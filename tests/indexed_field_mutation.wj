@@ -1,0 +1,93 @@
+// TDD TEST: Mutation through indexed field access should infer &mut self
+// Bug: self.array[i].mutate() doesn't detect mutation, infers &self instead of &mut self
+// Expected: Should infer &mut self when calling mutating methods on indexed fields
+
+struct Item {
+    value: i32,
+}
+
+impl Item {
+    pub fn increment(self) {
+        self.value = self.value + 1
+    }
+    
+    pub fn set_value(self, v: i32) {
+        self.value = v
+    }
+    
+    pub fn get_value(self) -> i32 {
+        self.value
+    }
+}
+
+struct Container {
+    items: Vec<Item>,
+    count: usize,
+}
+
+impl Container {
+    pub fn new() -> Container {
+        Container {
+            items: Vec::new(),
+            count: 0,
+        }
+    }
+    
+    // BUG: This should infer &mut self because we call mutating method on indexed element!
+    pub fn update_item(self, index: usize) {
+        if index < self.items.len() {
+            self.items[index].increment()  // <-- Calls increment() which mutates!
+        }
+    }
+    
+    // BUG: This should infer &mut self - direct field write on indexed element
+    pub fn set_item_value(self, index: usize, value: i32) {
+        if index < self.items.len() {
+            self.items[index].value = value  // <-- Direct mutation!
+        }
+    }
+    
+    // BUG: This should infer &mut self - method call on indexed element
+    pub fn set_item(self, index: usize, value: i32) {
+        if index < self.items.len() {
+            self.items[index].set_value(value)  // <-- Calls mutating method!
+        }
+    }
+    
+    // OK: This should infer &self - read-only access
+    pub fn get_item_value(self, index: usize) -> i32 {
+        if index < self.items.len() {
+            return self.items[index].get_value()  // <-- Read-only!
+        }
+        0
+    }
+    
+    // OK: This should infer &self - just reading length
+    pub fn item_count(self) -> usize {
+        self.items.len()
+    }
+}
+
+fn main() {
+    let mut container = Container::new()
+    
+    // Add some items
+    container.items.push(Item { value: 10 })
+    container.items.push(Item { value: 20 })
+    container.items.push(Item { value: 30 })
+    
+    // Mutate through index - should work!
+    container.update_item(0)
+    container.set_item_value(1, 25)
+    container.set_item(2, 35)
+    
+    // Read values
+    let v0 = container.get_item_value(0)
+    let v1 = container.get_item_value(1)
+    let v2 = container.get_item_value(2)
+    
+    println("Item 0: {}", v0)  // Should be 11 (incremented from 10)
+    println("Item 1: {}", v1)  // Should be 25
+    println("Item 2: {}", v2)  // Should be 35
+    println("✅ Indexed field mutations work!")
+}
