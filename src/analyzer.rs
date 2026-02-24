@@ -3679,6 +3679,16 @@ impl<'ast> Analyzer<'ast> {
         if method.starts_with("set_") {
             return true;
         }
+        // TDD FIX: Add common mutation prefixes
+        // Methods like increment, decrement, add_, sub_, etc. are mutating
+        if method.starts_with("increment") 
+            || method.starts_with("decrement")
+            || method.starts_with("add_")
+            || method.starts_with("sub_")
+            || method.starts_with("mul_")
+            || method.starts_with("div_") {
+            return true;
+        }
         matches!(
             method,
             "push"
@@ -3974,8 +3984,11 @@ impl<'ast> Analyzer<'ast> {
                 .iter()
                 .any(|s| self.statement_modifies_self_fields(s)),
             Expression::MethodCall { object, method, .. } => {
-                // Check if this is a mutating method call on a self field
-                self.expression_is_self_field_access(object) && self.is_mutating_method(method)
+                // TDD FIX: Check for mutations on both direct AND indexed self fields
+                // Pattern: self.items[index].mutate() in match arms should infer &mut self
+                (self.expression_is_self_field_access(object) 
+                    || self.expression_is_self_field_index_access(object))
+                    && self.is_mutating_method(method)
             }
             _ => false,
         }
@@ -4016,9 +4029,22 @@ impl<'ast> Analyzer<'ast> {
     fn expression_mutates_self_fields(&self, expr: &Expression) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
+                // TDD FIX: Check for mutations on INDEXED self fields!
+                // Pattern: self.items[index].mutate() should infer &mut self
+                // The object could be:
+                // 1. self.field (direct field access)
+                // 2. self.field[index] (indexed field access)
+                // 3. self.field[i][j] (nested index)
+                
                 if self.expression_is_self_field_access(object) && self.is_mutating_method(method) {
                     return true;
                 }
+                
+                // NEW: Check if object is an indexed self field (self.field[i])
+                if self.expression_is_self_field_index_access(object) && self.is_mutating_method(method) {
+                    return true;
+                }
+                
                 false
             }
             // TDD FIX: Detect `&mut self.field` as a mutation of self
