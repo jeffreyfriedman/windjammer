@@ -1,0 +1,40 @@
+// TDD TEST: Identifier with number suffix in generic arguments
+// Bug hypothesis: Maybe Vec3 is tokenized as "Vec" "3" instead of "Vec3"
+
+struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+struct Mat4 {
+    data: [f32; 16],
+}
+
+// Test: Various number suffixes in generics
+struct Container {
+    vec2s: Vec<Vec2>,      // number suffix: 2
+    vec3s: Vec<Vec3>,      // number suffix: 3
+    mat4s: Vec<Mat4>,      // number suffix: 4
+    items: Vec<Item2D>,    // number in middle
+}
+
+struct Item2D {
+    id: u32,
+}
+
+fn main() {
+    let c = Container {
+        vec2s: Vec::new(),
+        vec3s: Vec::new(),
+        mat4s: Vec::new(),
+        items: Vec::new(),
+    }
+    
+    println("✅ Number suffix identifiers in generics work!")
+}
