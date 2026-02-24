@@ -14,7 +14,7 @@
 // FIX:
 // Preserve parentheses around cast expressions when followed by binary operators
 
-use windjammer::compile_to_rust;
+// use windjammer::compile_to_rust;
 
 #[test]
 fn test_cast_with_bitshift_preserves_parentheses() {
