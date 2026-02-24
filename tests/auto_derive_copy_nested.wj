@@ -1,0 +1,56 @@
+// TDD TEST: Auto-derive Copy for structs with all Copy fields
+// Bug: Plane struct not getting Copy even though all fields are Copy
+// Expected: Should auto-derive Copy when all fields are Copy
+
+struct Vec3Copy {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+// This should auto-derive Copy because Vec3Copy and f32 are both Copy
+struct Plane {
+    normal: Vec3Copy,
+    distance: f32,
+}
+
+// This should work because Plane should be Copy!
+fn test_copy_works() {
+    let plane = Plane {
+        normal: Vec3Copy { x: 1.0, y: 0.0, z: 0.0 },
+        distance: 5.0,
+    }
+    
+    // BUG: This fails if Copy isn't derived!
+    // Passing to function by value should work for Copy types
+    let d1 = use_plane(plane)
+    let d2 = use_plane(plane)  // <-- Should work (plane was copied, not moved)
+    
+    println("Distances: {}, {}", d1, d2)
+}
+
+fn use_plane(p: Plane) -> f32 {
+    p.distance
+}
+
+// Test array indexing (the original error pattern)
+fn test_array_indexing() {
+    let planes: [Plane; 3] = [
+        Plane { normal: Vec3Copy { x: 1.0, y: 0.0, z: 0.0 }, distance: 1.0 },
+        Plane { normal: Vec3Copy { x: 0.0, y: 1.0, z: 0.0 }, distance: 2.0 },
+        Plane { normal: Vec3Copy { x: 0.0, y: 0.0, z: 1.0 }, distance: 3.0 },
+    ]
+    
+    // BUG: This should work! planes[0] should copy, not move
+    let d1 = use_plane(planes[0])
+    let d2 = use_plane(planes[1])
+    let d3 = use_plane(planes[2])
+    
+    println("Array distances: {}, {}, {}", d1, d2, d3)
+}
+
+fn main() {
+    test_copy_works()
+    test_array_indexing()
+    println("✅ Auto-derive Copy works for nested structs!")
+}
