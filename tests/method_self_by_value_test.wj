@@ -1,0 +1,25 @@
+// Test: Method that takes self by value should not infer &mut
+
+struct Point {
+    x: f32,
+    y: f32
+}
+
+impl Point {
+    fn double(self) -> Point {
+        Point {
+            x: self.x * 2.0,
+            y: self.y * 2.0
+        }
+    }
+}
+
+fn main() {
+    let p = Point { x: 1.0, y: 2.0 }
+    let p2 = p.double()
+    
+    assert(p2.x == 2.0, "x should be doubled")
+    assert(p2.y == 4.0, "y should be doubled")
+    
+    println("✅ Method with self by value works")
+}
