@@ -4383,6 +4383,11 @@ impl<'ast> Analyzer<'ast> {
                 Statement::Expression { expr, .. } => {
                     self.collect_mutations_in_expression(expr);
                 }
+                // DOGFOODING FIX #2B: Track mutations in let bindings
+                // let result = identity.multiply(other) - check if multiply mutates identity
+                Statement::Let { value, .. } => {
+                    self.collect_mutations_in_expression(value);
+                }
                 _ => {}
             }
         }
@@ -4391,33 +4396,72 @@ impl<'ast> Analyzer<'ast> {
     /// Track mutations in expressions (method calls that mutate)
     fn collect_mutations_in_expression(&mut self, expr: &Expression) {
         if let Expression::MethodCall { object, method, .. } = expr {
-            // Common mutating methods
-            let mutating_methods = [
-                "push",
-                "pop",
-                "insert",
-                "remove",
-                "clear",
-                "append",
-                "extend",
-                "truncate",
-                "resize",
-                "sort",
-                "reverse",
-                "dedup",
-                "retain",
-                "drain",
-                "split_off",
-                "swap_remove",
-            ];
-
-            if mutating_methods.contains(&method.as_str()) {
-                // Mark the object as mutated
+            // DOGFOODING FIX #2: Check method signature to see if it takes &mut self
+            // Bug: Was using hardcoded list of mutating methods, which doesn't account
+            // for user-defined methods that take `self` by value (like Mat4::multiply).
+            // Fix: Look up method signature and only mark as mutated if it takes &mut self.
+            
+            // Try to get type name and look up method signature
+            let type_name = if let Expression::Identifier { name, .. } = &**object {
+                // Try to infer type from variable (for local variables in impl blocks)
+                self.variables.get(name).cloned()
+            } else {
+                None
+            };
+            
+            // Check if we have a signature for this method
+            let method_requires_mut = if let Some(_type_name_str) = type_name {
+                if let Some(impl_functions) = &self.current_impl_functions {
+                    // Check if this is a method in the current impl block
+                    if let Some(func) = impl_functions.get(method.as_str()) {
+                        // Check the self parameter ownership
+                        func.parameters.iter()
+                            .find(|p| p.name == "self")
+                            .map(|p| matches!(p.ownership, OwnershipHint::Mut))
+                            .unwrap_or(false)
+                    } else {
+                        // Not in current impl, fall back to heuristic
+                        Self::is_heuristic_mutating_method(method)
+                    }
+                } else {
+                    // No impl context, use heuristic
+                    Self::is_heuristic_mutating_method(method)
+                }
+            } else {
+                // No type info, use heuristic
+                Self::is_heuristic_mutating_method(method)
+            };
+            
+            if method_requires_mut {
+                // Mark the object as mutated ONLY if method takes &mut self
                 if let Expression::Identifier { name, .. } = &**object {
                     self.mutated_variables.insert(name.clone());
                 }
             }
         }
+    }
+    
+    /// Heuristic: Common stdlib methods that take &mut self
+    fn is_heuristic_mutating_method(method: &str) -> bool {
+        matches!(
+            method,
+            "push"
+                | "pop"
+                | "insert"
+                | "remove"
+                | "clear"
+                | "append"
+                | "extend"
+                | "truncate"
+                | "resize"
+                | "sort"
+                | "reverse"
+                | "dedup"
+                | "retain"
+                | "drain"
+                | "split_off"
+                | "swap_remove"
+        )
     }
 
     /// Check if a variable is mutated within a specific set of statements
