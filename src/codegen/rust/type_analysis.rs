@@ -162,6 +162,7 @@ impl TypeAnalyzer {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
             Type::Reference(_) => true,         // References are Copy
             Type::MutableReference(_) => false, // Mutable references are not Copy
+            Type::RawPointer { .. } => true,    // TDD: Raw pointers are Copy (like &T)
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
                 // Recognize common Rust primitive types by name
@@ -411,6 +412,7 @@ pub fn is_copy_type(ty: &Type) -> bool {
         Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
         Type::Reference(_) => true,         // References are Copy
         Type::MutableReference(_) => false, // Mutable references are not Copy
+        Type::RawPointer { .. } => true,    // TDD: Raw pointers are Copy (like &T)
         Type::Tuple(types) => types.iter().all(is_copy_type),
         Type::Custom(name) => {
             // Recognize common Rust primitive types by name
