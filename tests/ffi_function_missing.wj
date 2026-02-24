@@ -1,0 +1,17 @@
+// TDD TEST: FFI function declarations
+// Bug: Generated code doesn't include FFI declarations
+// Expected: Should generate extern fn declarations for FFI calls
+
+// Test calling an FFI function
+extern fn test_ffi_function(x: i32, y: i32) -> bool
+
+fn check_collision(tile_x: i32, tile_y: i32) -> bool {
+    // This should work - calling external FFI function
+    test_ffi_function(tile_x, tile_y)
+}
+
+fn main() {
+    // Note: Can't actually run this without the FFI implementation
+    // But it should COMPILE successfully
+    println("✅ FFI function declarations work!")
+}
