@@ -13,7 +13,7 @@
 // Add support for `ref` and `ref mut` in pattern matching
 // Pattern syntax: `ref <identifier>` and `ref mut <identifier>`
 
-use windjammer::compile_to_rust;
+// use windjammer::compile_to_rust;
 
 #[test]
 fn test_ref_pattern_in_match_some() {
