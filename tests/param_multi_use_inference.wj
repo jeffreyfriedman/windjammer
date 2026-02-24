@@ -1,0 +1,29 @@
+// TDD TEST: Parameters used multiple times read-only should infer as &
+// Bug: state: DialogueState gets moved on first use, even though it's only read
+// Expected: Compiler should infer & when param is used multiple times without mutation
+
+struct Config {
+    name: String,    // Non-Copy type!
+    timeout: i32,
+}
+
+// Bug reproduction: state is used twice in the function
+// Should infer as &state, not owned state
+fn is_valid(state: Config) -> bool {
+    if state.name.is_empty() {  // First use - moves state!
+        return false
+    }
+    
+    if state.timeout < 0 {  // Second use - ERROR: state moved above!
+        return false
+    }
+    
+    true
+}
+
+fn main() {
+    let cfg = Config { name: "test".to_string(), timeout: 100 }
+    let valid = is_valid(cfg)
+    println("Valid: {}", valid)
+    println("✅ Multi-use parameter inference works!")
+}
