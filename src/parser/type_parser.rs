@@ -21,6 +21,13 @@ impl Parser {
             Type::Generic(name) => name.clone(),
             Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
             Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
+            Type::RawPointer { mutable, pointee } => {
+                if *mutable {
+                    format!("*mut {}", self.type_to_string(pointee))
+                } else {
+                    format!("*const {}", self.type_to_string(pointee))
+                }
+            }
             Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
             Type::Result(ok, err) => format!(
                 "Result<{}, {}>",
@@ -174,6 +181,25 @@ impl Parser {
 
     /// Parse a type annotation
     pub fn parse_type(&mut self) -> Result<Type, String> {
+        // Handle raw pointer types: *const T, *mut T
+        if self.current_token() == &Token::Star {
+            self.advance();
+            
+            // Check for const or mut
+            let mutable = if self.current_token() == &Token::Const {
+                self.advance();
+                false
+            } else if self.current_token() == &Token::Mut {
+                self.advance();
+                true
+            } else {
+                return Err("Expected 'const' or 'mut' after '*' in pointer type".to_string());
+            };
+            
+            let pointee = Box::new(self.parse_type()?);
+            return Ok(Type::RawPointer { mutable, pointee });
+        }
+        
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
             self.advance();
