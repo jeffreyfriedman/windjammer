@@ -2,7 +2,7 @@
 
 ## Bug #1: Method self-by-value incorrectly infers &mut [HIGH PRIORITY]
 
-**Status**: 🔴 OPEN - Test exists, fix identified, needs implementation
+**Status**: 🟡 IN PROGRESS - Partial fix applied, deeper issue found
 
 **Discovered**: 2026-02-24 during camera matrices test compilation
 
@@ -51,7 +51,15 @@ OwnershipHint::Owned => {
 
 **Workaround**: Mark variables as `mut` even though not needed, or use `&self` instead of `self`.
 
+**Update (2026-02-24)**: Fixed parameter inference (analyzer.rs:937-943) ✅  
+**Remaining**: Method call site still infers &mut for receiver. Need to trace codegen.
+
 **Priority**: HIGH - Common pattern in game math
+
+**Next Steps**: 
+1. Find where method call receivers get mutability inference
+2. Check method signature to see if it takes `self` vs `&mut self`
+3. Don't add `&mut` if method takes `self` by value
 
 ---
 
