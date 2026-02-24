@@ -935,40 +935,12 @@ impl<'ast> Analyzer<'ast> {
         for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
                 OwnershipHint::Owned => {
-                    // Special case: 'self' parameter in impl methods
-                    if param.name == "self" {
-                        // Check if this method modifies any fields
-                        let modifies_fields = self.function_modifies_self_fields(func);
-                        let returns_self = self.function_returns_self(func);
-                        let returns_non_copy_field =
-                            self.function_returns_non_copy_self_field(func);
-
-                        // CRITICAL FIX: Check returns_self FIRST!
-                        // If a function returns Self, it's a builder pattern and should always consume self (Owned)
-                        // This is true even if it doesn't directly modify fields (it creates a new struct instead)
-                        if returns_self {
-                            // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
-                            // Use `mut self` (Owned), not `&self` (Borrowed)
-                            OwnershipMode::Owned
-                        } else if returns_non_copy_field {
-                            // Returns non-Copy field (e.g., self.content: String) → must own self to move field
-                            OwnershipMode::Owned
-                        } else if modifies_fields {
-                            // Mutating method that doesn't return self: use `&mut self`
-                            OwnershipMode::MutBorrowed
-                        } else {
-                            // Check if self is used in binary operations (for Copy types like Vec2, Vec3)
-                            if self.is_used_in_binary_op("self", &func.body) {
-                                OwnershipMode::Owned
-                            } else {
-                                // Default to borrowed for read-only methods
-                                // Whether or not the method accesses self.fields, &self is appropriate
-                                OwnershipMode::Borrowed
-                            }
-                        }
-                    } else {
-                        OwnershipMode::Owned
-                    }
+                    // DOGFOODING FIX #1: Respect explicit ownership annotations!
+                    // If user writes `self` (not `&self` or `&mut self`), they want OWNED.
+                    // Bug was: analyzer checked modifies_fields and downgraded to &mut self
+                    // Fix: When Owned is explicit, use it - don't analyze or modify!
+                    // Analysis should ONLY happen for OwnershipHint::Inferred.
+                    OwnershipMode::Owned
                 }
                 OwnershipHint::Mut => OwnershipMode::MutBorrowed,
                 OwnershipHint::Ref => {
