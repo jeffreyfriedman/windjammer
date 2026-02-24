@@ -1,0 +1,151 @@
+// TDD TEST: Smart Ownership Inference
+// The compiler should distinguish between reads and writes automatically
+
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32
+}
+
+struct Mat4 {
+    m00: f32,
+    m01: f32,
+    m02: f32,
+    m03: f32
+}
+
+// TEST 1: Reading fields should NOT require mut
+// Current: Incorrectly infers &mut self
+// Expected: Should infer &self (immutable borrow)
+impl Vec3 {
+    fn length_squared(self) -> f32 {
+        // Only READS self.x, self.y, self.z
+        // Should work with immutable self!
+        self.x * self.x + self.y * self.y + self.z * self.z
+    }
+    
+    fn dot(self, other: Vec3) -> f32 {
+        // Only READS both vectors
+        // Should work with immutable self!
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+    
+    fn get_x(self) -> f32 {
+        // Just returning a field
+        // Should work with immutable self!
+        self.x
+    }
+}
+
+// TEST 2: Writing fields SHOULD require mut
+// Current: Correctly infers &mut self
+// Expected: Should still infer &mut self (mutable borrow)
+impl Vec3 {
+    fn set_x(self, value: f32) {
+        // WRITES to self.x
+        // Should require mut!
+        self.x = value
+    }
+    
+    fn scale(self, factor: f32) {
+        // WRITES to all fields
+        // Should require mut!
+        self.x = self.x * factor
+        self.y = self.y * factor
+        self.z = self.z * factor
+    }
+    
+    fn normalize(self) {
+        // Both READS and WRITES
+        // Should require mut!
+        let len = self.length_squared()
+        self.x = self.x / len
+        self.y = self.y / len
+        self.z = self.z / len
+    }
+}
+
+// TEST 3: Copy types used in operators should stay owned
+// Current: Might incorrectly infer &self
+// Expected: Should keep self by value (Copy types in operators)
+impl Mat4 {
+    fn multiply(self, other: Mat4) -> Mat4 {
+        // Uses self.m00 in binary operations
+        // For Copy types, self should be by value!
+        Mat4 {
+            m00: self.m00 * other.m00,
+            m01: self.m01 * other.m01,
+            m02: self.m02 * other.m02,
+            m03: self.m03 * other.m03
+        }
+    }
+}
+
+fn test_immutable_reads() {
+    println("TEST: Immutable reads should not require mut")
+    
+    // Create immutable vector (no mut!)
+    let v = Vec3 { x: 3.0, y: 4.0, z: 0.0 }
+    
+    // These should all work WITHOUT requiring `let mut v`!
+    let len_sq = v.length_squared()
+    assert(len_sq == 25.0, "Length squared should be 25")
+    
+    let x = v.get_x()
+    assert(x == 3.0, "X should be 3")
+    
+    let other = Vec3 { x: 1.0, y: 0.0, z: 0.0 }
+    let dot_product = v.dot(other)
+    assert(dot_product == 3.0, "Dot product should be 3")
+    
+    println("  ✅ Immutable reads work correctly!")
+}
+
+fn test_mutable_writes() {
+    println("TEST: Mutable writes should require mut")
+    
+    // Create mutable vector (WITH mut!)
+    let mut v = Vec3 { x: 1.0, y: 2.0, z: 3.0 }
+    
+    // These SHOULD require mut
+    v.set_x(10.0)
+    assert(v.x == 10.0, "X should be updated to 10")
+    
+    v.scale(2.0)
+    assert(v.x == 20.0, "X should be scaled to 20")
+    assert(v.y == 4.0, "Y should be scaled to 4")
+    
+    println("  ✅ Mutable writes work correctly!")
+}
+
+fn test_copy_operators() {
+    println("TEST: Copy types in operators should be by value")
+    
+    let m1 = Mat4 { m00: 1.0, m01: 2.0, m02: 3.0, m03: 4.0 }
+    let m2 = Mat4 { m00: 2.0, m01: 3.0, m02: 4.0, m03: 5.0 }
+    
+    // multiply takes self by value (Copy type)
+    let result = m1.multiply(m2)
+    
+    // m1 and m2 should still be usable (Copy!)
+    let result2 = m1.multiply(m2)
+    
+    assert(result.m00 == 2.0, "Multiplication should work")
+    
+    println("  ✅ Copy operators work correctly!")
+}
+
+fn main() {
+    println("========================================")
+    println("🧠 SMART OWNERSHIP INFERENCE TESTS")
+    println("========================================")
+    
+    test_immutable_reads()
+    test_mutable_writes()
+    test_copy_operators()
+    
+    println("")
+    println("✅ All smart ownership inference tests passed!")
+    println("")
+    println("🎉 SMART INFERENCE WORKING! 🎉")
+}
