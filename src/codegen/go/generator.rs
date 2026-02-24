@@ -1747,6 +1747,11 @@ impl GoGenerator {
                 // Go doesn't have references; use the inner type
                 self.type_to_go(inner)
             }
+            Type::RawPointer { pointee, .. } => {
+                // TDD: Raw pointers in Go are unsafe.Pointer or *T
+                // For FFI, use unsafe.Pointer
+                format!("unsafe.Pointer /* *{} */", self.type_to_go(pointee))
+            }
             Type::Tuple(types) => {
                 if types.is_empty() {
                     String::new() // unit type → void

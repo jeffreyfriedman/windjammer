@@ -124,6 +124,15 @@ pub fn type_to_rust(type_: &Type) -> String {
                 format!("&mut {}", type_to_rust(inner))
             }
         }
+        Type::RawPointer { mutable, pointee } => {
+            // TDD: Raw pointer types for FFI
+            // *const T -> *const T, *mut T -> *mut T
+            if *mutable {
+                format!("*mut {}", type_to_rust(pointee))
+            } else {
+                format!("*const {}", type_to_rust(pointee))
+            }
+        }
         Type::Tuple(types) => {
             let rust_types: Vec<String> = types.iter().map(type_to_rust).collect();
             format!("({})", rust_types.join(", "))
@@ -147,6 +156,8 @@ pub fn type_to_rust(type_: &Type) -> String {
 pub fn type_contains_reference(type_: &Type) -> bool {
     match type_ {
         Type::Reference(_) | Type::MutableReference(_) => true,
+        // TDD: Raw pointers are NOT references (different lifetime rules)
+        Type::RawPointer { .. } => false,
         Type::Option(inner) => type_contains_reference(inner),
         Type::Result(ok, err) => type_contains_reference(ok) || type_contains_reference(err),
         Type::Vec(inner) => type_contains_reference(inner),
@@ -187,6 +198,14 @@ pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
                 format!("&'a mut dyn {}", trait_name)
             } else {
                 format!("&'a mut {}", type_to_rust_with_lifetime(inner))
+            }
+        }
+        // TDD: Raw pointers don't have lifetimes (unsafe, FFI)
+        Type::RawPointer { mutable, pointee } => {
+            if *mutable {
+                format!("*mut {}", type_to_rust(pointee))
+            } else {
+                format!("*const {}", type_to_rust(pointee))
             }
         }
         // For container types, recurse to add lifetime to nested references
