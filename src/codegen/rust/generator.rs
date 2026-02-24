@@ -7847,7 +7847,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .iter()
                         .map(|arg_str| {
                             if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
-                                // Strip leading & if present
+                                // Strip leading & if present (was added by argument processing)
                                 let format_expr = if arg_str.starts_with("&") {
                                     &arg_str[1..]
                                 } else {
@@ -7857,7 +7857,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 let temp_name = format!("_temp{}", temp_counter);
                                 temp_counter += 1;
                                 temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-                                format!("&{}", temp_name)
+                                
+                                // TDD FIX (Bug #16): Don't always add & - format!() returns owned String
+                                // If the parameter expects &str, Rust's coercion handles it automatically
+                                // If the parameter expects String, we need the owned value
+                                // Check if original arg_str had & to preserve caller's intent
+                                if arg_str.starts_with("&") {
+                                    // Original code had &format!() → keep the &
+                                    format!("&{}", temp_name)
+                                } else {
+                                    // Original code had format!() → pass owned value
+                                    temp_name
+                                }
                             } else {
                                 arg_str.clone()
                             }
