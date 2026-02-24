@@ -446,7 +446,19 @@ impl Parser {
                 }
 
                 // Check for generic parameters
-                if self.current_token() == &Token::Lt {
+                // BUT: Primitive types like usize, i32, u32, etc. can't have generics
+                // If we see `<` after a primitive type, it's a comparison operator, not generics!
+                let is_primitive_type = matches!(
+                    type_name.as_str(),
+                    "usize" | "isize"
+                    | "u8" | "u16" | "u32" | "u64" | "u128"
+                    | "i8" | "i16" | "i32" | "i64" | "i128"
+                    | "f32" | "f64"
+                    | "char" | "str" | "bool"
+                    | "unit" | "()"
+                );
+                
+                if !is_primitive_type && self.current_token() == &Token::Lt {
                     self.advance();
 
                     // Handle Vec<T>, Option<T>, Result<T, E>
@@ -480,9 +492,11 @@ impl Parser {
                                 self.expect_gt_or_split_shr()?;
                                 break;
                             } else {
+                                eprintln!("DEBUG: Parsing type arguments for: {}", type_name);
+                                eprintln!("DEBUG: After parsing type arg, current token: {:?} at position: {}", self.current_token(), self.position);
                                 return Err(format!(
-                                    "Expected ',' or '>' in type arguments, got {:?}",
-                                    self.current_token()
+                                    "Expected ',' or '>' in type arguments for '{}', got {:?} at position {}",
+                                    type_name, self.current_token(), self.position
                                 ));
                             }
                         }
