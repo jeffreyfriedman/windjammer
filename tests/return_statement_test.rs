@@ -69,14 +69,7 @@ pub fn nested_return(a: bool, b: bool) -> bool {
         "return false should be in generated code");
 }
 
-// Helper function to compile a snippet
-fn compile_to_rust(source: &str) -> String {
-    // This would use the actual compiler
-    // For now, placeholder
-    use windjammer::compiler::*;
-    use windjammer::parser::*;
-    
-    let ast = parse(source).expect("Parse failed");
-    let analyzed = analyze(&ast).expect("Analysis failed");
-    codegen_rust(&analyzed).expect("Codegen failed")
-}
+// Helper function to compile a snippet (currently unused)
+// fn compile_to_rust(source: &str) -> String {
+//     todo!("Use actual compiler API")
+// }
