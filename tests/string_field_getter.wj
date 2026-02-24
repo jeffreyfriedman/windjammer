@@ -1,0 +1,57 @@
+// TDD TEST: String field getters should return &str, not String
+// Bug: Methods returning String fields require owned self
+// Expected: Should either infer &self and return &str, or require explicit return type
+
+struct Quest {
+    title: String,
+    description: String,
+    completed: bool,
+}
+
+impl Quest {
+    pub fn new(title: String, description: String) -> Quest {
+        Quest {
+            title: title,
+            description: description,
+            completed: false,
+        }
+    }
+    
+    // Pattern 1: Return String field - requires owned self (moves field out)
+    // This SHOULD work but requires self to be owned
+    pub fn take_title(self) -> String {
+        self.title
+    }
+    
+    // Pattern 2: Return &str - should infer &self automatically
+    // This is what most getters should do
+    pub fn title(self) -> &str {
+        &self.title
+    }
+    
+    // Pattern 3: Just access field - should infer &self
+    pub fn is_completed(self) -> bool {
+        self.completed
+    }
+}
+
+fn use_quest(q: &Quest) {
+    // This should work - calling method on &Quest
+    let title = q.title()
+    let done = q.is_completed()
+    
+    println("Quest: {}, completed: {}", title, done)
+}
+
+fn main() {
+    let quest = Quest::new("Save the kingdom".to_string(), "Defeat the dragon".to_string())
+    
+    // Call methods on reference
+    use_quest(&quest)
+    
+    // Now consume it
+    let title = quest.take_title()
+    println("Took title: {}", title)
+    
+    println("✅ String field getters work correctly!")
+}
