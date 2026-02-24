@@ -1,0 +1,22 @@
+// TDD TEST: Vec::new() followed by method call
+// Testing if Vec::<T>::new().something() causes parse issues
+
+struct Item {
+    id: u32,
+}
+
+fn test_vec_chain() {
+    // Pattern 1: Vec::new() then .len()
+    let count = Vec::new().len()
+    
+    // Pattern 2: Vec::<Item>::new() with turbofish
+    let items: Vec<Item> = Vec::new()
+    let count2 = items.len()
+    
+    println("counts: {}, {}", count, count2)
+}
+
+fn main() {
+    test_vec_chain()
+    println("✅ Vec operations work!")
+}

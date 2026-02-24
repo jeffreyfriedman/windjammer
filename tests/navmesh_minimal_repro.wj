@@ -1,0 +1,30 @@
+// TDD TEST: Minimal reproduction of navmesh.wj parse error
+// Bug: Parser fails with "Expected ',' or '>' in type arguments, got Dot"
+// when using Vec<Vec3> with crate::math::Vec3 import
+
+use crate::math::Vec3
+use std::collections::HashMap
+
+/// Path result
+pub struct NavmeshPath {
+    pub waypoints: Vec<Vec3>,
+}
+
+impl NavmeshPath {
+    pub fn new() -> NavmeshPath {
+        NavmeshPath {
+            waypoints: Vec::new(),
+        }
+    }
+
+    pub fn len(self) -> i32 {
+        self.waypoints.len() as i32
+    }
+}
+
+fn main() {
+    let path = NavmeshPath::new()
+    let count = path.len()
+    println("Path has {} waypoints", count)
+    println("✅ Navmesh imports work!")
+}

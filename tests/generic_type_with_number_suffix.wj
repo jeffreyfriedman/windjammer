@@ -1,0 +1,47 @@
+// TDD TEST: Generic types with number suffixes (Vec<Vec3>, etc.)
+// Bug: Parser fails on Vec<Vec3> thinking Vec3 is a dotted path
+// Expected: Should parse Vec3 as a single identifier
+
+use crate::math::Vec3
+
+struct Path {
+    waypoints: Vec<Vec3>,  // This should work!
+}
+
+struct Matrix {
+    data: Vec<f32>,  // This works
+}
+
+struct Complex {
+    vectors: Vec<Vec3>,     // Vec<Vec3> - number suffix
+    matrices: Vec<Mat4>,    // Vec<Mat4> - number suffix
+    items: Vec<Item>,       // Vec<Item> - no number
+}
+
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+struct Mat4 {
+    m: [f32; 16],
+}
+
+struct Item {
+    id: u32,
+}
+
+fn main() {
+    let path = Path {
+        waypoints: Vec::new(),
+    }
+    
+    let complex = Complex {
+        vectors: Vec::new(),
+        matrices: Vec::new(),
+        items: Vec::new(),
+    }
+    
+    println("✅ Generic types with number suffixes work!")
+}
