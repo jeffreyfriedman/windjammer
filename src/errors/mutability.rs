@@ -344,15 +344,16 @@ impl MutabilityChecker {
             return true;
         }
 
-        // Common mutating verbs without prefix
+        // DOGFOODING FIX #2C: REMOVED "multiply", "add", "subtract", "divide"
+        // These math operations typically take `self` by value (Mat4::multiply)
+        // NOT `&mut self`, so they don't mutate the original variable!
+        // Bug: Was flagging `identity.multiply(other)` as mutation when it's not.
+        // Fix: Only include methods that conventionally take `&mut self`.
+        // NOTE: This heuristic is still imperfect. Future: Check actual method signatures!
         matches!(
             method,
             "increment"
                 | "decrement"
-                | "add"
-                | "subtract"
-                | "multiply"
-                | "divide"
                 | "apply"
                 | "modify"
                 | "mutate"
