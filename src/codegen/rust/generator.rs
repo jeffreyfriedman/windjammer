@@ -4504,30 +4504,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // This is safe because String auto-borrows to &str when needed.
                         let mut value_str = self.generate_expression(value);
 
-                        // AUTO-CLONE: Vec indexing of non-Copy types needs .clone()
-                        // DATA FLOW ANALYSIS: Check if variable is only used for field access
+                        // TDD FIX: Vec indexing of non-Copy types needs .clone()
+                        // BUG FIX: Previous heuristic only checked certain variable names like "frame", "point"
+                        // But "child", "node", etc. were excluded, causing E0507 errors in octree.wj
+                        // NEW APPROACH: Always apply optimization for ALL vector indexing
                         if matches!(value, Expression::Index { .. }) {
                             if let Some(name) = var_name {
-                                // HEURISTIC: Only apply smart borrowing for struct-like variable names
-                                // Primitive types (int, float, bool) are Copy and don't need special handling
-                                let struct_like_names =
-                                    ["frame", "point", "pos", "position", "region", "data"];
-                                let is_likely_struct = struct_like_names
-                                    .iter()
-                                    .any(|pattern| name.contains(pattern));
-
-                                if is_likely_struct {
-                                    // Analyze how this variable is used after declaration
-                                    if self.variable_is_only_field_accessed(name) {
-                                        // Variable only used for field access → auto-borrow (don't clone)
-                                        value_str = format!("&{}", value_str);
-                                    } else {
-                                        // Variable is moved/returned → need to clone
-                                        value_str = format!("{}.clone()", value_str);
-                                    }
+                                // DATA FLOW ANALYSIS: Check if variable is only used for field access
+                                if self.variable_is_only_field_accessed(name) {
+                                    // Variable only used for field access → auto-borrow (don't clone)
+                                    // Example: let frame = frames[i]; frame.x += 1;
+                                    value_str = format!("&{}", value_str);
+                                } else {
+                                    // Variable is moved/returned → need to clone
+                                    // Example: let child = children[idx]; recursive(child);
+                                    // WINDJAMMER PHILOSOPHY: Compiler does the hard work, not the developer
+                                    value_str = format!("{}.clone()", value_str);
                                 }
-                                // For non-struct-like names (likely primitives), do nothing
-                                // Let Rust's copy semantics handle it
                             }
                         } else if matches!(
                             value,

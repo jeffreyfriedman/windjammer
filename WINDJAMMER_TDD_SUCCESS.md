@@ -1,141 +1,112 @@
-# Windjammer TDD Success: Bug #3 String/&str Coercion
+# 🎉 WINDJAMMER COMPILER BUG FIXED! 🎉
 
-## Date: 2026-02-22
+**Date**: 2026-02-24  
+**Bug**: Method `self`-by-value incorrectly flagged as mutation  
+**Status**: ✅ **COMPLETELY FIXED**
 
-## Problem
+## The Bug
 
-When `format!()` was used directly as a function/method argument expecting `&str`, the generated Rust code had a temporary value lifetime issue:
+When a method takes `self` by value (e.g., `Mat4::multiply(self, other: Mat4)`), the compiler incorrectly flagged it as a mutating method, requiring `let mut` for the receiver variable.
 
+```windjammer
+let identity = Mat4::new(1.0)  // Should NOT need mut
+let result = identity.multiply(other)  // ❌ ERROR: cannot borrow identity as mutable
+```
+
+## Root Causes (3 layers of bugs!)
+
+1. **Analyzer Bug #1** (FIXED): Parameter ownership inference in `analyzer.rs` lines 937-981  
+   - When user writes `self` (OwnershipHint::Owned), analyzer was downgrading to `&mut self`
+   - **Fix**: Respect explicit ownership - if user writes `self`, use `Owned`, don't analyze
+
+2. **Analyzer Bug #2** (FIXED): Mutation tracking in `analyzer.rs` lines 4392-4421  
+   - Method calls in `Statement::Let` bindings weren't checked
+   - Hardcoded list of mutating methods didn't check actual signatures
+   - **Fix**: Added `Statement::Let` handler, improved signature checking
+
+3. **MutabilityChecker Bug** (FIXED): Hardcoded heuristics in `errors/mutability.rs` lines 348-365  
+   - Methods `multiply`, `add`, `subtract`, `divide` hardcoded as mutating
+   - But math operations typically take `self` by value, not `&mut self`!
+   - **Fix**: Removed these from heuristic list
+
+## The Fix
+
+### File 1: `windjammer/src/analyzer.rs`
+
+**Change 1:** Lines 937-963 - Respect explicit ownership
 ```rust
-// Generated (broken):
-draw_text(format!("Score: {}", score), 10.0, 20.0)
-//        ^^^^^^^^^^^^^^^^^^^^^^^^^ temporary String dropped
-//        |                         while borrowed as &str
+OwnershipHint::Owned => {
+    // DOGFOODING FIX #1: Respect explicit ownership annotations!
+    // If user writes `self` (not `&self` or `&mut self`), they want OWNED.
+    OwnershipMode::Owned
+}
 ```
 
-Rust error:
-```
-error[E0716]: temporary value dropped while borrowed
-```
-
-## Solution
-
-**TDD Approach:** Red → Green → Refactor
-
-### RED Phase
-Created `tests/bug_string_coercion_test.rs` with 4 failing tests:
-1. `test_format_as_function_argument_extracts_to_variable` - format!() in extern fn call
-2. `test_format_in_method_call_extracts_to_variable` - format!() in method call
-3. `test_format_as_variable_assignment_unchanged` - don't break existing assignments
-4. `test_multiple_format_calls_in_same_function` - handle multiple calls
-
-### GREEN Phase
-Modified `src/codegen/rust/generator.rs` to extract format!() calls to temporary variables:
-
-**For Function Calls (Expression::Call):**
+**Change 2:** Lines 4387-4390 - Track mutations in let bindings
 ```rust
-// Before fix:
-draw_text(format!("Score: {}", score), 10.0, 20.0)
-
-// After fix:
-unsafe { let _temp0 = format!("Score: {}", score); draw_text(&_temp0, 10.0, 20.0) }
+Statement::Let { value, .. } => {
+    self.collect_mutations_in_expression(value);
+}
 ```
 
-**For Method Calls (Expression::MethodCall):**
+**Change 3:** Lines 4392-4453 - Improved mutation tracking
 ```rust
-// Before fix:
-ctx.draw_text(format!("Lives: {}", lives), 100.0, 20.0)
-
-// After fix:
-{ let _temp0 = format!("Lives: {}", lives); ctx.draw_text(&_temp0, 100.0, 20.0) }
+fn collect_mutations_in_expression(&mut self, expr: &Expression) {
+    // DOGFOODING FIX #2: Check method signature to see if it takes &mut self
+    // Look up actual method signature instead of relying only on heuristics
+    ...
+}
 ```
 
-**Implementation:**
-- Detects `format!(` in function/method arguments
-- Generates `let _tempN = format!(...);` declarations
-- Replaces format!() with `&_tempN` reference
-- Wraps in block (or merges with existing unsafe block for extern calls)
+### File 2: `windjammer/src/errors/mutability.rs`
 
-### REFACTOR Phase
-- No refactoring needed - implementation is clean and minimal
-- All 239 existing unit tests still pass ✅
-- All 4 new Bug #3 tests pass ✅
+**Change:** Lines 348-365 - Removed math operations from mutating methods list
+```rust
+// DOGFOODING FIX #2C: REMOVED "multiply", "add", "subtract", "divide"
+// These math operations typically take `self` by value, NOT `&mut self`
+matches!(
+    method,
+    "increment" | "decrement" | "apply" | "modify" | "mutate"
+    | "change" | "toggle" | "enable" | "disable"
+    | "activate" | "deactivate"
+)
+```
 
 ## Test Results
 
-```
-running 4 tests
-test test_format_as_function_argument_extracts_to_variable ... ok
-test test_format_in_method_call_extracts_to_variable ... ok
-test test_format_as_variable_assignment_unchanged ... ok
-test test_multiple_format_calls_in_same_function ... ok
-
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+### ✅ Minimal Test Case
+```bash
+$ cargo run --release -- run tests/method_self_by_value.wj
+✅ Method with self by value works correctly
 ```
 
-Full test suite:
-```
-test result: ok. 239 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-```
-
-## Real-World Verification
-
-Tested on `windjammer-game/examples/breakout.wj`:
-
-**Before fix:**
-- Multiple format!() errors in draw_text() calls
-- Temporary value dropped while borrowed
-
-**After fix:**
-- Generates correct Rust code with temp variable extraction
-- No more String/&str lifetime errors from format!()
-- Code compiles cleanly (rustc with only dead_code warnings)
-
-Example from breakout.wj:
-```rust
-// Generated code:
-{ let _temp0 = format!("Score: {}", self.score); 
-  ctx.draw_text(&_temp0, Vec2::new(10.0, 20.0), 20.0, Color::rgba(1.0, 1.0, 1.0, 1.0)) };
+### ✅ Camera Matrices Test (Original trigger)
+```bash
+$ cargo run --release --bin camera_test
+✅ All camera matrix tests passed!
 ```
 
-## Performance Impact
+## Impact
 
-**None.** The temporary variable approach is:
-- **Zero-cost:** Same assembly as hand-written code
-- **Idiomatic Rust:** This is the standard pattern
-- **Compiler-friendly:** Optimizer sees the full picture
+This fix enables:
+- ✅ Pure functional math operations without `mut` annotations
+- ✅ Method chaining on immutable values
+- ✅ Correct ownership inference for self-by-value methods
+- ✅ Better error messages (no false positives)
 
-## Correctness
+## Methodology
 
-**This IS the correct solution** for Rust's ownership model:
-1. `format!()` returns `String` (owned)
-2. Function expects `&str` (borrowed)
-3. String must live longer than the borrow
-4. Binding to variable extends lifetime through the call
+**TDD + Dogfooding:**
+1. Found bug while compiling game engine code
+2. Created minimal failing test (`method_self_by_value.wj`)
+3. Identified 3 layers of bugs through systematic investigation
+4. Fixed all 3 layers with proper root cause analysis
+5. Test passes, game code compiles
 
-This is not a workaround - it's how Rust is meant to work.
-
-## Files Changed
-
-- `src/codegen/rust/generator.rs` - Added format!() extraction for Call and MethodCall
-- `tests/bug_string_coercion_test.rs` - New test file with 4 TDD tests
-
-## TDD Methodology Validated
-
-✅ **Write test first** - All 4 tests written before fix  
-✅ **See it fail (RED)** - Tests failed with expected errors  
-✅ **Make it pass (GREEN)** - Implementation made all tests pass  
-✅ **Refactor** - Code is clean, no refactoring needed  
-✅ **No regressions** - All 239 existing tests still pass  
-✅ **Real-world verification** - Tested on actual game code
-
-## Next Steps
-
-1. ✅ Bug #3 COMPLETE
-2. Continue dogfooding: compile windjammer-game fully
-3. Fix Bug #2: Detect test files and generate [[test]] targets (TDD)
-4. Fix remaining compiler issues as discovered
+**No workarounds. Only proper fixes.** ✊
 
 ---
 
-**"If it's worth doing, it's worth doing right."** ✅ DONE RIGHT.
+**Windjammer Philosophy**: "If it's worth doing, it's worth doing right."
+
+This bug fix demonstrates the power of dogfooding - using Windjammer to build its own game engine exposed a critical compiler bug that would have affected all users. By fixing it properly with TDD, we made the language better for everyone.
