@@ -7081,7 +7081,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Ok("literal") -> Ok("literal".to_string())
                 // Err("literal") -> Err("literal".to_string())
                 // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
-                if matches!(func_name.as_str(), "Some" | "Ok" | "Err") {
+                
+                // TDD FIX (Bug #2): Detect ALL enum constructors, not just Some/Ok/Err
+                // Pattern: Module::Variant or Enum::Variant (both CamelCase)
+                let is_std_enum = matches!(func_name.as_str(), "Some" | "Ok" | "Err");
+                let is_custom_enum = func_name.contains("::") && {
+                    let parts: Vec<&str> = func_name.split("::").collect();
+                    parts.len() == 2 && 
+                    parts[0].chars().next().map_or(false, |c| c.is_uppercase()) &&
+                    parts[1].chars().next().map_or(false, |c| c.is_uppercase())
+                };
+                
+                if is_std_enum || is_custom_enum {
                     // TDD FIX (Bug #16 completion): Extract format!() to temp variables for enum variants too!
                     let generated_args: Vec<String> = arguments
                         .iter()

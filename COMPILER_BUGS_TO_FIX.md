@@ -63,6 +63,64 @@ OwnershipHint::Owned => {
 
 ---
 
+## Bug #2: format! in temp variable generates &_temp instead of _temp [HIGH PRIORITY]
+
+**Status**: 🔴 ACTIVE - TDD test created, fix in progress
+
+**Discovered**: 2026-02-25 during assets/loader.wj compilation
+
+**Symptom**:
+```windjammer
+enum AssetError {
+    InvalidFormat(String),
+}
+
+fn validate() -> Result<(), AssetError> {
+    Err(AssetError::InvalidFormat(format!("Error: {}", code)))
+}
+```
+
+**Generated Rust** (BUGGY):
+```rust
+Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(&_temp0) })
+//                                                                        ^^^^^^^^ BUG!
+```
+
+**Root Cause**:
+In `windjammer/src/codegen/rust/generator.rs`, when generating code for `format!()` in an expression context, the compiler creates a temporary variable but incorrectly passes `&_temp0` instead of `_temp0`.
+
+This causes two problems:
+1. **Type mismatch**: Expected `String`, found `&String`
+2. **Lifetime error**: `_temp0` goes out of scope immediately
+
+**The Fix**:
+```rust
+// Should generate:
+Err(AssetError::InvalidFormat(format!("Error: {}", code)))
+
+// Or if temp is needed:
+Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(_temp0) })
+//                                                                         ^^^^^^^^ No &!
+```
+
+**Test Case**: `windjammer/tests/bug_format_temp_var_lifetime.wj`
+
+**Impact**: Blocks any use of `format!()` in enum variants, function args, or struct fields that expect `String`.
+
+**Patterns Affected**:
+- `Err(EnumVariant(format!(...)))`
+- `func_call(format!(...))`
+- `Struct { field: format!(...) }`
+
+**Priority**: HIGH - Common pattern in error handling
+
+**Next Steps**:
+1. Find where format! generates temp variables in codegen
+2. Check if the result is being borrowed when it shouldn't be
+3. Remove the `&` prefix or eliminate temp variable entirely
+
+---
+
 ## Future Bugs to Document Here
 
 (Add more as we find them via dogfooding)

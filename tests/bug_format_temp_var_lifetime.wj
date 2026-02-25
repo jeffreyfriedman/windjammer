@@ -1,0 +1,87 @@
+// TDD TEST: Bug #2 - format! in temp variable creates &String instead of String
+// When format!() is used in a temporary variable and passed to a function/enum expecting String,
+// the compiler incorrectly generates `&_temp0` instead of `_temp0`, creating a lifetime issue.
+
+enum AssetError {
+    InvalidFormat(String),
+    TooLarge(String),
+}
+
+fn validate_extension(ext: String) -> Result<(), AssetError> {
+    if ext == "png" || ext == "jpg" {
+        Ok(())
+    } else {
+        // CRITICAL PATTERN: format! in expression context, passed to enum variant expecting String
+        Err(AssetError::InvalidFormat(format!("Unsupported file extension: {}", ext)))
+    }
+}
+
+fn validate_size(size: i32, max: i32) -> Result<(), AssetError> {
+    if size <= max {
+        Ok(())
+    } else {
+        // CRITICAL PATTERN: format! with multiple args, passed to enum variant expecting String
+        Err(AssetError::TooLarge(format!("Asset size {} exceeds max {}", size, max)))
+    }
+}
+
+pub fn test_format_in_error_enum() {
+    // Test 1: Invalid extension
+    let result = validate_extension("txt".to_string())
+    assert(result.is_err(), "Should reject invalid extension")
+    
+    match result {
+        Err(AssetError::InvalidFormat(msg)) => {
+            assert(msg.contains("Unsupported"), "Error message should contain 'Unsupported'")
+        }
+        _ => assert(false, "Wrong error variant")
+    }
+    
+    // Test 2: Size too large
+    let result2 = validate_size(1000, 500)
+    assert(result2.is_err(), "Should reject large size")
+    
+    match result2 {
+        Err(AssetError::TooLarge(msg)) => {
+            assert(msg.contains("exceeds"), "Error message should contain 'exceeds'")
+        }
+        _ => assert(false, "Wrong error variant")
+    }
+    
+    println("✅ format! in enum variants works correctly")
+}
+
+// Test case 2: format! in function argument
+fn log_error(message: String) {
+    println("ERROR: {}", message)
+}
+
+pub fn test_format_in_function_arg() {
+    let code = 404
+    let path = "/api/users"
+    
+    // CRITICAL PATTERN: format! directly in function argument
+    log_error(format!("HTTP {} for path {}", code, path))
+    
+    println("✅ format! in function args works correctly")
+}
+
+// Test case 3: format! in struct field
+struct ErrorReport {
+    message: String,
+    code: i32,
+}
+
+pub fn test_format_in_struct_field() {
+    let error_code = 500
+    let details = "Database connection failed"
+    
+    // CRITICAL PATTERN: format! in struct initialization
+    let report = ErrorReport {
+        message: format!("Error {}: {}", error_code, details),
+        code: error_code,
+    }
+    
+    assert(report.message.contains("Error 500"), "Message should contain error code")
+    println("✅ format! in struct fields works correctly")
+}
