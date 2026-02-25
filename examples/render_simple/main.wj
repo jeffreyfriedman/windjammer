@@ -1,0 +1,89 @@
+// Simple Rendering with Window - FFI Approach
+// This demonstrates how to create a window and render using external libraries
+
+// FFI declarations for GLFW (or we'll use winit in Rust)
+// For now, let's prove the concept with println-based "rendering"
+
+struct Window {
+    width: i32,
+    height: i32,
+    title: String,
+    is_open: bool,
+}
+
+impl Window {
+    fn new(width: i32, height: i32, title: String) -> Window {
+        println("Creating window: {} ({}x{})", title, width, height)
+        Window {
+            width: width,
+            height: height,
+            title: title,
+            is_open: true,
+        }
+    }
+    
+    fn update(&mut self) -> bool {
+        // Simulate frame update
+        self.is_open
+    }
+    
+    fn clear(&self, r: f32, g: f32, b: f32) {
+        println("Clear color: ({}, {}, {})", r, g, b)
+    }
+    
+    fn draw_rect(&self, x: f32, y: f32, w: f32, h: f32) {
+        println("Draw rect at ({}, {}) size {}x{}", x, y, w, h)
+    }
+    
+    fn close(&mut self) {
+        println("Closing window: {}", self.title)
+        self.is_open = false
+    }
+}
+
+pub fn main() {
+    println("=== WINDJAMMER RENDERING DEMO ===")
+    println("")
+    
+    let mut window = Window::new(800, 600, "Windjammer Game".to_string())
+    
+    println("Entering render loop...")
+    let mut frame = 0
+    
+    // Simulate 10 frames
+    while window.update() && frame < 10 {
+        let time = (frame as f32) * 0.1
+        // TODO: Fix compiler bug - f32 method calls generate wrong code
+        let r = 0.5  // time.sin() * 0.5 + 0.5
+        let g = 0.7  // (time + 2.0).sin() * 0.5 + 0.5
+        let b = 0.9  // (time + 4.0).sin() * 0.5 + 0.5
+        
+        window.clear(r, g, b)
+        
+        // Draw a simple "paddle"
+        let paddle_x = 350.0
+        let paddle_y = 550.0
+        window.draw_rect(paddle_x, paddle_y, 100.0, 20.0)
+        
+        // Draw a "ball"
+        let ball_x = 400.0 + (frame as f32) * 10.0
+        let ball_y = 300.0
+        window.draw_rect(ball_x, ball_y, 10.0, 10.0)
+        
+        frame += 1
+        
+        if frame % 5 == 0 {
+            println("--- Frame {} ---", frame)
+        }
+    }
+    
+    window.close()
+    
+    println("")
+    println("✅ Rendering demo complete!")
+    println("   - Window created")
+    println("   - 10 frames rendered")
+    println("   - Simulated paddle + ball")
+    println("")
+    println("Next: Add real FFI to winit/wgpu for actual rendering!")
+}
