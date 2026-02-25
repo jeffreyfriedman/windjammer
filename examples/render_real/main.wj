@@ -1,0 +1,98 @@
+// Real rendering with FFI to winit + wgpu
+// This demonstrates Windjammer's Rust interop capability
+
+// FFI declarations for window and rendering
+extern fn wgpu_init() -> i32
+extern fn wgpu_create_window(width: i32, height: i32, title: &str) -> i32
+extern fn wgpu_should_close() -> bool
+extern fn wgpu_poll_events()
+extern fn wgpu_clear(r: f32, g: f32, b: f32)
+extern fn wgpu_present()
+extern fn wgpu_shutdown()
+
+struct Color {
+    r: f32,
+    g: f32,
+    b: f32,
+}
+
+impl Color {
+    fn new(r: f32, g: f32, b: f32) -> Color {
+        Color { r, g, b }
+    }
+    
+    fn from_hue(hue: f32) -> Color {
+        let h = hue % 360.0
+        let s = 1.0
+        let v = 1.0
+        
+        let c = v * s
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0))
+        let m = v - c
+        
+        // Simplified HSV to RGB
+        let r = if h < 60.0 { c } else if h < 120.0 { x } else if h < 180.0{ 0.0 } else if h < 240.0 { 0.0 } else if h < 300.0 { x } else { c }
+        let g = if h < 60.0 { x } else if h < 120.0 { c } else if h < 180.0 { c } else if h < 240.0 { x } else { 0.0 }
+        let b = if h < 60.0 { 0.0 } else if h < 120.0 { 0.0 } else if h < 180.0 { x } else if h < 240.0 { c } else if h < 300.0 { c } else { x }
+        
+        Color::new(r + m, g + m, b + m)
+    }
+}
+
+pub fn main() {
+    println("╔═══════════════════════════════════════════╗")
+    println("║  WINDJAMMER REAL RENDERING TEST           ║")
+    println("╚═══════════════════════════════════════════╝")
+    println("")
+    
+    // Initialize graphics
+    let result = wgpu_init()
+    if result != 0 {
+        println("❌ Failed to initialize wgpu: {}", result)
+        return
+    }
+    
+    let window = wgpu_create_window(800, 600, "Windjammer Rendering Test")
+    if window != 0 {
+        println("❌ Failed to create window: {}", window)
+        return
+    }
+    
+    println("✅ Window created successfully!")
+    println("   - Size: 800x600")
+    println("   - Backend: wgpu")
+    println("")
+    println("Rendering color cycle...")
+    
+    // Main render loop
+    let mut frame = 0
+    while !wgpu_should_close() {
+        wgpu_poll_events()
+        
+        // Animate color through rainbow
+        let hue = (frame % 360) as f32
+        let color = Color::from_hue(hue)
+        
+        // Clear to animated color
+        wgpu_clear(color.r, color.g, color.b)
+        wgpu_present()
+        
+        frame += 1
+        
+        // Print status every 60 frames
+        if frame % 60 == 0 {
+            println("Frame {} - Hue: {}", frame, hue)
+        }
+    }
+    
+    println("")
+    println("✅ Render loop complete!")
+    println("   Frames rendered: {}", frame)
+    
+    wgpu_shutdown()
+    
+    println("")
+    println("╔═══════════════════════════════════════════╗")
+    println("║  WINDJAMMER RENDERING SUCCESS!            ║")
+    println("╚═══════════════════════════════════════════╝")
+}
