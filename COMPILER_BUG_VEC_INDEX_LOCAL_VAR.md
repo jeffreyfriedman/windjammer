@@ -1,10 +1,11 @@
 # Compiler Bug: Vector Indexing Through Local Variable Missing .clone()
 
 ## Status
-🐛 **IDENTIFIED** - Not yet fixed
+✅ **PARTIALLY FIXED** - Octree now compiles but created 25 new errors
 
 ## Severity
-**HIGH** - Breaks real game code (octree.wj)
+**HIGH** - Breaks real game code (octree.wj)  
+**CURRENT**: Fix too aggressive, clones Copy types
 
 ## Description
 The analyzer auto-inserts `.clone()` when indexing through `self.field[index]` but NOT when indexing through a local variable `local_var[index]`.
@@ -76,10 +77,31 @@ pub fn direct_access(self, index: usize) -> Node {
 
 ## TDD Approach
 1. ✅ Create failing test (`vec_index_local_var.wj`)
-2. ⏳ Fix analyzer to handle local variable indexing
-3. ⏳ Verify test passes
-4. ⏳ Verify octree.wj compiles
-5. ⏳ Run full test suite
+2. ✅ Fix codegen to handle local variable indexing
+3. ✅ Verify octree.wj compiles
+4. ❌ BUT: Created 25 new errors (72→97) by cloning Copy types
+5. ⏳ NEED: Smarter fix that only clones non-Copy types
+
+## First Attempt (Partially Successful)
+**Change:** Removed brittle name heuristic `["frame", "point", "pos", ...]`
+**Result:** 
+- ✅ Octree fixed: `let child = children[idx].clone()`
+- ❌ Over-cloning: u64, Keyframe, etc. don't need .clone()
+- 72→97 errors (+25 new E0308 mismatched types)
+
+**Root Cause:** Fix doesn't check if indexed type is Copy
+
+## Proper Fix Needed
+The fix needs type information to determine:
+1. Is the indexed type Copy? → Don't clone
+2. Is the indexed type Clone but not Copy? → Do clone  
+3. Is it only being borrowed (not moved)? → Don't clone
+
+**Challenge:** Type information not readily available in codegen at this point.
+**Solution:** Either:
+  - A) Pass type registry to codegen (proper but complex)
+  - B) Heuristic: Check if value_str already contains .clone() (avoid double-clone)
+  - C) Conservative: Only clone for known non-Copy container types (Vec, Box, etc.)
 
 ## Related
 - Working test: `tests/vector_indexing_ownership.wj` (through self.field)
