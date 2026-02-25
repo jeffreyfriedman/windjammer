@@ -1,0 +1,39 @@
+// TDD Test: Vector indexing through local variable should auto-clone
+// Bug: `local_var[index]` doesn't auto-insert .clone(), but `self.field[index]` does
+// This is the exact pattern in octree.wj
+
+struct Node {
+    value: i32,
+    children: Option<Vec<Node>>,
+}
+
+impl Node {
+    pub fn new(value: i32) -> Node {
+        Node {
+            value: value,
+            children: None,
+        }
+    }
+    
+    // THIS WORKS - indexing through self.field
+    pub fn direct_access(self, index: usize) -> Node {
+        let children = self.children.unwrap()
+        children[index]  // Should auto-clone but doesn't!
+    }
+    
+    // Compare with this pattern which DOES work
+    pub fn through_self(self, index: usize) -> Node {
+        let children_ref = self.children.unwrap()
+        // If we store in local var and index, it fails
+        children_ref[index]
+    }
+}
+
+pub fn test_local_var_indexing() {
+    let mut node = Node::new(10)
+    node.children = Some(Vec::new())
+    node.children.unwrap().push(Node::new(5))
+    
+    let child = node.direct_access(0)
+    assert_eq!(child.value, 5)
+}
