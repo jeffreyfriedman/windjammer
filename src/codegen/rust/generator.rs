@@ -4533,11 +4533,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         if self.variable_is_only_field_accessed(name) {
                                             // Only field-accessed → optimize with borrow
                                             // Example: let frame = frames[i]; frame.x += 1;
+                                            // Generate: let frame = &frames[i]
+                                            // TDD FIX: Set in_borrow_context BEFORE generating expression
+                                            // to prevent Expression::Index from adding .clone()
+                                            // Without this: value_str = "vec[i].clone()" then "&" → "&vec[i].clone()" ❌
+                                            // With this: value_str = "vec[i]" then "&" → "&vec[i]" ✅
+                                            let prev_borrow_ctx = self.in_borrow_context;
+                                            self.in_borrow_context = true;
+                                            value_str = self.generate_expression(value);
+                                            self.in_borrow_context = prev_borrow_ctx;
                                             value_str = format!("&{}", value_str);
                                         } else {
                                             // Moved/returned → need explicit clone
                                             // Example: let child = children[idx]; recursive(child);
-                                            value_str = format!("{}.clone()", value_str);
+                                            // Expression::Index will add .clone() automatically
+                                            // (no need to add it here - already in value_str)
                                         }
                                     }
                                 } else {
@@ -10304,6 +10314,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             Statement::Expression { expr, .. } => {
                 self.analyze_variable_usage_in_expression(var_name, expr)
+            }
+            // TDD FIX: Handle Statement::Let to detect variable usage in let bindings
+            // Bug: `let node = vec[idx]; let result = func(node);` was not detecting
+            // that `node` is moved in the second let statement!
+            Statement::Let { value, .. } => {
+                // Check if the variable is used in the value expression
+                // value is &Expression since stmt is &Statement
+                self.analyze_variable_usage_in_expression(var_name, value)
             }
             Statement::If {
                 condition,
