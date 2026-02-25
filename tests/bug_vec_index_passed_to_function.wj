@@ -1,0 +1,48 @@
+// TDD Test: Vec indexing where element is immediately passed to function
+// Bug: Compiler adds & instead of .clone(), causing E0507
+//
+// This is the EXACT pattern from octree.wj:
+//   let child = children[idx]
+//   Self::get_recursive(child, ...)  // ERROR: cannot move *child
+
+// CRITICAL: This struct must NOT be Copy!
+// Vec is not Copy, so Node containing Vec cannot be Copy
+struct Node {
+    value: i32,
+    data: Vec<i32>,  // Makes Node non-Copy
+}
+
+fn process_node(node: Node) -> i32 {
+    node.value * 2
+}
+
+fn recursive_process(nodes: Vec<Node>, idx: i32) -> i32 {
+    if idx >= nodes.len() as i32 {
+        return 0
+    }
+    
+    // CRITICAL PATTERN: Index, assign to variable, immediately pass to function
+    let node = nodes[idx as usize]  // Should add .clone(), NOT &
+    let result = process_node(node)  // This moves node
+    
+    result + recursive_process(nodes, idx + 1)
+}
+
+pub fn test_vec_index_then_call() {
+    let nodes = vec![
+        Node { value: 10 },
+        Node { value: 20 },
+        Node { value: 30 },
+    ]
+    
+    let result = recursive_process(nodes, 0)
+    assert_eq!(result, 120)  // (10*2) + (20*2) + (30*2) = 120
+}
+
+// Simpler version
+pub fn test_vec_index_direct_call() {
+    let nodes = vec![Node { value: 5 }]
+    let node = nodes[0]
+    let result = process_node(node)
+    assert_eq!(result, 10)
+}
