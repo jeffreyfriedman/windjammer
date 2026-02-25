@@ -1,0 +1,61 @@
+// TDD Test: Method self-by-value incorrectly infers &mut
+// Bug: Methods that take `self` (owned) are being called with `&mut`
+//
+// Pattern from game engine math:
+//   impl Mat4 {
+//       fn multiply(self, other: Mat4) -> Mat4 { ... }
+//   }
+//   let result = identity.multiply(other)  // Should move identity, not borrow
+
+struct Transform {
+    x: f32,
+    y: f32,
+    rotation: f32,
+}
+
+impl Transform {
+    fn new() -> Transform {
+        Transform { x: 0.0, y: 0.0, rotation: 0.0 }
+    }
+    
+    // Takes self by value (consumes self)
+    fn translate(self, dx: f32, dy: f32) -> Transform {
+        Transform {
+            x: self.x + dx,
+            y: self.y + dy,
+            rotation: self.rotation,
+        }
+    }
+    
+    // Takes self by value (consumes self)
+    fn rotate(self, angle: f32) -> Transform {
+        Transform {
+            x: self.x,
+            y: self.y,
+            rotation: self.rotation + angle,
+        }
+    }
+}
+
+pub fn test_method_chain_by_value() {
+    // Builder pattern: each method consumes self and returns new value
+    let transform = Transform::new()
+        .translate(10.0, 20.0)
+        .rotate(45.0)
+        .translate(5.0, 5.0)
+    
+    assert_eq!(transform.x, 15.0)
+    assert_eq!(transform.y, 25.0)
+    assert_eq!(transform.rotation, 45.0)
+}
+
+pub fn test_single_method_by_value() {
+    let t1 = Transform::new()
+    let t2 = t1.translate(100.0, 200.0)  // t1 is moved, not borrowed
+    
+    assert_eq!(t2.x, 100.0)
+    assert_eq!(t2.y, 200.0)
+    
+    // This should NOT compile (t1 was moved):
+    // let t3 = t1.rotate(90.0)  
+}
