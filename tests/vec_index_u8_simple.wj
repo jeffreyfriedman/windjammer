@@ -1,0 +1,14 @@
+// Minimal test: u8 vector indexing should NOT add & or .clone()
+
+pub fn test_u8_indexing() {
+    let mask = vec![1, 2, 3, 4]  // Vec<i32>
+    let color_id = mask[0]  // Should be: let color_id = mask[0] (Copy, no &)
+    
+    if color_id == 0 {
+        return
+    }
+    
+    // Use it
+    let result = color_id + 10
+    assert_eq!(result, 11)
+}
