@@ -7260,7 +7260,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 // WINDJAMMER FIX: Enum variant constructors like GameEvent::ItemPickup("text")
                                 // need .to_string() when the variant field is String type
                                 if let Some(variant_types) = self.enum_variant_types.get(&func_name) {
-                                    variant_types.get(i).is_some_and(|ty| matches!(ty, Type::String))
+                                    // TDD FIX: Check for both Type::String and Type::Custom("String")
+                                    variant_types.get(i).is_some_and(|ty| {
+                                        matches!(ty, Type::String)
+                                            || matches!(ty, Type::Custom(name) if name == "String")
+                                    })
                                 } else {
                                     // Fallback heuristic for constructors
                                     func_name == "new" || func_name.ends_with("::new")
