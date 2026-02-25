@@ -1,8 +1,8 @@
 # Compiler Bugs Found via Dogfooding - TO FIX WITH TDD
 
-## Bug #1: Method self-by-value incorrectly infers &mut [HIGH PRIORITY]
+## Bug #1: Method self-by-value incorrectly infers &mut [FIXED ✅]
 
-**Status**: 🟡 IN PROGRESS - Partial fix applied, deeper issue found
+**Status**: ✅ FIXED - Test passing as of 2026-02-25
 
 **Discovered**: 2026-02-24 during camera matrices test compilation
 
