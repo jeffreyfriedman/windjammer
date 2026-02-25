@@ -4504,22 +4504,47 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // This is safe because String auto-borrows to &str when needed.
                         let mut value_str = self.generate_expression(value);
 
-                        // TDD FIX: Vec indexing of non-Copy types needs .clone()
-                        // BUG FIX: Previous heuristic only checked certain variable names like "frame", "point"
-                        // But "child", "node", etc. were excluded, causing E0507 errors in octree.wj
-                        // NEW APPROACH: Always apply optimization for ALL vector indexing
+                        // TDD FIX: Vec indexing ownership inference
+                        // WINDJAMMER PHILOSOPHY: "Compiler does the hard work, not the developer"
+                        // 
+                        // Pattern: let x = vec[i]
+                        // If vec[i] type is Copy → no modification needed (Rust copies automatically)
+                        // If vec[i] type is Clone (not Copy):
+                        //   - If only field-accessed → &vec[i] (optimize to borrow)
+                        //   - If moved/returned → vec[i].clone() (need explicit clone)
                         if matches!(value, Expression::Index { .. }) {
                             if let Some(name) = var_name {
-                                // DATA FLOW ANALYSIS: Check if variable is only used for field access
-                                if self.variable_is_only_field_accessed(name) {
-                                    // Variable only used for field access → auto-borrow (don't clone)
-                                    // Example: let frame = frames[i]; frame.x += 1;
-                                    value_str = format!("&{}", value_str);
+                                // TDD FIX: Only apply ownership transformations if we can infer the type
+                                // WINDJAMMER PHILOSOPHY: Be conservative - better to get a clear E0507 
+                                // than add wrong & causing E0308
+                                let indexed_type = self.infer_expression_type(value);
+                                
+                                if let Some(elem_type) = indexed_type {
+                                    // SUCCESS: We know the element type
+                                    let is_copy = self.is_type_copy(&elem_type);
+
+                                    if is_copy {
+                                        // Copy types don't need & or .clone() - Rust copies automatically
+                                        // Example: let x = numbers[0] → let x = numbers[0]
+                                        // DO NOTHING - leave as-is
+                                    } else {
+                                        // Non-Copy type - need to decide between & and .clone()
+                                        // DATA FLOW ANALYSIS: Check how variable is used
+                                        if self.variable_is_only_field_accessed(name) {
+                                            // Only field-accessed → optimize with borrow
+                                            // Example: let frame = frames[i]; frame.x += 1;
+                                            value_str = format!("&{}", value_str);
+                                        } else {
+                                            // Moved/returned → need explicit clone
+                                            // Example: let child = children[idx]; recursive(child);
+                                            value_str = format!("{}.clone()", value_str);
+                                        }
+                                    }
                                 } else {
-                                    // Variable is moved/returned → need to clone
-                                    // Example: let child = children[idx]; recursive(child);
-                                    // WINDJAMMER PHILOSOPHY: Compiler does the hard work, not the developer
-                                    value_str = format!("{}.clone()", value_str);
+                                    // CANNOT INFER: Leave as-is, let Rust give clear error
+                                    // This happens when Vec is created without explicit type annotation
+                                    // Example: let mask = Vec::with_capacity(size); let x = mask[i];
+                                    // Better to get E0507 "cannot move" than E0308 "expected u8, found &u8"
                                 }
                             }
                         } else if matches!(
@@ -5959,6 +5984,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if method == "clone" {
                     return self.infer_expression_type(object);
                 }
+                // TDD FIX: .unwrap() on Option<T> → T
+                if method == "unwrap" {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        if let Type::Option(inner) = obj_type {
+                            return Some(*inner);
+                        }
+                    }
+                }
                 // Iterator methods: return the collection type so
                 // extract_iterator_element_type can extract the element type.
                 // This enables type inference for loop variables:
@@ -6066,7 +6099,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 None
             }
-            // Index expressions: vec[i] → element type of the collection
+            // TDD FIX: Index expressions: vec[i] → element type of the collection
+            // Example: let mask: Vec<u8> = ...; let color_id = mask[i]; → color_id: u8
             Expression::Index { object, .. } => {
                 if let Some(obj_type) = self.infer_expression_type(object) {
                     match obj_type {
