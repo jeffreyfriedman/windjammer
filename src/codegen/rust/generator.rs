@@ -6417,8 +6417,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // Result is usize if:
                         // - Both are usize, OR
                         // - One is usize and the other is an int literal
-                        (left_is_usize && right_is_usize) ||
-                        (left_is_usize && right_is_literal) ||
+                        (left_is_usize && (right_is_usize || right_is_literal)) ||
                         (right_is_usize && left_is_literal)
                     }
                     // Comparison/logical operations don't produce usize
@@ -7185,8 +7184,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 let is_custom_enum = func_name.contains("::") && {
                     let parts: Vec<&str> = func_name.split("::").collect();
                     parts.len() == 2 && 
-                    parts[0].chars().next().map_or(false, |c| c.is_uppercase()) &&
-                    parts[1].chars().next().map_or(false, |c| c.is_uppercase())
+                    parts[0].chars().next().is_some_and(|c| c.is_uppercase()) &&
+                    parts[1].chars().next().is_some_and(|c| c.is_uppercase())
                 };
                 
                 if is_std_enum || is_custom_enum {
@@ -7208,7 +7207,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
                                     // Strip leading & if present
                                     let format_expr = if arg_str.starts_with("&") {
-                                        &arg_str[1..]
+                                        arg_str.strip_prefix("&").unwrap()
                                     } else {
                                         arg_str
                                     };
@@ -7240,7 +7239,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         .map(|(i, arg_str)| {
                             // Get the original argument expression for type checking
                             let arg = &arguments[i].1;
-                            let mut result = arg_str.clone();
+                                    let result = arg_str.clone();
                             
                             // Auto-convert string literals to String for Option/Result wrappers
                             if matches!(
@@ -8064,7 +8063,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
                                 // Strip leading & if present (was added by argument processing)
                                 let format_expr = if arg_str.starts_with("&") {
-                                    &arg_str[1..]
+                                    arg_str.strip_prefix("&").unwrap()
                                 } else {
                                     arg_str
                                 };
@@ -9807,6 +9806,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Check if a while condition compares a variable to a usize expression
     /// Examples: i < vec.len(), i < vec.len() - 1, idx < items.len()
+    #[allow(dead_code)]
     fn condition_compares_to_usize(&self, condition: &Expression, var_name: &str) -> bool {
         match condition {
             Expression::Binary { left, op, right, .. } => {
@@ -9841,6 +9841,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Check if a variable is incremented in a loop body
     /// Patterns: i = i + 1, i += 1, i = i + step
+    #[allow(dead_code)]
     fn variable_is_incremented_in_body(body: &[&Statement], var_name: &str) -> bool {
         for stmt in body {
             match stmt {
@@ -9879,6 +9880,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Check if an expression increments a variable: var + 1, var + step, etc.
+    #[allow(dead_code)]
     fn expression_increments_variable(expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::Binary { left, op, .. } => {
@@ -9894,11 +9896,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
     /// Check if a variable is used in a comparison with usize expression in current function
     /// This helps detect while loop indices: while i < vec.len()
+    #[allow(dead_code)]
     fn variable_used_with_usize_in_function(&self, var_name: &str) -> bool {
         self.variable_used_with_usize_in_statements(&self.current_function_body, var_name)
     }
 
     /// Recursively check if variable is compared with usize expression
+    #[allow(dead_code)]
     fn variable_used_with_usize_in_statements(&self, stmts: &[&Statement], var_name: &str) -> bool {
         for stmt in stmts {
             match stmt {
@@ -9935,6 +9939,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     }
 
     /// Check if expression uses variable in comparison with usize
+    #[allow(dead_code)]
     fn expression_uses_var_with_usize(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::Binary { left, op, right, .. } => {
