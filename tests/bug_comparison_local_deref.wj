@@ -1,0 +1,18 @@
+// TDD: Bug #6 - Comparison with borrowed local variable
+// Right side of comparison needs deref when it's a borrowed local
+
+fn get_value() -> i32 {
+    return 42;
+}
+
+fn check_threshold(threshold: i32) -> bool {
+    // Bug #6: get_value() returns i32, threshold is &i32
+    // Should auto-deref: get_value() > *threshold
+    // Currently: error[E0308]: expected i32, found &i32
+    return get_value() > threshold;
+}
+
+fn main() {
+    let result = check_threshold(30);
+    println!("Result: {}", result);
+}

@@ -1,5 +1,39 @@
 # Compiler Bugs Found via Dogfooding - TO FIX WITH TDD
 
+## 🔴 ACTIVE BUG
+
+### Bug #6: Enum match on `&self` creates borrowed bindings needing deref [ACTIVE]
+
+**Status:** ACTIVE 🔴 - Test case created, bug reproduced (2026-02-26)
+**Severity:** High (blocks 21 E0308 errors in game library)
+**Test Case:** `tests/bug_enum_self_borrow.wj`
+
+**Problem:**
+When matching on `&self` inside impl methods, enum variant destructuring creates borrowed bindings (`&T`). These need auto-deref when used in comparisons or as function arguments.
+
+**Example:**
+```windjammer
+impl Condition {
+    pub fn check(self) -> bool {  // codegen converts to &self
+        match self {
+            Condition::ThresholdCheck(threshold) => {
+                return get_value() > threshold;  // ERROR: expected i32, found &i32
+            }
+        }
+    }
+}
+```
+
+**Root Cause:** Pattern matching on `&enum` borrows variant fields, but codegen doesn't track or auto-deref these bindings.
+
+**Fix Strategy:** Track enum match bindings, detect borrowed enums, add auto-deref in binary ops/function args.
+
+**Next:** Implement analyzer/codegen changes with TDD.
+
+---
+
+## ✅ FIXED BUGS
+
 ## Bug #1: Method self-by-value incorrectly infers &mut [FIXED ✅]
 
 **Status**: ✅ FIXED - Test passing as of 2026-02-25
