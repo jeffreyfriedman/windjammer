@@ -1,0 +1,18 @@
+// TDD: Bug #6 - Function arguments need auto-deref
+// When calling function with borrowed param, should auto-deref
+
+fn add_numbers(a: i32, b: i32) -> i32 {
+    return a + b;
+}
+
+fn calculate(x: i32, y: i32) -> i32 {
+    // Bug #6: x and y are borrowed (&i32), but add_numbers expects i32
+    // Should auto-deref: add_numbers(*x, *y)
+    // Currently: error[E0308]: expected i32, found &i32
+    return add_numbers(x, y);
+}
+
+fn main() {
+    let result = calculate(10, 20);
+    println!("Result: {}", result);
+}
