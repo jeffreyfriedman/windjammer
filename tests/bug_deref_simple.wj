@@ -1,0 +1,13 @@
+// TDD: Minimal test for borrowed param deref in comparison
+// Bug #5 simplified - just the comparison issue
+
+fn test_comparison(name: String) -> bool {
+    let stored = "hello".to_string();
+    return stored == name;  // Should work: String == &String with auto-deref
+}
+
+fn main() {
+    let n = "hello".to_string();
+    let result = test_comparison(n);
+    println!("Result: {}", result);
+}

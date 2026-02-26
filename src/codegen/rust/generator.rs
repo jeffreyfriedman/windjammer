@@ -2736,11 +2736,45 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     BinaryOp::Shl => "<<",
                     BinaryOp::Shr => ">>",
                 };
+                
+                // TDD FIX (Bug #5): For comparison operators, add auto-deref for borrowed parameters
+                // When comparing owned vs borrowed (String == &String), we need to dereference
+                // the borrowed side to make them compatible: String == *&String
+                let is_comparison = matches!(
+                    op,
+                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                );
+                
+                let left_str = self.generate_expression_immut(left);
+                let right_str = self.generate_expression_immut(right);
+                
+                // Check if right side is a borrowed parameter identifier that needs dereferencing
+                let right_needs_deref = if is_comparison {
+                    if let Expression::Identifier { name, .. } = right {
+                        // Check if this identifier is a borrowed parameter (&T)
+                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());
+                        eprintln!("DEBUG DEREF: comparison with identifier '{}', is_borrowed={}, borrowed_set={:?}", 
+                                  name, is_borrowed, self.inferred_borrowed_params);
+                        is_borrowed
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                
+                let final_right = if right_needs_deref {
+                    eprintln!("DEBUG DEREF: Adding * to {}", right_str);
+                    format!("*{}", right_str)
+                } else {
+                    right_str
+                };
+                
                 format!(
                     "{} {} {}",
-                    self.generate_expression_immut(left),
+                    left_str,
                     op_str,
-                    self.generate_expression_immut(right)
+                    final_right
                 )
             }
             Expression::FieldAccess { object, field, .. } => {
@@ -3692,7 +3726,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // These need `&` auto-inserted to prevent consuming the collection.
         self.precompute_for_loop_borrows(&func.body);
 
-        // Track parameters inferred as borrowed for field access cloning
+        // Track parameters inferred as borrowed for auto-deref in comparisons (Bug #5)
         self.inferred_borrowed_params.clear();
         for (param_name, ownership) in &analyzed.inferred_ownership {
             if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
@@ -6790,6 +6824,18 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 }
                 if right_needs_cast_parens {
                     right_str = format!("({})", right_str);
+                }
+
+                // TDD FIX (Bug #5): Auto-deref borrowed parameters in comparisons
+                // When comparing owned vs borrowed (String == &String), add * to borrowed side
+                // Check if right operand is a borrowed parameter identifier
+                if is_comparison {
+                    if let Expression::Identifier { name, .. } = right {
+                        if self.inferred_borrowed_params.contains(name.as_str()) {
+                            // YES! This parameter was inferred as borrowed, add deref
+                            right_str = format!("*{}", right_str);
+                        }
+                    }
                 }
 
                 format!("{} {} {}", left_str, op_str, right_str)
