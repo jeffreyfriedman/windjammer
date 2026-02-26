@@ -8,7 +8,7 @@ use std::process::Command;
 fn test_method_self_by_value_compiles() {
     // Compile the Windjammer test file
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--bin", "wj", "--", "build", "tests/bug_method_self_by_value.wj", "--target", "/tmp/bug_method_self_by_value"])
+        .args(["run", "--release", "--bin", "wj", "--", "build", "tests/bug_method_self_by_value.wj", "--target", "/tmp/bug_method_self_by_value"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to execute wj build");
@@ -34,7 +34,7 @@ fn test_method_self_by_value_compiles() {
 
     // Verify the generated Rust compiles
     let rust_compile = Command::new("cargo")
-        .args(&["build", "--release"])
+        .args(["build", "--release"])
         .current_dir("/tmp/bug_method_self_by_value")
         .output()
         .expect("Failed to compile generated Rust");

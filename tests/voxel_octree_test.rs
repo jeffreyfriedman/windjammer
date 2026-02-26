@@ -1,12 +1,12 @@
-/// TDD Phase 3: SVO Octree - Sparse Voxel Octree
-///
-/// Goal: 10x+ memory compression for sparse voxel grids
-/// Tests: OctreeNode, grid-to-octree conversion, memory efficiency
+//! TDD Phase 3: SVO Octree - Sparse Voxel Octree
+//!
+//! Goal: 10x+ memory compression for sparse voxel grids
+//! Tests: OctreeNode, grid-to-octree conversion, memory efficiency
 
 use std::path::PathBuf;
 use std::fs;
 
-fn compile_and_run(source: &str, test_name: &str) -> (bool, String) {
+fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_voxel_octree_{}_{}",
         std::time::SystemTime::now()

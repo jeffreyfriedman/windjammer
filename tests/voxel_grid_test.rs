@@ -1,7 +1,7 @@
-/// TDD Phase 1: Voxel Grid Data Structure
-/// 
-/// Goal: Create basic voxel grid for storing 3D voxel data
-/// This is the foundation for MagicaVoxel-quality rendering in Windjammer!
+//! TDD Phase 1: Voxel Grid Data Structure
+//! 
+//! Goal: Create basic voxel grid for storing 3D voxel data
+//! This is the foundation for MagicaVoxel-quality rendering in Windjammer!
 
 use std::path::PathBuf;
 use std::fs;

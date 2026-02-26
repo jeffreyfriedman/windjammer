@@ -1,10 +1,10 @@
-/// TDD for Bug #2: Detect test files and generate [[test]] targets
-/// 
-/// Problem: Compiler generates Cargo.toml without [[bin]] or [[test]] targets,
-///          causing test files to not be recognized properly.
-/// 
-/// Solution: Detect test files (containing #[test] functions) and generate
-///           appropriate [[test]] targets. Generate [[bin]] for executables.
+//! TDD for Bug #2: Detect test files and generate [[test]] targets
+//! 
+//! Problem: Compiler generates Cargo.toml without [[bin]] or [[test]] targets,
+//!          causing test files to not be recognized properly.
+//! 
+//! Solution: Detect test files (containing #[test] functions) and generate
+//!           appropriate [[test]] targets. Generate [[bin]] for executables.
 
 use std::path::PathBuf;
 use std::fs;

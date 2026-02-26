@@ -707,11 +707,6 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        eprintln!("DEBUG: Found {} trait implementations", trait_impls.len());
-        for trait_name in trait_impls.keys() {
-            eprintln!("DEBUG:   - {}", trait_name);
-        }
-
         // Step 2: For each trait, analyze ALL implementations and determine most permissive signature
         for (trait_name, impl_blocks) in trait_impls {
             eprintln!(
@@ -995,16 +990,9 @@ impl<'ast> Analyzer<'ast> {
                         }
                     } else {
                         // TDD DEBUG (Bug #5): Log before inference path selection
-                        let debug_param = param.name == "quest_id";
-                        if debug_param {
-                            eprintln!("DEBUG Bug #5: Parameter '{}' type {:?}", param.name, param.type_);
-                            eprintln!("DEBUG Bug #5: is_copy_type = {}", self.is_copy_type(&param.type_));
-                        }
-                        
                         // For Copy types, check if they're mutated first
                         // Mutated Copy types should be &mut, not Owned
                         if self.is_copy_type(&param.type_) {
-                            if debug_param { eprintln!("DEBUG Bug #5: COPY TYPE PATH -> Owned"); }
                             // Still check for mutation - mutated Copy types need &mut
                             if self.is_mutated(&param.name, &func.body) {
                                 OwnershipMode::MutBorrowed
@@ -1012,8 +1000,7 @@ impl<'ast> Analyzer<'ast> {
                                 // Non-mutated Copy types default to Owned (pass by value)
                                 OwnershipMode::Owned
                             }
-                        } else {
-                            if debug_param { eprintln!("DEBUG Bug #5: NOT COPY -> calling infer_parameter_ownership"); }
+                            } else {
                             // Perform inference based on usage in function body
                             self.infer_parameter_ownership(
                                 &param.name,
@@ -1214,12 +1201,6 @@ impl<'ast> Analyzer<'ast> {
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
-        // TDD DEBUG (Bug #5): Log which check triggers for this parameter
-        let debug_param = param_name == "quest_id";
-        if debug_param {
-            eprintln!("DEBUG Bug #5: Analyzing parameter '{}' type {:?}", param_name, param_type);
-        }
-        
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
         // Generic types like T, G, S should always be passed by value.
@@ -1243,17 +1224,13 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Check if parameter is mutated
         if self.is_mutated(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_mutated -> MutBorrowed"); }
             return Ok(OwnershipMode::MutBorrowed);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT mutated"); }
 
         // 2. Check if parameter is returned (escapes function)
         if self.is_returned(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_returned -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT returned"); }
 
         // 2.3. WINDJAMMER FIX: Check if parameter is used in if/else expression
         // When a parameter appears in an if/else that's assigned or returned,
@@ -1272,10 +1249,8 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_stored -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT stored"); }
 
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
         // TDD FIX (Bug #5): Comparison operators (==, !=, <, >, <=, >=) work with borrowed
@@ -1286,28 +1261,22 @@ impl<'ast> Analyzer<'ast> {
         // For comparisons, borrowed parameters work fine:
         // `if str1 == str2` works whether str1/str2 are &String or String
         if self.is_used_in_arithmetic_op(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_used_in_arithmetic_op -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT used in arithmetic ops"); }
 
         // 5. Check if parameter is pattern matched with field extraction
         // Borrowing an enum and pattern matching extracts references to fields
         // which breaks calls expecting owned values. Keep such parameters owned.
         if self.is_pattern_matched_with_fields(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_pattern_matched_with_fields -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT pattern matched with fields"); }
 
         // 6. TDD: Check if parameter is iterated over in a for loop
         // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
         // and elements are moved out. The parameter must be owned, not borrowed.
         if self.is_iterated_over(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_iterated_over -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT iterated over"); }
 
         // 7. TDD: Check if parameter is passed as a direct (non-&) argument to a
         // function or method call. This could consume the parameter (the callee
@@ -1318,10 +1287,8 @@ impl<'ast> Analyzer<'ast> {
         // Counter-example: data.len() — data is the receiver, not an argument
         // Counter-example: process(&data) — & prevents consumption
         if self.is_passed_as_argument(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_passed_as_argument -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT passed as argument"); }
 
         // 7.5. TDD: Check if parameter is the receiver of potentially-mutating method calls.
         // If the parameter has user-defined methods called on it (not just known read-only
@@ -1332,10 +1299,8 @@ impl<'ast> Analyzer<'ast> {
         // Counter-example: data.len() — .len() is known read-only
         // Counter-example: object.name — field access, not a method call
         if self.has_potentially_mutating_method_call(param_name, body) {
-            if debug_param { eprintln!("DEBUG Bug #5: Triggered has_potentially_mutating_method_call -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
-        if debug_param { eprintln!("DEBUG Bug #5: NOT has potentially mutating method calls"); }
 
         // 8. Default ownership: Borrowed (THE WINDJAMMER WAY!)
         //
@@ -1353,7 +1318,6 @@ impl<'ast> Analyzer<'ast> {
         //
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
-        if debug_param { eprintln!("DEBUG Bug #5: ✅ DEFAULT TO BORROWED!"); }
         Ok(OwnershipMode::Borrowed)
     }
 
