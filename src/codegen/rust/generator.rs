@@ -3690,7 +3690,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // FOR-LOOP AUTO-BORROW: Pre-scan function body to find local variables
         // that are iterated in for-loops and also used after the loop.
         // These need `&` auto-inserted to prevent consuming the collection.
+        eprintln!("DEBUG: generate_function called for '{}' with {} statements", func.name, func.body.len());
         self.precompute_for_loop_borrows(&func.body);
+
+        // TDD FIX (Bug #3): WHILE-LOOP USIZE INFERENCE
+        // Pre-scan to find loop index variables that should be usize instead of i64.
+        // Pattern: let mut i = 0; while i < expr.len() { ... }
+        eprintln!("DEBUG: About to call precompute_while_loop_usize_indices");
+        self.precompute_while_loop_usize_indices(&func.body);
+        eprintln!("DEBUG: After precompute_while_loop_usize_indices, usize_variables = {:?}", self.usize_variables);
 
         // Track parameters inferred as borrowed for field access cloning
         self.inferred_borrowed_params.clear();
@@ -9704,6 +9712,175 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
                 }
             }
+        }
+    }
+
+    /// TDD FIX (Bug #3): Pre-scan while loops to infer usize index variables
+    /// 
+    /// Pattern detection:
+    /// ```windjammer
+    /// let mut i = 0           // Integer literal (defaults to i64)
+    /// while i < vec.len() {   // Comparison with .len() (returns usize)
+    ///     arr[i] ...          // Index into array
+    ///     i = i + 1           // Increment
+    /// }
+    /// ```
+    /// 
+    /// When this pattern is detected, mark `i` as usize to prevent E0308 type errors.
+    fn precompute_while_loop_usize_indices(&mut self, body: &[&'ast Statement<'ast>]) {
+        eprintln!("DEBUG: precompute_while_loop_usize_indices called with {} statements", body.len());
+        for (i, stmt) in body.iter().enumerate() {
+            // Look for: let mut var = 0 (or small integer literal)
+            if let Statement::Let {
+                pattern: Pattern::Identifier(var_name),
+                value: init_value,
+                mutable: true,
+                ..
+            } = *stmt
+            {
+                eprintln!("DEBUG: Found let mut {} = ...", var_name);
+                // Check if initialized to 0 or small integer
+                let is_zero_or_small_int = matches!(
+                    init_value,
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    } if n >= &0 && n < &100
+                );
+
+                eprintln!("DEBUG: is_zero_or_small_int = {}", is_zero_or_small_int);
+
+                if !is_zero_or_small_int {
+                    continue;
+                }
+
+                // Look for a while loop in the next few statements
+                eprintln!("DEBUG: Looking for while loop using {}", var_name);
+                for (j, next_stmt) in body.iter().skip(i + 1).take(5).enumerate() {
+                    eprintln!("DEBUG: Checking statement {} after let", j);
+                    if let Statement::While { condition, body: while_body, .. } = *next_stmt {
+                        eprintln!("DEBUG: Found while loop");
+                        // Check if condition uses the variable with usize expression
+                        if self.condition_compares_to_usize(condition, var_name) {
+                            eprintln!("DEBUG: Condition compares to usize!");
+                            // Also check if variable is incremented in loop body
+                            // (Pattern: i = i + 1 or i += 1)
+                            if Self::variable_is_incremented_in_body(while_body, var_name) {
+                                eprintln!("DEBUG: ✅ Pattern matched! Adding {} to usize_variables", var_name);
+                                self.usize_variables.insert(var_name.clone());
+                                break;
+                            } else {
+                                eprintln!("DEBUG: Variable not incremented in body");
+                            }
+                        } else {
+                            eprintln!("DEBUG: Condition does not compare to usize");
+                        }
+                    }
+                }
+            }
+
+            // Recurse into nested blocks
+            match stmt {
+                Statement::If { then_block, else_block, .. } => {
+                    self.precompute_while_loop_usize_indices(then_block);
+                    if let Some(else_stmts) = else_block {
+                        self.precompute_while_loop_usize_indices(else_stmts);
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::Loop { body, .. }
+                | Statement::For { body, .. } => {
+                    self.precompute_while_loop_usize_indices(body);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Check if a while condition compares a variable to a usize expression
+    /// Examples: i < vec.len(), i < vec.len() - 1, idx < items.len()
+    fn condition_compares_to_usize(&self, condition: &Expression, var_name: &str) -> bool {
+        match condition {
+            Expression::Binary { left, op, right, .. } => {
+                // Check for: var < usize_expr or usize_expr > var
+                let left_is_var = matches!(
+                    **left,
+                    Expression::Identifier { ref name, .. } if name == var_name
+                );
+                let right_is_var = matches!(
+                    **right,
+                    Expression::Identifier { ref name, .. } if name == var_name
+                );
+
+                let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+
+                if !is_comparison {
+                    return false;
+                }
+
+                // Check if the other side produces usize
+                if left_is_var {
+                    self.expression_produces_usize(right)
+                } else if right_is_var {
+                    self.expression_produces_usize(left)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a variable is incremented in a loop body
+    /// Patterns: i = i + 1, i += 1, i = i + step
+    fn variable_is_incremented_in_body(body: &[&Statement], var_name: &str) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::Assignment { target, value, .. } => {
+                    // Check: i = i + 1 or i = i + step
+                    if let Expression::Identifier { name, .. } = target {
+                        if name == var_name {
+                            // Check if value contains: var + something
+                            if Self::expression_increments_variable(value, var_name) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::Loop { body, .. }
+                | Statement::For { body, .. } => {
+                    if Self::variable_is_incremented_in_body(body, var_name) {
+                        return true;
+                    }
+                }
+                Statement::If { then_block, else_block, .. } => {
+                    if Self::variable_is_incremented_in_body(then_block, var_name) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if Self::variable_is_incremented_in_body(else_stmts, var_name) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if an expression increments a variable: var + 1, var + step, etc.
+    fn expression_increments_variable(expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::Binary { left, op, .. } => {
+                matches!(op, BinaryOp::Add)
+                    && matches!(
+                        **left,
+                        Expression::Identifier { ref name, .. } if name == var_name
+                    )
+            }
+            _ => false,
         }
     }
 
