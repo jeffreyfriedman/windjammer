@@ -121,11 +121,12 @@ Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(_temp0)
 
 ---
 
-## Bug #3: For-loop index incorrectly inferred as i64 instead of usize [HIGH PRIORITY]
+## Bug #3: While-loop index incorrectly inferred as i64 instead of usize [HIGH PRIORITY]
 
-**Status**: 🔴 ACTIVE - TDD test created, fix in progress
+**Status**: ✅ FIXED (2026-02-26 01:15 PST) - TDD test passing, game library compiles
 
 **Discovered**: 2026-02-25 during animation/clip.wj compilation
+**Fixed**: 2026-02-26 01:15 PST (usize_variables now persists during statement generation)
 
 **Symptom**:
 ```windjammer
