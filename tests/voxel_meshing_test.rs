@@ -1,7 +1,7 @@
-/// TDD Phase 2: Greedy Meshing Algorithm
-/// 
-/// Goal: Convert voxel grid to optimized triangle mesh
-/// This enables rendering voxels with 90%+ triangle reduction!
+//! TDD Phase 2: Greedy Meshing Algorithm
+//! 
+//! Goal: Convert voxel grid to optimized triangle mesh
+//! This enables rendering voxels with 90%+ triangle reduction!
 
 use std::path::PathBuf;
 use std::fs;
