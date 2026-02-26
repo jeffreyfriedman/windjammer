@@ -1,0 +1,65 @@
+// TDD TEST: Bug #4 - Array indexing with expression (i + 1) incorrectly typed as i64
+//
+// SYMPTOM: 
+// error[E0277]: the type `[Keyframe]` cannot be indexed by `i64`
+//   --> animation/clip.rs:68:82
+//    |
+// 68 |  if self.keyframes[i + 1].time > time {
+//    |                    ^^^^^ slice indices are of type `usize` or ranges of `usize`
+//
+// ROOT CAUSE:
+// When `i` is marked as usize, the expression `i + 1` should ALSO be usize.
+// Currently, binary expressions don't propagate usize typing, causing the result
+// to default to i64.
+//
+// EXPECTED BEHAVIOR:
+// If both operands of + are usize (or one is usize and the other is an int literal),
+// the result should be usize.
+//
+// This test should FAIL before the fix and PASS after.
+
+struct Keyframe {
+    time: f32
+}
+
+struct AnimationClip {
+    keyframes: [Keyframe]
+}
+
+impl AnimationClip {
+    fn find_keyframe_index(&self, target_time: f32) -> usize {
+        let mut before_idx = 0;
+        let mut after_idx = self.keyframes.len() - 1;
+        let mut i = 0;
+        
+        // This while loop should mark `i` as usize (already fixed in Bug #3)
+        while i < self.keyframes.len() {
+            // BUG #4: The expression `i + 1` should be usize since `i` is usize
+            // Currently generates: self.keyframes[(i + 1) as i64]  ❌
+            // Should generate: self.keyframes[i + 1]  ✅
+            if self.keyframes[i].time <= target_time && target_time <= self.keyframes[i + 1].time {
+                before_idx = i;
+                after_idx = i + 1;  // Both should work as usize
+                break;
+            }
+            i += 1;
+        }
+        
+        return after_idx;
+    }
+    
+    fn another_test(&self, idx: usize) -> f32 {
+        // Additional test: usize parameter in expression
+        if idx + 1 < self.keyframes.len() {
+            return self.keyframes[idx + 1].time;
+        }
+        return 0.0;
+    }
+}
+
+fn main() {
+    let mut clip = AnimationClip { keyframes: [] };
+    let idx = clip.find_keyframe_index(5.0);
+    let time = clip.another_test(idx);
+    println!("Found keyframe at index: {}, time: {}", idx, time);
+}
