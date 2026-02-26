@@ -63,9 +63,9 @@ OwnershipHint::Owned => {
 
 ---
 
-## Bug #2: format! in temp variable generates &_temp instead of _temp [HIGH PRIORITY]
+## Bug #2: format! in temp variable generates &_temp instead of _temp [FIXED ✅]
 
-**Status**: 🔴 ACTIVE - TDD test created, fix in progress
+**Status**: ✅ FIXED - Verified in game library as of 2026-02-25
 
 **Discovered**: 2026-02-25 during assets/loader.wj compilation
 
@@ -118,6 +118,58 @@ Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(_temp0)
 1. Find where format! generates temp variables in codegen
 2. Check if the result is being borrowed when it shouldn't be
 3. Remove the `&` prefix or eliminate temp variable entirely
+
+---
+
+## Bug #3: For-loop index incorrectly inferred as i64 instead of usize [HIGH PRIORITY]
+
+**Status**: 🔴 ACTIVE - TDD test created, fix in progress
+
+**Discovered**: 2026-02-25 during animation/clip.wj compilation
+
+**Symptom**:
+```windjammer
+let mut after_idx = keyframes.len() - 1  // usize
+for i in 0..keyframes.len() {
+    after_idx = i + 1  // Error: expected usize, found i64
+}
+```
+
+**Generated Rust** (BUGGY):
+```rust
+let mut after_idx = self.keyframes.len() - 1;  // usize
+let mut i = 0;
+while i < ((self.keyframes.len() - 1) as i64) {  // BUG: i is i64!
+    after_idx = i + 1;  // ERROR: expected usize, found i64
+    i += 1;
+}
+```
+
+**Root Cause**:
+In `windjammer/src/codegen/rust/generator.rs`, when converting for-loops to while-loops, the compiler:
+1. Defaults loop index `i` to `i64`
+2. Casts `.len()` to `i64` for comparison
+3. SHOULD infer `i` as `usize` when:
+   - Loop bound is `.len()` (which is usize)
+   - Index assigned to usize variable
+   - Index used for array indexing
+
+**The Fix**:
+Improve type inference for loop indices:
+1. Check if loop bound is `.len()` or other usize expression
+2. Check if index is used with usize variables/indexing
+3. Infer `i` as `usize` instead of defaulting to `i64`
+
+**Test Case**: `windjammer/tests/bug_loop_index_usize_inference.wj`
+
+**Impact**: Blocks any pattern where loop index is assigned to usize variables (common in animation, pathfinding, searching).
+
+**Priority**: HIGH - Common pattern in game code
+
+**Next Steps**:
+1. Find loop index type inference logic in codegen
+2. Add usize inference when bound is .len()
+3. Propagate usize type through arithmetic (i + 1, i - 1)
 
 ---
 
