@@ -1,0 +1,20 @@
+// TDD: Bug #6 - Enum variant constructors with type aliases
+// Should allow String where QuestId = String is expected
+
+type QuestId = String
+
+enum DialogueConsequence {
+    CompleteQuest(QuestId),
+    FailQuest(QuestId),
+}
+
+fn create_consequence() -> DialogueConsequence {
+    // Bug #6: This should work since QuestId = String
+    // Currently: error[E0308]: expected QuestId, found String
+    return DialogueConsequence::CompleteQuest("rescue_mission".to_string());
+}
+
+fn main() {
+    let c = create_consequence();
+    println!("Created consequence");
+}

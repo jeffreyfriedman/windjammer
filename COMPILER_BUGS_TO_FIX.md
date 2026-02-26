@@ -1,15 +1,15 @@
 # Compiler Bugs Found via Dogfooding - TO FIX WITH TDD
 
-## 🔴 ACTIVE BUG
+## ✅ FIXED BUGS
 
-### Bug #6: Enum match on `&self` creates borrowed bindings needing deref [ACTIVE]
+## Bug #6: Enum match on `&self` creates borrowed bindings needing deref [FIXED ✅]
 
-**Status:** ACTIVE 🔴 - Test case created, bug reproduced (2026-02-26)
-**Severity:** High (blocks 21 E0308 errors in game library)
-**Test Case:** `tests/bug_enum_self_borrow.wj`
+**Status:** ✅ FIXED - 2026-02-26
+**Test Case:** `tests/bug_enum_self_borrow.wj` (PASSING)
+**Severity:** High (blocked dialogue system compilation)
 
 **Problem:**
-When matching on `&self` inside impl methods, enum variant destructuring creates borrowed bindings (`&T`). These need auto-deref when used in comparisons or as function arguments.
+When matching on `&self` inside impl methods, enum variant destructuring creates borrowed bindings (`&T`). These weren't being auto-dereferenced in comparisons.
 
 **Example:**
 ```windjammer
@@ -24,15 +24,22 @@ impl Condition {
 }
 ```
 
-**Root Cause:** Pattern matching on `&enum` borrows variant fields, but codegen doesn't track or auto-deref these bindings.
+**Root Cause:** `match_expression_binds_refs()` didn't check if the matched expression is a borrowed parameter (like `&self`), so `borrowed_iterator_vars` wasn't populated.
 
-**Fix Strategy:** Track enum match bindings, detect borrowed enums, add auto-deref in binary ops/function args.
+**Fix:**
+- Added `Expression::Identifier` case to `match_expression_binds_refs`
+- Check if identifier is in `inferred_borrowed_params`
+- This correctly populates `borrowed_iterator_vars` with enum bindings
+- Existing Bug #5 deref logic then applies auto-deref in comparisons
 
-**Next:** Implement analyzer/codegen changes with TDD.
+**Generated Code (After Fix):**
+```rust
+return get_value() > *threshold;  // ✅ Auto-deref applied!
+```
+
+**Impact:** Dialogue system enum conditions now compile correctly.
 
 ---
-
-## ✅ FIXED BUGS
 
 ## Bug #1: Method self-by-value incorrectly infers &mut [FIXED ✅]
 
