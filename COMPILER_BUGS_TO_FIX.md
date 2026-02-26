@@ -138,6 +138,60 @@ Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(_temp0)
 **Fixed**: 2026-02-26 01:40 PST (expression_produces_usize() now handles Binary expressions properly)
 **Test Case**: `tests/bug_array_index_expression_type.wj` ✅ PASSING
 
+---
+
+## Bug #5: Parameter ownership not inferred for type aliases / newtype wrappers
+
+**Status**: 🔴 ACTIVE - TDD test created, investigating fix
+
+**Discovered**: 2026-02-26 01:45 PST during dialogue module compilation (dogfooding session)
+**Test Case**: `tests/bug_newtype_wrapper_inference.wj` ✅ CREATED
+
+**Symptom**:
+```rust
+error[E0308]: mismatched types
+  --> bug_newtype_wrapper_inference.rs:29:33
+   |
+29 |         self.is_quest_completed(quest_id)
+   |              ------------------ ^^^^^^^^ expected `String`, found `&String`
+```
+
+**Windjammer Code**:
+```windjammer
+type QuestId = String
+
+fn is_quest_completed(&self, quest_id: QuestId) -> bool {
+    self.completed_quests[i] == quest_id  // Only reads quest_id
+}
+
+fn check_with_ref(&self, quest_id: &QuestId) -> bool {
+    self.is_quest_completed(quest_id)  // ERROR: expected QuestId, found &QuestId
+}
+```
+
+**Generated Rust** (BUGGY):
+```rust
+fn is_quest_completed(&self, quest_id: QuestId) -> bool {  // Owned
+    self.completed_quests[i] == quest_id
+}
+```
+
+**Expected Rust**:
+```rust
+fn is_quest_completed(&self, quest_id: &QuestId) -> bool {  // Borrowed
+    self.completed_quests[i] == quest_id
+}
+```
+
+**Root Cause**:
+Ownership inference doesn't recognize that `quest_id` should be `&QuestId` because:
+1. It's only used in comparisons (read-only)
+2. Type aliases (like `QuestId = String`) should follow same rules as the underlying type
+3. Parameter is passed by reference at call sites
+
+**Fix Strategy**:
+Update parameter ownership inference in analyzer to treat type alias parameters same as their underlying types for ownership analysis.
+
 **Symptom**:
 ```windjammer
 let mut after_idx = keyframes.len() - 1  // usize
