@@ -1205,6 +1205,12 @@ impl<'ast> Analyzer<'ast> {
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
     ) -> Result<OwnershipMode, String> {
+        // TDD DEBUG (Bug #5): Log which check triggers for this parameter
+        let debug_param = param_name == "quest_id";
+        if debug_param {
+            eprintln!("DEBUG Bug #5: Analyzing parameter '{}' type {:?}", param_name, param_type);
+        }
+        
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
         // Generic types like T, G, S should always be passed by value.
@@ -1228,13 +1234,17 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Check if parameter is mutated
         if self.is_mutated(param_name, body) {
+            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_mutated -> MutBorrowed"); }
             return Ok(OwnershipMode::MutBorrowed);
         }
+        if debug_param { eprintln!("DEBUG Bug #5: NOT mutated"); }
 
         // 2. Check if parameter is returned (escapes function)
         if self.is_returned(param_name, body) {
+            if debug_param { eprintln!("DEBUG Bug #5: Triggered is_returned -> Owned"); }
             return Ok(OwnershipMode::Owned);
         }
+        if debug_param { eprintln!("DEBUG Bug #5: NOT returned"); }
 
         // 2.3. WINDJAMMER FIX: Check if parameter is used in if/else expression
         // When a parameter appears in an if/else that's assigned or returned,
