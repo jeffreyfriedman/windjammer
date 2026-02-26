@@ -3690,15 +3690,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // FOR-LOOP AUTO-BORROW: Pre-scan function body to find local variables
         // that are iterated in for-loops and also used after the loop.
         // These need `&` auto-inserted to prevent consuming the collection.
-        eprintln!("DEBUG: generate_function called for '{}' with {} statements", func.name, func.body.len());
         self.precompute_for_loop_borrows(&func.body);
-
-        // TDD FIX (Bug #3): WHILE-LOOP USIZE INFERENCE
-        // Pre-scan to find loop index variables that should be usize instead of i64.
-        // Pattern: let mut i = 0; while i < expr.len() { ... }
-        eprintln!("DEBUG: About to call precompute_while_loop_usize_indices");
-        self.precompute_while_loop_usize_indices(&func.body);
-        eprintln!("DEBUG: After precompute_while_loop_usize_indices, usize_variables = {:?}", self.usize_variables);
 
         // Track parameters inferred as borrowed for field access cloning
         self.inferred_borrowed_params.clear();
@@ -5274,9 +5266,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Statement::While {
                 condition, body, ..
             } => {
+                // TDD FIX (Bug #3): Before generating while condition expression,
+                // check if it compares a variable to .len() - if so, mark that variable as usize
+                // This must happen BEFORE generate_expression to prevent `as i64` cast
+                self.mark_usize_variables_in_condition(condition);
+                
                 let mut output = self.indent();
                 output.push_str("while ");
-                output.push_str(&self.generate_expression(condition));
+                
+                // Now generate the condition - usize variables already marked
+                let condition_str = self.generate_expression(condition);
+                output.push_str(&condition_str);
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
@@ -9715,87 +9715,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
     }
 
-    /// TDD FIX (Bug #3): Pre-scan while loops to infer usize index variables
-    /// 
-    /// Pattern detection:
-    /// ```windjammer
-    /// let mut i = 0           // Integer literal (defaults to i64)
-    /// while i < vec.len() {   // Comparison with .len() (returns usize)
-    ///     arr[i] ...          // Index into array
-    ///     i = i + 1           // Increment
-    /// }
-    /// ```
-    /// 
-    /// When this pattern is detected, mark `i` as usize to prevent E0308 type errors.
-    fn precompute_while_loop_usize_indices(&mut self, body: &[&'ast Statement<'ast>]) {
-        eprintln!("DEBUG: precompute_while_loop_usize_indices called with {} statements", body.len());
-        for (i, stmt) in body.iter().enumerate() {
-            // Look for: let mut var = 0 (or small integer literal)
-            if let Statement::Let {
-                pattern: Pattern::Identifier(var_name),
-                value: init_value,
-                mutable: true,
-                ..
-            } = *stmt
-            {
-                eprintln!("DEBUG: Found let mut {} = ...", var_name);
-                // Check if initialized to 0 or small integer
-                let is_zero_or_small_int = matches!(
-                    init_value,
-                    Expression::Literal {
-                        value: Literal::Int(n),
-                        ..
-                    } if n >= &0 && n < &100
-                );
-
-                eprintln!("DEBUG: is_zero_or_small_int = {}", is_zero_or_small_int);
-
-                if !is_zero_or_small_int {
-                    continue;
-                }
-
-                // Look for a while loop in the next few statements
-                eprintln!("DEBUG: Looking for while loop using {}", var_name);
-                for (j, next_stmt) in body.iter().skip(i + 1).take(5).enumerate() {
-                    eprintln!("DEBUG: Checking statement {} after let", j);
-                    if let Statement::While { condition, body: while_body, .. } = *next_stmt {
-                        eprintln!("DEBUG: Found while loop");
-                        // Check if condition uses the variable with usize expression
-                        if self.condition_compares_to_usize(condition, var_name) {
-                            eprintln!("DEBUG: Condition compares to usize!");
-                            // Also check if variable is incremented in loop body
-                            // (Pattern: i = i + 1 or i += 1)
-                            if Self::variable_is_incremented_in_body(while_body, var_name) {
-                                eprintln!("DEBUG: ✅ Pattern matched! Adding {} to usize_variables", var_name);
-                                self.usize_variables.insert(var_name.clone());
-                                break;
-                            } else {
-                                eprintln!("DEBUG: Variable not incremented in body");
-                            }
-                        } else {
-                            eprintln!("DEBUG: Condition does not compare to usize");
-                        }
-                    }
-                }
-            }
-
-            // Recurse into nested blocks
-            match stmt {
-                Statement::If { then_block, else_block, .. } => {
-                    self.precompute_while_loop_usize_indices(then_block);
-                    if let Some(else_stmts) = else_block {
-                        self.precompute_while_loop_usize_indices(else_stmts);
-                    }
-                }
-                Statement::While { body, .. }
-                | Statement::Loop { body, .. }
-                | Statement::For { body, .. } => {
-                    self.precompute_while_loop_usize_indices(body);
-                }
-                _ => {}
-            }
-        }
-    }
 
     /// Check if a while condition compares a variable to a usize expression
     /// Examples: i < vec.len(), i < vec.len() - 1, idx < items.len()
@@ -9881,6 +9800,97 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     )
             }
             _ => false,
+        }
+    }
+
+    /// Check if a variable is used in a comparison with usize expression in current function
+    /// This helps detect while loop indices: while i < vec.len()
+    fn variable_used_with_usize_in_function(&self, var_name: &str) -> bool {
+        self.variable_used_with_usize_in_statements(&self.current_function_body, var_name)
+    }
+
+    /// Recursively check if variable is compared with usize expression
+    fn variable_used_with_usize_in_statements(&self, stmts: &[&Statement], var_name: &str) -> bool {
+        for stmt in stmts {
+            match stmt {
+                Statement::While { condition, body, .. } => {
+                    if self.condition_compares_to_usize(condition, var_name) {
+                        return true;
+                    }
+                    if self.variable_used_with_usize_in_statements(body, var_name) {
+                        return true;
+                    }
+                }
+                Statement::If { condition, then_block, else_block, .. } => {
+                    if self.expression_uses_var_with_usize(condition, var_name) {
+                        return true;
+                    }
+                    if self.variable_used_with_usize_in_statements(then_block, var_name) {
+                        return true;
+                    }
+                    if let Some(else_stmts) = else_block {
+                        if self.variable_used_with_usize_in_statements(else_stmts, var_name) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                    if self.variable_used_with_usize_in_statements(body, var_name) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if expression uses variable in comparison with usize
+    fn expression_uses_var_with_usize(&self, expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::Binary { left, op, right, .. } => {
+                let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+                if !is_comparison {
+                    return false;
+                }
+                
+                let left_is_var = matches!(**left, Expression::Identifier { ref name, .. } if name == var_name);
+                let right_is_var = matches!(**right, Expression::Identifier { ref name, .. } if name == var_name);
+                
+                if left_is_var && self.expression_produces_usize(right) {
+                    return true;
+                }
+                if right_is_var && self.expression_produces_usize(left) {
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// TDD FIX (Bug #3): Mark variables as usize if they're compared to .len()
+    /// Called before generating while condition
+    fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
+        if let Expression::Binary { left, op, right, .. } = condition {
+            let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+            if !is_comparison {
+                return;
+            }
+            
+            // Check if left is variable and right produces usize
+            if let Expression::Identifier { name, .. } = &**left {
+                if self.expression_produces_usize(right) {
+                    self.usize_variables.insert(name.clone());
+                }
+            }
+            
+            // Check if right is variable and left produces usize
+            if let Expression::Identifier { name, .. } = &**right {
+                if self.expression_produces_usize(left) {
+                    self.usize_variables.insert(name.clone());
+                }
+            }
         }
     }
 
