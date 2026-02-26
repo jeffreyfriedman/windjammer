@@ -1212,17 +1212,17 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 0b. String parameters stay Owned to avoid &String vs &str mismatches.
-        // In Rust, &String doesn't accept &str literals ("hello"), and &str doesn't
-        // accept &String without .as_str(). Keeping String parameters owned avoids
-        // these cross-type issues at call sites.
-        // Note: WJ `string` parses as Type::String, but `String` parses as Type::Custom("String").
-        // Future: could generate &str for borrowed String params (more idiomatic Rust).
-        if matches!(param_type, Type::String)
-            || matches!(param_type, Type::Custom(name) if name == "String")
-        {
-            return Ok(OwnershipMode::Owned);
-        }
+        // TDD FIX (Bug #5): Removed blanket "String stays Owned" rule.
+        // Previous logic forced all String parameters to be Owned to avoid &String vs &str
+        // mismatches at call sites. However, this prevents proper inference for read-only
+        // String parameters (e.g., parameters only used in comparisons).
+        //
+        // New approach: Let normal inference work for String types too. If a String parameter
+        // is only used in read-only operations (comparisons, method calls like .len()), it
+        // will correctly infer as Borrowed. String comparisons work fine with borrowed strings.
+        //
+        // The remaining checks below (is_mutated, is_returned, is_stored, etc.) will still
+        // catch cases where the String needs to be Owned.
 
         // Simple heuristic-based inference
 
@@ -1256,10 +1256,15 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 4. Check if parameter is used in binary operations (for Copy types)
-        // Copy types used in operators (a - b, a + b, etc.) should remain owned
-        // because operator traits are typically implemented for owned values, not references
-        if self.is_used_in_binary_op(param_name, body) {
+        // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
+        // TDD FIX (Bug #5): Comparison operators (==, !=, <, >, <=, >=) work with borrowed
+        // values, so we should only force Owned for arithmetic operations (Add, Sub, Mul, Div).
+        // Copy types used in arithmetic operators (a - b, a + b, etc.) should remain owned
+        // because operator traits are typically implemented for owned values, not references.
+        //
+        // For comparisons, borrowed parameters work fine:
+        // `if str1 == str2` works whether str1/str2 are &String or String
+        if self.is_used_in_arithmetic_op(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -2219,6 +2224,117 @@ impl<'ast> Analyzer<'ast> {
             Expression::TryOp { expr, .. } => self.expr_passes_as_argument(name, expr),
             // Note: We do NOT check Expression::Identifier here because bare identifiers
             // outside of Call/MethodCall arguments are not consuming (e.g., `data.len()`)
+            _ => false,
+        }
+    }
+
+    // TDD FIX (Bug #5): New function to check ONLY arithmetic operations, not comparisons
+    fn is_used_in_arithmetic_op(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Let { value, .. } => {
+                    if self.expr_uses_in_arithmetic_op(name, value) {
+                        return true;
+                    }
+                }
+                Statement::Expression { expr, .. } => {
+                    if self.expr_uses_in_arithmetic_op(name, expr) {
+                        return true;
+                    }
+                }
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    if self.expr_uses_in_arithmetic_op(name, expr) {
+                        return true;
+                    }
+                }
+                Statement::Return { value: None, .. } => {}
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.expr_uses_in_arithmetic_op(name, condition) {
+                        return true;
+                    }
+                    if self.is_used_in_arithmetic_op(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_block) = else_block {
+                        if self.is_used_in_arithmetic_op(name, else_block) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::While { condition, body, .. } => {
+                    if self.expr_uses_in_arithmetic_op(name, condition) {
+                        return true;
+                    }
+                    if self.is_used_in_arithmetic_op(name, body) {
+                        return true;
+                    }
+                }
+                Statement::For { body, .. } => {
+                    if self.is_used_in_arithmetic_op(name, body) {
+                        return true;
+                    }
+                }
+                Statement::Assignment { value, .. } => {
+                    if self.expr_uses_in_arithmetic_op(name, value) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_uses_in_arithmetic_op(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary { op, left, right, .. } => {
+                use crate::parser::ast::operators::BinaryOp;
+                // Only check for arithmetic operators, not comparisons
+                let is_arithmetic = matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                );
+                
+                if is_arithmetic {
+                    if self.expr_is_identifier(name, left) || self.expr_is_identifier(name, right) {
+                        return true;
+                    }
+                }
+                // Recursively check nested expressions
+                self.expr_uses_in_arithmetic_op(name, left) || self.expr_uses_in_arithmetic_op(name, right)
+            }
+            Expression::Unary { operand, .. } => self.expr_uses_in_arithmetic_op(name, operand),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_uses_in_arithmetic_op(name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expr_uses_in_arithmetic_op(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_uses_in_arithmetic_op(name, arg))
+            }
+            Expression::FieldAccess { .. } => false,
+            Expression::Index { object, index, .. } => {
+                self.expr_uses_in_arithmetic_op(name, object)
+                    || self.expr_uses_in_arithmetic_op(name, index)
+            }
+            Expression::Block { statements, .. } => self.is_used_in_arithmetic_op(name, statements),
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expr_uses_in_arithmetic_op(name, elem)),
+            Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expr_uses_in_arithmetic_op(name, elem)),
+            Expression::TryOp { expr, .. } => self.expr_uses_in_arithmetic_op(name, expr),
             _ => false,
         }
     }
