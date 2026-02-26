@@ -2700,6 +2700,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_expression_immut(&self, expr: &Expression) -> String {
         use crate::parser::ast::operators::{BinaryOp, UnaryOp};
 
+        // TDD DEBUG: Check if we hit Binary expressions at all
+        if matches!(expr, Expression::Binary { .. }) {
+            eprintln!("IMMUT_BINARY: Processing binary expression");
+        }
+
         match expr {
             Expression::Literal { value: lit, .. } => self.generate_literal(lit),
             Expression::Identifier { name, .. } => name.clone(),
@@ -2746,35 +2751,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 );
                 
                 let left_str = self.generate_expression_immut(left);
-                let right_str = self.generate_expression_immut(right);
+                let mut right_str = self.generate_expression_immut(right);
                 
-                // Check if right side is a borrowed parameter identifier that needs dereferencing
-                let right_needs_deref = if is_comparison {
+                // Check if right side is a borrowed parameter that needs dereferencing
+                if is_comparison {
                     if let Expression::Identifier { name, .. } = right {
-                        // Check if this identifier is a borrowed parameter (&T)
                         let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());
-                        eprintln!("DEBUG DEREF: comparison with identifier '{}', is_borrowed={}, borrowed_set={:?}", 
-                                  name, is_borrowed, self.inferred_borrowed_params);
-                        is_borrowed
-                    } else {
-                        false
+                        // Write to file for debugging
+                        use std::fs::OpenOptions;
+                        use std::io::Write;
+                        let mut file = OpenOptions::new().create(true).append(true).open("/tmp/bug5_debug.txt").unwrap();
+                        writeln!(file, "IMMUT: Checking '{}', is_borrowed={}, set={:?}", name, is_borrowed, self.inferred_borrowed_params).unwrap();
+                        
+                        if is_borrowed {
+                            // Add deref for borrowed parameters in comparisons
+                            writeln!(file, "IMMUT: ADDING DEREF to '{}'", name).unwrap();
+                            right_str = format!("*{}", right_str);
+                        }
                     }
-                } else {
-                    false
-                };
-                
-                let final_right = if right_needs_deref {
-                    eprintln!("DEBUG DEREF: Adding * to {}", right_str);
-                    format!("*{}", right_str)
-                } else {
-                    right_str
-                };
+                }
                 
                 format!(
                     "{} {} {}",
                     left_str,
                     op_str,
-                    final_right
+                    right_str
                 )
             }
             Expression::FieldAccess { object, field, .. } => {
@@ -3728,11 +3729,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         // Track parameters inferred as borrowed for auto-deref in comparisons (Bug #5)
         self.inferred_borrowed_params.clear();
+        eprintln!("=== BUG5 TRACK: Function '{}', analyzing {} params ===", func.name, analyzed.inferred_ownership.len());
         for (param_name, ownership) in &analyzed.inferred_ownership {
+            eprintln!("BUG5 TRACK: Param '{}' has ownership {:?}", param_name, ownership);
             if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
                 self.inferred_borrowed_params.insert(param_name.clone());
+                eprintln!("BUG5 TRACK: ✅ Added '{}' to borrowed set", param_name);
             }
         }
+        eprintln!("BUG5 TRACK: Final borrowed_params set: {:?}", self.inferred_borrowed_params);
 
         // WINDJAMMER FIX: Track usize-typed parameters for auto-cast logic
         // DON'T clear here - we need to accumulate variables from let statements during generation!
@@ -6604,6 +6609,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             Expression::Binary {
                 left, op, right, ..
             } => {
+                
                 // TDD FIX: Optimize .len() comparisons to .is_empty()
                 // Clippy warns about .len() == 0, .len() != 0, .len() > 0
                 // Transform to .is_empty() or !.is_empty()
@@ -6831,8 +6837,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if right operand is a borrowed parameter identifier
                 if is_comparison {
                     if let Expression::Identifier { name, .. } = right {
+                        println!("BUG5: Comparison with identifier '{}', borrowed_set={:?}", name, self.inferred_borrowed_params);
                         if self.inferred_borrowed_params.contains(name.as_str()) {
                             // YES! This parameter was inferred as borrowed, add deref
+                            println!("BUG5: ADDING DEREF to '{}'!", name);
                             right_str = format!("*{}", right_str);
                         }
                     }
