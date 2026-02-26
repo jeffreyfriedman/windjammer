@@ -6354,9 +6354,30 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Fallback: check via type inference
                 self.infer_expression_type_is_usize(expr)
             }
-            // Binary ops with len: len() - 1, len() + offset, etc.
-            Expression::Binary { left, right, .. } => {
-                self.expression_produces_usize(left) || self.expression_produces_usize(right)
+            // Binary ops with usize operands: i + 1, len() - 1, etc.
+            // TDD FIX (Bug #4): If BOTH sides are usize (or one side is usize and other is int literal),
+            // then the result is usize. The old logic used OR which was wrong.
+            Expression::Binary { op, left, right, location: _ } => {
+                match op {
+                    // Arithmetic operations preserve usize if both operands are usize-compatible
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                        let left_is_usize = self.expression_produces_usize(left);
+                        let right_is_usize = self.expression_produces_usize(right);
+                        
+                        // Int literals adapt to the other operand's type
+                        let right_is_literal = matches!(**right, Expression::Literal { .. });
+                        let left_is_literal = matches!(**left, Expression::Literal { .. });
+                        
+                        // Result is usize if:
+                        // - Both are usize, OR
+                        // - One is usize and the other is an int literal
+                        (left_is_usize && right_is_usize) ||
+                        (left_is_usize && right_is_literal) ||
+                        (right_is_usize && left_is_literal)
+                    }
+                    // Comparison/logical operations don't produce usize
+                    _ => false
+                }
             }
             // Casts to usize: (x as usize)
             Expression::Cast { type_, .. } => {

@@ -128,6 +128,16 @@ Err({ let _temp0 = format!("Error: {}", code); AssetError::InvalidFormat(_temp0)
 **Discovered**: 2026-02-25 during animation/clip.wj compilation
 **Fixed**: 2026-02-26 01:15 PST (usize_variables now persists during statement generation)
 
+---
+
+## Bug #4: Array indexing with expression (i + 1) incorrectly typed as i64 [HIGH PRIORITY]
+
+**Status**: ✅ FIXED (2026-02-26 01:40 PST) - TDD test passing, game library compiles
+
+**Discovered**: 2026-02-26 01:20 PST during animation/clip.wj compilation (dogfooding session)
+**Fixed**: 2026-02-26 01:40 PST (expression_produces_usize() now handles Binary expressions properly)
+**Test Case**: `tests/bug_array_index_expression_type.wj` ✅ PASSING
+
 **Symptom**:
 ```windjammer
 let mut after_idx = keyframes.len() - 1  // usize
