@@ -1,0 +1,28 @@
+// TDD: Bug #7 - Function call arguments need auto-deref
+// When calling functions with borrowed enum match bindings
+
+fn process(name: String, value: i32) {
+    println!("Name: {}, Value: {}", name, value);
+}
+
+enum Action {
+    Update(String, i32),
+}
+
+impl Action {
+    pub fn execute(self) {
+        match self {
+            Action::Update(name, value) => {
+                // Bug #7: name is &String, value is &i32 (from &self match)
+                // Should auto-deref: process(*name, *value) or process(name.clone(), *value)
+                // Currently: error[E0308]: expected String/i32, found &String/&i32
+                process(name, value);
+            }
+        }
+    }
+}
+
+fn main() {
+    let action = Action::Update("test".to_string(), 42);
+    action.execute();
+}

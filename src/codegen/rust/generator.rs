@@ -6844,13 +6844,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Check if right operand is a borrowed identifier (parameter OR enum match binding)
                 if is_comparison {
                     if let Expression::Identifier { name, .. } = right {
-                        println!("BUG5/6: Comparison with identifier '{}', borrowed_params={:?}, match_bindings={:?}", 
-                                 name, self.inferred_borrowed_params, self.borrowed_iterator_vars);
                         // Check both borrowed parameters (Bug #5) AND match-bound variables (Bug #6)
                         if self.inferred_borrowed_params.contains(name.as_str()) 
                            || self.borrowed_iterator_vars.contains(name) {
-                            // YES! This value was inferred as borrowed, add deref
-                            println!("BUG5/6: ADDING DEREF to '{}'!", name);
                             right_str = format!("*{}", right_str);
                         }
                     }
