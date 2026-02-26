@@ -3701,7 +3701,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // WINDJAMMER FIX: Track usize-typed parameters for auto-cast logic
-        // Clear from previous function to prevent variable leakage between functions
+        // DON'T clear here - we need to accumulate variables from let statements during generation!
+        // Only clear at the very beginning of function generation, before body processing.
+        // TDD FIX (Bug #3): Moved clear to happen BEFORE pre-passes, so marking during
+        // statement generation can accumulate variables.
+
+        // Clear ONCE at function start (before any analysis)
         self.usize_variables.clear();
 
         // When a parameter is declared as `usize`, add it to usize_variables
@@ -5270,6 +5275,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // check if it compares a variable to .len() - if so, mark that variable as usize
                 // This must happen BEFORE generate_expression to prevent `as i64` cast
                 self.mark_usize_variables_in_condition(condition);
+                
+                // DEBUG: Verify marking worked
+                eprintln!("DEBUG Bug #3: After marking, usize_variables = {:?}", self.usize_variables);
                 
                 let mut output = self.indent();
                 output.push_str("while ");
