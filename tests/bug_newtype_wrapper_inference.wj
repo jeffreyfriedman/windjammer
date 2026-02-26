@@ -1,0 +1,82 @@
+// TDD TEST: Bug #5 - Newtype wrapper type inference
+//
+// SYMPTOM:
+// error[E0308]: mismatched types
+//   --> dialogue/examples.rs:5:9407
+//    |
+//  5 | ...DialogueConsequence::CompleteQuest("rescue_silas".to_string())
+//    |    ---------------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `QuestId`, found `String`
+//    |    |
+//    |    arguments to this enum variant are incorrect
+//
+// Also:
+// error[E0308]: mismatched types
+//   --> dialogue/system.rs:169:42
+//    |
+//169 |     state.is_quest_completed(quest_id)
+//    |           ------------------ ^^^^^^^^ expected `QuestId`, found `&QuestId`
+//
+// ROOT CAUSE:
+// The compiler doesn't properly handle newtype wrappers (type aliases or tuple structs).
+// When a type is defined as `type QuestId = String` or `struct QuestId(String)`,
+// the compiler should:
+// 1. Allow String literals/values to be used where QuestId is expected
+// 2. Allow &QuestId where QuestId is expected (auto-borrow)
+// 3. Properly infer conversions in enum variant constructors
+//
+// EXPECTED BEHAVIOR:
+// - `QuestId("foo".to_string())` should work if QuestId is a newtype
+// - Function expecting `QuestId` should accept `&QuestId` (auto-deref)
+// - Enum variants with QuestId fields should accept String when QuestId = String
+//
+// This test should FAIL before the fix and PASS after.
+
+// Define a newtype wrapper (common pattern)
+type QuestId = String
+
+// Enum using the newtype
+enum DialogueConsequence {
+    SetFlag(String),
+    CompleteQuest(QuestId),  // Uses newtype
+    UnlockQuest(QuestId)
+}
+
+// Struct using the newtype
+struct DialogueState {
+    completed_quests: [QuestId]
+}
+
+impl DialogueState {
+    fn is_quest_completed(&self, quest_id: QuestId) -> bool {
+        // Bug #5: This should accept &QuestId via auto-deref
+        let mut i = 0;
+        while i < self.completed_quests.len() {
+            if self.completed_quests[i] == quest_id {
+                return true;
+            }
+            i += 1;
+        }
+        return false;
+    }
+    
+    fn check_with_ref(&self, quest_id: &QuestId) -> bool {
+        // Bug #5: Calling with &QuestId when function expects QuestId
+        // Currently generates: expected `QuestId`, found `&QuestId`
+        // Should work with auto-deref
+        self.is_quest_completed(quest_id)
+    }
+}
+
+fn main() {
+    // Bug #5 Test Case 1: Enum variant with newtype
+    // Currently generates: expected `QuestId`, found `String`
+    // Should work because QuestId = String
+    let consequence = DialogueConsequence::CompleteQuest("rescue_silas".to_string());
+    
+    // Bug #5 Test Case 2: Function call with reference
+    let state = DialogueState { completed_quests: [] };
+    let quest = "test_quest".to_string();
+    let is_complete = state.check_with_ref(&quest);
+    
+    println!("Quest complete: {}", is_complete);
+}
