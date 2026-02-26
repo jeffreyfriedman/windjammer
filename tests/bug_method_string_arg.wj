@@ -1,0 +1,42 @@
+// TDD: Bug #7 - Method calls with String args need auto-clone from &String
+// Exact reproduction of dialogue system get_relationship error
+
+struct State {
+    pub names: Vec<String>,
+}
+
+impl State {
+    pub fn new() -> State {
+        State { names: vec![] }
+    }
+    
+    // Takes owned String (not &String)
+    pub fn get_value(self, name: String) -> i32 {
+        return 42;
+    }
+}
+
+enum Condition {
+    Check(String, i32),
+}
+
+impl Condition {
+    pub fn is_met(self, state: State) -> bool {
+        match self {
+            Condition::Check(name, threshold) => {
+                // Bug #7: name is &String (from &self match)
+                // get_value expects String (owned)
+                // Should auto-clone: state.get_value(name.clone())
+                // Currently: error[E0308]: expected String, found &String
+                return state.get_value(name) > threshold;
+            }
+        }
+    }
+}
+
+fn main() {
+    let cond = Condition::Check("test".to_string(), 10);
+    let state = State::new();
+    let result = cond.is_met(state);
+    println!("Result: {}", result);
+}

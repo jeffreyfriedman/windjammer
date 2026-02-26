@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod ownership_inference_method_self_by_value {
-    use crate::*;
 
     #[test]
     fn test_method_self_by_value_should_not_infer_mut() {
@@ -83,7 +82,7 @@ fn main() {
             "Should not infer 'mut' for immutable variable");
     }
 
-    fn parse_and_analyze(source: &str) -> Result<Program, String> {
+    fn parse_and_analyze(_source: &str) -> Result<Program, String> {
         // This is a placeholder - actual implementation would use the real parser/analyzer
         Err("Not implemented".to_string())
     }

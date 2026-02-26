@@ -1,5 +1,5 @@
-/// Comprehensive dogfooding tests - Find remaining compiler bugs
-/// These tests exercise common patterns in game code to discover issues
+//! Comprehensive dogfooding tests - Find remaining compiler bugs
+//! These tests exercise common patterns in game code to discover issues
 
 use std::path::PathBuf;
 use std::fs;

@@ -23,7 +23,7 @@ fn parse_program(input: &str) -> Result<Program<'_>, String> {
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new(tokens);
-    parser.parse().map_err(|e| e)
+    parser.parse()
 }
 
 #[test]
