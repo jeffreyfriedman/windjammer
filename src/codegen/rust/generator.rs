@@ -6815,10 +6815,59 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     right_str = format!("({})", right_str);
                 }
 
-                // TDD FIX: Rust's PartialEq handles comparisons correctly for references.
-                // When comparing &String == &String or &str == &str, NO dereference needed!
-                // The trait `PartialEq<&T> for &T` is implemented by default.
-                // REMOVED: Incorrect auto-deref logic that was adding * when both sides are borrowed.
+                // TDD FIX: Smart XOR deref logic for string comparisons
+                // Check if BOTH sides are borrowed, or only ONE side is borrowed
+                //
+                // Rules:
+                // - Both borrowed (&String == &String): NO deref (PartialEq<&T> works)
+                // - Both owned (String == String): NO deref (PartialEq<T> works)
+                // - One borrowed, one owned: Add * to borrowed side (XOR)
+                //
+                // Borrowed sources:
+                // - Identifier in inferred_borrowed_params (function parameters like `name: &String`)
+                // - Identifier in borrowed_iterator_vars (for-loop variables like `for item in items.iter()`)
+                // - MethodCall returning &str (e.g., `t.as_str()` returns `&str`)
+                //
+                // Owned sources (everything else):
+                // - FieldAccess (e.g., `m.id` where `m: &Member` → `String`)
+                // - Literal values
+                // - Method calls returning owned types
+                
+                let left_is_borrowed = match left {
+                    Expression::Identifier { name, .. } => {
+                        self.inferred_borrowed_params.contains(name.as_str())
+                        || self.borrowed_iterator_vars.contains(name)
+                    }
+                    Expression::MethodCall { method, .. } => {
+                        // Methods like .as_str() return &str (borrowed)
+                        method == "as_str"
+                    }
+                    _ => false,  // FieldAccess, Literal, etc. are owned
+                };
+                
+                let right_is_borrowed = match right {
+                    Expression::Identifier { name, .. } => {
+                        self.inferred_borrowed_params.contains(name.as_str())
+                        || self.borrowed_iterator_vars.contains(name)
+                    }
+                    Expression::MethodCall { method, .. } => {
+                        // Methods like .as_str() return &str (borrowed)
+                        method == "as_str"
+                    }
+                    _ => false,  // FieldAccess, Literal, etc. are owned
+                };
+                
+                // XOR: Add deref only if exactly ONE side is borrowed
+                if left_is_borrowed != right_is_borrowed {
+                    if left_is_borrowed {
+                        // &String == String → *&String == String
+                        left_str = format!("*{}", left_str);
+                    } else {
+                        // String == &String → String == *&String
+                        right_str = format!("*{}", right_str);
+                    }
+                }
+                // If both borrowed OR both owned: NO deref needed
 
                 format!("{} {} {}", left_str, op_str, right_str)
             }
