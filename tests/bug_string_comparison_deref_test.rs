@@ -174,3 +174,45 @@ fn main() {
     assert!(!rust_code.contains("== *tag"), 
             "Should not add * dereference on tag:\n{}", rust_code);
 }
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_owned_vs_borrowed_comparison() {
+    let source = r#"
+struct Member {
+    id: String,
+}
+
+fn find_member(members: &Vec<Member>, target_id: &String) -> bool {
+    for m in members.iter() {
+        if m.id == target_id {
+            return true
+        }
+    }
+    false
+}
+
+fn main() {
+    let members = vec![Member { id: "a".to_string() }]
+    let found = find_member(&members, &"a".to_string())
+}
+"#;
+
+    let (success, rust_code, stderr) = compile_wj_test(source);
+    
+    if !success {
+        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+    }
+    
+    // Should not have E0277 comparison errors
+    assert!(!stderr.contains("E0277"), 
+            "Should not have E0277 errors:\n{}", stderr);
+    assert!(!stderr.contains("can't compare `String` with `&String`"), 
+            "Should not have String vs &String error:\n{}", stderr);
+    
+    // Check generated code adds * to the borrowed side (target_id)
+    // When comparing owned field (m.id: String) with borrowed param (target_id: &String),
+    // should generate: m.id == *target_id
+    assert!(rust_code.contains("m.id == *target_id") || rust_code.contains("*target_id == m.id"), 
+            "Should add * to borrowed parameter:\n{}", rust_code);
+}
