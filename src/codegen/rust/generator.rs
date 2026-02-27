@@ -2742,34 +2742,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     BinaryOp::Shr => ">>",
                 };
                 
-                // TDD FIX (Bug #5): For comparison operators, add auto-deref for borrowed parameters
-                // When comparing owned vs borrowed (String == &String), we need to dereference
-                // the borrowed side to make them compatible: String == *&String
-                let is_comparison = matches!(
-                    op,
-                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-                );
-                
+                // TDD FIX: Generate comparison without adding incorrect dereferences
+                // When comparing &String == &String, both sides are already borrowed - no deref needed!
+                // Rust's PartialEq trait handles comparisons correctly for references.
                 let left_str = self.generate_expression_immut(left);
-                let mut right_str = self.generate_expression_immut(right);
-                
-                // Check if right side is a borrowed parameter that needs dereferencing
-                if is_comparison {
-                    if let Expression::Identifier { name, .. } = right {
-                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());
-                        // Write to file for debugging
-                        use std::fs::OpenOptions;
-                        use std::io::Write;
-                        let mut file = OpenOptions::new().create(true).append(true).open("/tmp/bug5_debug.txt").unwrap();
-                        writeln!(file, "IMMUT: Checking '{}', is_borrowed={}, set={:?}", name, is_borrowed, self.inferred_borrowed_params).unwrap();
-                        
-                        if is_borrowed {
-                            // Add deref for borrowed parameters in comparisons
-                            writeln!(file, "IMMUT: ADDING DEREF to '{}'", name).unwrap();
-                            right_str = format!("*{}", right_str);
-                        }
-                    }
-                }
+                let right_str = self.generate_expression_immut(right);
                 
                 format!(
                     "{} {} {}",
@@ -6838,18 +6815,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     right_str = format!("({})", right_str);
                 }
 
-                // TDD FIX (Bug #5 + Bug #6): Auto-deref borrowed values in comparisons
-                // When comparing owned vs borrowed (String == &String), add * to borrowed side
-                // Check if right operand is a borrowed identifier (parameter OR enum match binding)
-                if is_comparison {
-                    if let Expression::Identifier { name, .. } = right {
-                        // Check both borrowed parameters (Bug #5) AND match-bound variables (Bug #6)
-                        if self.inferred_borrowed_params.contains(name.as_str()) 
-                           || self.borrowed_iterator_vars.contains(name) {
-                            right_str = format!("*{}", right_str);
-                        }
-                    }
-                }
+                // TDD FIX: Rust's PartialEq handles comparisons correctly for references.
+                // When comparing &String == &String or &str == &str, NO dereference needed!
+                // The trait `PartialEq<&T> for &T` is implemented by default.
+                // REMOVED: Incorrect auto-deref logic that was adding * when both sides are borrowed.
 
                 format!("{} {} {}", left_str, op_str, right_str)
             }
