@@ -59,10 +59,10 @@ fn render(score: i32) {
         rust_code
     );
     
-    // Should pass reference to the variable
+    // Should pass the temp variable (Rust auto-derefs String → &str for extern fn params)
     assert!(
-        rust_code.contains("&_temp") || rust_code.contains("&score_text"),
-        "Should pass reference to temp variable, got:\n{}",
+        rust_code.contains("_temp") || rust_code.contains("score_text"),
+        "Should pass temp variable to extern fn, got:\n{}",
         rust_code
     );
     

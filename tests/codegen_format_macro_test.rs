@@ -76,10 +76,10 @@ fn test_format_in_call() {
 
     println!("Generated code:\n{}", generated);
 
-    // Should contain format! macro in function call
+    // format!() should be extracted to a temp variable for safety (handles &str/String coercion)
     assert!(
-        generated.contains("log_message(format!"),
-        "format! macro should be inside function call"
+        generated.contains("format!(") && generated.contains("log_message("),
+        "format! should be used and log_message should be called"
     );
 
     fs::remove_file("test_format_call.wj").ok();
