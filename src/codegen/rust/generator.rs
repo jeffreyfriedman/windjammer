@@ -524,6 +524,11 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_output_file = path.into();
     }
 
+    /// Set whether this generator is producing module code (vs entry point)
+    pub fn set_is_module(&mut self, is_module: bool) {
+        self.is_module = is_module;
+    }
+
     /// Set the Windjammer source file path for source mapping
     pub fn set_source_file(&mut self, path: impl Into<std::path::PathBuf>) {
         self.current_wj_file = path.into();
@@ -1448,41 +1453,40 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // Walk up the directory tree to find the module root name
         // KEY DISTINCTION:
         // - If directory has lib.rs: it's the crate root -> return None
-        // - If directory has mod.rs AND parent has lib.rs: it's a submodule -> return dir name
-        // - Otherwise: not a module boundary -> keep searching
+        // - If directory is inside src/ of another crate: it's a submodule -> return dir name
+        // - Known output dirs (build, generated, out) are always the crate root
+        //   even if lib.rs hasn't been generated yet (chicken-and-egg with CLI)
 
         let mut parent = self.current_output_file.parent();
 
         while let Some(p) = parent {
             let dir_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-            // Check if this is a known module root directory
             if dir_name == "generated" || dir_name == "build" || dir_name == "out" {
                 // If this directory contains lib.rs, it IS the crate root
                 if p.join("lib.rs").exists() {
-                    // Example: build/lib.rs exists
-                    // So crate:: refers to build/ itself, not build::something
                     return None;
                 }
 
-                // Check if parent directory has lib.rs
-                // If so, this is a submodule (regardless of whether mod.rs exists yet)
-                // NOTE: Don't check for mod.rs existence because the CLI generates it AFTER
-                // compiling the individual files (chicken-and-egg problem)
+                // TDD FIX: Only treat as a submodule if this output directory is
+                // INSIDE another crate's src/ directory. A parent lib.rs that's NOT
+                // in a src/ directory belongs to a DIFFERENT crate (sibling project),
+                // not the one we're generating into.
                 if let Some(parent_of_p) = p.parent() {
-                    // Check immediate parent for lib.rs
-                    if parent_of_p.join("lib.rs").exists() {
-                        // Example: src/lib.rs exists, so src/generated/ is a submodule
+                    let parent_name = parent_of_p
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if parent_name == "src" && parent_of_p.join("lib.rs").exists() {
                         return Some(dir_name.to_string());
                     }
                 }
 
-                // No lib.rs in this directory or parent
-                // This directory is the crate root
+                // Known output directory without lib.rs yet - it IS the crate root.
+                // lib.rs will be generated later by the CLI.
                 return None;
             }
 
-            // Stop at src/ directory (don't go higher)
             if dir_name == "src" {
                 break;
             }
