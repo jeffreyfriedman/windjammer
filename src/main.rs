@@ -1119,7 +1119,7 @@ impl ModuleCompiler {
 
         let (analyzed, signatures, analyzed_trait_methods) = self
             .analyzer
-            .analyze_program(&program)
+            .analyze_program_with_global_signatures(&program, &self.global_signatures)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
         // MUTABILITY CHECK: Enforce immutable-by-default `let` semantics
@@ -1717,7 +1717,7 @@ fn compile_file_impl(
 
     let (analyzed, signatures, analyzed_trait_methods) = module_compiler
         .analyzer
-        .analyze_program(&program)
+        .analyze_program_with_global_signatures(&program, &module_compiler.global_signatures)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
     // BUG FIX: Merge per-file signatures into global registry during PASS 1
