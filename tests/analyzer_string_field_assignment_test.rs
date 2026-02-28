@@ -86,10 +86,11 @@ impl Logger {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: Parameter can be &str since it's not assigned to a field
+    // ASSERT: Parameter should be borrowed since it's only read (not assigned to field)
+    // TDD UPDATE: Multi-pass inference now correctly infers Borrowed for read-only String params
     assert!(
-        generated.contains("message: &str") || generated.contains("message: String"),
-        "Parameter can be &str or String when not assigned to field!\nGenerated:\n{}",
+        generated.contains("message: &String") || generated.contains("message: &str") || generated.contains("message: String"),
+        "Parameter should be borrowed (&String or &str) or owned (String) when not assigned to field!\nGenerated:\n{}",
         generated
     );
 }
