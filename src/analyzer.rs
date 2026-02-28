@@ -1080,7 +1080,7 @@ impl<'ast> Analyzer<'ast> {
                         
                         if is_copy {
                             // Still check for mutation - mutated Copy types need &mut
-                            if self.is_mutated(&param.name, &func.body) {
+                            if self.is_mutated(&param.name, &func.body, registry) {
                                 eprintln!("  ✓ Copy type, mutated → MutBorrowed");
                                 OwnershipMode::MutBorrowed
                             } else {
@@ -1318,10 +1318,10 @@ impl<'ast> Analyzer<'ast> {
         // The remaining checks below (is_mutated, is_returned, is_stored, etc.) will still
         // catch cases where the String needs to be Owned.
 
-        // Simple heuristic-based inference
+        // Multi-pass registry-aware inference
 
-        // 1. Check if parameter is mutated
-        if self.is_mutated(param_name, body) {
+        // 1. Check if parameter is mutated (uses registry for method call detection)
+        if self.is_mutated(param_name, body, registry) {
             eprintln!("  → Mutated: MutBorrowed");
             return Ok(OwnershipMode::MutBorrowed);
         }
@@ -1741,7 +1741,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_mutated(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    fn is_mutated(&self, name: &str, statements: &[&'ast Statement<'ast>], registry: &SignatureRegistry) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
@@ -1762,7 +1762,7 @@ impl<'ast> Analyzer<'ast> {
                 }
                 Statement::Expression { expr, .. } => {
                     // Check for method calls that might mutate
-                    if self.has_mutable_method_call(name, expr) {
+                    if self.has_mutable_method_call(name, expr, registry) {
                         return true;
                     }
                 }
@@ -1771,11 +1771,11 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    if self.is_mutated(name, then_block) {
+                    if self.is_mutated(name, then_block, registry) {
                         return true;
                     }
                     if let Some(else_b) = else_block {
-                        if self.is_mutated(name, else_b) {
+                        if self.is_mutated(name, else_b, registry) {
                             return true;
                         }
                     }
@@ -1783,7 +1783,7 @@ impl<'ast> Analyzer<'ast> {
                 Statement::Loop { body, .. }
                 | Statement::While { body, .. }
                 | Statement::For { body, .. } => {
-                    if self.is_mutated(name, body) {
+                    if self.is_mutated(name, body, registry) {
                         return true;
                     }
                 }
@@ -1822,22 +1822,39 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn has_mutable_method_call(&self, name: &str, expr: &Expression) -> bool {
+    fn has_mutable_method_call(&self, name: &str, expr: &Expression, registry: &SignatureRegistry) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name: id, .. } = &**object {
                     if id == name {
-                        // Heuristic: methods like push, insert, etc. are mutating
-                        return method.starts_with("push")
+                        // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
+                        // Check if the method takes &mut self (first param is MutBorrowed)
+                        if let Some(sig) = registry.get_signature(method) {
+                            eprintln!("    🔍 Method '{}' signature found: has_self={}, param_ownership={:?}", 
+                                method, sig.has_self_receiver, sig.param_ownership);
+                            if sig.has_self_receiver && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed) {
+                                eprintln!("    ✅ Method '{}' takes &mut self", method);
+                                return true;
+                            }
+                        }
+                        
+                        // FALLBACK HEURISTIC: stdlib methods not yet in registry
+                        let is_mutating_by_name = method.starts_with("push")
                             || method.starts_with("insert")
                             || method.starts_with("remove")
                             || method.starts_with("clear")
                             || method.ends_with("_mut");
+                        
+                        if is_mutating_by_name {
+                            eprintln!("    ⚠️ Method '{}' assumed mutating (heuristic fallback)", method);
+                        }
+                        
+                        return is_mutating_by_name;
                     }
                 }
                 false
             }
-            Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr),
+            Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr, registry),
             _ => false,
         }
     }
@@ -2424,23 +2441,6 @@ impl<'ast> Analyzer<'ast> {
     /// - `data.len()` — data is the receiver, not an argument
     /// - `process(&data)` — & wraps the argument, so it's borrowed
     /// - `format!("{}", data)` — macro call, not a function call in the AST
-    fn is_parameter_only_read(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
-        // Check that the parameter is:
-        // 1. NOT mutated
-        // 2. NOT returned
-        // 3. NOT stored
-        // 4. NOT used in arithmetic ops (only comparisons OK)
-        // 5. NOT iterated over
-        // 
-        // If all checks pass, it's read-only → can be Borrowed
-        !self.is_mutated(name, statements)
-            && !self.is_returned(name, statements)
-            && !self.is_stored(name, statements)
-            && !self.is_used_in_arithmetic_op(name, statements)
-            && !self.is_iterated_over(name, statements)
-            && !self.is_pattern_matched_with_fields(name, statements)
-    }
-
     fn is_passed_as_argument(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             if self.stmt_passes_as_argument(name, stmt) {
