@@ -149,16 +149,16 @@ fn load_level(loader: AssetLoader, level: String) -> Vec<Asset> {
         println!("Errors:\n{}", err);
     }
 
-    // loader must be `mut` because load() takes &mut self AND the calls are in let bindings
+    // loader should be &mut because load() takes &mut self
     assert!(
         ok,
         "Generated Rust should compile without E0596 when mutating method call is in let binding.\nErrors:\n{}",
         err
     );
-    // Verify mut is present in the generated signature
+    // Verify &mut is present in the parameter type (binding doesn't need `mut` for &mut T)
     assert!(
-        generated.contains("mut loader"),
-        "Parameter 'loader' should be declared as 'mut' in generated code.\nGenerated:\n{}",
+        generated.contains("&mut AssetLoader"),
+        "Parameter 'loader' should have &mut AssetLoader type.\nGenerated:\n{}",
         generated
     );
 }
