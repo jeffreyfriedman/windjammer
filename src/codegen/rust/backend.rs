@@ -139,17 +139,24 @@ impl CodegenBackend for RustBackend {
     }
 
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
-        // Use existing CodeGenerator for now
-        let registry = SignatureRegistry::new();
+        // TDD FIX: Analyze program first to populate signature registry!
+        // This was the root cause of the auto-clone bug - method signatures weren't available
         let target = match config.target {
             Target::WebAssembly => CompilationTarget::Wasm,
             _ => CompilationTarget::Wasm, // Default to Wasm for now
         };
+        
+        // Run analyzer to get signatures and analyzed functions
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        let (analyzed, signatures, analyzed_trait_methods) = analyzer
+            .analyze_program(program)
+            .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
-        let mut generator = crate::codegen::CodeGenerator::new(registry, target);
-
-        // TODO: Pass analyzed functions once refactoring is complete
-        let code = generator.generate_program(program, &[]);
+        let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
+        generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        
+        // Pass analyzed functions so codegen has ownership info
+        let code = generator.generate_program(program, &analyzed);
 
         let mut output = CodegenOutput::new(code.clone(), "rs".to_string());
 
@@ -177,11 +184,20 @@ impl CodegenBackend for RustBackend {
         program: &Program,
         _config: &CodegenConfig,
     ) -> Vec<(String, String)> {
-        // Generate code to extract dependencies from
-        let registry = SignatureRegistry::new();
+        // TDD FIX: Analyze program first (same as generate())
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        let (analyzed, signatures, analyzed_trait_methods) = match analyzer.analyze_program(program) {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("Warning: Analysis error in generate_additional_files: {}", e);
+                (vec![], SignatureRegistry::new(), std::collections::HashMap::new())
+            }
+        };
+        
         let target = CompilationTarget::Wasm; // Default target
-        let mut generator = crate::codegen::CodeGenerator::new(registry, target);
-        let code = generator.generate_program(program, &[]);
+        let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
+        generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        let code = generator.generate_program(program, &analyzed);
         
         vec![("Cargo.toml".to_string(), self.generate_cargo_toml_with_code(&code))]
     }

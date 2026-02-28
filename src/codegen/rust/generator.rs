@@ -128,6 +128,9 @@ pub struct CodeGenerator<'ast> {
     // suppress borrowed-iterator cloning on the intermediate object.
     // e.g., enemy.velocity.y → no need to clone velocity just to read .y
     suppress_borrowed_clone: bool,
+    // TDD FIX: When true, suppress .clone() for borrowed iterator field access in call arguments
+    // The Call handler will add .clone() or & based on parameter ownership signature
+    in_call_argument_generation: bool,
     // VEC INDEX CONTEXT: When generating the object of a FieldAccess, suppress Vec index
     // auto-clone since Rust allows field access on &T returned by Vec indexing.
     // e.g., players[i].score → no clone needed, just accesses the field through the ref.
@@ -249,6 +252,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
+            in_call_argument_generation: false,
             in_borrow_context: false,
             partial_eq_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
@@ -7157,12 +7161,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     return format!("assert!({})", args.join(", "));
                 }
 
-                // WINDJAMMER FIX: Call(FieldAccess) → method call
+                // TDD FIX: Call(FieldAccess) → method call WITH SIGNATURE LOOKUP
                 // When the parser produces Call { function: FieldAccess { object, field }, args }
-                // instead of MethodCall { object, method, args }, we need to handle it as
-                // a method call to avoid the FieldAccess auto-clone inserting .clone()
-                // between the method name and the call parentheses.
-                // e.g., e.get_tag() should NOT become e.get_tag.clone()()
+                // instead of MethodCall { object, method, args }, we need to:
+                // 1. Handle it as a method call (not function call)
+                // 2. Do signature lookup to get parameter ownership info
+                // 3. Apply correct ownership conversions (& vs .clone() etc.)
+                // 
+                // This was the AUTO-CLONE BUG: method calls skipped signature lookup!
                 if let Expression::FieldAccess {
                     object: call_obj,
                     field: call_method,
@@ -7181,14 +7187,79 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     if call_method == "clone" && obj_str.ends_with(".clone()") {
                         obj_str = obj_str[..obj_str.len() - 8].to_string();
                     }
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .map(|(_label, arg)| self.generate_expression(arg))
-                        .collect();
+                    
+                    // TDD FIX: Lookup method signature for ownership inference
+                    // Try multiple lookup strategies:
+                    // 1. Type::method (if we can infer object type)
+                    // 2. method (simple name fallback)
+                    let method_signature = self.signature_registry.get_signature(call_method).cloned();
+                    
+                    // TDD DEBUG
+                    if call_method == "has_item" {
+                        eprintln!("[TDD DEBUG] FieldAccess method call: {}.{}()", obj_str, call_method);
+                        eprintln!("[TDD DEBUG] Signature lookup result: {}", if method_signature.is_some() { "FOUND" } else { "NOT FOUND" });
+                        if let Some(ref sig) = method_signature {
+                            eprintln!("[TDD DEBUG] param_ownership: {:?}", sig.param_ownership);
+                        }
+                    }
+                    
+                    // Generate arguments with ownership awareness (same logic as regular Call)
+                    let args: Vec<String> = if let Some(ref sig) = method_signature {
+                        arguments
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(i, (_label, arg))| {
+                                let mut arg_str = self.generate_expression(arg);
+                                
+                                // Apply ownership conversion based on signature
+                                if let Some(&ownership) = sig.param_ownership.get(i) {
+                                    match ownership {
+                                        OwnershipMode::Borrowed => {
+                                            // Destination wants borrowed - add & if needed
+                                            let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                                            if !is_string_literal && !arg_str.starts_with("&") {
+                                                arg_str = format!("&{}", arg_str);
+                                            }
+                                        }
+                                        OwnershipMode::Owned => {
+                                            // Destination wants owned - add .clone() for borrowed sources
+                                            if let Expression::FieldAccess { object: field_obj, .. } = arg {
+                                                if let Expression::Identifier { name, .. } = &**field_obj {
+                                                    let is_borrowed = self.borrowed_iterator_vars.contains(name)
+                                                        || self.inferred_borrowed_params.contains(name);
+                                                    if is_borrowed && !arg_str.ends_with(".clone()") {
+                                                        let is_copy = self.infer_expression_type(arg)
+                                                            .as_ref()
+                                                            .is_some_and(|t| self.is_type_copy(t));
+                                                        if !is_copy {
+                                                            arg_str = format!("{}.clone()", arg_str);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                
+                                vec![arg_str]
+                            })
+                            .collect()
+                    } else {
+                        // No signature - just generate args without ownership hints
+                        arguments
+                            .iter()
+                            .map(|(_label, arg)| self.generate_expression(arg))
+                            .collect()
+                    };
+                    
                     return format!("{}.{}({})", obj_str, call_method, args.join(", "));
                 }
 
                 let func_str = self.generate_expression(function);
+                
+                // TDD DEBUG
+                eprintln!("[TDD CALL] func_name='{}' func_str='{}'", func_name, func_str);
 
                 // WINDJAMMER PHILOSOPHY: Some/Ok/Err with string literals need .to_string()
                 // Some("literal") -> Some("literal".to_string())
@@ -7319,19 +7390,71 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Look up signature and clone it to avoid borrow conflicts
                 // THE WINDJAMMER WAY: Try qualified name first, then simple name
                 // e.g., "Sound::new" -> try "Sound::new", then "new"
-                let signature = self
-                    .signature_registry
-                    .get_signature(&func_name)
-                    .cloned()
-                    .or_else(|| {
-                        // If qualified lookup fails, try simple name (just the method)
-                        if let Some(pos) = func_name.rfind("::") {
-                            let simple_name = &func_name[pos + 2..];
-                            self.signature_registry.get_signature(simple_name).cloned()
-                        } else {
-                            None
-                        }
-                    });
+                
+                // TDD FIX: Function pointer signature extraction
+                // When calling a function pointer parameter (e.g., has_item(arg1, arg2)),
+                // extract the signature from the parameter's type instead of the registry
+                eprintln!("[TDD FP] func_name='{}', looking for param", func_name);
+                eprintln!("[TDD FP] current_function_params: {:?}", self.current_function_params.iter().map(|p| (&p.name, &p.type_)).collect::<Vec<_>>());
+                let signature = if let Some(param) = self.current_function_params.iter().find(|p| p.name == func_name) {
+                    eprintln!("[TDD FP] Found param! type={:?}", param.type_);
+                    // Check if this parameter is a function pointer
+                    if let Type::FunctionPointer { params, return_type } = &param.type_ {
+                        // TDD FIX: Build signature from function pointer type
+                        // CRITICAL: Match the conversion logic in types.rs type_to_rust()!
+                        // fn(string, i32) in Windjammer → fn(&String, i32) in Rust
+                        // 
+                        // Conversion rules (from types.rs lines 148-160):
+                        // - Type::String → "&String" → Borrowed
+                        // - Type::Custom("string") → "&String" → Borrowed
+                        // - Type::Reference(_) → "&T" → Borrowed
+                        // - Copy types (Int, Bool, etc.) → owned → Owned
+                        // - Everything else → as-is (keep explicit types)
+                        let param_ownership: Vec<OwnershipMode> = params.iter().map(|ty| {
+                            match ty {
+                                // Idiomatic Windjammer: string parameters are borrowed (types.rs:151)
+                                Type::String => OwnershipMode::Borrowed,
+                                Type::Custom(name) if name == "string" => OwnershipMode::Borrowed,
+                                // Explicit references - borrowed (types.rs:154)
+                                Type::Reference(_) | Type::MutableReference(_) => OwnershipMode::Borrowed,
+                                // Copy types - owned (types.rs:156-157)
+                                Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => OwnershipMode::Owned,
+                                Type::Custom(name) if matches!(name.as_str(), "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "bool" | "char" | "usize" | "isize") => OwnershipMode::Owned,
+                                // Everything else - keep as-is (types.rs:159)
+                                // For non-Copy custom types, default is as-is, which means Owned in this context
+                                // (the analyzer will have determined the correct type already)
+                                _ => OwnershipMode::Owned,
+                            }
+                        }).collect();
+                        
+                        Some(crate::analyzer::FunctionSignature {
+                            name: func_name.clone(),
+                            param_types: params.clone(),
+                            param_ownership,
+                            return_type: return_type.as_ref().map(|t| (**t).clone()),
+                            return_ownership: OwnershipMode::Owned, // Functions return owned by default
+                            has_self_receiver: false,
+                            is_extern: false,
+                        })
+                    } else {
+                        // Not a function pointer - try registry
+                        self.signature_registry.get_signature(&func_name).cloned()
+                    }
+                } else {
+                    // Not a parameter - try registry lookup
+                    self.signature_registry
+                        .get_signature(&func_name)
+                        .cloned()
+                        .or_else(|| {
+                            // If qualified lookup fails, try simple name (just the method)
+                            if let Some(pos) = func_name.rfind("::") {
+                                let simple_name = &func_name[pos + 2..];
+                                self.signature_registry.get_signature(simple_name).cloned()
+                            } else {
+                                None
+                            }
+                        })
+                };
 
                 // Check if this is an extern function call for FFI str handling
                 let is_extern_call = if let Some(ref sig) = signature {
@@ -7351,7 +7474,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // suppressing necessary .clone() calls.
                         let prev_field_access_obj = self.in_field_access_object;
                         self.in_field_access_object = false;
+                        
+                        // TDD FIX: Set call argument context to suppress premature .clone()
+                        // The FieldAccess handler normally adds .clone() for borrowed iterator vars,
+                        // but in call arguments, we need to let the ownership check below decide
+                        let prev_in_call_arg = self.in_call_argument_generation;
+                        self.in_call_argument_generation = true;
+                        
                         let mut arg_str = self.generate_expression(arg);
+                        
+                        self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
                         
                         // WINDJAMMER FFI: Convert string arguments to (*const u8, usize) for extern functions
@@ -7413,9 +7545,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                         // Check if this parameter expects a borrow
                         if let Some(ref sig) = signature {
+                            // TDD DEBUG
+                            eprintln!("[TDD] func_name='{}' arg {} ownership check", func_name, i);
+                            eprintln!("[TDD] signature param_ownership: {:?}", sig.param_ownership);
+                            
                             if let Some(&ownership) = sig.param_ownership.get(i) {
+                                eprintln!("[TDD] param {} ownership: {:?}", i, ownership);
                                 match ownership {
                                     OwnershipMode::Borrowed => {
+                                        eprintln!("[TDD] BORROWED - should add &");
+
                                         // String literals are ALREADY &str - don't add &!
                                         let is_string_literal = matches!(
                                             arg,
@@ -7461,6 +7600,17 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         let is_temp_variable = arg_str.starts_with("_temp") 
                                             && arg_str.chars().skip(5).all(|c| c.is_numeric());
                                         
+                                        // TDD FIX: IDIOMATIC WINDJAMMER - Strip .clone() if present!
+                                        // When destination wants Borrowed, pass &field, NOT &field.clone()
+                                        // Example: has_item(ingredient.item_id) with has_item(item_id: string)
+                                        // Should generate: has_item(&ingredient.item_id)
+                                        // NOT: has_item(&ingredient.item_id.clone())
+                                        // The .clone() may have been added by generate_expression for borrowed iterator vars
+                                        if arg_str.ends_with(".clone()") {
+                                            arg_str = arg_str[..arg_str.len() - 8].to_string();
+                                            eprintln!("[TDD] Stripped .clone() from '{}' for Borrowed parameter", arg_str);
+                                        }
+                                        
                                         // Insert & if not already a reference and not a string literal and not a temp var
                                         if !expression_helpers::is_reference_expression(arg)
                                             && !is_string_literal
@@ -7468,7 +7618,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             && !is_copy_param
                                             && !is_temp_variable
                                         {
+                                            eprintln!("[TDD] Adding & to arg_str='{}'", arg_str);
                                             return vec![format!("&{}", arg_str)];
+                                        } else {
+                                            eprintln!("[TDD] NOT adding & - returning arg_str='{}'", arg_str);
+                                            return vec![arg_str];
                                         }
                                     }
                                     OwnershipMode::MutBorrowed => {
@@ -7535,6 +7689,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 // TDD FIX: Check if it's from a borrowed iterator (for loop)
                                                 // Example: for npc_id in npc_ids { Member::new(npc_id) }
                                                 // npc_id is &String from iterator, needs .clone() for owned String
+                                                // 
+                                                // CRITICAL: We're in OwnershipMode::Owned block, which means
+                                                // the DESTINATION parameter wants an owned value (String, not &String).
+                                                // So it's correct to .clone() borrowed iterator vars.
+                                                // 
+                                                // This block is fine - it only runs when ownership == Owned
                                                 let is_borrowed_iterator_var =
                                                     self.borrowed_iterator_vars.contains(name);
 
@@ -7553,9 +7713,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             }
                                         }
 
-                                        // AUTO-CLONE: When passing a field from a borrowed parameter
-                                        // to a function that expects an owned value, clone it
-                                        // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
+                                        // TDD FIX: AUTO-CLONE for borrowed_param.field
+                                        // When passing ingredient.item_id where ingredient is borrowed,
+                                        // we need to clone() IF destination wants Owned.
+                                        // 
+                                        // We're ALREADY in OwnershipMode::Owned block,
+                                        // so destination wants owned. Safe to add .clone().
+                                        //
+                                        // This handles: for ingredient in &vec { func(ingredient.field) }
+                                        // where func(field: String) expects owned.
                                         if let Expression::FieldAccess {
                                             object: field_obj, ..
                                         } = arg
@@ -7563,7 +7729,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                             if let Expression::Identifier { name, .. } =
                                                 &**field_obj
                                             {
-                                                // Check if it's a borrowed parameter (explicit OR inferred)
+                                                // Check if the object is from borrowed iterator OR borrowed param
+                                                let is_borrowed_iterator_var =
+                                                    self.borrowed_iterator_vars.contains(name);
                                                 let is_explicitly_borrowed =
                                                     self.current_function_params.iter().any(|p| {
                                                         &p.name == name
@@ -7574,7 +7742,10 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                     });
                                                 let is_inferred_borrowed =
                                                     self.inferred_borrowed_params.contains(name);
-                                                if (is_explicitly_borrowed || is_inferred_borrowed)
+                                                
+                                                if (is_borrowed_iterator_var 
+                                                    || is_explicitly_borrowed 
+                                                    || is_inferred_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
                                                     // Skip .clone() for Copy types — they are implicitly copied
@@ -7591,36 +7762,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 }
                             }
                         } else {
-                            // No signature found - still check for borrowed param field access
-                            // This handles qualified calls like Type::method(param.field)
-                            if let Expression::FieldAccess {
-                                object: field_obj, ..
-                            } = arg
-                            {
-                                if let Expression::Identifier { name, .. } = &**field_obj {
-                                    let is_explicitly_borrowed =
-                                        self.current_function_params.iter().any(|p| {
-                                            &p.name == name
-                                                && matches!(
-                                                    p.ownership,
-                                                    crate::parser::OwnershipHint::Ref
-                                                )
-                                        });
-                                    let is_inferred_borrowed =
-                                        self.inferred_borrowed_params.contains(name);
-                                    if (is_explicitly_borrowed || is_inferred_borrowed)
-                                        && !arg_str.ends_with(".clone()")
-                                    {
-                                        // Skip .clone() for Copy types — they are implicitly copied
-                                        let is_copy = self.infer_expression_type(arg)
-                                            .as_ref()
-                                            .is_some_and(|t| self.is_type_copy(t));
-                                        if !is_copy {
-                                            arg_str = format!("{}.clone()", arg_str);
-                                        }
-                                    }
-                                }
-                            }
+                            // No signature found - don't auto-clone!
+                            // Without signature info, we can't know if destination wants Owned or Borrowed
+                            // Better to let Rust compiler catch the error than guess wrong
                         }
 
                         vec![arg_str]
@@ -7823,11 +7967,40 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             arg_str = format!("|__e| {}(__e)", arg_str);
                         }
 
-                        // AUTO .to_string(): Convert string literals when parameter expects owned String
-                        if matches!(arg, Expression::Literal { value: Literal::String(_), .. })
-                            && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
-                            arg_str = format!("{}.to_string()", arg_str);
-                        }
+                        // TDD FIX: String literal ownership conversion
+                        // Windjammer philosophy: "sword" should work whether parameter wants String or &String
+                        let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                        let string_literal_converted = if is_string_literal {
+                            // Check what the parameter wants
+                            let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
+                            let param_ownership = method_signature
+                                .as_ref()
+                                .and_then(|sig| sig.param_ownership.get(sig_param_idx));
+                            
+                            match param_ownership {
+                                Some(&OwnershipMode::Owned) => {
+                                    // Parameter wants owned String → add .to_string()
+                                    arg_str = format!("{}.to_string()", arg_str);
+                                    true // Mark that we converted
+                                }
+                                Some(&OwnershipMode::Borrowed) => {
+                                    // Parameter wants &String → add &.to_string()
+                                    arg_str = format!("&{}.to_string()", arg_str);
+                                    true // Mark that we converted
+                                }
+                                _ => {
+                                    // No signature info - use heuristic (fallback to old logic)
+                                    if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
+                                        arg_str = format!("{}.to_string()", arg_str);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                            }
+                        } else {
+                            false
+                        };
 
                         // TDD FIX: AUTO-CONVERT &str/&String → String for method calls
                         // When passing a &str parameter to a method expecting owned String, convert it
@@ -7870,19 +8043,22 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
 
                         // AUTO-REF: Add & when parameter expects reference but arg is owned
-                        let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
-                            arg,
-                            &arg_str,
-                            method,
-                            i,
-                            &method_signature,
-                            &self.usize_variables,
-                            &self.current_function_params,
-                            &self.borrowed_iterator_vars,
-                            arguments.len(),
-                        );
-                        if should_ref {
-                            arg_str = format!("&{}", arg_str);
+                        // TDD FIX: Don't add & if we already handled string literal conversion above
+                        if !string_literal_converted {
+                            let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
+                                arg,
+                                &arg_str,
+                                method,
+                                i,
+                                &method_signature,
+                                &self.usize_variables,
+                                &self.current_function_params,
+                                &self.borrowed_iterator_vars,
+                                arguments.len(),
+                            );
+                            if should_ref {
+                                arg_str = format!("&{}", arg_str);
+                            }
                         }
 
                         // AUTO-BORROW for push_str: String::push_str expects &str, not String
@@ -8338,12 +8514,14 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // AND: Don't clone when this is an intermediate object in a field access chain
                 //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
                 // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
+                // TDD FIX: Don't clone when generating call arguments (Call handler applies ownership)
                 // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
                 if !self.generating_assignment_target
                     && !self.suppress_borrowed_clone
                     && !self.in_explicit_clone_call
                     && !self.in_field_access_object
                     && !self.in_borrow_context
+                    && !self.in_call_argument_generation
                 {
                     if let Expression::Identifier { name: var_name, .. } = &**object {
                         if self.borrowed_iterator_vars.contains(var_name) {
