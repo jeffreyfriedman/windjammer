@@ -7968,13 +7968,39 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         // If the user writes `&object.transform` but the method takes `Transform` (owned),
                         // the compiler strips the & and passes by value (Copy types) or moves.
                         // Example: self.render_transform(&object.transform) → self.render_transform(object.transform)
+                        //
+                        // TDD FIX: ALSO strip explicit & for HashMap/BTreeMap key methods with &String arguments.
+                        // HashMap<String, V>.contains_key() expects &str, not &&String.
+                        // User writes: map.contains_key(&key) where key is inferred as &String
+                        // Compiler generates: map.contains_key(key) which auto-derefs &String to &str ✅
                         let arg_to_generate = if let Expression::Unary {
                             op: crate::parser::UnaryOp::Ref,
                             operand,
                             ..
                         } = arg
                         {
-                            if let Some(ref sig) = method_signature {
+                            // Check if this is a HashMap/BTreeMap key method with a borrowed String argument
+                            let is_hashmap_key_method = matches!(
+                                method.as_str(),
+                                "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
+                            ) && i == 0; // Key is always first argument
+                            
+                            if is_hashmap_key_method {
+                                // Check if the operand is a borrowed String parameter
+                                if let Expression::Identifier { name, .. } = &**operand {
+                                    let is_borrowed_string = self.inferred_borrowed_params.contains(name)
+                                        && self.current_function_params.iter().any(|param| {
+                                            &param.name == name && matches!(&param.type_, Type::String)
+                                        });
+                                    if is_borrowed_string {
+                                        operand // Strip & — &String auto-derefs to &str
+                                    } else {
+                                        arg // Keep as-is
+                                    }
+                                } else {
+                                    arg // Not an identifier — keep as-is
+                                }
+                            } else if let Some(ref sig) = method_signature {
                                 let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
                                 let param_is_owned = sig
                                     .param_ownership
@@ -8121,6 +8147,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 &self.usize_variables,
                                 &self.current_function_params,
                                 &self.borrowed_iterator_vars,
+                                &self.inferred_borrowed_params,
                                 arguments.len(),
                             );
                             if should_ref {
