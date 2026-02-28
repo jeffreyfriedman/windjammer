@@ -7555,7 +7555,11 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     OwnershipMode::Borrowed => {
                                         eprintln!("[TDD] BORROWED - should add &");
 
-                                        // String literals are ALREADY &str - don't add &!
+                                        // TDD FIX (Bug #12): String literals &str -> &String conversion
+                                        // When parameter expects &String and arg is "literal" (&str),
+                                        // we need to convert: &"literal".to_string()
+                                        // 
+                                        // Check if this is a string literal AND parameter expects &String
                                         let is_string_literal = matches!(
                                             arg,
                                             Expression::Literal {
@@ -7563,6 +7567,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                                 ..
                                             }
                                         );
+                                        
+                                        if is_string_literal {
+                                            // Check if parameter type is String (not some other type)
+                                            let expects_string = sig.param_types.get(i)
+                                                .map(|t| match t {
+                                                    Type::String => true,
+                                                    Type::Custom(name) if name == "String" || name == "string" => true,
+                                                    _ => false,
+                                                })
+                                                .unwrap_or(false);
+                                            
+                                            if expects_string {
+                                                // Convert &str literal to &String
+                                                // "test" -> &"test".to_string()
+                                                eprintln!("[TDD] String literal -> &String conversion");
+                                                return vec![format!("&{}.to_string()", arg_str)];
+                                            }
+                                            // For other types expecting &T, string literal is already &str, don't add &
+                                            eprintln!("[TDD] String literal for non-String type - no &");
+                                            return vec![arg_str];
+                                        }
 
                                         // TDD FIX: Check if parameter is already a reference type
                                         // If param is &string, don't add another & (would be &&string)
@@ -7613,7 +7638,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                         
                                         // Insert & if not already a reference and not a string literal and not a temp var
                                         if !expression_helpers::is_reference_expression(arg)
-                                            && !is_string_literal
                                             && !is_param_already_ref
                                             && !is_copy_param
                                             && !is_temp_variable
