@@ -1075,16 +1075,22 @@ impl<'ast> Analyzer<'ast> {
                         // TDD DEBUG (Bug #5): Log before inference path selection
                         // For Copy types, check if they're mutated first
                         // Mutated Copy types should be &mut, not Owned
-                        if self.is_copy_type(&param.type_) {
+                        let is_copy = self.is_copy_type(&param.type_);
+                        eprintln!("🔎 Parameter '{}' type={:?} is_copy={}", param.name, param.type_, is_copy);
+                        
+                        if is_copy {
                             // Still check for mutation - mutated Copy types need &mut
                             if self.is_mutated(&param.name, &func.body) {
+                                eprintln!("  ✓ Copy type, mutated → MutBorrowed");
                                 OwnershipMode::MutBorrowed
                             } else {
                                 // Non-mutated Copy types default to Owned (pass by value)
+                                eprintln!("  ✓ Copy type, not mutated → Owned");
                                 OwnershipMode::Owned
                             }
                             } else {
                             // Perform inference based on usage in function body
+                            eprintln!("  ✓ Non-Copy type → calling infer_parameter_ownership");
                             self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
@@ -1313,11 +1319,13 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Check if parameter is mutated
         if self.is_mutated(param_name, body) {
+            eprintln!("  → Mutated: MutBorrowed");
             return Ok(OwnershipMode::MutBorrowed);
         }
 
         // 2. Check if parameter is returned (escapes function)
         if self.is_returned(param_name, body) {
+            eprintln!("  → Returned: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1325,6 +1333,7 @@ impl<'ast> Analyzer<'ast> {
         // When a parameter appears in an if/else that's assigned or returned,
         // it needs to be owned to match the other branch's ownership
         if self.is_used_in_if_else_expression(param_name, body) {
+            eprintln!("  → Used in if/else: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1338,6 +1347,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
+            eprintln!("  → Stored: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1350,6 +1360,7 @@ impl<'ast> Analyzer<'ast> {
         // For comparisons, borrowed parameters work fine:
         // `if str1 == str2` works whether str1/str2 are &String or String
         if self.is_used_in_arithmetic_op(param_name, body) {
+            eprintln!("  → Used in arithmetic: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1357,6 +1368,7 @@ impl<'ast> Analyzer<'ast> {
         // Borrowing an enum and pattern matching extracts references to fields
         // which breaks calls expecting owned values. Keep such parameters owned.
         if self.is_pattern_matched_with_fields(param_name, body) {
+            eprintln!("  → Pattern matched: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1364,6 +1376,7 @@ impl<'ast> Analyzer<'ast> {
         // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
         // and elements are moved out. The parameter must be owned, not borrowed.
         if self.is_iterated_over(param_name, body) {
+            eprintln!("  → Iterated: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -2123,8 +2136,9 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                // Also check general function calls
-                self.expression_uses_identifier(name, expr)
+                // For other function calls, the parameter is NOT being returned
+                // (the function's return value is being returned)
+                false
             }
 
             // Tuple expression: (a, b, c)
@@ -2137,8 +2151,17 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
-            // Default: use standard identifier check
-            _ => self.expression_uses_identifier(name, expr),
+            // CRITICAL FIX: Binary expressions (comparisons, arithmetic) return the RESULT, not the parameter
+            // Example: `id == "test"` returns bool, NOT id
+            // Example: `id + 1` returns the sum, NOT id
+            // The parameter is only being READ, not returned
+            Expression::Binary { .. } => false,
+            
+            // Unary expressions also return the result, not the operand
+            Expression::Unary { .. } => false,
+
+            // Default: reject (conservative - only allow explicit cases above)
+            _ => false,
         }
     }
 
