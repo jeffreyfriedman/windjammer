@@ -483,15 +483,12 @@ impl<'ast> Analyzer<'ast> {
         let mut pass_number = 1;
         
         loop {
-            eprintln!("🔄 Ownership Analysis Pass {}", pass_number);
-            
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
             
             // Check for convergence: did any signatures change?
             let converged = self.signatures_converged(&registry, &new_registry);
             
             if converged {
-                eprintln!("✅ Ownership analysis converged after {} passes", pass_number);
                 return Ok((new_analyzed, new_registry, self.analyzed_trait_methods.clone()));
             }
             
@@ -526,7 +523,6 @@ impl<'ast> Analyzer<'ast> {
                     
                     for (old_ownership, new_ownership) in old_sig.param_ownership.iter().zip(&new_sig.param_ownership) {
                         if old_ownership != new_ownership {
-                            eprintln!("  📝 {}: {:?} -> {:?}", name, old_ownership, new_ownership);
                             return false;
                         }
                     }
@@ -771,11 +767,6 @@ impl<'ast> Analyzer<'ast> {
     ) -> Result<(), String> {
         use std::collections::HashMap;
 
-        eprintln!(
-            "DEBUG: infer_trait_signatures_from_impls called with {} items",
-            program.items.len()
-        );
-
         // Step 1: Collect all trait implementations WITH their impl blocks
         // THE WINDJAMMER WAY: We need the impl block for proper ownership analysis
         // Map: trait_name -> Vec<(ImplBlock, functions)>
@@ -797,23 +788,7 @@ impl<'ast> Analyzer<'ast> {
 
         // Step 2: For each trait, analyze ALL implementations and determine most permissive signature
         for (trait_name, impl_blocks) in trait_impls {
-            eprintln!(
-                "DEBUG INFERENCE: Processing trait: {} with {} impl blocks",
-                trait_name,
-                impl_blocks.len()
-            );
             if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_name).cloned() {
-                eprintln!(
-                    "DEBUG INFERENCE:   Found {} methods in trait",
-                    trait_methods.len()
-                );
-                for (method_name, method_analysis) in &trait_methods {
-                    eprintln!(
-                        "DEBUG INFERENCE:     Method {} has self ownership: {:?}",
-                        method_name,
-                        method_analysis.inferred_ownership.get("self")
-                    );
-                }
                 let mut updated_methods = HashMap::new();
 
                 for (method_name, mut trait_method_analysis) in trait_methods {
@@ -870,11 +845,6 @@ impl<'ast> Analyzer<'ast> {
                     trait_method_analysis
                         .inferred_ownership
                         .insert("self".to_string(), most_permissive_self);
-
-                    eprintln!(
-                        "DEBUG:     Method {} upgraded to self: {:?}",
-                        method_name, most_permissive_self
-                    );
 
                     updated_methods.insert(method_name, trait_method_analysis);
                 }
@@ -1083,40 +1053,32 @@ impl<'ast> Analyzer<'ast> {
                             }
                         }
                     } else {
-                        // TDD DEBUG (Bug #5): Log before inference path selection
                         // For Copy types, check if they're mutated first
                         // Mutated Copy types should be &mut, not Owned
                         let is_copy = self.is_copy_type(&param.type_);
-                        eprintln!("🔎 Parameter '{}' type={:?} is_copy={}", param.name, param.type_, is_copy);
-                        
+
                         if is_copy {
                             // Still check for mutation - mutated Copy types need &mut
                             if self.is_mutated(&param.name, &func.body, registry) {
-                                eprintln!("  ✓ Copy type, mutated → MutBorrowed");
                                 OwnershipMode::MutBorrowed
                             } else {
                                 // Non-mutated Copy types default to Owned (pass by value)
-                                eprintln!("  ✓ Copy type, not mutated → Owned");
                                 OwnershipMode::Owned
                             }
-                            } else {
+                        } else {
                             // Perform inference based on usage in function body
-                            eprintln!("  ✓ Non-Copy type → calling infer_parameter_ownership");
-                            let inferred = self.infer_parameter_ownership(
+                            self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
                                 &func.body,
                                 &func.return_type,
                                 registry,
-                            )?;
-                            eprintln!("  ✅ Inference result for '{}': {:?}", param.name, inferred);
-                            inferred
+                            )?
                         }
                     }
                 }
             };
 
-            eprintln!("💾 Storing '{}' ownership: {:?}", param.name, mode);
             inferred_ownership.insert(param.name.clone(), mode);
         }
 
@@ -1307,13 +1269,10 @@ impl<'ast> Analyzer<'ast> {
         _return_type: &Option<Type>,
         registry: &SignatureRegistry,
     ) -> Result<OwnershipMode, String> {
-        eprintln!("🔍 Inferring ownership for parameter '{}' (type: {:?})", param_name, param_type);
-        
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
         // Generic types like T, G, S should always be passed by value.
         if Self::is_generic_type_param(param_type) {
-            eprintln!("  → Generic type param: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1333,13 +1292,11 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry) {
-            eprintln!("  → Mutated: MutBorrowed");
             return Ok(OwnershipMode::MutBorrowed);
         }
 
         // 2. Check if parameter is returned (escapes function)
         if self.is_returned(param_name, body) {
-            eprintln!("  → Returned: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1347,7 +1304,6 @@ impl<'ast> Analyzer<'ast> {
         // When a parameter appears in an if/else that's assigned or returned,
         // it needs to be owned to match the other branch's ownership
         if self.is_used_in_if_else_expression(param_name, body) {
-            eprintln!("  → Used in if/else: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1361,7 +1317,6 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
-            eprintln!("  → Stored: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1374,7 +1329,6 @@ impl<'ast> Analyzer<'ast> {
         // For comparisons, borrowed parameters work fine:
         // `if str1 == str2` works whether str1/str2 are &String or String
         if self.is_used_in_arithmetic_op(param_name, body) {
-            eprintln!("  → Used in arithmetic: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1382,7 +1336,6 @@ impl<'ast> Analyzer<'ast> {
         // Borrowing an enum and pattern matching extracts references to fields
         // which breaks calls expecting owned values. Keep such parameters owned.
         if self.is_pattern_matched_with_fields(param_name, body) {
-            eprintln!("  → Pattern matched: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1390,7 +1343,6 @@ impl<'ast> Analyzer<'ast> {
         // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
         // and elements are moved out. The parameter must be owned, not borrowed.
         if self.is_iterated_over(param_name, body) {
-            eprintln!("  → Iterated: Owned");
             return Ok(OwnershipMode::Owned);
         }
 
@@ -1410,29 +1362,19 @@ impl<'ast> Analyzer<'ast> {
         //
         // IMPORTANT: Only use registry if callees expect stricter ownership than local usage
         if let Some(pass_through_mode) = self.infer_passthrough_ownership(param_name, body, registry) {
-            eprintln!("  → Passthrough inferred: {:?}", pass_through_mode);
             // Registry says callees need this ownership
             // But if parameter is ONLY used for reading locally, prefer Borrowed
             // unless callees explicitly need Owned/MutBorrowed
             match pass_through_mode {
-                OwnershipMode::Borrowed => {
-                    eprintln!("  → Using passthrough: Borrowed");
-                    return Ok(OwnershipMode::Borrowed);
-                }
-                OwnershipMode::MutBorrowed => {
-                    eprintln!("  → Using passthrough: MutBorrowed");
-                    return Ok(OwnershipMode::MutBorrowed);
-                }
+                OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
+                OwnershipMode::MutBorrowed => return Ok(OwnershipMode::MutBorrowed),
                 OwnershipMode::Owned => {
                     // Callees want Owned - check if this is just propagation from Pass 1
                     // If parameter has NO local mutations/returns/stores, default to Borrowed
                     // This breaks the "Owned begets Owned" cycle
-                    eprintln!("  → Passthrough wants Owned, but using default");
                     return Ok(OwnershipMode::Owned);
                 }
             }
-        } else {
-            eprintln!("  → No passthrough calls found");
         }
 
         // 8. Default ownership: Borrowed (THE WINDJAMMER WAY!)
@@ -1451,7 +1393,6 @@ impl<'ast> Analyzer<'ast> {
         //
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
-        eprintln!("  → Default: Borrowed");
         Ok(OwnershipMode::Borrowed)
     }
 
@@ -1466,11 +1407,8 @@ impl<'ast> Analyzer<'ast> {
         // Collect all places where this parameter is used as an argument
         let mut passthrough_calls = Vec::new();
         self.collect_passthrough_calls(param_name, body, &mut passthrough_calls);
-        
-        eprintln!("    📞 Found {} passthrough calls for '{}'", passthrough_calls.len(), param_name);
-        
+
         if passthrough_calls.is_empty() {
-            eprintln!("    📞 No passthrough calls");
             return None; // Not used as argument, other checks will handle
         }
         
@@ -1478,9 +1416,7 @@ impl<'ast> Analyzer<'ast> {
         let mut inferred_mode: Option<OwnershipMode> = None;
         
         for (func_name, arg_position) in &passthrough_calls {
-            eprintln!("    📞 Checking call to '{}' arg {}", func_name, arg_position);
             if let Some(sig) = registry.get_signature(func_name) {
-                eprintln!("    📞 Found signature for '{}' (has_self={})", func_name, sig.has_self_receiver);
                 // Adjust position: method calls store natural arg index (0-based);
                 // if the signature has an explicit self receiver, offset by 1
                 let adjusted_position = if sig.has_self_receiver {
@@ -1856,25 +1792,18 @@ impl<'ast> Analyzer<'ast> {
                         // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
                         // Check if the method takes &mut self (first param is MutBorrowed)
                         if let Some(sig) = registry.get_signature(method) {
-                            eprintln!("    🔍 Method '{}' signature found: has_self={}, param_ownership={:?}", 
-                                method, sig.has_self_receiver, sig.param_ownership);
                             if sig.has_self_receiver && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed) {
-                                eprintln!("    ✅ Method '{}' takes &mut self", method);
                                 return true;
                             }
                         }
-                        
+
                         // FALLBACK HEURISTIC: stdlib methods not yet in registry
                         let is_mutating_by_name = method.starts_with("push")
                             || method.starts_with("insert")
                             || method.starts_with("remove")
                             || method.starts_with("clear")
                             || method.ends_with("_mut");
-                        
-                        if is_mutating_by_name {
-                            eprintln!("    ⚠️ Method '{}' assumed mutating (heuristic fallback)", method);
-                        }
-                        
+
                         return is_mutating_by_name;
                     }
                 }
@@ -3013,8 +2942,6 @@ impl<'ast> Analyzer<'ast> {
                     .get(&param.name)
                     .cloned()
                     .unwrap_or(OwnershipMode::Owned);
-                
-                eprintln!("📊 build_signature: param '{}' type={:?} inferred={:?}", param.name, param.type_, inferred);
 
                 // CRITICAL: Generic type parameters (like G in fn foo<G: Trait>(g: G))
                 // should ALWAYS be Owned. The trait bound is on G, not on &G.
