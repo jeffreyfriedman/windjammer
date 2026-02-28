@@ -137,9 +137,12 @@ impl MethodCallAnalyzer {
         
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
-                // Check if this identifier is an inferred borrowed String parameter
+                let is_string_type = |t: &Type| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(s) if s == "String" || s == "string")
+                };
                 let is_borrowed_string_param = current_function_params.iter().any(|param| {
-                    param.name == *name && matches!(&param.type_, Type::String)
+                    param.name == *name && is_string_type(&param.type_)
                 }) && inferred_borrowed_params.contains(name);
                 
                 if is_borrowed_string_param {
@@ -324,7 +327,13 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Check if method expects owned value and arg is a borrowed field
+        // TDD FIX: Check if method expects borrowed value from borrowed struct field
+        // Pattern: borrowed_struct.owned_field passed to method expecting &T
+        // Example: ingredient.item_id where ingredient: &Ingredient, item_id: String
+        //          passed to has_item(item_id: &String)
+        // Solution: Pass &borrowed_struct.owned_field (NO clone needed)
+        // Wrong: &ingredient.item_id.clone() (wasteful - creates String then borrows it)
+        // Right: &ingredient.item_id (just borrow the field)
         if let Some(sig) = method_signature {
             let sig_param_idx = if sig.has_self_receiver {
                 param_idx + 1
@@ -332,6 +341,12 @@ impl MethodCallAnalyzer {
                 param_idx
             };
             if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                // If method expects Borrowed, don't clone - should_add_ref will add &
+                if matches!(ownership, OwnershipMode::Borrowed) {
+                    return false; // Will be borrowed, no clone needed
+                }
+                
+                // Method expects Owned - check if we need to clone
                 if matches!(ownership, OwnershipMode::Owned) {
                     if let Expression::FieldAccess { object, .. } = arg {
                         if let Expression::Identifier { name, .. } = &**object {

@@ -411,6 +411,17 @@ impl<'ast> Analyzer<'ast> {
         &mut self,
         program: &Program<'ast>,
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
+        self.analyze_program_with_global_signatures(program, &SignatureRegistry::new())
+    }
+
+    /// Analyze a program with pre-populated signatures from previously compiled files.
+    /// This enables cross-file passthrough ownership inference (e.g., Merchant::add_item
+    /// can look up Inventory::add_item's ownership when they're in separate files).
+    pub fn analyze_program_with_global_signatures(
+        &mut self,
+        program: &Program<'ast>,
+        global_signatures: &SignatureRegistry,
+    ) -> Result<ProgramAnalysisResult<'ast>, String> {
         // THE PROPER SOLUTION: Multi-pass ownership analysis
         // Iterate until convergence - no workarounds, no heuristics, just correctness
         
@@ -468,7 +479,7 @@ impl<'ast> Analyzer<'ast> {
         // Continue analyzing until ownership signatures stabilize (convergence)
         const MAX_PASSES: usize = 10; // Safety limit to prevent infinite loops
         
-        let mut registry = SignatureRegistry::new();
+        let mut registry = global_signatures.clone();
         let mut pass_number = 1;
         
         loop {
@@ -1469,9 +1480,15 @@ impl<'ast> Analyzer<'ast> {
         for (func_name, arg_position) in &passthrough_calls {
             eprintln!("    📞 Checking call to '{}' arg {}", func_name, arg_position);
             if let Some(sig) = registry.get_signature(func_name) {
-                eprintln!("    📞 Found signature for '{}'", func_name);
-                // Get the ownership mode for this parameter position
-                if let Some(&ownership) = sig.param_ownership.get(*arg_position) {
+                eprintln!("    📞 Found signature for '{}' (has_self={})", func_name, sig.has_self_receiver);
+                // Adjust position: method calls store natural arg index (0-based);
+                // if the signature has an explicit self receiver, offset by 1
+                let adjusted_position = if sig.has_self_receiver {
+                    *arg_position + 1
+                } else {
+                    *arg_position
+                };
+                if let Some(&ownership) = sig.param_ownership.get(adjusted_position) {
                     match inferred_mode {
                         None => inferred_mode = Some(ownership),
                         Some(existing_mode) => {
@@ -1577,12 +1594,12 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::MethodCall { object, method, arguments, .. } => {
-                // Check arguments (skip receiver object for now)
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(arg, param_name) {
-                        // Try to get qualified method name (Type::method)
                         if let Some(method_name) = self.extract_method_name(object, method) {
-                            results.push((method_name, i + 1)); // +1 because self is arg 0
+                            // Store natural argument index; adjusted at lookup time
+                            // based on whether the signature has an explicit self receiver
+                            results.push((method_name, i));
                         }
                     }
                 }
@@ -1761,7 +1778,16 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 Statement::Expression { expr, .. } => {
-                    // Check for method calls that might mutate
+                    if self.has_mutable_method_call(name, expr, registry) {
+                        return true;
+                    }
+                }
+                Statement::Let { value, .. } => {
+                    if self.has_mutable_method_call(name, value, registry) {
+                        return true;
+                    }
+                }
+                Statement::Return { value: Some(expr), .. } => {
                     if self.has_mutable_method_call(name, expr, registry) {
                         return true;
                     }
@@ -1855,6 +1881,32 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
             Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr, registry),
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    match s {
+                        Statement::Expression { expr, .. } => {
+                            if self.has_mutable_method_call(name, expr, registry) {
+                                return true;
+                            }
+                        }
+                        Statement::Let { value, .. } => {
+                            if self.has_mutable_method_call(name, value, registry) {
+                                return true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                false
+            }
+            Expression::Call { arguments, .. } => {
+                for (_label, arg) in arguments {
+                    if self.has_mutable_method_call(name, arg, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
             _ => false,
         }
     }
@@ -2140,15 +2192,19 @@ impl<'ast> Analyzer<'ast> {
             // Direct identifier use
             Expression::Identifier { name: id, .. } if id == name => true,
 
-            // Wrapped in Some, Ok, Err, etc.
+            // Wrapped in constructors: Some(param), Ok(param), Err(param), Enum::Variant(param)
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
-                // Check if this is a wrapper call like Some(param) or Ok(param)
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    if matches!(fn_name.as_str(), "Some" | "Ok" | "Err") {
+                    // Option/Result constructors
+                    let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
+                    // Enum variant constructors: Type::Variant(...) stores its arguments
+                    let is_enum_constructor = fn_name.contains("::");
+                    
+                    if is_known_wrapper || is_enum_constructor {
                         for (_label, arg) in arguments {
                             if self.expression_uses_identifier(name, arg) {
                                 return true;
@@ -2156,8 +2212,6 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                // For other function calls, the parameter is NOT being returned
-                // (the function's return value is being returned)
                 false
             }
 
@@ -2181,6 +2235,37 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { .. } => false,
 
             // Default: reject (conservative - only allow explicit cases above)
+            _ => false,
+        }
+    }
+
+    /// Check if an expression stores a parameter by value.
+    /// Matches direct identifier use, wrapping in Some/Ok/Err, enum variant constructors,
+    /// tuples, and struct literals containing the parameter.
+    fn expression_stores_identifier(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::Call { function, arguments, .. } => {
+                if let Expression::Identifier { name: fn_name, .. } = &**function {
+                    let is_constructor = matches!(fn_name.as_str(), "Some" | "Ok" | "Err")
+                        || fn_name.contains("::");
+                    if is_constructor {
+                        return arguments.iter().any(|(_label, arg)| {
+                            self.expression_stores_identifier(name, arg)
+                        });
+                    }
+                }
+                false
+            }
+            Expression::Tuple { elements, .. } => {
+                elements.iter().any(|el| self.expression_stores_identifier(name, el))
+            }
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().any(|(_, v)| self.expression_stores_identifier(name, v))
+            }
+            Expression::Array { elements, .. } => {
+                elements.iter().any(|el| self.expression_stores_identifier(name, el))
+            }
             _ => false,
         }
     }
@@ -2226,32 +2311,27 @@ impl<'ast> Analyzer<'ast> {
                     value,
                     ..
                 } => {
-                    // TDD FIX: Check if the parameter is DIRECTLY assigned to ANY struct field
-                    // (not just self.field, but also local_var.field)
+                    // Check if the parameter is assigned to a struct field, either directly
+                    // or wrapped in Some/Enum constructors/tuples.
                     //
-                    // Examples:
-                    // - self.field = param (method storing parameter)
-                    // - node.items = items (constructor storing parameter)
-                    // - config.data = data (factory function storing parameter)
-                    //
-                    // We check if the value is JUST the identifier, not part of a larger expression.
-                    // Direct assignment: obj.field = param
-                    // Calculation: obj.field = obj.field * param (not "stored")
+                    // Direct: obj.field = param
+                    // Wrapped: obj.field = Some(param)
+                    // Enum: obj.field = Enum::Variant(param)
                     if matches!(&**object, Expression::Identifier { .. }) {
-                        // Only return true if the value is EXACTLY the parameter identifier
-                        if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                        if self.expression_stores_identifier(name, value) {
                             return true;
                         }
                     }
                 }
-                // TDD FIX: Check if parameter is stored via index assignment
-                // e.g., self.items[index] = item (stores item in a Vec/array)
+                // Check if parameter is stored via index assignment
+                // e.g., self.slots[i] = item
+                // e.g., self.slots[i] = Some(ItemStack::new(item, qty))
                 Statement::Assignment {
                     target: Expression::Index { .. },
                     value,
                     ..
                 } => {
-                    if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                    if self.expression_stores_identifier(name, value) {
                         return true;
                     }
                 }
@@ -2279,29 +2359,17 @@ impl<'ast> Analyzer<'ast> {
                     );
 
                     if is_storage_method {
-                        // Check for method calls on fields: self.field.push(param)
-                        if let Expression::FieldAccess {
-                            object: field_obj, ..
-                        } = &**object
-                        {
-                            if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id == "self")
-                            {
-                                // Check if any argument uses the parameter DIRECTLY
-                                for (_label, arg) in arguments {
-                                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
-                                    {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Also check for method calls on local variables: vec.push(param)
-                        // This catches cases like store_path(paths, path) where paths.push(path)
-                        if let Expression::Identifier { .. } = &**object {
+                        // Check for storage method calls on ANY object:
+                        // - self.field.push(param)
+                        // - self.field.push((param, other))  ← tuple wrapping
+                        // - self.field.push(Enum::Variant(param))  ← enum wrapping
+                        // - local_var.push(param)
+                        let is_on_field_or_var = matches!(&**object, Expression::FieldAccess { .. })
+                            || matches!(&**object, Expression::Identifier { .. });
+                        
+                        if is_on_field_or_var {
                             for (_label, arg) in arguments {
-                                if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
-                                {
+                                if self.expression_stores_identifier(name, arg) {
                                     return true;
                                 }
                             }
@@ -2378,10 +2446,84 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                 }
-                _ => {}
+                // General case: check any statement for enum variant constructors
+                // that consume the parameter. Covers patterns like:
+                //   let x = Func(EnumType::Variant(param, ...))
+                //   let x = Func(format!(..., param), &EnumType::Variant(param, ...))
+                _ => {
+                    if self.stmt_has_enum_variant_consuming(name, stmt) {
+                        return true;
+                    }
+                }
             }
         }
         false
+    }
+
+    /// Check if a statement contains an enum variant constructor that consumes a parameter.
+    /// Recursively scans all expressions within the statement.
+    fn stmt_has_enum_variant_consuming(&self, name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => self.expr_has_enum_variant_consuming(name, value),
+            Statement::Expression { expr, .. } => self.expr_has_enum_variant_consuming(name, expr),
+            Statement::Return { value: Some(expr), .. } => self.expr_has_enum_variant_consuming(name, expr),
+            Statement::Assignment { value, .. } => self.expr_has_enum_variant_consuming(name, value),
+            _ => false,
+        }
+    }
+
+    /// Recursively check if an expression contains an enum variant constructor
+    /// (function call where name contains "::") that has the parameter as a direct argument.
+    fn expr_has_enum_variant_consuming(&self, name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Call { function, arguments, .. } => {
+                // Check if this is an enum variant constructor
+                let is_enum_variant = if let Expression::Identifier { name: fn_name, .. } = function {
+                    fn_name.contains("::")
+                } else if let Expression::FieldAccess { field, .. } = function {
+                    field.contains("::")
+                } else {
+                    false
+                };
+
+                if is_enum_variant {
+                    for (_label, arg) in arguments {
+                        if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                            return true;
+                        }
+                    }
+                }
+
+                // Recurse into all arguments
+                for (_label, arg) in arguments {
+                    if self.expr_has_enum_variant_consuming(name, arg) {
+                        return true;
+                    }
+                }
+                // Recurse into function expression
+                self.expr_has_enum_variant_consuming(name, function)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_has_enum_variant_consuming(name, operand)
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    if self.stmt_has_enum_variant_consuming(name, s) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Tuple { elements, .. } => {
+                for el in elements {
+                    if self.expr_has_enum_variant_consuming(name, el) {
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
     }
 
     /// TDD: Check if a parameter is iterated over in a for loop (consumed by iteration)

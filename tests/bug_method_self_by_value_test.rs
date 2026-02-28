@@ -29,6 +29,7 @@ fn test_method_self_by_value_compiles() {
         .arg("rust")
         .arg("--output")
         .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to execute wj build");
 
@@ -55,7 +56,7 @@ fn test_method_self_by_value_compiles() {
     let rust_compile = Command::new("rustc")
         .arg(out_dir.join("test.rs"))
         .arg("--crate-type")
-        .arg("bin")
+        .arg("lib")
         .arg("--edition")
         .arg("2021")
         .arg("-o")
