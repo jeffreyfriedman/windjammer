@@ -142,7 +142,23 @@ pub fn type_to_rust(type_: &Type) -> String {
             params,
             return_type,
         } => {
-            let param_strs: Vec<String> = params.iter().map(type_to_rust).collect();
+            // TDD FIX: IDIOMATIC WINDJAMMER - Apply ownership inference to function pointer params
+            // fn(string, i32) → fn(&String, i32) (string is borrowed by default)
+            // fn(vec: Vec<T>) → fn(Vec<T>) (explicit type, keep as-is)
+            let param_strs: Vec<String> = params.iter().map(|ty| {
+                match ty {
+                    // Idiomatic Windjammer: string parameters are borrowed
+                    Type::String => "&String".to_string(),
+                    Type::Custom(name) if name == "string" => "&String".to_string(),
+                    // Already explicit references - keep as-is
+                    Type::Reference(_) | Type::MutableReference(_) => type_to_rust(ty),
+                    // Copy types - pass by value
+                    Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => type_to_rust(ty),
+                    Type::Custom(name) if matches!(name.as_str(), "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "bool" | "char" | "usize" | "isize") => type_to_rust(ty),
+                    // Everything else - keep as-is (explicit types are respected)
+                    _ => type_to_rust(ty),
+                }
+            }).collect();
             if let Some(ret) = return_type {
                 format!("fn({}) -> {}", param_strs.join(", "), type_to_rust(ret))
             } else {
