@@ -324,10 +324,52 @@ impl Lexer {
             }
         }
 
-        if is_float {
-            Token::FloatLiteral(num_str.parse().unwrap())
-        } else {
+        // TDD FIX: Handle type suffixes for integer literals (0u64, 0i32, 0u32, etc.)
+        // Without this, "0u64" gets tokenized as IntLiteral(0) + Ident("u64"),
+        // which causes the "u64" to become a stray expression statement "u64;"
+        // resulting in E0423: expected value, found builtin type `u64`
+        if !is_float {
+            // Check for type suffix: u64, i64, u32, i32, u16, i16, u8, i8, usize, isize
+            let _type_suffix = if self.current_char == Some('u') || self.current_char == Some('i') {
+                let mut suffix = String::new();
+                while let Some(ch) = self.current_char {
+                    if ch.is_ascii_alphanumeric() {
+                        suffix.push(ch);
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Validate it's a real type suffix
+                match suffix.as_str() {
+                    "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize" | "isize" => {
+                        Some(suffix)
+                    }
+                    _ => {
+                        // Not a valid type suffix, backtrack
+                        // This handles cases like "0ux" which should be "0" + "ux" (identifier)
+                        for _ in 0..suffix.len() {
+                            self.position -= 1;
+                        }
+                        self.current_char = if self.position < self.input.len() {
+                            Some(self.input[self.position])
+                        } else {
+                            None
+                        };
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            // For now, just parse the number and discard the type suffix
+            // The type system will infer the correct type from context
+            // TODO: Store type suffix in Token for better type checking
             Token::IntLiteral(num_str.parse().unwrap())
+        } else {
+            Token::FloatLiteral(num_str.parse().unwrap())
         }
     }
 
