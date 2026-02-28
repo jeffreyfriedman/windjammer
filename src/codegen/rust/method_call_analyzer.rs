@@ -35,6 +35,7 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
         borrowed_iterator_vars: &HashSet<String>,
+        inferred_borrowed_params: &HashSet<String>,
         arg_count: usize,
     ) -> bool {
         // String literals are ALREADY &str - never add &
@@ -122,6 +123,31 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // TDD FIX: HashMap/BTreeMap key methods with &String arguments
+        // HashMap<String, V>.contains_key() expects &str, not &String or &&String
+        // When passing a &String parameter to these methods, don't add another &
+        // Example: fn check(map: HashMap<String, int>, key: string) { map.contains_key(&key) }
+        //   Generated: fn check(map: &HashMap<String, i64>, key: &String)
+        //   Need: map.contains_key(key) NOT map.contains_key(&key)
+        //   Result: &String auto-derefs to &str ✅
+        let is_hashmap_key_method = matches!(
+            method,
+            "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
+        ) && param_idx == 0; // Key is always first argument
+        
+        if is_hashmap_key_method {
+            if let Expression::Identifier { name, .. } = arg {
+                // Check if this identifier is an inferred borrowed String parameter
+                let is_borrowed_string_param = current_function_params.iter().any(|param| {
+                    param.name == *name && matches!(&param.type_, Type::String)
+                }) && inferred_borrowed_params.contains(name);
+                
+                if is_borrowed_string_param {
+                    return false; // Don't add & - pass &String as-is, it auto-derefs to &str
+                }
+            }
+        }
+        
         // TDD FIX: PARAMETERS THAT ARE ALREADY REFERENCE TYPES
         // If a function parameter is declared as &T or &mut T, the identifier
         // itself is already a reference. Don't add another &.
