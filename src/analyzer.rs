@@ -1091,18 +1091,21 @@ impl<'ast> Analyzer<'ast> {
                             } else {
                             // Perform inference based on usage in function body
                             eprintln!("  ✓ Non-Copy type → calling infer_parameter_ownership");
-                            self.infer_parameter_ownership(
+                            let inferred = self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
                                 &func.body,
                                 &func.return_type,
                                 registry,
-                            )?
+                            )?;
+                            eprintln!("  ✅ Inference result for '{}': {:?}", param.name, inferred);
+                            inferred
                         }
                     }
                 }
             };
 
+            eprintln!("💾 Storing '{}' ownership: {:?}", param.name, mode);
             inferred_ownership.insert(param.name.clone(), mode);
         }
 
