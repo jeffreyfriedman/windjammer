@@ -49,12 +49,10 @@ impl Merchant {
         self.inventory.has(item_id)
     }
     
-    /// Check multiple items
+    /// Check multiple items (uses self via has_item call)
     fn check_items(items: Vec<string>) -> bool {
         for id in &items {
-            // id is &String from borrowed iterator
-            // has_item should accept &String (Borrowed param)
-            if !has_item(id) {
+            if !self.has_item(id) {
                 return false
             }
         }

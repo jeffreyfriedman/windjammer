@@ -104,14 +104,23 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        // TDD FIX: METHOD CALL EXPRESSIONS SHOULD NEVER BE BORROWED (CHECKED FIRST!)
-        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
-        // Don't add & to them, EVEN IF the method signature says the parameter should be borrowed.
-        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
-        // should NOT become paddle.update(delta, &input.is_key_down(Key::W), input.is_key_down(Key::S))
-        // This check MUST come before the signature check to prevent over-borrowing Copy types.
+        // Method call results (like input.is_key_down()) generally shouldn't be auto-borrowed.
+        // Exception: when we have a user-defined signature that says the parameter is Borrowed
+        // AND the param type is non-Copy (e.g., `path: &String`), then .to_string() results
+        // DO need & added. The signature check downstream handles this.
         if matches!(arg, Expression::MethodCall { .. }) {
-            return false;
+            // Allow through ONLY if we have a user-defined method signature that says Borrowed
+            if let Some(sig) = method_signature {
+                let sig_param_idx = if sig.has_self_receiver { param_idx + 1 } else { param_idx };
+                let is_borrowed = sig.param_ownership.get(sig_param_idx)
+                    .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
+                if !is_borrowed {
+                    return false;
+                }
+                // Fall through to let the downstream Copy-type check handle it
+            } else {
+                return false;
+            }
         }
 
         // BORROWED ITERATOR VARIABLES: Variables from borrowed iterators (.keys(), .values(), .iter())
