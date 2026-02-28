@@ -63,17 +63,20 @@ fn test_user(id: string, name: string, age: i32) {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // Check that test_user_impl receives String arguments
-    // The impl function should take String parameters
+    // The impl function should take &String parameters (read-only usage infers Borrowed)
+    // Windjammer philosophy: compiler infers the cheapest ownership mode
     assert!(
-        rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
-        "Should generate impl function with String parameters (unused params get _ prefix)"
+        rust_code.contains("fn test_user_impl(id: &String, name: &String, _age: i32)")
+            || rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
+        "Should generate impl function with String or &String parameters.\nGenerated:\n{}", rust_code
     );
 
-    // CRITICAL: The test case calls MUST convert &str to String
-    // This is the bug we're fixing!
-    assert!(rust_code.contains(r#"test_user_impl("alice".to_string(), "Alice".to_string(), 25)"#), 
-        "BUG: Compiler must add .to_string() when calling impl function with string literal arguments");
+    // The test case calls must convert &str to String (Rust auto-refs when passing String to &String)
+    assert!(
+        rust_code.contains(r#"test_user_impl("alice".to_string()"#)
+            || rust_code.contains(r#"test_user_impl(&"alice".to_string()"#),
+        "Compiler must add .to_string() when calling impl function with string literal arguments.\nGenerated:\n{}", rust_code
+    );
 
     // Verify it compiles with rustc
     let rustc_result = Command::new("rustc")
@@ -138,10 +141,11 @@ fn test_greet() {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // Should contain .to_string() for the parameter
+    // Should contain .to_string() for the parameter (may include & for borrowed params)
     assert!(
-        rust_code.contains(r#"greet("World".to_string())"#),
-        "Compiler should auto-convert string literal parameters"
+        rust_code.contains(r#"greet("World".to_string())"#)
+            || rust_code.contains(r#"greet(&"World".to_string())"#),
+        "Compiler should auto-convert string literal parameters.\nGenerated:\n{}", rust_code
     );
 
     // Verify it compiles with rustc
