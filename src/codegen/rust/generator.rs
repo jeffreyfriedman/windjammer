@@ -119,8 +119,12 @@ pub struct CodeGenerator<'ast> {
     unused_let_bindings: std::collections::HashSet<(usize, usize)>,
     // INFERRED BORROWED PARAMS: Parameters inferred to be borrowed (for field access cloning)
     inferred_borrowed_params: std::collections::HashSet<String>,
+    // INFERRED MUT BORROWED PARAMS: Parameters inferred to be &mut (for avoiding double &mut in passthrough)
+    inferred_mut_borrowed_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     generating_assignment_target: bool,
+    // VOID BLOCK: When true, last expression in a block gets a semicolon (if-without-else bodies)
+    in_void_block: bool,
     // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
     // suppress auto-clone on the object expression to prevent double .clone().clone()
     in_explicit_clone_call: bool,
@@ -248,7 +252,9 @@ impl<'ast> CodeGenerator<'ast> {
             usize_variables: std::collections::HashSet::new(),
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
+            inferred_mut_borrowed_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
+            in_void_block: false,
             in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
@@ -637,8 +643,8 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
             let should_optimize_return =
                 self.in_function_body && matches!(stmt, Statement::Return { .. });
-            // Simplified: (is_last && A) || (is_last && B) = is_last && (A || B)
             if is_last
+                && !self.in_void_block
                 && (should_optimize_return
                     || matches!(
                         stmt,
@@ -2930,7 +2936,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn generate_extern_function(&self, func: &FunctionDecl) -> String {
         let mut output = String::new();
 
-        output.push_str("    fn ");
+        output.push_str("    pub fn ");
         output.push_str(&func.name);
 
         // Add type parameters if present
@@ -3708,17 +3714,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         // These need `&` auto-inserted to prevent consuming the collection.
         self.precompute_for_loop_borrows(&func.body);
 
-        // Track parameters inferred as borrowed for auto-deref in comparisons (Bug #5)
+        // Track parameters inferred as borrowed/mut-borrowed for codegen decisions
         self.inferred_borrowed_params.clear();
+        self.inferred_mut_borrowed_params.clear();
         eprintln!("=== BUG5 TRACK: Function '{}', analyzing {} params ===", func.name, analyzed.inferred_ownership.len());
         for (param_name, ownership) in &analyzed.inferred_ownership {
             eprintln!("BUG5 TRACK: Param '{}' has ownership {:?}", param_name, ownership);
-            if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
-                self.inferred_borrowed_params.insert(param_name.clone());
-                eprintln!("BUG5 TRACK: ✅ Added '{}' to borrowed set", param_name);
+            match ownership {
+                crate::analyzer::OwnershipMode::Borrowed => {
+                    self.inferred_borrowed_params.insert(param_name.clone());
+                    eprintln!("BUG5 TRACK: ✅ Added '{}' to borrowed set", param_name);
+                }
+                crate::analyzer::OwnershipMode::MutBorrowed => {
+                    self.inferred_mut_borrowed_params.insert(param_name.clone());
+                    eprintln!("BUG5 TRACK: ✅ Added '{}' to mut_borrowed set", param_name);
+                }
+                _ => {}
             }
         }
         eprintln!("BUG5 TRACK: Final borrowed_params set: {:?}", self.inferred_borrowed_params);
+        eprintln!("BUG5 TRACK: Final mut_borrowed_params set: {:?}", self.inferred_mut_borrowed_params);
 
         // WINDJAMMER FIX: Track usize-typed parameters for auto-cast logic
         // DON'T clear here - we need to accumulate variables from let statements during generation!
@@ -4863,16 +4878,19 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 // Safe to optimize returns ONLY in if-else (both branches have values/returns)
                 // Must preserve returns in if-without-else (then block evaluates to ())
                 let old_in_func_body = self.in_function_body;
+                let old_in_void_block = self.in_void_block;
                 if else_block.is_none() || !self.current_is_last_statement {
-                    // Disable return optimization if:
-                    // 1. No else branch (if-without-else) → preserve returns
-                    // 2. Not last statement (early exit) → preserve returns
                     self.in_function_body = false;
+                }
+                // if-without-else must evaluate to (); suppress implicit returns
+                if else_block.is_none() {
+                    self.in_void_block = true;
                 }
 
                 self.indent_level += 1;
                 output.push_str(&self.generate_block(then_block));
                 self.indent_level -= 1;
+                self.in_void_block = old_in_void_block;
 
                 output.push_str(&self.indent());
                 output.push('}');
@@ -5383,7 +5401,29 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     output.push('&');
                 }
 
-                output.push_str(&self.generate_expression(iterable));
+                // TDD FIX: Strip explicit & from iterable when inner identifier is
+                // already a borrowed param. Prevents &&Vec<T> which isn't iterable.
+                // Example: for x in &stacks where stacks: &Vec<T> → for x in stacks
+                let iterable_to_generate = if let Expression::Unary {
+                    op: crate::parser::UnaryOp::Ref,
+                    operand,
+                    ..
+                } = iterable
+                {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        if self.inferred_borrowed_params.contains(name) {
+                            operand // Strip & — param is already a reference
+                        } else {
+                            iterable
+                        }
+                    } else {
+                        iterable
+                    }
+                } else {
+                    iterable
+                };
+
+                output.push_str(&self.generate_expression(iterable_to_generate));
                 output.push_str(" {\n");
 
                 self.indent_level += 1;
@@ -5638,6 +5678,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 ) {
                     // String literal assigned to field - add .to_string()
                     value_str = format!("{}.to_string()", value_str);
+                }
+
+                // TDD FIX: Auto-clone when assigning borrowed String param to owned String field
+                // Bug: self.data.field = param where param: &String, field: String
+                // Error: expected `String`, found `&String`
+                // Solution: Auto-insert .clone() or .to_string()
+                if let Expression::Identifier { ref name, .. } = value {
+                    if self.inferred_borrowed_params.contains(name) {
+                        // Check if target is a String field using full type inference
+                        let target_type = self.infer_expression_type(target);
+                        if let Some(Type::String) = target_type {
+                            // Borrowed param -> owned String field: need .clone()
+                            if !value_str.contains(".clone()") && !value_str.contains(".to_string()") {
+                                value_str = format!("{}.clone()", value_str);
+                            }
+                        }
+                    }
                 }
 
                 // AUTO-CAST: When assigning usize (.len() result) to non-usize field, cast
@@ -7145,11 +7202,26 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     }
 
                     // No interpolation, just regular print
+                    // TDD FIX: Auto-format non-string arguments
+                    // println(value) where value: bool → println!("{}", value)
+                    // println("text") → println!("text") (string literals stay as-is)
                     let args: Vec<String> = arguments
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
                         .collect();
-                    return format!("{}!({})", target_macro, args.join(", "));
+                    
+                    // Check if first argument is a string literal
+                    let first_arg_is_string_literal = arguments.first()
+                        .map(|(_, arg)| matches!(arg, Expression::Literal { value: Literal::String(_), .. }))
+                        .unwrap_or(false);
+                    
+                    if args.len() == 1 && !first_arg_is_string_literal {
+                        // Single non-string argument - format it
+                        return format!("{}!(\"{{}}\", {})", target_macro, args[0]);
+                    } else {
+                        // Multiple args or string literal - keep as-is
+                        return format!("{}!({})", target_macro, args.join(", "));
+                    }
                 }
 
                 // Special case: convert assert() to assert!()
@@ -7544,10 +7616,16 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                         }
 
                         // Check if this parameter expects a borrow
+                        // Skip ownership inference for extern function calls - they have explicit types
                         if let Some(ref sig) = signature {
                             // TDD DEBUG
-                            eprintln!("[TDD] func_name='{}' arg {} ownership check", func_name, i);
+                            eprintln!("[TDD] func_name='{}' arg {} ownership check (is_extern={})", func_name, i, sig.is_extern);
                             eprintln!("[TDD] signature param_ownership: {:?}", sig.param_ownership);
+
+                            if sig.is_extern {
+                                eprintln!("[TDD] EXTERN function - skipping ownership inference for arg {}", i);
+                                return vec![arg_str];
+                            }
                             
                             if let Some(&ownership) = sig.param_ownership.get(i) {
                                 eprintln!("[TDD] param {} ownership: {:?}", i, ownership);
@@ -7651,17 +7729,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                     }
                                     OwnershipMode::MutBorrowed => {
                                         // TDD FIX: Don't add &mut if arg is already a &mut parameter
-                                        // e.g., fn foo(mesh: &mut Mesh) { bar(mesh) } where bar expects &mut Mesh
-                                        // mesh is already &mut Mesh, don't make it &mut &mut Mesh
+                                        // Covers both explicitly declared &mut params AND
+                                        // params inferred as &mut through ownership analysis
                                         let is_already_mut_ref =
                                             if let Expression::Identifier { name, .. } = arg {
-                                                self.current_function_params.iter().any(|param| {
+                                                // Check 1: Explicit &mut in AST type
+                                                let explicit_mut_ref = self.current_function_params.iter().any(|param| {
                                                     param.name == *name
                                                         && matches!(
                                                             &param.type_,
                                                             Type::MutableReference(_)
                                                         )
-                                                })
+                                                });
+                                                // Check 2: Inferred &mut through ownership analysis
+                                                let inferred_mut_ref = self.inferred_mut_borrowed_params.contains(name.as_str());
+                                                explicit_mut_ref || inferred_mut_ref
                                             } else {
                                                 false
                                             };
@@ -7960,6 +8042,20 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                     .iter()
                     .enumerate()
                     .map(|(i, (_label, arg))| {
+                        // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
+                        // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
+                        // Fix: Suppress clone when param expects Borrowed -> just add & to field
+                        let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
+                        let param_expects_borrowed = method_signature
+                            .as_ref()
+                            .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                            .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
+                        
+                        let prev_suppress = self.suppress_borrowed_clone;
+                        if param_expects_borrowed && matches!(arg, Expression::FieldAccess { .. }) {
+                            self.suppress_borrowed_clone = true;
+                        }
+                        
                         // CRITICAL: Reset in_field_access_object for method argument generation.
                         // Same rationale as function call arguments — method arguments are
                         // independent expressions, not part of a field/method/index chain.
@@ -7988,9 +8084,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             if is_hashmap_key_method {
                                 // Check if the operand is a borrowed String parameter
                                 if let Expression::Identifier { name, .. } = &**operand {
+                                    let is_string_type = |t: &Type| {
+                                        matches!(t, Type::String)
+                                            || matches!(t, Type::Custom(s) if s == "String" || s == "string")
+                                    };
                                     let is_borrowed_string = self.inferred_borrowed_params.contains(name)
                                         && self.current_function_params.iter().any(|param| {
-                                            &param.name == name && matches!(&param.type_, Type::String)
+                                            &param.name == name && is_string_type(&param.type_)
                                         });
                                     if is_borrowed_string {
                                         operand // Strip & — &String auto-derefs to &str
@@ -8135,6 +8235,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             arg_str = format!("{}.clone()", arg_str);
                         }
 
+                        // TDD FIX: Strip unnecessary .clone() when method param is Borrowed
+                        // When a field like `ingredient.item_id` is auto-cloned by the
+                        // FieldAccess handler (because owner is borrowed), but the method
+                        // expects &String (Borrowed), the clone is wasteful:
+                        //   &ingredient.item_id.clone()  ← clones then borrows (wasteful)
+                        //   &ingredient.item_id          ← borrows directly (correct)
+                        // Strip the .clone() so should_add_ref can add & cleanly.
+                        if let Some(ref sig) = method_signature {
+                            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            let param_is_borrowed = sig
+                                .param_ownership
+                                .get(sig_param_idx)
+                                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
+                            if param_is_borrowed && arg_str.ends_with(".clone()") {
+                                arg_str = arg_str[..arg_str.len() - 8].to_string();
+                            }
+                        }
+
                         // AUTO-REF: Add & when parameter expects reference but arg is owned
                         // TDD FIX: Don't add & if we already handled string literal conversion above
                         if !string_literal_converted {
@@ -8173,6 +8291,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                             }
                         }
 
+                        // Restore suppress flag
+                        self.suppress_borrowed_clone = prev_suppress;
+                        
                         arg_str
                     })
                     .collect();
