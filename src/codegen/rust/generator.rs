@@ -7885,6 +7885,31 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if method == "clone" && obj_str.ends_with(".clone()") {
                     obj_str = obj_str[..obj_str.len() - 8].to_string();
                 }
+                
+                // TDD FIX: Option::unwrap() move error prevention
+                // TDD FIX: AUTO-CLONE Option::unwrap() on borrowed fields
+                // When calling .unwrap() on a borrowed Option field, we must clone before unwrap:
+                //   node.children.unwrap() where node is &Node → ERROR: cannot move from &Option
+                //   node.children.clone().unwrap() → ✅ OK
+                // THE WINDJAMMER WAY: Users write .unwrap() naturally, compiler handles ownership
+                if method == "unwrap" {
+                    // Check if object is a field access (node.children) that needs clone
+                    let needs_clone = if let Expression::FieldAccess { object: field_obj, .. } = object {
+                        // Is this accessing a field on a borrowed parameter?
+                        if let Expression::Identifier { ref name, .. } = **field_obj {
+                            // Check if the identifier is an inferred borrowed parameter
+                            self.inferred_borrowed_params.contains(name)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    
+                    if needs_clone && !obj_str.contains(".clone()") {
+                        obj_str = format!("{}.clone()", obj_str);
+                    }
+                }
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
                 let type_name = self.infer_type_name(object);
@@ -7993,6 +8018,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
                         // TDD FIX: String literal ownership conversion
                         // Windjammer philosophy: "sword" should work whether parameter wants String or &String
+                        // CRITICAL: Do NOT convert for explicit &str parameters! Only for inferred &String.
                         let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
                         let string_literal_converted = if is_string_literal {
                             // Check what the parameter wants
@@ -8001,24 +8027,41 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                                 .as_ref()
                                 .and_then(|sig| sig.param_ownership.get(sig_param_idx));
                             
-                            match param_ownership {
-                                Some(&OwnershipMode::Owned) => {
-                                    // Parameter wants owned String → add .to_string()
-                                    arg_str = format!("{}.to_string()", arg_str);
-                                    true // Mark that we converted
-                                }
-                                Some(&OwnershipMode::Borrowed) => {
-                                    // Parameter wants &String → add &.to_string()
-                                    arg_str = format!("&{}.to_string()", arg_str);
-                                    true // Mark that we converted
-                                }
-                                _ => {
-                                    // No signature info - use heuristic (fallback to old logic)
-                                    if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
+                            // CRITICAL: Check if parameter is explicitly &str (not inferred &String)
+                            // Explicit &str parameters should NOT get .to_string() conversion
+                            let param_type = method_signature
+                                .as_ref()
+                                .and_then(|sig| sig.param_types.get(sig_param_idx));
+                            let is_explicit_str_ref = if let Some(Type::Reference(inner)) = param_type {
+                                matches!(**inner, Type::String) || 
+                                matches!(**inner, Type::Custom(ref s) if s == "str")
+                            } else {
+                                false
+                            };
+                            
+                            if is_explicit_str_ref {
+                                // Explicit &str parameter - no conversion needed
+                                false
+                            } else {
+                                match param_ownership {
+                                    Some(&OwnershipMode::Owned) => {
+                                        // Parameter wants owned String → add .to_string()
                                         arg_str = format!("{}.to_string()", arg_str);
-                                        true
-                                    } else {
-                                        false
+                                        true // Mark that we converted
+                                    }
+                                    Some(&OwnershipMode::Borrowed) => {
+                                        // Parameter wants &String (inferred) → add &.to_string()
+                                        arg_str = format!("&{}.to_string()", arg_str);
+                                        true // Mark that we converted
+                                    }
+                                    _ => {
+                                        // No signature info - use heuristic (fallback to old logic)
+                                        if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
+                                            arg_str = format!("{}.to_string()", arg_str);
+                                            true
+                                        } else {
+                                            false
+                                        }
                                     }
                                 }
                             }
