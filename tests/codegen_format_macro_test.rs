@@ -3,7 +3,13 @@ use std::fs;
 ///
 /// The format! macro is a Rust macro that should be passed through as-is.
 /// Windjammer doesn't need to parse or understand it, just pass it to rustc.
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -15,10 +21,19 @@ fn test_format() -> String {
 }
 "#;
 
-    fs::write("test_format.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_format.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_format.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
@@ -29,7 +44,7 @@ fn test_format() -> String {
     );
 
     let generated =
-        fs::read_to_string("./build/test_format.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_format.rs")).expect("Failed to read generated file");
 
     // Should contain format! macro as-is
     assert!(
@@ -40,8 +55,6 @@ fn test_format() -> String {
         generated.contains(r#""The answer is {}""#),
         "Format string should be preserved"
     );
-
-    fs::remove_file("test_format.wj").ok();
 }
 
 #[test]
@@ -58,10 +71,19 @@ fn test_format_in_call() {
 }
 "#;
 
-    fs::write("test_format_call.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_format_call.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_format_call.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
@@ -72,7 +94,7 @@ fn test_format_in_call() {
     );
 
     let generated =
-        fs::read_to_string("./build/test_format_call.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_format_call.rs")).expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 
@@ -81,6 +103,4 @@ fn test_format_in_call() {
         generated.contains("format!(") && generated.contains("log_message("),
         "format! should be used and log_message should be called"
     );
-
-    fs::remove_file("test_format_call.wj").ok();
 }

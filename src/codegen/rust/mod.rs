@@ -13,6 +13,7 @@
 
 pub mod arm_string_analysis;
 pub mod ast_utilities;
+pub mod collection_detection;
 pub mod backend;
 pub mod codegen_helpers;
 pub mod constant_folding;
@@ -20,6 +21,8 @@ pub mod expression_helpers;
 pub mod expressions;
 pub mod generator;
 pub mod helpers;
+pub mod import_generation;
+pub mod item_generation;
 pub mod items;
 pub mod literals;
 pub mod operators;
@@ -28,9 +31,11 @@ pub mod pattern_analysis;
 pub mod self_analysis;
 pub mod statements;
 pub mod string_analysis;
+pub mod trait_derivation;
 pub mod type_analysis;
 pub mod type_casting;
 pub mod types;
+pub mod variable_analysis;
 
 // Re-export the main CodeGenerator for backward compatibility
 pub use generator::CodeGenerator;
