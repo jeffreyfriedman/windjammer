@@ -371,6 +371,7 @@ pub fn expr_tuple<'ast>(elements: Vec<&'ast Expression<'ast>>) -> Expression<'as
 pub fn expr_block<'ast>(statements: Vec<&'ast Statement<'ast>>) -> Expression<'ast> {
     Expression::Block {
         statements,
+        is_unsafe: false,
         location: None,
     }
 }

@@ -2860,8 +2860,11 @@ impl<'ast> CodeGenerator<'ast> {
                 format!("{} as {}", expr_str, type_str)
             }
             Expression::Block {
-                statements: stmts, ..
+                statements: stmts,
+                is_unsafe,
+                ..
             } => {
+                let block_open = if *is_unsafe { "unsafe {\n" } else { "{\n" };
                 // Special case: if the block contains only a match statement, generate it as a match expression
                 // BUT: Skip this optimization when the match is an if-let pattern (2 arms, last is wildcard with empty body)
                 // In that case, fall through to normal block generation which will generate `if let` via Statement::Match handler
@@ -2875,7 +2878,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         if is_if_let_pattern {
                             // Fall through to normal block generation — generate_statement will emit `if let`
-                            let mut output = String::from("{\n");
+                            let mut output = String::from(block_open);
                             self.indent_level += 1;
                             for stmt in stmts {
                                 output.push_str(&self.generate_statement(stmt));
@@ -2998,7 +3001,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Regular block - must handle last expression correctly
-                let mut output = String::from("{\n");
+                let mut output = String::from(block_open);
                 self.indent_level += 1;
 
                 let len = stmts.len();
