@@ -5171,6 +5171,19 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     let module_tree =
         discover_nested_modules(source_dir).context("Failed to discover module structure")?;
 
+    // Build set of ALL generated module names (including nested submodules)
+    // Used to prevent stale copies in src/ from being treated as hand-written modules
+    fn collect_all_names(modules: &[crate::module_system::Module], names: &mut std::collections::HashSet<String>) {
+        for m in modules {
+            names.insert(m.name.clone());
+            if !m.submodules.is_empty() {
+                collect_all_names(&m.submodules, names);
+            }
+        }
+    }
+    let mut all_generated_names = std::collections::HashSet::new();
+    collect_all_names(&module_tree.root_modules, &mut all_generated_names);
+
     // Generate lib.rs (for crate root) or mod.rs (for subdirectory)
     // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
     // Look for hand-written .rs files in the project root (parent of src_wj)
@@ -5330,11 +5343,16 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                         ];
 
                         if !skip_dirs.contains(&dir_name_str.as_ref()) {
-                            // CRITICAL FIX: Don't copy directories that correspond to Windjammer modules!
-                            // Check if there's a corresponding .wj directory in src_wj
+                            // Don't copy directories that correspond to ANY generated module
+                            // (including nested submodules like sundering/player → player)
+                            if all_generated_names.contains(dir_name_str.as_ref()) {
+                                continue;
+                            }
+
+                            // Also check for a corresponding .wj directory in src_wj
                             let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
                             if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
-                                continue; // Skip copying - this is a Windjammer module directory
+                                continue;
                             }
 
                             // CRITICAL FIX: Don't copy directories that contain the output directory!
