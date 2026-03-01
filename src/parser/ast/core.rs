@@ -363,6 +363,7 @@ pub enum Expression<'ast> {
     },
     Block {
         statements: Vec<&'ast Statement<'ast>>,
+        is_unsafe: bool,
         location: SourceLocation,
     },
 }

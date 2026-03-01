@@ -710,12 +710,14 @@ fn eliminate_dead_code_in_expression<'a: 'ast, 'ast>(
         }),
         Expression::Block {
             statements,
+            is_unsafe,
             location,
         } => {
             let (new_statements, _) = eliminate_dead_code_in_statements(statements, optimizer);
             optimizer.alloc_expr(unsafe {
                 std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Block {
                     statements: new_statements,
+                    is_unsafe: *is_unsafe,
                     location: location.clone(),
                 })
             })
