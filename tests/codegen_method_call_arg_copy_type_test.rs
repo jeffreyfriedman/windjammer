@@ -11,7 +11,13 @@ use std::fs;
 /// 3. `.clone()` is unnecessary for Copy types
 ///
 /// Root cause: The analyzer is over-eagerly borrowing method call results
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -43,17 +49,26 @@ fn test_function() {
 }
 "#;
 
-    fs::write("test_input.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_input.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_input.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
     assert!(output.status.success(), "Compilation failed");
 
     let generated =
-        fs::read_to_string("./build/test_input.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_input.rs")).expect("Failed to read generated file");
 
     // Should NOT have unnecessary borrow
     assert!(
@@ -72,6 +87,4 @@ fn test_function() {
         generated.contains("paddle.update(input.is_key_down())"),
         "Should pass bool directly without borrow or clone"
     );
-
-    fs::remove_file("test_input.wj").ok();
 }

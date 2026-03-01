@@ -8,7 +8,13 @@ use std::fs;
 ///   paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
 /// Generates:
 ///   paddle.update(delta, &input.is_key_down(Key::W).clone(), input.is_key_down(Key::S).clone())
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -43,10 +49,19 @@ fn test_function() {
 }
 "#;
 
-    fs::write("test_multi_bool.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_multi_bool.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_multi_bool.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
@@ -57,7 +72,7 @@ fn test_function() {
     );
 
     let generated =
-        fs::read_to_string("./build/test_multi_bool.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_multi_bool.rs")).expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 
@@ -72,6 +87,4 @@ fn test_function() {
         !generated.contains(".clone()"),
         "Should not clone Copy type (bool)"
     );
-
-    fs::remove_file("test_multi_bool.wj").ok();
 }
