@@ -1188,7 +1188,15 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             // Check if the parameter expects an owned String
                             let should_convert = if let Some(ref sig) = signature {
-                                if let Some(&ownership) = sig.param_ownership.get(i) {
+                                if sig.is_extern {
+                                    // Extern functions have explicit types; ownership inference
+                                    // is meaningless (empty body defaults to Borrowed).
+                                    // Convert if parameter type is String.
+                                    sig.param_types.get(i).is_some_and(|ty| {
+                                        matches!(ty, Type::String)
+                                            || matches!(ty, Type::Custom(name) if name == "string" || name == "String")
+                                    })
+                                } else if let Some(&ownership) = sig.param_ownership.get(i) {
                                     // Convert if parameter expects owned String
                                     matches!(ownership, OwnershipMode::Owned)
                                 } else {
