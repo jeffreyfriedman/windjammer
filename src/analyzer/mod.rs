@@ -895,7 +895,7 @@ impl<'ast> Analyzer<'ast> {
                     OwnershipHint::Owned | OwnershipHint::Inferred => {
                         // User wrote `self` (inferred) - optimize based on usage
                         // If body exists, infer from body; otherwise will be refined by infer_trait_signatures_from_impls
-                        let modifies_self = self.function_modifies_self_fields(func);
+                        let modifies_self = self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let self_ownership = if modifies_self {
                             OwnershipMode::MutBorrowed
                         } else {
@@ -970,7 +970,7 @@ impl<'ast> Analyzer<'ast> {
 
         if uses_self && !declares_self {
             // Auto-infer self ownership based on usage
-            let modifies_fields = self.function_modifies_self_fields(func);
+            let modifies_fields = self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
             let returns_non_copy_field = self.function_returns_non_copy_self_field(func);
 
@@ -1010,7 +1010,7 @@ impl<'ast> Analyzer<'ast> {
                 OwnershipHint::Ref => {
                     // SMART FIX: If user wrote &self but function modifies fields, upgrade to &mut self
                     // This prevents a common user error
-                    if param.name == "self" && self.function_modifies_self_fields(func) {
+                    if param.name == "self" && self.function_modifies_self_fields_with_registry(func, Some(registry)) {
                         OwnershipMode::MutBorrowed
                     } else {
                         OwnershipMode::Borrowed
@@ -1025,7 +1025,7 @@ impl<'ast> Analyzer<'ast> {
                         OwnershipMode::MutBorrowed
                     } else if param.name == "self" {
                         // Infer ownership for self based on field access and return type
-                        let modifies_fields = self.function_modifies_self_fields(func);
+                        let modifies_fields = self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let returns_self = self.function_returns_self(func);
                         let returns_non_copy_field =
                             self.function_returns_non_copy_self_field(func);
