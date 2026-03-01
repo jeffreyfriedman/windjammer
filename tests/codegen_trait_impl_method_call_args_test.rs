@@ -5,7 +5,13 @@ use std::fs;
 /// the compiler incorrectly generates borrows/clones.
 ///
 /// This is the actual Pong bug context.
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -48,10 +54,19 @@ impl GameLoop for Game {
 }
 "#;
 
-    fs::write("test_trait_impl.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_trait_impl.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_trait_impl.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
@@ -62,7 +77,7 @@ impl GameLoop for Game {
     );
 
     let generated =
-        fs::read_to_string("./build/test_trait_impl.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_trait_impl.rs")).expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 
@@ -77,6 +92,4 @@ impl GameLoop for Game {
         !generated.contains(".clone()"),
         "Should not clone Copy type (bool)"
     );
-
-    fs::remove_file("test_trait_impl.wj").ok();
 }

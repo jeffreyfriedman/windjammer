@@ -3,7 +3,13 @@ use std::fs;
 ///
 /// Bug: In Pong, `self.left_paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))`
 /// generates `.clone()` on the method call results, which is wrong for Copy types (bool).
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -42,10 +48,19 @@ impl Game {
 }
 "#;
 
-    fs::write("test_clone_bug.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_clone_bug.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_clone_bug.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
@@ -56,7 +71,7 @@ impl Game {
     );
 
     let generated =
-        fs::read_to_string("./build/test_clone_bug.rs").expect("Failed to read generated file");
+        fs::read_to_string(output_dir.join("test_clone_bug.rs")).expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 
@@ -69,6 +84,4 @@ impl Game {
         !generated.contains("input.is_key_down(Key::S).clone()"),
         "Should not clone method call result (bool is Copy)"
     );
-
-    fs::remove_file("test_clone_bug.wj").ok();
 }
