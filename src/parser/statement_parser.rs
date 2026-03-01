@@ -400,6 +400,7 @@ impl Parser {
             // becomes: match expr { Pattern => { then }, _ => { else_block } }
             let then_body = self.alloc_expr(Expression::Block {
                 statements: then_block,
+                is_unsafe: false,
                 location: self.current_location(),
             });
 
@@ -414,11 +415,13 @@ impl Parser {
             let else_body = if let Some(else_stmts) = else_block {
                 self.alloc_expr(Expression::Block {
                     statements: else_stmts,
+                    is_unsafe: false,
                     location: self.current_location(),
                 })
             } else {
                 self.alloc_expr(Expression::Block {
                     statements: vec![],
+                    is_unsafe: false,
                     location: self.current_location(),
                 }) // Empty block if no else clause
             };
@@ -499,6 +502,7 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 let block = self.alloc_expr(Expression::Block {
                     statements,
+                    is_unsafe: false,
                     location: self.current_location(),
                 });
                 (block, true)
@@ -541,6 +545,7 @@ impl Parser {
                     // Wrap in block expression
                     let block = self.alloc_expr(Expression::Block {
                         statements: vec![stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     });
                     (block, false)
@@ -632,6 +637,7 @@ impl Parser {
             // }
             let body_block = self.alloc_expr(Expression::Block {
                 statements: body.clone(),
+                is_unsafe: false,
                 location: self.current_location(),
             });
 
@@ -641,6 +647,7 @@ impl Parser {
 
             let break_block = self.alloc_expr(Expression::Block {
                 statements: vec![break_stmt],
+                is_unsafe: false,
                 location: self.current_location(),
             });
 

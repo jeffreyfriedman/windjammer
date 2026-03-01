@@ -542,6 +542,7 @@ impl Parser {
                     });
                     self.alloc_expr(Expression::Block {
                         statements: vec![thread_stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 } else {
@@ -570,6 +571,7 @@ impl Parser {
                     });
                     self.alloc_expr(Expression::Block {
                         statements: vec![async_stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 } else {
@@ -987,6 +989,7 @@ impl Parser {
                         self.expect(Token::RBrace)?;
                         let block = self.alloc_expr(Expression::Block {
                             statements,
+                            is_unsafe: false,
                             location: self.current_location(),
                         });
                         (block, true)
@@ -1029,6 +1032,7 @@ impl Parser {
                             // Wrap in block expression
                             let block = self.alloc_expr(Expression::Block {
                                 statements: vec![stmt],
+                                is_unsafe: false,
                                 location: self.current_location(),
                             });
                             (block, false)
@@ -1076,6 +1080,7 @@ impl Parser {
                 });
                 self.alloc_expr(Expression::Block {
                     statements: vec![match_stmt],
+                    is_unsafe: false,
                     location: self.current_location(),
                 })
             }
@@ -1169,6 +1174,7 @@ impl Parser {
                     self.expect(Token::RBrace)?;
                     self.alloc_expr(Expression::Block {
                         statements,
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 } else {
@@ -1196,6 +1202,7 @@ impl Parser {
                         let stmt = self.parse_statement()?;
                         self.alloc_expr(Expression::Block {
                             statements: vec![stmt],
+                            is_unsafe: false,
                             location: self.current_location(),
                         })
                     } else {
@@ -1223,6 +1230,7 @@ impl Parser {
                     self.expect(Token::RBrace)?;
                     self.alloc_expr(Expression::Block {
                         statements,
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 } else {
@@ -1276,6 +1284,7 @@ impl Parser {
                     // }
                     let then_body = self.alloc_expr(Expression::Block {
                         statements: then_block,
+                        is_unsafe: false,
                         location: self.current_location(),
                     });
 
@@ -1288,6 +1297,7 @@ impl Parser {
                     if let Some(else_block) = else_block {
                         let else_body = self.alloc_expr(Expression::Block {
                             statements: else_block,
+                            is_unsafe: false,
                             location: self.current_location(),
                         });
                         arms.push(MatchArm {
@@ -1305,6 +1315,7 @@ impl Parser {
 
                     self.alloc_expr(Expression::Block {
                         statements: vec![match_stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 } else {
@@ -1345,6 +1356,7 @@ impl Parser {
 
                     self.alloc_expr(Expression::Block {
                         statements: vec![if_stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 }
@@ -1357,6 +1369,7 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 self.alloc_expr(Expression::Block {
                     statements: body,
+                    is_unsafe: true,
                     location: self.current_location(),
                 })
             }
@@ -1373,6 +1386,7 @@ impl Parser {
                     // Empty block (not empty map - use HashMap::new() or map{} for that)
                     return Ok(self.alloc_expr(Expression::Block {
                         statements: vec![],
+                        is_unsafe: false,
                         location: self.current_location(),
                     }));
                 }
@@ -1429,6 +1443,7 @@ impl Parser {
                     self.expect(Token::RBrace)?;
                     self.alloc_expr(Expression::Block {
                         statements: body,
+                        is_unsafe: false,
                         location: self.current_location(),
                     })
                 }
@@ -1451,6 +1466,7 @@ impl Parser {
                 });
                 self.alloc_expr(Expression::Block {
                     statements: vec![return_stmt],
+                    is_unsafe: false,
                     location: self.current_location(),
                 })
             }
