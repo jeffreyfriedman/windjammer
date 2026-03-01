@@ -7,9 +7,17 @@
 //
 // These functions are used by the derive inference system to automatically
 // add trait implementations to structs and enums.
+//
+// Also contains type inference helper methods for CodeGenerator (infer_type_name,
+// infer_expression_type, expression_produces_usize, etc.).
 
-use crate::parser::{EnumVariant, EnumVariantData, Item, Program, StructDecl, StructField, Type};
+use crate::parser::{
+    BinaryOp, EnumPatternBinding, EnumVariant, EnumVariantData, Expression, Item, Literal,
+    Pattern, Program, Statement, StructDecl, StructField, Type,
+};
 use std::collections::HashSet;
+
+use super::CodeGenerator;
 
 /// Type analyzer with knowledge of which custom types support various traits
 pub struct TypeAnalyzer {
@@ -440,6 +448,532 @@ pub fn is_copy_type(ty: &Type) -> bool {
         _ => false, // String, Vec, Option, Result, other Custom types are not Copy
     }
 }
+
+// =============================================================================
+// CodeGenerator Type Inference Helpers
+// =============================================================================
+//
+// These methods are used by CodeGenerator for expression type inference,
+// method signature lookup, and usize detection. They are part of the split-impl
+// pattern and can be called from any CodeGenerator impl block.
+
+impl<'ast> CodeGenerator<'ast> {
+    /// BUG #8 FIX: Infer the type name from an expression
+    /// This enables qualified method signature lookup (Type::method)
+    pub(super) fn infer_type_name(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                // "self" refers to the current struct type
+                if name == "self" && self.in_impl_block {
+                    return self.current_struct_name.clone();
+                }
+                // Try to infer from struct name if we're in an impl block
+                if self.in_impl_block {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if self.current_struct_fields.contains(name) {
+                            return Some(struct_name.clone());
+                        }
+                    }
+                }
+                // TDD FIX: Check function parameters for type info
+                // e.g., fn test(validator: Validator) → infer_type_name("validator") = "Validator"
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Self::type_to_name(&param.type_);
+                    }
+                }
+                // TDD FIX: Check local variable types
+                // e.g., let stack = Stack { .. } → infer_type_name("stack") = "Stack"
+                if let Some(var_type) = self.local_var_types.get(name) {
+                    return Self::type_to_name(var_type);
+                }
+                None
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                // TDD FIX: Try to resolve field type from struct field type tracking
+                // e.g., self.transforms → World.transforms → ComponentArray<int> → "ComponentArray"
+                let owner_type = self.infer_type_name(object);
+                if let Some(ref owner) = owner_type {
+                    // TDD FIX: For generic types like "ComponentArray<T>", also try base name "ComponentArray"
+                    if let Some(field_types) =
+                        self.struct_field_types.get(owner.as_str()).or_else(|| {
+                            owner
+                                .split('<')
+                                .next()
+                                .and_then(|base| self.struct_field_types.get(base))
+                        })
+                    {
+                        if let Some(field_type) = field_types.get(field) {
+                            if let Some(name) = Self::type_to_name(field_type) {
+                                return Some(name);
+                            }
+                        }
+                    }
+                }
+                // Fallback: use the owner type (for self.field_name → current struct type)
+                owner_type
+            }
+            Expression::Unary {
+                op:
+                    crate::parser::UnaryOp::Deref
+                    | crate::parser::UnaryOp::Ref
+                    | crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => {
+                // Look through references/derefs
+                self.infer_type_name(operand)
+            }
+            Expression::MethodCall { object, .. } => {
+                // Try to infer from the object
+                self.infer_type_name(object)
+            }
+            Expression::Index { object, .. } => {
+                // For array[i], the element type is unknown without full type inference
+                // But we can try to infer the array type
+                self.infer_type_name(object)
+            }
+            _ => None,
+        }
+    }
+
+    /// Extract a type name from a Type enum (for signature lookup)
+    pub(super) fn type_to_name(type_: &Type) -> Option<String> {
+        match type_ {
+            Type::Custom(name) => Some(name.clone()),
+            Type::Parameterized(name, _) => Some(name.clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => Self::type_to_name(inner),
+            // TDD FIX: Handle stdlib container types for method signature lookup
+            // Without this, self.dense (Vec<T>) can't resolve to "Vec" for Vec::remove lookup
+            Type::Vec(_) => Some("Vec".to_string()),
+            Type::Option(_) => Some("Option".to_string()),
+            Type::Result(_, _) => Some("Result".to_string()),
+            Type::Array(_, _) => Some("Array".to_string()),
+            _ => None,
+        }
+    }
+
+    /// Extract the element type from an iterable type.
+    /// Vec<T> → T, &Vec<T> → T, &mut Vec<T> → T, Array(T, _) → T
+    pub(super) fn extract_iterator_element_type(iterable_type: &Type) -> Option<Type> {
+        match iterable_type {
+            Type::Vec(inner) => Some(inner.as_ref().clone()),
+            Type::Array(inner, _) => Some(inner.as_ref().clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::extract_iterator_element_type(inner)
+            }
+            _ => None,
+        }
+    }
+
+    /// Infer the types of variables bound in match arm patterns.
+    /// When matching `Some(x)` on `opt: Option<Stack>`, returns [("x", Type::Custom("Stack"))].
+    /// This enables qualified method signature lookup for match-bound variables.
+    pub(super) fn infer_match_bound_types(
+        &self,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+    ) -> Vec<(String, Type)> {
+        // Try to determine the scrutinee's type
+        let scrutinee_type = self.infer_expression_type(scrutinee);
+        let scrutinee_type = match scrutinee_type {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        // Unwrap references: &T, &mut T → T
+        let inner_type = match &scrutinee_type {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+            _ => scrutinee_type,
+        };
+
+        // Match pattern against type to extract bound variable types
+        match (pattern, &inner_type) {
+            // Some(var) matching Option<T> → var: T
+            (
+                Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name)),
+                Type::Option(inner_t),
+            ) if variant == "Some" => {
+                vec![(var_name.clone(), inner_t.as_ref().clone())]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Try to infer the Type of an expression from local variable tracking and function parameters.
+    pub(super) fn infer_expression_type(&self, expr: &Expression) -> Option<Type> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                // Check local variable types first
+                if let Some(t) = self.local_var_types.get(name) {
+                    return Some(t.clone());
+                }
+                // Check function parameters
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Some(param.type_.clone());
+                    }
+                }
+                // In impl blocks, identifiers may refer to struct fields (implicit self)
+                // e.g., `mouse_x` in `impl Game` → `self.mouse_x` → type is Game.mouse_x's type
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if let Some(fields) = self.struct_field_types.get(struct_name.as_str()) {
+                            if let Some(field_type) = fields.get(name.as_str()) {
+                                return Some(field_type.clone());
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            // obj.field → look up field type from struct_field_types
+            // Supports: self.field, var.field, and nested: self.config.max_size
+            Expression::FieldAccess { object, field, .. } => {
+                // Resolve the object's type first
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        // self.field → current struct's field type
+                        // TDD FIX: Also try base name for generic types
+                        // e.g., "ComponentArray<T>" → try "ComponentArray"
+                        if let Some(struct_name) = &self.current_struct_name {
+                            if let Some(fields) = self
+                                .struct_field_types
+                                .get(struct_name.as_str())
+                                .or_else(|| {
+                                    struct_name
+                                        .split('<')
+                                        .next()
+                                        .and_then(|base| self.struct_field_types.get(base))
+                                })
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    } else {
+                        // var.field → look up var's type, then its field
+                        // Check local variables first, then function parameters
+                        let var_type =
+                            self.local_var_types
+                                .get(name.as_str())
+                                .cloned()
+                                .or_else(|| {
+                                    self.current_function_params
+                                        .iter()
+                                        .find(|p| p.name == *name)
+                                        .map(|p| p.type_.clone())
+                                });
+                        if let Some(var_type) = var_type {
+                            let type_name = match &var_type {
+                                Type::Custom(n) => n.as_str(),
+                                // Handle references: &Recipe → Recipe, &mut Recipe → Recipe
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    match inner.as_ref() {
+                                        Type::Custom(n) => n.as_str(),
+                                        _ => "",
+                                    }
+                                }
+                                _ => "",
+                            };
+                            if let Some(fields) = self.struct_field_types.get(type_name) {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Nested field access: self.config.max_size, obj.inner.field, etc.
+                    // Recursively resolve the object's type, then look up the field
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        let type_name = match &obj_type {
+                            Type::Custom(n) => n.as_str(),
+                            // Handle references: &Config → Config
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                match inner.as_ref() {
+                                    Type::Custom(n) => n.as_str(),
+                                    _ => "",
+                                }
+                            }
+                            _ => "",
+                        };
+                        if !type_name.is_empty() {
+                            // Also try stripping generic params: "Config<T>" → "Config"
+                            let base_name = type_name.split('<').next().unwrap_or(type_name);
+                            if let Some(fields) = self
+                                .struct_field_types
+                                .get(type_name)
+                                .or_else(|| self.struct_field_types.get(base_name))
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    return Some(field_type.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            // &expr or &mut expr → Reference(inner_type)
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref,
+                operand,
+                ..
+            } => self
+                .infer_expression_type(operand)
+                .map(|t| Type::Reference(Box::new(t))),
+            Expression::Unary {
+                op: crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => self
+                .infer_expression_type(operand)
+                .map(|t| Type::MutableReference(Box::new(t))),
+            // Method calls: look up return type from method_return_types registry
+            // and signature registry (for cross-file method resolution)
+            Expression::MethodCall { object, method, .. } => {
+                // Check well-known methods first
+                if method == "len" || method == "count" || method == "capacity" {
+                    return Some(Type::Custom("usize".to_string()));
+                }
+                // .clone() returns the same type as the object
+                // This enables type inference through cloned iterables:
+                //   for x in &collection.clone() → x has same element type as collection
+                if method == "clone" {
+                    return self.infer_expression_type(object);
+                }
+                // TDD FIX: .unwrap() on Option<T> → T
+                if method == "unwrap" {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        if let Type::Option(inner) = obj_type {
+                            return Some(*inner);
+                        }
+                    }
+                }
+                // Iterator methods: return the collection type so
+                // extract_iterator_element_type can extract the element type.
+                // This enables type inference for loop variables:
+                //   for brick in self.bricks.iter_mut() → brick: Brick
+                if method == "iter" || method == "iter_mut" || method == "into_iter" {
+                    if let Some(obj_type) = self.infer_expression_type(object) {
+                        return Some(obj_type);
+                    }
+                }
+                // Look up from the method return type registry (populated during impl generation)
+                if let Some(t) = self.method_return_types.get(method.as_str()) {
+                    return Some(t.clone());
+                }
+                // TDD FIX: Cross-file method resolution via signature registry.
+                // When the method is on a different type (e.g., animation.frame_count()),
+                // method_return_types won't have it. Resolve the object's type, then
+                // look up Type::method in the signature registry.
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    let type_name = match &obj_type {
+                        Type::Custom(n) => n.clone(),
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            match inner.as_ref() {
+                                Type::Custom(n) => n.clone(),
+                                _ => String::new(),
+                            }
+                        }
+                        _ => String::new(),
+                    };
+                    if !type_name.is_empty() {
+                        let qualified = format!("{}::{}", type_name, method);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                        // Also try base name for generic types
+                        let base_name = type_name.split('<').next().unwrap_or(&type_name);
+                        if base_name != type_name {
+                            let qualified = format!("{}::{}", base_name, method);
+                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                                return sig.return_type.clone();
+                            }
+                        }
+                    }
+                }
+                // Final fallback: try simple method name
+                self.signature_registry
+                    .get_signature(method)
+                    .and_then(|sig| sig.return_type.clone())
+            }
+            // Block expression: infer from the last statement's expression
+            // Handles: let x = { if cond { 64.0 } else { 32.0 } }
+            Expression::Block { statements, .. } => {
+                if let Some(last_stmt) = statements.last() {
+                    match last_stmt {
+                        Statement::Expression { expr, .. } => self.infer_expression_type(expr),
+                        Statement::If { then_block, .. } => {
+                            // Infer from the then branch's last expression
+                            if let Some(last) = then_block.last() {
+                                if let Statement::Expression { expr, .. } = last {
+                                    return self.infer_expression_type(expr);
+                                }
+                            }
+                            None
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            // Literal expressions: directly known types
+            Expression::Literal { value, .. } => match value {
+                Literal::Int(_) => Some(Type::Int),
+                Literal::Float(_) => Some(Type::Float),
+                Literal::Bool(_) => Some(Type::Bool),
+                Literal::String(_) => Some(Type::String),
+                _ => None,
+            },
+            // Binary operations: infer from operands (result usually matches operand type)
+            Expression::Binary { left, right, .. } => self
+                .infer_expression_type(left)
+                .or_else(|| self.infer_expression_type(right)),
+            // Cast expressions: the target type is explicit
+            Expression::Cast { type_, .. } => Some(type_.clone()),
+            // Call expressions: Type::method(args) → look up return type from signature registry
+            // This is critical for Copy-type inference: let u = MathHelper::fade(x) → u is f32
+            Expression::Call { function, .. } => {
+                // Extract function name for signature lookup
+                // Pattern: Type::method() → "Type::method"
+                if let Expression::FieldAccess { object, field, .. } = function {
+                    if let Expression::Identifier {
+                        name: type_name, ..
+                    } = object
+                    {
+                        let qualified = format!("{}::{}", type_name, field);
+                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            return sig.return_type.clone();
+                        }
+                    }
+                }
+                // Pattern: simple function call → "function_name"
+                if let Expression::Identifier { name, .. } = function {
+                    if let Some(sig) = self.signature_registry.get_signature(name.as_str()) {
+                        return sig.return_type.clone();
+                    }
+                }
+                None
+            }
+            // TDD FIX: Index expressions: vec[i] → element type of the collection
+            // Example: let mask: Vec<u8> = ...; let color_id = mask[i]; → color_id: u8
+            Expression::Index { object, .. } => {
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    match obj_type {
+                        Type::Vec(inner) => Some(*inner),
+                        Type::Array(inner, _) => Some(*inner),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Check if an expression produces usize (e.g., .len(), array indexing)
+    /// Used for auto-casting between i32 and usize in comparisons
+    pub(crate) fn expression_produces_usize(&self, expr: &Expression) -> bool {
+        match expr {
+            // .len() returns usize
+            Expression::MethodCall { method, .. } => {
+                if method == "len" || method == "count" || method == "capacity" {
+                    return true;
+                }
+                // Fallback: check via type inference
+                self.infer_expression_type_is_usize(expr)
+            }
+            // Binary ops with usize operands: i + 1, len() - 1, etc.
+            // TDD FIX (Bug #4): If BOTH sides are usize (or one side is usize and other is int literal),
+            // then the result is usize. The old logic used OR which was wrong.
+            Expression::Binary { op, left, right, location: _ } => {
+                match op {
+                    // Arithmetic operations preserve usize if both operands are usize-compatible
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                        let left_is_usize = self.expression_produces_usize(left);
+                        let right_is_usize = self.expression_produces_usize(right);
+
+                        // Int literals adapt to the other operand's type
+                        let right_is_literal = matches!(**right, Expression::Literal { .. });
+                        let left_is_literal = matches!(**left, Expression::Literal { .. });
+
+                        // Result is usize if:
+                        // - Both are usize, OR
+                        // - One is usize and the other is an int literal
+                        (left_is_usize && (right_is_usize || right_is_literal))
+                            || (right_is_usize && left_is_literal)
+                    }
+                    // Comparison/logical operations don't produce usize
+                    _ => false,
+                }
+            }
+            // Casts to usize: (x as usize)
+            Expression::Cast { type_, .. } => {
+                matches!(type_, Type::Custom(name) if name == "usize")
+            }
+            // Variables assigned from .len() or typed as usize
+            Expression::Identifier { name, .. } => {
+                if self.usize_variables.contains(name) {
+                    return true;
+                }
+
+                // Check if this is a struct field with usize type (in impl block)
+                if self.in_impl_block && self.current_struct_fields.contains(name) {
+                    // Look up the struct to see if this field is usize
+                    // Strip generic parameters: "Pool<T>" → "Pool"
+                    if let Some(struct_name) = &self.current_struct_name {
+                        let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                        if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                            if usize_fields.contains(name) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: check parameters and local variable types via type inference
+                self.infer_expression_type_is_usize(expr)
+            }
+            // Field access: self.field_name or obj.field_name (including nested)
+            Expression::FieldAccess { object, field, .. } => {
+                // Check if accessing a usize field on self (fast path)
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                    if obj_name == "self" && self.in_impl_block {
+                        // Look up struct to see if this field is usize
+                        if let Some(struct_name) = &self.current_struct_name {
+                            // Strip generic parameters: "Pool<T>" → "Pool"
+                            let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+                            if let Some(usize_fields) = self.usize_struct_fields.get(base_name) {
+                                if usize_fields.contains(field) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fallback: use type inference for obj.field, self.config.field, etc.
+                self.infer_expression_type_is_usize(expr)
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if an expression's inferred type is usize.
+    /// Uses infer_expression_type() for comprehensive type resolution including
+    /// parameters, local variables, nested field access, and method return types.
+    pub(super) fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
+        if let Some(t) = self.infer_expression_type(expr) {
+            return matches!(t, Type::Custom(ref name) if name == "usize");
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
