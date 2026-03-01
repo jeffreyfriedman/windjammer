@@ -7,6 +7,7 @@ pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
 pub mod cli;
 pub mod codegen;
+pub mod plugin; // Plugin discovery and delegation
 pub mod component_analyzer;
 pub mod error;
 pub mod errors; // High-quality error messages (mutability, etc.)
@@ -225,7 +226,8 @@ enum Commands {
 }
 
 #[allow(dead_code)]
-fn main() -> Result<()> {
+/// Main CLI entry point (called from bin/wj.rs after plugin discovery)
+pub fn run_main_cli() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
