@@ -9,6 +9,15 @@ use super::Analyzer;
 impl<'ast> Analyzer<'ast> {
     /// Check if a function modifies self fields (for impl methods)
     pub(super) fn function_modifies_self_fields(&self, func: &FunctionDecl) -> bool {
+        self.function_modifies_self_fields_with_registry(func, None)
+    }
+
+    /// Check if a function modifies self fields, with optional registry for cross-type resolution
+    pub(super) fn function_modifies_self_fields_with_registry(
+        &self,
+        func: &FunctionDecl,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
         // THE WINDJAMMER WAY: Check ALL cases that require &mut self
 
         // Case 1: Return type is &mut T (requires &mut self)
@@ -19,7 +28,7 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // Case 2: Function calls other methods on self that need &mut self
-        if self.function_calls_mutating_self_methods(func) {
+        if self.function_calls_mutating_self_methods_with_registry(func, registry) {
             return true;
         }
 
@@ -68,8 +77,17 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if function calls methods on self that require &mut self
     fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
+        self.function_calls_mutating_self_methods_with_registry(func, None)
+    }
+
+    /// Check if function calls methods on self that require &mut self (with registry)
+    fn function_calls_mutating_self_methods_with_registry(
+        &self,
+        func: &FunctionDecl,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
         for stmt in &func.body {
-            if self.statement_calls_mutating_self_methods(stmt) {
+            if self.statement_calls_mutating_self_methods(stmt, registry) {
                 return true;
             }
         }
@@ -77,9 +95,15 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if statement calls methods on self that require &mut self
-    fn statement_calls_mutating_self_methods(&self, stmt: &Statement) -> bool {
+    fn statement_calls_mutating_self_methods(
+        &self,
+        stmt: &Statement,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => self.expression_calls_mutating_self_methods(expr),
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_mutating_self_methods(expr, registry)
+            }
             Statement::If {
                 then_block,
                 else_block,
@@ -87,28 +111,35 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 then_block
                     .iter()
-                    .any(|s| self.statement_calls_mutating_self_methods(s))
+                    .any(|s| self.statement_calls_mutating_self_methods(s, registry))
                     || else_block.as_ref().is_some_and(|block| {
                         block
                             .iter()
-                            .any(|s| self.statement_calls_mutating_self_methods(s))
+                            .any(|s| self.statement_calls_mutating_self_methods(s, registry))
                     })
             }
             Statement::While { body, .. } => body
                 .iter()
-                .any(|s| self.statement_calls_mutating_self_methods(s)),
+                .any(|s| self.statement_calls_mutating_self_methods(s, registry)),
             Statement::For { iterable, body, .. } => {
-                self.expression_calls_mutating_self_methods(iterable)
+                self.expression_calls_mutating_self_methods(iterable, registry)
                     || body
                         .iter()
-                        .any(|s| self.statement_calls_mutating_self_methods(s))
+                        .any(|s| self.statement_calls_mutating_self_methods(s, registry))
+            }
+            Statement::Let { value, .. } => {
+                self.expression_calls_mutating_self_methods(value, registry)
             }
             _ => false,
         }
     }
 
     /// Check if expression calls methods on self that require &mut self
-    fn expression_calls_mutating_self_methods(&self, expr: &Expression) -> bool {
+    fn expression_calls_mutating_self_methods(
+        &self,
+        expr: &Expression,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
         match expr {
             Expression::MethodCall {
                 object,
@@ -136,14 +167,14 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
 
-                // TDD FIX: Cross-type mutation propagation via self.field.method()
-                if self.expression_is_self_field_mutating_method_call(object, method) {
+                // Cross-type mutation propagation via self.field.method()
+                if self.expression_is_self_field_mutating_method_call(object, method, registry) {
                     return true;
                 }
 
                 // Recurse into arguments to find nested mutation patterns
                 for (_, arg) in arguments {
-                    if self.expression_calls_mutating_self_methods(arg) {
+                    if self.expression_calls_mutating_self_methods(arg, registry) {
                         return true;
                     }
                 }
@@ -152,22 +183,53 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Block { statements, .. } => statements
                 .iter()
-                .any(|s| self.statement_calls_mutating_self_methods(s)),
+                .any(|s| self.statement_calls_mutating_self_methods(s, registry)),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_calls_mutating_self_methods(arg, registry)),
             _ => false,
         }
     }
 
     /// Check if object.method() is a self.field[.subfield...].method() pattern
-    /// where method is a known mutating method. This enables cross-type mutation
-    /// propagation: if self.field calls a mutating method, self needs &mut.
+    /// where method requires &mut self. Checks both stdlib list and signature registry.
     fn expression_is_self_field_mutating_method_call(
         &self,
         object: &Expression,
         method: &str,
+        registry: Option<&super::SignatureRegistry>,
     ) -> bool {
-        if self.expression_traces_to_self(object) && self.is_mutating_method(method) {
+        if !self.expression_traces_to_self(object) {
+            return false;
+        }
+
+        if self.is_mutating_method(method) {
             return true;
         }
+
+        // Check methods in current impl block (same-file, different struct)
+        if let Some(impl_functions) = &self.current_impl_functions {
+            if let Some(called_func) = impl_functions.get(method) {
+                if self.function_modifies_self_fields_recursive(called_func) {
+                    return true;
+                }
+            }
+        }
+
+        // Cross-type registry lookup: if the method exists in the registry
+        // and takes &mut self, it's a mutating call
+        if let Some(reg) = registry {
+            if let Some(sig) = reg.get_signature(method) {
+                if sig.has_self_receiver {
+                    if let Some(&ownership) = sig.param_ownership.first() {
+                        if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
         false
     }
 
