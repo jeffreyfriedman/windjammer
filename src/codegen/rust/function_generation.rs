@@ -196,6 +196,21 @@ impl<'ast> CodeGenerator<'ast> {
         let func = &analyzed.decl;
         let mut output = String::new();
 
+        // TDD FIX: Auto-add #[test] attribute for test functions in test files (EARLY CHECK)
+        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-generate test attributes
+        // Bug: Tests don't run because #[test] attributes are missing
+        // Root Cause: Codegen doesn't detect test files and test functions
+        // Fix: Check if filename ends with _test.wj AND function starts with test_
+        let filename_str = self.current_wj_file.to_string_lossy();
+        let is_test_file = filename_str.ends_with("_test.wj") || filename_str.contains("_test.wj");
+        let is_test_function = func.name.starts_with("test_");
+        let has_test_decorator = func.decorators.iter().any(|d| d.name == "test");
+        let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
+        
+        if is_test_file && is_test_function && !has_test_decorator && !has_property_test {
+            output.push_str("#[test]\n");
+        }
+
         // Generate doc comment if present
         if let Some(doc_comment) = &func.doc_comment {
             for line in doc_comment.lines() {
@@ -852,6 +867,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let mut output = String::new();
+        
+        // TDD FIX: Auto-add #[test] attribute for test functions in test files
+        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-generate test attributes  
+        // Bug: Tests don't run because #[test] attributes are missing
+        // Root Cause: Codegen doesn't detect test files and test functions
+        // Fix: Check if filename ends with _test.wj AND function starts with test_
+        let filename_str = self.current_wj_file.to_string_lossy();
+        let is_test_file = filename_str.ends_with("_test.wj") || filename_str.contains("_test.wj");
+        let is_test_function = func.name.starts_with("test_");
+        let has_test_decorator = func.decorators.iter().any(|d| d.name == "test");
+        let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
+        
+        if is_test_file && is_test_function && !has_test_decorator && !has_property_test {
+            output.push_str("#[test]\n");
+        }
 
         // LOCAL VARIABLE TRACKING: Push new scope for this function
         self.local_variable_scopes
