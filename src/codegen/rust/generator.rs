@@ -26,7 +26,7 @@ pub struct CodeGenerator<'ast> {
     source_map: crate::source_map::SourceMap,
     pub(crate) current_output_file: std::path::PathBuf, // Path to the Rust file being generated
     current_rust_line: usize, // Current line number in generated Rust code (1-indexed)
-    current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
+    pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
@@ -949,6 +949,17 @@ impl<'ast> CodeGenerator<'ast> {
             if !has_explicit_glob_imports {
                 implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
             }
+        }
+
+        // TDD FIX: Auto-import test runtime for test files
+        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-import test utilities
+        // Bug: Test functions can't find assert_eq, assert_gt, etc.
+        // Root Cause: Codegen doesn't auto-import windjammer_runtime::test::*
+        // Fix: Check if filename ends with _test.wj and add the import
+        let filename_str = self.current_wj_file.to_string_lossy();
+        let is_test_file = filename_str.ends_with("_test.wj") || filename_str.contains("_test.wj");
+        if is_test_file {
+            implicit_imports.push_str("use windjammer_runtime::test::*;\n");
         }
 
         // Add property testing imports if needed
