@@ -7,6 +7,45 @@ use crate::parser::*;
 use super::{Analyzer, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
+    /// THE WINDJAMMER WAY: Check if an expression contains a specific identifier
+    /// Used to detect if a parameter is used in a method call chain (e.g., self.camera.move_to())
+    /// 
+    /// CRITICAL: For Index expressions, only check the object, NOT the index!
+    /// When we see `arr[i].method()`, only `arr` is being used mutably, NOT `i`.
+    /// The index `i` is just being READ to select which element to call the method on.
+    fn expr_contains_identifier(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } => self.expr_contains_identifier(name, object),
+            // THE FIX: Don't check the index part - it's only read, never mutated!
+            // Before: self.expr_contains_identifier(name, object) || self.expr_contains_identifier(name, index)
+            // After: Only check object
+            Expression::Index { object, index: _, location: _ } => {
+                self.expr_contains_identifier(name, object)
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                if self.expr_contains_identifier(name, object) {
+                    return true;
+                }
+                for (_label, arg) in arguments {
+                    if self.expr_contains_identifier(name, arg) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Call { arguments, .. } => {
+                for (_label, arg) in arguments {
+                    if self.expr_contains_identifier(name, arg) {
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn is_mutated(&self, name: &str, statements: &[&'ast Statement<'ast>], registry: &SignatureRegistry) -> bool {
         for stmt in statements {
             match stmt {
@@ -70,6 +109,10 @@ impl<'ast> Analyzer<'ast> {
     /// Check if a parameter is the DIRECT target of mutation
     /// Returns true for: p = x, p.field = x, p.field.nested = x
     /// Returns false for: arr[p.index] = x, obj[p] = x  (p is only READ here)
+    /// 
+    /// THE WINDJAMMER WAY: Array indices are NEVER mutation targets!
+    /// When we see `arr[i] = x`, only `arr` is mutated, NOT `i`.
+    /// This is critical for Copy types like usize - they should stay owned (by value).
     fn is_direct_mutation_target(&self, name: &str, target: &Expression) -> bool {
         match target {
             Expression::Identifier { name: id, .. } => id == name,
@@ -80,8 +123,9 @@ impl<'ast> Analyzer<'ast> {
             }
 
             // Index access: arr[i] = ...
-            // Only check the object, not the index!
-            Expression::Index { object, .. } => {
+            // CRITICAL: Only check the object (arr), NEVER the index (i)!
+            // The index is only READ, not mutated, even if the indexed element is mutated.
+            Expression::Index { object, index: _, location: _ } => {
                 self.is_direct_mutation_target(name, object)
             }
 
@@ -92,24 +136,27 @@ impl<'ast> Analyzer<'ast> {
     fn has_mutable_method_call(&self, name: &str, expr: &Expression, registry: &SignatureRegistry) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                if let Expression::Identifier { name: id, .. } = &**object {
-                    if id == name {
-                        // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
-                        if let Some(sig) = registry.get_signature(method) {
-                            if sig.has_self_receiver && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed) {
-                                return true;
-                            }
+                // THE WINDJAMMER WAY: Check if the parameter appears ANYWHERE in the object chain
+                // This catches both direct calls (grid.set()) and field calls (self.camera.move_to())
+                if self.expr_contains_identifier(name, object) {
+                    // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
+                    if let Some(sig) = registry.get_signature(method) {
+                        if sig.has_self_receiver && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed) {
+                            return true;
                         }
-
-                        // FALLBACK HEURISTIC: stdlib methods not yet in registry
-                        let is_mutating_by_name = method.starts_with("push")
-                            || method.starts_with("insert")
-                            || method.starts_with("remove")
-                            || method.starts_with("clear")
-                            || method.ends_with("_mut");
-
-                        return is_mutating_by_name;
                     }
+
+                    // FALLBACK HEURISTIC: stdlib methods not yet in registry
+                    let is_mutating_by_name = method.starts_with("push")
+                        || method.starts_with("insert")
+                        || method.starts_with("remove")
+                        || method.starts_with("clear")
+                        || method.starts_with("set")  // VoxelGrid::set()
+                        || method.ends_with("_mut")
+                        || method == "smooth_follow"  // Camera methods
+                        || method == "look_at";
+
+                    return is_mutating_by_name;
                 }
                 false
             }
