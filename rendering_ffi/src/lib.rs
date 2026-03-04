@@ -2,8 +2,9 @@
 // EventLoop lives in Windjammer code, this just manages GPU resources
 
 use std::sync::{Arc, Mutex};
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration, TextureFormat};
+use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
+#[allow(dead_code)]
 struct RenderState {
     device: Device,
     queue: Queue,
