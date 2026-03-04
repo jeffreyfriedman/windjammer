@@ -1,0 +1,72 @@
+// TDD Test: Keyboard Input System
+//
+// Test KeyboardState updates and queries
+
+struct KeyboardState {
+    w_down: bool,
+    a_down: bool,
+    s_down: bool,
+    d_down: bool,
+}
+
+impl KeyboardState {
+    fn new() -> KeyboardState {
+        KeyboardState {
+            w_down: false,
+            a_down: false,
+            s_down: false,
+            d_down: false,
+        }
+    }
+    
+    fn update_key(self, key: i32, is_down: bool) {
+        if key == 87 {  // W key
+            self.w_down = is_down
+        } else if key == 65 {  // A key
+            self.a_down = is_down
+        } else if key == 83 {  // S key
+            self.s_down = is_down
+        } else if key == 68 {  // D key
+            self.d_down = is_down
+        }
+    }
+    
+    fn is_w_down(self) -> bool {
+        self.w_down
+    }
+    
+    fn is_moving_forward(self) -> bool {
+        self.w_down && !self.s_down
+    }
+}
+
+#[test]
+fn test_keyboard_initial_state() {
+    let kb = KeyboardState::new()
+    assert_eq!(kb.is_w_down(), false)
+    assert_eq!(kb.is_moving_forward(), false)
+}
+
+#[test]
+fn test_keyboard_press_w() {
+    let kb = KeyboardState::new()
+    kb.update_key(87, true)  // W key pressed
+    assert_eq!(kb.is_w_down(), true)
+    assert_eq!(kb.is_moving_forward(), true)
+}
+
+#[test]
+fn test_keyboard_press_s_cancels_w() {
+    let kb = KeyboardState::new()
+    kb.update_key(87, true)  // W pressed
+    kb.update_key(83, true)  // S pressed
+    assert_eq!(kb.is_moving_forward(), false)  // W and S cancel out
+}
+
+#[test]
+fn test_keyboard_release() {
+    let kb = KeyboardState::new()
+    kb.update_key(87, true)   // W pressed
+    kb.update_key(87, false)  // W released
+    assert_eq!(kb.is_w_down(), false)
+}
