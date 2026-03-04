@@ -1,3 +1,18 @@
+## [0.45.0] - 2026-03-01 (In Progress)
+### Focus: Explicit Mutability & Developer Experience
+This release reinforces the **explicit mutability** philosophy and improves the developer experience for game projects.
+
+### Philosophy
+- **Explicit Mutability Confirmed**: Following industry standards (Rust, Swift, Kotlin), Windjammer requires `let mut x` for mutable variables
+- **Rationale**: Prevents accidental state mutation bugs, makes mutations visible, aids debugging
+- **Design Doc Updated**: `.cursor/rules/windjammer-development.mdc` now clearly documents this decision
+
+### Changed
+- **Mutability**: Explicit `mut` keyword required (not inferred) - aligns with 0.39.0 decision
+- **Documentation**: Updated design docs to reflect explicit mutability philosophy
+
+---
+
 ## [0.44.0] - 2026-02-19
 ### Focus: Production-Ready Compiler - Zero Errors, Zero Warnings, Cross-Platform
 This release represents a major milestone: **90+ bug fixes** through rigorous TDD + dogfooding methodology, resulting in a **production-ready compiler** that generates idiomatic, Clippy-clean Rust code across all platforms.

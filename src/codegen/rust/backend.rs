@@ -72,6 +72,9 @@ edition = "2021"
                 "windjammer_game_core" => {
                     "windjammer-game-core = { path = \"../windjammer-game/windjammer-game-core\" }\n".to_string()
                 }
+                "windjammer_app" => {
+                    "windjammer-app = { path = \"../windjammer-game/windjammer-game-core\" }\n".to_string()
+                }
                 "windjammer_runtime" => {
                     "windjammer-runtime = { path = \"../windjammer/crates/windjammer-runtime\" }\n".to_string()
                 }
