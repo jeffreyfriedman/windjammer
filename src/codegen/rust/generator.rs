@@ -858,6 +858,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Check for test decorators (for test runtime import)
+        let has_test_functions = analyzed.iter().any(|af| {
+            af.decl
+                .decorators
+                .iter()
+                .any(|d| d.name == "test" || d.name == "property_test" || d.name == "test_cases")
+        });
+
         // Check for property testing decorators and collect max parameter count
         let mut max_property_test_params = 0;
         for analyzed_func in analyzed {
@@ -957,14 +965,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // TDD FIX: Auto-import test runtime for test files
-        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-import test utilities
+        // TDD FIX: Auto-import test runtime for files with test functions
+        // THE WINDJAMMER WAY: Files with @test decorators should auto-import test utilities
         // Bug: Test functions can't find assert_eq, assert_gt, etc.
         // Root Cause: Codegen doesn't auto-import windjammer_runtime::test::*
-        // Fix: Check if filename ends with _test.wj and add the import
-        let filename_str = self.current_wj_file.to_string_lossy();
-        let is_test_file = filename_str.ends_with("_test.wj") || filename_str.contains("_test.wj");
-        if is_test_file {
+        // Fix: Check if module has ANY functions with @test/@property_test/@test_cases decorators
+        // NOTE: Uses AST analysis, not filename (prevents false positives like "hashmap_test.wj")
+        if has_test_functions {
             implicit_imports.push_str("use windjammer_runtime::test::*;\n");
         }
 
