@@ -79,6 +79,16 @@ fn test_user(id: string, name: string, age: i32) {
         "Compiler must add .to_string() when calling impl function with string literal arguments.\nGenerated:\n{}", rust_code
     );
 
+    // Strip windjammer_runtime import for standalone rustc test
+    let rust_code_stripped = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let rustc_test_path = temp_dir.path().join("test_rustc.rs");
+    fs::write(&rustc_test_path, rust_code_stripped).unwrap();
+
     // Verify it compiles with rustc
     let rustc_result = Command::new("rustc")
         .args([
@@ -86,7 +96,7 @@ fn test_user(id: string, name: string, age: i32) {
             "lib",
             "--edition",
             "2021",
-            output_path.to_str().unwrap(),
+            rustc_test_path.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");
@@ -150,6 +160,16 @@ fn test_greet() {
         rust_code
     );
 
+    // Strip windjammer_runtime import for standalone rustc test
+    let rust_code_stripped = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let rustc_test_path = temp_dir.path().join("test_rustc_2.rs");
+    fs::write(&rustc_test_path, rust_code_stripped).unwrap();
+
     // Verify it compiles with rustc
     let rustc_result = Command::new("rustc")
         .args([
@@ -157,7 +177,7 @@ fn test_greet() {
             "lib",
             "--edition",
             "2021",
-            output_path.to_str().unwrap(),
+            rustc_test_path.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");

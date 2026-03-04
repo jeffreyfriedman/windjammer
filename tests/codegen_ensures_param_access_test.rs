@@ -59,8 +59,10 @@ fn test_create_user() {
 
     // Strip out windjammer_runtime calls and import for rustc test
     let rust_code_for_rustc = rust_code
-        .replace("use windjammer_runtime::test::*;\n", "")
-        .replace("use windjammer_runtime::test::*;", "")
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n")
         .replace("windjammer_runtime::test::requires", "let _ = ")
         .replace("windjammer_runtime::test::ensures", "let _ = ");
 
@@ -143,8 +145,10 @@ fn create_point(label: string, x: i32, y: i32) -> Point {
 
     // Strip out windjammer_runtime calls and import for rustc test
     let rust_code_for_rustc = rust_code
-        .replace("use windjammer_runtime::test::*;\n", "")
-        .replace("use windjammer_runtime::test::*;", "")
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n")
         .replace("windjammer_runtime::test::requires", "let _ = ")
         .replace("windjammer_runtime::test::ensures", "let _ = ");
 
