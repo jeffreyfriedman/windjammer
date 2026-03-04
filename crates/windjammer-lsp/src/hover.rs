@@ -231,6 +231,13 @@ impl HoverProvider {
                     format!("fn({})", param_strs.join(", "))
                 }
             }
+            Type::RawPointer { mutable, pointee } => {
+                if *mutable {
+                    format!("*mut {}", self.format_type(pointee))
+                } else {
+                    format!("*const {}", self.format_type(pointee))
+                }
+            }
         }
     }
 }
