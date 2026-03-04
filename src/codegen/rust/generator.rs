@@ -858,12 +858,20 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Check for test decorators (for test runtime import)
+        // Check for test decorators or test_ prefix functions (for test runtime import)
+        let filename_str = self.current_wj_file.to_string_lossy();
+        let is_test_file = filename_str.ends_with("_test.wj") || filename_str.contains("_test.wj");
         let has_test_functions = analyzed.iter().any(|af| {
-            af.decl
-                .decorators
-                .iter()
-                .any(|d| d.name == "test" || d.name == "property_test" || d.name == "test_cases")
+            // Check for explicit decorators (@test, @property_test, @test_cases)
+            let has_test_decorator =
+                af.decl.decorators.iter().any(|d| {
+                    d.name == "test" || d.name == "property_test" || d.name == "test_cases"
+                });
+
+            // Check for implicit test_ prefix naming convention (only in test files)
+            let has_test_prefix = is_test_file && af.decl.name.starts_with("test_");
+
+            has_test_decorator || has_test_prefix
         });
 
         // Check for property testing decorators and collect max parameter count

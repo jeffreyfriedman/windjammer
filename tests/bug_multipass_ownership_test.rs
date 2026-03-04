@@ -41,13 +41,12 @@ fn main() {
 "#;
 
     let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let thread_id = std::thread::current().id();
+    let test_id = format!("wj_test_{}_{:?}", timestamp, thread_id);
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
 
@@ -144,13 +143,12 @@ fn main() {}
 "#;
 
     let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let thread_id = std::thread::current().id();
+    let test_id = format!("wj_test_{}_{:?}", timestamp, thread_id);
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
 
@@ -234,13 +232,12 @@ fn main() {
 "#;
 
     let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let thread_id = std::thread::current().id();
+    let test_id = format!("wj_test_{}_{:?}", timestamp, thread_id);
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
 
