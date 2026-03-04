@@ -14,13 +14,12 @@ use std::process::Command;
 fn compile_to_rust(wj_source: &str) -> Result<String, String> {
     let test_dir = std::env::temp_dir().join("wj_test_self_field_mut");
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let src_path = test_dir.join("test.wj");
     std::fs::write(&src_path, wj_source).unwrap();
-    
-    let compiler_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
-    
+
+    let compiler_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+
     let output = Command::new(&compiler_path)
         .arg("build")
         .arg(&src_path)
@@ -28,14 +27,14 @@ fn compile_to_rust(wj_source: &str) -> Result<String, String> {
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    
+
     let build_dir = test_dir.join("build");
     let rs_path = build_dir.join("test.rs");
-    
+
     Ok(std::fs::read_to_string(rs_path).unwrap())
 }
 
@@ -81,13 +80,13 @@ impl Game {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Should infer &mut self for poll_input (fn or pub fn)
-    let has_mut_self = rust_code.contains("fn poll_input(&mut self)") 
+    let has_mut_self = rust_code.contains("fn poll_input(&mut self)")
         || rust_code.contains("pub fn poll_input(&mut self)");
-    
+
     assert!(
         has_mut_self,
         "poll_input should be inferred as &mut self (calls mutating method on field)\n\nGenerated:\n{}", 
@@ -134,18 +133,30 @@ impl Outer {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // All methods should be &mut self (transitive mutation)
-    let has_update_nested = rust_code.contains("fn update_nested(&mut self") 
+    let has_update_nested = rust_code.contains("fn update_nested(&mut self")
         || rust_code.contains("pub fn update_nested(&mut self");
-    let has_update_inner = rust_code.contains("fn update_inner(&mut self") 
+    let has_update_inner = rust_code.contains("fn update_inner(&mut self")
         || rust_code.contains("pub fn update_inner(&mut self");
-    let has_set_value = rust_code.contains("fn set_value(&mut self") 
+    let has_set_value = rust_code.contains("fn set_value(&mut self")
         || rust_code.contains("pub fn set_value(&mut self");
-    
-    assert!(has_update_nested, "update_nested should infer &mut self\n\nGenerated:\n{}", rust_code);
-    assert!(has_update_inner, "update_inner should infer &mut self\n\nGenerated:\n{}", rust_code);
-    assert!(has_set_value, "set_value should infer &mut self\n\nGenerated:\n{}", rust_code);
+
+    assert!(
+        has_update_nested,
+        "update_nested should infer &mut self\n\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        has_update_inner,
+        "update_inner should infer &mut self\n\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        has_set_value,
+        "set_value should infer &mut self\n\nGenerated:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -179,15 +190,15 @@ impl Game {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     println!("Generated Rust:\n{}", rust_code);
-    
-    let has_mut_self = rust_code.contains("fn update_camera(&mut self") 
+
+    let has_mut_self = rust_code.contains("fn update_camera(&mut self")
         || rust_code.contains("pub fn update_camera(&mut self");
-    
+
     assert!(
         has_mut_self,
-        "update_camera should be inferred as &mut self (calls method on field)\n\nGenerated:\n{}", 
+        "update_camera should be inferred as &mut self (calls method on field)\n\nGenerated:\n{}",
         rust_code
     );
 }

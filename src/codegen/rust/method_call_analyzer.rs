@@ -111,8 +111,14 @@ impl MethodCallAnalyzer {
         if matches!(arg, Expression::MethodCall { .. }) {
             // Allow through ONLY if we have a user-defined method signature that says Borrowed
             if let Some(sig) = method_signature {
-                let sig_param_idx = if sig.has_self_receiver { param_idx + 1 } else { param_idx };
-                let is_borrowed = sig.param_ownership.get(sig_param_idx)
+                let sig_param_idx = if sig.has_self_receiver {
+                    param_idx + 1
+                } else {
+                    param_idx
+                };
+                let is_borrowed = sig
+                    .param_ownership
+                    .get(sig_param_idx)
                     .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
                 if !is_borrowed {
                     return false;
@@ -143,23 +149,24 @@ impl MethodCallAnalyzer {
             method,
             "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
         ) && param_idx == 0; // Key is always first argument
-        
+
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
                 let is_string_type = |t: &Type| {
                     matches!(t, Type::String)
                         || matches!(t, Type::Custom(s) if s == "String" || s == "string")
                 };
-                let is_borrowed_string_param = current_function_params.iter().any(|param| {
-                    param.name == *name && is_string_type(&param.type_)
-                }) && inferred_borrowed_params.contains(name);
-                
+                let is_borrowed_string_param = current_function_params
+                    .iter()
+                    .any(|param| param.name == *name && is_string_type(&param.type_))
+                    && inferred_borrowed_params.contains(name);
+
                 if is_borrowed_string_param {
                     return false; // Don't add & - pass &String as-is, it auto-derefs to &str
                 }
             }
         }
-        
+
         // TDD FIX: PARAMETERS THAT ARE ALREADY REFERENCE TYPES
         // If a function parameter is declared as &T or &mut T, the identifier
         // itself is already a reference. Don't add another &.
@@ -354,7 +361,7 @@ impl MethodCallAnalyzer {
                 if matches!(ownership, OwnershipMode::Borrowed) {
                     return false; // Will be borrowed, no clone needed
                 }
-                
+
                 // Method expects Owned - check if we need to clone
                 if matches!(ownership, OwnershipMode::Owned) {
                     if let Expression::FieldAccess { object, .. } = arg {

@@ -6,24 +6,26 @@
 /// incorrectly inferred as Borrowed instead of Owned.
 ///
 /// Dogfooding evidence: 12+ E0308 errors in windjammer-game from this pattern
-
 use std::fs;
 use std::process::Command;
 
 fn compile_wj(source: &str) -> (String, bool) {
     let temp_dir = std::env::temp_dir();
-    let test_id = format!("wj_test_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
-    
+
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
-    
+
     let out_dir = test_dir.join("out");
-    
+
     let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
@@ -33,11 +35,10 @@ fn compile_wj(source: &str) -> (String, bool) {
         .arg(&out_dir)
         .output()
         .expect("Failed to run wj compiler");
-    
+
     let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file");
-    
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+
     let rustc_output = Command::new("rustc")
         .arg(&rust_file)
         .arg("--crate-type")
@@ -48,13 +49,13 @@ fn compile_wj(source: &str) -> (String, bool) {
         .arg(test_dir.join("test_bin"))
         .output()
         .expect("Failed to run rustc");
-    
+
     let rustc_ok = rustc_output.status.success();
     if !rustc_ok {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);
         eprintln!("rustc stderr:\n{}", stderr);
     }
-    
+
     fs::remove_dir_all(&test_dir).ok();
     (generated, rustc_ok)
 }
@@ -84,14 +85,19 @@ fn main() {
 
     let (generated, rustc_ok) = compile_wj(source);
     println!("Generated:\n{}", generated);
-    
+
     assert!(
-        generated.contains("fn make_kill(enemy_type: String") 
-        || generated.contains("fn make_kill(enemy_type: &String"),
-        "make_kill should have enemy_type param. Generated:\n{}", generated
+        generated.contains("fn make_kill(enemy_type: String")
+            || generated.contains("fn make_kill(enemy_type: &String"),
+        "make_kill should have enemy_type param. Generated:\n{}",
+        generated
     );
-    
-    assert!(rustc_ok, "Should compile with rustc. Generated:\n{}", generated);
+
+    assert!(
+        rustc_ok,
+        "Should compile with rustc. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -118,8 +124,12 @@ fn main() {
 
     let (generated, rustc_ok) = compile_wj(source);
     println!("Generated:\n{}", generated);
-    
-    assert!(rustc_ok, "Should compile with rustc. Generated:\n{}", generated);
+
+    assert!(
+        rustc_ok,
+        "Should compile with rustc. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -137,8 +147,12 @@ fn main() {
 
     let (generated, rustc_ok) = compile_wj(source);
     println!("Generated:\n{}", generated);
-    
-    assert!(rustc_ok, "Should compile with rustc. Generated:\n{}", generated);
+
+    assert!(
+        rustc_ok,
+        "Should compile with rustc. Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -172,6 +186,10 @@ fn main() {
 
     let (generated, rustc_ok) = compile_wj(source);
     println!("Generated:\n{}", generated);
-    
-    assert!(rustc_ok, "Should compile with rustc. Generated:\n{}", generated);
+
+    assert!(
+        rustc_ok,
+        "Should compile with rustc. Generated:\n{}",
+        generated
+    );
 }

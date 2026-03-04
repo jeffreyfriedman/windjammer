@@ -4,7 +4,6 @@
 /// Bug discovered during Breach Protocol dogfooding:
 /// When a parameter is passed to a method that requires &mut, the compiler
 /// should infer that the parameter itself needs &mut.
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -64,10 +63,13 @@ fn fill_grid(grid: Grid) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // Should infer &mut for grid parameter
-    assert!(rust_code.contains("fn fill_grid") && rust_code.contains("grid: &mut Grid"), 
-        "Should infer &mut Grid for parameter used in mutating method call.\n\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("fn fill_grid") && rust_code.contains("grid: &mut Grid"),
+        "Should infer &mut Grid for parameter used in mutating method call.\n\nGenerated:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -98,11 +100,14 @@ impl Game {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // Should infer &mut self for update_camera
     // Bug: analyzer only checks self.method(), not self.field.method()
-    assert!(rust_code.contains("fn update_camera(&mut self)"), 
-        "Should infer &mut self when calling mutating method on field.\n\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("fn update_camera(&mut self)"),
+        "Should infer &mut self when calling mutating method on field.\n\nGenerated:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -136,10 +141,13 @@ impl Game {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // Should infer &mut self for update method
-    assert!(rust_code.contains("fn update(&mut self)"), 
-        "Should infer &mut self when calling field method that requires &mut.\n\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("fn update(&mut self)"),
+        "Should infer &mut self when calling field method that requires &mut.\n\nGenerated:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -185,12 +193,18 @@ impl SkillTree {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // Should keep index as usize, NOT &mut usize
-    assert!(rust_code.contains("index: usize"), 
-        "Should NOT infer &mut for usize parameters used as indices.\n\nGenerated:\n{}", rust_code);
-    assert!(!rust_code.contains("index: &mut usize"), 
-        "Should NOT generate &mut usize for index parameter.\n\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("index: usize"),
+        "Should NOT infer &mut for usize parameters used as indices.\n\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("index: &mut usize"),
+        "Should NOT generate &mut usize for index parameter.\n\nGenerated:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -219,8 +233,11 @@ fn modify_nested(outer: Outer) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
-    
+
     // Should infer &mut for outer parameter
-    assert!(rust_code.contains("fn modify_nested") && rust_code.contains("outer: &mut Outer"), 
-        "Should infer &mut when mutating nested field via method call.\n\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("fn modify_nested") && rust_code.contains("outer: &mut Outer"),
+        "Should infer &mut when mutating nested field via method call.\n\nGenerated:\n{}",
+        rust_code
+    );
 }

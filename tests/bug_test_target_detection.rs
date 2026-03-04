@@ -1,13 +1,13 @@
 //! TDD for Bug #2: Detect test files and generate [[test]] targets
-//! 
+//!
 //! Problem: Compiler generates Cargo.toml without [[bin]] or [[test]] targets,
 //!          causing test files to not be recognized properly.
-//! 
+//!
 //! Solution: Detect test files (containing #[test] functions) and generate
 //!           appropriate [[test]] targets. Generate [[bin]] for executables.
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -15,7 +15,7 @@ fn test_file_with_test_functions_generates_test_target() {
     // GREEN: Test that .rs files with #[test] generate [[test]] targets
     // Note: We test with pre-generated .rs files since Windjammer parser
     // doesn't support #[test] attributes yet (future feature)
-    
+
     let test_dir = std::env::temp_dir().join(format!(
         "wj_test_target_{}_{}",
         std::time::SystemTime::now()
@@ -39,9 +39,9 @@ fn test_subtraction() {
     assert_eq!(5 - 3, 2);
 }
 "#;
-    
+
     fs::write(build_dir.join("my_tests.rs"), rust_test_code).unwrap();
-    
+
     // Manually trigger Cargo.toml generation by calling wj build with a dummy file
     let dummy_wj = r#"
 fn helper() {
@@ -49,7 +49,7 @@ fn helper() {
 }
 "#;
     fs::write(test_dir.join("dummy.wj"), dummy_wj).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -59,12 +59,14 @@ fn helper() {
         .output()
         .expect("Failed to run wj build");
 
-    assert!(output.status.success(),
-            "wj build should succeed, stderr: {}",
-            String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "wj build should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    let cargo_toml = fs::read_to_string(build_dir.join("Cargo.toml"))
-        .expect("Should have generated Cargo.toml");
+    let cargo_toml =
+        fs::read_to_string(build_dir.join("Cargo.toml")).expect("Should have generated Cargo.toml");
 
     println!("Generated Cargo.toml:\n{}", cargo_toml);
 
@@ -92,7 +94,7 @@ fn helper() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_executable_file_generates_bin_target() {
     // RED: This test should fail until we implement bin target generation
-    
+
     let test_dir = std::env::temp_dir().join(format!(
         "wj_bin_target_{}_{}",
         std::time::SystemTime::now()
@@ -109,9 +111,9 @@ fn main() {
     println("Hello, World!");
 }
 "#;
-    
+
     fs::write(test_dir.join("my_game.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -121,9 +123,11 @@ fn main() {
         .output()
         .expect("Failed to run wj build");
 
-    assert!(output.status.success(),
-            "wj build should succeed, stderr: {}",
-            String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "wj build should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let cargo_toml = fs::read_to_string(test_dir.join("build/Cargo.toml"))
         .expect("Should have generated Cargo.toml");
@@ -146,7 +150,7 @@ fn main() {
         "Should set bin path, got:\n{}",
         cargo_toml
     );
-    
+
     // Should NOT generate [[test]] for executables
     assert!(
         !cargo_toml.contains("[[test]]"),
@@ -162,7 +166,7 @@ fn main() {
 fn test_mixed_file_with_main_and_tests_generates_bin_target() {
     // GREEN: Mixed files (main + tests) should be treated as executables
     // Tests can live alongside main() in the same file
-    
+
     let test_dir = std::env::temp_dir().join(format!(
         "wj_mixed_target_{}_{}",
         std::time::SystemTime::now()
@@ -185,13 +189,13 @@ fn test_something() {
     assert!(true);
 }
 "#;
-    
+
     fs::write(build_dir.join("my_app.rs"), rust_mixed_code).unwrap();
-    
+
     // Manually trigger Cargo.toml generation
     let dummy_wj = r#"fn helper() {}"#;
     fs::write(test_dir.join("dummy.wj"), dummy_wj).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -201,12 +205,14 @@ fn test_something() {
         .output()
         .expect("Failed to run wj build");
 
-    assert!(output.status.success(),
-            "wj build should succeed, stderr: {}",
-            String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "wj build should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    let cargo_toml = fs::read_to_string(build_dir.join("Cargo.toml"))
-        .expect("Should have generated Cargo.toml");
+    let cargo_toml =
+        fs::read_to_string(build_dir.join("Cargo.toml")).expect("Should have generated Cargo.toml");
 
     println!("Generated Cargo.toml:\n{}", cargo_toml);
 
@@ -229,7 +235,7 @@ fn test_something() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_library_file_generates_no_target() {
     // Library files (no main, no tests) should not generate [[bin]] or [[test]]
-    
+
     let test_dir = std::env::temp_dir().join(format!(
         "wj_lib_target_{}_{}",
         std::time::SystemTime::now()
@@ -251,9 +257,9 @@ struct Point {
     y: f32,
 }
 "#;
-    
+
     fs::write(test_dir.join("math.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -263,9 +269,11 @@ struct Point {
         .output()
         .expect("Failed to run wj build");
 
-    assert!(output.status.success(),
-            "wj build should succeed, stderr: {}",
-            String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "wj build should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let cargo_toml = fs::read_to_string(test_dir.join("build/Cargo.toml"))
         .expect("Should have generated Cargo.toml");

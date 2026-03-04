@@ -1,5 +1,5 @@
 // TDD Test for Bug: Struct field access in loops incorrectly auto-cloned
-// 
+//
 // Bug: When accessing a String field from a struct reference in a loop,
 // the compiler incorrectly adds .clone() even when the receiving function
 // expects a &String reference.
@@ -12,20 +12,23 @@
 // Expected:  if !inventory.has_item(&ingredient.item_id, quantity) {
 //                                    ^ Should add & not .clone()
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 fn compile_wj_test(source: &str) -> (bool, String, String) {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
     let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", timestamp));
     fs::create_dir_all(&temp_dir).unwrap();
-    
+
     let source_file = temp_dir.join("test.wj");
     fs::write(&source_file, source).unwrap();
-    
+
     let output_dir = temp_dir.join("out");
-    
+
     let output = Command::new("wj")
         .args(&["build", source_file.to_str().unwrap()])
         .args(&["--output", output_dir.to_str().unwrap()])
@@ -33,13 +36,14 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
         .args(&["--no-cargo"])
         .output()
         .expect("Failed to run wj");
-    
+
     let _success = output.status.success();
-    
+
     // Read generated Rust code
     let rust_file = output_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rust_file).unwrap_or_else(|_| String::from("(file not generated)"));
-    
+    let rust_code =
+        fs::read_to_string(&rust_file).unwrap_or_else(|_| String::from("(file not generated)"));
+
     // Try to compile with rustc to check for errors
     let rustc_output = Command::new("rustc")
         .arg("--crate-type=lib")
@@ -48,12 +52,12 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
         .arg(&temp_dir)
         .output()
         .expect("Failed to run rustc");
-    
+
     let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-    
+
     // Cleanup
     let _ = fs::remove_dir_all(&temp_dir);
-    
+
     (rustc_output.status.success(), rust_code, stderr)
 }
 
@@ -88,17 +92,23 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Should NOT have .clone() on struct field access
     // Source: item.id == item_id
     // Should generate: item.id == item_id (or &item.id == &item_id)
     // Should NOT generate: item.id.clone() == item_id
-    assert!(!rust_code.contains("item.id.clone()"), 
-            "Should not auto-clone struct field in comparison:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("item.id.clone()"),
+        "Should not auto-clone struct field in comparison:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -136,14 +146,20 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Compiler should infer correct borrowing/ownership
     // Since has_item takes `string` (inferred as &String in params),
     // the compiler should pass &ingredient.item_id, NOT ingredient.item_id.clone()
-    assert!(!rust_code.contains("ingredient.item_id.clone()"), 
-            "Should not auto-clone struct field when passing to borrowed param:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("ingredient.item_id.clone()"),
+        "Should not auto-clone struct field when passing to borrowed param:\n{}",
+        rust_code
+    );
 }

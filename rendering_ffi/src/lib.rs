@@ -24,10 +24,10 @@ pub extern "C" fn wgpu_init() -> i32 {
 #[no_mangle]
 pub extern "C" fn wgpu_create_window(_width: i32, _height: i32, _title_ptr: *const u8) -> i32 {
     println!("🪟 Creating window with GPU context");
-    
+
     // NOTE: In a real implementation, Windjammer would pass a raw window handle
     // For now, we'll create a minimal validation that wgpu links correctly
-    
+
     println!("✅ Window creation FFI called");
     1 // Success
 }
@@ -81,7 +81,7 @@ pub extern "C" fn wgpu_validate_linking() -> i32 {
         backends: wgpu::Backends::all(),
         ..Default::default()
     });
-    
+
     println!("✅ wgpu linked successfully!");
     1
 }

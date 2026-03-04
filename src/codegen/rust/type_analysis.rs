@@ -12,8 +12,8 @@
 // infer_expression_type, expression_produces_usize, etc.).
 
 use crate::parser::{
-    BinaryOp, EnumPatternBinding, EnumVariant, EnumVariantData, Expression, Item, Literal,
-    Pattern, Program, Statement, StructDecl, StructField, Type,
+    BinaryOp, EnumPatternBinding, EnumVariant, EnumVariantData, Expression, Item, Literal, Pattern,
+    Program, Statement, StructDecl, StructField, Type,
 };
 use std::collections::HashSet;
 
@@ -168,9 +168,9 @@ impl TypeAnalyzer {
     pub fn is_copy_type(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-            Type::Reference(_) => true,         // References are Copy
-            Type::MutableReference(_) => false, // Mutable references are not Copy
-            Type::RawPointer { .. } => true,    // TDD: Raw pointers are Copy (like &T)
+            Type::Reference(_) => true,           // References are Copy
+            Type::MutableReference(_) => false,   // Mutable references are not Copy
+            Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)
             Type::FunctionPointer { .. } => true, // TDD FIX: Function pointers are Copy!
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
             Type::Custom(name) => {
@@ -419,9 +419,9 @@ impl Default for TypeAnalyzer {
 pub fn is_copy_type(ty: &Type) -> bool {
     match ty {
         Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-        Type::Reference(_) => true,         // References are Copy
-        Type::MutableReference(_) => false, // Mutable references are not Copy
-        Type::RawPointer { .. } => true,    // TDD: Raw pointers are Copy (like &T)
+        Type::Reference(_) => true,           // References are Copy
+        Type::MutableReference(_) => false,   // Mutable references are not Copy
+        Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)
         Type::FunctionPointer { .. } => true, // TDD FIX: Function pointers are Copy!
         Type::Tuple(types) => types.iter().all(is_copy_type),
         Type::Custom(name) => {
@@ -457,6 +457,7 @@ pub fn is_copy_type(ty: &Type) -> bool {
 // method signature lookup, and usize detection. They are part of the split-impl
 // pattern and can be called from any CodeGenerator impl block.
 
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
     /// BUG #8 FIX: Infer the type name from an expression
     /// This enables qualified method signature lookup (Type::method)
@@ -891,10 +892,19 @@ impl<'ast> CodeGenerator<'ast> {
             // Binary ops with usize operands: i + 1, len() - 1, etc.
             // TDD FIX (Bug #4): If BOTH sides are usize (or one side is usize and other is int literal),
             // then the result is usize. The old logic used OR which was wrong.
-            Expression::Binary { op, left, right, location: _ } => {
+            Expression::Binary {
+                op,
+                left,
+                right,
+                location: _,
+            } => {
                 match op {
                     // Arithmetic operations preserve usize if both operands are usize-compatible
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod => {
                         let left_is_usize = self.expression_produces_usize(left);
                         let right_is_usize = self.expression_produces_usize(right);
 

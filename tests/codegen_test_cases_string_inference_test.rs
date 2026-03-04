@@ -68,7 +68,8 @@ fn test_user(id: string, name: string, age: i32) {
     assert!(
         rust_code.contains("fn test_user_impl(id: &String, name: &String, _age: i32)")
             || rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
-        "Should generate impl function with String or &String parameters.\nGenerated:\n{}", rust_code
+        "Should generate impl function with String or &String parameters.\nGenerated:\n{}",
+        rust_code
     );
 
     // The test case calls must convert &str to String (Rust auto-refs when passing String to &String)
@@ -145,7 +146,8 @@ fn test_greet() {
     assert!(
         rust_code.contains(r#"greet("World".to_string())"#)
             || rust_code.contains(r#"greet(&"World".to_string())"#),
-        "Compiler should auto-convert string literal parameters.\nGenerated:\n{}", rust_code
+        "Compiler should auto-convert string literal parameters.\nGenerated:\n{}",
+        rust_code
     );
 
     // Verify it compiles with rustc

@@ -8,8 +8,8 @@
 //! Used to auto-detect when `std::collections::HashMap` and `std::collections::HashSet`
 //! imports are needed in the generated Rust code.
 
-use crate::parser::*;
 use super::CodeGenerator;
+use crate::parser::*;
 
 impl CodeGenerator<'_> {
     /// Check if a program references a collection type (HashMap or HashSet)

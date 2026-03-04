@@ -70,8 +70,8 @@ impl Game {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated =
-        fs::read_to_string(output_dir.join("test_clone_bug.rs")).expect("Failed to read generated file");
+    let generated = fs::read_to_string(output_dir.join("test_clone_bug.rs"))
+        .expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 

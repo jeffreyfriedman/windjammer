@@ -4,8 +4,8 @@
 //! This includes both type declarations and their implementations.
 
 use crate::analyzer::*;
-use crate::parser::*;
 use crate::parser::OwnershipHint;
+use crate::parser::*;
 
 use super::codegen_helpers;
 use super::self_analysis;
@@ -430,9 +430,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         // No default implementation - check analyzed_trait_methods
                         // The analyzer has inferred the signature from ALL impls!
-                        if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_decl.name) {
+                        if let Some(trait_methods) =
+                            self.analyzed_trait_methods.get(&trait_decl.name)
+                        {
                             if let Some(method_analysis) = trait_methods.get(&method.name) {
-                                if let Some(inferred_ownership) = method_analysis.inferred_ownership.get(&param.name) {
+                                if let Some(inferred_ownership) =
+                                    method_analysis.inferred_ownership.get(&param.name)
+                                {
                                     match inferred_ownership {
                                         OwnershipMode::Borrowed => OwnershipHint::Ref,
                                         OwnershipMode::MutBorrowed => OwnershipHint::Mut,
@@ -453,7 +457,8 @@ impl<'ast> CodeGenerator<'ast> {
 
                     // THE WINDJAMMER WAY: Check if param.type_ already contains a reference
                     // If so, don't add another & (prevents &&Input bug)
-                    let type_already_has_ref = matches!(param.type_, Type::Reference(_) | Type::MutableReference(_));
+                    let type_already_has_ref =
+                        matches!(param.type_, Type::Reference(_) | Type::MutableReference(_));
 
                     let type_str = match &ownership {
                         OwnershipHint::Owned => {
@@ -645,16 +650,22 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Pre-classify methods as instance (takes self) vs static for Self:: vs self. dispatch.
         // A method is instance if: it has explicit self, analyzer inferred self, or it accesses fields.
-        let mut instance_methods: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut instance_methods: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for func in &impl_block.functions {
             let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
-            let has_inferred_self = analyzed.iter()
+            let has_inferred_self = analyzed
+                .iter()
                 .find(|af| af.decl.name == func.name && af.decl.parent_type == func.parent_type)
                 .map(|af| af.inferred_ownership.contains_key("self"))
                 .unwrap_or(false);
             let accesses_fields = if !self.current_struct_fields.is_empty() {
-                let ctx = self_analysis::AnalysisContext::new(&func.parameters, &self.current_struct_fields);
-                self_analysis::function_accesses_fields(&ctx, func) || self_analysis::function_mutates_fields(&ctx, func)
+                let ctx = self_analysis::AnalysisContext::new(
+                    &func.parameters,
+                    &self.current_struct_fields,
+                );
+                self_analysis::function_accesses_fields(&ctx, func)
+                    || self_analysis::function_mutates_fields(&ctx, func)
             } else {
                 false
             };

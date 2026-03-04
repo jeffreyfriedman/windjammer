@@ -1,9 +1,9 @@
 // TDD Test: Type Alias Support
 // Test that Windjammer can parse and generate type aliases
 
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -33,7 +33,7 @@ fn main() {
 "#;
 
     fs::write(test_dir.join("main.wj"), source).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -49,16 +49,22 @@ fn main() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("Compilation failed:\n{}", stderr);
     }
-    
+
     let result = fs::read_to_string(test_dir.join("output/main.rs"))
         .expect("Failed to read generated Rust file");
-    
+
     // Should generate "pub type UserId = u32;"
-    assert!(result.contains("type UserId"), 
-        "Expected 'type UserId' in generated code, got: {}", result);
-    assert!(result.contains("u32"), 
-        "Expected 'u32' in type alias, got: {}", result);
-    
+    assert!(
+        result.contains("type UserId"),
+        "Expected 'type UserId' in generated code, got: {}",
+        result
+    );
+    assert!(
+        result.contains("u32"),
+        "Expected 'u32' in type alias, got: {}",
+        result
+    );
+
     fs::remove_dir_all(&test_dir).ok();
 }
 
@@ -90,7 +96,7 @@ fn main() {
 "#;
 
     fs::write(test_dir.join("main.wj"), source).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -106,15 +112,21 @@ fn main() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("Compilation failed:\n{}", stderr);
     }
-    
+
     let result = fs::read_to_string(test_dir.join("output/main.rs"))
         .expect("Failed to read generated Rust file");
-    
+
     // Should generate "pub type QuestId = String;"
-    assert!(result.contains("type QuestId"), 
-        "Expected 'type QuestId' in generated code, got: {}", result);
-    assert!(result.contains("String"), 
-        "Expected 'String' in type alias, got: {}", result);
-    
+    assert!(
+        result.contains("type QuestId"),
+        "Expected 'type QuestId' in generated code, got: {}",
+        result
+    );
+    assert!(
+        result.contains("String"),
+        "Expected 'String' in type alias, got: {}",
+        result
+    );
+
     fs::remove_dir_all(&test_dir).ok();
 }

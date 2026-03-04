@@ -43,8 +43,8 @@ fn test_format() -> String {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated =
-        fs::read_to_string(output_dir.join("test_format.rs")).expect("Failed to read generated file");
+    let generated = fs::read_to_string(output_dir.join("test_format.rs"))
+        .expect("Failed to read generated file");
 
     // Should contain format! macro as-is
     assert!(
@@ -93,8 +93,8 @@ fn test_format_in_call() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated =
-        fs::read_to_string(output_dir.join("test_format_call.rs")).expect("Failed to read generated file");
+    let generated = fs::read_to_string(output_dir.join("test_format_call.rs"))
+        .expect("Failed to read generated file");
 
     println!("Generated code:\n{}", generated);
 

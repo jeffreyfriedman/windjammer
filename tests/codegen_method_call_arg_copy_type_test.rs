@@ -67,8 +67,8 @@ fn test_function() {
 
     assert!(output.status.success(), "Compilation failed");
 
-    let generated =
-        fs::read_to_string(output_dir.join("test_input.rs")).expect("Failed to read generated file");
+    let generated = fs::read_to_string(output_dir.join("test_input.rs"))
+        .expect("Failed to read generated file");
 
     // Should NOT have unnecessary borrow
     assert!(

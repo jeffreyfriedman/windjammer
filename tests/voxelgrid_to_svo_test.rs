@@ -28,25 +28,25 @@ mod tests {
         // Expected SVO:
         // - Root node (branch, points to octant containing voxel)
         // - Leaf node (material ID)
-        
+
         // This test will guide the implementation
         // TODO: Implement conversion algorithm
-        
+
         assert!(true, "TODO: Implement VoxelGrid → SVO conversion");
     }
-    
+
     #[test]
     fn test_svo_empty_regions_are_skipped() {
         // Black screen fix: Verify empty space is efficiently encoded
         // Large empty regions should collapse to single nodes
-        
+
         assert!(true, "TODO: Test sparse encoding");
     }
-    
+
     #[test]
     fn test_svo_material_ids_preserved() {
         // Ensure material IDs (stone=1, dirt=2, etc.) are correct in SVO
-        
+
         assert!(true, "TODO: Test material preservation");
     }
 }

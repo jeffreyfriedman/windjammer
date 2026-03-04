@@ -23,6 +23,7 @@ pub(super) enum VariableUsage {
     Moved,
 }
 
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
     /// Pre-scan a function body to find local variables that are iterated in for-loops
     /// and also used after the loop. These need auto-borrow (`&`) in the for-loop.
@@ -56,7 +57,9 @@ impl<'ast> CodeGenerator<'ast> {
     #[allow(dead_code)]
     fn condition_compares_to_usize(&self, condition: &Expression, var_name: &str) -> bool {
         match condition {
-            Expression::Binary { left, op, right, .. } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 let left_is_var = matches!(
                     **left,
                     Expression::Identifier { ref name, .. } if name == var_name
@@ -66,7 +69,10 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::Identifier { ref name, .. } if name == var_name
                 );
 
-                let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+                let is_comparison = matches!(
+                    op,
+                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                );
 
                 if !is_comparison {
                     return false;
@@ -104,7 +110,11 @@ impl<'ast> CodeGenerator<'ast> {
                         return true;
                     }
                 }
-                Statement::If { then_block, else_block, .. } => {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     if Self::variable_is_incremented_in_body(then_block, var_name) {
                         return true;
                     }
@@ -143,7 +153,9 @@ impl<'ast> CodeGenerator<'ast> {
     fn variable_used_with_usize_in_statements(&self, stmts: &[&Statement], var_name: &str) -> bool {
         for stmt in stmts {
             match stmt {
-                Statement::While { condition, body, .. } => {
+                Statement::While {
+                    condition, body, ..
+                } => {
                     if self.condition_compares_to_usize(condition, var_name) {
                         return true;
                     }
@@ -151,7 +163,12 @@ impl<'ast> CodeGenerator<'ast> {
                         return true;
                     }
                 }
-                Statement::If { condition, then_block, else_block, .. } => {
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     if self.expression_uses_var_with_usize(condition, var_name) {
                         return true;
                     }
@@ -178,14 +195,21 @@ impl<'ast> CodeGenerator<'ast> {
     #[allow(dead_code)]
     fn expression_uses_var_with_usize(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
-            Expression::Binary { left, op, right, .. } => {
-                let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+            Expression::Binary {
+                left, op, right, ..
+            } => {
+                let is_comparison = matches!(
+                    op,
+                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                );
                 if !is_comparison {
                     return false;
                 }
 
-                let left_is_var = matches!(**left, Expression::Identifier { ref name, .. } if name == var_name);
-                let right_is_var = matches!(**right, Expression::Identifier { ref name, .. } if name == var_name);
+                let left_is_var =
+                    matches!(**left, Expression::Identifier { ref name, .. } if name == var_name);
+                let right_is_var =
+                    matches!(**right, Expression::Identifier { ref name, .. } if name == var_name);
 
                 if left_is_var && self.expression_produces_usize(right) {
                     return true;
@@ -201,8 +225,14 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// TDD FIX (Bug #3): Mark variables as usize if they're compared to .len()
     pub(super) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
-        if let Expression::Binary { left, op, right, .. } = condition {
-            let is_comparison = matches!(op, BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge);
+        if let Expression::Binary {
+            left, op, right, ..
+        } = condition
+        {
+            let is_comparison = matches!(
+                op,
+                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+            );
             if !is_comparison {
                 return;
             }
@@ -480,7 +510,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a loop body modifies a variable
-    pub(super) fn loop_body_modifies_variable(&self, body: &[&'ast Statement<'ast>], var_name: &str) -> bool {
+    pub(super) fn loop_body_modifies_variable(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        var_name: &str,
+    ) -> bool {
         for stmt in body {
             if self.statement_modifies_variable(stmt, var_name) {
                 return true;
@@ -633,16 +667,12 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_mutates_variable_field(left, var_name)
                     || self.expression_mutates_variable_field(right, var_name)
             }
-            Expression::Call { arguments, .. } => {
-                arguments
-                    .iter()
-                    .any(|(_, arg)| self.expression_mutates_variable_field(arg, var_name))
-            }
-            Expression::Block { statements, .. } => {
-                statements
-                    .iter()
-                    .any(|stmt| self.statement_mutates_variable_field(stmt, var_name))
-            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_mutates_variable_field(arg, var_name)),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|stmt| self.statement_mutates_variable_field(stmt, var_name)),
             Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
                 self.expression_mutates_variable_field(expr, var_name)
             }
@@ -741,9 +771,7 @@ impl<'ast> CodeGenerator<'ast> {
         match stmt {
             Statement::Return {
                 value: Some(expr), ..
-            } => {
-                self.analyze_variable_usage_in_expression(var_name, expr)
-            }
+            } => self.analyze_variable_usage_in_expression(var_name, expr),
             Statement::Expression { expr, .. } => {
                 self.analyze_variable_usage_in_expression(var_name, expr)
             }
@@ -852,9 +880,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression,
     ) -> VariableUsage {
         match expr {
-            Expression::Identifier { name, .. } if name == var_name => {
-                VariableUsage::Moved
-            }
+            Expression::Identifier { name, .. } if name == var_name => VariableUsage::Moved,
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {

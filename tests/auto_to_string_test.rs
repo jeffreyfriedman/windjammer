@@ -171,9 +171,11 @@ fn test_multiple_string_params() {
     // All three literals should be converted (TDD UPDATE: b and c are inferred as &String)
     // First param is Owned (used in addition), others are Borrowed (only read)
     assert!(
-        generated.contains("concatenate(\"Hello\".to_string(),") &&
-        (generated.contains("&\"World\".to_string()") || generated.contains("\"World\".to_string()")) &&
-        (generated.contains("&\"!\".to_string()") || generated.contains("\"!\".to_string()")),
+        generated.contains("concatenate(\"Hello\".to_string(),")
+            && (generated.contains("&\"World\".to_string()")
+                || generated.contains("\"World\".to_string()"))
+            && (generated.contains("&\"!\".to_string()")
+                || generated.contains("\"!\".to_string()")),
         "Should convert all string literal arguments. Generated:\n{}",
         generated
     );

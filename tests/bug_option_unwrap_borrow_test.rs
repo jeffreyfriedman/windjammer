@@ -1,22 +1,21 @@
 /// TDD Test: Option field access without moving
-/// 
+///
 /// Problem: node.children.unwrap() moves from borrowed reference
-/// 
+///
 /// Example:
 /// ```windjammer
 /// struct Node {
 ///     pub children: Option<Vec<Node>>
 /// }
-/// 
+///
 /// fn get_first(node: Node) -> Node {
 ///     let children = node.children.unwrap()  // ERROR: moves from &Node
 ///     children[0]
 /// }
 /// ```
-/// 
+///
 /// Solution: Compiler should auto-insert .as_ref() for Option on borrowed fields
 /// node.children.unwrap() -> node.children.as_ref().unwrap()
-
 use std::fs;
 use std::process::Command;
 
@@ -45,18 +44,21 @@ fn main() {
 "#;
 
     let temp_dir = std::env::temp_dir();
-    let test_id = format!("wj_test_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
-    
+
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
-    
+
     let out_dir = test_dir.join("out");
-    
+
     let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
@@ -66,13 +68,12 @@ fn main() {
         .arg(&out_dir)
         .output()
         .expect("Failed to run wj compiler");
-    
+
     let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file");
-    
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+
     println!("Generated code:\n{}", generated);
-    
+
     let rustc_output = Command::new("rustc")
         .arg(&rust_file)
         .arg("--crate-type")
@@ -83,17 +84,20 @@ fn main() {
         .arg(test_dir.join("test_bin"))
         .output()
         .expect("Failed to run rustc");
-    
+
     if !rustc_output.status.success() {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, generated);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
+        );
     }
-    
+
     // Verify Option field access generates .as_ref() or .clone()
     assert!(
         generated.contains(".as_ref().unwrap()") || generated.contains(".clone().unwrap()"),
         "Option::unwrap on borrowed field should use .as_ref() or .clone()"
     );
-    
+
     fs::remove_dir_all(&test_dir).ok();
 }

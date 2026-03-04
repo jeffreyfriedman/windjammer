@@ -1,5 +1,5 @@
 /// TDD Test: Nested Field Access Through Borrowed Iterator
-/// 
+///
 /// Bug: Compiler fails to add & or .clone() for nested field access like stack.item.id
 /// where stack is from &collection and parameter expects &String
 ///
@@ -11,7 +11,6 @@
 ///     }
 /// }
 /// ```
-
 use std::fs;
 use std::process::Command;
 
@@ -50,19 +49,22 @@ fn main() {}
 "#;
 
     let temp_dir = std::env::temp_dir();
-    let test_id = format!("wj_test_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
-    
+
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
-    
+
     let out_dir = test_dir.join("out");
-    
-    let output = Command::new("wj")
+
+    let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
         .arg("--target")
@@ -71,13 +73,12 @@ fn main() {}
         .arg(&out_dir)
         .output()
         .expect("Failed to run wj compiler");
-    
+
     let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file");
-    
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+
     println!("Generated code:\n{}", generated);
-    
+
     // Compile with rustc
     let rustc_output = Command::new("rustc")
         .arg(&rust_file)
@@ -89,12 +90,15 @@ fn main() {}
         .arg(test_dir.join("test_bin"))
         .output()
         .expect("Failed to run rustc");
-    
+
     if !rustc_output.status.success() {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, generated);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
+        );
     }
-    
+
     // Verify: Should generate &stack.item.id (not stack.item.id)
     // Because has_item(item_id: string) → has_item(item_id: &String)
     // And stack.item.id is accessed from borrowed stack
@@ -102,6 +106,6 @@ fn main() {}
         generated.contains("&stack.item.id") || generated.contains("stack.item.id.clone()"),
         "Should add & or .clone() for nested field: Expected '&stack.item.id' or 'stack.item.id.clone()'"
     );
-    
+
     fs::remove_dir_all(&test_dir).ok();
 }

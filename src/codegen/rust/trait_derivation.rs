@@ -82,9 +82,21 @@ impl CodeGenerator<'_> {
             Type::Custom(name) => {
                 let is_primitive = matches!(
                     name.as_str(),
-                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                    | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
-                    | "f32" | "f64" | "bool" | "char"
+                    "i8" | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "f32"
+                        | "f64"
+                        | "bool"
+                        | "char"
                 );
                 is_primitive || self.copy_types_registry.contains(name.as_str())
             }
@@ -99,7 +111,10 @@ impl CodeGenerator<'_> {
     }
 
     /// Check if all enum variants have only Copy fields.
-    pub(super) fn all_enum_variants_are_copy(&self, variants: &[crate::parser::EnumVariant]) -> bool {
+    pub(super) fn all_enum_variants_are_copy(
+        &self,
+        variants: &[crate::parser::EnumVariant],
+    ) -> bool {
         use crate::parser::EnumVariantData;
         variants.iter().all(|variant| match &variant.data {
             EnumVariantData::Unit => true,
@@ -110,16 +125,17 @@ impl CodeGenerator<'_> {
         })
     }
 
-    pub(super) fn all_enum_variants_are_partial_eq(&self, variants: &[crate::parser::EnumVariant]) -> bool {
+    pub(super) fn all_enum_variants_are_partial_eq(
+        &self,
+        variants: &[crate::parser::EnumVariant],
+    ) -> bool {
         use crate::parser::EnumVariantData;
-        variants.iter().all(|variant| {
-            match &variant.data {
-                EnumVariantData::Unit => true,
-                EnumVariantData::Tuple(types) => types.iter().all(|ty| self.is_partial_eq_type(ty)),
-                EnumVariantData::Struct(fields) => fields
-                    .iter()
-                    .all(|(_, field_type)| self.is_partial_eq_type(field_type)),
-            }
+        variants.iter().all(|variant| match &variant.data {
+            EnumVariantData::Unit => true,
+            EnumVariantData::Tuple(types) => types.iter().all(|ty| self.is_partial_eq_type(ty)),
+            EnumVariantData::Struct(fields) => fields
+                .iter()
+                .all(|(_, field_type)| self.is_partial_eq_type(field_type)),
         })
     }
 

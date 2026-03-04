@@ -3,8 +3,8 @@
 //! Goal: 10x+ memory compression for sparse voxel grids
 //! Tests: OctreeNode, grid-to-octree conversion, memory efficiency
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let test_dir = std::env::temp_dir().join(format!(

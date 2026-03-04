@@ -1,10 +1,10 @@
 //! TDD Phase 1: Voxel Grid Data Structure
-//! 
+//!
 //! Goal: Create basic voxel grid for storing 3D voxel data
 //! This is the foundation for MagicaVoxel-quality rendering in Windjammer!
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -57,9 +57,9 @@ fn main() {
     println("Grid created: {}x{}x{}", grid.width(), grid.height(), grid.depth());
 }
 "#;
-    
+
     fs::write(test_dir.join("voxel_grid.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -74,8 +74,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for VoxelGrid creation");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for VoxelGrid creation"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/voxel_grid.rs"))
         .expect("Should have generated Rust file");
@@ -161,9 +163,9 @@ fn main() {
     println("Voxel at (0,0,0): {}", empty);
 }
 "#;
-    
+
     fs::write(test_dir.join("voxel_setget.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -178,8 +180,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for voxel set/get");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for voxel set/get"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/voxel_setget.rs"))
         .expect("Should have generated Rust file");
@@ -249,9 +253,9 @@ fn main() {
     println("To hex: 0x{:08X}", back_to_hex);
 }
 "#;
-    
+
     fs::write(test_dir.join("voxel_color.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -266,8 +270,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for VoxelColor");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for VoxelColor"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/voxel_color.rs"))
         .expect("Should have generated Rust file");

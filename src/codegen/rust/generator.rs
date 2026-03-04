@@ -15,12 +15,12 @@ pub struct CodeGenerator<'ast> {
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
-    needs_serde_imports: bool,   // For JSON support
-    pub(crate) needs_write_import: bool,    // For string capacity optimization (write! macro)
-    needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
-    pub(crate) needs_cow_import: bool,      // For Phase 9 Cow optimization
-    needs_hashmap_import: bool,  // Auto-detect HashMap usage
-    needs_hashset_import: bool,  // Auto-detect HashSet usage
+    needs_serde_imports: bool,           // For JSON support
+    pub(crate) needs_write_import: bool, // For string capacity optimization (write! macro)
+    needs_smallvec_import: bool,         // For Phase 8 SmallVec optimization
+    pub(crate) needs_cow_import: bool,   // For Phase 9 Cow optimization
+    needs_hashmap_import: bool,          // Auto-detect HashMap usage
+    needs_hashset_import: bool,          // Auto-detect HashSet usage
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -29,15 +29,17 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
-    bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
+    bound_aliases: std::collections::HashMap<String, Vec<String>>,     // bound Name = Trait + Trait
     // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
     pub(crate) clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
     // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
-    pub(crate) struct_mapping_hints: std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
+    pub(crate) struct_mapping_hints:
+        std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
     // PHASE 4 OPTIMIZATION: Track string operation optimizations
     pub(crate) string_capacity_hints: std::collections::HashMap<usize, usize>, // Statement idx -> capacity
     // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
-    pub(crate) assignment_optimizations: std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
+    pub(crate) assignment_optimizations:
+        std::collections::HashMap<String, crate::analyzer::CompoundOp>, // Variable -> compound op
     // PHASE 6 OPTIMIZATION: Track defer drop optimizations
     pub(crate) defer_drop_optimizations: Vec<crate::analyzer::DeferDropOptimization>,
     // PHASE 8 OPTIMIZATION: Track SmallVec optimizations
@@ -54,9 +56,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
     pub(crate) current_impl_methods: std::collections::HashSet<String>, // Method names in current impl block
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
-    pub(crate) in_impl_block: bool,                 // true if currently generating code for an impl block
+    pub(crate) in_impl_block: bool, // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
-    pub(crate) usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
+    pub(crate) usize_struct_fields:
+        std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
     // METHOD RETURN TYPES: Track which methods return usize (for auto-casting in comparisons)
     // Maps method name -> return type. Used by infer_expression_type for MethodCall.
     pub(crate) method_return_types: std::collections::HashMap<String, Type>,
@@ -144,7 +147,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) local_var_types: std::collections::HashMap<String, Type>,
     // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
-    pub(crate) struct_field_types: std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    pub(crate) struct_field_types:
+        std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
@@ -762,7 +766,9 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         self.current_struct_fields.clear();
                     }
-                    self.current_impl_methods = impl_block.functions.iter()
+                    self.current_impl_methods = impl_block
+                        .functions
+                        .iter()
                         .map(|f| f.name.clone())
                         .collect();
                     self.in_impl_block = true;

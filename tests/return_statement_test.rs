@@ -1,9 +1,9 @@
 // Test return statement generation
 // Dogfooding bug: return statements in else blocks
 
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -35,7 +35,7 @@ fn main() {
 "#;
 
     fs::write(test_dir.join("main.wj"), source).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let _output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -46,15 +46,18 @@ fn main() {
         .arg("rust")
         .output()
         .expect("Failed to run wj command");
-    
+
     // Read generated Rust code (transpilation succeeds even if cargo build fails)
     let result = fs::read_to_string(test_dir.join("output/main.rs"))
         .expect("Failed to read generated Rust file");
-    
+
     // Should generate "return false" not just "false"
-    assert!(result.contains("return false"), 
-        "return statement should be preserved in else block, got: {}", result);
-    
+    assert!(
+        result.contains("return false"),
+        "return statement should be preserved in else block, got: {}",
+        result
+    );
+
     fs::remove_dir_all(&test_dir).ok();
 }
 
@@ -86,7 +89,7 @@ fn main() {
 "#;
 
     fs::write(test_dir.join("main.wj"), source).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let _output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -97,14 +100,16 @@ fn main() {
         .arg("rust")
         .output()
         .expect("Failed to run wj command");
-    
+
     let result = fs::read_to_string(test_dir.join("output/main.rs"))
         .expect("Failed to read generated Rust file");
-    
+
     // Should generate "return true"
-    assert!(result.contains("return true"), 
-        "return statement should be preserved in if block");
-    
+    assert!(
+        result.contains("return true"),
+        "return statement should be preserved in if block"
+    );
+
     fs::remove_dir_all(&test_dir).ok();
 }
 
@@ -140,7 +145,7 @@ fn main() {
 "#;
 
     fs::write(test_dir.join("main.wj"), source).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let _output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -151,15 +156,19 @@ fn main() {
         .arg("rust")
         .output()
         .expect("Failed to run wj command");
-    
+
     let result = fs::read_to_string(test_dir.join("output/main.rs"))
         .expect("Failed to read generated Rust file");
-    
+
     // Both returns should be preserved
-    assert!(result.contains("return true"), 
-        "return true should be in generated code");
-    assert!(result.contains("return false"), 
-        "return false should be in generated code");
-    
+    assert!(
+        result.contains("return true"),
+        "return true should be in generated code"
+    );
+    assert!(
+        result.contains("return false"),
+        "return false should be in generated code"
+    );
+
     fs::remove_dir_all(&test_dir).ok();
 }

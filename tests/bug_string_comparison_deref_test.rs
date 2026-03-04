@@ -24,7 +24,7 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
 
     let output_dir = temp_dir.join(format!("output_{}", unique_id));
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-    
+
     let output = Command::new("cargo")
         .args([
             "run",
@@ -42,7 +42,7 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
 
     let success = output.status.success();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    
+
     let rs_file = output_dir.join(format!("{}.rs", unique_id));
     let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
 
@@ -75,27 +75,45 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Verify no type mismatch errors
-    assert!(!stderr.contains("E0277"), 
-            "Should not have E0277 type mismatch errors:\n{}", stderr);
-    assert!(!stderr.contains("can't compare"), 
-            "Should not have comparison errors:\n{}", stderr);
-    
+    assert!(
+        !stderr.contains("E0277"),
+        "Should not have E0277 type mismatch errors:\n{}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("can't compare"),
+        "Should not have comparison errors:\n{}",
+        stderr
+    );
+
     // Check generated code doesn't have incorrect dereferences
     // Should NOT have `name == *target` or `*name == target`
-    assert!(!rust_code.contains("name == *target"), 
-            "Should not add * dereference in comparison:\n{}", rust_code);
-    assert!(!rust_code.contains("*name == target"), 
-            "Should not add * dereference in comparison:\n{}", rust_code);
-    
+    assert!(
+        !rust_code.contains("name == *target"),
+        "Should not add * dereference in comparison:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("*name == target"),
+        "Should not add * dereference in comparison:\n{}",
+        rust_code
+    );
+
     // Should have correct comparison: `name == target`
-    assert!(rust_code.contains("name == target") || rust_code.contains("(name == target)"),
-            "Should have correct comparison without dereference:\n{}", rust_code);
+    assert!(
+        rust_code.contains("name == target") || rust_code.contains("(name == target)"),
+        "Should have correct comparison without dereference:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -119,23 +137,38 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Should not have E0277 comparison errors
-    assert!(!stderr.contains("E0277"), 
-            "Should not have E0277 errors:\n{}", stderr);
-    assert!(!stderr.contains("can't compare"), 
-            "Should not have comparison errors:\n{}", stderr);
-    
+    assert!(
+        !stderr.contains("E0277"),
+        "Should not have E0277 errors:\n{}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("can't compare"),
+        "Should not have comparison errors:\n{}",
+        stderr
+    );
+
     // Check generated code
     // Should NOT add incorrect dereference
-    assert!(!rust_code.contains("item == *target"), 
-            "Should not add * dereference:\n{}", rust_code);
-    assert!(!rust_code.contains("*item == target"), 
-            "Should not add * dereference:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("item == *target"),
+        "Should not add * dereference:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("*item == target"),
+        "Should not add * dereference:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -158,21 +191,33 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Should not have E0277 comparison errors
-    assert!(!stderr.contains("E0277"), 
-            "Should not have E0277 errors:\n{}", stderr);
-    assert!(!stderr.contains("can't compare `&str` with `str`"), 
-            "Should not have &str vs str comparison error:\n{}", stderr);
-    
+    assert!(
+        !stderr.contains("E0277"),
+        "Should not have E0277 errors:\n{}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("can't compare `&str` with `str`"),
+        "Should not have &str vs str comparison error:\n{}",
+        stderr
+    );
+
     // Check generated code
     // Should NOT add incorrect dereference
-    assert!(!rust_code.contains("== *tag"), 
-            "Should not add * dereference on tag:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("== *tag"),
+        "Should not add * dereference on tag:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -199,20 +244,32 @@ fn main() {
 "#;
 
     let (success, rust_code, stderr) = compile_wj_test(source);
-    
+
     if !success {
-        panic!("Compilation failed:\n{}\n\nGenerated code:\n{}", stderr, rust_code);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, rust_code
+        );
     }
-    
+
     // Should not have E0277 comparison errors
-    assert!(!stderr.contains("E0277"), 
-            "Should not have E0277 errors:\n{}", stderr);
-    assert!(!stderr.contains("can't compare `String` with `&String`"), 
-            "Should not have String vs &String error:\n{}", stderr);
-    
+    assert!(
+        !stderr.contains("E0277"),
+        "Should not have E0277 errors:\n{}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("can't compare `String` with `&String`"),
+        "Should not have String vs &String error:\n{}",
+        stderr
+    );
+
     // Check generated code adds * to the borrowed side (target_id)
     // When comparing owned field (m.id: String) with borrowed param (target_id: &String),
     // should generate: m.id == *target_id
-    assert!(rust_code.contains("m.id == *target_id") || rust_code.contains("*target_id == m.id"), 
-            "Should add * to borrowed parameter:\n{}", rust_code);
+    assert!(
+        rust_code.contains("m.id == *target_id") || rust_code.contains("*target_id == m.id"),
+        "Should add * to borrowed parameter:\n{}",
+        rust_code
+    );
 }

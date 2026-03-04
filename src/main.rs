@@ -7,10 +7,10 @@ pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
 pub mod cli;
 pub mod codegen;
-pub mod plugin; // Plugin discovery and delegation
 pub mod component_analyzer;
 pub mod error;
-pub mod errors; // High-quality error messages (mutability, etc.)
+pub mod errors;
+pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
                 // Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
@@ -788,7 +788,7 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                     }
                 }
             }
-            
+
             // Merge filtered_external_crates with rust_code_deps
             let mut combined_external_crates = filtered_external_crates;
             for dep in rust_code_deps {
@@ -2143,7 +2143,7 @@ fn detect_rust_file_type(path: &Path) -> RustFileType {
     if let Ok(contents) = std::fs::read_to_string(path) {
         let has_main = contents.contains("fn main()") || contents.contains("fn main(");
         let has_test = contents.contains("#[test]");
-        
+
         // Priority: main() takes precedence (binaries can have tests)
         // Files with ONLY tests (no main) are test targets
         // Files with neither are library modules (no target needed)
@@ -2443,7 +2443,7 @@ fn create_cargo_toml_with_deps(
                 // windjammer-app is in windjammer-game/windjammer-game-core
                 let game_path = src_root.join("windjammer-game/windjammer-game-core");
                 let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
-                
+
                 if game_path.exists() {
                     game_path
                 } else if legacy_game_path.exists() {
@@ -2467,9 +2467,12 @@ fn create_cargo_toml_with_deps(
                                 // Fallback: guess based on crate_name
                                 if crate_name.contains("_core") || crate_name.contains("-core") {
                                     "windjammer-game-core".to_string()
-                                } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                                } else if crate_name.contains("_app") || crate_name.contains("-app")
+                                {
                                     "windjammer-app".to_string()
-                                } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                                } else if crate_name.contains("_runtime")
+                                    || crate_name.contains("-runtime")
+                                {
                                     "windjammer-runtime".to_string()
                                 } else {
                                     "windjammer-game".to_string()
@@ -2481,7 +2484,9 @@ fn create_cargo_toml_with_deps(
                                 "windjammer-game-core".to_string()
                             } else if crate_name.contains("_app") || crate_name.contains("-app") {
                                 "windjammer-app".to_string()
-                            } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                            } else if crate_name.contains("_runtime")
+                                || crate_name.contains("-runtime")
+                            {
                                 "windjammer-runtime".to_string()
                             } else {
                                 "windjammer-game".to_string()
@@ -2493,7 +2498,8 @@ fn create_cargo_toml_with_deps(
                             "windjammer-game-core".to_string()
                         } else if crate_name.contains("_app") || crate_name.contains("-app") {
                             "windjammer-app".to_string()
-                        } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                        } else if crate_name.contains("_runtime") || crate_name.contains("-runtime")
+                        {
                             "windjammer-runtime".to_string()
                         } else {
                             "windjammer-game".to_string()
@@ -2521,15 +2527,16 @@ fn create_cargo_toml_with_deps(
             }
 
             // Fallback: assume it's on crates.io (for published version)
-            let crate_name_normalized = if crate_name.contains("_core") || crate_name.contains("-core") {
-                "windjammer-game-core"
-            } else if crate_name.contains("_app") || crate_name.contains("-app") {
-                "windjammer-app"
-            } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
-                "windjammer-runtime"
-            } else {
-                "windjammer-game"
-            };
+            let crate_name_normalized =
+                if crate_name.contains("_core") || crate_name.contains("-core") {
+                    "windjammer-game-core"
+                } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                    "windjammer-app"
+                } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                    "windjammer-runtime"
+                } else {
+                    "windjammer-game"
+                };
             external_deps.push(format!("{} = \"*\"", crate_name_normalized));
         } else {
             // All other external crates are assumed to be from crates.io
@@ -2602,7 +2609,7 @@ fn create_cargo_toml_with_deps(
     } else {
         PathBuf::new()
     };
-    
+
     let project_name = if !game_toml_path.as_os_str().is_empty() {
         if let Ok(game_toml_content) = std::fs::read_to_string(&game_toml_path) {
             eprintln!("DEBUG: Found game.toml at {:?}", game_toml_path);
@@ -2630,10 +2637,16 @@ fn create_cargo_toml_with_deps(
 
     let lib_or_bin_section = if has_lib_rs {
         // Library project - generate [lib] section
-        format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n", lib_name_normalized)
+        format!(
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n",
+            lib_name_normalized
+        )
     } else if has_main_rs {
         // Binary project with main.rs - generate [[bin]] section
-        format!("[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n", project_name)
+        format!(
+            "[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
+            project_name
+        )
     } else {
         // TDD FIX (Bug #2): Detect test files and generate appropriate targets
         // Multiple standalone files - detect file type and generate [[bin]] or [[test]]
@@ -2644,9 +2657,9 @@ fn create_cargo_toml_with_deps(
                     if filename.ends_with(".rs") {
                         let file_path = entry.path();
                         let file_type = detect_rust_file_type(&file_path);
-                        
+
                         let target_name = filename.strip_suffix(".rs").unwrap_or(filename);
-                        
+
                         match file_type {
                             RustFileType::Test => {
                                 // Test file: generate [[test]] target
@@ -2677,7 +2690,7 @@ fn create_cargo_toml_with_deps(
             String::new()
         }
     };
-    
+
     let cargo_toml = format!(
         r#"[package]
 name = "{}"
@@ -2692,8 +2705,11 @@ opt-level = 3
 "#,
         project_name, deps_section, lib_or_bin_section
     );
-    
-    eprintln!("DEBUG: Generated Cargo.toml with package name: {}", project_name);
+
+    eprintln!(
+        "DEBUG: Generated Cargo.toml with package name: {}",
+        project_name
+    );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
     fs::write(cargo_toml_path, cargo_toml)?;
@@ -5270,7 +5286,10 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
 
     // Build set of ALL generated module names (including nested submodules)
     // Used to prevent stale copies in src/ from being treated as hand-written modules
-    fn collect_all_names(modules: &[crate::module_system::Module], names: &mut std::collections::HashSet<String>) {
+    fn collect_all_names(
+        modules: &[crate::module_system::Module],
+        names: &mut std::collections::HashSet<String>,
+    ) {
         for m in modules {
             names.insert(m.name.clone());
             if !m.submodules.is_empty() {

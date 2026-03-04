@@ -1,8 +1,8 @@
 //! Comprehensive dogfooding tests - Find remaining compiler bugs
 //! These tests exercise common patterns in game code to discover issues
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -40,9 +40,9 @@ fn main() {
     update_enemies(enemies, 0.016);
 }
 "#;
-    
+
     fs::write(test_dir.join("vec_test.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -57,8 +57,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for vec iteration");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for vec iteration"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/vec_test.rs"))
         .expect("Should have generated Rust file");
@@ -109,9 +111,9 @@ fn main() {
     println("Position: {}, {}", pos.x, pos.y);
 }
 "#;
-    
+
     fs::write(test_dir.join("chain_test.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -126,8 +128,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for method chaining");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for method chaining"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/chain_test.rs"))
         .expect("Should have generated Rust file");
@@ -172,9 +176,9 @@ fn main() {
     }
 }
 "#;
-    
+
     fs::write(test_dir.join("option_test.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -189,8 +193,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for Option handling");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for Option handling"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/option_test.rs"))
         .expect("Should have generated Rust file");
@@ -239,9 +245,9 @@ fn main() {
     println("Position: {}, {}", e.transform.x, e.transform.y);
 }
 "#;
-    
+
     fs::write(test_dir.join("nested_test.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -256,8 +262,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for nested field access");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for nested field access"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/nested_test.rs"))
         .expect("Should have generated Rust file");
@@ -295,9 +303,9 @@ fn main() {
     println("First: {}", vec[0]);
 }
 "#;
-    
+
     fs::write(test_dir.join("array_test.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -312,8 +320,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for array indexing");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for array indexing"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/array_test.rs"))
         .expect("Should have generated Rust file");

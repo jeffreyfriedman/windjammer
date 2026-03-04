@@ -958,9 +958,15 @@ pub use rendering::Color
             ("mod.wj", "pub mod game"),
             ("game/mod.wj", "pub mod player\npub mod combat"),
             ("game/player/mod.wj", "pub mod controller"),
-            ("game/player/controller.wj", "pub struct PlayerController { pub x: f32 }"),
+            (
+                "game/player/controller.wj",
+                "pub struct PlayerController { pub x: f32 }",
+            ),
             ("game/combat/mod.wj", "pub mod weapon"),
-            ("game/combat/weapon.wj", "pub struct Weapon { pub damage: f32 }"),
+            (
+                "game/combat/weapon.wj",
+                "pub struct Weapon { pub damage: f32 }",
+            ),
         ]);
 
         let tree = discover_nested_modules(temp_dir.path()).unwrap();

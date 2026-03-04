@@ -29,16 +29,20 @@ fn main() {
 
         let program = parse_and_analyze(source);
         assert!(program.is_ok(), "Should compile without mutability errors");
-        
+
         let rust_code = generate_rust(&program.unwrap());
-        
+
         // Should NOT contain "let mut p"
-        assert!(!rust_code.contains("let mut p = Point"), 
-            "Should not infer 'mut' for variable passed to method with self by value");
-        
+        assert!(
+            !rust_code.contains("let mut p = Point"),
+            "Should not infer 'mut' for variable passed to method with self by value"
+        );
+
         // Method signature should be "self" not "&mut self"
-        assert!(rust_code.contains("fn double(self)"), 
-            "Method should take 'self' by value, not '&mut self'");
+        assert!(
+            rust_code.contains("fn double(self)"),
+            "Method should take 'self' by value, not '&mut self'"
+        );
     }
 
     #[test]
@@ -72,14 +76,19 @@ fn main() {
 "#;
 
         let program = parse_and_analyze(source);
-        assert!(program.is_ok(), "Should compile without mutability errors: {:?}", 
-            program.as_ref().err());
-        
+        assert!(
+            program.is_ok(),
+            "Should compile without mutability errors: {:?}",
+            program.as_ref().err()
+        );
+
         let rust_code = generate_rust(&program.unwrap());
-        
+
         // Should NOT require mut
-        assert!(!rust_code.contains("let mut identity"), 
-            "Should not infer 'mut' for immutable variable");
+        assert!(
+            !rust_code.contains("let mut identity"),
+            "Should not infer 'mut' for immutable variable"
+        );
     }
 
     fn parse_and_analyze(_source: &str) -> Result<Program, String> {

@@ -9,7 +9,7 @@ use super::{Analyzer, OwnershipMode, SignatureRegistry};
 impl<'ast> Analyzer<'ast> {
     /// THE WINDJAMMER WAY: Check if an expression contains a specific identifier
     /// Used to detect if a parameter is used in a method call chain (e.g., self.camera.move_to())
-    /// 
+    ///
     /// CRITICAL: For Index expressions, only check the object, NOT the index!
     /// When we see `arr[i].method()`, only `arr` is being used mutably, NOT `i`.
     /// The index `i` is just being READ to select which element to call the method on.
@@ -20,10 +20,14 @@ impl<'ast> Analyzer<'ast> {
             // THE FIX: Don't check the index part - it's only read, never mutated!
             // Before: self.expr_contains_identifier(name, object) || self.expr_contains_identifier(name, index)
             // After: Only check object
-            Expression::Index { object, index: _, location: _ } => {
-                self.expr_contains_identifier(name, object)
-            }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::Index {
+                object,
+                index: _,
+                location: _,
+            } => self.expr_contains_identifier(name, object),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 if self.expr_contains_identifier(name, object) {
                     return true;
                 }
@@ -46,7 +50,12 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(super) fn is_mutated(&self, name: &str, statements: &[&'ast Statement<'ast>], registry: &SignatureRegistry) -> bool {
+    pub(super) fn is_mutated(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Assignment { target, .. } => {
@@ -74,7 +83,9 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                 }
-                Statement::Return { value: Some(expr), .. } => {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
                     if self.has_mutable_method_call(name, expr, registry) {
                         return true;
                     }
@@ -109,7 +120,7 @@ impl<'ast> Analyzer<'ast> {
     /// Check if a parameter is the DIRECT target of mutation
     /// Returns true for: p = x, p.field = x, p.field.nested = x
     /// Returns false for: arr[p.index] = x, obj[p] = x  (p is only READ here)
-    /// 
+    ///
     /// THE WINDJAMMER WAY: Array indices are NEVER mutation targets!
     /// When we see `arr[i] = x`, only `arr` is mutated, NOT `i`.
     /// This is critical for Copy types like usize - they should stay owned (by value).
@@ -118,22 +129,27 @@ impl<'ast> Analyzer<'ast> {
             Expression::Identifier { name: id, .. } => id == name,
 
             // Field access: p.x = ... or p.field.nested = ...
-            Expression::FieldAccess { object, .. } => {
-                self.is_direct_mutation_target(name, object)
-            }
+            Expression::FieldAccess { object, .. } => self.is_direct_mutation_target(name, object),
 
             // Index access: arr[i] = ...
             // CRITICAL: Only check the object (arr), NEVER the index (i)!
             // The index is only READ, not mutated, even if the indexed element is mutated.
-            Expression::Index { object, index: _, location: _ } => {
-                self.is_direct_mutation_target(name, object)
-            }
+            Expression::Index {
+                object,
+                index: _,
+                location: _,
+            } => self.is_direct_mutation_target(name, object),
 
             _ => false,
         }
     }
 
-    fn has_mutable_method_call(&self, name: &str, expr: &Expression, registry: &SignatureRegistry) -> bool {
+    fn has_mutable_method_call(
+        &self,
+        name: &str,
+        expr: &Expression,
+        registry: &SignatureRegistry,
+    ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 // THE WINDJAMMER WAY: Check if the parameter appears ANYWHERE in the object chain
@@ -141,7 +157,9 @@ impl<'ast> Analyzer<'ast> {
                 if self.expr_contains_identifier(name, object) {
                     // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
                     if let Some(sig) = registry.get_signature(method) {
-                        if sig.has_self_receiver && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed) {
+                        if sig.has_self_receiver
+                            && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed)
+                        {
                             return true;
                         }
                     }
@@ -466,11 +484,12 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 None
             };
-            
+
             let method_requires_mut = if let Some(_type_name_str) = type_name {
                 if let Some(impl_functions) = &self.current_impl_functions {
                     if let Some(func) = impl_functions.get(method.as_str()) {
-                        func.parameters.iter()
+                        func.parameters
+                            .iter()
                             .find(|p| p.name == "self")
                             .map(|p| matches!(p.ownership, OwnershipHint::Mut))
                             .unwrap_or(false)
@@ -483,7 +502,7 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 Self::is_heuristic_mutating_method(method)
             };
-            
+
             if method_requires_mut {
                 if let Expression::Identifier { name, .. } = &**object {
                     self.mutated_variables.insert(name.clone());
@@ -491,7 +510,7 @@ impl<'ast> Analyzer<'ast> {
             }
         }
     }
-    
+
     /// Heuristic: Common stdlib methods that take &mut self
     fn is_heuristic_mutating_method(method: &str) -> bool {
         matches!(

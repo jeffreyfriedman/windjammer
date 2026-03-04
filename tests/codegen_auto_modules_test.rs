@@ -3,21 +3,25 @@
 // The compiler should auto-generate a file that includes all .wj modules
 // without requiring manual #[path] declarations
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
+use walkdir::WalkDir;
 
 #[test]
 fn test_auto_gen_creates_windjammer_modules_file() {
     // GIVEN: A project with .wj files
     let test_dir = setup_test_project();
-    
+
     // WHEN: Compiler runs
     compile_project(&test_dir);
-    
+
     // THEN: windjammer_modules.rs should exist
     let modules_file = test_dir.join("build/windjammer_modules.rs");
-    assert!(modules_file.exists(), "windjammer_modules.rs should be auto-generated");
-    
+    assert!(
+        modules_file.exists(),
+        "windjammer_modules.rs should be auto-generated"
+    );
+
     cleanup_test_project(&test_dir);
 }
 
@@ -29,17 +33,26 @@ fn test_auto_gen_includes_all_wj_files() {
         "src_wj/physics/collision.wj",
         "src_wj/rendering/shader.wj",
     ]);
-    
+
     // WHEN: Compiler runs
     compile_project(&test_dir);
-    
+
     // THEN: All modules should be declared
     let content = fs::read_to_string(test_dir.join("build/windjammer_modules.rs")).unwrap();
-    
-    assert!(content.contains("pub mod wj_math"), "Should include math module");
-    assert!(content.contains("pub mod wj_physics_collision"), "Should include physics/collision");
-    assert!(content.contains("pub mod wj_rendering_shader"), "Should include rendering/shader");
-    
+
+    assert!(
+        content.contains("pub mod wj_math"),
+        "Should include math module"
+    );
+    assert!(
+        content.contains("pub mod wj_physics_collision"),
+        "Should include physics/collision"
+    );
+    assert!(
+        content.contains("pub mod wj_rendering_shader"),
+        "Should include rendering/shader"
+    );
+
     cleanup_test_project(&test_dir);
 }
 
@@ -47,38 +60,54 @@ fn test_auto_gen_includes_all_wj_files() {
 fn test_auto_gen_creates_proper_path_declarations() {
     // GIVEN: A .wj file
     let test_dir = setup_test_project_with_files(&["src_wj/core.wj"]);
-    
+
     // WHEN: Compiler runs
     compile_project(&test_dir);
-    
+
     // THEN: Path declaration should be correct
     let content = fs::read_to_string(test_dir.join("build/windjammer_modules.rs")).unwrap();
-    
-    assert!(content.contains("#[path = \"core.rs\"]"), "Should have #[path] attribute");
-    assert!(content.contains("pub mod wj_core;"), "Should declare module");
-    
+
+    assert!(
+        content.contains("#[path = \"core.rs\"]"),
+        "Should have #[path] attribute"
+    );
+    assert!(
+        content.contains("pub mod wj_core;"),
+        "Should declare module"
+    );
+
     cleanup_test_project(&test_dir);
 }
 
 #[test]
 fn test_auto_gen_creates_namespace_reexports() {
     // GIVEN: Nested .wj files
-    let test_dir = setup_test_project_with_files(&[
-        "src_wj/voxel/grid.wj",
-        "src_wj/voxel/svo_convert.wj",
-    ]);
-    
+    let test_dir =
+        setup_test_project_with_files(&["src_wj/voxel/grid.wj", "src_wj/voxel/svo_convert.wj"]);
+
     // WHEN: Compiler runs
     compile_project(&test_dir);
-    
+
     // THEN: Should create wj:: namespace with re-exports
     let content = fs::read_to_string(test_dir.join("build/windjammer_modules.rs")).unwrap();
-    
-    assert!(content.contains("pub mod wj {"), "Should create wj namespace");
-    assert!(content.contains("pub mod voxel {"), "Should create voxel submodule");
-    assert!(content.contains("pub use crate::wj_voxel_grid::*"), "Should re-export grid");
-    assert!(content.contains("pub use crate::wj_voxel_svo_convert::*"), "Should re-export svo_convert");
-    
+
+    assert!(
+        content.contains("pub mod wj {"),
+        "Should create wj namespace"
+    );
+    assert!(
+        content.contains("pub mod voxel {"),
+        "Should create voxel submodule"
+    );
+    assert!(
+        content.contains("pub use crate::wj_voxel_grid::*"),
+        "Should re-export grid"
+    );
+    assert!(
+        content.contains("pub use crate::wj_voxel_svo_convert::*"),
+        "Should re-export svo_convert"
+    );
+
     cleanup_test_project(&test_dir);
 }
 
@@ -87,17 +116,17 @@ fn test_auto_gen_handles_updates() {
     // GIVEN: Initial project
     let test_dir = setup_test_project_with_files(&["src_wj/old.wj"]);
     compile_project(&test_dir);
-    
+
     // WHEN: New file added
     create_wj_file(&test_dir, "src_wj/new.wj", "pub fn hello() {}");
     compile_project(&test_dir);
-    
+
     // THEN: Both modules should be present
     let content = fs::read_to_string(test_dir.join("build/windjammer_modules.rs")).unwrap();
-    
+
     assert!(content.contains("pub mod wj_old"), "Should keep old module");
     assert!(content.contains("pub mod wj_new"), "Should add new module");
-    
+
     cleanup_test_project(&test_dir);
 }
 
@@ -107,10 +136,10 @@ fn setup_test_project() -> PathBuf {
     fs::create_dir_all(&dir).unwrap();
     fs::create_dir_all(dir.join("src_wj")).unwrap();
     fs::create_dir_all(dir.join("build")).unwrap();
-    
+
     // Create minimal .wj file
     fs::write(dir.join("src_wj/dummy.wj"), "pub fn test() {}").unwrap();
-    
+
     dir
 }
 
@@ -134,35 +163,37 @@ fn compile_project(dir: &PathBuf) {
     // TODO: Call actual compiler with auto-module generation
     // For now, stub that creates a basic file
     let modules_file = dir.join("build/windjammer_modules.rs");
-    
+
     // Generate minimal content for tests to pass
     let mut content = String::new();
     content.push_str("// AUTO-GENERATED by Windjammer compiler\n");
     content.push_str("// DO NOT EDIT\n\n");
-    
+
     // Find all .wj files
-    for entry in walkdir::WalkDir::new(dir.join("src_wj")) {
+    for entry in WalkDir::new(dir.join("src_wj")) {
         if let Ok(entry) = entry {
             if entry.path().extension().and_then(|s| s.to_str()) == Some("wj") {
                 let relative = entry.path().strip_prefix(dir.join("src_wj")).unwrap();
-                let module_name = relative.with_extension("")
-                    .to_str().unwrap()
+                let module_name = relative
+                    .with_extension("")
+                    .to_str()
+                    .unwrap()
                     .replace("/", "_")
                     .replace("\\", "_");
-                
+
                 let rs_path = relative.with_extension("rs");
-                
+
                 content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
                 content.push_str(&format!("pub mod wj_{};\n\n", module_name));
             }
         }
     }
-    
+
     // Create wj:: namespace
     content.push_str("pub mod wj {\n");
     // TODO: Add nested module structure
     content.push_str("}\n");
-    
+
     fs::write(modules_file, content).unwrap();
 }
 

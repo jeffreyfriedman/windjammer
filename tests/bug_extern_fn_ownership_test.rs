@@ -1,3 +1,4 @@
+use std::fs;
 /// TDD test: extern fn calls should NOT apply ownership inference
 ///
 /// Bug: When calling extern fn with owned String argument, codegen adds `&`
@@ -11,16 +12,17 @@
 /// codegen applies `&`/`&mut` wrapping without checking if the function is extern.
 ///
 /// Fix: Skip ownership inference for extern function call arguments.
-
 use std::process::Command;
-use std::fs;
 
 fn transpile_wj(source: &str) -> String {
     let temp_dir = std::env::temp_dir();
-    let test_id = format!("wj_test_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
 
@@ -40,8 +42,7 @@ fn transpile_wj(source: &str) -> String {
         .expect("Failed to run wj compiler");
 
     let rust_file = out_dir.join("test.rs");
-    fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
 
 #[test]

@@ -18,6 +18,7 @@ use super::self_analysis;
 use super::string_analysis;
 use super::CodeGenerator;
 
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
     /// Generate a statement with automatic source tracking
     #[allow(dead_code)]
@@ -1048,12 +1049,12 @@ impl<'ast> CodeGenerator<'ast> {
             && matches!(arms[1].pattern, Pattern::Wildcard)
             && arms[1].guard.is_none()
         {
-            let wildcard_body_is_empty =
-                if let Expression::Block { statements, .. } = arms[1].body {
-                    statements.is_empty()
-                } else {
-                    false
-                };
+            let wildcard_body_is_empty = if let Expression::Block { statements, .. } = arms[1].body
+            {
+                statements.is_empty()
+            } else {
+                false
+            };
 
             let wildcard_body_stmts: Option<&[&Statement]> =
                 if let Expression::Block { statements, .. } = arms[1].body {
@@ -1329,8 +1330,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&display_pattern);
         output.push_str(" in ");
 
-        let is_borrowed_iterator =
-            needs_borrow || self.is_iterating_over_borrowed(iterable);
+        let is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
 
         if needs_mut_borrow {
             output.push_str("&mut ");
@@ -1385,9 +1385,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         if let Some(var) = &loop_var {
             if let Some(iterable_type) = self.infer_expression_type(iterable) {
-                if let Some(elem_type) =
-                    Self::extract_iterator_element_type(&iterable_type)
-                {
+                if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
                     self.local_var_types.insert(var.clone(), elem_type);
                 }
             }
@@ -1605,9 +1603,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         let field_strs: Vec<String> = fields
                             .iter()
-                            .map(|(name, pat)| {
-                                format!("{}: {}", name, self.pattern_to_rust(pat))
-                            })
+                            .map(|(name, pat)| format!("{}: {}", name, self.pattern_to_rust(pat)))
                             .collect();
                         if *has_wildcard {
                             format!("{} {{ {}, .. }}", variant, field_strs.join(", "))
@@ -1808,9 +1804,8 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn match_arms_mutate_self(&self, arms: &[crate::parser::MatchArm<'ast>]) -> bool {
         let ctx = self_analysis::AnalysisContext::new(&[], &self.current_struct_fields);
-        arms.iter().any(|arm| {
-            self_analysis::expression_mutates_fields(&ctx, arm.body)
-        })
+        arms.iter()
+            .any(|arm| self_analysis::expression_mutates_fields(&ctx, arm.body))
     }
 
     fn get_assignment_target_type(&self, target: &Expression) -> Option<String> {
@@ -1841,9 +1836,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn returns_option_owned_type(&self) -> bool {
         match &self.current_function_return_type {
-            Some(Type::Option(inner_type)) => {
-                !matches!(**inner_type, Type::Reference(_))
-            }
+            Some(Type::Option(inner_type)) => !matches!(**inner_type, Type::Reference(_)),
             _ => false,
         }
     }

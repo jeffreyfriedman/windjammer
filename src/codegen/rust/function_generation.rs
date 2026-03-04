@@ -164,7 +164,11 @@ impl<'ast> CodeGenerator<'ast> {
                 params.push(format!("{}_ptr: *const u8", param.name));
                 params.push(format!("{}_len: usize", param.name));
             } else {
-                params.push(format!("{}: {}", param.name, self.type_to_rust(&param.type_)));
+                params.push(format!(
+                    "{}: {}",
+                    param.name,
+                    self.type_to_rust(&param.type_)
+                ));
             }
         }
 
@@ -206,7 +210,7 @@ impl<'ast> CodeGenerator<'ast> {
         let is_test_function = func.name.starts_with("test_");
         let has_test_decorator = func.decorators.iter().any(|d| d.name == "test");
         let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
-        
+
         if is_test_file && is_test_function && !has_test_decorator && !has_property_test {
             output.push_str("#[test]\n");
         }
@@ -867,9 +871,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let mut output = String::new();
-        
+
         // TDD FIX: Auto-add #[test] attribute for test functions in test files
-        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-generate test attributes  
+        // THE WINDJAMMER WAY: Test files (*_test.wj) should auto-generate test attributes
         // Bug: Tests don't run because #[test] attributes are missing
         // Root Cause: Codegen doesn't detect test files and test functions
         // Fix: Check if filename ends with _test.wj AND function starts with test_
@@ -878,7 +882,7 @@ impl<'ast> CodeGenerator<'ast> {
         let is_test_function = func.name.starts_with("test_");
         let has_test_decorator = func.decorators.iter().any(|d| d.name == "test");
         let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
-        
+
         if is_test_file && is_test_function && !has_test_decorator && !has_property_test {
             output.push_str("#[test]\n");
         }

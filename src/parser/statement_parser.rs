@@ -337,7 +337,10 @@ impl Parser {
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
         // The comma indicates end of return statement (no value to return)
-        let stmt = if matches!(self.current_token(), Token::RBrace | Token::Semicolon | Token::Comma) {
+        let stmt = if matches!(
+            self.current_token(),
+            Token::RBrace | Token::Semicolon | Token::Comma
+        ) {
             self.alloc_stmt(Statement::Return {
                 value: None,
                 location: self.current_location(),

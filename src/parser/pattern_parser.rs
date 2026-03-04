@@ -35,12 +35,12 @@ impl Parser {
         if let Token::Ident(name) = self.current_token() {
             if name == "ref" {
                 self.advance();
-                
+
                 // Check for `ref mut`
                 if let Token::Ident(mut_name) = self.current_token() {
                     if mut_name == "mut" {
                         self.advance();
-                        
+
                         // Expect identifier after `ref mut`
                         if let Token::Ident(var_name) = self.current_token() {
                             let var = var_name.clone();
@@ -54,7 +54,7 @@ impl Parser {
                         }
                     }
                 }
-                
+
                 // Just `ref`, expect identifier
                 if let Token::Ident(var_name) = self.current_token() {
                     let var = var_name.clone();
@@ -68,7 +68,7 @@ impl Parser {
                 }
             }
         }
-        
+
         match self.current_token() {
             Token::Underscore => {
                 self.advance();
@@ -505,8 +505,8 @@ impl Parser {
                 patterns.iter().any(Self::is_pattern_refutable)
             }
             Pattern::Reference(inner) => Self::is_pattern_refutable(inner),
-            Pattern::Ref(_) => false,      // ref x is irrefutable (always matches and borrows)
-            Pattern::RefMut(_) => false,   // ref mut x is irrefutable
+            Pattern::Ref(_) => false, // ref x is irrefutable (always matches and borrows)
+            Pattern::RefMut(_) => false, // ref mut x is irrefutable
 
             // Refutable patterns
             Pattern::EnumVariant(_, _) => true,

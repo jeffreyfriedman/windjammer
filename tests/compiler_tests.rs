@@ -67,7 +67,8 @@ fn test_automatic_reference_insertion() {
             || generated.contains(r#"greet(&"Alice".to_string())"#)
             || generated.contains("greet(name)")
             || generated.contains("greet(&name)"),
-        "String should be passed to greet (owned or borrowed).\nGenerated:\n{}", generated
+        "String should be passed to greet (owned or borrowed).\nGenerated:\n{}",
+        generated
     );
 
     println!("✓ Ownership inference and auto-ref working correctly");

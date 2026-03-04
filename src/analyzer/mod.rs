@@ -429,7 +429,7 @@ impl<'ast> Analyzer<'ast> {
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
         // THE PROPER SOLUTION: Multi-pass ownership analysis
         // Iterate until convergence - no workarounds, no heuristics, just correctness
-        
+
         // PHASE 0: Collect all enum, struct, and trait definitions
         // This must happen before any function analysis
         for item in &program.items {
@@ -479,43 +479,54 @@ impl<'ast> Analyzer<'ast> {
                 _ => {}
             }
         }
-        
+
         // MULTI-PASS OWNERSHIP INFERENCE
         // Continue analyzing until ownership signatures stabilize (convergence)
         const MAX_PASSES: usize = 10; // Safety limit to prevent infinite loops
-        
+
         let mut registry = global_signatures.clone();
         let mut pass_number = 1;
-        
+
         loop {
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
-            
+
             // Check for convergence: did any signatures change?
             let converged = self.signatures_converged(&registry, &new_registry);
-            
+
             if converged {
-                return Ok((new_analyzed, new_registry, self.analyzed_trait_methods.clone()));
+                return Ok((
+                    new_analyzed,
+                    new_registry,
+                    self.analyzed_trait_methods.clone(),
+                ));
             }
-            
+
             if pass_number >= MAX_PASSES {
-                eprintln!("⚠️  Warning: Ownership analysis did not converge after {} passes", MAX_PASSES);
+                eprintln!(
+                    "⚠️  Warning: Ownership analysis did not converge after {} passes",
+                    MAX_PASSES
+                );
                 eprintln!("    Using last known signatures (may be suboptimal)");
-                return Ok((new_analyzed, new_registry, self.analyzed_trait_methods.clone()));
+                return Ok((
+                    new_analyzed,
+                    new_registry,
+                    self.analyzed_trait_methods.clone(),
+                ));
             }
-            
+
             // Update registry for next pass
             registry = new_registry;
             pass_number += 1;
         }
     }
-    
+
     /// Helper: Check if two signature registries have converged (no changes)
     fn signatures_converged(&self, old: &SignatureRegistry, new: &SignatureRegistry) -> bool {
         // If sizes differ, not converged
         if old.signatures.len() != new.signatures.len() {
             return false;
         }
-        
+
         // Compare each signature
         for (name, new_sig) in &new.signatures {
             match old.signatures.get(name) {
@@ -525,13 +536,15 @@ impl<'ast> Analyzer<'ast> {
                     if old_sig.param_ownership.len() != new_sig.param_ownership.len() {
                         return false;
                     }
-                    
-                    for (old_ownership, new_ownership) in old_sig.param_ownership.iter().zip(&new_sig.param_ownership) {
+
+                    for (old_ownership, new_ownership) in
+                        old_sig.param_ownership.iter().zip(&new_sig.param_ownership)
+                    {
                         if old_ownership != new_ownership {
                             return false;
                         }
                     }
-                    
+
                     // Compare return type ownership
                     if old_sig.return_ownership != new_sig.return_ownership {
                         return false;
@@ -539,10 +552,10 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
         }
-        
+
         true // All signatures match
     }
-    
+
     /// Helper: Single pass of program analysis
     /// Uses the provided registry to infer ownership, returns updated analysis and registry
     fn analyze_program_pass(
@@ -710,12 +723,15 @@ impl<'ast> Analyzer<'ast> {
                             } => {
                                 // Analyze methods in impl blocks inside modules
                                 for func in &impl_block.functions {
-                                    let mut analyzed_func =
-                                        if let Some(trait_name) = &impl_block.trait_name {
-                                            self.analyze_trait_impl_function(func, trait_name, &registry)?
-                                        } else {
-                                            self.analyze_function_in_impl(func, impl_block, &registry)?
-                                        };
+                                    let mut analyzed_func = if let Some(trait_name) =
+                                        &impl_block.trait_name
+                                    {
+                                        self.analyze_trait_impl_function(
+                                            func, trait_name, &registry,
+                                        )?
+                                    } else {
+                                        self.analyze_function_in_impl(func, impl_block, &registry)?
+                                    };
                                     analyzed_func.const_static_optimizations =
                                         self.detect_const_static_opportunities(&analyzed_func);
                                     analyzed_func.smallvec_optimizations =
@@ -820,8 +836,11 @@ impl<'ast> Analyzer<'ast> {
                                 // Use empty registry for trait signature inference
                                 // (this is cross-file, signatures don't exist yet)
                                 let empty_registry = SignatureRegistry::new();
-                                let impl_analysis =
-                                    self.analyze_function_in_impl(func, impl_block, &empty_registry)?;
+                                let impl_analysis = self.analyze_function_in_impl(
+                                    func,
+                                    impl_block,
+                                    &empty_registry,
+                                )?;
 
                                 // Upgrade self ownership if implementation needs more permission
                                 if let Some(&impl_self_ownership) =
@@ -895,7 +914,8 @@ impl<'ast> Analyzer<'ast> {
                     OwnershipHint::Owned | OwnershipHint::Inferred => {
                         // User wrote `self` (inferred) - optimize based on usage
                         // If body exists, infer from body; otherwise will be refined by infer_trait_signatures_from_impls
-                        let modifies_self = self.function_modifies_self_fields_with_registry(func, Some(registry));
+                        let modifies_self =
+                            self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let self_ownership = if modifies_self {
                             OwnershipMode::MutBorrowed
                         } else {
@@ -970,7 +990,8 @@ impl<'ast> Analyzer<'ast> {
 
         if uses_self && !declares_self {
             // Auto-infer self ownership based on usage
-            let modifies_fields = self.function_modifies_self_fields_with_registry(func, Some(registry));
+            let modifies_fields =
+                self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
             let returns_non_copy_field = self.function_returns_non_copy_self_field(func);
 
@@ -1010,7 +1031,9 @@ impl<'ast> Analyzer<'ast> {
                 OwnershipHint::Ref => {
                     // SMART FIX: If user wrote &self but function modifies fields, upgrade to &mut self
                     // This prevents a common user error
-                    if param.name == "self" && self.function_modifies_self_fields_with_registry(func, Some(registry)) {
+                    if param.name == "self"
+                        && self.function_modifies_self_fields_with_registry(func, Some(registry))
+                    {
                         OwnershipMode::MutBorrowed
                     } else {
                         OwnershipMode::Borrowed
@@ -1025,7 +1048,8 @@ impl<'ast> Analyzer<'ast> {
                         OwnershipMode::MutBorrowed
                     } else if param.name == "self" {
                         // Infer ownership for self based on field access and return type
-                        let modifies_fields = self.function_modifies_self_fields_with_registry(func, Some(registry));
+                        let modifies_fields =
+                            self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let returns_self = self.function_returns_self(func);
                         let returns_non_copy_field =
                             self.function_returns_non_copy_self_field(func);
@@ -1079,13 +1103,15 @@ impl<'ast> Analyzer<'ast> {
                                 &func.return_type,
                                 registry,
                             )?;
-                            
+
                             // DEBUG: Log ownership inference for non-Copy parameters
                             if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
-                                eprintln!("  [OWNERSHIP] {} in {}: {:?} (type: {:?})",
-                                    param.name, func.name, inferred_mode, param.type_);
+                                eprintln!(
+                                    "  [OWNERSHIP] {} in {}: {:?} (type: {:?})",
+                                    param.name, func.name, inferred_mode, param.type_
+                                );
                             }
-                            
+
                             inferred_mode
                         }
                     }
@@ -1374,7 +1400,9 @@ impl<'ast> Analyzer<'ast> {
         // - Pass 3: No changes → CONVERGED ✅
         //
         // IMPORTANT: Only use registry if callees expect stricter ownership than local usage
-        if let Some(pass_through_mode) = self.infer_passthrough_ownership(param_name, body, registry) {
+        if let Some(pass_through_mode) =
+            self.infer_passthrough_ownership(param_name, body, registry)
+        {
             // Registry says callees need this ownership
             // But if parameter is ONLY used for reading locally, prefer Borrowed
             // unless callees explicitly need Owned/MutBorrowed
@@ -1408,7 +1436,6 @@ impl<'ast> Analyzer<'ast> {
         // from read-only params generating owned types while call sites pass &T.
         Ok(OwnershipMode::Borrowed)
     }
-
 
     fn is_used_in_if_else_expression(
         &self,
@@ -1614,7 +1641,7 @@ impl<'ast> Analyzer<'ast> {
                     let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
                     // Enum variant constructors: Type::Variant(...) stores its arguments
                     let is_enum_constructor = fn_name.contains("::");
-                    
+
                     if is_known_wrapper || is_enum_constructor {
                         for (_label, arg) in arguments {
                             if self.expression_uses_identifier(name, arg) {
@@ -1641,7 +1668,7 @@ impl<'ast> Analyzer<'ast> {
             // Example: `id + 1` returns the sum, NOT id
             // The parameter is only being READ, not returned
             Expression::Binary { .. } => false,
-            
+
             // Unary expressions also return the result, not the operand
             Expression::Unary { .. } => false,
 
@@ -1656,27 +1683,31 @@ impl<'ast> Analyzer<'ast> {
     fn expression_stores_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    let is_constructor = matches!(fn_name.as_str(), "Some" | "Ok" | "Err")
-                        || fn_name.contains("::");
+                    let is_constructor =
+                        matches!(fn_name.as_str(), "Some" | "Ok" | "Err") || fn_name.contains("::");
                     if is_constructor {
-                        return arguments.iter().any(|(_label, arg)| {
-                            self.expression_stores_identifier(name, arg)
-                        });
+                        return arguments
+                            .iter()
+                            .any(|(_label, arg)| self.expression_stores_identifier(name, arg));
                     }
                 }
                 false
             }
-            Expression::Tuple { elements, .. } => {
-                elements.iter().any(|el| self.expression_stores_identifier(name, el))
-            }
-            Expression::StructLiteral { fields, .. } => {
-                fields.iter().any(|(_, v)| self.expression_stores_identifier(name, v))
-            }
-            Expression::Array { elements, .. } => {
-                elements.iter().any(|el| self.expression_stores_identifier(name, el))
-            }
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|el| self.expression_stores_identifier(name, el)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expression_stores_identifier(name, v)),
+            Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|el| self.expression_stores_identifier(name, el)),
             _ => false,
         }
     }
@@ -1775,9 +1806,10 @@ impl<'ast> Analyzer<'ast> {
                         // - self.field.push((param, other))  ← tuple wrapping
                         // - self.field.push(Enum::Variant(param))  ← enum wrapping
                         // - local_var.push(param)
-                        let is_on_field_or_var = matches!(&**object, Expression::FieldAccess { .. })
-                            || matches!(&**object, Expression::Identifier { .. });
-                        
+                        let is_on_field_or_var =
+                            matches!(&**object, Expression::FieldAccess { .. })
+                                || matches!(&**object, Expression::Identifier { .. });
+
                         if is_on_field_or_var {
                             for (_label, arg) in arguments {
                                 if self.expression_stores_identifier(name, arg) {
@@ -1877,8 +1909,12 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Let { value, .. } => self.expr_has_enum_variant_consuming(name, value),
             Statement::Expression { expr, .. } => self.expr_has_enum_variant_consuming(name, expr),
-            Statement::Return { value: Some(expr), .. } => self.expr_has_enum_variant_consuming(name, expr),
-            Statement::Assignment { value, .. } => self.expr_has_enum_variant_consuming(name, value),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_has_enum_variant_consuming(name, expr),
+            Statement::Assignment { value, .. } => {
+                self.expr_has_enum_variant_consuming(name, value)
+            }
             _ => false,
         }
     }
@@ -1887,9 +1923,14 @@ impl<'ast> Analyzer<'ast> {
     /// (function call where name contains "::") that has the parameter as a direct argument.
     fn expr_has_enum_variant_consuming(&self, name: &str, expr: &Expression<'ast>) -> bool {
         match expr {
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 // Check if this is an enum variant constructor
-                let is_enum_variant = if let Expression::Identifier { name: fn_name, .. } = function {
+                let is_enum_variant = if let Expression::Identifier { name: fn_name, .. } = function
+                {
                     fn_name.contains("::")
                 } else if let Expression::FieldAccess { field, .. } = function {
                     field.contains("::")
@@ -2047,11 +2088,11 @@ impl<'ast> Analyzer<'ast> {
                 // TDD FIX: Don't force Owned for simple pass-through!
                 // If a parameter is ONLY passed to another function with no other operations,
                 // it might be a pass-through and can stay Borrowed.
-                // 
+                //
                 // CONSERVATIVE APPROACH: Still return true (force Owned) because without
                 // the callee's signature (which doesn't exist during analysis), we can't
                 // know if the callee consumes the value or just borrows it.
-                // 
+                //
                 // FUTURE: Multi-pass analysis could solve this:
                 // - Pass 1: Conservative inference
                 // - Pass 2: Re-infer using SignatureRegistry from Pass 1
@@ -2152,7 +2193,9 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                Statement::While { condition, body, .. } => {
+                Statement::While {
+                    condition, body, ..
+                } => {
                     if self.expr_uses_in_arithmetic_op(name, condition) {
                         return true;
                     }
@@ -2178,21 +2221,24 @@ impl<'ast> Analyzer<'ast> {
 
     fn expr_uses_in_arithmetic_op(&self, name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::Binary { op, left, right, .. } => {
+            Expression::Binary {
+                op, left, right, ..
+            } => {
                 use crate::parser::ast::operators::BinaryOp;
                 // Only check for arithmetic operators, not comparisons
                 let is_arithmetic = matches!(
                     op,
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
                 );
-                
+
                 if is_arithmetic {
                     if self.expr_is_identifier(left, name) || self.expr_is_identifier(right, name) {
                         return true;
                     }
                 }
                 // Recursively check nested expressions
-                self.expr_uses_in_arithmetic_op(name, left) || self.expr_uses_in_arithmetic_op(name, right)
+                self.expr_uses_in_arithmetic_op(name, left)
+                    || self.expr_uses_in_arithmetic_op(name, right)
             }
             Expression::Unary { operand, .. } => self.expr_uses_in_arithmetic_op(name, operand),
             Expression::Call { arguments, .. } => arguments
@@ -2396,7 +2442,6 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-
     fn build_signature(&self, func: &AnalyzedFunction) -> FunctionSignature {
         let param_ownership: Vec<OwnershipMode> = func
             .decl
@@ -2587,7 +2632,6 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
-
 }
 
 #[cfg(test)]

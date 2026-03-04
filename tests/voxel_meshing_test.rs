@@ -1,10 +1,10 @@
 //! TDD Phase 2: Greedy Meshing Algorithm
-//! 
+//!
 //! Goal: Convert voxel grid to optimized triangle mesh
 //! This enables rendering voxels with 90%+ triangle reduction!
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -116,9 +116,9 @@ fn main() {
     println("Faces extracted: {}", faces.len());
 }
 "#;
-    
+
     fs::write(test_dir.join("face_extract.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -133,8 +133,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for face extraction");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for face extraction"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/face_extract.rs"))
         .expect("Should have generated Rust file");
@@ -226,9 +228,9 @@ fn main() {
     println("Mesh has {} quads = {} triangles", mesh.quad_count(), mesh.triangle_count());
 }
 "#;
-    
+
     fs::write(test_dir.join("quad_mesh.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -243,8 +245,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for quad mesh structure");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for quad mesh structure"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/quad_mesh.rs"))
         .expect("Should have generated Rust file");
@@ -355,9 +359,9 @@ fn main() {
     println("Generated {} quads for 3 voxels", quads.len());
 }
 "#;
-    
+
     fs::write(test_dir.join("greedy_mesh.wj"), windjammer_code).unwrap();
-    
+
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
@@ -372,8 +376,10 @@ fn main() {
         println!("STDOUT:\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
-    assert!(output.status.success(),
-            "wj build should succeed for greedy meshing");
+    assert!(
+        output.status.success(),
+        "wj build should succeed for greedy meshing"
+    );
 
     let rust_code = fs::read_to_string(test_dir.join("build/greedy_mesh.rs"))
         .expect("Should have generated Rust file");

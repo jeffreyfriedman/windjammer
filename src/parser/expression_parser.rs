@@ -1486,18 +1486,28 @@ impl Parser {
                 })
             }
             _ => {
-                eprintln!("DEBUG: Unexpected token at position {}: {:?}", self.position, self.current_token());
+                eprintln!(
+                    "DEBUG: Unexpected token at position {}: {:?}",
+                    self.position,
+                    self.current_token()
+                );
                 if self.position > 0 {
-                    eprintln!("DEBUG: Previous token: {:?}", self.tokens.get(self.position - 1));
+                    eprintln!(
+                        "DEBUG: Previous token: {:?}",
+                        self.tokens.get(self.position - 1)
+                    );
                 }
                 if self.position > 1 {
-                    eprintln!("DEBUG: Token before that: {:?}", self.tokens.get(self.position - 2));
+                    eprintln!(
+                        "DEBUG: Token before that: {:?}",
+                        self.tokens.get(self.position - 2)
+                    );
                 }
                 return Err(format!(
                     "Unexpected token in expression: {:?} (at token position {})",
                     self.current_token(),
                     self.position
-                ))
+                ));
             }
         };
 

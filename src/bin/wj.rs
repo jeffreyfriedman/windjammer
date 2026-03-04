@@ -269,7 +269,7 @@ enum Commands {
         /// Error code to explain (e.g., WJ0001, E0425)
         code: String,
     },
-    
+
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
@@ -525,10 +525,10 @@ fn main() -> anyhow::Result<()> {
             if plugin_args.is_empty() {
                 anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
             }
-            
+
             let plugin_name = &plugin_args[0];
             let args = &plugin_args[1..];
-            
+
             let exit_code = windjammer::plugin::execute_plugin(plugin_name, args)?;
             std::process::exit(exit_code);
         }

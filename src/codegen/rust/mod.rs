@@ -13,11 +13,11 @@
 
 pub mod arm_string_analysis;
 pub mod ast_utilities;
-pub mod collection_detection;
 pub mod backend;
-pub mod expression_generation;
 pub mod codegen_helpers;
+pub mod collection_detection;
 pub mod constant_folding;
+pub mod expression_generation;
 pub mod expression_helpers;
 pub mod expressions;
 pub mod function_generation;

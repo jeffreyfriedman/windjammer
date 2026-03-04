@@ -1,19 +1,18 @@
+use std::fs;
+use tempfile::TempDir;
 /// TDD Test: crate:: imports should NOT include the output directory name
 ///
 /// Bug: When compiling to ./build/ and build/lib.rs doesn't exist yet,
-/// the compiler incorrectly rewrites `use crate::math::Vec3` to 
+/// the compiler incorrectly rewrites `use crate::math::Vec3` to
 /// `use crate::build::math::Vec3` because it finds the parent crate's
 /// lib.rs and treats the build/ directory as a submodule.
 ///
 /// Fix: Known output directories (build, generated, out) should always
 /// be treated as the crate root, not as submodules.
-
 use windjammer::analyzer::SignatureRegistry;
 use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
-use std::fs;
-use tempfile::TempDir;
 
 #[test]
 fn test_crate_import_no_build_prefix_with_parent_lib() {

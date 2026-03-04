@@ -6,10 +6,10 @@ use crate::parser::*;
 use std::collections::HashMap;
 
 use super::{
-    Analyzer, AnalyzedFunction, AssignmentOptimization, CloneEliminationReason, CloneOptimization,
+    AnalyzedFunction, Analyzer, AssignmentOptimization, CloneEliminationReason, CloneOptimization,
     CompoundOp, ConstStaticOptimization, CowOptimization, CowReason, DeferDropOptimization,
     DeferDropReason, EstimatedSize, MappingStrategy, OwnershipMode, SignatureRegistry,
-    SmallVecOptimization, StructMappingOptimization, StringOptimization, StringOptimizationType,
+    SmallVecOptimization, StringOptimization, StringOptimizationType, StructMappingOptimization,
 };
 
 impl<'ast> Analyzer<'ast> {
@@ -58,7 +58,10 @@ impl<'ast> Analyzer<'ast> {
 
     /// PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
     /// Identifies patterns where struct literals can be optimized
-    pub(super) fn detect_struct_mappings(&self, func: &FunctionDecl) -> Vec<StructMappingOptimization> {
+    pub(super) fn detect_struct_mappings(
+        &self,
+        func: &FunctionDecl,
+    ) -> Vec<StructMappingOptimization> {
         let mut optimizations = Vec::new();
 
         // Scan function body for struct literal expressions
@@ -215,7 +218,10 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// PHASE 5 OPTIMIZATION: Detect assignment operations (x = x + 1 → x += 1)
-    pub(super) fn detect_assignment_optimizations(&self, func: &FunctionDecl) -> Vec<AssignmentOptimization> {
+    pub(super) fn detect_assignment_optimizations(
+        &self,
+        func: &FunctionDecl,
+    ) -> Vec<AssignmentOptimization> {
         let mut optimizations = Vec::new();
 
         for (idx, stmt) in func.body.iter().enumerate() {
@@ -293,7 +299,10 @@ impl<'ast> Analyzer<'ast> {
 
     /// PHASE 4 OPTIMIZATION: Detect string operation opportunities
     /// Identifies patterns where string operations can be optimized
-    pub(super) fn detect_string_optimizations(&self, func: &FunctionDecl) -> Vec<StringOptimization> {
+    pub(super) fn detect_string_optimizations(
+        &self,
+        func: &FunctionDecl,
+    ) -> Vec<StringOptimization> {
         let mut optimizations = Vec::new();
 
         for (idx, stmt) in func.body.iter().enumerate() {
@@ -841,7 +850,10 @@ impl<'ast> Analyzer<'ast> {
 
     /// PHASE 8: Detect SmallVec optimization opportunities
     /// Returns Vec variables that can use stack allocation via SmallVec
-    pub(super) fn detect_smallvec_opportunities(&self, func: &FunctionDecl) -> Vec<SmallVecOptimization> {
+    pub(super) fn detect_smallvec_opportunities(
+        &self,
+        func: &FunctionDecl,
+    ) -> Vec<SmallVecOptimization> {
         let mut optimizations = Vec::new();
 
         // TODO: Implement full SmallVec detection

@@ -8,6 +8,7 @@ use super::Analyzer;
 
 impl<'ast> Analyzer<'ast> {
     /// Check if a function modifies self fields (for impl methods)
+    #[allow(dead_code)]
     pub(super) fn function_modifies_self_fields(&self, func: &FunctionDecl) -> bool {
         self.function_modifies_self_fields_with_registry(func, None)
     }
@@ -76,6 +77,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if function calls methods on self that require &mut self
+    #[allow(dead_code)]
     fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
         self.function_calls_mutating_self_methods_with_registry(func, None)
     }
@@ -255,9 +257,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_is_self_field_access(target)
                     || self.expression_is_self_field_index_access(target)
             }
-            Statement::Expression { expr, .. } => {
-                self.expression_mutates_self_fields(expr)
-            }
+            Statement::Expression { expr, .. } => self.expression_mutates_self_fields(expr),
             Statement::If {
                 condition,
                 then_block,
@@ -284,18 +284,14 @@ impl<'ast> Analyzer<'ast> {
             Statement::Match { value, arms, .. } => {
                 // THE WINDJAMMER WAY: Check match value for mutations!
                 self.expression_mutates_self_fields(value)
-                    || arms.iter().any(|arm| {
-                        self.expression_contains_self_field_mutations(arm.body)
-                    })
+                    || arms
+                        .iter()
+                        .any(|arm| self.expression_contains_self_field_mutations(arm.body))
             }
-            Statement::Return { value, .. } => {
-                value
-                    .as_ref()
-                    .is_some_and(|expr| self.expression_mutates_self_fields(expr))
-            }
-            Statement::Let { value, .. } => {
-                self.expression_mutates_self_fields(value)
-            }
+            Statement::Return { value, .. } => value
+                .as_ref()
+                .is_some_and(|expr| self.expression_mutates_self_fields(expr)),
+            Statement::Let { value, .. } => self.expression_mutates_self_fields(value),
             _ => false,
         }
     }
@@ -308,7 +304,7 @@ impl<'ast> Analyzer<'ast> {
                 .any(|s| self.statement_modifies_self_fields(s)),
             Expression::MethodCall { object, method, .. } => {
                 // TDD FIX: Check for mutations on both direct AND indexed self fields
-                (self.expression_is_self_field_access(object) 
+                (self.expression_is_self_field_access(object)
                     || self.expression_is_self_field_index_access(object))
                     && self.is_mutating_method(method)
             }
@@ -351,11 +347,13 @@ impl<'ast> Analyzer<'ast> {
                 if self.expression_is_self_field_access(object) && self.is_mutating_method(method) {
                     return true;
                 }
-                
-                if self.expression_is_self_field_index_access(object) && self.is_mutating_method(method) {
+
+                if self.expression_is_self_field_index_access(object)
+                    && self.is_mutating_method(method)
+                {
                     return true;
                 }
-                
+
                 false
             }
             // TDD FIX: Detect `&mut self.field` as a mutation of self
@@ -381,9 +379,7 @@ impl<'ast> Analyzer<'ast> {
             match last_stmt {
                 Statement::Return {
                     value: Some(expr), ..
-                } => {
-                    self.expression_returns_self_type(expr, return_type_name)
-                }
+                } => self.expression_returns_self_type(expr, return_type_name),
                 Statement::Expression { expr, .. } => {
                     self.expression_returns_self_type(expr, return_type_name)
                 }
@@ -431,7 +427,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a function uses a specific identifier (e.g., "self")
-    pub(super) fn function_uses_identifier(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    pub(super) fn function_uses_identifier(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             if self.statement_uses_identifier(name, stmt) {
                 return true;

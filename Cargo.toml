@@ -89,6 +89,7 @@ which = { version = "8.0.0", optional = true }
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"] }
 smallvec = "1.13.0"
+walkdir = "2.5"
 
 [[bench]]
 name = "compilation"

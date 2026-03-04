@@ -20,8 +20,8 @@ use super::pattern_analysis;
 use super::string_analysis;
 use super::CodeGenerator;
 
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     // Helper method for expressions that need to be evaluated without &mut self
     pub(crate) fn generate_expression_immut(&self, expr: &Expression) -> String {
         use crate::parser::ast::operators::{BinaryOp, UnaryOp};
@@ -62,19 +62,14 @@ impl<'ast> CodeGenerator<'ast> {
                     BinaryOp::Shl => "<<",
                     BinaryOp::Shr => ">>",
                 };
-                
+
                 // TDD FIX: Generate comparison without adding incorrect dereferences
                 // When comparing &String == &String, both sides are already borrowed - no deref needed!
                 // Rust's PartialEq trait handles comparisons correctly for references.
                 let left_str = self.generate_expression_immut(left);
                 let right_str = self.generate_expression_immut(right);
-                
-                format!(
-                    "{} {} {}",
-                    left_str,
-                    op_str,
-                    right_str
-                )
+
+                format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::FieldAccess { object, field, .. } => {
                 format!("{}.{}", self.generate_expression_immut(object), field)
@@ -158,7 +153,6 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|arm| pattern_analysis::pattern_extracts_value(&arm.pattern))
     }
 
-
     fn generate_expression_with_precedence(&mut self, expr: &Expression<'ast>) -> String {
         // Wrap expressions in parentheses if they need them for proper precedence
         // when used as the object of a method call or field access
@@ -198,7 +192,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.exit_recursion();
         result
     }
-
 
     fn generate_expression_impl(&mut self, expr_to_generate: &Expression<'ast>) -> String {
         match expr_to_generate {
@@ -257,7 +250,6 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Binary {
                 left, op, right, ..
             } => {
-                
                 // TDD FIX: Optimize .len() comparisons to .is_empty()
                 // Clippy warns about .len() == 0, .len() != 0, .len() > 0
                 // Transform to .is_empty() or !.is_empty()
@@ -464,10 +456,8 @@ impl<'ast> CodeGenerator<'ast> {
                 //   Source: `let r = (self.r as u32) << 24;`
                 //   Generated: `let r = self.r as u32 << 24;`  ← Missing parens!
                 //   Error: `<<` is interpreted as start of generic arguments for `u32`
-                let needs_cast_parens_for_op = matches!(
-                    op_str,
-                    "<" | ">" | "<<" | ">>" | "|" | "&" | "^"
-                );
+                let needs_cast_parens_for_op =
+                    matches!(op_str, "<" | ">" | "<<" | ">>" | "|" | "&" | "^");
                 let left_needs_cast_parens = needs_cast_parens_for_op
                     && (matches!(left, Expression::Cast { .. }) || left_str.contains(" as "));
                 let right_needs_cast_parens = needs_cast_parens_for_op
@@ -497,31 +487,31 @@ impl<'ast> CodeGenerator<'ast> {
                 // - FieldAccess (e.g., `m.id` where `m: &Member` → `String`)
                 // - Literal values
                 // - Method calls returning owned types
-                
+
                 let left_is_borrowed = match left {
                     Expression::Identifier { name, .. } => {
                         self.inferred_borrowed_params.contains(name.as_str())
-                        || self.borrowed_iterator_vars.contains(name)
+                            || self.borrowed_iterator_vars.contains(name)
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)
                         method == "as_str"
                     }
-                    _ => false,  // FieldAccess, Literal, etc. are owned
+                    _ => false, // FieldAccess, Literal, etc. are owned
                 };
-                
+
                 let right_is_borrowed = match right {
                     Expression::Identifier { name, .. } => {
                         self.inferred_borrowed_params.contains(name.as_str())
-                        || self.borrowed_iterator_vars.contains(name)
+                            || self.borrowed_iterator_vars.contains(name)
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)
                         method == "as_str"
                     }
-                    _ => false,  // FieldAccess, Literal, etc. are owned
+                    _ => false, // FieldAccess, Literal, etc. are owned
                 };
-                
+
                 // XOR: Add deref only if exactly ONE side is borrowed
                 if left_is_borrowed != right_is_borrowed {
                     if left_is_borrowed {
@@ -813,12 +803,21 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
                         .collect();
-                    
+
                     // Check if first argument is a string literal
-                    let first_arg_is_string_literal = arguments.first()
-                        .map(|(_, arg)| matches!(arg, Expression::Literal { value: Literal::String(_), .. }))
+                    let first_arg_is_string_literal = arguments
+                        .first()
+                        .map(|(_, arg)| {
+                            matches!(
+                                arg,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            )
+                        })
                         .unwrap_or(false);
-                    
+
                     if args.len() == 1 && !first_arg_is_string_literal {
                         // Single non-string argument - format it
                         return format!("{}!(\"{{}}\", {})", target_macro, args[0]);
@@ -843,7 +842,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // 1. Handle it as a method call (not function call)
                 // 2. Do signature lookup to get parameter ownership info
                 // 3. Apply correct ownership conversions (& vs .clone() etc.)
-                // 
+                //
                 // This was the AUTO-CLONE BUG: method calls skipped signature lookup!
                 if let Expression::FieldAccess {
                     object: call_obj,
@@ -863,12 +862,13 @@ impl<'ast> CodeGenerator<'ast> {
                     if call_method == "clone" && obj_str.ends_with(".clone()") {
                         obj_str = obj_str[..obj_str.len() - 8].to_string();
                     }
-                    
+
                     // TDD FIX: Lookup method signature for ownership inference
                     // Try multiple lookup strategies:
                     // 1. Type::method (if we can infer object type)
                     // 2. method (simple name fallback)
-                    let method_signature = self.signature_registry.get_signature(call_method).cloned();
+                    let method_signature =
+                        self.signature_registry.get_signature(call_method).cloned();
 
                     // Generate arguments with ownership awareness (same logic as regular Call)
                     let args: Vec<String> = if let Some(ref sig) = method_signature {
@@ -877,29 +877,47 @@ impl<'ast> CodeGenerator<'ast> {
                             .enumerate()
                             .flat_map(|(i, (_label, arg))| {
                                 let mut arg_str = self.generate_expression(arg);
-                                
+
                                 // Apply ownership conversion based on signature
                                 if let Some(&ownership) = sig.param_ownership.get(i) {
                                     match ownership {
                                         OwnershipMode::Borrowed => {
                                             // Destination wants borrowed - add & if needed
-                                            let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                                            let is_string_literal = matches!(
+                                                arg,
+                                                Expression::Literal {
+                                                    value: Literal::String(_),
+                                                    ..
+                                                }
+                                            );
                                             if !is_string_literal && !arg_str.starts_with("&") {
                                                 arg_str = format!("&{}", arg_str);
                                             }
                                         }
                                         OwnershipMode::Owned => {
                                             // Destination wants owned - add .clone() for borrowed sources
-                                            if let Expression::FieldAccess { object: field_obj, .. } = arg {
-                                                if let Expression::Identifier { name, .. } = &**field_obj {
-                                                    let is_borrowed = self.borrowed_iterator_vars.contains(name)
-                                                        || self.inferred_borrowed_params.contains(name);
-                                                    if is_borrowed && !arg_str.ends_with(".clone()") {
-                                                        let is_copy = self.infer_expression_type(arg)
+                                            if let Expression::FieldAccess {
+                                                object: field_obj,
+                                                ..
+                                            } = arg
+                                            {
+                                                if let Expression::Identifier { name, .. } =
+                                                    &**field_obj
+                                                {
+                                                    let is_borrowed =
+                                                        self.borrowed_iterator_vars.contains(name)
+                                                            || self
+                                                                .inferred_borrowed_params
+                                                                .contains(name);
+                                                    if is_borrowed && !arg_str.ends_with(".clone()")
+                                                    {
+                                                        let is_copy = self
+                                                            .infer_expression_type(arg)
                                                             .as_ref()
                                                             .is_some_and(|t| self.is_type_copy(t));
                                                         if !is_copy {
-                                                            arg_str = format!("{}.clone()", arg_str);
+                                                            arg_str =
+                                                                format!("{}.clone()", arg_str);
                                                         }
                                                     }
                                                 }
@@ -908,7 +926,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         _ => {}
                                     }
                                 }
-                                
+
                                 vec![arg_str]
                             })
                             .collect()
@@ -919,12 +937,12 @@ impl<'ast> CodeGenerator<'ast> {
                             .map(|(_label, arg)| self.generate_expression(arg))
                             .collect()
                     };
-                    
+
                     return format!("{}.{}({})", obj_str, call_method, args.join(", "));
                 }
 
                 let mut func_str = self.generate_expression(function);
-                
+
                 // In an impl block, bare function calls to sibling methods need qualified dispatch.
                 // Instance methods (take self) → self.method(args)
                 // Static methods → Self::method(args)
@@ -944,26 +962,28 @@ impl<'ast> CodeGenerator<'ast> {
                 // Ok("literal") -> Ok("literal".to_string())
                 // Err("literal") -> Err("literal".to_string())
                 // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
-                
+
                 // TDD FIX (Bug #2): Detect ALL enum constructors, not just Some/Ok/Err
                 // Pattern: Module::Variant or Enum::Variant (both CamelCase)
                 let is_std_enum = matches!(func_name.as_str(), "Some" | "Ok" | "Err");
                 let is_custom_enum = func_name.contains("::") && {
                     let parts: Vec<&str> = func_name.split("::").collect();
-                    parts.len() == 2 && 
-                    parts[0].chars().next().is_some_and(|c| c.is_uppercase()) &&
-                    parts[1].chars().next().is_some_and(|c| c.is_uppercase())
+                    parts.len() == 2
+                        && parts[0].chars().next().is_some_and(|c| c.is_uppercase())
+                        && parts[1].chars().next().is_some_and(|c| c.is_uppercase())
                 };
-                
+
                 if is_std_enum || is_custom_enum {
                     // TDD FIX (Bug #16 completion): Extract format!() to temp variables for enum variants too!
                     let generated_args: Vec<String> = arguments
                         .iter()
                         .map(|(_label, arg)| self.generate_expression(arg))
                         .collect();
-                    
-                    let has_format_arg = generated_args.iter().any(|arg_str| arg_str.contains("format!("));
-                    
+
+                    let has_format_arg = generated_args
+                        .iter()
+                        .any(|arg_str| arg_str.contains("format!("));
+
                     if has_format_arg {
                         // Extract format!() macros to temp variables
                         let mut temp_decls = String::new();
@@ -971,7 +991,9 @@ impl<'ast> CodeGenerator<'ast> {
                         let fixed_args: Vec<String> = generated_args
                             .iter()
                             .map(|arg_str| {
-                                if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
+                                if arg_str.starts_with("format!(")
+                                    || arg_str.starts_with("&format!(")
+                                {
                                     // Strip leading & if present
                                     let format_expr = if arg_str.starts_with("&") {
                                         arg_str.strip_prefix("&").unwrap()
@@ -981,8 +1003,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     // Extract to temp var
                                     let temp_name = format!("_temp{}", temp_counter);
                                     temp_counter += 1;
-                                    temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-                                    
+                                    temp_decls.push_str(&format!(
+                                        "let {} = {}; ",
+                                        temp_name, format_expr
+                                    ));
+
                                     // TDD FIX: Don't add & for owned parameters
                                     // Err(format!(...)) should be Err(_temp0), not Err(&_temp0)
                                     // Original arg didn't have &, so pass owned value
@@ -996,18 +1021,23 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             })
                             .collect();
-                        
-                        return format!("{{ {}{}({}) }}", temp_decls, func_str, fixed_args.join(", "));
+
+                        return format!(
+                            "{{ {}{}({}) }}",
+                            temp_decls,
+                            func_str,
+                            fixed_args.join(", ")
+                        );
                     }
-                    
+
                     let args: Vec<String> = generated_args
                         .iter()
                         .enumerate()
                         .map(|(i, arg_str)| {
                             // Get the original argument expression for type checking
                             let arg = &arguments[i].1;
-                                    let result = arg_str.clone();
-                            
+                            let result = arg_str.clone();
+
                             // Auto-convert string literals to String for Option/Result wrappers
                             if matches!(
                                 arg,
@@ -1068,40 +1098,75 @@ impl<'ast> CodeGenerator<'ast> {
                 // Look up signature and clone it to avoid borrow conflicts
                 // THE WINDJAMMER WAY: Try qualified name first, then simple name
                 // e.g., "Sound::new" -> try "Sound::new", then "new"
-                
+
                 // TDD FIX: Function pointer signature extraction
                 // When calling a function pointer parameter (e.g., has_item(arg1, arg2)),
                 // extract the signature from the parameter's type instead of the registry
-                let signature = if let Some(param) = self.current_function_params.iter().find(|p| p.name == func_name) {
+                let signature = if let Some(param) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == func_name)
+                {
                     // Check if this parameter is a function pointer
-                    if let Type::FunctionPointer { params, return_type } = &param.type_ {
+                    if let Type::FunctionPointer {
+                        params,
+                        return_type,
+                    } = &param.type_
+                    {
                         // TDD FIX: Build signature from function pointer type
                         // CRITICAL: Match the conversion logic in types.rs type_to_rust()!
                         // fn(string, i32) in Windjammer → fn(&String, i32) in Rust
-                        // 
+                        //
                         // Conversion rules (from types.rs lines 148-160):
                         // - Type::String → "&String" → Borrowed
                         // - Type::Custom("string") → "&String" → Borrowed
                         // - Type::Reference(_) → "&T" → Borrowed
                         // - Copy types (Int, Bool, etc.) → owned → Owned
                         // - Everything else → as-is (keep explicit types)
-                        let param_ownership: Vec<OwnershipMode> = params.iter().map(|ty| {
-                            match ty {
-                                // Idiomatic Windjammer: string parameters are borrowed (types.rs:151)
-                                Type::String => OwnershipMode::Borrowed,
-                                Type::Custom(name) if name == "string" => OwnershipMode::Borrowed,
-                                // Explicit references - borrowed (types.rs:154)
-                                Type::Reference(_) | Type::MutableReference(_) => OwnershipMode::Borrowed,
-                                // Copy types - owned (types.rs:156-157)
-                                Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => OwnershipMode::Owned,
-                                Type::Custom(name) if matches!(name.as_str(), "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "bool" | "char" | "usize" | "isize") => OwnershipMode::Owned,
-                                // Everything else - keep as-is (types.rs:159)
-                                // For non-Copy custom types, default is as-is, which means Owned in this context
-                                // (the analyzer will have determined the correct type already)
-                                _ => OwnershipMode::Owned,
-                            }
-                        }).collect();
-                        
+                        let param_ownership: Vec<OwnershipMode> = params
+                            .iter()
+                            .map(|ty| {
+                                match ty {
+                                    // Idiomatic Windjammer: string parameters are borrowed (types.rs:151)
+                                    Type::String => OwnershipMode::Borrowed,
+                                    Type::Custom(name) if name == "string" => {
+                                        OwnershipMode::Borrowed
+                                    }
+                                    // Explicit references - borrowed (types.rs:154)
+                                    Type::Reference(_) | Type::MutableReference(_) => {
+                                        OwnershipMode::Borrowed
+                                    }
+                                    // Copy types - owned (types.rs:156-157)
+                                    Type::Int
+                                    | Type::Int32
+                                    | Type::Uint
+                                    | Type::Float
+                                    | Type::Bool => OwnershipMode::Owned,
+                                    Type::Custom(name)
+                                        if matches!(
+                                            name.as_str(),
+                                            "i32"
+                                                | "i64"
+                                                | "u32"
+                                                | "u64"
+                                                | "f32"
+                                                | "f64"
+                                                | "bool"
+                                                | "char"
+                                                | "usize"
+                                                | "isize"
+                                        ) =>
+                                    {
+                                        OwnershipMode::Owned
+                                    }
+                                    // Everything else - keep as-is (types.rs:159)
+                                    // For non-Copy custom types, default is as-is, which means Owned in this context
+                                    // (the analyzer will have determined the correct type already)
+                                    _ => OwnershipMode::Owned,
+                                }
+                            })
+                            .collect();
+
                         Some(crate::analyzer::FunctionSignature {
                             name: func_name.clone(),
                             param_types: params.clone(),
@@ -1149,18 +1214,18 @@ impl<'ast> CodeGenerator<'ast> {
                         // suppressing necessary .clone() calls.
                         let prev_field_access_obj = self.in_field_access_object;
                         self.in_field_access_object = false;
-                        
+
                         // TDD FIX: Set call argument context to suppress premature .clone()
                         // The FieldAccess handler normally adds .clone() for borrowed iterator vars,
                         // but in call arguments, we need to let the ownership check below decide
                         let prev_in_call_arg = self.in_call_argument_generation;
                         self.in_call_argument_generation = true;
-                        
+
                         let mut arg_str = self.generate_expression(arg);
-                        
+
                         self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
-                        
+
                         // WINDJAMMER FFI: Convert string arguments to (*const u8, usize) for extern functions
                         if is_extern_call {
                             if let Some(ref sig) = signature {
@@ -1239,7 +1304,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         // TDD FIX (Bug #12): String literals &str -> &String conversion
                                         // When parameter expects &String and arg is "literal" (&str),
                                         // we need to convert: &"literal".to_string()
-                                        // 
+                                        //
                                         // Check if this is a string literal AND parameter expects &String
                                         let is_string_literal = matches!(
                                             arg,
@@ -1248,7 +1313,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 ..
                                             }
                                         );
-                                        
+
                                         if is_string_literal {
                                             // Check if parameter type is String (not some other type)
                                             let expects_string = sig.param_types.get(i)
@@ -1258,7 +1323,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                     _ => false,
                                                 })
                                                 .unwrap_or(false);
-                                            
+
                                             if expects_string {
                                                 // Convert &str literal to &String
                                                 // "test" -> &"test".to_string()
@@ -1301,9 +1366,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Temp variables (like _temp0) hold OWNED values from format!()
                                         // format!() returns String, not &str, so _temp0 is String
                                         // If we add &, we get &String when we need String
-                                        let is_temp_variable = arg_str.starts_with("_temp") 
+                                        let is_temp_variable = arg_str.starts_with("_temp")
                                             && arg_str.chars().skip(5).all(|c| c.is_numeric());
-                                        
+
                                         // TDD FIX: IDIOMATIC WINDJAMMER - Strip .clone() if present!
                                         // When destination wants Borrowed, pass &field, NOT &field.clone()
                                         // Example: has_item(ingredient.item_id) with has_item(item_id: string)
@@ -1393,11 +1458,11 @@ impl<'ast> CodeGenerator<'ast> {
                                                 // TDD FIX: Check if it's from a borrowed iterator (for loop)
                                                 // Example: for npc_id in npc_ids { Member::new(npc_id) }
                                                 // npc_id is &String from iterator, needs .clone() for owned String
-                                                // 
+                                                //
                                                 // CRITICAL: We're in OwnershipMode::Owned block, which means
                                                 // the DESTINATION parameter wants an owned value (String, not &String).
                                                 // So it's correct to .clone() borrowed iterator vars.
-                                                // 
+                                                //
                                                 // This block is fine - it only runs when ownership == Owned
                                                 let is_borrowed_iterator_var =
                                                     self.borrowed_iterator_vars.contains(name);
@@ -1420,7 +1485,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         // TDD FIX: AUTO-CLONE for borrowed_param.field
                                         // When passing ingredient.item_id where ingredient is borrowed,
                                         // we need to clone() IF destination wants Owned.
-                                        // 
+                                        //
                                         // We're ALREADY in OwnershipMode::Owned block,
                                         // so destination wants owned. Safe to add .clone().
                                         //
@@ -1443,9 +1508,9 @@ impl<'ast> CodeGenerator<'ast> {
                                                     });
                                                 let is_inferred_borrowed =
                                                     self.inferred_borrowed_params.contains(&name);
-                                                
-                                                if (is_borrowed_iterator_var 
-                                                    || is_explicitly_borrowed 
+
+                                                if (is_borrowed_iterator_var
+                                                    || is_explicitly_borrowed
                                                     || is_inferred_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
@@ -1475,7 +1540,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // The args vec has already been generated as Rust strings
                 // Check if any contain format!() and extract them
                 let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
-                
+
                 // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
                 // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
                 if has_format_arg {
@@ -1497,8 +1562,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 // Extract to temp var
                                 let temp_name = format!("_temp{}", temp_counter);
                                 temp_counter += 1;
-                                temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-                                
+                                temp_decls
+                                    .push_str(&format!("let {} = {}; ", temp_name, format_expr));
+
                                 // TDD FIX: Only add & if original had it!
                                 // format!() returns owned String, so if caller wants owned, pass temp directly
                                 // If caller wants borrowed, pass &temp (when original was &format!())
@@ -1512,9 +1578,9 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         })
                         .collect();
-                    
+
                     let call_expr = format!("{}({})", func_str, fixed_args.join(", "));
-                    
+
                     // Wrap in unsafe block if extern, otherwise regular block
                     if is_extern_call {
                         format!("unsafe {{ {}{}  }}", temp_decls, call_expr)
@@ -1561,7 +1627,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if method == "clone" && obj_str.ends_with(".clone()") {
                     obj_str = obj_str[..obj_str.len() - 8].to_string();
                 }
-                
+
                 // TDD FIX: Option::unwrap() move error prevention
                 // TDD FIX: AUTO-CLONE Option::unwrap() on borrowed fields
                 // When calling .unwrap() on a borrowed Option field, we must clone before unwrap:
@@ -1570,7 +1636,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // THE WINDJAMMER WAY: Users write .unwrap() naturally, compiler handles ownership
                 if method == "unwrap" {
                     // Check if object is a field access (node.children) that needs clone
-                    let needs_clone = if let Expression::FieldAccess { object: field_obj, .. } = object {
+                    let needs_clone = if let Expression::FieldAccess {
+                        object: field_obj, ..
+                    } = object
+                    {
                         // Is this accessing a field on a borrowed parameter?
                         if let Expression::Identifier { ref name, .. } = **field_obj {
                             // Check if the identifier is an inferred borrowed parameter
@@ -1581,7 +1650,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         false
                     };
-                    
+
                     if needs_clone && !obj_str.contains(".clone()") {
                         obj_str = format!("{}.clone()", obj_str);
                     }
@@ -1644,12 +1713,12 @@ impl<'ast> CodeGenerator<'ast> {
                             .as_ref()
                             .and_then(|sig| sig.param_ownership.get(sig_param_idx))
                             .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
-                        
+
                         let prev_suppress = self.suppress_borrowed_clone;
                         if param_expects_borrowed && matches!(arg, Expression::FieldAccess { .. }) {
                             self.suppress_borrowed_clone = true;
                         }
-                        
+
                         // CRITICAL: Reset in_field_access_object for method argument generation.
                         // Same rationale as function call arguments — method arguments are
                         // independent expressions, not part of a field/method/index chain.
@@ -1674,7 +1743,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 method.as_str(),
                                 "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
                             ) && i == 0; // Key is always first argument
-                            
+
                             if is_hashmap_key_method {
                                 // Check if the operand is a borrowed String parameter
                                 if let Expression::Identifier { name, .. } = &**operand {
@@ -1746,19 +1815,19 @@ impl<'ast> CodeGenerator<'ast> {
                             let param_ownership = method_signature
                                 .as_ref()
                                 .and_then(|sig| sig.param_ownership.get(sig_param_idx));
-                            
+
                             // CRITICAL: Check if parameter is explicitly &str (not inferred &String)
                             // Explicit &str parameters should NOT get .to_string() conversion
                             let param_type = method_signature
                                 .as_ref()
                                 .and_then(|sig| sig.param_types.get(sig_param_idx));
                             let is_explicit_str_ref = if let Some(Type::Reference(inner)) = param_type {
-                                matches!(**inner, Type::String) || 
+                                matches!(**inner, Type::String) ||
                                 matches!(**inner, Type::Custom(ref s) if s == "str")
                             } else {
                                 false
                             };
-                            
+
                             if is_explicit_str_ref {
                                 // Explicit &str parameter - no conversion needed
                                 false
@@ -1887,7 +1956,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Restore suppress flag
                         self.suppress_borrowed_clone = prev_suppress;
-                        
+
                         arg_str
                     })
                     .collect();
@@ -2054,8 +2123,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // TDD FIX (Bug #3): Extract format!() macros in method arguments too
-                let has_format_arg = processed_args.iter().any(|arg_str| arg_str.contains("format!("));
-                
+                let has_format_arg = processed_args
+                    .iter()
+                    .any(|arg_str| arg_str.contains("format!("));
+
                 let base_expr = if has_format_arg {
                     // Extract format!() macros to temp variables
                     let mut temp_decls = String::new();
@@ -2073,8 +2144,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 // Extract to temp var
                                 let temp_name = format!("_temp{}", temp_counter);
                                 temp_counter += 1;
-                                temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-                                
+                                temp_decls
+                                    .push_str(&format!("let {} = {}; ", temp_name, format_expr));
+
                                 // TDD FIX (Bug #16): Don't always add & - format!() returns owned String
                                 // If the parameter expects &str, Rust's coercion handles it automatically
                                 // If the parameter expects String, we need the owned value
@@ -2091,7 +2163,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         })
                         .collect();
-                    
+
                     // Wrap in block: { let _temp0 = format!(...); obj.method(&_temp0, ...) }
                     format!(
                         "{{ {}{}{}{}{}({}) }}",
@@ -2925,19 +2997,16 @@ impl<'ast> CodeGenerator<'ast> {
                         self.indent_level += 1;
 
                         // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
-                        let needs_string_conversion_from_type =
-                            match &self.current_function_return_type {
-                                Some(Type::String) => true,
-                                Some(Type::Custom(name)) if name == "String" => true,
-                                _ => {
-                                    arms.iter().any(|arm| {
-                                        string_analysis::expression_produces_string(arm.body)
-                                            || arm_string_analysis::arm_returns_converted_string(
-                                                arm.body,
-                                            )
-                                    })
-                                }
-                            };
+                        let needs_string_conversion_from_type = match &self
+                            .current_function_return_type
+                        {
+                            Some(Type::String) => true,
+                            Some(Type::Custom(name)) if name == "String" => true,
+                            _ => arms.iter().any(|arm| {
+                                string_analysis::expression_produces_string(arm.body)
+                                    || arm_string_analysis::arm_returns_converted_string(arm.body)
+                            }),
+                        };
 
                         // Set context flag BEFORE generating arms
                         let old_in_match_arm = self.in_match_arm_needing_string;
@@ -3038,11 +3107,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 output.push_str(&expr_str);
 
                                 // TDD FIX: In statement-context matches, add semicolons to all statements
-                                if self.in_statement_match {
-                                    output.push_str(";\n");
-                                } else {
-                                    output.push_str("\n");
-                                }
+                            if self.in_statement_match {
+                                output.push_str(";\n");
+                            } else {
+                                output.push('\n');
+                            }
                             }
                             Statement::Thread { body, .. } => {
                                 output.push_str(&self.indent());
@@ -3212,6 +3281,4 @@ impl<'ast> CodeGenerator<'ast> {
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
     }
-
-
 }

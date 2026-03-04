@@ -1,3 +1,4 @@
+use std::fs;
 /// TDD test: Parameters passed to enum variant constructors should stay Owned
 ///
 /// Bug: `ObjectiveType::Kill(enemy_type, count)` - the `enemy_type` parameter
@@ -10,16 +11,17 @@
 ///
 /// Fix: Add recursive scanning in `is_stored` to detect enum variant constructors
 /// that consume the parameter.
-
 use std::process::Command;
-use std::fs;
 
 fn transpile_wj(source: &str) -> String {
     let temp_dir = std::env::temp_dir();
-    let test_id = format!("wj_test_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos());
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
 
@@ -39,8 +41,7 @@ fn transpile_wj(source: &str) -> String {
         .expect("Failed to run wj compiler");
 
     let rust_file = out_dir.join("test.rs");
-    fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
 
 #[test]
@@ -227,7 +228,7 @@ pub fn create_delivery_quest(item_id: String, recipient: String) -> Objective {
         "enemy_type consumed by enum variant should stay Owned. Got:\n{}",
         generated
     );
-    
+
     // item_id and recipient should stay owned - consumed by Deliver variant
     assert!(
         generated.contains("fn create_delivery_quest(item_id: String, recipient: String"),

@@ -340,12 +340,11 @@ impl Lexer {
                         break;
                     }
                 }
-                
+
                 // Validate it's a real type suffix
                 match suffix.as_str() {
-                    "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize" | "isize" => {
-                        Some(suffix)
-                    }
+                    "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize"
+                    | "isize" => Some(suffix),
                     _ => {
                         // Not a valid type suffix, backtrack
                         // This handles cases like "0ux" which should be "0" + "ux" (identifier)

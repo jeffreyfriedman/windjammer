@@ -184,7 +184,7 @@ impl Parser {
         // Handle raw pointer types: *const T, *mut T
         if self.current_token() == &Token::Star {
             self.advance();
-            
+
             // Check for const or mut
             let mutable = if self.current_token() == &Token::Const {
                 self.advance();
@@ -195,11 +195,11 @@ impl Parser {
             } else {
                 return Err("Expected 'const' or 'mut' after '*' in pointer type".to_string());
             };
-            
+
             let pointee = Box::new(self.parse_type()?);
             return Ok(Type::RawPointer { mutable, pointee });
         }
-        
+
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
             self.advance();
@@ -450,14 +450,27 @@ impl Parser {
                 // If we see `<` after a primitive type, it's a comparison operator, not generics!
                 let is_primitive_type = matches!(
                     type_name.as_str(),
-                    "usize" | "isize"
-                    | "u8" | "u16" | "u32" | "u64" | "u128"
-                    | "i8" | "i16" | "i32" | "i64" | "i128"
-                    | "f32" | "f64"
-                    | "char" | "str" | "bool"
-                    | "unit" | "()"
+                    "usize"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "f32"
+                        | "f64"
+                        | "char"
+                        | "str"
+                        | "bool"
+                        | "unit"
+                        | "()"
                 );
-                
+
                 if !is_primitive_type && self.current_token() == &Token::Lt {
                     self.advance();
 

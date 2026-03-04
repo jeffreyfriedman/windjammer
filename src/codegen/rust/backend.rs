@@ -20,15 +20,15 @@ impl RustBackend {
     }
 
     /// Extract external crate dependencies from generated Rust code
-    /// 
+    ///
     /// This scans the generated code for `use` statements and identifies external crates.
     /// Built-in crates like `std`, `core`, and `alloc` are excluded.
     pub fn extract_external_dependencies(code: &str) -> Vec<String> {
         use std::collections::HashSet;
-        
+
         let mut deps = HashSet::new();
         let builtin_crates = ["std", "core", "alloc"];
-        
+
         // Simple parser: match `use crate_name::...` patterns
         for line in code.lines() {
             let trimmed = line.trim();
@@ -37,7 +37,7 @@ impl RustBackend {
                 if let Some(rest) = trimmed.strip_prefix("use ") {
                     if let Some(first_ident_end) = rest.find("::").or_else(|| rest.find(";")) {
                         let crate_name = &rest[..first_ident_end];
-                        
+
                         // Skip builtin crates
                         if !builtin_crates.contains(&crate_name) {
                             deps.insert(crate_name.to_string());
@@ -46,7 +46,7 @@ impl RustBackend {
                 }
             }
         }
-        
+
         let mut result: Vec<String> = deps.into_iter().collect();
         result.sort(); // Deterministic ordering
         result
@@ -55,7 +55,7 @@ impl RustBackend {
     /// Generate Cargo.toml with proper dependencies based on generated code
     pub fn generate_cargo_toml_with_code(&self, code: &str) -> String {
         let deps = Self::extract_external_dependencies(code);
-        
+
         let mut cargo_toml = String::from(
             r#"[package]
 name = "windjammer-generated"
@@ -65,7 +65,7 @@ edition = "2021"
 [dependencies]
 "#,
         );
-        
+
         // Add detected dependencies with path references
         for dep in deps {
             let dep_line = match dep.as_str() {
@@ -85,7 +85,7 @@ edition = "2021"
             };
             cargo_toml.push_str(&dep_line);
         }
-        
+
         cargo_toml
     }
 
@@ -148,7 +148,7 @@ impl CodegenBackend for RustBackend {
             Target::WebAssembly => CompilationTarget::Wasm,
             _ => CompilationTarget::Wasm, // Default to Wasm for now
         };
-        
+
         // Run analyzer to get signatures and analyzed functions
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, signatures, analyzed_trait_methods) = analyzer
@@ -157,7 +157,7 @@ impl CodegenBackend for RustBackend {
 
         let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
-        
+
         // Pass analyzed functions so codegen has ownership info
         let code = generator.generate_program(program, &analyzed);
 
@@ -189,20 +189,31 @@ impl CodegenBackend for RustBackend {
     ) -> Vec<(String, String)> {
         // TDD FIX: Analyze program first (same as generate())
         let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, signatures, analyzed_trait_methods) = match analyzer.analyze_program(program) {
+        let (analyzed, signatures, analyzed_trait_methods) = match analyzer.analyze_program(program)
+        {
             Ok(result) => result,
             Err(e) => {
-                eprintln!("Warning: Analysis error in generate_additional_files: {}", e);
-                (vec![], SignatureRegistry::new(), std::collections::HashMap::new())
+                eprintln!(
+                    "Warning: Analysis error in generate_additional_files: {}",
+                    e
+                );
+                (
+                    vec![],
+                    SignatureRegistry::new(),
+                    std::collections::HashMap::new(),
+                )
             }
         };
-        
+
         let target = CompilationTarget::Wasm; // Default target
         let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         let code = generator.generate_program(program, &analyzed);
-        
-        vec![("Cargo.toml".to_string(), self.generate_cargo_toml_with_code(&code))]
+
+        vec![(
+            "Cargo.toml".to_string(),
+            self.generate_cargo_toml_with_code(&code),
+        )]
     }
 
     fn target_specific_optimizations(&self) -> Vec<String> {
@@ -257,16 +268,22 @@ fn main() {
     println!("Hello");
 }
 "#;
-        
+
         let deps = RustBackend::extract_external_dependencies(generated_code);
-        
+
         // Should extract external crates, but NOT std
-        assert!(deps.contains(&"windjammer_game_core".to_string()), 
-                "Should extract windjammer_game_core");
-        assert!(deps.contains(&"windjammer_runtime".to_string()), 
-                "Should extract windjammer_runtime");
-        assert!(!deps.contains(&"std".to_string()), 
-                "Should NOT extract std (builtin)");
+        assert!(
+            deps.contains(&"windjammer_game_core".to_string()),
+            "Should extract windjammer_game_core"
+        );
+        assert!(
+            deps.contains(&"windjammer_runtime".to_string()),
+            "Should extract windjammer_runtime"
+        );
+        assert!(
+            !deps.contains(&"std".to_string()),
+            "Should NOT extract std (builtin)"
+        );
         assert_eq!(deps.len(), 2, "Should have exactly 2 external dependencies");
     }
 
@@ -280,21 +297,31 @@ use windjammer_runtime::test::assert_eq;
 
 fn test() {}
 "#;
-        
+
         let cargo_toml = backend.generate_cargo_toml_with_code(generated_code);
-        
+
         // Cargo.toml uses hyphens (windjammer-game-core) not underscores
-        assert!(cargo_toml.contains("windjammer-game-core"), 
-                "Cargo.toml should include windjammer-game-core (with hyphens)");
-        assert!(cargo_toml.contains("windjammer-runtime"), 
-                "Cargo.toml should include windjammer-runtime (with hyphens)");
-        assert!(cargo_toml.contains("path = "), 
-                "Should use path references for local crates");
-        
+        assert!(
+            cargo_toml.contains("windjammer-game-core"),
+            "Cargo.toml should include windjammer-game-core (with hyphens)"
+        );
+        assert!(
+            cargo_toml.contains("windjammer-runtime"),
+            "Cargo.toml should include windjammer-runtime (with hyphens)"
+        );
+        assert!(
+            cargo_toml.contains("path = "),
+            "Should use path references for local crates"
+        );
+
         // Verify the actual format
-        assert!(cargo_toml.contains("windjammer-game-core = { path = "), 
-                "Should have proper dependency declaration for game-core");
-        assert!(cargo_toml.contains("windjammer-runtime = { path = "), 
-                "Should have proper dependency declaration for runtime");
+        assert!(
+            cargo_toml.contains("windjammer-game-core = { path = "),
+            "Should have proper dependency declaration for game-core"
+        );
+        assert!(
+            cargo_toml.contains("windjammer-runtime = { path = "),
+            "Should have proper dependency declaration for runtime"
+        );
     }
 }

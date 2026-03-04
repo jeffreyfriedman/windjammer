@@ -4,7 +4,6 @@
 /// creates &&String which doesn't satisfy Borrow trait
 ///
 /// Solution: Strip explicit & for borrowed String params passed to HashMap key methods
-
 use std::fs;
 use std::process::Command;
 
@@ -44,8 +43,7 @@ fn run_wj_test(source: &str) -> String {
     }
 
     let rust_file = out_dir.join("test.rs");
-    let generated =
-        fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
     fs::remove_dir_all(&test_dir).ok();
     generated

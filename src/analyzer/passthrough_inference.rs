@@ -21,9 +21,9 @@ impl<'ast> Analyzer<'ast> {
         if passthrough_calls.is_empty() {
             return None;
         }
-        
+
         let mut inferred_mode: Option<OwnershipMode> = None;
-        
+
         for (func_name, arg_position) in &passthrough_calls {
             if let Some(sig) = registry.get_signature(func_name) {
                 // Adjust position: method calls store natural arg index (0-based);
@@ -50,10 +50,10 @@ impl<'ast> Analyzer<'ast> {
                 return None;
             }
         }
-        
+
         inferred_mode
     }
-    
+
     /// Helper: Collect all function calls where param is passed as an argument
     /// Returns (function_name, argument_position)
     fn collect_passthrough_calls(
@@ -66,7 +66,7 @@ impl<'ast> Analyzer<'ast> {
             self.collect_passthrough_from_stmt(param_name, stmt, results);
         }
     }
-    
+
     fn collect_passthrough_from_stmt(
         &self,
         param_name: &str,
@@ -74,7 +74,9 @@ impl<'ast> Analyzer<'ast> {
         results: &mut Vec<(String, usize)>,
     ) {
         match stmt {
-            Statement::Expression { expr: expression, .. } => {
+            Statement::Expression {
+                expr: expression, ..
+            } => {
                 self.collect_passthrough_from_expr(param_name, expression, results);
             }
             Statement::Let { value, .. } => {
@@ -85,7 +87,12 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_passthrough_from_expr(param_name, expr, results);
                 }
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.collect_passthrough_from_expr(param_name, condition, results);
                 for stmt in then_block {
                     self.collect_passthrough_from_stmt(param_name, stmt, results);
@@ -96,13 +103,21 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-            Statement::While { condition, body: while_body, .. } => {
+            Statement::While {
+                condition,
+                body: while_body,
+                ..
+            } => {
                 self.collect_passthrough_from_expr(param_name, condition, results);
                 for stmt in while_body {
                     self.collect_passthrough_from_stmt(param_name, stmt, results);
                 }
             }
-            Statement::For { iterable, body: for_body, .. } => {
+            Statement::For {
+                iterable,
+                body: for_body,
+                ..
+            } => {
                 self.collect_passthrough_from_expr(param_name, iterable, results);
                 for stmt in for_body {
                     self.collect_passthrough_from_stmt(param_name, stmt, results);
@@ -111,7 +126,7 @@ impl<'ast> Analyzer<'ast> {
             _ => {}
         }
     }
-    
+
     fn collect_passthrough_from_expr(
         &self,
         param_name: &str,
@@ -119,7 +134,11 @@ impl<'ast> Analyzer<'ast> {
         results: &mut Vec<(String, usize)>,
     ) {
         match expr {
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 for (i, (_name, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(arg, param_name) {
                         if let Some(func_name) = self.extract_function_name(function) {
@@ -132,7 +151,12 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_passthrough_from_expr(param_name, arg, results);
                 }
             }
-            Expression::MethodCall { object, method, arguments, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(arg, param_name) {
                         if let Some(method_name) = self.extract_method_name(object, method) {
@@ -150,11 +174,11 @@ impl<'ast> Analyzer<'ast> {
             _ => {}
         }
     }
-    
+
     pub(super) fn expr_is_identifier(&self, expr: &Expression, name: &str) -> bool {
         matches!(expr, Expression::Identifier { name: id, .. } if id == name)
     }
-    
+
     fn extract_function_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -162,7 +186,7 @@ impl<'ast> Analyzer<'ast> {
             _ => None,
         }
     }
-    
+
     fn extract_method_name(&self, _object: &Expression, method: &str) -> Option<String> {
         Some(method.to_string())
     }
