@@ -3107,11 +3107,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 output.push_str(&expr_str);
 
                                 // TDD FIX: In statement-context matches, add semicolons to all statements
-                            if self.in_statement_match {
-                                output.push_str(";\n");
-                            } else {
-                                output.push('\n');
-                            }
+                                if self.in_statement_match {
+                                    output.push_str(";\n");
+                                } else {
+                                    output.push('\n');
+                                }
                             }
                             Statement::Thread { body, .. } => {
                                 output.push_str(&self.indent());
