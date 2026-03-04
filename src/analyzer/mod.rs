@@ -1072,13 +1072,21 @@ impl<'ast> Analyzer<'ast> {
                             }
                         } else {
                             // Perform inference based on usage in function body
-                            self.infer_parameter_ownership(
+                            let inferred_mode = self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
                                 &func.body,
                                 &func.return_type,
                                 registry,
-                            )?
+                            )?;
+                            
+                            // DEBUG: Log ownership inference for non-Copy parameters
+                            if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
+                                eprintln!("  [OWNERSHIP] {} in {}: {:?} (type: {:?})",
+                                    param.name, func.name, inferred_mode, param.type_);
+                            }
+                            
+                            inferred_mode
                         }
                     }
                 }

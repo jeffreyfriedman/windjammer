@@ -72,6 +72,9 @@ edition = "2021"
                 "game_host_core" => {
                     "game-host-core = { path = \"../game-host/game-host-core\" }\n".to_string()
                 }
+                "windjammer_app" => {
+                    "windjammer-app = { path = \"../game-host/game-host-core\" }\n".to_string()
+                }
                 "windjammer_runtime" => {
                     "windjammer-runtime = { path = \"../windjammer/crates/windjammer-runtime\" }\n".to_string()
                 }

@@ -329,13 +329,9 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 };
 
-                // Immutable-by-default: `let` is immutable, `let mut` is mutable.
-                // The compiler no longer silently infers `mut` for local bindings.
-                // Users must explicitly write `let mut` when mutation is intended.
-                // This follows the modern language consensus (Rust, Swift, Kotlin, Zig).
-                //
-                // NOTE: Parameter ownership inference (& vs &mut vs owned) is unchanged --
-                // that's a mechanical detail the compiler still handles automatically.
+                // EXPLICIT MUTABILITY: Follow Rust/Swift/Kotlin standard
+                // Users must write `let mut x = 0` when reassignment is intended
+                // This prevents accidental state mutation bugs (critical for game engines)
                 if needs_mut_ref {
                     // Don't add mut keyword, but we'll add &mut to the value
                 } else if *mutable {
