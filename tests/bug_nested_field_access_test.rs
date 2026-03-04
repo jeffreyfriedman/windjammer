@@ -11,7 +11,6 @@
 /// }
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
@@ -65,7 +64,7 @@ fn main() {
     let out_dir = test_dir.join("out");
 
     // Compile with wj
-    let output = Command::new("wj")
+    let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
         .arg("--target")
@@ -155,7 +154,7 @@ fn main() {}
 
     let out_dir = test_dir.join("out");
 
-    let output = Command::new("wj")
+    let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
         .arg("--target")

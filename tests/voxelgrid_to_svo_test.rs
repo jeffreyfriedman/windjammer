@@ -23,6 +23,7 @@ mod tests {
     // then port to Windjammer once validated.
 
     #[test]
+    #[ignore = "TODO: Implement VoxelGrid → SVO conversion"]
     fn test_voxelgrid_to_svo_minimal() {
         // TDD RED: Create a 4x4x4 grid with single voxel
         // Expected SVO:
@@ -30,23 +31,23 @@ mod tests {
         // - Leaf node (material ID)
 
         // This test will guide the implementation
-        // TODO: Implement conversion algorithm
-
-        assert!(true, "TODO: Implement VoxelGrid → SVO conversion");
+        todo!("Implement VoxelGrid → SVO conversion");
     }
 
     #[test]
+    #[ignore = "TODO: Test sparse encoding"]
     fn test_svo_empty_regions_are_skipped() {
         // Black screen fix: Verify empty space is efficiently encoded
         // Large empty regions should collapse to single nodes
 
-        assert!(true, "TODO: Test sparse encoding");
+        todo!("Test sparse encoding");
     }
 
     #[test]
+    #[ignore = "TODO: Test material preservation"]
     fn test_svo_material_ids_preserved() {
         // Ensure material IDs (stone=1, dirt=2, etc.) are correct in SVO
 
-        assert!(true, "TODO: Test material preservation");
+        todo!("Test material preservation");
     }
 }

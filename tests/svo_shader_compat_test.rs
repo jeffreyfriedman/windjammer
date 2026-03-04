@@ -87,7 +87,7 @@ fn lookup_svo(
         let is_leaf = (node & LEAF_FLAG) != 0;
 
         if is_leaf {
-            return (node & 0xFF) as u32;
+            return node & 0xFF;
         }
 
         // Interior node - descend
@@ -109,18 +109,12 @@ fn lookup_svo(
         // Update bounds for next iteration
         if x >= center.0 {
             node_min.0 = center.0;
-        } else {
-            node_min.0 = node_min.0;
         }
         if y >= center.1 {
             node_min.1 = center.1;
-        } else {
-            node_min.1 = node_min.1;
         }
         if z >= center.2 {
             node_min.2 = center.2;
-        } else {
-            node_min.2 = node_min.2;
         }
         node_size = half;
 

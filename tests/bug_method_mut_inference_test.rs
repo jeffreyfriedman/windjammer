@@ -65,7 +65,7 @@ fn main() {
 
     let out_dir = test_dir.join("out");
 
-    let output = Command::new("wj")
+    let _output = Command::new("wj")
         .arg("build")
         .arg(&wj_file)
         .arg("--target")

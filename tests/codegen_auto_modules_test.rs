@@ -4,7 +4,7 @@
 // without requiring manual #[path] declarations
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[test]
@@ -153,13 +153,13 @@ fn setup_test_project_with_files(files: &[&str]) -> PathBuf {
     dir
 }
 
-fn create_wj_file(dir: &PathBuf, path: &str, content: &str) {
+fn create_wj_file(dir: &Path, path: &str, content: &str) {
     let full_path = dir.join(path);
     fs::create_dir_all(full_path.parent().unwrap()).unwrap();
     fs::write(full_path, content).unwrap();
 }
 
-fn compile_project(dir: &PathBuf) {
+fn compile_project(dir: &Path) {
     // TODO: Call actual compiler with auto-module generation
     // For now, stub that creates a basic file
     let modules_file = dir.join("build/windjammer_modules.rs");
@@ -170,22 +170,20 @@ fn compile_project(dir: &PathBuf) {
     content.push_str("// DO NOT EDIT\n\n");
 
     // Find all .wj files
-    for entry in WalkDir::new(dir.join("src_wj")) {
-        if let Ok(entry) = entry {
-            if entry.path().extension().and_then(|s| s.to_str()) == Some("wj") {
-                let relative = entry.path().strip_prefix(dir.join("src_wj")).unwrap();
-                let module_name = relative
-                    .with_extension("")
-                    .to_str()
-                    .unwrap()
-                    .replace("/", "_")
-                    .replace("\\", "_");
+    for entry in WalkDir::new(dir.join("src_wj")).into_iter().flatten() {
+        if entry.path().extension().and_then(|s| s.to_str()) == Some("wj") {
+            let relative = entry.path().strip_prefix(dir.join("src_wj")).unwrap();
+            let module_name = relative
+                .with_extension("")
+                .to_str()
+                .unwrap()
+                .replace("/", "_")
+                .replace("\\", "_");
 
-                let rs_path = relative.with_extension("rs");
+            let rs_path = relative.with_extension("rs");
 
-                content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
-                content.push_str(&format!("pub mod wj_{};\n\n", module_name));
-            }
+            content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
+            content.push_str(&format!("pub mod wj_{};\n\n", module_name));
         }
     }
 
@@ -197,6 +195,6 @@ fn compile_project(dir: &PathBuf) {
     fs::write(modules_file, content).unwrap();
 }
 
-fn cleanup_test_project(dir: &PathBuf) {
+fn cleanup_test_project(dir: &Path) {
     let _ = fs::remove_dir_all(dir);
 }

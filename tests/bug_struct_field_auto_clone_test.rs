@@ -30,10 +30,10 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let output_dir = temp_dir.join("out");
 
     let output = Command::new("wj")
-        .args(&["build", source_file.to_str().unwrap()])
-        .args(&["--output", output_dir.to_str().unwrap()])
-        .args(&["--target", "rust"])
-        .args(&["--no-cargo"])
+        .args(["build", source_file.to_str().unwrap()])
+        .args(["--output", output_dir.to_str().unwrap()])
+        .args(["--target", "rust"])
+        .args(["--no-cargo"])
         .output()
         .expect("Failed to run wj");
 
