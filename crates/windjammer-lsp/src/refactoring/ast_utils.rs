@@ -118,8 +118,8 @@ pub fn format_type(ty: &Type) -> String {
                 format!("fn({})", param_strs.join(", "))
             }
         }
-        Type::RawPointer { is_mut, pointee } => {
-            if *is_mut {
+        Type::RawPointer { mutable, pointee } => {
+            if *mutable {
                 format!("*mut {}", format_type(pointee))
             } else {
                 format!("*const {}", format_type(pointee))
