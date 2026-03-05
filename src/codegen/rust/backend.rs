@@ -155,6 +155,20 @@ impl CodegenBackend for RustBackend {
             .analyze_program(program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
+        // THE WINDJAMMER WAY: Run linter after analysis, before codegen
+        // Compile predictably (respect explicit intent), warn helpfully (guide to better patterns)
+        let mut linter = crate::linter::Linter::new();
+        for analyzed_func in &analyzed {
+            linter.lint_function(analyzed_func);
+        }
+        let diagnostics = linter.into_diagnostics();
+        for diagnostic in &diagnostics {
+            // Only print warnings and errors (not notes) to stderr
+            if diagnostic.level != crate::linter::LintLevel::Allow {
+                eprintln!("{}", diagnostic);
+            }
+        }
+
         let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
 

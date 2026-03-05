@@ -26,6 +26,8 @@ pub struct AnalyzedFunction<'ast> {
     pub inferred_param_types: Vec<Type>,
     // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
     pub mutated_variables: HashSet<String>,
+    // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
+    pub mutated_parameters: HashSet<String>,
     // AUTO-CLONE: Track where clones should be automatically inserted
     pub auto_clone_analysis: AutoCloneAnalysis,
     // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
@@ -1142,6 +1144,14 @@ impl<'ast> Analyzer<'ast> {
         self.track_mutations(&func.body);
         let mutated_variables = self.mutated_variables.clone();
 
+        // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
+        let mut mutated_parameters = HashSet::new();
+        for param in &func.parameters {
+            if self.is_mutated(&param.name, &func.body, registry) {
+                mutated_parameters.insert(param.name.clone());
+            }
+        }
+
         // PHASE 7-9: Additional optimizations (future implementation)
         let const_static_optimizations = Vec::new(); // TODO: Implement detection
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
@@ -1160,6 +1170,7 @@ impl<'ast> Analyzer<'ast> {
             inferred_ownership,
             inferred_param_types,
             mutated_variables,
+            mutated_parameters,
             auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,

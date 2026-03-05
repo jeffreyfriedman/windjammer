@@ -100,11 +100,16 @@ fn main() {
         );
     }
 
-    // Verify loader parameter inferred as &mut
+    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `loader: Loader` (owned),
+    // compiler preserves it as `mut loader: Loader` to respect explicit intent!
+    // The linter will warn that `&mut Loader` would be more efficient.
+    //
+    // OLD BEHAVIOR (pre-v0.45.0): Changed `Loader` → `&mut Loader`
+    // NEW BEHAVIOR (v0.45.0+): Preserves as `mut loader: Loader` + linter warns
     assert!(
-        generated.contains("fn process(loader: &mut Loader)")
-            || generated.contains("fn process(_loader: &mut Loader)"),
-        "process() should infer &mut Loader for parameter calling mutating methods"
+        generated.contains("fn process(mut loader: Loader)")
+            || generated.contains("fn process(mut _loader: Loader)"),
+        "process() should preserve owned parameter as `mut T` (respect explicit intent)"
     );
 
     // Verify method calls use the parameter directly (not &mut)
@@ -200,10 +205,13 @@ fn main() {
         );
     }
 
+    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `config: Config` (owned),
+    // compiler preserves it as `mut config: Config` to respect explicit intent!
+    // The linter will warn that `&mut Config` would be more efficient.
     assert!(
-        generated.contains("fn setup(config: &mut Config)")
-            || generated.contains("fn setup(_config: &mut Config)"),
-        "setup() should infer &mut Config"
+        generated.contains("fn setup(mut config: Config)")
+            || generated.contains("fn setup(mut _config: Config)"),
+        "setup() should preserve owned parameter as `mut T` (respect explicit intent)"
     );
 
     fs::remove_dir_all(&test_dir).ok();

@@ -26,6 +26,7 @@ pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
+pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -1749,6 +1750,22 @@ fn compile_file_impl(
         .analyzer
         .analyze_program_with_global_signatures(&program, &module_compiler.global_signatures)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
+
+    // THE WINDJAMMER WAY: Run linter after analysis
+    // Compile predictably (respect explicit intent), warn helpfully (guide to better patterns)
+    if !store_program {
+        // Only run linter during PASS 2 (regeneration), not PASS 1 (registration)
+        let mut linter = linter::Linter::new();
+        for analyzed_func in &analyzed {
+            linter.lint_function(analyzed_func);
+        }
+        let diagnostics = linter.into_diagnostics();
+        for diagnostic in &diagnostics {
+            if diagnostic.level != linter::LintLevel::Allow {
+                eprintln!("{}", diagnostic);
+            }
+        }
+    }
 
     // BUG FIX: Merge per-file signatures into global registry during PASS 1
     // This ensures extern function signatures (and all other signatures) are available
