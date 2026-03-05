@@ -229,8 +229,7 @@ fn main() {
         generated
     );
     assert!(
-        generated.contains("fn outer(c: Counter")
-            && !generated.contains("fn outer(mut c: Counter"),
+        generated.contains("fn outer(c: Counter") && !generated.contains("fn outer(mut c: Counter"),
         "outer should preserve owned without mut (just moves). Generated:\n{}",
         generated
     );

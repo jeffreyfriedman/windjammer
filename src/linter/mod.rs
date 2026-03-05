@@ -24,10 +24,10 @@ pub enum LintLevel {
 /// Lint category for organization
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LintCategory {
-    Performance,  // Efficiency issues
-    Correctness,  // Bugs and mistakes
-    Style,        // Idiomatic code
-    Complexity,   // Code complexity
+    Performance, // Efficiency issues
+    Correctness, // Bugs and mistakes
+    Style,       // Idiomatic code
+    Complexity,  // Code complexity
 }
 
 /// Individual lint diagnostic
@@ -52,12 +52,12 @@ impl fmt::Display for LintDiagnostic {
             LintLevel::Allow => return Ok(()), // Don't display allowed lints
         };
 
+        writeln!(f, "{}: {} [{}]", level_str, self.message, self.lint_name)?;
         writeln!(
             f,
-            "{}: {} [{}]",
-            level_str, self.message, self.lint_name
+            "  --> {}:{}:{}",
+            self.location.file, self.location.line, self.location.column
         )?;
-        writeln!(f, "  --> {}:{}:{}", self.location.file, self.location.line, self.location.column)?;
 
         if let Some(note) = &self.note {
             writeln!(f, "  = note: {}", note)?;
@@ -101,7 +101,9 @@ impl LintCollector {
     }
 
     pub fn has_warnings(&self) -> bool {
-        self.diagnostics.iter().any(|d| d.level == LintLevel::Warning)
+        self.diagnostics
+            .iter()
+            .any(|d| d.level == LintLevel::Warning)
     }
 }
 
@@ -185,10 +187,7 @@ impl<'ast> Linter<'ast> {
                 lint_name: "owned-but-not-returned".to_string(),
                 category: LintCategory::Performance,
                 level: LintLevel::Warning,
-                message: format!(
-                    "Parameter `{}` is mutated but not returned",
-                    param.name
-                ),
+                message: format!("Parameter `{}` is mutated but not returned", param.name),
                 location,
                 help: Some(format!(
                     "Consider using `&mut {}` for efficiency",
@@ -221,10 +220,11 @@ impl<'ast> Linter<'ast> {
 
     /// Check if a parameter is returned from the function
     fn parameter_is_returned(param_name: &str, body: &[&Statement]) -> bool {
-
         for stmt in body {
             match stmt {
-                Statement::Return { value: Some(expr), .. } => {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
                     if Self::expression_contains_identifier(expr, param_name) {
                         return true;
                     }

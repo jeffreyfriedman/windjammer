@@ -1007,8 +1007,7 @@ pub fn check_pool(pool: ResourcePool) -> i32 {
     // Code compiles predictably (explicit intent respected),
     // but linter warns about inefficiency (educational)
     assert!(
-        stderr.contains("owned-but-not-returned")
-            || stderr.contains("mutated but not returned"),
+        stderr.contains("owned-but-not-returned") || stderr.contains("mutated but not returned"),
         "Expected linter warning for owned-but-not-returned in fill_pool.\n\
          Stderr:\n{}",
         stderr

@@ -98,8 +98,7 @@ pub fn increment_counter(counter: Counter) -> Counter {
 
     // Should NOT have warning
     assert!(
-        !stderr.contains("owned-but-not-returned")
-            && !stderr.contains("mutated but not returned"),
+        !stderr.contains("owned-but-not-returned") && !stderr.contains("mutated but not returned"),
         "Should NOT warn for owned param that is returned. Stderr:\n{}",
         stderr
     );
