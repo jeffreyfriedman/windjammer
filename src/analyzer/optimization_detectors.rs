@@ -676,6 +676,7 @@ impl<'ast> Analyzer<'ast> {
                     self.infer_parameter_ownership(
                         &param.name,
                         &param.type_,
+                        &param.ownership,
                         &func.body,
                         &func.return_type,
                         registry,

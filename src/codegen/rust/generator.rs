@@ -114,6 +114,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_borrowed_params: std::collections::HashSet<String>,
     // INFERRED MUT BORROWED PARAMS: Parameters inferred to be &mut (for avoiding double &mut in passthrough)
     pub(crate) inferred_mut_borrowed_params: std::collections::HashSet<String>,
+    // USER-WRITTEN CLOSURE: When true, suppress auto-borrowing transformations (preserve user intent)
+    pub(crate) in_user_written_closure: bool,
+    // USER CLOSURE PARAMS: Track parameters of current user-written closure
+    pub(crate) user_closure_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     pub(crate) generating_assignment_target: bool,
     // VOID BLOCK: When true, last expression in a block gets a semicolon (if-without-else bodies)
@@ -249,6 +253,8 @@ impl<'ast> CodeGenerator<'ast> {
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             inferred_mut_borrowed_params: std::collections::HashSet::new(),
+            in_user_written_closure: false,
+            user_closure_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             in_void_block: false,
             in_explicit_clone_call: false,

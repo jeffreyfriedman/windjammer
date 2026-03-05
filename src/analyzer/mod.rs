@@ -1099,6 +1099,7 @@ impl<'ast> Analyzer<'ast> {
                             let inferred_mode = self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
+                                &param.ownership,
                                 &func.body,
                                 &func.return_type,
                                 registry,
@@ -1304,6 +1305,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         param_type: &Type,
+        original_hint: &OwnershipHint,
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
         registry: &SignatureRegistry,
@@ -1330,8 +1332,25 @@ impl<'ast> Analyzer<'ast> {
         // Multi-pass registry-aware inference
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
+        // THE WINDJAMMER WAY: Respect user's ownership choice!
+        // If user wrote `pool: ResourcePool` (owned) and it's mutated,
+        // keep it Owned (codegen will add `mut` to binding).
+        // Only change to MutBorrowed if user wrote `&pool` and it needs mutation.
         if self.is_mutated(param_name, body, registry) {
-            return Ok(OwnershipMode::MutBorrowed);
+            match original_hint {
+                OwnershipHint::Owned | OwnershipHint::Inferred => {
+                    // User wants owned (or didn't specify), we'll add mut to binding: mut pool: ResourcePool
+                    return Ok(OwnershipMode::Owned);
+                }
+                OwnershipHint::Ref => {
+                    // User wants borrowed, upgrade to mut borrowed: pool: &mut T
+                    return Ok(OwnershipMode::MutBorrowed);
+                }
+                OwnershipHint::Mut => {
+                    // User explicitly wrote &mut, keep it
+                    return Ok(OwnershipMode::MutBorrowed);
+                }
+            }
         }
 
         // 2. Check if parameter is returned (escapes function)
