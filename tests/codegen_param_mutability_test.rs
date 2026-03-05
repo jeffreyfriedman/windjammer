@@ -149,16 +149,21 @@ fn load_level(loader: AssetLoader, level: String) -> Vec<Asset> {
         println!("Errors:\n{}", err);
     }
 
-    // loader should be &mut because load() takes &mut self
+    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `loader: AssetLoader` (owned),
+    // compiler preserves it as `mut loader: AssetLoader` to respect explicit intent!
+    // The linter will warn that `&mut AssetLoader` would be more efficient.
+    //
+    // OLD BEHAVIOR (pre-v0.45.0): Changed `AssetLoader` → `&mut AssetLoader`
+    // NEW BEHAVIOR (v0.45.0+): Preserves as `mut loader: AssetLoader` + linter warns
     assert!(
         ok,
         "Generated Rust should compile without E0596 when mutating method call is in let binding.\nErrors:\n{}",
         err
     );
-    // Verify &mut is present in the parameter type (binding doesn't need `mut` for &mut T)
+    // Verify owned parameter with mut binding (respects explicit intent)
     assert!(
-        generated.contains("&mut AssetLoader"),
-        "Parameter 'loader' should have &mut AssetLoader type.\nGenerated:\n{}",
+        generated.contains("mut loader: AssetLoader"),
+        "Parameter 'loader' should be `mut loader: AssetLoader` (respect explicit owned).\nGenerated:\n{}",
         generated
     );
 }
