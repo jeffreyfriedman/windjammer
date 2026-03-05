@@ -3,7 +3,6 @@
 //! Tests compiler lint warnings (performance, style, correctness)
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 

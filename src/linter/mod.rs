@@ -113,6 +113,12 @@ pub struct Linter<'ast> {
     _phantom: std::marker::PhantomData<&'ast ()>,
 }
 
+impl<'ast> Default for Linter<'ast> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'ast> Linter<'ast> {
     pub fn new() -> Self {
         Self {
