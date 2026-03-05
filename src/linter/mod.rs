@@ -272,13 +272,3 @@ impl<'ast> Linter<'ast> {
             .collect()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // TDD: Tests will go here
-    // - test_lint_owned_but_not_returned_warns()
-    // - test_lint_owned_and_returned_no_warning()
-    // - test_lint_explicit_to_string_warns()
-}
