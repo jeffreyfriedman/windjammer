@@ -104,10 +104,16 @@ fn test_hashmap_remove_expects_reference() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // HashMap::remove DOES need &, so this should have it
+    // Compiler correctly infers key: &String (HashMap::remove needs &K)
+    // So in generated code, key is already &String, just pass it directly
     assert!(
-        generated.contains("map.remove(&key)"),
-        "HashMap::remove should get &key reference, got:\n{}",
+        generated.contains("key: &String"),
+        "key parameter should be inferred as &String, got:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("map.remove(key)"),
+        "HashMap::remove should receive key directly (already &String), got:\n{}",
         generated
     );
 }
