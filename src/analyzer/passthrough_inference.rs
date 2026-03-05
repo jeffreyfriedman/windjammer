@@ -17,6 +17,11 @@ impl<'ast> Analyzer<'ast> {
     ) -> Option<OwnershipMode> {
         // TDD: Check for METHOD CALLS ON the parameter first (e.g., grid.set(42))
         // This determines if parameter needs &mut based on method's self type
+        //
+        // THE WINDJAMMER WAY: Multi-pass compilation makes this work
+        // - Pass 1: Grid::set isn't registered yet, fallback to other inference
+        // - Pass 2: Grid::set is registered, we look it up and see it needs &mut self
+        // - Result: fill_grid(grid: &mut Grid) correctly inferred!
         if let Some(method_self_mode) = self.infer_from_method_calls_on_param(param_name, body, registry) {
             return Some(method_self_mode);
         }
@@ -76,23 +81,18 @@ impl<'ast> Analyzer<'ast> {
             return None;
         }
 
-        eprintln!("TDD DEBUG: Found method calls on param '{}': {:?}", param_name, method_calls);
-
         let mut needs_mut = false;
 
         for method_name in &method_calls {
+            // Look up method signature in registry
+            // Multi-pass compilation ensures this exists by Pass 2+
             if let Some(sig) = registry.get_signature(method_name) {
-                eprintln!("TDD DEBUG: Found signature for '{}': self={:?}, params={:?}", 
-                    method_name, sig.param_ownership.first(), sig.param_ownership);
                 // Check the self parameter (position 0 in param_ownership)
                 if let Some(&self_ownership) = sig.param_ownership.first() {
                     if self_ownership == OwnershipMode::MutBorrowed {
                         needs_mut = true;
-                        eprintln!("TDD DEBUG: Method '{}' needs &mut self -> param '{}' needs &mut!", method_name, param_name);
                     }
                 }
-            } else {
-                eprintln!("TDD DEBUG: No signature found for method '{}'", method_name);
             }
         }
 
