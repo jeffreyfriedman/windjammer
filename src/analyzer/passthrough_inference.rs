@@ -22,7 +22,9 @@ impl<'ast> Analyzer<'ast> {
         // - Pass 1: Grid::set isn't registered yet, fallback to other inference
         // - Pass 2: Grid::set is registered, we look it up and see it needs &mut self
         // - Result: fill_grid(grid: &mut Grid) correctly inferred!
-        if let Some(method_self_mode) = self.infer_from_method_calls_on_param(param_name, body, registry) {
+        if let Some(method_self_mode) =
+            self.infer_from_method_calls_on_param(param_name, body, registry)
+        {
             return Some(method_self_mode);
         }
 
@@ -197,7 +199,11 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_method_calls_from_expr(param_name, arg, results);
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.collect_method_calls_from_expr(param_name, function, results);
                 for (_, arg) in arguments {
                     self.collect_method_calls_from_expr(param_name, arg, results);

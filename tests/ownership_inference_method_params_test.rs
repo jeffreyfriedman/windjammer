@@ -151,12 +151,14 @@ impl Game {
     };
 
     // THE WINDJAMMER WAY: Self is INFERRED!
-    // User writes `update(self)` → Compiler should infer `&mut self` 
+    // User writes `update(self)` → Compiler should infer `&mut self`
     // when calling methods that require `&mut` on fields
     //
     // This is the CORRECT behavior - the compiler is smart!
     assert!(
-        rust_code.contains("fn update(&mut self)") || rust_code.contains("fn update(&self)") || rust_code.contains("fn update(self)"),
+        rust_code.contains("fn update(&mut self)")
+            || rust_code.contains("fn update(&self)")
+            || rust_code.contains("fn update(self)"),
         "Should infer appropriate self ownership.\n\nGenerated:\n{}",
         rust_code
     );
