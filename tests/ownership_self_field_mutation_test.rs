@@ -8,9 +8,7 @@
 //
 // This is causing 7+ E0596 errors in Breach Protocol game.
 
-use std::fs;
 use std::process::Command;
-use tempfile::TempDir;
 
 fn get_wj_binary() -> String {
     env!("CARGO_BIN_EXE_wj").to_string()
