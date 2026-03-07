@@ -66,15 +66,17 @@ fn main() {
 
     println!("Generated code:\n{}", generated);
 
-    // Verify HashMap key methods don't produce &&String
+    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
+    // - Read-only string param → &str (idiomatic Rust)
+    // - User wrote `&name` → we generate `contains_key(name)` (already &str, no extra &)
     assert!(
-        !generated.contains("contains_key(&name)"),
-        "Should NOT have &name (&&String) for contains_key. Got:\n{}",
+        generated.contains("name: &str"),
+        "Should generate &str parameter. Got:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(name)"),
-        "Should pass name directly (auto-derefs &String to &str). Got:\n{}",
+        "Should pass name directly (already &str). Got:\n{}",
         generated
     );
 

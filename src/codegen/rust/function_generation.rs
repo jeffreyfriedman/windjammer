@@ -779,7 +779,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let args: Vec<String> = elements
                     .iter()
                     .enumerate()
-                    .map(|(idx, arg)| self.generate_test_case_argument(arg, &func.parameters, idx))
+                    .map(|(idx, arg)| self.generate_test_case_argument(arg, analyzed, idx))
                     .collect();
                 output.push_str(&args.join(", "));
             } else if let Expression::Array { elements, .. } = case_expr {
@@ -787,12 +787,12 @@ impl<'ast> CodeGenerator<'ast> {
                 let args: Vec<String> = elements
                     .iter()
                     .enumerate()
-                    .map(|(idx, arg)| self.generate_test_case_argument(arg, &func.parameters, idx))
+                    .map(|(idx, arg)| self.generate_test_case_argument(arg, analyzed, idx))
                     .collect();
                 output.push_str(&args.join(", "));
             } else {
                 // Single argument (not a tuple or array)
-                output.push_str(&self.generate_test_case_argument(case_expr, &func.parameters, 0));
+                output.push_str(&self.generate_test_case_argument(case_expr, analyzed, 0));
             }
 
             output.push_str(");\n");
@@ -807,28 +807,35 @@ impl<'ast> CodeGenerator<'ast> {
     fn generate_test_case_argument(
         &mut self,
         arg_expr: &Expression<'ast>,
-        params: &[Parameter<'ast>],
+        analyzed: &AnalyzedFunction<'ast>,
         param_idx: usize,
     ) -> String {
         use crate::parser::ast::core::Expression;
         use crate::parser::ast::literals::Literal;
         use crate::parser::ast::types::Type;
 
-        // Get the expected parameter type
-        let param_type = params.get(param_idx).map(|p| &p.type_);
+        let params = &analyzed.decl.parameters;
+        let param = params.get(param_idx);
 
-        // Check if this is a string literal and the parameter expects String
+        // Check if this is a string literal and the parameter expects OWNED String (not &str)
         let needs_to_string = if let Expression::Literal {
             value: Literal::String(_),
             ..
         } = arg_expr
         {
-            // Check if the parameter type is String
-            if let Some(param_type) = param_type {
-                match param_type {
-                    Type::String => true,
-                    Type::Custom(name) if name == "string" => true,
-                    _ => false,
+            if let Some(param) = param {
+                // Check if parameter type is string
+                let is_string_type = matches!(param.type_, Type::String) 
+                    || matches!(param.type_, Type::Custom(ref name) if name == "string");
+                
+                if is_string_type {
+                    // Check if this parameter was inferred as OWNED (not borrowed)
+                    // If inferred as borrowed → generates &str → string literal passes directly
+                    // If inferred as owned → generates String → string literal needs .to_string()
+                    let inferred_ownership = analyzed.inferred_ownership.get(&param.name);
+                    !matches!(inferred_ownership, Some(OwnershipMode::Borrowed))
+                } else {
+                    false
                 }
             } else {
                 false
@@ -840,7 +847,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Generate the expression
         let mut result = self.generate_expression_immut(arg_expr);
 
-        // Add .to_string() if needed
+        // Add .to_string() if needed (only for owned String params)
         if needs_to_string {
             result.push_str(".to_string()");
         }
@@ -1295,7 +1302,15 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             self.type_to_rust(inferred_type)
                         } else {
-                            format!("&{}", self.type_to_rust(inferred_type))
+                            // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
+                            let is_string = matches!(inferred_type, Type::String) 
+                                || matches!(inferred_type, Type::Custom(name) if name == "string");
+                            
+                            if is_string {
+                                "&str".to_string()
+                            } else {
+                                format!("&{}", self.type_to_rust(inferred_type))
+                            }
                         }
                     }
                     OwnershipHint::Mut => {
@@ -1365,7 +1380,18 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
-                                        format!("&{}", self.type_to_rust(inferred_type))
+                                        // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
+                                        // Check if this is a String type (either Type::String or Type::Custom("string"))
+                                        let is_string = matches!(inferred_type, Type::String) 
+                                            || matches!(inferred_type, Type::Custom(name) if name == "string");
+                                        
+                                        if is_string {
+                                            // &str is idiomatic Rust: accepts both String and &str via deref coercion
+                                            // &String is an anti-pattern (Clippy warning)
+                                            "&str".to_string()
+                                        } else {
+                                            format!("&{}", self.type_to_rust(inferred_type))
+                                        }
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {

@@ -91,13 +91,22 @@ fn main() {
         );
     }
 
-    // Verify: borrowed_struct.owned_field passed as &field when method expects &String
-    // Should be: inv.has_item(&item.item_id, ...)
-    // NOT: inv.has_item(item.item_id.clone(), ...)
+    // WINDJAMMER DESIGN: String params infer to &str (not String!)
+    // When passing borrowed_struct.owned_field (where field is String):
+    // - item: &Ingredient → item.item_id is &String
+    // - has_item expects item_id: &str (borrowed, read-only)
+    // - Just borrow: has_item(&item.item_id, ...) - &String coerces to &str
+    //
+    // This is CORRECT! No clone needed, just borrow the field.
     assert!(
-        generated.contains("has_item(&item.item_id,")
-            || generated.contains("has_item(&item.item_id )"),
-        "Should pass &borrowed_struct.owned_field when method expects &String"
+        generated.contains("item_id: &str"),
+        "Should generate &str parameter. Got:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("has_item(&item.item_id,") || generated.contains("has_item(&item.item_id )"),
+        "Should borrow the field (no .clone()). Got:\n{}",
+        generated
     );
 
     fs::remove_dir_all(&test_dir).ok();

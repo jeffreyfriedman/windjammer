@@ -81,10 +81,19 @@ fn main() {
         );
     }
 
-    // Verify HashMap method doesn't add double &
+    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
+    // - Read-only string param → &str (idiomatic Rust, no Clippy warnings)
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &str works perfectly
+    // - User wrote `&name` → generated code passes `name` directly (already &str)
     assert!(
-        generated.contains("contains_key(name)") || generated.contains("contains_key(&**name)"),
-        "HashMap::contains_key on self.field should handle &String correctly"
+        generated.contains("name: &str"),
+        "Should generate &str parameter (not &String)\n\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("contains_key(name)"),
+        "Should pass name directly (already &str, no extra &)\n\nGenerated:\n{}",
+        generated
     );
 
     fs::remove_dir_all(&test_dir).ok();

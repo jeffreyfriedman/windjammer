@@ -69,10 +69,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // key is inferred as &String which auto-derefs to &str for HashMap
+    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
+    // - Read-only string param → &str (idiomatic Rust)
+    // - User wrote `&key` → we generate `contains_key(key)` (already &str, strip redundant &)
+    assert!(
+        generated.contains("key: &str"),
+        "Should generate &str parameter. Generated:\n{}",
+        generated
+    );
     assert!(
         generated.contains("contains_key(key)"),
-        "Should strip & for borrowed String param. Generated:\n{}",
+        "Should pass key directly (already &str, strip &). Generated:\n{}",
         generated
     );
 }
@@ -97,10 +104,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // key is inferred as &String which auto-derefs to &str for HashMap::get
+    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
+    // - Read-only string param → &str (idiomatic Rust)
+    // - User wrote `&key` → we generate `map.get(key)` (already &str, strip redundant &)
+    assert!(
+        generated.contains("key: &str"),
+        "Should generate &str parameter. Generated:\n{}",
+        generated
+    );
     assert!(
         generated.contains("map.get(key)"),
-        "Should strip & for borrowed String param. Generated:\n{}",
+        "Should pass key directly (already &str, strip &). Generated:\n{}",
         generated
     );
 }

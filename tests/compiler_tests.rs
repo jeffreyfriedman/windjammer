@@ -49,10 +49,10 @@ fn test_automatic_reference_insertion() {
         "Copy types should be passed by value without mut if not mutated"
     );
 
-    // THE WINDJAMMER WAY: String parameters may be owned or borrowed depending on usage
+    // THE WINDJAMMER WAY: Read-only string parameters infer to &str (idiomatic Rust!)
     assert!(
-        generated.contains("fn greet(name: String)") || generated.contains("fn greet(name: &String)"),
-        "String parameter should be String or &String depending on ownership inference.\nGenerated:\n{}", generated
+        generated.contains("fn greet(name: &str)"),
+        "Read-only string parameter should infer to &str.\nGenerated:\n{}", generated
     );
 
     // Check that call sites pass Copy types by value (no &)
@@ -61,13 +61,10 @@ fn test_automatic_reference_insertion() {
         "Copy types should be passed by value at call site"
     );
 
-    // Check that string literals are auto-converted to String (may be borrowed)
+    // Check that owned String is borrowed when passed to &str parameter
     assert!(
-        generated.contains(r#"greet("Alice".to_string())"#)
-            || generated.contains(r#"greet(&"Alice".to_string())"#)
-            || generated.contains("greet(name)")
-            || generated.contains("greet(&name)"),
-        "String should be passed to greet (owned or borrowed).\nGenerated:\n{}",
+        generated.contains("greet(&name)"),
+        "Owned String should be borrowed when passed to &str parameter.\nGenerated:\n{}",
         generated
     );
 

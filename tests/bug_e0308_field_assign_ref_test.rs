@@ -81,11 +81,23 @@ fn main() {
         );
     }
 
-    // Verify auto-clone/to_string is inserted
+    // WINDJAMMER DESIGN: String params infer to &str (not String!)
+    // When assigning borrowed param to owned field:
+    // - value: &str (borrowed parameter, read-only inference)
+    // - self.data.value: String (owned field)
+    // - Must clone: self.data.value = value.clone() or value.to_string()
+    //
+    // This is CORRECT! Converting &str to String requires allocation.
     assert!(
-        generated.contains("self.data.value = value.clone()")
+        generated.contains("value: &str"),
+        "Should generate &str parameter. Got:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.data.value = value.clone()") 
             || generated.contains("self.data.value = value.to_string()"),
-        "Should auto-convert borrowed parameter to owned field"
+        "Should clone/convert &str to String for owned field. Got:\n{}",
+        generated
     );
 
     fs::remove_dir_all(&test_dir).ok();

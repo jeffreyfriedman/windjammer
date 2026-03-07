@@ -219,6 +219,11 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.collect_method_calls_from_expr(param_name, operand, results);
             }
+            // TDD FIX: Recurse into TryOp (?) expressions
+            // Example: loader.load(...)? wraps the method call in TryOp
+            Expression::TryOp { expr, .. } => {
+                self.collect_method_calls_from_expr(param_name, expr, results);
+            }
             _ => {}
         }
     }
@@ -339,6 +344,12 @@ impl<'ast> Analyzer<'ast> {
                 for (_, arg) in arguments {
                     self.collect_passthrough_from_expr(param_name, arg, results);
                 }
+            }
+            // TDD FIX: Recurse into TryOp (?) expressions
+            // Example: process(data)? wraps the function call in TryOp
+            // We must recurse into the inner expression to detect the parameter usage
+            Expression::TryOp { expr, .. } => {
+                self.collect_passthrough_from_expr(param_name, expr, results);
             }
             _ => {}
         }

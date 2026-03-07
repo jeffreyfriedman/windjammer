@@ -1312,11 +1312,9 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Some(&ownership) = sig.param_ownership.get(i) {
                                 match ownership {
                                     OwnershipMode::Borrowed => {
-                                        // TDD FIX (Bug #12): String literals &str -> &String conversion
-                                        // When parameter expects &String and arg is "literal" (&str),
-                                        // we need to convert: &"literal".to_string()
-                                        //
-                                        // Check if this is a string literal AND parameter expects &String
+                                        // NEW DESIGN: Borrowed string parameters → &str (not &String!)
+                                        // String literals are already &str in Rust, so they can be passed directly.
+                                        // No conversion needed: "literal" → &str parameter is a perfect match
                                         let is_string_literal = matches!(
                                             arg,
                                             Expression::Literal {
@@ -1326,21 +1324,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         );
 
                                         if is_string_literal {
-                                            // Check if parameter type is String (not some other type)
-                                            let expects_string = sig.param_types.get(i)
-                                                .map(|t| match t {
-                                                    Type::String => true,
-                                                    Type::Custom(name) if name == "String" || name == "string" => true,
-                                                    _ => false,
-                                                })
-                                                .unwrap_or(false);
-
-                                            if expects_string {
-                                                // Convert &str literal to &String
-                                                // "test" -> &"test".to_string()
-                                                return vec![format!("&{}.to_string()", arg_str)];
-                                            }
-                                            // For other types expecting &T, string literal is already &str, don't add &
+                                            // String literals are already &str, pass directly to &str parameter
+                                            // No & needed, no .to_string() needed
                                             return vec![arg_str];
                                         }
 
@@ -1858,9 +1843,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         true // Mark that we converted
                                     }
                                     Some(&OwnershipMode::Borrowed) => {
-                                        // Parameter wants &String (inferred) → add &.to_string()
-                                        arg_str = format!("&{}.to_string()", arg_str);
-                                        true // Mark that we converted
+                                        // NEW DESIGN: Borrowed string parameters → &str (not &String!)
+                                        // String literals are already &str, so pass directly (no conversion)
+                                        false // No conversion needed
                                     }
                                     _ => {
                                         // No signature info - use heuristic (fallback to old logic)

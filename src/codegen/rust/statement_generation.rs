@@ -91,6 +91,23 @@ impl<'ast> CodeGenerator<'ast> {
                             {
                                 expr_str = format!("{}.to_string()", expr_str);
                             }
+                            // param.clone() where param: &str → param.to_string()
+                            // &str.clone() returns &str, but we need String
+                            else if expr_str.ends_with(".clone()") {
+                                if let Expression::MethodCall { method, object, .. } = expr {
+                                    if method == "clone" {
+                                        if let Expression::Identifier { name, .. } = &**object {
+                                            // Check if this is a borrowed string parameter
+                                            let is_borrowed_str_param = self.inferred_borrowed_params.contains(name);
+                                            
+                                            if is_borrowed_str_param {
+                                                // Replace .clone() with .to_string()
+                                                expr_str = expr_str.replace(".clone()", ".to_string()");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             // self.field needs .clone() when self is borrowed
                             // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
                             else if let Expression::FieldAccess { object, .. } = expr {
@@ -211,6 +228,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 ) && !expr_str.ends_with(".to_string()")
                                 {
                                     expr_str = format!("{}.to_string()", expr_str);
+                                }
+                                // param.clone() where param: &str → param.to_string()
+                                // &str.clone() returns &str, but we need String  
+                                // Check if expression is identifier.clone() and identifier is a borrowed string param
+                                else if expr_str.ends_with(".clone()") {
+                                    if let Expression::MethodCall { method, object, .. } = expr {
+                                        if method == "clone" {
+                                            if let Expression::Identifier { name, .. } = &**object {
+                                                // Check if this is a borrowed string parameter
+                                                let is_borrowed_str_param = self.inferred_borrowed_params.contains(name);
+                                                
+                                                if is_borrowed_str_param {
+                                                    // Replace .clone() with .to_string()
+                                                    expr_str = expr_str.replace(".clone()", ".to_string()");
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 // self.field needs .clone() when self is borrowed
                                 // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
@@ -736,6 +771,30 @@ impl<'ast> CodeGenerator<'ast> {
                         ) && !return_str.ends_with(".to_string()")
                         {
                             return_str = format!("{}.to_string()", return_str);
+                        }
+                        // param.clone() where param: &str → param.to_string()
+                        // &str.clone() returns &str, but we need String
+                        else if let Expression::MethodCall { method, object, .. } = e {
+                            if method == "clone" {
+                                if let Expression::Identifier { name, .. } = &**object {
+                                    // Check if this identifier is a borrowed string parameter
+                                    let is_string_type = self.current_function_params.iter().any(|p| {
+                                        p.name == *name && (
+                                            matches!(p.type_, Type::String) 
+                                            || matches!(p.type_, Type::Custom(ref n) if n == "string")
+                                        )
+                                    });
+                                    let is_borrowed_str_param = self
+                                        .inferred_borrowed_params
+                                        .contains(name)
+                                        && is_string_type;
+                                    
+                                    if is_borrowed_str_param {
+                                        // Replace .clone() with .to_string()
+                                        return_str = return_str.replace(".clone()", ".to_string()");
+                                    }
+                                }
+                            }
                         }
                         // self.field needs .clone() when self is borrowed
                         // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
@@ -1546,7 +1605,10 @@ impl<'ast> CodeGenerator<'ast> {
                 let target_type = self.infer_expression_type(target);
                 if let Some(Type::String) = target_type {
                     if !value_str.contains(".clone()") && !value_str.contains(".to_string()") {
-                        value_str = format!("{}.clone()", value_str);
+                        // WINDJAMMER FIX: &str → String requires .to_string(), not .clone()
+                        // .clone() on &str returns &str (via ToOwned trait)
+                        // .to_string() converts &str to String (what we need here)
+                        value_str = format!("{}.to_string()", value_str);
                     }
                 }
             }

@@ -1328,17 +1328,23 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // TDD FIX (Bug #5): Removed blanket "String stays Owned" rule.
-        // Previous logic forced all String parameters to be Owned to avoid &String vs &str
-        // mismatches at call sites. However, this prevents proper inference for read-only
-        // String parameters (e.g., parameters only used in comparisons).
+        // 0b. Explicit Rust type `String` (not Windjammer `string`) stays Owned.
+        // When user writes `path: String`, they're explicitly requesting Rust's String type,
+        // which should be respected as owned. Do NOT infer it as borrowed.
+        // This is different from `path: string` (lowercase), which can infer to &str.
+        if matches!(param_type, Type::Custom(name) if name == "String") {
+            return Ok(OwnershipMode::Owned);
+        }
+
+        // WINDJAMMER DESIGN: String parameters infer to &str (not &String!)
+        // 
+        // When a string parameter is read-only, we generate `&str` (idiomatic Rust):
+        // - Accepts both `String` and `&str` via deref coercion
+        // - No `&String` anti-pattern (Clippy-approved)
+        // - Zero-cost for read-only access
         //
-        // New approach: Let normal inference work for String types too. If a String parameter
-        // is only used in read-only operations (comparisons, method calls like .len()), it
-        // will correctly infer as Borrowed. String comparisons work fine with borrowed strings.
-        //
-        // The remaining checks below (is_mutated, is_returned, is_stored, etc.) will still
-        // catch cases where the String needs to be Owned.
+        // Strings are treated like any other type in ownership inference.
+        // The codegen layer will emit `&str` for Borrowed String parameters.
 
         // Multi-pass registry-aware inference
 

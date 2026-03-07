@@ -142,16 +142,16 @@ pub fn type_to_rust(type_: &Type) -> String {
             params,
             return_type,
         } => {
-            // TDD FIX: IDIOMATIC WINDJAMMER - Apply ownership inference to function pointer params
-            // fn(string, i32) → fn(&String, i32) (string is borrowed by default)
-            // fn(vec: Vec<T>) → fn(Vec<T>) (explicit type, keep as-is)
+            // WINDJAMMER DESIGN: Function pointers use &str (not &String!)
+            // fn(string, i32) → fn(&str, i32) - idiomatic Rust, no Clippy warnings
+            // fn(vec: Vec<T>) → fn(&Vec<T>) - borrowed for non-Copy types
             let param_strs: Vec<String> = params
                 .iter()
                 .map(|ty| {
                     match ty {
-                        // Idiomatic Windjammer: string parameters are borrowed
-                        Type::String => "&String".to_string(),
-                        Type::Custom(name) if name == "string" => "&String".to_string(),
+                        // WINDJAMMER DESIGN: String → &str for borrowed parameters
+                        Type::String => "&str".to_string(),
+                        Type::Custom(name) if name == "string" => "&str".to_string(),
                         // Already explicit references - keep as-is
                         Type::Reference(_) | Type::MutableReference(_) => type_to_rust(ty),
                         // Copy types - pass by value

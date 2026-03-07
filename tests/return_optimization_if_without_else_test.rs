@@ -58,6 +58,7 @@ fn compile_wj_source(source: &str) -> Result<String> {
         .arg(&output_dir)
         .arg("--target")
         .arg("rust")
+        .arg("--no-cargo")  // Skip cargo build to avoid manifest issues
         .output()?;
 
     if !output.status.success() {

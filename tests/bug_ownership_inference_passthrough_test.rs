@@ -11,9 +11,8 @@
 /// fn has_item(id: string) -> bool { true }
 /// ```
 ///
-/// Expected: wrapper should have item_id: &String (Borrowed)
-/// Actual: wrapper has item_id: String (Owned) ❌
-/// Result: Callers can't pass &String to wrapper!
+/// Expected: wrapper should have item_id: &str (Borrowed)
+/// Actual: Multi-pass inference may take a long time (slow test)
 use std::fs;
 use std::process::Command;
 
@@ -113,12 +112,13 @@ fn main() {}
         );
     }
 
-    // Verify: has_item should have &String parameter (Borrowed)
-    // Because it only passes to Inventory::has which expects Borrowed
+    // WINDJAMMER DESIGN: Read-only String params infer to &str (not &String!)
+    // has_item only passes to Inventory::has (read-only) → should be &str
     assert!(
-        generated.contains("fn has_item(&self, item_id: &String)")
-            || generated.contains("fn has_item(&self, _item_id: &String)"),
-        "Expected has_item to have Borrowed parameter (&String), not Owned (String)"
+        generated.contains("fn has_item(&self, item_id: &str)")
+            || generated.contains("fn has_item(&self, _item_id: &str)"),
+        "Expected has_item to have &str parameter (idiomatic Rust). Generated:\n{}",
+        generated
     );
 
     // Verify: check_items should compile (calls has_item with borrowed iterator var)

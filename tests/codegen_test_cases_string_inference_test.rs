@@ -63,20 +63,19 @@ fn test_user(id: string, name: string, age: i32) {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The impl function should take &String parameters (read-only usage infers Borrowed)
+    // The impl function should take &str parameters (read-only usage infers Borrowed)
     // Windjammer philosophy: compiler infers the cheapest ownership mode
+    // DESIGN: String → &str for borrowed (idiomatic Rust, not &String anti-pattern)
     assert!(
-        rust_code.contains("fn test_user_impl(id: &String, name: &String, _age: i32)")
-            || rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
-        "Should generate impl function with String or &String parameters.\nGenerated:\n{}",
+        rust_code.contains("fn test_user_impl(id: &str, name: &str, _age: i32)"),
+        "Should generate impl function with &str parameters (idiomatic Rust).\nGenerated:\n{}",
         rust_code
     );
 
-    // The test case calls must convert &str to String (Rust auto-refs when passing String to &String)
+    // The test case calls pass string literals directly (already &str, no .to_string() needed)
     assert!(
-        rust_code.contains(r#"test_user_impl("alice".to_string()"#)
-            || rust_code.contains(r#"test_user_impl(&"alice".to_string()"#),
-        "Compiler must add .to_string() when calling impl function with string literal arguments.\nGenerated:\n{}", rust_code
+        rust_code.contains(r#"test_user_impl("alice", "Alice""#),
+        "String literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}", rust_code
     );
 
     // Strip windjammer_runtime import for standalone rustc test
@@ -152,11 +151,11 @@ fn test_greet() {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // Should contain .to_string() for the parameter (may include & for borrowed params)
+    // NEW DESIGN: Read-only string parameter infers to &str
+    // String literal (already &str) can be passed directly - no conversion needed!
     assert!(
-        rust_code.contains(r#"greet("World".to_string())"#)
-            || rust_code.contains(r#"greet(&"World".to_string())"#),
-        "Compiler should auto-convert string literal parameters.\nGenerated:\n{}",
+        rust_code.contains(r#"greet("World")"#),
+        "String literal should be passed directly to &str parameter.\nGenerated:\n{}",
         rust_code
     );
 

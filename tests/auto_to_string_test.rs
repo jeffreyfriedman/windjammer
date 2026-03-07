@@ -168,15 +168,12 @@ fn test_multiple_string_params() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // All three literals should be converted (TDD UPDATE: b and c are inferred as &String)
-    // First param is Owned (used in addition), others are Borrowed (only read)
+    // NEW DESIGN: Only owned parameter needs .to_string()
+    // a: Owned (used in addition) → needs .to_string()
+    // b, c: Borrowed (only read) → infer to &str, string literals passed directly
     assert!(
-        generated.contains("concatenate(\"Hello\".to_string(),")
-            && (generated.contains("&\"World\".to_string()")
-                || generated.contains("\"World\".to_string()"))
-            && (generated.contains("&\"!\".to_string()")
-                || generated.contains("\"!\".to_string()")),
-        "Should convert all string literal arguments. Generated:\n{}",
+        generated.contains("concatenate(\"Hello\".to_string(), \"World\", \"!\")"),
+        "First param (owned) needs .to_string(), others (borrowed) don't. Generated:\n{}",
         generated
     );
 }

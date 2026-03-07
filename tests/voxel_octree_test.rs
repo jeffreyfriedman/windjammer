@@ -23,7 +23,6 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("octree.wj")
-        .arg("--no-cargo")
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -36,8 +35,8 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
         return (false, format!("STDERR:\n{}\nSTDOUT:\n{}", stderr, stdout));
     }
 
-    // Run the compiled binary
-    let binary_path = test_dir.join("build/octree");
+    // Run the compiled binary (cargo builds to target/debug/)
+    let binary_path = test_dir.join("build/target/debug/octree");
     let run_output = std::process::Command::new(&binary_path)
         .current_dir(&test_dir)
         .output();
