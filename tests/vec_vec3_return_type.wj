@@ -1,0 +1,42 @@
+// TDD TEST: Vec<Vec3> as return type
+// Testing if the parser handles Vec<Vec3> in function signatures
+
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+// Test: Vec<Vec3> as field type
+struct Path {
+    waypoints: Vec<Vec3>,
+}
+
+// Test: Vec<Vec3> as return type
+fn make_path() -> Vec<Vec3> {
+    Vec::new()
+}
+
+// Test: Vec<Vec3> as parameter type
+fn process_path(waypoints: Vec<Vec3>) -> i32 {
+    waypoints.len() as i32
+}
+
+// Test: Complex - multiple Vec< types
+fn funnel_algorithm(
+    triangle_path: Vec<u32>,
+    start: Vec3,
+    goal: Vec3,
+) -> Vec<Vec3> {
+    Vec::new()
+}
+
+fn main() {
+    let path = make_path()
+    let result = process_path(path)
+    
+    let v3 = Vec3 { x: 1.0, y: 2.0, z: 3.0 }
+    let waypoints = funnel_algorithm(Vec::new(), v3, v3)
+    
+    println("✅ Vec<Vec3> in all contexts works!")
+}

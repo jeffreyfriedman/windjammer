@@ -57,8 +57,12 @@ fn test_create_user() {
 
     println!("Generated Rust:\n{}", rust_code);
 
-    // Strip out windjammer_runtime calls for rustc test
+    // Strip out windjammer_runtime calls and import for rustc test
     let rust_code_for_rustc = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n")
         .replace("windjammer_runtime::test::requires", "let _ = ")
         .replace("windjammer_runtime::test::ensures", "let _ = ");
 
@@ -139,8 +143,12 @@ fn create_point(label: string, x: i32, y: i32) -> Point {
     let rust_path = temp_dir.path().join("build/test.rs");
     let rust_code = fs::read_to_string(&rust_path).unwrap();
 
-    // Strip out windjammer_runtime calls for rustc test
+    // Strip out windjammer_runtime calls and import for rustc test
     let rust_code_for_rustc = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n")
         .replace("windjammer_runtime::test::requires", "let _ = ")
         .replace("windjammer_runtime::test::ensures", "let _ = ");
 

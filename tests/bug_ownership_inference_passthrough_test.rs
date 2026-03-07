@@ -1,0 +1,129 @@
+/// TDD Test: Ownership Inference Pass-Through Bug
+///
+/// Bug: Analyzer incorrectly infers Owned for parameters that are only
+/// passed to callees expecting Borrowed parameters.
+///
+/// Example:
+/// ```windjammer
+/// fn wrapper(item_id: string) -> bool {
+///     has_item(item_id)  // has_item expects &String
+/// }
+/// fn has_item(id: string) -> bool { true }
+/// ```
+///
+/// Expected: wrapper should have item_id: &str (Borrowed)
+/// Actual: Multi-pass inference may take a long time (slow test)
+use std::fs;
+use std::process::Command;
+
+#[test]
+fn test_passthrough_to_borrowed_param() {
+    let source = r#"
+struct Inventory {
+    items: Vec<string>
+}
+
+impl Inventory {
+    fn has(id: string) -> bool {
+        // Just a check, parameter not consumed
+        for item_id in &self.items {
+            if item_id == id {
+                return true
+            }
+        }
+        false
+    }
+}
+
+struct Merchant {
+    inventory: Inventory
+}
+
+impl Merchant {
+    /// Wrapper that just calls inventory.has()
+    /// Should infer: item_id: &String (Borrowed)
+    /// Because Inventory::has expects &String (Borrowed)
+    fn has_item(item_id: string) -> bool {
+        self.inventory.has(item_id)
+    }
+    
+    /// Check multiple items (uses self via has_item call)
+    fn check_items(items: Vec<string>) -> bool {
+        for id in &items {
+            if !self.has_item(id) {
+                return false
+            }
+        }
+        true
+    }
+}
+
+fn main() {}
+"#;
+
+    let temp_dir = std::env::temp_dir();
+    let test_id = format!(
+        "wj_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let test_dir = temp_dir.join(&test_id);
+    fs::create_dir_all(&test_dir).unwrap();
+
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+
+    let out_dir = test_dir.join("out");
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let _output = Command::new(wj_binary)
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("rust")
+        .arg("--output")
+        .arg(&out_dir)
+        .output()
+        .expect("Failed to run wj compiler");
+
+    let rust_file = out_dir.join("test.rs");
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+
+    println!("Generated code:\n{}", generated);
+
+    // Compile with rustc
+    let rustc_output = Command::new("rustc")
+        .arg(&rust_file)
+        .arg("--crate-type")
+        .arg("bin")
+        .arg("--edition")
+        .arg("2021")
+        .arg("-o")
+        .arg(test_dir.join("test_bin"))
+        .output()
+        .expect("Failed to run rustc");
+
+    if !rustc_output.status.success() {
+        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
+        );
+    }
+
+    // WINDJAMMER DESIGN: Read-only String params infer to &str (not &String!)
+    // has_item only passes to Inventory::has (read-only) → should be &str
+    assert!(
+        generated.contains("fn has_item(&self, item_id: &str)")
+            || generated.contains("fn has_item(&self, _item_id: &str)"),
+        "Expected has_item to have &str parameter (idiomatic Rust). Generated:\n{}",
+        generated
+    );
+
+    // Verify: check_items should compile (calls has_item with borrowed iterator var)
+    // If has_item incorrectly expects String, this would fail with E0308
+
+    fs::remove_dir_all(&test_dir).ok();
+}

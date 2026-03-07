@@ -1,0 +1,35 @@
+// TDD Test: Enum variants with String fields should auto-convert &str literals
+// Bug: Speaker::NPC("Silas Crane") generates "Silas Crane" (&str) instead of "Silas Crane".to_string()
+// Expected: Compiler automatically converts string literals to String for enum variants
+
+pub enum Speaker {
+    Player,
+    NPC(String),  // Expects owned String
+}
+
+pub fn test_enum_string_literal() {
+    // String literal should be auto-converted to String
+    let speaker = Speaker::NPC("Silas Crane")
+    
+    match speaker {
+        Speaker::Player => assert!(false),
+        Speaker::NPC(name) => {
+            assert_eq!(name, "Silas Crane")
+        }
+    }
+}
+
+pub enum Message {
+    Text(String),
+    Error(String),
+}
+
+pub fn test_enum_variants_multiple() {
+    let msg1 = Message::Text("Hello")
+    let msg2 = Message::Error("Failed")
+    
+    match msg1 {
+        Message::Text(s) => assert_eq!(s, "Hello"),
+        Message::Error(_) => assert!(false),
+    }
+}

@@ -253,6 +253,8 @@ pub enum Pattern<'ast> {
     Tuple(Vec<Pattern<'ast>>),      // Tuple pattern: (a, b, c)
     Or(Vec<Pattern<'ast>>),         // Or pattern: pattern1 | pattern2 | pattern3
     Reference(&'ast Pattern<'ast>), // Reference pattern: &x
+    Ref(String),                    // Ref binding: ref x (borrows without moving)
+    RefMut(String),                 // RefMut binding: ref mut x (mutable borrow)
 }
 
 // ============================================================================
@@ -361,6 +363,7 @@ pub enum Expression<'ast> {
     },
     Block {
         statements: Vec<&'ast Statement<'ast>>,
+        is_unsafe: bool,
         location: SourceLocation,
     },
 }
@@ -519,6 +522,12 @@ pub enum Item<'ast> {
         traits: Vec<String>,
         location: SourceLocation,
     }, // bound Printable = Display + Debug
+    TypeAlias {
+        name: String,
+        target: Type,
+        is_pub: bool,
+        location: SourceLocation,
+    }, // pub type QuestStatus = QuestState
 }
 
 impl<'ast> Item<'ast> {
@@ -535,6 +544,7 @@ impl<'ast> Item<'ast> {
             Item::Use { location, .. } => location.clone(),
             Item::Mod { location, .. } => location.clone(),
             Item::BoundAlias { location, .. } => location.clone(),
+            Item::TypeAlias { location, .. } => location.clone(),
         }
     }
 }

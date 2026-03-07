@@ -1,0 +1,39 @@
+// TDD TEST: Qualified paths (Type::function) in generic method calls
+// Bug: Parser fails when seeing Type::function inside Vec.push()
+// Expected: Should parse Triangle::new() as a function call, not a type argument
+
+struct Triangle {
+    pub id: u32,
+}
+
+impl Triangle {
+    pub fn new(id: u32) -> Triangle {
+        Triangle { id }
+    }
+}
+
+struct Navmesh {
+    pub triangles: Vec<Triangle>,
+}
+
+impl Navmesh {
+    pub fn new() -> Navmesh {
+        Navmesh {
+            triangles: Vec::new(),
+        }
+    }
+    
+    pub fn add_triangle(&mut self, id: u32) -> u32 {
+        // BUG: Parser fails on this line!
+        // It sees Triangle::new and thinks :: is part of generic syntax
+        self.triangles.push(Triangle::new(id))
+        id
+    }
+}
+
+fn main() {
+    let mut nav = Navmesh::new()
+    nav.add_triangle(1)
+    
+    println("✅ Qualified paths in method calls work!")
+}

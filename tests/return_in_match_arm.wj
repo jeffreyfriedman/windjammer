@@ -1,0 +1,40 @@
+// TDD TEST: Return statement in match arm
+// Bug: Parser fails on "None => return," in match expression
+// Expected: return should work as a match arm expression
+
+fn get_value(opt: Option<i32>) -> i32 {
+    // BUG: This should work!
+    // Match arm with just "return" (early return)
+    let value = match opt {
+        Some(x) => x,
+        None => return,  // <-- Parser fails on this comma!
+    }
+    
+    value * 2
+}
+
+fn process_option(opt: Option<String>) -> String {
+    match opt {
+        Some(s) => s,
+        None => return,  // Early return with no value
+    }
+}
+
+fn complex_match(x: i32) -> i32 {
+    match x {
+        0 => return,     // Early return
+        1 => 10,
+        2 => 20,
+        _ => 30,
+    }
+}
+
+fn main() {
+    let result1 = get_value(Some(5))
+    assert(result1 == 10, "Should double the value")
+    
+    // This would return early, so we can't test it easily
+    // let result2 = get_value(None)
+    
+    println("✅ Return in match arms works!")
+}

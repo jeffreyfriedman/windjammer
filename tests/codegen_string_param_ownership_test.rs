@@ -49,10 +49,12 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The parameter should be `message: String`, NOT `message: &String`
+    // print_message only reads message (println), so Borrowed inference (&str) is correct.
+    // Windjammer philosophy: infer cheapest ownership mode.
+    // DESIGN: String → &str for borrowed (idiomatic Rust, not &String anti-pattern)
     assert!(
-        rust_code.contains("fn print_message(message: String)"),
-        "Expected owned String parameter, not &String.\nGenerated code:\n{}",
+        rust_code.contains("fn print_message(message: &str)"),
+        "Expected &str parameter (idiomatic Rust).\nGenerated code:\n{}",
         rust_code
     );
 

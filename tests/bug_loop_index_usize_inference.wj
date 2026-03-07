@@ -1,0 +1,100 @@
+// TDD TEST: Bug #3 - Loop index should infer usize when used with .len()
+// When a loop variable is assigned to a variable that came from .len(), 
+// the loop index should be inferred as usize, not i64.
+
+struct Keyframe {
+    time: f32,
+    value: f32,
+}
+
+struct AnimationClip {
+    keyframes: Vec<Keyframe>,
+}
+
+impl AnimationClip {
+    fn new() -> AnimationClip {
+        AnimationClip { keyframes: Vec::new() }
+    }
+    
+    fn add_keyframe(&mut self, time: f32, value: f32) {
+        self.keyframes.push(Keyframe { time, value })
+    }
+    
+    fn find_keyframe_index(&self, target_time: f32) -> usize {
+        // CRITICAL PATTERN: after_idx is usize (from .len())
+        let mut after_idx = self.keyframes.len() - 1
+        
+        // BUG: While loop with manual index - i should be inferred as usize
+        let mut i = 0
+        while i < self.keyframes.len() {
+            if self.keyframes[i].time > target_time {
+                // BUG PATTERN: i + 1 should be usize, not i64
+                after_idx = i + 1
+                break
+            }
+            i = i + 1
+        }
+        
+        after_idx
+    }
+    
+    fn sample(&self, time: f32) -> f32 {
+        if self.keyframes.is_empty() {
+            return 0.0
+        }
+        
+        let idx = self.find_keyframe_index(time)
+        if idx < self.keyframes.len() {
+            self.keyframes[idx].value
+        } else {
+            0.0
+        }
+    }
+}
+
+pub fn test_loop_index_usize_inference() {
+    let mut clip = AnimationClip::new()
+    clip.add_keyframe(0.0, 0.0)
+    clip.add_keyframe(1.0, 100.0)
+    clip.add_keyframe(2.0, 50.0)
+    
+    let idx = clip.find_keyframe_index(0.5)
+    assert_eq!(idx, 1)
+    
+    let value = clip.sample(0.5)
+    assert(value >= 0.0, "Value should be valid")
+    
+    println("✅ Loop index usize inference works correctly")
+}
+
+// Test case 2: Direct assignment from loop to usize var
+pub fn test_direct_loop_assignment() {
+    let items = vec![10, 20, 30, 40, 50]
+    let mut found_idx = items.len()  // usize from .len()
+    
+    for i in 0..items.len() {
+        if items[i] > 25 {
+            found_idx = i  // i should be inferred as usize
+            break
+        }
+    }
+    
+    assert_eq!(found_idx, 2)
+    println("✅ Direct loop assignment works")
+}
+
+// Test case 3: Arithmetic on loop index assigned to usize
+pub fn test_loop_arithmetic_usize() {
+    let data = vec![1, 2, 3, 4, 5]
+    let mut next_idx = data.len()
+    
+    for i in 0..data.len() - 1 {
+        if data[i] == 3 {
+            next_idx = i + 1  // i + 1 should be usize
+            break
+        }
+    }
+    
+    assert_eq!(next_idx, 3)
+    println("✅ Loop arithmetic with usize works")
+}

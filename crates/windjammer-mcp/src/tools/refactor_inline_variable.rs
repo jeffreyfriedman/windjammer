@@ -175,6 +175,7 @@ fn is_safe_to_inline(expr: &Expression) -> bool {
         // Blocks might have side effects - not safe (could be refined)
         Expression::Block {
             statements: _,
+            is_unsafe: _,
             location: _,
         } => false,
 
