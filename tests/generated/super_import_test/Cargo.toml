@@ -10,9 +10,5 @@ edition = "2021"
 smallvec = "1.13"
 serde = { version = "1.0", features = ["derive"] }
 
-[[bin]]
-name = "test_super_import"
-path = "test_super_import.rs"
-
 [profile.release]
 opt-level = 3

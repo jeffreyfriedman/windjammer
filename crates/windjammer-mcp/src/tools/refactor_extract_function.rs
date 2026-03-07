@@ -309,6 +309,7 @@ fn collect_expr_variables(expr: &Expression, used: &mut HashSet<String>) {
         }
         Expression::Block {
             statements: stmts,
+            is_unsafe: _,
             location: _,
         } => {
             let mut defined = HashSet::new();

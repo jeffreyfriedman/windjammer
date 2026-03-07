@@ -52,18 +52,18 @@ fn test_read_only_param_infers_str_ref() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // THE WINDJAMMER WAY: Explicit `string` type is honored as `String` (owned)
-    // User wrote `text: string` → they want `text: String`, not `text: &str`
-    // This prevents API contract violations and maintains consistency
+    // NEW DESIGN: String ownership is inferred from USAGE, not explicit type
+    // `text: string` (read-only) → infers to `text: &str` (idiomatic Rust!)
+    // This makes Windjammer code more ergonomic and performant by default
     assert!(
-        generated.contains("text: String"),
-        "Explicit string type should be honored as String (owned), got:\n{}",
+        generated.contains("text: &str"),
+        "Read-only string parameter should infer to &str, got:\n{}",
         generated
     );
 
     assert!(
-        generated.contains("\"hello\".to_string()"),
-        "Should convert literal to String for String param, got:\n{}",
+        generated.contains("print_msg(\"hello\")"),
+        "String literal can be passed directly to &str param, got:\n{}",
         generated
     );
 }

@@ -53,11 +53,10 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should work: greet returns String, store_name takes String
-    // No .to_string() needed since greet already returns String!
-    // Just verify it contains the store_name call with greet
+    // greet returns String, store_name takes &String (Borrowed inference).
+    // The codegen correctly generates store_name(&greet(...)) to pass &String.
     assert!(
-        rust_code.contains("store_name(greet("),
+        rust_code.contains("store_name(greet(") || rust_code.contains("store_name(&greet("),
         "Expected store_name to receive greet result.\nGenerated code:\n{}",
         rust_code
     );

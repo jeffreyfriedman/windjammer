@@ -77,9 +77,11 @@ fn main() {
     let (generated, _compiles) = compile_and_check_rust(source);
 
     // The generated code should have & before format! to borrow the String as &str
-    // Acceptable forms: &format!(...), format!(...).as_str(), or &*format!(...)
+    // Acceptable forms: &format!(...), format!(...).as_str(), &_temp variable, or &*format!(...)
     assert!(
-        generated.contains("&format!") || generated.contains(".as_str()"),
+        generated.contains("&format!")
+            || generated.contains(".as_str()")
+            || (generated.contains("format!(") && generated.contains("&_temp")),
         "Expected auto-borrow of format!() when passed to &str parameter.\nGenerated:\n{}",
         generated
     );

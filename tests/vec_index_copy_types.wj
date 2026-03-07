@@ -1,0 +1,30 @@
+// TDD Test: Vector indexing of Copy types should NOT add .clone()
+// Bug: Current fix clones ALL types, including Copy types like u8, u32, i32
+// Expected: Copy types should just be copied, not cloned
+
+pub fn test_copy_type_indexing() {
+    // Test primitive Copy types
+    let numbers = vec![1, 2, 3, 4, 5]
+    let x = numbers[0]  // Should NOT add .clone() - i32 is Copy
+    assert_eq!(x, 1)
+    
+    let bytes = vec![10, 20, 30]
+    let b = bytes[1]  // Should NOT add .clone() - i32 is Copy
+    assert_eq!(b, 20)
+    
+    let floats = vec![1.0, 2.0, 3.0]
+    let f = floats[2]  // Should NOT add .clone() - f64 is Copy
+    assert_eq!(f, 3.0)
+}
+
+// Test that Clone-only types DO get .clone()
+struct Node {
+    value: i32,
+    children: Vec<Node>,
+}
+
+pub fn test_non_copy_indexing() {
+    let nodes = vec![Node { value: 1, children: Vec::new() }]
+    let node = nodes[0]  // SHOULD add .clone() - Node is Clone but not Copy
+    assert_eq!(node.value, 1)
+}

@@ -192,6 +192,10 @@ impl SemanticTokensProvider {
                 self.collect_type_tokens(inner, tokens);
                 return;
             }
+            WJType::RawPointer { pointee, .. } => {
+                self.collect_type_tokens(pointee, tokens);
+                return;
+            }
             WJType::TraitObject(name) => name.as_str(),
             WJType::ImplTrait(name) => name.as_str(),
             WJType::Associated(base, _assoc) => base.as_str(),

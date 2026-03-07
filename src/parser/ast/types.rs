@@ -37,6 +37,10 @@ pub enum Type {
     Array(Box<Type>, usize), // Fixed-size array: [T; N]
     Reference(Box<Type>),
     MutableReference(Box<Type>),
+    RawPointer {
+        mutable: bool,
+        pointee: Box<Type>,
+    }, // Raw pointer: *const T, *mut T (for FFI)
     Tuple(Vec<Type>), // Tuple type: (T1, T2, T3)
     Infer,            // Type inference placeholder: _
     FunctionPointer {

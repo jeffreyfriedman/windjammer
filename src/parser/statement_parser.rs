@@ -335,7 +335,12 @@ impl Parser {
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
         self.advance();
 
-        let stmt = if matches!(self.current_token(), Token::RBrace | Token::Semicolon) {
+        // TDD FIX: Check for Comma too! Match arms can have: None => return,
+        // The comma indicates end of return statement (no value to return)
+        let stmt = if matches!(
+            self.current_token(),
+            Token::RBrace | Token::Semicolon | Token::Comma
+        ) {
             self.alloc_stmt(Statement::Return {
                 value: None,
                 location: self.current_location(),
@@ -398,6 +403,7 @@ impl Parser {
             // becomes: match expr { Pattern => { then }, _ => { else_block } }
             let then_body = self.alloc_expr(Expression::Block {
                 statements: then_block,
+                is_unsafe: false,
                 location: self.current_location(),
             });
 
@@ -412,11 +418,13 @@ impl Parser {
             let else_body = if let Some(else_stmts) = else_block {
                 self.alloc_expr(Expression::Block {
                     statements: else_stmts,
+                    is_unsafe: false,
                     location: self.current_location(),
                 })
             } else {
                 self.alloc_expr(Expression::Block {
                     statements: vec![],
+                    is_unsafe: false,
                     location: self.current_location(),
                 }) // Empty block if no else clause
             };
@@ -497,6 +505,7 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 let block = self.alloc_expr(Expression::Block {
                     statements,
+                    is_unsafe: false,
                     location: self.current_location(),
                 });
                 (block, true)
@@ -526,12 +535,20 @@ impl Parser {
                     false
                 };
 
-                if is_assignment {
-                    // Parse as statement (assignment)
+                // TDD: break/continue/return in match arm (e.g. None => break) must be parsed
+                // as statements, not expressions. Expression parser doesn't handle them.
+                let is_control_flow = matches!(
+                    self.current_token(),
+                    Token::Break | Token::Continue | Token::Return
+                );
+
+                if is_assignment || is_control_flow {
+                    // Parse as statement (assignment or break/continue/return)
                     let stmt = self.parse_statement()?;
                     // Wrap in block expression
                     let block = self.alloc_expr(Expression::Block {
                         statements: vec![stmt],
+                        is_unsafe: false,
                         location: self.current_location(),
                     });
                     (block, false)
@@ -623,6 +640,7 @@ impl Parser {
             // }
             let body_block = self.alloc_expr(Expression::Block {
                 statements: body.clone(),
+                is_unsafe: false,
                 location: self.current_location(),
             });
 
@@ -632,6 +650,7 @@ impl Parser {
 
             let break_block = self.alloc_expr(Expression::Block {
                 statements: vec![break_stmt],
+                is_unsafe: false,
                 location: self.current_location(),
             });
 

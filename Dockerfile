@@ -8,9 +8,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/windjammer-lsp/Cargo.toml ./crates/windjammer-lsp/
 COPY crates/windjammer-mcp/Cargo.toml ./crates/windjammer-mcp/
 COPY crates/windjammer-runtime/Cargo.toml ./crates/windjammer-runtime/
+COPY rendering_ffi/Cargo.toml ./rendering_ffi/
 
 # Create dummy source files to build dependencies
-RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src && \
+RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src rendering_ffi/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > src/lib.rs && \
     echo "fn main() {}" > src/bin/wj.rs && \
@@ -28,12 +29,14 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
     echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \
     echo "fn main() {}" > crates/windjammer-mcp/benches/mcp_tools_benchmarks.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-runtime/src/lib.rs && \
+    echo "pub fn dummy() {}" > rendering_ffi/src/lib.rs && \
     cargo build --release && \
-    rm -rf src benches crates/*/src crates/*/benches
+    rm -rf src benches crates/*/src crates/*/benches rendering_ffi/src
 
 # Copy the actual source code
 COPY src ./src
 COPY crates ./crates
+COPY rendering_ffi ./rendering_ffi
 COPY benches ./benches
 COPY std ./std
 COPY examples ./examples

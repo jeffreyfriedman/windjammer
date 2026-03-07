@@ -35,6 +35,7 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
         borrowed_iterator_vars: &HashSet<String>,
+        inferred_borrowed_params: &HashSet<String>,
         arg_count: usize,
     ) -> bool {
         // String literals are ALREADY &str - never add &
@@ -103,14 +104,29 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        // TDD FIX: METHOD CALL EXPRESSIONS SHOULD NEVER BE BORROWED (CHECKED FIRST!)
-        // Method calls like input.is_key_down(Key::W) return owned values (often Copy types)
-        // Don't add & to them, EVEN IF the method signature says the parameter should be borrowed.
-        // Example: paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
-        // should NOT become paddle.update(delta, &input.is_key_down(Key::W), input.is_key_down(Key::S))
-        // This check MUST come before the signature check to prevent over-borrowing Copy types.
+        // Method call results (like input.is_key_down()) generally shouldn't be auto-borrowed.
+        // Exception: when we have a user-defined signature that says the parameter is Borrowed
+        // AND the param type is non-Copy (e.g., `path: &String`), then .to_string() results
+        // DO need & added. The signature check downstream handles this.
         if matches!(arg, Expression::MethodCall { .. }) {
-            return false;
+            // Allow through ONLY if we have a user-defined method signature that says Borrowed
+            if let Some(sig) = method_signature {
+                let sig_param_idx = if sig.has_self_receiver {
+                    param_idx + 1
+                } else {
+                    param_idx
+                };
+                let is_borrowed = sig
+                    .param_ownership
+                    .get(sig_param_idx)
+                    .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
+                if !is_borrowed {
+                    return false;
+                }
+                // Fall through to let the downstream Copy-type check handle it
+            } else {
+                return false;
+            }
         }
 
         // BORROWED ITERATOR VARIABLES: Variables from borrowed iterators (.keys(), .values(), .iter())
@@ -119,6 +135,35 @@ impl MethodCallAnalyzer {
         if let Expression::Identifier { name, .. } = arg {
             if borrowed_iterator_vars.contains(name) {
                 return false;
+            }
+        }
+
+        // TDD FIX: HashMap/BTreeMap key methods with &String arguments
+        // HashMap<String, V>.contains_key() expects &str, not &String or &&String
+        // When passing a &String parameter to these methods, don't add another &
+        // Example: fn check(map: HashMap<String, int>, key: string) { map.contains_key(&key) }
+        //   Generated: fn check(map: &HashMap<String, i64>, key: &String)
+        //   Need: map.contains_key(key) NOT map.contains_key(&key)
+        //   Result: &String auto-derefs to &str ✅
+        let is_hashmap_key_method = matches!(
+            method,
+            "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
+        ) && param_idx == 0; // Key is always first argument
+
+        if is_hashmap_key_method {
+            if let Expression::Identifier { name, .. } = arg {
+                let is_string_type = |t: &Type| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(s) if s == "String" || s == "string")
+                };
+                let is_borrowed_string_param = current_function_params
+                    .iter()
+                    .any(|param| param.name == *name && is_string_type(&param.type_))
+                    && inferred_borrowed_params.contains(name);
+
+                if is_borrowed_string_param {
+                    return false; // Don't add & - pass &String as-is, it auto-derefs to &str
+                }
             }
         }
 
@@ -298,7 +343,13 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // Check if method expects owned value and arg is a borrowed field
+        // TDD FIX: Check if method expects borrowed value from borrowed struct field
+        // Pattern: borrowed_struct.owned_field passed to method expecting &T
+        // Example: ingredient.item_id where ingredient: &Ingredient, item_id: String
+        //          passed to has_item(item_id: &String)
+        // Solution: Pass &borrowed_struct.owned_field (NO clone needed)
+        // Wrong: &ingredient.item_id.clone() (wasteful - creates String then borrows it)
+        // Right: &ingredient.item_id (just borrow the field)
         if let Some(sig) = method_signature {
             let sig_param_idx = if sig.has_self_receiver {
                 param_idx + 1
@@ -306,6 +357,12 @@ impl MethodCallAnalyzer {
                 param_idx
             };
             if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                // If method expects Borrowed, don't clone - should_add_ref will add &
+                if matches!(ownership, OwnershipMode::Borrowed) {
+                    return false; // Will be borrowed, no clone needed
+                }
+
+                // Method expects Owned - check if we need to clone
                 if matches!(ownership, OwnershipMode::Owned) {
                     if let Expression::FieldAccess { object, .. } = arg {
                         if let Expression::Identifier { name, .. } = &**object {

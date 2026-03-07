@@ -1,0 +1,66 @@
+// Minimal Windjammer + Window Rendering Demo
+// Proves we can create windows and render!
+
+extern fn glfwInit() -> i32
+extern fn glfwCreateWindow(width: i32, height: i32, title: &str, monitor: i32, share: i32) -> i32
+extern fn glfwMakeContextCurrent(window: i32)
+extern fn glfwWindowShouldClose(window: i32) -> bool
+extern fn glfwSwapBuffers(window: i32)
+extern fn glfwPollEvents()
+extern fn glfwTerminate()
+
+extern fn glClearColor(r: f32, g: f32, b: f32, a: f32)
+extern fn glClear(mask: u32)
+
+const GL_COLOR_BUFFER_BIT: u32 = 16384
+
+pub fn main() -> i32 {
+    println("=== WINDJAMMER RENDERING DEMO ===")
+    println("Creating window with GLFW...")
+    
+    // Initialize GLFW
+    if glfwInit() == 0 {
+        println("ERROR: Failed to initialize GLFW")
+        return 1
+    }
+    
+    // Create window
+    let window = glfwCreateWindow(800, 600, "Windjammer Rendering Test", 0, 0)
+    if window == 0 {
+        println("ERROR: Failed to create window")
+        glfwTerminate()
+        return 1
+    }
+    
+    glfwMakeContextCurrent(window)
+    println("✅ Window created successfully!")
+    println("")
+    println("Press Ctrl+C to exit...")
+    
+    // Render loop
+    let mut frame_count = 0
+    while !glfwWindowShouldClose(window) {
+        // Animated color - cycles through rainbow
+        let time = (frame_count as f32) * 0.01
+        let r = (time * 0.5).sin() * 0.5 + 0.5
+        let g = ((time + 2.0) * 0.5).sin() * 0.5 + 0.5
+        let b = ((time + 4.0) * 0.5).sin() * 0.5 + 0.5
+        
+        glClearColor(r, g, b, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT)
+        
+        glfwSwapBuffers(window)
+        glfwPollEvents()
+        
+        frame_count += 1
+        
+        // Print status every 60 frames
+        if frame_count % 60 == 0 {
+            println("Rendered {} frames", frame_count)
+        }
+    }
+    
+    glfwTerminate()
+    println("✅ Rendering demo complete!")
+    0
+}

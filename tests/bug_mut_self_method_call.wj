@@ -1,0 +1,40 @@
+// TDD: Bug #7 - &mut self method calls need auto-deref/clone for borrowed args
+// Exact reproduction of dialogue system error
+
+struct State {
+    pub value: i32,
+}
+
+impl State {
+    pub fn new() -> State {
+        State { value: 0 }
+    }
+    
+    pub fn change_value(self, name: String, delta: i32) {
+        println!("Changing: {}, delta: {}", name, delta);
+    }
+}
+
+enum Action {
+    Change(String, i32),
+}
+
+impl Action {
+    pub fn execute(self, state: State) {
+        match self {
+            Action::Change(name, delta) => {
+                // Bug #7: name is &String, delta is &i32 (from &self match)
+                // state.change_value() has &mut self and expects String, i32 (owned)
+                // Should auto-convert: state.change_value(name.clone(), *delta)
+                // Currently: error[E0308]: expected String/i32, found &String/&i32
+                state.change_value(name, delta);
+            }
+        }
+    }
+}
+
+fn main() {
+    let action = Action::Change("test".to_string(), 10);
+    let mut state = State::new();
+    action.execute(state);
+}

@@ -1,0 +1,53 @@
+// TDD TEST: Raw pointer type support for FFI
+// Windjammer should support *const T and *mut T for low-level FFI
+
+// Test 1: Extern functions with pointer parameters (main use case!)
+extern fn test_const_pointer(data: *const u8, size: u64) -> u64
+extern fn test_mut_pointer(data: *mut u8, size: u64) -> u64
+extern fn test_pointer_to_struct(ptr: *const Vec3) -> f32
+
+struct Vec3 {
+    x: f32,
+    y: f32,
+    z: f32
+}
+
+// Test 2: Pointer in struct (for FFI structs)
+struct Buffer {
+    data: *const u8,
+    size: u64
+}
+
+// Test 3: Function that returns pointer
+fn get_null_ptr() -> *const u8 {
+    std::ptr::null()
+}
+
+fn get_null_mut_ptr() -> *mut u8 {
+    std::ptr::null_mut()
+}
+
+fn main() {
+    println("========================================")
+    println("🔧 RAW POINTER TYPE TESTS")
+    println("========================================")
+    
+    // Test: Create struct with pointer field
+    let ptr = get_null_ptr()
+    let buffer = Buffer {
+        data: ptr,
+        size: 0
+    }
+    println("✅ Pointer in struct works")
+    
+    // Test: Function returning pointer
+    let null_ptr = get_null_ptr()
+    let null_mut_ptr = get_null_mut_ptr()
+    println("✅ Returning pointers works")
+    
+    println("")
+    println("✅ All pointer type tests passed!")
+    println("✅ Extern functions with pointer params declared")
+    println("")
+    println("🎉 POINTER TYPES WORKING! 🎉")
+}

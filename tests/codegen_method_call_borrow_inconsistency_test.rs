@@ -9,7 +9,13 @@
 ///
 /// Expected:   particle.update(delta, gx, gy)     // All Copy types, no borrowing
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
+
+fn get_wj_compiler() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -36,16 +42,25 @@ fn main() {
 }
 "#;
 
-    fs::write("test_borrow_inconsistency.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_borrow_inconsistency.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_borrow_inconsistency.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    let rust_code = fs::read_to_string("./build/test_borrow_inconsistency.rs")
+    let rust_code = fs::read_to_string(output_dir.join("test_borrow_inconsistency.rs"))
         .expect("Failed to read generated Rust code");
 
     // Should NOT add `&` to any f32 arguments (they are Copy)
@@ -64,9 +79,6 @@ fn main() {
         "Should not borrow delta (it's Copy type f32): \n{}",
         rust_code
     );
-
-    // Cleanup
-    fs::remove_file("test_borrow_inconsistency.wj").ok();
 }
 
 #[test]
@@ -92,16 +104,25 @@ fn main() {
 }
 "#;
 
-    fs::write("test_copy_no_borrow.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_copy_no_borrow.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_copy_no_borrow.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    let rust_code = fs::read_to_string("./build/test_copy_no_borrow.rs")
+    let rust_code = fs::read_to_string(output_dir.join("test_copy_no_borrow.rs"))
         .expect("Failed to read generated Rust code");
 
     // i32 is Copy, should not borrow
@@ -120,9 +141,6 @@ fn main() {
         "Should not borrow z (Copy type): \n{}",
         rust_code
     );
-
-    // Cleanup
-    fs::remove_file("test_copy_no_borrow.wj").ok();
 }
 
 #[test]
@@ -151,16 +169,25 @@ fn simulate() {
 }
 "#;
 
-    fs::write("test_borrow_consistency.wj", source).unwrap();
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_borrow_consistency.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", "test_borrow_consistency.wj", "--no-cargo"])
+    let output = Command::new(get_wj_compiler())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute wj");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    let rust_code = fs::read_to_string("./build/test_borrow_consistency.rs")
+    let rust_code = fs::read_to_string(output_dir.join("test_borrow_consistency.rs"))
         .expect("Failed to read generated Rust code");
 
     // Check that ALL f32 args are handled consistently
@@ -187,7 +214,4 @@ fn simulate() {
         "No f32 arguments should be borrowed (they are Copy)\n{}",
         rust_code
     );
-
-    // Cleanup
-    fs::remove_file("test_borrow_consistency.wj").ok();
 }

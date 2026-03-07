@@ -1,0 +1,21 @@
+// Test: String literals in enum variants expecting String should auto-convert
+pub enum Speaker {
+    Player,
+    NPC(String),
+    System,
+}
+
+pub struct Message {
+    pub speaker: Speaker,
+    pub text: String,
+}
+
+fn main() {
+    // This should work - string literal auto-converts to String
+    let msg = Message {
+        speaker: Speaker::NPC("Alice"),
+        text: "Hello world".to_string(),
+    }
+    
+    println!("Message from NPC")
+}

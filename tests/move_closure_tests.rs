@@ -132,23 +132,34 @@ fn test_closures_auto_generate_move() {
 fn test_no_explicit_move_keyword_needed() {
     // This test verifies the Windjammer philosophy:
     // The developer writes: |x| x + 1
-    // We generate: move |x| x + 1
+    // We generate: |x| x + 1  (borrow by reference - efficient!)
     //
     // The developer writes: thread { ... }
-    // We generate: std::thread::spawn(move || { ... })
+    // We generate: std::thread::spawn(move || { ... })  (needs 'move' to escape scope)
     //
-    // NO explicit 'move' keyword ever needed!
+    // NO explicit 'move' keyword ever needed by the user!
+    // Compiler adds 'move' only when necessary (closures that outlive their scope).
 
     let generated = compile_fixture("move_closures").expect("Compilation failed");
 
-    // Count how many `move` keywords appear - should be multiple (auto-generated)
-    let move_count = generated.matches("move").count();
+    // Regular closures should NOT have move (they borrow by reference)
     assert!(
-        move_count >= 2,
-        "Expected multiple auto-generated 'move' keywords, found {}. Generated:\n{}",
-        move_count,
+        generated.contains("let closure = || x + 1"),
+        "Regular closure should borrow by reference (no move). Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("let add_offset = |n| n + offset"),
+        "Closure with params should borrow by reference (no move). Generated:\n{}",
         generated
     );
 
-    println!("✓ Found {} auto-generated 'move' keywords", move_count);
+    // Thread spawn SHOULD have move (closure escapes scope)
+    assert!(
+        generated.contains("std::thread::spawn(move ||"),
+        "Thread closure should use 'move' (escapes scope). Generated:\n{}",
+        generated
+    );
+
+    println!("✓ Windjammer correctly uses 'move' only when needed (thread spawns, etc.)");
 }

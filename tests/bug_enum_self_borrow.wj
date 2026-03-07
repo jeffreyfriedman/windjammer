@@ -1,0 +1,29 @@
+// TDD: Bug #6 - Enum match on &self borrows destructured values
+// When matching on &self with enum, extracted values are &T not T
+
+enum Condition {
+    ThresholdCheck(i32),
+}
+
+fn get_value() -> i32 {
+    return 42;
+}
+
+impl Condition {
+    pub fn check(self) -> bool {
+        match self {
+            Condition::ThresholdCheck(threshold) => {
+                // Bug #6: When matching on &self, threshold is &i32 not i32
+                // Should auto-deref: get_value() > *threshold
+                // Currently: error[E0308]: expected i32, found &i32
+                return get_value() > threshold;
+            }
+        }
+    }
+}
+
+fn main() {
+    let cond = Condition::ThresholdCheck(30);
+    let result = cond.check();
+    println!("Result: {}", result);
+}

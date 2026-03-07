@@ -210,7 +210,11 @@ jobs:
           fi
       
       - name: Run tests
-        run: cargo test --release --verbose --all-features
+        shell: bash
+        run: |
+          # Add wj binary to PATH for integration tests
+          export PATH="$PWD/target/release:$PATH"
+          cargo test --release --verbose --all-features
       
       - name: Test examples (Unix)
         if: matrix.rust == 'stable' && runner.os != 'Windows'

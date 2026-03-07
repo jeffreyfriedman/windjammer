@@ -5,7 +5,7 @@ pub struct MyType {
     pub value: i32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Foo {
     pub value: MyType,
 }
