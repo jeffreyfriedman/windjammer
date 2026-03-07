@@ -11,7 +11,11 @@ fn test_windjammer_octree_compiles() {
     let wj_src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/src_wj/voxel/svo_convert.wj");
 
-    assert!(wj_src.exists(), "Windjammer SVO source should exist");
+    // Skip if windjammer-game repository is not checked out (e.g., in CI)
+    if !wj_src.exists() {
+        eprintln!("Skipping test: windjammer-game repository not found");
+        return;
+    }
 
     // WHEN: We compile it
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
