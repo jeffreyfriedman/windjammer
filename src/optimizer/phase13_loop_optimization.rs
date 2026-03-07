@@ -488,10 +488,12 @@ fn optimize_loops_in_expression<'a: 'ast, 'ast>(
         }),
         Expression::Block {
             statements,
+            is_unsafe,
             location,
         } => optimizer.alloc_expr(unsafe {
             std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::Block {
                 statements: optimize_loops_in_statements(statements, config, stats, optimizer),
+                is_unsafe: *is_unsafe,
                 location: location.clone(),
             })
         }),

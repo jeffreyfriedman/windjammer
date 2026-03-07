@@ -93,12 +93,12 @@ impl Profiler {
         generated
     );
 
-    // String params stay Owned to avoid &String vs &str mismatches at call sites
+    // WINDJAMMER DESIGN: Read-only String params infer to &str (not &String!)
     let render_graph_line = generated.lines().find(|l| l.contains("fn render_graph"));
     if let Some(line) = render_graph_line {
         assert!(
-            line.contains("label: String"),
-            "String params should stay Owned (avoiding &String vs &str mismatch).\n\
+            line.contains("label: &str"),
+            "Read-only String params should become &str (idiomatic Rust).\n\
              Line: {}",
             line
         );
@@ -226,7 +226,7 @@ pub fn get_name(config: Config) -> string {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_string_param_stays_owned() {
+fn test_string_param_infers_to_str() {
     let source = r#"
 pub struct Logger {
     pub prefix: string,
@@ -241,12 +241,12 @@ impl Logger {
 
     let (generated, _stderr) = compile_wj(source);
 
-    // String params should stay Owned to avoid &String vs &str issues at call sites
+    // WINDJAMMER DESIGN: Read-only String params infer to &str (idiomatic Rust!)
     let log_line = generated.lines().find(|l| l.contains("fn log_message"));
     if let Some(line) = log_line {
         assert!(
-            line.contains("message: String"),
-            "String params should stay Owned (avoiding &String vs &str mismatch).\n\
+            line.contains("message: &str"),
+            "Read-only String params should infer to &str (not &String, not String).\n\
              Line: {}\n\
              Generated:\n{}",
             line,

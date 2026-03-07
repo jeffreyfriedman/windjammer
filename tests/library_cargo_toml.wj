@@ -1,0 +1,8 @@
+// TDD Test: --library flag should generate [lib] section in Cargo.toml
+// Bug: Cargo.toml missing [lib] path = "lib/lib.rs" or src/lib.rs location
+// Expected: Cargo.toml has [lib] section pointing to library entry point
+
+pub fn dummy_function() {
+    let x = 42
+    assert_eq!(x, 42)
+}

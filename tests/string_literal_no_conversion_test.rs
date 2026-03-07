@@ -133,16 +133,16 @@ fn test_string_param_needs_conversion() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // THE WINDJAMMER WAY: Explicit `string` type is honored as `String` (owned)
-    // User wrote `text: string` → they want `text: String`, not `text: &str`
+    // NEW DESIGN: Read-only `string` parameters infer to `&str` (idiomatic Rust)
+    // The parameter `text` is only read (text.len()), so it infers to `&str`
     assert!(
-        generated.contains("pub fn process(text: String)"),
-        "Explicit string type should be honored as String (owned), got:\n{}",
+        generated.contains("pub fn process(text: &str)"),
+        "Read-only string parameter should infer to &str, got:\n{}",
         generated
     );
     assert!(
-        generated.contains("\"hello\".to_string()"),
-        "Should add .to_string() when function expects String (owned), got:\n{}",
+        generated.contains("process(\"hello\")"),
+        "String literal can be passed directly to &str parameter, got:\n{}",
         generated
     );
 }
@@ -167,22 +167,22 @@ fn test_mixed_str_and_string_params() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // THE WINDJAMMER WAY: Explicit types are honored
-    // - `text: &str` stays `&str` (no conversion)
-    // - `text: string` becomes `String` (owned, with conversion)
+    // NEW DESIGN: Both parameters are read-only, so both infer to &str
+    // - `text: &str` (explicit) → stays `&str`
+    // - `text: string` (read-only) → infers to `&str`
     assert!(
         generated.contains("process_str(\"no conversion\")"),
-        "Should NOT convert for explicit &str param, got:\n{}",
+        "String literal passed directly to explicit &str param, got:\n{}",
         generated
     );
     assert!(
-        generated.contains("pub fn process_string(text: String)"),
-        "Explicit string type should be honored as String (owned), got:\n{}",
+        generated.contains("pub fn process_string(text: &str)"),
+        "Read-only string parameter should infer to &str, got:\n{}",
         generated
     );
     assert!(
-        generated.contains(".to_string()"),
-        "Should convert for String param, got:\n{}",
+        generated.contains("process_string(\"yes conversion\")"),
+        "String literal passed directly to inferred &str param, got:\n{}",
         generated
     );
 }

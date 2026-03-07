@@ -173,12 +173,19 @@ fn discover_hand_written_modules(
         return Ok(modules);
     }
 
-    // Build set of generated module names for quick lookup
-    let generated_names: HashSet<String> = module_tree
-        .root_modules
-        .iter()
-        .map(|m| m.name.clone())
-        .collect();
+    // Build set of ALL generated module names (including nested submodules) for quick lookup.
+    // This prevents stale copies of nested modules (e.g., sundering/player/) in src/ from
+    // being picked up as "hand-written" top-level modules.
+    fn collect_all_module_names(modules: &[Module], names: &mut HashSet<String>) {
+        for m in modules {
+            names.insert(m.name.clone());
+            if !m.submodules.is_empty() {
+                collect_all_module_names(&m.submodules, names);
+            }
+        }
+    }
+    let mut generated_names = HashSet::new();
+    collect_all_module_names(&module_tree.root_modules, &mut generated_names);
 
     // THE WINDJAMMER WAY: Rust convention is to put library code in src/
     // So we need to check both project_root/ and project_root/src/ for hand-written modules
@@ -939,6 +946,53 @@ pub use rendering::Color
         assert!(
             !lib_rs.contains("pub use math::*;"),
             "Should use explicit re-exports, not wildcard"
+        );
+    }
+
+    #[test]
+    fn test_nested_submodule_not_treated_as_hand_written() {
+        // Regression test: when src_wj/game/player/ exists as a submodule of game/,
+        // a stale copy at project_root/src/player/ should NOT be picked up as a
+        // "hand-written" top-level module.
+        let temp_dir = create_test_dir(&[
+            ("mod.wj", "pub mod game"),
+            ("game/mod.wj", "pub mod player\npub mod combat"),
+            ("game/player/mod.wj", "pub mod controller"),
+            (
+                "game/player/controller.wj",
+                "pub struct PlayerController { pub x: f32 }",
+            ),
+            ("game/combat/mod.wj", "pub mod weapon"),
+            (
+                "game/combat/weapon.wj",
+                "pub struct Weapon { pub damage: f32 }",
+            ),
+        ]);
+
+        let tree = discover_nested_modules(temp_dir.path()).unwrap();
+
+        // Simulate stale copies in a "src/" sibling directory
+        let project_root = temp_dir.path().parent().unwrap_or(temp_dir.path());
+        let stale_src = project_root.join("src");
+        fs::create_dir_all(stale_src.join("player")).unwrap();
+        fs::write(stale_src.join("player/mod.rs"), "pub mod controller;").unwrap();
+        fs::create_dir_all(stale_src.join("combat")).unwrap();
+        fs::write(stale_src.join("combat/mod.rs"), "pub mod weapon;").unwrap();
+
+        let output_dir = temp_dir.path().join("out");
+        fs::create_dir_all(&output_dir).unwrap();
+
+        let hand_written = discover_hand_written_modules(project_root, &tree, &output_dir).unwrap();
+
+        assert!(
+            !hand_written.contains(&"player".to_string()),
+            "Nested submodule 'player' should NOT be treated as hand-written. Found: {:?}",
+            hand_written
+        );
+        assert!(
+            !hand_written.contains(&"combat".to_string()),
+            "Nested submodule 'combat' should NOT be treated as hand-written. Found: {:?}",
+            hand_written
         );
     }
 }

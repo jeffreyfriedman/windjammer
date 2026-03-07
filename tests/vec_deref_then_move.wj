@@ -1,0 +1,33 @@
+// TDD Test: Vec indexing with reference then dereference
+// Bug: `let x = &vec[i]; foo(*x)` fails to compile when T is not Copy
+//
+// This pattern appears in octree.wj:
+//   let child = &children[idx];
+//   Self::get_recursive(*child, ...)  // ERROR: cannot move
+
+struct Node {
+    value: i32,
+}
+
+fn process_node(node: Node) -> i32 {
+    node.value * 2
+}
+
+pub fn test_vec_ref_then_deref() {
+    let nodes = vec![Node { value: 10 }, Node { value: 20 }, Node { value: 30 }]
+    
+    // Pattern 1: Direct dereference of indexed reference
+    let node_ref = &nodes[1]
+    let result = process_node(*node_ref)  // Should add .clone()
+    
+    assert_eq!(result, 40)
+}
+
+pub fn test_vec_ref_deref_in_call() {
+    let nodes = vec![Node { value: 5 }, Node { value: 15 }]
+    
+    // Pattern 2: Inline dereference
+    let result = process_node(*&nodes[0])  // Should simplify or clone
+    
+    assert_eq!(result, 10)
+}

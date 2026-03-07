@@ -63,19 +63,19 @@ fn main() {
     let rust_code = compile_code(source).expect("Compilation failed");
     println!("Generated Rust code:\n{}", rust_code);
 
-    // THE WINDJAMMER WAY: String should be moved, not borrowed
-    // Should generate: renderer.draw_text(message)
-    // NOT: renderer.draw_text(&message)
+    // NEW DESIGN: Read-only string parameters infer to &str
+    // text: string (read-only) → infers to text: &str
+    // Call site: owned String is borrowed with &
     assert!(
-        rust_code.contains("renderer.draw_text(message)"),
-        "String variable should be passed owned (moved), not as &.\nGenerated:\n{}",
+        rust_code.contains("text: &str"),
+        "Read-only string parameter should infer to &str.\nGenerated:\n{}",
         rust_code
     );
 
-    // Should NOT contain &message
     assert!(
-        !rust_code.contains("renderer.draw_text(&message)"),
-        "Should NOT add & when method expects owned String"
+        rust_code.contains("renderer.draw_text(&message)"),
+        "Owned String should be borrowed when passed to &str parameter.\nGenerated:\n{}",
+        rust_code
     );
 }
 
@@ -100,15 +100,17 @@ fn main() {
     let rust_code = compile_code(source).expect("Compilation failed");
     println!("Generated Rust code:\n{}", rust_code);
 
-    // THE WINDJAMMER WAY: String literals should be auto-converted to String
-    // Should generate: renderer.draw_text("Hello World".to_string())
-    // OR: renderer.draw_text(String::from("Hello World"))
-    let has_to_string = rust_code.contains(r#""Hello World".to_string()"#);
-    let has_string_from = rust_code.contains(r#"String::from("Hello World")"#);
+    // NEW DESIGN: Read-only string parameters infer to &str
+    // String literals are already &str, so they're passed directly
+    assert!(
+        rust_code.contains("text: &str"),
+        "Read-only string parameter should infer to &str.\nGenerated:\n{}",
+        rust_code
+    );
 
     assert!(
-        has_to_string || has_string_from,
-        "String literal should be auto-converted to String when method expects owned String.\nGenerated:\n{}",
+        rust_code.contains(r#"draw_text("Hello World")"#),
+        "String literal should be passed directly to &str parameter.\nGenerated:\n{}",
         rust_code
     );
 }

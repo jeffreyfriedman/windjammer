@@ -14,7 +14,8 @@
 use std::process::Command;
 
 fn compile_wj_source_named(source: &str, name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("wj_vec_index_ctx_{}", name));
+    let dir =
+        std::env::temp_dir().join(format!("wj_vec_index_ctx_{}_{}", name, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -52,7 +53,8 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
 }
 
 fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
-    let dir = std::env::temp_dir().join("wj_vec_index_context_check");
+    let dir =
+        std::env::temp_dir().join(format!("wj_vec_index_context_check_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 

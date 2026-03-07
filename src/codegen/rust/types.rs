@@ -124,6 +124,15 @@ pub fn type_to_rust(type_: &Type) -> String {
                 format!("&mut {}", type_to_rust(inner))
             }
         }
+        Type::RawPointer { mutable, pointee } => {
+            // TDD: Raw pointer types for FFI
+            // *const T -> *const T, *mut T -> *mut T
+            if *mutable {
+                format!("*mut {}", type_to_rust(pointee))
+            } else {
+                format!("*const {}", type_to_rust(pointee))
+            }
+        }
         Type::Tuple(types) => {
             let rust_types: Vec<String> = types.iter().map(type_to_rust).collect();
             format!("({})", rust_types.join(", "))
@@ -133,7 +142,44 @@ pub fn type_to_rust(type_: &Type) -> String {
             params,
             return_type,
         } => {
-            let param_strs: Vec<String> = params.iter().map(type_to_rust).collect();
+            // WINDJAMMER DESIGN: Function pointers use &str (not &String!)
+            // fn(string, i32) → fn(&str, i32) - idiomatic Rust, no Clippy warnings
+            // fn(vec: Vec<T>) → fn(&Vec<T>) - borrowed for non-Copy types
+            let param_strs: Vec<String> = params
+                .iter()
+                .map(|ty| {
+                    match ty {
+                        // WINDJAMMER DESIGN: String → &str for borrowed parameters
+                        Type::String => "&str".to_string(),
+                        Type::Custom(name) if name == "string" => "&str".to_string(),
+                        // Already explicit references - keep as-is
+                        Type::Reference(_) | Type::MutableReference(_) => type_to_rust(ty),
+                        // Copy types - pass by value
+                        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => {
+                            type_to_rust(ty)
+                        }
+                        Type::Custom(name)
+                            if matches!(
+                                name.as_str(),
+                                "i32"
+                                    | "i64"
+                                    | "u32"
+                                    | "u64"
+                                    | "f32"
+                                    | "f64"
+                                    | "bool"
+                                    | "char"
+                                    | "usize"
+                                    | "isize"
+                            ) =>
+                        {
+                            type_to_rust(ty)
+                        }
+                        // Everything else - keep as-is (explicit types are respected)
+                        _ => type_to_rust(ty),
+                    }
+                })
+                .collect();
             if let Some(ret) = return_type {
                 format!("fn({}) -> {}", param_strs.join(", "), type_to_rust(ret))
             } else {
@@ -147,6 +193,8 @@ pub fn type_to_rust(type_: &Type) -> String {
 pub fn type_contains_reference(type_: &Type) -> bool {
     match type_ {
         Type::Reference(_) | Type::MutableReference(_) => true,
+        // TDD: Raw pointers are NOT references (different lifetime rules)
+        Type::RawPointer { .. } => false,
         Type::Option(inner) => type_contains_reference(inner),
         Type::Result(ok, err) => type_contains_reference(ok) || type_contains_reference(err),
         Type::Vec(inner) => type_contains_reference(inner),
@@ -187,6 +235,14 @@ pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
                 format!("&'a mut dyn {}", trait_name)
             } else {
                 format!("&'a mut {}", type_to_rust_with_lifetime(inner))
+            }
+        }
+        // TDD: Raw pointers don't have lifetimes (unsafe, FFI)
+        Type::RawPointer { mutable, pointee } => {
+            if *mutable {
+                format!("*mut {}", type_to_rust(pointee))
+            } else {
+                format!("*const {}", type_to_rust(pointee))
             }
         }
         // For container types, recurse to add lifetime to nested references

@@ -287,6 +287,13 @@ impl WindjammerLanguageServer {
                     format!("fn({})", param_strs.join(", "))
                 }
             }
+            Type::RawPointer { mutable, pointee } => {
+                if *mutable {
+                    format!("*mut {}", self.type_to_string(pointee))
+                } else {
+                    format!("*const {}", self.type_to_string(pointee))
+                }
+            }
         }
     }
 

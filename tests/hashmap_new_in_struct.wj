@@ -1,0 +1,38 @@
+// TDD TEST: HashMap::new() in struct literal
+// Bug: "Unexpected token in expression: Comma"
+// Expected: HashMap::new() should work in struct field initialization
+
+use std::collections::HashMap
+
+struct Animation {
+    name: String,
+}
+
+struct Controller {
+    animations: HashMap<String, Animation>,
+    current: Option<String>,
+    index: usize,
+    time: f32,
+    playing: bool,
+    looping: bool,
+    speed: f32,
+}
+
+impl Controller {
+    pub fn new() -> Controller {
+        Controller {
+            animations: HashMap::new(),   // BUG: Might fail here!
+            current: None,
+            index: 0,
+            time: 0.0,
+            playing: false,
+            looping: true,
+            speed: 1.0,
+        }
+    }
+}
+
+fn main() {
+    let ctrl = Controller::new()
+    println("✅ HashMap::new() in struct literals works!")
+}

@@ -1,0 +1,49 @@
+// TDD Test: Vector indexing should auto-clone when moving out of vector
+// Bug: Compiler generates `children[idx]` which tries to move, causing E0507
+// Expected: Compiler should auto-insert `.clone()` for Clone types when moving from vector
+
+struct Node {
+    value: i32,
+    children: Vec<Node>,
+}
+
+impl Node {
+    pub fn new(value: i32) -> Node {
+        Node {
+            value: value,
+            children: Vec::new(),
+        }
+    }
+    
+    pub fn add_child(self, child: Node) {
+        self.children.push(child)
+    }
+    
+    // This should compile without explicit .clone()
+    // Compiler should auto-insert .clone() when moving out of vector
+    pub fn get_child(self, index: usize) -> Node {
+        self.children[index]  // Should auto-clone
+    }
+    
+    // Recursive case (like Octree)
+    pub fn recursive_sum(node: Node) -> i32 {
+        let mut sum = node.value
+        for i in 0..node.children.len() {
+            let child = node.children[i]  // Should auto-clone
+            sum = sum + Self::recursive_sum(child)
+        }
+        sum
+    }
+}
+
+pub fn test_vector_indexing() {
+    let mut parent = Node::new(10)
+    parent.add_child(Node::new(5))
+    parent.add_child(Node::new(3))
+    
+    let child = parent.get_child(0)
+    assert_eq!(child.value, 5)
+    
+    let sum = Node::recursive_sum(parent)
+    assert_eq!(sum, 18)  // 10 + 5 + 3
+}
