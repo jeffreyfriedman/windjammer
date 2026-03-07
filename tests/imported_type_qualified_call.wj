@@ -1,0 +1,26 @@
+// TDD TEST: Qualified call on imported type (Vec3::new)
+// Bug: Parser fails when calling Type::function where Type is imported from another module
+// Expected: Should parse Vec3::new() correctly
+
+use crate::math::Vec3
+
+struct Triangle {
+    pub v0: Vec3,
+}
+
+impl Triangle {
+    pub fn center(self) -> Vec3 {
+        // BUG: This line might fail!
+        // Vec3 is imported, and we're calling Vec3::new()
+        Vec3::new(1.0, 2.0, 3.0)
+    }
+}
+
+fn main() {
+    let tri = Triangle {
+        v0: Vec3::new(0.0, 0.0, 0.0),
+    }
+    let center = tri.center()
+    
+    println("✅ Imported type qualified calls work!")
+}

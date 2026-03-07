@@ -104,10 +104,16 @@ fn test_hashmap_remove_expects_reference() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // HashMap::remove DOES need &, so this should have it
+    // Compiler correctly infers key: &str (read-only string parameter)
+    // HashMap<String, i32>::remove can accept &str via Borrow<str> trait
     assert!(
-        generated.contains("map.remove(&key)"),
-        "HashMap::remove should get &key reference, got:\n{}",
+        generated.contains("key: &str"),
+        "key parameter should be inferred as &str, got:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("map.remove(key)"),
+        "HashMap::remove should receive key directly (accepts &str), got:\n{}",
         generated
     );
 }

@@ -1,0 +1,66 @@
+// TDD TEST: Array literal syntax
+// Windjammer should support [val1, val2, val3] for array literals
+
+fn test_basic_array_literal() {
+    // Integer array
+    let numbers = [1, 2, 3, 4, 5]
+    assert(numbers.len() == 5, "Array should have 5 elements")
+    println("✅ Integer array literal works")
+    
+    // Float array
+    let floats = [1.0, 2.0, 3.0]
+    assert(floats.len() == 3, "Float array should have 3 elements")
+    println("✅ Float array literal works")
+}
+
+fn test_vertex_data_array() {
+    // Triangle vertices (x, y, z) - THE ACTUAL USE CASE!
+    let vertices = [
+        0.0,  0.5, 0.0,   // Top
+       -0.5, -0.5, 0.0,   // Bottom-left
+        0.5, -0.5, 0.0    // Bottom-right
+    ]
+    
+    assert(vertices.len() == 9, "Should have 9 floats (3 vertices * 3 coords)")
+    println("✅ Vertex data array literal works")
+}
+
+fn test_index_buffer_array() {
+    // Cube indices
+    let indices = [
+        0, 1, 2,  // Front face triangle 1
+        2, 3, 0   // Front face triangle 2
+    ]
+    
+    assert(indices.len() == 6, "Should have 6 indices")
+    println("✅ Index buffer array literal works")
+}
+
+fn test_uniform_data_array() {
+    // Camera matrices as flat array (4x4 = 16 floats)
+    let view_matrix = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]
+    
+    assert(view_matrix.len() == 16, "Matrix should have 16 elements")
+    println("✅ Uniform data array literal works")
+}
+
+fn main() {
+    println("========================================")
+    println("🔧 ARRAY LITERAL SYNTAX TESTS")
+    println("========================================")
+    
+    test_basic_array_literal()
+    test_vertex_data_array()
+    test_index_buffer_array()
+    test_uniform_data_array()
+    
+    println("")
+    println("✅ All array literal tests passed!")
+    println("")
+    println("🎉 ARRAY LITERALS WORKING! 🎉")
+}

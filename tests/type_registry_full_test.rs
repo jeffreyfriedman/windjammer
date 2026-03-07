@@ -13,7 +13,8 @@ fn test_type_registry_generates_correct_imports() {
     let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     // Create a temporary directory structure
-    let temp_dir = std::env::temp_dir().join("wj_test_type_registry");
+    let temp_dir =
+        std::env::temp_dir().join(format!("wj_test_type_registry_{}", std::process::id()));
     let _ = fs::remove_dir_all(&temp_dir);
     fs::create_dir_all(&temp_dir).unwrap();
 

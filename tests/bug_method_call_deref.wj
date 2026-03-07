@@ -1,0 +1,41 @@
+// TDD: Bug #7 - Method call arguments need auto-deref/clone
+// When calling methods with borrowed enum match bindings
+
+struct State {
+    pub name: String,
+    pub value: i32,
+}
+
+impl State {
+    pub fn new() -> State {
+        State { name: "".to_string(), value: 0 }
+    }
+    
+    pub fn update(self, name: String, value: i32) {
+        println!("Updating: {}, {}", name, value);
+    }
+}
+
+enum Action {
+    Update(String, i32),
+}
+
+impl Action {
+    pub fn execute(self, state: State) {
+        match self {
+            Action::Update(name, value) => {
+                // Bug #7: name is &String, value is &i32 (from &self match)
+                // state.update() expects String, i32 (owned)
+                // Should auto-convert: state.update(name.clone(), *value)
+                // Currently: error[E0308]: expected String/i32, found &String/&i32
+                state.update(name, value);
+            }
+        }
+    }
+}
+
+fn main() {
+    let action = Action::Update("test".to_string(), 42);
+    let state = State::new();
+    action.execute(state);
+}

@@ -1,0 +1,23 @@
+// TDD TEST: Struct with undefined types (missing imports)
+// Bug: When HashMap/Animation aren't imported, parser might give confusing errors
+// Expected: Should give clear "undefined type" error, not parse error
+
+// NOTE: No imports! HashMap and Animation are undefined
+pub struct AnimationController {
+    animations: HashMap<String, Animation>,
+    current_animation: Option<String>,
+}
+
+impl AnimationController {
+    pub fn new() -> AnimationController {
+        AnimationController {
+            animations: HashMap::new(),
+            current_animation: None,
+        }
+    }
+}
+
+fn main() {
+    let ctrl = AnimationController::new()
+    println("This should compile (or give type error, not parse error)")
+}

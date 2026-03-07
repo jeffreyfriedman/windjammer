@@ -63,17 +63,31 @@ fn test_user(id: string, name: string, age: i32) {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // Check that test_user_impl receives String arguments
-    // The impl function should take String parameters
+    // The impl function should take &str parameters (read-only usage infers Borrowed)
+    // Windjammer philosophy: compiler infers the cheapest ownership mode
+    // DESIGN: String → &str for borrowed (idiomatic Rust, not &String anti-pattern)
     assert!(
-        rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
-        "Should generate impl function with String parameters (unused params get _ prefix)"
+        rust_code.contains("fn test_user_impl(id: &str, name: &str, _age: i32)"),
+        "Should generate impl function with &str parameters (idiomatic Rust).\nGenerated:\n{}",
+        rust_code
     );
 
-    // CRITICAL: The test case calls MUST convert &str to String
-    // This is the bug we're fixing!
-    assert!(rust_code.contains(r#"test_user_impl("alice".to_string(), "Alice".to_string(), 25)"#), 
-        "BUG: Compiler must add .to_string() when calling impl function with string literal arguments");
+    // The test case calls pass string literals directly (already &str, no .to_string() needed)
+    assert!(
+        rust_code.contains(r#"test_user_impl("alice", "Alice""#),
+        "String literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}",
+        rust_code
+    );
+
+    // Strip windjammer_runtime import for standalone rustc test
+    let rust_code_stripped = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let rustc_test_path = temp_dir.path().join("test_rustc.rs");
+    fs::write(&rustc_test_path, rust_code_stripped).unwrap();
 
     // Verify it compiles with rustc
     let rustc_result = Command::new("rustc")
@@ -82,7 +96,7 @@ fn test_user(id: string, name: string, age: i32) {
             "lib",
             "--edition",
             "2021",
-            output_path.to_str().unwrap(),
+            rustc_test_path.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");
@@ -138,11 +152,23 @@ fn test_greet() {
     let rust_code = fs::read_to_string(&output_path).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // Should contain .to_string() for the parameter
+    // NEW DESIGN: Read-only string parameter infers to &str
+    // String literal (already &str) can be passed directly - no conversion needed!
     assert!(
-        rust_code.contains(r#"greet("World".to_string())"#),
-        "Compiler should auto-convert string literal parameters"
+        rust_code.contains(r#"greet("World")"#),
+        "String literal should be passed directly to &str parameter.\nGenerated:\n{}",
+        rust_code
     );
+
+    // Strip windjammer_runtime import for standalone rustc test
+    let rust_code_stripped = rust_code
+        .lines()
+        .filter(|line| !line.trim().starts_with("use windjammer_runtime::test::"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let rustc_test_path = temp_dir.path().join("test_rustc_2.rs");
+    fs::write(&rustc_test_path, rust_code_stripped).unwrap();
 
     // Verify it compiles with rustc
     let rustc_result = Command::new("rustc")
@@ -151,7 +177,7 @@ fn test_greet() {
             "lib",
             "--edition",
             "2021",
-            output_path.to_str().unwrap(),
+            rustc_test_path.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");

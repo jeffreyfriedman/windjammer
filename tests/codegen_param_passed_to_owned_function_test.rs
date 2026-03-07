@@ -55,20 +55,19 @@ pub fn wrapper(items: Vec<string>) {
 
     // process() only reads items (calls .len()), so it should be borrowed
     assert!(
-        rust_code.contains("items: &Vec<String>")
-            && rust_code
-                .lines()
-                .any(|l| l.contains("fn process") && l.contains("&Vec<String>")),
+        rust_code
+            .lines()
+            .any(|l| l.contains("fn process") && l.contains("&Vec<String>")),
         "process() only reads items via .len(), should be borrowed. Generated: {}",
         rust_code
     );
-    // wrapper() passes items to process(), which is a consuming argument pass,
-    // so items should stay owned in wrapper
+    // wrapper() passes items to process() which expects &Vec<String> (borrowed),
+    // so wrapper's items should also be borrowed (passthrough inference)
     assert!(
         rust_code
             .lines()
-            .any(|l| l.contains("fn wrapper") && l.contains("items: Vec<String>")),
-        "wrapper() passes items to process() directly, should be owned. Generated: {}",
+            .any(|l| l.contains("fn wrapper") && l.contains("&Vec<String>")),
+        "wrapper() passes items to borrowed process(), should also be borrowed. Generated: {}",
         rust_code
     );
 

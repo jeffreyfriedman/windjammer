@@ -56,8 +56,11 @@ test_command() {
 
 echo -e "${BLUE}Part 1: Building Windjammer Compiler${NC}"
 echo "----------------------------------------"
-test_command "Windjammer compiler build" "cargo build --release"
+test_command "Windjammer compiler build" "cargo build --release --bin wj"
 echo ""
+
+# Add wj binary to PATH for integration tests
+export PATH="$PWD/target/release:$PATH"
 
 # ============================================================================
 # Part 2: Workspace Tests

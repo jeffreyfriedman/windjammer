@@ -1,0 +1,35 @@
+// TDD TEST: Loop index should infer to usize for array indexing
+// Bug: i + 1 infers to i64 instead of usize, causing type mismatch
+// Expected: Loop indices used in array operations should infer to usize
+
+struct Keyframe {
+    time: f32,
+    value: f32,
+}
+
+fn find_keyframe_range(keyframes: Vec<Keyframe>, target_time: f32) -> (usize, usize) {
+    let before_idx = 0
+    let mut after_idx = keyframes.len() - 1
+    
+    // BUG: i is inferred as i64, but we use it for array indexing!
+    // When we do after_idx = i + 1, this should work without cast
+    for i in 0..keyframes.len() {
+        if keyframes[i].time >= target_time {
+            after_idx = i + 1  // <-- BUG: i + 1 infers to i64, not usize
+            break
+        }
+    }
+    
+    (before_idx, after_idx)
+}
+
+fn main() {
+    let mut frames = Vec::new()
+    frames.push(Keyframe { time: 0.0, value: 0.0 })
+    frames.push(Keyframe { time: 1.0, value: 10.0 })
+    frames.push(Keyframe { time: 2.0, value: 20.0 })
+    
+    let (before, after) = find_keyframe_range(frames, 1.5)
+    println("Range: {} to {}", before, after)
+    println("✅ Loop index type inference works!")
+}

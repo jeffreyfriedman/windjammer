@@ -747,7 +747,9 @@ impl Parser {
                     name: "self".to_string(),
                     pattern: None,
                     type_: Type::Custom("Self".to_string()),
-                    ownership: OwnershipHint::Owned,
+                    // SMART OWNERSHIP FIX: Let analyzer infer &self, &mut self, or self
+                    // based on whether the method reads or writes fields!
+                    ownership: OwnershipHint::Inferred,
                     is_mutable: false,
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {

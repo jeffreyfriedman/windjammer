@@ -4099,8 +4099,8 @@ mod diagnostics_tests {
         // Check that auto-fixes are provided when enabled
         for diag in &diagnostics {
             // Auto-fix may or may not be available depending on the diagnostic
-            if diag.fix.is_some() {
-                assert!(!diag.fix.as_ref().unwrap().description.is_empty());
+            if let Some(fix) = &diag.fix {
+                assert!(!fix.description.is_empty());
             }
         }
     }

@@ -1,0 +1,28 @@
+// TDD TEST: Type cast followed by comparison operator
+// Bug: Parser confuses `as usize <` thinking < starts generic arguments
+// Expected: Should parse < as comparison operator, not generic argument start
+
+fn test_cast_and_compare() {
+    let x = 5
+    let arr = [1, 2, 3, 4, 5]
+    
+    // BUG: This should work but parser fails!
+    // Parser sees `as usize <` and thinks usize<T> instead of comparison
+    if x as usize < arr.len() {
+        println("x is less than array length")
+    }
+    
+    // Also test with other operators after cast
+    if x as usize > 0 {
+        println("x is positive")
+    }
+    
+    if x as usize == arr.len() {
+        println("x equals array length")
+    }
+}
+
+fn main() {
+    test_cast_and_compare()
+    println("✅ Type casts followed by comparisons work!")
+}

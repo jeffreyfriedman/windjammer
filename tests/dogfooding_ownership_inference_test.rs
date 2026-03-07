@@ -957,10 +957,11 @@ impl ResourcePool {
 /// Function that takes owned ResourcePool and calls mutating methods on it
 /// THE WINDJAMMER WAY: User writes `pool: ResourcePool` without `mut`,
 /// compiler infers `mut` because .add() requires &mut self
+/// NOTE: String literals auto-convert to String (no .to_string() needed!)
 pub fn fill_pool(pool: ResourcePool) {
-    pool.add("water".to_string())
-    pool.add("food".to_string())
-    pool.add("ammo".to_string())
+    pool.add("water")
+    pool.add("food")
+    pool.add("ammo")
 }
 
 /// Function that takes owned ResourcePool but only reads it
@@ -1001,4 +1002,20 @@ pub fn check_pool(pool: ResourcePool) -> i32 {
             generated
         );
     }
+
+    // Phase 3: THE WINDJAMMER WAY - Linter warning verification
+    // Code compiles predictably (explicit intent respected),
+    // but linter warns about inefficiency (educational)
+    assert!(
+        stderr.contains("owned-but-not-returned") || stderr.contains("mutated but not returned"),
+        "Expected linter warning for owned-but-not-returned in fill_pool.\n\
+         Stderr:\n{}",
+        stderr
+    );
+    assert!(
+        stderr.contains("Consider using `&mut"),
+        "Expected linter suggestion to use &mut ResourcePool.\n\
+         Stderr:\n{}",
+        stderr
+    );
 }

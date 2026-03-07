@@ -21,6 +21,13 @@ impl Parser {
             Type::Generic(name) => name.clone(),
             Type::Reference(inner) => format!("&{}", self.type_to_string(inner)),
             Type::MutableReference(inner) => format!("&mut {}", self.type_to_string(inner)),
+            Type::RawPointer { mutable, pointee } => {
+                if *mutable {
+                    format!("*mut {}", self.type_to_string(pointee))
+                } else {
+                    format!("*const {}", self.type_to_string(pointee))
+                }
+            }
             Type::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
             Type::Result(ok, err) => format!(
                 "Result<{}, {}>",
@@ -174,6 +181,25 @@ impl Parser {
 
     /// Parse a type annotation
     pub fn parse_type(&mut self) -> Result<Type, String> {
+        // Handle raw pointer types: *const T, *mut T
+        if self.current_token() == &Token::Star {
+            self.advance();
+
+            // Check for const or mut
+            let mutable = if self.current_token() == &Token::Const {
+                self.advance();
+                false
+            } else if self.current_token() == &Token::Mut {
+                self.advance();
+                true
+            } else {
+                return Err("Expected 'const' or 'mut' after '*' in pointer type".to_string());
+            };
+
+            let pointee = Box::new(self.parse_type()?);
+            return Ok(Type::RawPointer { mutable, pointee });
+        }
+
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
             self.advance();
@@ -420,7 +446,32 @@ impl Parser {
                 }
 
                 // Check for generic parameters
-                if self.current_token() == &Token::Lt {
+                // BUT: Primitive types like usize, i32, u32, etc. can't have generics
+                // If we see `<` after a primitive type, it's a comparison operator, not generics!
+                let is_primitive_type = matches!(
+                    type_name.as_str(),
+                    "usize"
+                        | "isize"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "f32"
+                        | "f64"
+                        | "char"
+                        | "str"
+                        | "bool"
+                        | "unit"
+                        | "()"
+                );
+
+                if !is_primitive_type && self.current_token() == &Token::Lt {
                     self.advance();
 
                     // Handle Vec<T>, Option<T>, Result<T, E>
@@ -454,9 +505,11 @@ impl Parser {
                                 self.expect_gt_or_split_shr()?;
                                 break;
                             } else {
+                                eprintln!("DEBUG: Parsing type arguments for: {}", type_name);
+                                eprintln!("DEBUG: After parsing type arg, current token: {:?} at position: {}", self.current_token(), self.position);
                                 return Err(format!(
-                                    "Expected ',' or '>' in type arguments, got {:?}",
-                                    self.current_token()
+                                    "Expected ',' or '>' in type arguments for '{}', got {:?} at position {}",
+                                    type_name, self.current_token(), self.position
                                 ));
                             }
                         }
@@ -471,6 +524,11 @@ impl Parser {
                 // Type inference placeholder: _
                 self.advance();
                 Type::Infer
+            }
+            Token::Self_ => {
+                // Self type (e.g. in &self, &mut self parameter types)
+                self.advance();
+                Type::Custom("Self".to_string())
             }
             _ => return Err(format!("Expected type, got {:?}", self.current_token())),
         };

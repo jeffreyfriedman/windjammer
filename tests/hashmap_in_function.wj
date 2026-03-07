@@ -1,0 +1,17 @@
+// TDD TEST: HashMap usage in functions (from navmesh.wj line 265-266)
+use std::collections::HashMap
+
+fn test_hashmap() -> Vec<u32> {
+    let mut came_from: HashMap<u32, u32> = HashMap::new()
+    let mut g_score: HashMap<u32, f32> = HashMap::new()
+    
+    came_from.insert(1, 2)
+    g_score.insert(1, 1.0)
+    
+    Vec::new()
+}
+
+fn main() {
+    let result = test_hashmap()
+    println("✅ HashMap in functions works!")
+}

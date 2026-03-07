@@ -9,7 +9,8 @@ pub mod cli;
 pub mod codegen;
 pub mod component_analyzer;
 pub mod error;
-pub mod errors; // High-quality error messages (mutability, etc.)
+pub mod errors;
+pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
                 // Removed: codegen_legacy is now codegen::rust::generator
 pub mod compiler_database;
 pub mod config;
@@ -25,6 +26,7 @@ pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
+pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -225,7 +227,8 @@ enum Commands {
 }
 
 #[allow(dead_code)]
-fn main() -> Result<()> {
+/// Main CLI entry point (called from bin/wj.rs after plugin discovery)
+pub fn run_main_cli() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -769,10 +772,36 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
                 })
                 .collect();
 
+            // THE WINDJAMMER WAY: Scan generated Rust code for external crate usage
+            // This catches dependencies like windjammer_app:: that are passed through
+            // without being marked as external during compilation
+            let mut rust_code_deps = std::collections::HashSet::new();
+            if let Ok(entries) = std::fs::read_dir(output) {
+                for entry in entries.flatten() {
+                    if let Some(filename) = entry.file_name().to_str() {
+                        if filename.ends_with(".rs") {
+                            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                                rust_code_deps.extend(
+                                    crate::codegen::rust::backend::RustBackend::extract_external_dependencies(&content)
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Merge filtered_external_crates with rust_code_deps
+            let mut combined_external_crates = filtered_external_crates;
+            for dep in rust_code_deps {
+                if !combined_external_crates.contains(&dep) && dep != "crate" && dep != "super" {
+                    combined_external_crates.push(dep);
+                }
+            }
+
             create_cargo_toml_with_deps(
                 output,
                 &all_stdlib_modules,
-                &filtered_external_crates,
+                &combined_external_crates,
                 target,
                 source_dir,
             )?;
@@ -1119,10 +1148,12 @@ impl ModuleCompiler {
 
         let (analyzed, signatures, analyzed_trait_methods) = self
             .analyzer
-            .analyze_program(&program)
+            .analyze_program_with_global_signatures(&program, &self.global_signatures)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
-        // MUTABILITY CHECK: Enforce immutable-by-default `let` semantics
+        // EXPLICIT MUTABILITY: Enforce immutable-by-default `let` semantics
+        // Users must write `let mut x` when mutation is intended (like Rust/Swift/Kotlin)
+        // This prevents accidental state mutation bugs
         let mut mut_checker = errors::MutabilityChecker::new(file_path.clone());
         let mut has_mut_errors = false;
         for item in &program.items {
@@ -1717,8 +1748,24 @@ fn compile_file_impl(
 
     let (analyzed, signatures, analyzed_trait_methods) = module_compiler
         .analyzer
-        .analyze_program(&program)
+        .analyze_program_with_global_signatures(&program, &module_compiler.global_signatures)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
+
+    // THE WINDJAMMER WAY: Run linter after analysis
+    // Compile predictably (respect explicit intent), warn helpfully (guide to better patterns)
+    if !store_program {
+        // Only run linter during PASS 2 (regeneration), not PASS 1 (registration)
+        let mut linter = linter::Linter::new();
+        for analyzed_func in &analyzed {
+            linter.lint_function(analyzed_func);
+        }
+        let diagnostics = linter.into_diagnostics();
+        for diagnostic in &diagnostics {
+            if diagnostic.level != linter::LintLevel::Allow {
+                eprintln!("{}", diagnostic);
+            }
+        }
+    }
 
     // BUG FIX: Merge per-file signatures into global registry during PASS 1
     // This ensures extern function signatures (and all other signatures) are available
@@ -1727,7 +1774,7 @@ fn compile_file_impl(
         module_compiler.global_signatures.merge(&signatures);
     }
 
-    // MUTABILITY CHECK: Check for mut errors with great error messages
+    // EXPLICIT MUTABILITY: Check for mut errors with helpful error messages
     // Checks both top-level functions AND methods inside impl blocks
     let mut mut_checker = errors::MutabilityChecker::new(input_path.to_path_buf());
     let mut has_mut_errors = false;
@@ -2100,6 +2147,36 @@ fn check_file(file_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// TDD FIX (Bug #2): File type detection for Cargo.toml target generation
+#[derive(Debug, PartialEq)]
+enum RustFileType {
+    Test,    // Contains #[test] functions
+    Binary,  // Contains fn main()
+    Library, // Neither (just library code)
+}
+
+/// Detect what type of Rust file this is by scanning its contents
+fn detect_rust_file_type(path: &Path) -> RustFileType {
+    if let Ok(contents) = std::fs::read_to_string(path) {
+        let has_main = contents.contains("fn main()") || contents.contains("fn main(");
+        let has_test = contents.contains("#[test]");
+
+        // Priority: main() takes precedence (binaries can have tests)
+        // Files with ONLY tests (no main) are test targets
+        // Files with neither are library modules (no target needed)
+        if has_main {
+            RustFileType::Binary
+        } else if has_test {
+            RustFileType::Test
+        } else {
+            RustFileType::Library
+        }
+    } else {
+        // Can't read file - assume library
+        RustFileType::Library
+    }
+}
+
 #[allow(dead_code)]
 fn create_cargo_toml_with_deps(
     output_dir: &Path,
@@ -2346,12 +2423,16 @@ fn create_cargo_toml_with_deps(
             continue; // Skip Rust keywords
         }
 
-        // THE WINDJAMMER WAY: Check if windjammer-game or windjammer-game-core is imported
-        // If so, add it as a path dependency to the local game framework
+        // THE WINDJAMMER WAY: Check if windjammer engine crates are imported
+        // If so, add them as path dependencies to the local framework
         if crate_name == "windjammer_game"
             || crate_name == "windjammer-game"
             || crate_name == "windjammer_game_core"
             || crate_name == "windjammer-game-core"
+            || crate_name == "windjammer_app"
+            || crate_name == "windjammer-app"
+            || crate_name == "windjammer_runtime"
+            || crate_name == "windjammer-runtime"
         {
             // Try to find windjammer-game in the workspace
             // First, check if WINDJAMMER_GAME_PATH env var is set (for development)
@@ -2371,19 +2452,25 @@ fn create_cargo_toml_with_deps(
             let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")); // /path/to/windjammer
             let src_root = manifest_dir.parent().unwrap(); // /path/to (parent of windjammer)
 
-            // Try both old and new paths for compatibility
-            let game_path = src_root.join("windjammer-game/windjammer-game-core");
-            let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
-
-            let final_path = if game_path.exists() {
-                game_path
-            } else if legacy_game_path.exists() {
-                legacy_game_path
+            // THE WINDJAMMER WAY: Determine the correct path based on which crate is imported
+            let final_path = if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                // windjammer-runtime is in windjammer/crates/windjammer-runtime
+                src_root.join("windjammer/crates/windjammer-runtime")
             } else {
-                PathBuf::new() // Empty path, will fallback to crates.io
+                // windjammer-app is in windjammer-game/windjammer-game-core
+                let game_path = src_root.join("windjammer-game/windjammer-game-core");
+                let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
+
+                if game_path.exists() {
+                    game_path
+                } else if legacy_game_path.exists() {
+                    legacy_game_path
+                } else {
+                    PathBuf::new() // Empty path, will fallback to crates.io
+                }
             };
 
-            if !final_path.as_os_str().is_empty() {
+            if !final_path.as_os_str().is_empty() && final_path.exists() {
                 // Read the actual crate name from Cargo.toml at the path
                 let cargo_toml_path = final_path.join("Cargo.toml");
                 let crate_name_normalized = if cargo_toml_path.exists() {
@@ -2397,6 +2484,13 @@ fn create_cargo_toml_with_deps(
                                 // Fallback: guess based on crate_name
                                 if crate_name.contains("_core") || crate_name.contains("-core") {
                                     "windjammer-game-core".to_string()
+                                } else if crate_name.contains("_app") || crate_name.contains("-app")
+                                {
+                                    "windjammer-app".to_string()
+                                } else if crate_name.contains("_runtime")
+                                    || crate_name.contains("-runtime")
+                                {
+                                    "windjammer-runtime".to_string()
                                 } else {
                                     "windjammer-game".to_string()
                                 }
@@ -2405,6 +2499,12 @@ fn create_cargo_toml_with_deps(
                             // Fallback: guess based on crate_name
                             if crate_name.contains("_core") || crate_name.contains("-core") {
                                 "windjammer-game-core".to_string()
+                            } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                                "windjammer-app".to_string()
+                            } else if crate_name.contains("_runtime")
+                                || crate_name.contains("-runtime")
+                            {
+                                "windjammer-runtime".to_string()
                             } else {
                                 "windjammer-game".to_string()
                             }
@@ -2413,6 +2513,11 @@ fn create_cargo_toml_with_deps(
                         // Fallback: guess based on crate_name
                         if crate_name.contains("_core") || crate_name.contains("-core") {
                             "windjammer-game-core".to_string()
+                        } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                            "windjammer-app".to_string()
+                        } else if crate_name.contains("_runtime") || crate_name.contains("-runtime")
+                        {
+                            "windjammer-runtime".to_string()
                         } else {
                             "windjammer-game".to_string()
                         }
@@ -2421,6 +2526,10 @@ fn create_cargo_toml_with_deps(
                     // Fallback: guess based on crate_name
                     if crate_name.contains("_core") || crate_name.contains("-core") {
                         "windjammer-game-core".to_string()
+                    } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                        "windjammer-app".to_string()
+                    } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                        "windjammer-runtime".to_string()
                     } else {
                         "windjammer-game".to_string()
                     }
@@ -2435,11 +2544,16 @@ fn create_cargo_toml_with_deps(
             }
 
             // Fallback: assume it's on crates.io (for published version)
-            let crate_name_normalized = if crate_name.contains("_core") {
-                "windjammer-game-core"
-            } else {
-                "windjammer-game"
-            };
+            let crate_name_normalized =
+                if crate_name.contains("_core") || crate_name.contains("-core") {
+                    "windjammer-game-core"
+                } else if crate_name.contains("_app") || crate_name.contains("-app") {
+                    "windjammer-app"
+                } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
+                    "windjammer-runtime"
+                } else {
+                    "windjammer-game"
+                };
             external_deps.push(format!("{} = \"*\"", crate_name_normalized));
         } else {
             // All other external crates are assumed to be from crates.io
@@ -2499,35 +2613,96 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
+    // THE WINDJAMMER WAY: Use project name from game.toml if it exists
+    // Check source_dir and its parent for game.toml
+    let game_toml_path = if source_dir.join("game.toml").exists() {
+        source_dir.join("game.toml")
+    } else if let Some(parent) = source_dir.parent() {
+        if parent.join("game.toml").exists() {
+            parent.join("game.toml")
+        } else {
+            PathBuf::new() // Empty, will use default
+        }
+    } else {
+        PathBuf::new()
+    };
+
+    let project_name = if !game_toml_path.as_os_str().is_empty() {
+        if let Ok(game_toml_content) = std::fs::read_to_string(&game_toml_path) {
+            eprintln!("DEBUG: Found game.toml at {:?}", game_toml_path);
+            // Parse name from game.toml and normalize for Cargo
+            let name = game_toml_content
+                .lines()
+                .find(|l| l.trim().starts_with("name"))
+                .and_then(|l| l.split('"').nth(1))
+                .map(|s| s.to_lowercase().replace(' ', "-"))
+                .unwrap_or_else(|| "windjammer-app".to_string());
+            eprintln!("DEBUG: Extracted project name: {}", name);
+            name
+        } else {
+            "windjammer-app".to_string()
+        }
+    } else {
+        eprintln!("DEBUG: No game.toml found, using default");
+        "windjammer-app".to_string()
+    };
+    let lib_name_normalized = project_name.replace('-', "_");
+
     // THE WINDJAMMER WAY: Check if lib.rs exists to determine if this is a library or binary project
     let has_lib_rs = output_dir.join("lib.rs").exists();
     let has_main_rs = output_dir.join("main.rs").exists();
 
     let lib_or_bin_section = if has_lib_rs {
         // Library project - generate [lib] section
-        "[lib]\nname = \"windjammer_app\"\npath = \"lib.rs\"\n\n".to_string()
+        format!(
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n",
+            lib_name_normalized
+        )
     } else if has_main_rs {
         // Binary project with main.rs - generate [[bin]] section
-        "[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n".to_string()
+        format!(
+            "[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
+            project_name
+        )
     } else {
-        // Multiple standalone files - generate [[bin]] sections for each
-        let mut bin_sections = Vec::new();
+        // TDD FIX (Bug #2): Detect test files and generate appropriate targets
+        // Multiple standalone files - detect file type and generate [[bin]] or [[test]]
+        let mut target_sections = Vec::new();
         if let Ok(entries) = fs::read_dir(output_dir) {
             for entry in entries.flatten() {
                 if let Some(filename) = entry.file_name().to_str() {
                     if filename.ends_with(".rs") {
-                        let bin_name = filename.strip_suffix(".rs").unwrap_or(filename);
-                        bin_sections.push(format!(
-                            "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
-                            bin_name, filename
-                        ));
+                        let file_path = entry.path();
+                        let file_type = detect_rust_file_type(&file_path);
+
+                        let target_name = filename.strip_suffix(".rs").unwrap_or(filename);
+
+                        match file_type {
+                            RustFileType::Test => {
+                                // Test file: generate [[test]] target
+                                target_sections.push(format!(
+                                    "[[test]]\nname = \"{}\"\npath = \"{}\"\n",
+                                    target_name, filename
+                                ));
+                            }
+                            RustFileType::Binary => {
+                                // Executable: generate [[bin]] target
+                                target_sections.push(format!(
+                                    "[[bin]]\nname = \"{}\"\npath = \"{}\"\n",
+                                    target_name, filename
+                                ));
+                            }
+                            RustFileType::Library => {
+                                // Library code: no target needed (just a module)
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if !bin_sections.is_empty() {
-            format!("{}\n", bin_sections.join("\n"))
+        if !target_sections.is_empty() {
+            format!("{}\n", target_sections.join("\n"))
         } else {
             String::new()
         }
@@ -2535,7 +2710,7 @@ fn create_cargo_toml_with_deps(
 
     let cargo_toml = format!(
         r#"[package]
-name = "windjammer-app"
+name = "{}"
 version = "0.1.0"
 edition = "2021"
 
@@ -2545,7 +2720,12 @@ edition = "2021"
 {}{}[profile.release]
 opt-level = 3
 "#,
-        deps_section, lib_or_bin_section
+        project_name, deps_section, lib_or_bin_section
+    );
+
+    eprintln!(
+        "DEBUG: Generated Cargo.toml with package name: {}",
+        project_name
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
@@ -5121,6 +5301,22 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     let module_tree =
         discover_nested_modules(source_dir).context("Failed to discover module structure")?;
 
+    // Build set of ALL generated module names (including nested submodules)
+    // Used to prevent stale copies in src/ from being treated as hand-written modules
+    fn collect_all_names(
+        modules: &[crate::module_system::Module],
+        names: &mut std::collections::HashSet<String>,
+    ) {
+        for m in modules {
+            names.insert(m.name.clone());
+            if !m.submodules.is_empty() {
+                collect_all_names(&m.submodules, names);
+            }
+        }
+    }
+    let mut all_generated_names = std::collections::HashSet::new();
+    collect_all_names(&module_tree.root_modules, &mut all_generated_names);
+
     // Generate lib.rs (for crate root) or mod.rs (for subdirectory)
     // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
     // Look for hand-written .rs files in the project root (parent of src_wj)
@@ -5280,11 +5476,16 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                         ];
 
                         if !skip_dirs.contains(&dir_name_str.as_ref()) {
-                            // CRITICAL FIX: Don't copy directories that correspond to Windjammer modules!
-                            // Check if there's a corresponding .wj directory in src_wj
+                            // Don't copy directories that correspond to ANY generated module
+                            // (including nested submodules like sundering/player → player)
+                            if all_generated_names.contains(dir_name_str.as_ref()) {
+                                continue;
+                            }
+
+                            // Also check for a corresponding .wj directory in src_wj
                             let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
                             if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
-                                continue; // Skip copying - this is a Windjammer module directory
+                                continue;
                             }
 
                             // CRITICAL FIX: Don't copy directories that contain the output directory!

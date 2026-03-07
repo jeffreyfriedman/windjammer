@@ -1,0 +1,30 @@
+// Minimal test for field write detection
+
+struct Point {
+    x: f32,
+    y: f32
+}
+
+impl Point {
+    // Should infer &mut self (writes to field)
+    fn set_x(self, value: f32) {
+        self.x = value
+    }
+    
+    // Should infer &self (only reads field)
+    fn get_x(self) -> f32 {
+        self.x
+    }
+}
+
+fn main() {
+    println("Testing field write detection...")
+    
+    let mut p = Point { x: 1.0, y: 2.0 }
+    p.set_x(10.0)
+    
+    println("x = {}", p.x)
+    assert(p.x == 10.0, "set_x should modify x")
+    
+    println("✅ Test passed!")
+}
