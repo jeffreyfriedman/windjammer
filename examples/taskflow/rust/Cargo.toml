@@ -24,7 +24,7 @@ serde_json = "1.0"
 
 # Authentication
 bcrypt = "0.15"
-jsonwebtoken = "9.2"
+jsonwebtoken = "10.3"
 
 # Logging
 tracing = "0.1"
