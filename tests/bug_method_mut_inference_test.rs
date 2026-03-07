@@ -65,7 +65,8 @@ fn main() {
 
     let out_dir = test_dir.join("out");
 
-    let _output = Command::new("wj")
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let _output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
         .arg("--target")
@@ -171,7 +172,8 @@ fn main() {
 
     let out_dir = test_dir.join("out");
 
-    let _output = Command::new("wj")
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let _output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
         .arg("--target")

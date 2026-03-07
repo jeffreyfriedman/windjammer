@@ -25,7 +25,8 @@ fn test_method_self_by_value_compiles() {
     let out_dir = test_dir.join("out");
 
     // Compile the Windjammer test file
-    let output = Command::new("wj")
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
         .arg("--target")

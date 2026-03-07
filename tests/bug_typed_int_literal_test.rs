@@ -25,7 +25,8 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
 
     let output_dir = temp_dir.join("out");
 
-    let output = Command::new("wj")
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
         .args(["build", source_file.to_str().unwrap()])
         .args(["--output", output_dir.to_str().unwrap()])
         .args(["--target", "rust"])
