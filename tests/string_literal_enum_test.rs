@@ -44,10 +44,7 @@ fn test_string_literal_enum_auto_convert() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         let _ = fs::remove_dir_all(&output_dir);
-        panic!(
-            "wj build failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
+        panic!("wj build failed:\nSTDERR:\n{}\nSTDOUT:\n{}", stderr, stdout);
     }
 
     // Read generated Rust file
