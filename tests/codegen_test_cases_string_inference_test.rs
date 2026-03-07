@@ -75,7 +75,8 @@ fn test_user(id: string, name: string, age: i32) {
     // The test case calls pass string literals directly (already &str, no .to_string() needed)
     assert!(
         rust_code.contains(r#"test_user_impl("alice", "Alice""#),
-        "String literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}", rust_code
+        "String literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}",
+        rust_code
     );
 
     // Strip windjammer_runtime import for standalone rustc test

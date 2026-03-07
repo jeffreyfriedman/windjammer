@@ -52,7 +52,8 @@ fn test_automatic_reference_insertion() {
     // THE WINDJAMMER WAY: Read-only string parameters infer to &str (idiomatic Rust!)
     assert!(
         generated.contains("fn greet(name: &str)"),
-        "Read-only string parameter should infer to &str.\nGenerated:\n{}", generated
+        "Read-only string parameter should infer to &str.\nGenerated:\n{}",
+        generated
     );
 
     // Check that call sites pass Copy types by value (no &)

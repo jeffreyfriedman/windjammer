@@ -825,9 +825,9 @@ impl<'ast> CodeGenerator<'ast> {
         {
             if let Some(param) = param {
                 // Check if parameter type is string
-                let is_string_type = matches!(param.type_, Type::String) 
+                let is_string_type = matches!(param.type_, Type::String)
                     || matches!(param.type_, Type::Custom(ref name) if name == "string");
-                
+
                 if is_string_type {
                     // Check if this parameter was inferred as OWNED (not borrowed)
                     // If inferred as borrowed → generates &str → string literal passes directly
@@ -1303,9 +1303,9 @@ impl<'ast> CodeGenerator<'ast> {
                             self.type_to_rust(inferred_type)
                         } else {
                             // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
-                            let is_string = matches!(inferred_type, Type::String) 
+                            let is_string = matches!(inferred_type, Type::String)
                                 || matches!(inferred_type, Type::Custom(name) if name == "string");
-                            
+
                             if is_string {
                                 "&str".to_string()
                             } else {
@@ -1382,9 +1382,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
                                         // Check if this is a String type (either Type::String or Type::Custom("string"))
-                                        let is_string = matches!(inferred_type, Type::String) 
+                                        let is_string = matches!(inferred_type, Type::String)
                                             || matches!(inferred_type, Type::Custom(name) if name == "string");
-                                        
+
                                         if is_string {
                                             // &str is idiomatic Rust: accepts both String and &str via deref coercion
                                             // &String is an anti-pattern (Clippy warning)

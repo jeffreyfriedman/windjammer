@@ -29,7 +29,7 @@ fn test_string_borrow_inference() {
         .arg(&test_file)
         .arg("--output")
         .arg(&output_dir)
-        .arg("--no-cargo")  // Skip cargo build to avoid test decorator scope issues
+        .arg("--no-cargo") // Skip cargo build to avoid test decorator scope issues
         .output()
         .expect("Failed to run compiler");
 

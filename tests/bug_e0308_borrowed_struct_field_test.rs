@@ -104,7 +104,8 @@ fn main() {
         generated
     );
     assert!(
-        generated.contains("has_item(&item.item_id,") || generated.contains("has_item(&item.item_id )"),
+        generated.contains("has_item(&item.item_id,")
+            || generated.contains("has_item(&item.item_id )"),
         "Should borrow the field (no .clone()). Got:\n{}",
         generated
     );

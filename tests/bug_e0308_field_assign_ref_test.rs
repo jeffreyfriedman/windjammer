@@ -94,7 +94,7 @@ fn main() {
         generated
     );
     assert!(
-        generated.contains("self.data.value = value.clone()") 
+        generated.contains("self.data.value = value.clone()")
             || generated.contains("self.data.value = value.to_string()"),
         "Should clone/convert &str to String for owned field. Got:\n{}",
         generated

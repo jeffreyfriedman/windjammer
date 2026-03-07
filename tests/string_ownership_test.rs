@@ -107,7 +107,7 @@ fn main() {
         "Read-only string parameter should infer to &str.\nGenerated:\n{}",
         rust_code
     );
-    
+
     assert!(
         rust_code.contains(r#"draw_text("Hello World")"#),
         "String literal should be passed directly to &str parameter.\nGenerated:\n{}",

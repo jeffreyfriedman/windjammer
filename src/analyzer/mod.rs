@@ -1337,7 +1337,7 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // WINDJAMMER DESIGN: String parameters infer to &str (not &String!)
-        // 
+        //
         // When a string parameter is read-only, we generate `&str` (idiomatic Rust):
         // - Accepts both `String` and `&str` via deref coercion
         // - No `&String` anti-pattern (Clippy-approved)

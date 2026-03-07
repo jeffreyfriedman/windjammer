@@ -98,11 +98,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     if method == "clone" {
                                         if let Expression::Identifier { name, .. } = &**object {
                                             // Check if this is a borrowed string parameter
-                                            let is_borrowed_str_param = self.inferred_borrowed_params.contains(name);
-                                            
+                                            let is_borrowed_str_param =
+                                                self.inferred_borrowed_params.contains(name);
+
                                             if is_borrowed_str_param {
                                                 // Replace .clone() with .to_string()
-                                                expr_str = expr_str.replace(".clone()", ".to_string()");
+                                                expr_str =
+                                                    expr_str.replace(".clone()", ".to_string()");
                                             }
                                         }
                                     }
@@ -230,18 +232,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     expr_str = format!("{}.to_string()", expr_str);
                                 }
                                 // param.clone() where param: &str → param.to_string()
-                                // &str.clone() returns &str, but we need String  
+                                // &str.clone() returns &str, but we need String
                                 // Check if expression is identifier.clone() and identifier is a borrowed string param
                                 else if expr_str.ends_with(".clone()") {
                                     if let Expression::MethodCall { method, object, .. } = expr {
                                         if method == "clone" {
                                             if let Expression::Identifier { name, .. } = &**object {
                                                 // Check if this is a borrowed string parameter
-                                                let is_borrowed_str_param = self.inferred_borrowed_params.contains(name);
-                                                
+                                                let is_borrowed_str_param =
+                                                    self.inferred_borrowed_params.contains(name);
+
                                                 if is_borrowed_str_param {
                                                     // Replace .clone() with .to_string()
-                                                    expr_str = expr_str.replace(".clone()", ".to_string()");
+                                                    expr_str = expr_str
+                                                        .replace(".clone()", ".to_string()");
                                                 }
                                             }
                                         }
@@ -780,15 +784,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     // Check if this identifier is a borrowed string parameter
                                     let is_string_type = self.current_function_params.iter().any(|p| {
                                         p.name == *name && (
-                                            matches!(p.type_, Type::String) 
+                                            matches!(p.type_, Type::String)
                                             || matches!(p.type_, Type::Custom(ref n) if n == "string")
                                         )
                                     });
-                                    let is_borrowed_str_param = self
-                                        .inferred_borrowed_params
-                                        .contains(name)
-                                        && is_string_type;
-                                    
+                                    let is_borrowed_str_param =
+                                        self.inferred_borrowed_params.contains(name)
+                                            && is_string_type;
+
                                     if is_borrowed_str_param {
                                         // Replace .clone() with .to_string()
                                         return_str = return_str.replace(".clone()", ".to_string()");
