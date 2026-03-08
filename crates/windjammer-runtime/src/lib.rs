@@ -33,6 +33,7 @@ pub mod env;
 pub mod fixtures;
 pub mod io;
 pub mod log_mod;
+pub mod marker;
 pub mod math;
 pub mod mock;
 pub mod mock_function;
@@ -55,3 +56,9 @@ pub mod timeout;
 // Re-export commonly used types
 #[cfg(feature = "server")]
 pub use http::{Request, Response, Router, ServerResponse};
+
+// Prelude for common imports
+pub mod prelude {
+    pub use crate::testing::*;
+    pub use crate::marker::PhantomData;
+}
