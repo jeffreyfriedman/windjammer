@@ -918,6 +918,14 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            // TDD FIX: Skip "shaders" directory - contains WGSL files, not Rust
+            // Shader files use WGSL types (vec3<float>, mat4x4<float>) which don't exist in Rust
+            // They should be compiled separately to WGSL, not to Rust
+            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if dir_name == "shaders" {
+                continue; // Skip shaders directory
+            }
+            
             // Recurse into subdirectories
             find_wj_files_recursive(&path, files)?;
         }
