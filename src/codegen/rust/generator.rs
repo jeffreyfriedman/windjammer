@@ -160,9 +160,19 @@ pub struct CodeGenerator<'ast> {
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
     pub(crate) in_struct_literal_field: bool,
+    // STRUCT LITERAL CONTEXT: Track which struct we're currently constructing
+    // Enables context-sensitive float type inference (f32 vs f64) for struct fields
+    pub(crate) current_struct_literal_name: Option<String>,
+    // STRUCT LITERAL CONTEXT: Track which field we're currently generating
+    // Enables lookup of field type from struct_field_types for literal inference
+    pub(crate) current_struct_field_name: Option<String>,
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
     // Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
+    // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
+    // Maps expression locations to inferred float types (f32 vs f64)
+    // Enables accurate float literal suffix generation without mixing errors
+    pub(crate) float_inference: Option<crate::type_inference::FloatInference>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -276,6 +286,9 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             copy_types_registry: std::collections::HashSet::new(),
             in_struct_literal_field: false,
+            current_struct_literal_name: None,
+            current_struct_field_name: None,
+            float_inference: None,
             enum_variant_types: std::collections::HashMap::new(),
         }
     }
@@ -330,6 +343,12 @@ impl<'ast> CodeGenerator<'ast> {
         bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     ) {
         self.inferred_bounds = bounds;
+    }
+
+    /// Set expression-level float type inference results
+    /// Enables accurate f32/f64 suffix generation based on constraint solving
+    pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
+        self.float_inference = Some(inference);
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
