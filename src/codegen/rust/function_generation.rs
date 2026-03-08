@@ -236,6 +236,14 @@ impl<'ast> CodeGenerator<'ast> {
             if decorator.name == "export" && self.target != CompilationTarget::Wasm {
                 continue;
             }
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
+                continue;
+            }
             // Skip wrapping decorators - they'll be handled in the body
             if matches!(
                 decorator.name.as_str(),
@@ -1050,6 +1058,15 @@ impl<'ast> CodeGenerator<'ast> {
 
             // Skip @export - it's used to determine visibility but doesn't map to a Rust attribute for native targets
             if decorator.name == "export" && self.target != CompilationTarget::Wasm {
+                continue;
+            }
+
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
                 continue;
             }
 
