@@ -123,7 +123,12 @@ impl Parser {
                     | Token::MinusAssign
                     | Token::StarAssign
                     | Token::SlashAssign
-                    | Token::PercentAssign => {
+                    | Token::PercentAssign
+                    | Token::AndAssign
+                    | Token::OrAssign
+                    | Token::XorAssign
+                    | Token::ShlAssign
+                    | Token::ShrAssign => {
                         let op_token = self.current_token().clone();
                         self.advance(); // consume compound operator
 
@@ -137,6 +142,11 @@ impl Parser {
                             Token::StarAssign => CompoundOp::Mul,
                             Token::SlashAssign => CompoundOp::Div,
                             Token::PercentAssign => CompoundOp::Mod,
+                            Token::AndAssign => CompoundOp::BitAnd,
+                            Token::OrAssign => CompoundOp::BitOr,
+                            Token::XorAssign => CompoundOp::BitXor,
+                            Token::ShlAssign => CompoundOp::Shl,
+                            Token::ShrAssign => CompoundOp::Shr,
                             _ => unreachable!(),
                         };
 

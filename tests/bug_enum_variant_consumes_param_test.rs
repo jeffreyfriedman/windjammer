@@ -106,7 +106,7 @@ impl Objective {
 }
 
 pub fn create_kill(enemy_type: String, count: i32) -> Objective {
-    let desc = format!("Kill {} {}", count, enemy_type)
+    let desc = format!("Kill {} {}", count, enemy_type);
     Objective::new(ObjectiveType::Kill(enemy_type, count), count)
 }
 "#;

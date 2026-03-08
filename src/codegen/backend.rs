@@ -24,6 +24,8 @@ pub enum Target {
     JavaScript,
     /// WebAssembly
     WebAssembly,
+    /// WGSL (WebGPU Shading Language)
+    Wgsl,
 }
 
 impl std::str::FromStr for Target {
@@ -35,6 +37,7 @@ impl std::str::FromStr for Target {
             "go" | "golang" => Ok(Target::Go),
             "javascript" | "js" => Ok(Target::JavaScript),
             "wasm" | "webassembly" => Ok(Target::WebAssembly),
+            "wgsl" => Ok(Target::Wgsl),
             _ => Err(format!("Unknown target: {}", s)),
         }
     }
@@ -47,6 +50,7 @@ impl Target {
             Target::Go => "go",
             Target::JavaScript => "javascript",
             Target::WebAssembly => "webassembly",
+            Target::Wgsl => "wgsl",
         }
     }
 
@@ -56,6 +60,7 @@ impl Target {
             Target::Go => "go",
             Target::JavaScript => "js",
             Target::WebAssembly => "wasm",
+            Target::Wgsl => "wgsl",
         }
     }
 }
@@ -235,6 +240,7 @@ pub fn create_backend(target: Target) -> Box<dyn CodegenBackend> {
         Target::Go => Box::new(crate::codegen::go::GoBackend::new()),
         Target::JavaScript => Box::new(crate::codegen::javascript::JavaScriptBackend::new()),
         Target::WebAssembly => Box::new(crate::codegen::wasm::WasmBackend::new()),
+        Target::Wgsl => Box::new(crate::codegen::wgsl::WgslBackend::new()),
     }
 }
 

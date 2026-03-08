@@ -92,6 +92,11 @@ pub enum Token {
     StarAssign,    // *=
     SlashAssign,   // /=
     PercentAssign, // %=
+    AndAssign,     // &=
+    OrAssign,      // |=
+    XorAssign,     // ^=
+    ShlAssign,     // <<=
+    ShrAssign,     // >>=
     Arrow,         // ->
     LeftArrow,     // <-
     FatArrow,      // =>
@@ -707,6 +712,11 @@ impl Lexer {
                 self.advance();
                 Token::Percent
             }
+            Some('^') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::XorAssign
+            }
             Some('^') => {
                 self.advance();
                 Token::Caret
@@ -739,6 +749,12 @@ impl Lexer {
                 self.advance();
                 Token::LeftArrow
             }
+            Some('<') if self.peek(1) == Some('<') && self.peek(2) == Some('=') => {
+                self.advance();
+                self.advance();
+                self.advance();
+                Token::ShlAssign
+            }
             Some('<') if self.peek(1) == Some('<') => {
                 self.advance();
                 self.advance();
@@ -752,6 +768,12 @@ impl Lexer {
             Some('<') => {
                 self.advance();
                 Token::Lt
+            }
+            Some('>') if self.peek(1) == Some('>') && self.peek(2) == Some('=') => {
+                self.advance();
+                self.advance();
+                self.advance();
+                Token::ShrAssign
             }
             Some('>') if self.peek(1) == Some('>') => {
                 self.advance();
@@ -772,6 +794,11 @@ impl Lexer {
                 self.advance();
                 Token::And
             }
+            Some('&') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::AndAssign
+            }
             Some('&') => {
                 self.advance();
                 Token::Ampersand
@@ -780,6 +807,11 @@ impl Lexer {
                 self.advance();
                 self.advance();
                 Token::Or
+            }
+            Some('|') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::OrAssign
             }
             Some('|') if self.peek(1) == Some('>') => {
                 self.advance();
