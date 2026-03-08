@@ -590,6 +590,14 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         let mut parser = parser_impl::Parser::new(tokens);
 
         if let Ok(program) = parser.parse() {
+            // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+            // Check immediately after parsing, before trait registration
+            let checker_analyzer = analyzer::Analyzer::new();
+            if let Err(e) = checker_analyzer.check_forbidden_rust_patterns(&program) {
+                eprintln!("{}", e);
+                anyhow::bail!("{}", e);
+            }
+            
             // Register any trait definitions found
             let mut has_traits = false;
             for item in &program.items {
@@ -1074,6 +1082,16 @@ impl ModuleCompiler {
         let program = parser
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
+
+        // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+        // This must happen immediately after parsing, before any other processing
+        {
+            eprintln!("🔍 LANGUAGE CHECK (compile_module): Scanning {} for .as_str()", module_path);
+            let checker_analyzer = analyzer::Analyzer::new();
+            checker_analyzer.check_forbidden_rust_patterns(&program)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            eprintln!("✅ LANGUAGE CHECK (compile_module): No .as_str() found in {}", module_path);
+        }
 
         // Mark as "being compiled" to prevent infinite recursion
         // We'll update this with the actual code later
@@ -1581,6 +1599,7 @@ fn compile_file_impl(
     store_program: bool,
     _path_key: &str,
 ) -> Result<(HashSet<String>, Vec<String>)> {
+    eprintln!("🚀 ENTERED compile_file_impl for {:?}", input_path.file_name());
     let target = module_compiler.target;
 
     // Read source file
@@ -1598,6 +1617,16 @@ fn compile_file_impl(
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+    // This must happen immediately after parsing, before any other processing
+    {
+        eprintln!("🔍 LANGUAGE CHECK (file_impl): Scanning for .as_str() in {:?}", input_path.file_name());
+        let checker_analyzer = analyzer::Analyzer::new();
+        checker_analyzer.check_forbidden_rust_patterns(&program)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
+    }
 
     // DEBUG: Print Item::Mod entries in the AST
     if std::env::var("WJ_DEBUG_AST").is_ok() {
