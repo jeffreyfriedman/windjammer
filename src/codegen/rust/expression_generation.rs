@@ -488,10 +488,22 @@ impl<'ast> CodeGenerator<'ast> {
                 // - Literal values
                 // - Method calls returning owned types
 
+                // TDD FIX: Check if parameter is &str type (never needs deref in comparisons)
+                let is_str_param = |name: &str| {
+                    self.current_function_params.iter().any(|p| {
+                        p.name == name
+                            && (matches!(p.type_, crate::parser::Type::String)
+                                || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "string"))
+                            && self.inferred_borrowed_params.contains(name)
+                    })
+                };
+
                 let left_is_borrowed = match left {
                     Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
+                        // Don't treat &str params as "borrowed" for deref purposes
+                        !is_str_param(name)
+                            && (self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name))
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)
@@ -502,8 +514,10 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let right_is_borrowed = match right {
                     Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
+                        // Don't treat &str params as "borrowed" for deref purposes
+                        !is_str_param(name)
+                            && (self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name))
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)

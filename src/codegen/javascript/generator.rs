@@ -1318,6 +1318,7 @@ mod tests {
                     is_extern: false,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![],
                     decorators: vec![],
                     is_async: false,

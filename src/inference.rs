@@ -481,8 +481,10 @@ mod tests {
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             }],
             return_type: None,
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::MacroInvocation {
@@ -534,8 +536,10 @@ mod tests {
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             }],
             return_type: Some(Type::Generic("T".to_string())),
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::MethodCall {
@@ -582,6 +586,7 @@ mod tests {
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
                     is_mutable: false,
+                    decorators: Vec::new(),
                 },
                 Parameter {
                     name: "y".to_string(),
@@ -589,9 +594,11 @@ mod tests {
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
                     is_mutable: false,
+                    decorators: Vec::new(),
                 },
             ],
             return_type: Some(Type::Generic("T".to_string())),
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::Binary {

@@ -63,9 +63,19 @@ pub fn execute(
         }
         "go" | "golang" => crate::CompilationTarget::Go,
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
+        "wgsl" => {
+            // Use WGSL backend for GPU shaders
+            use crate::codegen::backend::{CodegenConfig, Target};
+            let config = CodegenConfig {
+                target: Target::Wgsl,
+                output_dir: output_dir.to_path_buf(),
+                ..Default::default()
+            };
+            return build_wgsl(path, &config);
+        }
         _ => {
             anyhow::bail!(
-                "Unknown target: {}. Use 'rust', 'go', 'javascript', or 'wasm'",
+                "Unknown target: {}. Use 'rust', 'go', 'javascript', 'wasm', or 'wgsl'",
                 target_str
             );
         }
@@ -195,6 +205,52 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
         fs::write(&file_path, content)?;
         println!("  {} {:?}", "Generated".green(), file_path);
     }
+
+    Ok(())
+}
+
+fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
+    use crate::codegen;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use std::fs;
+
+    // Read source file
+    let source = fs::read_to_string(path)?;
+
+    // Lex and parse
+    let mut lexer = Lexer::new(&source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = Parser::new(tokens);
+    let program = parser
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Generate WGSL
+    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+
+    // Create output directory
+    fs::create_dir_all(&config.output_dir)?;
+
+    // Determine output filename from input
+    let input_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("shader");
+    let output_path = config.output_dir.join(format!("{}.wgsl", input_stem));
+    
+    // Write WGSL output
+    fs::write(&output_path, &output.source)?;
+    println!("  {} {:?}", "Generated".green(), output_path);
+
+    // Write additional files if any
+    for (filename, content) in &output.additional_files {
+        let file_path = config.output_dir.join(filename);
+        fs::write(&file_path, content)?;
+        println!("  {} {:?}", "Generated".green(), file_path);
+    }
+
+    println!(
+        "\n{} WGSL shader compilation complete!",
+        "Success!".green().bold()
+    );
 
     Ok(())
 }

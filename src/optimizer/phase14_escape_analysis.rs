@@ -498,6 +498,7 @@ mod tests {
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::Let {
                         pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
@@ -563,6 +564,7 @@ mod tests {
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![
                         test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("temp".to_string()),

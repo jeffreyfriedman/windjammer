@@ -117,6 +117,7 @@ fn optimize_loops_in_item<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
+                    return_decorators: func.return_decorators.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
                     doc_comment: func.doc_comment.clone(),
@@ -141,6 +142,7 @@ fn optimize_loops_in_item<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
+                    return_decorators: func.return_decorators.clone(),
                     body: optimize_loops_in_statements(&func.body, config, stats, optimizer),
                     parent_type: func.parent_type.clone(),
                     doc_comment: func.doc_comment.clone(),
@@ -977,6 +979,7 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1039,6 +1042,7 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1121,6 +1125,7 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: Some(Type::Custom("i32".to_string())),
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::Return {
                         value: Some(test_alloc_expr(Expression::Binary {
                             left: test_alloc_expr(Expression::Identifier {
@@ -1163,6 +1168,7 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1220,6 +1226,7 @@ mod tests {
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {

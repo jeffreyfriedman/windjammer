@@ -281,19 +281,6 @@ impl Parser {
         };
 
         match self.current_token() {
-            Token::Extern => {
-                self.advance(); // Consume the Extern token
-                self.expect(Token::Fn)?; // Expect fn after extern
-                let mut func = self.parse_function()?;
-                func.is_extern = true; // Mark as extern function
-                func.is_pub = is_pub;
-                func.decorators = decorators;
-                func.doc_comment = doc_comment;
-                Ok(Item::Function {
-                    decl: func,
-                    location: self.current_location(),
-                })
-            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -390,6 +377,50 @@ impl Parser {
                     value,
                     location: self.current_location(),
                 })
+            }
+            Token::Extern => {
+                // Check if this is `extern let` (GPU bindings) or `extern fn` (FFI)
+                if self.peek(1) == Some(&Token::Let) {
+                    self.advance(); // consume extern
+                    self.advance(); // consume let
+                    
+                    let name = if let Token::Ident(n) = self.current_token() {
+                        let n = n.clone();
+                        self.advance();
+                        n
+                    } else {
+                        return Err("Expected variable name after extern let".to_string());
+                    };
+                    
+                    self.expect(Token::Colon)?;
+                    let type_ = self.parse_type()?;
+                    
+                    // Semicolon optional (ASI)
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                    }
+                    
+                    Ok(Item::ExternLet {
+                        name,
+                        type_,
+                        decorators,
+                        is_pub,
+                        location: self.current_location(),
+                    })
+                } else {
+                    // extern fn - existing code path
+                    self.advance(); // Consume the Extern token
+                    self.expect(Token::Fn)?; // Expect fn after extern
+                    let mut func = self.parse_function()?;
+                    func.is_extern = true; // Mark as extern function
+                    func.is_pub = is_pub;
+                    func.decorators = decorators;
+                    func.doc_comment = doc_comment;
+                    Ok(Item::Function {
+                        decl: func,
+                        location: self.current_location(),
+                    })
+                }
             }
             Token::Use => {
                 self.advance(); // consume 'use'
