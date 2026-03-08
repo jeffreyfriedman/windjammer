@@ -1056,6 +1056,7 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'ast>,
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> String {
+        eprintln!("TDD DEBUG MATCH START: arms={}, value={:?}", arms.len(), std::mem::discriminant(value));
         use super::arm_string_analysis;
 
         // TDD FIX: Optimize boolean match expressions to matches! macro
@@ -1137,7 +1138,41 @@ impl<'ast> CodeGenerator<'ast> {
             if !needs_borrow_break_check
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
-                let value_str = self.generate_expression(value);
+                // TDD FIX: Skip redundant .as_str() when value is MethodCall with .as_str()
+                // and object is already &str (same logic as in generate_expression_immut)
+                eprintln!("TDD DEBUG IF-LET PATH: value is MethodCall? {}", 
+                    matches!(value, Expression::MethodCall { .. }));
+                let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
+                    eprintln!("TDD DEBUG IF-LET PATH: MethodCall, method={}", method);
+                    if method == "as_str" && arguments.is_empty() {
+                        eprintln!("TDD DEBUG IF-LET PATH: .as_str() with no args");
+                        let is_already_str = match object {
+                            Expression::Identifier { name, .. } => {
+                                let result = self.inferred_borrowed_params.contains(name.as_str());
+                                eprintln!("TDD DEBUG IF-LET PATH: Identifier {}, borrowed={}, params={:?}",
+                                    name, result, self.inferred_borrowed_params);
+                                result
+                            }
+                            Expression::MethodCall { method: inner_method, .. } => {
+                                matches!(
+                                    inner_method.as_str(),
+                                    "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                    "strip_prefix" | "strip_suffix"
+                                )
+                            }
+                            _ => false,
+                        };
+                        if is_already_str {
+                            self.generate_expression(object)
+                        } else {
+                            self.generate_expression(value)
+                        }
+                    } else {
+                        self.generate_expression(value)
+                    }
+                } else {
+                    self.generate_expression(value)
+                };
                 let main_arm = &arms[0];
 
                 let mut bound_vars = std::collections::HashSet::new();
@@ -1226,7 +1261,80 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
-        let value_str = self.generate_expression(value);
+        // TDD FIX: Skip redundant .as_str() on &str parameters in match expressions
+        eprintln!("TDD DEBUG VALUE_STR: value variant={:?}", std::mem::discriminant(value));
+        let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
+            eprintln!("TDD DEBUG VALUE_STR: MethodCall, method={}", method);
+            if method == "as_str" && arguments.is_empty() {
+                eprintln!("TDD DEBUG VALUE_STR: .as_str() with no args");
+                let is_already_str = match object {
+                    Expression::Identifier { name, .. } => {
+                        let result = self.inferred_borrowed_params.contains(name.as_str());
+                        eprintln!("TDD DEBUG VALUE_STR: Identifier {}, borrowed={}, params={:?}",
+                            name, result, self.inferred_borrowed_params);
+                        result
+                    }
+                    Expression::MethodCall { method: inner_method, .. } => {
+                        matches!(
+                            inner_method.as_str(),
+                            "as_str" | "trim" | "trim_start" | "trim_end" | 
+                            "strip_prefix" | "strip_suffix"
+                        )
+                    }
+                    _ => false,
+                };
+                eprintln!("TDD DEBUG VALUE_STR: is_already_str={}", is_already_str);
+                if is_already_str {
+                    eprintln!("TDD DEBUG VALUE_STR: Removing redundant .as_str()");
+                    self.generate_expression(object)
+                } else {
+                    self.generate_expression(value)
+                }
+            } else {
+                self.generate_expression(value)
+            }
+        } else if let Expression::Call { function, arguments, .. } = value {
+            eprintln!("TDD DEBUG: Checking Call expression");
+            // Check if this is actually a method call: obj.method()
+            if let Expression::FieldAccess { object, field, .. } = &**function {
+                eprintln!("TDD DEBUG: Field access, field={}", field);
+                if field == "as_str" && arguments.is_empty() {
+                    eprintln!("TDD DEBUG: .as_str() call with no args");
+                    let is_already_str = match &**object {
+                        Expression::Identifier { name, .. } => {
+                            let result = self.inferred_borrowed_params.contains(name.as_str());
+                            eprintln!("TDD DEBUG: Identifier {}, in borrowed_params={}, params={:?}", 
+                                name, result, self.inferred_borrowed_params);
+                            result
+                        }
+                        Expression::Call { function: inner_func, .. } => {
+                            // Nested method call like obj.trim().as_str()
+                            if let Expression::FieldAccess { field: inner_field, .. } = *inner_func {
+                                matches!(
+                                    inner_field.as_str(),
+                                    "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                    "strip_prefix" | "strip_suffix"
+                                )
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    };
+                    if is_already_str {
+                        self.generate_expression(object)
+                    } else {
+                        self.generate_expression(value)
+                    }
+                } else {
+                    self.generate_expression(value)
+                }
+            } else {
+                self.generate_expression(value)
+            }
+        } else {
+            self.generate_expression(value)
+        };
 
         let match_binds_refs_early = self.match_expression_binds_refs(value);
         let needs_borrow_break = match_binds_refs_early
@@ -1245,9 +1353,26 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
+                // TDD FIX: Don't add .as_str() if value_str already has it OR if it's already &str
+                // value_str may have been simplified (redundant .as_str() removed)
+                eprintln!("TDD DEBUG MATCH ADD: value_str={}, ends_with_as_str={}", 
+                    value_str, value_str.ends_with(".as_str()"));
+                
                 if !value_str.ends_with(".as_str()") {
-                    output.push_str(&format!("{}.as_str()", value_str));
+                    // Check if the simplified value_str is an identifier that's already &str
+                    let is_borrowed_param = self.inferred_borrowed_params.contains(&value_str);
+                    eprintln!("TDD DEBUG MATCH ADD: is_borrowed_param={}, borrowed_params={:?}",
+                        is_borrowed_param, self.inferred_borrowed_params);
+                    
+                    if is_borrowed_param {
+                        // Already &str, don't add .as_str()
+                        output.push_str(&value_str);
+                    } else {
+                        // Not &str, add .as_str()
+                        output.push_str(&format!("{}.as_str()", value_str));
+                    }
                 } else {
+                    // Already has .as_str()
                     output.push_str(&value_str);
                 }
             } else {
