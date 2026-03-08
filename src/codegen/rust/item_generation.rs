@@ -38,6 +38,15 @@ impl<'ast> CodeGenerator<'ast> {
             if decorator.name == "component" || decorator.name == "game" {
                 continue;
             }
+            
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
+                continue;
+            }
 
             if decorator.name == "command" {
                 // Special handling for @command decorator - generates clap attributes
