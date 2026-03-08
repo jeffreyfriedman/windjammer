@@ -80,6 +80,32 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // TDD FIX: Redundant .as_str() on &str
+                // When method is .as_str() and object is already &str, skip the call
+                if method == "as_str" && arguments.is_empty() {
+                    // Check if object is already &str
+                    let is_already_str = match object {
+                        Expression::Identifier { name, .. } => {
+                            // Check if this is an inferred &str parameter
+                            self.inferred_borrowed_params.contains(name.as_str())
+                        }
+                        Expression::MethodCall { method: inner_method, .. } => {
+                            // Methods like .as_str(), .trim(), etc. already return &str
+                            matches!(
+                                inner_method.as_str(),
+                                "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                "strip_prefix" | "strip_suffix"
+                            )
+                        }
+                        _ => false,
+                    };
+                    
+                    if is_already_str {
+                        // Skip the redundant .as_str() call, just return the object
+                        return self.generate_expression_immut(object);
+                    }
+                }
+                
                 let obj_str = self.generate_expression_immut(object);
                 let args_str = arguments
                     .iter()
