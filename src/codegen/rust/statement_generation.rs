@@ -1362,20 +1362,23 @@ impl<'ast> CodeGenerator<'ast> {
             if has_string_literal && !is_tuple_match {
                 // TDD FIX: Don't add .as_str() if value_str already has it OR if it's already &str
                 // value_str may have been simplified (redundant .as_str() removed)
-                eprintln!("TDD DEBUG MATCH ADD: value_str={}, ends_with_as_str={}", 
+                eprintln!("TDD DEBUG MATCH ADD: value_str='{}', ends_with_as_str={}", 
                     value_str, value_str.ends_with(".as_str()"));
+                eprintln!("TDD DEBUG MATCH ADD: borrowed_params={:?}", self.inferred_borrowed_params);
                 
                 if !value_str.ends_with(".as_str()") {
                     // Check if the simplified value_str is an identifier that's already &str
                     let is_borrowed_param = self.inferred_borrowed_params.contains(&value_str);
-                    eprintln!("TDD DEBUG MATCH ADD: is_borrowed_param={}, borrowed_params={:?}",
-                        is_borrowed_param, self.inferred_borrowed_params);
+                    eprintln!("TDD DEBUG MATCH ADD: is_borrowed_param={} for value_str='{}'",
+                        is_borrowed_param, value_str);
                     
                     if is_borrowed_param {
                         // Already &str, don't add .as_str()
+                        eprintln!("TDD DEBUG MATCH ADD: Skipping .as_str() for borrowed param '{}'", value_str);
                         output.push_str(&value_str);
                     } else {
                         // Not &str, add .as_str()
+                        eprintln!("TDD DEBUG MATCH ADD: Adding .as_str() to '{}'", value_str);
                         output.push_str(&format!("{}.as_str()", value_str));
                     }
                 } else {
