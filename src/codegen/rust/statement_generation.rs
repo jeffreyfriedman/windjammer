@@ -1260,9 +1260,16 @@ impl<'ast> CodeGenerator<'ast> {
         let is_tuple_match = arms
             .iter()
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
+        
+        eprintln!("TDD DEBUG MATCH CHECK: has_string_literal={}, is_tuple_match={}", 
+            has_string_literal, is_tuple_match);
 
         // TDD FIX: Skip redundant .as_str() on &str parameters in match expressions
         eprintln!("TDD DEBUG VALUE_STR: value variant={:?}", std::mem::discriminant(value));
+        if let Expression::FieldAccess { object, field, .. } = value {
+            eprintln!("TDD DEBUG VALUE_STR: FieldAccess, object={:?}, field={}", 
+                std::mem::discriminant(*object), field);
+        }
         let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
             eprintln!("TDD DEBUG VALUE_STR: MethodCall, method={}", method);
             if method == "as_str" && arguments.is_empty() {
