@@ -1648,6 +1648,22 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // TDD FIX: Strip redundant .as_str() on &str parameters
+                // If method is .as_str() and object is already inferred as &str, just return object
+                if method == "as_str" && arguments.is_empty() {
+                    eprintln!("TDD: .as_str() call found, checking object");
+                    if let Expression::Identifier { name, .. } = object {
+                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());
+                        eprintln!("TDD: object={}, is_borrowed={}, borrowed_params={:?}", 
+                            name, is_borrowed, self.inferred_borrowed_params);
+                        if is_borrowed {
+                            // Parameter is already &str, .as_str() is redundant
+                            eprintln!("TDD: Stripping redundant .as_str() on {}", name);
+                            return self.generate_expression(object);
+                        }
+                    }
+                }
+
                 // METHOD CALL CONTEXT: Suppress Vec index auto-clone when generating the
                 // object of a method call. Methods take &self or &mut self, so Rust allows
                 // calling methods on &T returned by Vec indexing without cloning.
