@@ -337,6 +337,7 @@ impl<'ast> Analyzer<'ast> {
                             type_: Type::Custom("Self".to_string()),
                             ownership: OwnershipHint::Owned,
                             is_mutable: false,
+                            decorators: Vec::new(),
                         },
                         Parameter {
                             name: "rhs".to_string(),
@@ -344,6 +345,7 @@ impl<'ast> Analyzer<'ast> {
                             type_: Type::Custom("Rhs".to_string()),
                             ownership: OwnershipHint::Owned,
                             is_mutable: false,
+                            decorators: Vec::new(),
                         },
                     ],
                     return_type: Some(Type::Custom("Output".to_string())),
@@ -387,6 +389,7 @@ impl<'ast> Analyzer<'ast> {
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Owned, // THE WINDJAMMER WAY: Neg uses owned self!
                         is_mutable: false,
+                        decorators: Vec::new(),
                     }],
                     return_type: Some(Type::Custom("Output".to_string())),
                     is_async: false,
@@ -654,6 +657,7 @@ impl<'ast> Analyzer<'ast> {
                             is_async: method.is_async,
                             parameters: method.parameters.clone(),
                             return_type: method.return_type.clone(),
+                            return_decorators: Vec::new(),
                             body: method.body.clone().unwrap_or_default(),
                             parent_type: None,
                             doc_comment: method.doc_comment.clone(),
@@ -1316,7 +1320,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         param_type: &Type,
-        original_hint: &OwnershipHint,
+        _original_hint: &OwnershipHint,
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
         registry: &SignatureRegistry,
@@ -1349,25 +1353,28 @@ impl<'ast> Analyzer<'ast> {
         // Multi-pass registry-aware inference
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
-        // THE WINDJAMMER WAY: Respect user's ownership choice!
-        // If user wrote `pool: ResourcePool` (owned) and it's mutated,
-        // keep it Owned (codegen will add `mut` to binding).
-        // Only change to MutBorrowed if user wrote `&pool` and it needs mutation.
+        // TDD FIX: For non-Copy types, mutated parameters MUST be &mut, not owned!
+        //
+        // CORRECTNESS: When a function mutates a parameter (e.g., grid.set(...)),
+        // the parameter MUST be a mutable borrow (&mut) so the caller can pass
+        // the same object to multiple functions (e.g., generate_ground(&mut grid), 
+        // generate_buildings(&mut grid)).
+        //
+        // If we use Owned (mut grid: VoxelGrid), the caller would need to pass
+        // by value, which MOVES the object and prevents reuse. This breaks
+        // common patterns like:
+        //   let mut grid = VoxelGrid::new();
+        //   env.generate_ground(&mut grid);   // ERROR: expects VoxelGrid, not &mut
+        //   env.generate_buildings(&mut grid); // ERROR: grid was moved
+        //
+        // EXCEPTION: Copy types (i32, f32, etc.) can use owned when mutated,
+        // because they're cheap to copy. But this is handled earlier (lines 1095-1102).
+        //
+        // For non-Copy types being mutated, ALWAYS infer &mut regardless of hint.
         if self.is_mutated(param_name, body, registry) {
-            match original_hint {
-                OwnershipHint::Owned | OwnershipHint::Inferred => {
-                    // User wants owned (or didn't specify), we'll add mut to binding: mut pool: ResourcePool
-                    return Ok(OwnershipMode::Owned);
-                }
-                OwnershipHint::Ref => {
-                    // User wants borrowed, upgrade to mut borrowed: pool: &mut T
-                    return Ok(OwnershipMode::MutBorrowed);
-                }
-                OwnershipHint::Mut => {
-                    // User explicitly wrote &mut, keep it
-                    return Ok(OwnershipMode::MutBorrowed);
-                }
-            }
+            // Always use MutBorrowed for mutated non-Copy parameters
+            // (Copy types are handled earlier and don't reach here)
+            return Ok(OwnershipMode::MutBorrowed);
         }
 
         // 2. Check if parameter is returned (escapes function)

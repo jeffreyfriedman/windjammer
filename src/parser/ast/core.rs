@@ -22,6 +22,7 @@ pub struct Parameter<'ast> {
     pub type_: Type,
     pub ownership: OwnershipHint,
     pub is_mutable: bool, // Whether parameter is declared with 'mut' keyword
+    pub decorators: Vec<Decorator<'ast>>, // GPU builtins, etc.
 }
 
 // ============================================================================
@@ -49,6 +50,7 @@ pub struct FunctionDecl<'ast> {
     pub is_async: bool,
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
+    pub return_decorators: Vec<Decorator<'ast>>, // Decorators on return type (e.g., @location(0))
     pub body: Vec<&'ast Statement<'ast>>, // Empty for extern functions
     pub parent_type: Option<String>,      // The type name if this function is in an impl block
     pub doc_comment: Option<String>,      // Documentation comment (/// lines)
@@ -505,6 +507,13 @@ pub enum Item<'ast> {
         value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
+    ExternLet {
+        name: String,
+        type_: Type,
+        decorators: Vec<Decorator<'ast>>,
+        is_pub: bool,
+        location: SourceLocation,
+    },
     Use {
         path: Vec<String>,
         alias: Option<String>,
@@ -541,6 +550,7 @@ impl<'ast> Item<'ast> {
             Item::Impl { location, .. } => location.clone(),
             Item::Const { location, .. } => location.clone(),
             Item::Static { location, .. } => location.clone(),
+            Item::ExternLet { location, .. } => location.clone(),
             Item::Use { location, .. } => location.clone(),
             Item::Mod { location, .. } => location.clone(),
             Item::BoundAlias { location, .. } => location.clone(),
