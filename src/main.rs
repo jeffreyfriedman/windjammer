@@ -37,6 +37,7 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_utils; // Syntax highlighting for error snippets
+pub mod type_inference; // Expression-level float type inference
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -1188,6 +1189,22 @@ impl ModuleCompiler {
             );
         }
 
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.infer_program(&program);
+        
+        if !float_inference.errors.is_empty() {
+            eprintln!("🚨 Float type inference errors in module {}:", module_path);
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Create a per-file registry that starts with global signatures (for cross-module lookups)
         // then overlays per-file signatures (for local type priority).
@@ -1197,6 +1214,7 @@ impl ModuleCompiler {
         per_file_registry.merge(&signatures);
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
+        generator.set_float_inference(float_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
@@ -1919,6 +1937,21 @@ fn compile_file_impl(
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
         } else {
+            // WINDJAMMER PHILOSOPHY: Expression-level float type inference (WASM target)
+            let mut float_inference = type_inference::FloatInference::new();
+            float_inference.infer_program(&program);
+            
+            if !float_inference.errors.is_empty() {
+                eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+                for error in &float_inference.errors {
+                    eprintln!("  {}", error);
+                }
+                return Err(anyhow::anyhow!(
+                    "Type inference failed with {} error(s)",
+                    float_inference.errors.len()
+                ));
+            }
+
             // Use old generator for non-component WASM
             // MODULE-SCOPED SIGNATURE RESOLUTION:
             // Always start with global signatures (for cross-module lookups),
@@ -1932,6 +1965,7 @@ fn compile_file_impl(
             } else {
                 codegen::CodeGenerator::new(generator_signatures, target)
             };
+            generator.set_float_inference(float_inference);
             generator.set_inferred_bounds(inferred_bounds_map);
             generator.set_analyzed_trait_methods(analyzed_trait_methods);
             // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
@@ -1967,6 +2001,22 @@ fn compile_file_impl(
             result
         }
     } else {
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference (Rust target)
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.infer_program(&program);
+        
+        if !float_inference.errors.is_empty() {
+            eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
         // Use old generator for Rust target
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Always start with global signatures (for cross-module lookups),
@@ -1978,6 +2028,7 @@ fn compile_file_impl(
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
         };
+        generator.set_float_inference(float_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs

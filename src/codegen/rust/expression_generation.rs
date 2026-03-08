@@ -27,7 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::ast::operators::{BinaryOp, UnaryOp};
 
         match expr {
-            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Literal { value: lit, .. } => self.generate_literal_with_context(lit, expr),
             Expression::Identifier { name, .. } => name.clone(),
             Expression::Unary { op, operand, .. } => {
                 let op_str = match op {
@@ -195,7 +195,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn generate_expression_impl(&mut self, expr_to_generate: &Expression<'ast>) -> String {
         match expr_to_generate {
-            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Literal { value: lit, .. } => self.generate_literal_with_context(lit, expr_to_generate),
             Expression::Identifier { name, .. } => {
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
@@ -2462,6 +2462,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
                 let _has_optimization_hint = self.struct_mapping_hints.get(name);
 
+                // CONTEXT-SENSITIVE INFERENCE: Set struct literal context for float type inference
+                let prev_struct_name = self.current_struct_literal_name.clone();
+                self.current_struct_literal_name = Some(name.to_string());
+
                 // Generate field assignments
                 let field_str: Vec<String> = fields
                     .iter()
@@ -2470,7 +2474,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // fixed-size [...] syntax, not vec![...], because struct fields have
                         // explicit type annotations (e.g., position: [f32; 3]).
                         let prev_in_struct_field = self.in_struct_literal_field;
+                        let prev_field_name = self.current_struct_field_name.clone();
                         self.in_struct_literal_field = true;
+                        self.current_struct_field_name = Some(field_name.to_string());
 
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // In Windjammer, `string` type is always owned (maps to Rust String)
@@ -2479,6 +2485,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Restore previous context
                         self.in_struct_literal_field = prev_in_struct_field;
+                        self.current_struct_field_name = prev_field_name;
 
                         // Auto-convert string literals to String for struct fields
                         if matches!(
@@ -2547,6 +2554,9 @@ impl<'ast> CodeGenerator<'ast> {
                         format!("{}: {}", field_name, expr_str)
                     })
                     .collect();
+
+                // Restore struct literal context
+                self.current_struct_literal_name = prev_struct_name;
 
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
@@ -3199,108 +3209,124 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn generate_literal(&self, lit: &Literal) -> String {
-        match lit {
-            Literal::Int(n) => n.to_string(),
-            Literal::Float(f) => {
-                let s = f.to_string();
-                // Ensure float literals always have a decimal point
-                if !s.contains('.') && !s.contains('e') {
-                    format!("{}.0", s)
-                } else {
-                    s
-                }
+    /// Helper: Extract float type from a Type (handles tuples, arrays, Vec, etc.)
+    /// Searches recursively for float types, prioritizing f32 over f64.
+    fn extract_float_type_from_context(ty: &Type) -> &str {
+        match ty {
+            Type::Custom(name) if name == "f32" => "f32",
+            Type::Custom(name) if name == "f64" => "f64",
+            Type::Vec(inner) => {
+                // Recurse into Vec<T> to find float type
+                Self::extract_float_type_from_context(inner)
             }
-            Literal::String(s) => {
-                // Check for string interpolation: {variable}
-                if s.contains('{') && s.contains('}') {
-                    // Convert to format! macro
-                    // "Count: {count}" -> format!("Count: {}", count)
-                    let mut format_str = String::new();
-                    let mut args = Vec::new();
-                    let mut chars = s.chars().peekable();
-
-                    while let Some(ch) = chars.next() {
-                        if ch == '{' {
-                            // Check if it's {variable} pattern or {} placeholder
-                            let mut var_name = String::new();
-                            let mut is_variable = true;
-
-                            while let Some(&next_ch) = chars.peek() {
-                                if next_ch == '}' {
-                                    chars.next(); // consume }
-                                    break;
-                                } else if next_ch.is_alphanumeric() || next_ch == '_' {
-                                    var_name.push(next_ch);
-                                    chars.next();
-                                } else {
-                                    // Not a simple variable pattern
-                                    is_variable = false;
-                                    break;
-                                }
-                            }
-
-                            if is_variable && !var_name.is_empty() {
-                                // It's a variable interpolation: {count} -> {}, count
-                                format_str.push_str("{}");
-                                args.push(var_name);
-                            } else if is_variable && var_name.is_empty() {
-                                // It's an empty placeholder: {} -> keep as-is (format! placeholder)
-                                format_str.push_str("{}");
-                            } else {
-                                // Not a variable, escape the literal brace
-                                format_str.push_str("{{");
-                                format_str.push_str(&var_name);
-                            }
-                        } else if ch == '}' {
-                            // Escape literal closing brace (not part of a placeholder)
-                            format_str.push_str("}}");
-                        } else {
-                            format_str.push(ch);
-                        }
+            Type::Tuple(types) => {
+                // Search ALL tuple elements for f32 (prioritize f32 over f64)
+                for t in types {
+                    let float_ty = Self::extract_float_type_from_context(t);
+                    if float_ty == "f32" {
+                        return "f32"; // Found f32 anywhere in tuple
                     }
-
-                    if args.is_empty() {
-                        // No interpolation found, just a regular string
-                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
-                    } else {
-                        // Generate format! call with implicit self for struct fields
-                        let formatted_args = args
-                            .iter()
-                            .map(|a| {
-                                // Check if this is a struct field and add self. prefix
-                                if self.in_impl_block && self.current_struct_fields.contains(a) {
-                                    format!(", self.{}", a)
-                                } else {
-                                    format!(", {}", a)
-                                }
-                            })
-                            .collect::<String>();
-
-                        format!(
-                            "format!(\"{}\"{})",
-                            format_str.replace('\\', "\\\\").replace('"', "\\\""),
-                            formatted_args
-                        )
+                }
+                // Check again for f64
+                for t in types {
+                    let float_ty = Self::extract_float_type_from_context(t);
+                    if float_ty == "f64" {
+                        return "f64"; // Found f64 somewhere
                     }
+                }
+                "f64" // No float type found, default to f64
+            }
+            Type::Array(inner, _) => Self::extract_float_type_from_context(inner),
+            Type::Custom(name) if name.starts_with("Vec<") => {
+                // Legacy string-based Vec check (shouldn't be needed with Type::Vec)
+                if name.contains("f32") {
+                    "f32"
+                } else if name.contains("f64") {
+                    "f64"
                 } else {
-                    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                    "f64"
                 }
             }
-            Literal::Char(c) => {
-                // Escape special characters
-                match c {
-                    '\n' => "'\\n'".to_string(),
-                    '\t' => "'\\t'".to_string(),
-                    '\r' => "'\\r'".to_string(),
-                    '\\' => "'\\\\'".to_string(),
-                    '\'' => "'\\''".to_string(),
-                    '\0' => "'\\0'".to_string(),
-                    _ => format!("'{}'", c),
-                }
-            }
-            Literal::Bool(b) => b.to_string(),
+            _ => "f64",
         }
+    }
+
+    pub(super) fn generate_literal_with_context(&self, lit: &Literal, expr: &Expression<'ast>) -> String {
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
+        // Use constraint-based inference results when available, fallback to context-sensitive
+        match lit {
+            Literal::Float(f) => {
+                // Priority 1: Use inference engine results (most accurate)
+                if let Some(inference) = &self.float_inference {
+                    use crate::type_inference::FloatType;
+                    let inferred = inference.get_float_type(expr);
+                    
+                    let suffix = match inferred {
+                        FloatType::F32 => "f32",
+                        FloatType::F64 => "f64",
+                        FloatType::Unknown => "f64", // Default
+                    };
+                    
+                    let s = f.to_string();
+                    return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                        format!("{}.0_{}", s, suffix)
+                    } else {
+                        format!("{}_{}", s, suffix)
+                    };
+                }
+                
+                // Priority 2: Fallback to old context-sensitive approach
+                self.generate_literal_context_sensitive(lit)
+            }
+            _ => crate::codegen::rust::literals::generate_literal(lit),
+        }
+    }
+
+    /// Old context-sensitive approach (fallback when inference not available)
+    fn generate_literal_context_sensitive(&self, lit: &Literal) -> String {
+        // WINDJAMMER PHILOSOPHY: Context-sensitive float type inference
+        // The compiler should infer f32 vs f64 based on the surrounding context
+        // to avoid ambiguous numeric type errors (Rust E0689)
+        match lit {
+            Literal::Float(f) => {
+                // Priority 1: Struct field type (most specific)
+                let float_type = if let (Some(struct_name), Some(field_name)) = (
+                    &self.current_struct_literal_name,
+                    &self.current_struct_field_name,
+                ) {
+                    if let Some(fields) = self.struct_field_types.get(struct_name) {
+                        if let Some(field_type) = fields.get(field_name) {
+                            Self::extract_float_type_from_context(field_type)
+                        } else {
+                            "f64"
+                        }
+                    } else {
+                        "f64"
+                    }
+                // Priority 2: Function return type (handles tuples like (bool, f32))
+                } else if let Some(return_type) = &self.current_function_return_type {
+                    Self::extract_float_type_from_context(return_type)
+                } else {
+                    // Default: f64 (Rust standard, scientific computing, general-purpose default)
+                    "f64"
+                };
+                
+                let s = f.to_string();
+                if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                    format!("{}.0_{}", s, float_type)
+                } else {
+                    format!("{}_{}", s, float_type)
+                }
+            }
+            // For other literal types, delegate to canonical implementation
+            _ => crate::codegen::rust::literals::generate_literal(lit),
+        }
+    }
+
+    /// Generate literal without expression context (used in older code paths)
+    pub(super) fn generate_literal(&self, lit: &Literal) -> String {
+        // Delegate to context-sensitive version
+        self.generate_literal_context_sensitive(lit)
     }
 
     /// Generate efficient string concatenation using format! macro
