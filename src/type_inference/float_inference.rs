@@ -7,9 +7,13 @@ use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use std::collections::HashMap;
 
-/// Unique identifier for an expression (line, column in source)
+/// Unique identifier for an expression
+/// THE WINDJAMMER WAY: Sequential IDs ensure uniqueness even when expressions lack locations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExprId {
+    /// Sequential ID assigned during AST traversal (guaranteed unique)
+    pub seq_id: usize,
+    /// Optional source location for debugging (may be None or duplicate)
     pub line: usize,
     pub col: usize,
 }
@@ -45,6 +49,8 @@ pub struct FloatInference {
     function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     /// Variable assignment tracking: variable name → initial value ExprId
     var_assignments: HashMap<String, ExprId>,
+    /// Sequential ID counter for generating unique ExprIds
+    next_seq_id: usize,
 }
 
 impl FloatInference {
@@ -55,6 +61,7 @@ impl FloatInference {
             errors: Vec::new(),
             function_signatures: HashMap::new(),
             var_assignments: HashMap::new(),
+            next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
         }
     }
 
@@ -66,12 +73,17 @@ impl FloatInference {
         }
         
         // Pass 1: Collect constraints from all expressions
-        for (i, item) in program.items.iter().enumerate() {
+        for (_i, item) in program.items.iter().enumerate() {
             self.collect_item_constraints(item);
         }
 
+
         // Pass 2: Solve constraints (unification)
         self.solve_constraints();
+        
+        for (expr_id, float_type) in &self.inferred_types {
+            eprintln!("  seq_id={}, {}:{} -> {:?}", expr_id.seq_id, expr_id.line, expr_id.col, float_type);
+        }
     }
 
     /// Register function signatures for constraint propagation
@@ -116,7 +128,7 @@ impl FloatInference {
         match item {
             Item::Function { decl, .. } => {
                 // Collect return type constraints
-                for (i, stmt) in decl.body.iter().enumerate() {
+                for (_i, stmt) in decl.body.iter().enumerate() {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
             }
@@ -142,6 +154,7 @@ impl FloatInference {
     fn collect_statement_constraints<'ast>(&mut self, stmt: &Statement<'ast>, return_type: Option<&Type>) {
         match stmt {
             Statement::Let { pattern, value, .. } => {
+
                 self.collect_expression_constraints(value, return_type);
                 
                 // Track variable assignment for constraint propagation
@@ -198,7 +211,20 @@ impl FloatInference {
                     }
                 }
             }
-            _ => {}
+            Statement::If { condition, then_block, else_block, .. } => {
+                // THE WINDJAMMER WAY: if-else branches that return floats must match return type
+                self.collect_expression_constraints(condition, return_type);
+                for stmt in then_block {
+                    self.collect_statement_constraints(stmt, return_type);
+                }
+                if let Some(else_stmts) = else_block {
+                    for stmt in else_stmts {
+                        self.collect_statement_constraints(stmt, return_type);
+                    }
+                }
+            }
+            other => {
+            }
         }
     }
 
@@ -407,15 +433,21 @@ impl FloatInference {
     }
 
     /// Get unique ID for an expression (based on source location)
-    fn get_expr_id<'ast>(&self, expr: &Expression<'ast>) -> ExprId {
+    /// Get unique ID for expression with sequential ID assignment
+    /// THE WINDJAMMER WAY: Guaranteed unique IDs prevent HashMap collisions
+    fn get_expr_id<'ast>(&mut self, expr: &Expression<'ast>) -> ExprId {
+        let seq_id = self.next_seq_id;
+        self.next_seq_id += 1;
+        
         let location = expr.location();
         if let Some(loc) = location {
             ExprId {
+                seq_id,
                 line: loc.line,
                 col: loc.column,
             }
         } else {
-            ExprId { line: 0, col: 0 }
+            ExprId { seq_id, line: 0, col: 0 }
         }
     }
 
@@ -436,29 +468,53 @@ impl FloatInference {
             for constraint in self.constraints.clone() {
                 match constraint {
                     Constraint::MustBeF32(expr_id, reason) => {
-                        if let Some(current) = self.inferred_types.get(&expr_id) {
-                            if *current == FloatType::F64 {
+                        // THE WINDJAMMER WAY: Always insert if missing, check conflicts if present
+                        let current = self.inferred_types.get(&expr_id).copied();
+                        match current {
+                            Some(FloatType::F64) => {
                                 self.errors.push(format!(
-                                    "Type conflict at {:?}: must be f32 ({}) but was inferred as f64",
-                                    expr_id, reason
+                                    "Type conflict at seq_id={}, {}:{}: must be f32 ({}) but was inferred as f64",
+                                    expr_id.seq_id, expr_id.line, expr_id.col, reason
                                 ));
                             }
-                        } else {
-                            self.inferred_types.insert(expr_id, FloatType::F32);
-                            changed = true;
+                            Some(FloatType::F32) => {
+                                // Already F32, no change needed
+                            }
+                            Some(FloatType::Unknown) => {
+                                // Unknown -> F32
+                                self.inferred_types.insert(expr_id, FloatType::F32);
+                                changed = true;
+                            }
+                            None => {
+                                // Not yet inferred, insert f32
+                                self.inferred_types.insert(expr_id, FloatType::F32);
+                                changed = true;
+                            }
                         }
                     }
                     Constraint::MustBeF64(expr_id, reason) => {
-                        if let Some(current) = self.inferred_types.get(&expr_id) {
-                            if *current == FloatType::F32 {
+                        // THE WINDJAMMER WAY: Always insert if missing, check conflicts if present
+                        let current = self.inferred_types.get(&expr_id).copied();
+                        match current {
+                            Some(FloatType::F32) => {
                                 self.errors.push(format!(
-                                    "Type conflict at {:?}: must be f64 ({}) but was inferred as f32",
-                                    expr_id, reason
+                                    "Type conflict at seq_id={}, {}:{}: must be f64 ({}) but was inferred as f32",
+                                    expr_id.seq_id, expr_id.line, expr_id.col, reason
                                 ));
                             }
-                        } else {
-                            self.inferred_types.insert(expr_id, FloatType::F64);
-                            changed = true;
+                            Some(FloatType::F64) => {
+                                // Already F64, no change needed
+                            }
+                            Some(FloatType::Unknown) => {
+                                // Unknown -> F64
+                                self.inferred_types.insert(expr_id, FloatType::F64);
+                                changed = true;
+                            }
+                            None => {
+                                // Not yet inferred, insert f64
+                                self.inferred_types.insert(expr_id, FloatType::F64);
+                                changed = true;
+                            }
                         }
                     }
                     Constraint::MustMatch(id1, id2, reason) => {
@@ -488,8 +544,13 @@ impl FloatInference {
             }
         }
 
-        if iterations >= MAX_ITERATIONS {
-            self.errors.push("Type inference exceeded maximum iterations".to_string());
+        // THE WINDJAMMER WAY: If no new changes occurred, we've converged successfully
+        // Only error if we're still changing after max iterations (true infinite loop)
+        if iterations >= MAX_ITERATIONS && changed {
+            self.errors.push(format!(
+                "Type inference did not converge after {} iterations",
+                MAX_ITERATIONS
+            ));
         }
     }
 
@@ -539,10 +600,29 @@ impl FloatInference {
 
     /// Get inferred float type for an expression
     pub fn get_float_type<'ast>(&self, expr: &Expression<'ast>) -> FloatType {
-        let expr_id = self.get_expr_id(expr);
-        self.inferred_types
-            .get(&expr_id)
-            .copied()
-            .unwrap_or(FloatType::F64) // Default to f64
+        // Look up by location only (seq_id not available after inference)
+        // Find ExprId with matching location
+        let location = expr.location();
+        let (line, col) = if let Some(loc) = location {
+            (loc.line, loc.column)
+        } else {
+            (0, 0)
+        };
+        
+        // DEBUG: Print all inferred types
+        if line > 0 {
+            for (expr_id, float_type) in &self.inferred_types {
+                eprintln!("    seq_id={}, {}:{} -> {:?}", expr_id.seq_id, expr_id.line, expr_id.col, float_type);
+            }
+        }
+        
+        // Search for any ExprId with matching location
+        for (expr_id, float_type) in &self.inferred_types {
+            if expr_id.line == line && expr_id.col == col {
+                return *float_type;
+            }
+        }
+        
+        FloatType::F64 // Default to f64
     }
 }
