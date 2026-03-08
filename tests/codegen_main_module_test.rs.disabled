@@ -6,7 +6,7 @@
 ///
 /// FIX: Detect main.wj and exclude from lib.rs module declarations
 
-use windjammer_compiler::*
+// use windjammer_compiler::*
 
 pub fn test_main_wj_is_binary_not_module() {
     // main.wj should generate main.rs (binary), not be declared in lib.rs
@@ -31,7 +31,7 @@ pub fn test_lib_wj_generates_lib_rs() {
     }
     
     // main should NOT be in lib.rs
-    let excluded = vec!["main"]
+    let excluded = vec!["main"];
     for module in excluded {
         println("[TEST] Module '{}' should NOT be in lib.rs", module)
     }
@@ -46,7 +46,7 @@ pub fn test_detect_binary_vs_library_modules() {
     }
     
     // Library modules: everything else in src/
-    let library_files = vec!["lib.wj", "game.wj", "rendering.wj"]
+    let library_files = vec!["lib.wj", "game.wj", "rendering.wj"];
     
     for file in library_files {
         println("[TEST] {} is library module", file)
