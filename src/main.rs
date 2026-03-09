@@ -27,6 +27,7 @@ pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
+pub mod metadata; // Cross-module type inference metadata
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -2041,6 +2042,7 @@ fn compile_file_impl(
         // WINDJAMMER PHILOSOPHY: Expression-level float type inference (Rust target)
         // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
         let mut float_inference = type_inference::FloatInference::new();
+        float_inference.set_source_root(source_root);
         float_inference.infer_program(&program);
         
         if !float_inference.errors.is_empty() {
@@ -2211,6 +2213,65 @@ fn compile_file_impl(
 
         #[cfg(not(target_os = "linux"))]
         drop(file); // Close file handle on non-Linux systems
+    }
+
+    // TDD FIX: Emit metadata file for cross-module type inference
+    if target == CompilationTarget::Rust {
+        use crate::metadata::{ModuleMetadata, FunctionSignature};
+        
+        let module_path = input_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        
+        let mut meta = ModuleMetadata::new(module_path.to_string());
+        
+        // Extract function signatures from program
+        for item in &program.items {
+            match item {
+                parser::Item::Function { decl, .. } => {
+                    meta.functions.insert(
+                        decl.name.clone(),
+                        FunctionSignature {
+                            params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                            return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                            is_associated: false,
+                            parent_type: None,
+                        },
+                    );
+                }
+                parser::Item::Impl { block, .. } => {
+                    let type_name = &block.type_name;
+                    for func_decl in &block.functions {
+                        let full_name = format!("{}::{}", type_name, func_decl.name);
+                        meta.functions.insert(
+                            full_name,
+                            FunctionSignature {
+                                params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                                return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                is_associated: true,
+                                parent_type: Some(type_name.clone()),
+                            },
+                        );
+                    }
+                }
+                parser::Item::Struct { decl, .. } => {
+                    let mut fields = std::collections::HashMap::new();
+                    for field in &decl.fields {
+                        fields.insert(field.name.clone(), ModuleMetadata::serialize_type(&field.field_type));
+                    }
+                    meta.structs.insert(decl.name.clone(), fields);
+                }
+                _ => {}
+            }
+        }
+        
+        // Write metadata file: file.wj → file.wj.meta (JSON)
+        let meta_path = input_path.with_extension("wj.meta");
+        let meta_json = serde_json::to_string_pretty(&meta)?;
+        std::fs::write(&meta_path, meta_json)?;
+        
+        eprintln!("📋 METADATA: {} ({} functions, {} structs)", meta_path.display(), meta.functions.len(), meta.structs.len());
     }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
