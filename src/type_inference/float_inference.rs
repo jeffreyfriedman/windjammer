@@ -3,6 +3,7 @@
 /// Tracks constraints for float literals and unifies them across expressions.
 
 use crate::parser::ast::core::{Expression, Statement, Item};
+use crate::parser::ast::literals::Literal;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use std::collections::HashMap;
@@ -60,6 +61,8 @@ pub struct FloatInference {
     expr_id_cache: HashMap<(usize, usize), ExprId>,
     /// Source root for resolving metadata file paths
     source_root: Option<std::path::PathBuf>,
+    /// Current impl block type (for resolving `self` field access)
+    current_impl_type: Option<String>,
 }
 
 impl FloatInference {
@@ -75,6 +78,7 @@ impl FloatInference {
             struct_field_types: HashMap::new(),
             expr_id_cache: HashMap::new(),
             source_root: None,
+            current_impl_type: None,
         }
     }
     
@@ -318,6 +322,9 @@ impl FloatInference {
                 }
             }
             Item::Impl { block, .. } => {
+                // TDD FIX: Set current impl type context for `self` field access resolution
+                self.current_impl_type = Some(block.type_name.clone());
+                
                 // Process methods in impl block
                 for func in &block.functions {
                     // THE WINDJAMMER WAY: Clear cache for each method to ensure proper scoping
@@ -337,6 +344,9 @@ impl FloatInference {
                         self.var_types.remove(&param.name);
                     }
                 }
+                
+                // Clear impl type context
+                self.current_impl_type = None;
             }
             Item::Struct { .. } => {
             }
@@ -457,6 +467,22 @@ impl FloatInference {
                 for stmt in body {
                     self.collect_statement_constraints(stmt, return_type);
                 }
+            }
+            Statement::Assignment { target, value, .. } => {
+                // TDD FIX: Handle assignments (e.g., self.vy = self.vy * 0.5)
+                // Traverse both target and value to collect constraints
+                self.collect_expression_constraints(target, return_type);
+                self.collect_expression_constraints(value, return_type);
+                
+                // THE WINDJAMMER WAY: Target and value must match types
+                // For `self.vy = self.vy * 0.5`, this ensures the literal matches the field type
+                let target_id = self.get_expr_id(target);
+                let value_id = self.get_expr_id(value);
+                self.constraints.push(Constraint::MustMatch(
+                    target_id,
+                    value_id,
+                    format!("assignment target and value"),
+                ));
             }
             Statement::Match { value, arms, .. } => {
                 // THE WINDJAMMER WAY: Match arms must have compatible types AND match return type
@@ -871,43 +897,55 @@ impl FloatInference {
             }
             Expression::FieldAccess { object, field, .. } => {
                 // TDD FIX: Constrain field access to field's type
-                // e.g., self.cell_size (f32) should constrain the expression to f32
+                // e.g., self.vy (f32) or self.cell_size (f32) should constrain the FieldAccess expression to f32
+                
+                // First, get the ID for this FieldAccess expression (before mutating self)
+                let field_access_id = self.get_expr_id(expr);
+                
+                // Recurse into object
                 self.collect_expression_constraints(object, return_type);
                 
-                // Try to determine the type of this field
-                // 1. If object is `self`, we need to know which struct we're in (TODO: context tracking)
-                // 2. If object is an identifier, look up its type from var_types
-                // For now, we'll handle case #2 and leave case #1 for later
+                // Determine the struct type that contains this field
+                let struct_name: Option<String> = if let Expression::Identifier { name, .. } = object {
+                    if name == "self" {
+                        // Case 1: self.field - use current impl type context
+                        self.current_impl_type.clone()
+                    } else {
+                        // Case 2: variable.field - look up variable's type
+                        self.var_types.get(name).and_then(|var_type| {
+                            match var_type {
+                                Type::Custom(name) => Some(name.clone()),
+                                _ => None,
+                            }
+                        })
+                    }
+                } else {
+                    None
+                };
                 
-                if let Expression::Identifier { name, .. } = object {
-                    if let Some(var_type) = self.var_types.get(name).cloned() {
-                        // Extract struct name from type
-                        let struct_name = match &var_type {
-                            Type::Custom(name) => Some(name.clone()),
-                            _ => None,
-                        };
-                        
-                        if let Some(struct_name) = struct_name {
-                            if let Some(field_types) = self.struct_field_types.get(&struct_name) {
-                                if let Some(field_type) = field_types.get(field) {
-                                    if let Some(float_ty) = self.extract_float_type(field_type) {
-                                        let field_id = self.get_expr_id(object); // Constrain the field access itself
-                                        match float_ty {
-                                            FloatType::F32 => {
-                                                self.constraints.push(Constraint::MustBeF32(
-                                                    field_id,
-                                                    format!("field {} is f32", field),
-                                                ));
-                                            }
-                                            FloatType::F64 => {
-                                                self.constraints.push(Constraint::MustBeF64(
-                                                    field_id,
-                                                    format!("field {} is f64", field),
-                                                ));
-                                            }
-                                            FloatType::Unknown => {}
-                                        }
+                // If we know the struct type, constrain the FieldAccess expression to the field's type
+                if let Some(struct_name) = struct_name {
+                    if let Some(field_types) = self.struct_field_types.get(&struct_name) {
+                        if let Some(field_type) = field_types.get(field) {
+                            if let Some(float_ty) = self.extract_float_type(field_type) {
+                                // TDD FIX: Constrain the FieldAccess expression itself, not the object!
+                                // This is critical for binary ops: `self.vy * 0.5` needs the entire
+                                // FieldAccess expression to be constrained, which then propagates
+                                // through MustMatch to the literal
+                                match float_ty {
+                                    FloatType::F32 => {
+                                        self.constraints.push(Constraint::MustBeF32(
+                                            field_access_id,
+                                            format!("{}.{} is f32", struct_name, field),
+                                        ));
                                     }
+                                    FloatType::F64 => {
+                                        self.constraints.push(Constraint::MustBeF64(
+                                            field_access_id,
+                                            format!("{}.{} is f64", struct_name, field),
+                                        ));
+                                    }
+                                    FloatType::Unknown => {}
                                 }
                             }
                         }
