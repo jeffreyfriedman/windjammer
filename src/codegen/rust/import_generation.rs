@@ -586,8 +586,11 @@ impl CodeGenerator<'_> {
                                 // Internal module - add crate:: prefix
                                 format!("use crate::{};\n", rust_path)
                             } else {
-                                // External crate - keep as-is
-                                format!("use {};\n", rust_path)
+                                // TDD FIX: For unknown modules, assume same-file module and use self:: prefix
+                                // This handles pub use statements like "pub use inner_module::MyType"
+                                // where inner_module is defined in the same file.
+                                // Default to self:: instead of bare paths to avoid Rust errors.
+                                format!("use self::{};\n", rust_path)
                             }
                         } else {
                             // Single identifier (Vec3) - likely a type, keep as-is

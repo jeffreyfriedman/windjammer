@@ -2,4 +2,5 @@
 // This is common in AST traversal code
 #![allow(clippy::only_used_in_recursion)]
 
+pub mod metadata;
 pub mod type_registry;
