@@ -58,6 +58,8 @@ pub struct FloatInference {
     /// THE WINDJAMMER WAY: Cache ExprIds by location to ensure same expression = same ID
     /// Key: (line, col), Value: the first ExprId assigned to that location
     expr_id_cache: HashMap<(usize, usize), ExprId>,
+    /// Source root for resolving metadata file paths
+    source_root: Option<std::path::PathBuf>,
 }
 
 impl FloatInference {
@@ -72,7 +74,13 @@ impl FloatInference {
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
             struct_field_types: HashMap::new(),
             expr_id_cache: HashMap::new(),
+            source_root: None,
         }
+    }
+    
+    /// Set source root for resolving metadata file paths
+    pub fn set_source_root(&mut self, path: &std::path::Path) {
+        self.source_root = Some(path.to_path_buf());
     }
 
     /// Main entry point: Infer float types for a program
@@ -83,6 +91,9 @@ impl FloatInference {
             self.register_function_signature(item);
         }
         
+        // TDD FIX: Load metadata from imported modules for cross-module inference
+        self.load_imported_metadata(program);
+        
         // Pass 1: Collect constraints from all expressions
         for (_i, item) in program.items.iter().enumerate() {
             self.collect_item_constraints(item);
@@ -90,6 +101,150 @@ impl FloatInference {
 
         // Pass 2: Solve constraints (unification)
         self.solve_constraints();
+    }
+    
+    /// TDD FIX: Load function signatures from imported modules' metadata files
+    fn load_imported_metadata<'ast>(&mut self, program: &Program<'ast>) {
+        use crate::metadata::ModuleMetadata;
+        use std::path::PathBuf;
+        
+        
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                // Convert import path to file path
+                // e.g., "crate::math::vec3::Vec3" → "math/vec3.wj.meta" (skip type name!)
+                let mut module_path: Vec<String> = path.iter()
+                    .skip_while(|s| s.as_str() == "crate" || s.as_str() == "self" || s.as_str() == "super")
+                    .map(|s| s.clone())
+                    .collect();
+                
+                
+                if module_path.is_empty() {
+                    continue;
+                }
+                
+                // TDD FIX: Last element is type/function name, not module!
+                // "crate::math::vec3::Vec3" → ["math", "vec3", "Vec3"]
+                // We want "math/vec3.wj.meta", not "math/vec3/Vec3.wj.meta"
+                let type_name = module_path.pop(); // Remove type name (Vec3)
+                
+                
+                if module_path.is_empty() {
+                    continue; // Import from current module
+                }
+                
+                // TDD FIX: Handle module re-exports by trying multiple paths
+                // Example: "use crate::math::Vec3" could be:
+                //   1. math/vec3.wj.meta (type defined in math/vec3.wj)
+                //   2. math.wj.meta (type defined in math.wj)
+                //   3. math/mod.wj.meta (type re-exported by math/mod.wj)
+                
+                // Build candidate paths
+                let mut candidates: Vec<PathBuf> = Vec::new();
+                
+                if let Some(ref ty_name) = type_name {
+                    // Helper: Convert PascalCase to snake_case
+                    let snake_case = ty_name.chars().fold(String::new(), |mut acc, c| {
+                        if c.is_uppercase() && !acc.is_empty() {
+                            acc.push('_');
+                        }
+                        acc.push(c.to_lowercase().next().unwrap());
+                        acc
+                    });
+                    
+                    // Helper: Truncate common suffixes (State, Config, Manager, etc.)
+                    let truncated = ty_name.to_lowercase()
+                        .trim_end_matches("state")
+                        .trim_end_matches("config")
+                        .trim_end_matches("manager")
+                        .trim_end_matches("system")
+                        .to_string();
+                    
+                    // Candidate 1: math/vec3.wj.meta (lowercase)
+                    let mut p1 = PathBuf::new();
+                    for seg in &module_path {
+                        p1.push(seg);
+                    }
+                    p1.push(format!("{}.wj.meta", ty_name.to_lowercase()));
+                    candidates.push(p1);
+                    
+                    // Candidate 2: math/vec_3.wj.meta (snake_case)
+                    let mut p2 = PathBuf::new();
+                    for seg in &module_path {
+                        p2.push(seg);
+                    }
+                    p2.push(format!("{}.wj.meta", snake_case));
+                    candidates.push(p2);
+                    
+                    // Candidate 3: ai/perception.wj.meta (truncated)
+                    if !truncated.is_empty() && truncated != ty_name.to_lowercase() {
+                        let mut p3 = PathBuf::new();
+                        for seg in &module_path {
+                            p3.push(seg);
+                        }
+                        p3.push(format!("{}.wj.meta", truncated));
+                        candidates.push(p3);
+                    }
+                    
+                    // Candidate 4: math.wj.meta (mod file)
+                    let mut p4 = PathBuf::new();
+                    for (i, segment) in module_path.iter().enumerate() {
+                        if i < module_path.len() - 1 {
+                            p4.push(segment);
+                        } else {
+                            p4.push(format!("{}.wj.meta", segment));
+                        }
+                    }
+                    candidates.push(p4);
+                } else {
+                    // No type name, just use module path
+                    let mut meta_path = PathBuf::new();
+                    for (i, segment) in module_path.iter().enumerate() {
+                        if i < module_path.len() - 1 {
+                            meta_path.push(segment);
+                        } else {
+                            meta_path.push(format!("{}.wj.meta", segment));
+                        }
+                    }
+                    candidates.push(meta_path);
+                }
+                
+                
+                // Try each candidate until we find one that exists
+                let mut found_metadata = false;
+                for candidate in &candidates {
+                    let full_meta_path = if let Some(ref root) = self.source_root {
+                        root.join(candidate)
+                    } else {
+                        candidate.clone()
+                    };
+                    
+                    
+                    if let Ok(meta_json) = std::fs::read_to_string(&full_meta_path) {
+                        if let Ok(meta) = serde_json::from_str::<ModuleMetadata>(&meta_json) {
+                            // Load all function signatures from metadata
+                            for (func_name, sig) in meta.functions {
+                                // Convert serialized types back to Type enum
+                                let params: Vec<Type> = sig.params.iter()
+                                    .filter_map(|s| ModuleMetadata::deserialize_type(s))
+                                    .collect();
+                                
+                                let return_type = sig.return_type
+                                    .as_ref()
+                                    .and_then(|s| ModuleMetadata::deserialize_type(s));
+                                
+                                self.function_signatures.insert(func_name, (params, return_type));
+                            }
+                            found_metadata = true;
+                            break; // Found and loaded, stop trying candidates
+                        }
+                    }
+                }
+                
+                if !found_metadata {
+                }
+            }
+        }
     }
 
     /// Register struct field types for constraint propagation
@@ -147,9 +302,19 @@ impl FloatInference {
                 // THE WINDJAMMER WAY: Clear cache for each function to ensure proper scoping
                 self.expr_id_cache.clear();
                 
+                // TDD FIX: Register function parameters for type tracking
+                for param in &decl.parameters {
+                    self.var_types.insert(param.name.clone(), param.type_.clone());
+                }
+                
                 // Collect return type constraints
                 for (_i, stmt) in decl.body.iter().enumerate() {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
+                }
+                
+                // Clear parameter types after function (for proper scoping)
+                for param in &decl.parameters {
+                    self.var_types.remove(&param.name);
                 }
             }
             Item::Impl { block, .. } => {
@@ -158,8 +323,18 @@ impl FloatInference {
                     // THE WINDJAMMER WAY: Clear cache for each method to ensure proper scoping
                     self.expr_id_cache.clear();
                     
+                    // TDD FIX: Register function parameters for type tracking
+                    for param in &func.parameters {
+                        self.var_types.insert(param.name.clone(), param.type_.clone());
+                    }
+                    
                     for (_i, stmt) in func.body.iter().enumerate() {
                         self.collect_statement_constraints(stmt, func.return_type.as_ref());
+                    }
+                    
+                    // Clear parameter types after method (for proper scoping)
+                    for param in &func.parameters {
+                        self.var_types.remove(&param.name);
                     }
                 }
             }
@@ -177,7 +352,9 @@ impl FloatInference {
     fn collect_statement_constraints<'ast>(&mut self, stmt: &Statement<'ast>, return_type: Option<&Type>) {
         match stmt {
             Statement::Let { pattern, value, type_, .. } => {
-
+                // TDD FIX: If type annotation exists, constrain value to that type FIRST
+                let explicit_type = type_.as_ref().and_then(|ty| self.extract_float_type(ty));
+                
                 self.collect_expression_constraints(value, return_type);
                 
                 // Track variable assignment for constraint propagation
@@ -188,6 +365,22 @@ impl FloatInference {
                     // TDD FIX: Track explicit type annotations (let x: Type = ...)
                     if let Some(ty) = type_ {
                         self.var_types.insert(var_name.clone(), ty.clone());
+                    }
+                    
+                    // TDD FIX: Constrain value expression to match explicit type annotation
+                    if let Some(float_ty) = explicit_type {
+                        let expr_id = self.get_expr_id(value);
+                        match float_ty {
+                            FloatType::F32 => {
+                                self.constraints.push(Constraint::MustBeF32(expr_id, format!("let {} has explicit type f32", var_name)));
+                            }
+                            FloatType::F64 => {
+                                self.constraints.push(Constraint::MustBeF64(expr_id, format!("let {} has explicit type f64", var_name)));
+                            }
+                            FloatType::Unknown => {
+                                // No constraint needed
+                            }
+                        }
                     }
                 }
                 
@@ -312,6 +505,32 @@ impl FloatInference {
     /// Collect constraints from an expression
     fn collect_expression_constraints<'ast>(&mut self, expr: &Expression<'ast>, return_type: Option<&Type>) {
         match expr {
+            Expression::Identifier { name, .. } => {
+                // TDD FIX: Constrain identifier to its declared type (function param, let with type annotation)
+                if let Some(var_type) = self.var_types.get(name) {
+                    if let Some(float_ty) = self.extract_float_type(var_type) {
+                        let id = self.get_expr_id(expr);
+                        match float_ty {
+                            FloatType::F32 => {
+                                self.constraints.push(Constraint::MustBeF32(
+                                    id,
+                                    format!("identifier {} has type f32", name),
+                                ));
+                            }
+                            FloatType::F64 => {
+                                self.constraints.push(Constraint::MustBeF64(
+                                    id,
+                                    format!("identifier {} has type f64", name),
+                                ));
+                            }
+                            FloatType::Unknown => {}
+                        }
+                    }
+                }
+                
+                // Also check if identifier is a float primitive type itself
+                // (This shouldn't conflict with the above since var_types contains Type, not primitive float values)
+            }
             Expression::Binary { left, right, op, .. } => {
                 // Binary ops require both operands to have same type
                 self.collect_expression_constraints(left, return_type);
@@ -365,6 +584,48 @@ impl FloatInference {
                         method_call_id,
                         format!("method {} returns f32", method),
                     ));
+                }
+                
+                // TDD FIX: Method calls on fields (self.field.method(...))
+                // Need to look up method signature from loaded metadata
+                if let Expression::FieldAccess { .. } = object {
+                    // Try to find method signature for Type::method
+                    // e.g., self.perception (PerceptionState).decrease_detection(...)
+                    
+                    // Collect method signature (two-phase to avoid borrow checker)
+                    let method_sig = self.function_signatures.iter()
+                        .find(|(func_name, _)| {
+                            // Check if this is a method matching our method name
+                            // Format: "TypeName::method_name"
+                            func_name.split("::").last() == Some(method.as_str())
+                        })
+                        .map(|(_, (params, ret))| (params.clone(), ret.clone()));
+                    
+                    if let Some((param_types, _)) = method_sig {
+                        // Found a matching method! Constrain arguments
+                        for (i, (_label, arg)) in arguments.iter().enumerate() {
+                            if let Some(param_type) = param_types.get(i) {
+                                if let Some(float_ty) = self.extract_float_type(param_type) {
+                                    let arg_id = self.get_expr_id(arg);
+                                    match float_ty {
+                                        FloatType::F32 => {
+                                            self.constraints.push(Constraint::MustBeF32(
+                                                arg_id,
+                                                format!("{}() parameter {}", method, i),
+                                            ));
+                                        }
+                                        FloatType::F64 => {
+                                            self.constraints.push(Constraint::MustBeF64(
+                                                arg_id,
+                                                format!("{}() parameter {}", method, i),
+                                            ));
+                                        }
+                                        FloatType::Unknown => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 // TDD FIX: HashMap.insert(K, V) and Vec.push(T) - constrain arguments to collection element type
@@ -451,7 +712,8 @@ impl FloatInference {
                 };
                 
                 let func_sig = if let Some(name) = &func_name {
-                    self.function_signatures.get(name).cloned()
+                    let sig = self.function_signatures.get(name).cloned();
+                    sig
                 } else {
                     None
                 };
@@ -605,6 +867,51 @@ impl FloatInference {
                 // Match statements inside blocks weren't being visited!
                 for stmt in statements {
                     self.collect_statement_constraints(stmt, return_type);
+                }
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                // TDD FIX: Constrain field access to field's type
+                // e.g., self.cell_size (f32) should constrain the expression to f32
+                self.collect_expression_constraints(object, return_type);
+                
+                // Try to determine the type of this field
+                // 1. If object is `self`, we need to know which struct we're in (TODO: context tracking)
+                // 2. If object is an identifier, look up its type from var_types
+                // For now, we'll handle case #2 and leave case #1 for later
+                
+                if let Expression::Identifier { name, .. } = object {
+                    if let Some(var_type) = self.var_types.get(name).cloned() {
+                        // Extract struct name from type
+                        let struct_name = match &var_type {
+                            Type::Custom(name) => Some(name.clone()),
+                            _ => None,
+                        };
+                        
+                        if let Some(struct_name) = struct_name {
+                            if let Some(field_types) = self.struct_field_types.get(&struct_name) {
+                                if let Some(field_type) = field_types.get(field) {
+                                    if let Some(float_ty) = self.extract_float_type(field_type) {
+                                        let field_id = self.get_expr_id(object); // Constrain the field access itself
+                                        match float_ty {
+                                            FloatType::F32 => {
+                                                self.constraints.push(Constraint::MustBeF32(
+                                                    field_id,
+                                                    format!("field {} is f32", field),
+                                                ));
+                                            }
+                                            FloatType::F64 => {
+                                                self.constraints.push(Constraint::MustBeF64(
+                                                    field_id,
+                                                    format!("field {} is f64", field),
+                                                ));
+                                            }
+                                            FloatType::Unknown => {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -872,7 +1179,6 @@ impl FloatInference {
         // DEBUG: Print all inferred types
         if line > 0 {
             for (expr_id, float_type) in &self.inferred_types {
-                eprintln!("    seq_id={}, {}:{} -> {:?}", expr_id.seq_id, expr_id.line, expr_id.col, float_type);
             }
         }
         

@@ -78,6 +78,9 @@ fn create_vector(x: f32, z: f32) -> Vec3 {
         .expect("Failed to compile usage.wj");
 
     let stderr = String::from_utf8_lossy(&output2.stderr);
+    
+    eprintln!("=== STDERR FROM WJ BUILD ===\n{}\n===", stderr);
+    
     assert!(
         output2.status.success(),
         "Usage compilation should succeed, stderr: {}",
