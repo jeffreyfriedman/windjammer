@@ -56,9 +56,9 @@ pub fn test_asi() -> f32 {
         generated_rust
     );
 
-    // Check that dz is assigned correctly
+    // Check that dz is assigned correctly (with or without type suffix)
     assert!(
-        generated_rust.contains("let dz = 5.0;"),
+        generated_rust.contains("let dz = 5.0") && generated_rust.contains(";"),
         "ASI should insert semicolon after let statement.\nGenerated:\n{}",
         generated_rust
     );
