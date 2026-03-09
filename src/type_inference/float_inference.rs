@@ -238,15 +238,30 @@ impl FloatInference {
                 }
             }
             Statement::Match { value, arms, .. } => {
-                // THE WINDJAMMER WAY: Match arms must have compatible types
+                // THE WINDJAMMER WAY: Match arms must have compatible types AND match return type
                 self.collect_expression_constraints(value, return_type);
                 
-                // All match arm bodies must have same float type
+                // Each arm body must match return type (for implicit return)
+                for (i, arm) in arms.iter().enumerate() {
+                    self.collect_expression_constraints(arm.body, return_type);
+                    
+                    // Constrain arm to return type if return type is float
+                    if let Some(ret_ty) = return_type {
+                        if let Some(float_ty) = self.extract_float_type(ret_ty) {
+                            let arm_id = self.get_expr_id(arm.body);
+                            let constraint = match float_ty {
+                                FloatType::F32 => Constraint::MustBeF32(arm_id, format!("match arm {} must match return type f32", i)),
+                                FloatType::F64 => Constraint::MustBeF64(arm_id, format!("match arm {} must match return type f64", i)),
+                                FloatType::Unknown => continue,
+                            };
+                            self.constraints.push(constraint);
+                        }
+                    }
+                }
+                
+                // All match arm bodies must also match each other
                 if arms.len() > 1 {
                     for i in 0..arms.len() - 1 {
-                        self.collect_expression_constraints(arms[i].body, return_type);
-                        self.collect_expression_constraints(arms[i + 1].body, return_type);
-                        
                         let id1 = self.get_expr_id(arms[i].body);
                         let id2 = self.get_expr_id(arms[i + 1].body);
                         self.constraints.push(Constraint::MustMatch(
@@ -255,8 +270,6 @@ impl FloatInference {
                             format!("match arms {} and {}", i, i + 1),
                         ));
                     }
-                } else if arms.len() == 1 {
-                    self.collect_expression_constraints(arms[0].body, return_type);
                 }
                 
                 // Guard expressions if present
@@ -296,8 +309,18 @@ impl FloatInference {
                         self.constrain_nested_floats(left, return_type);
                         self.constrain_nested_floats(right, return_type);
                     }
+                    // THE WINDJAMMER WAY: Comparison ops also need matching operands
+                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                        let left_id = self.get_expr_id(left);
+                        let right_id = self.get_expr_id(right);
+                        self.constraints.push(Constraint::MustMatch(
+                            left_id,
+                            right_id,
+                            format!("comparison {:?} operands", op),
+                        ));
+                    }
                     _ => {
-                        // Comparison/logical ops don't constrain types
+                        // Logical ops (&&, ||) don't constrain float types
                     }
                 }
             }
