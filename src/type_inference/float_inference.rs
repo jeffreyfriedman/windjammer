@@ -51,6 +51,8 @@ pub struct FloatInference {
     var_assignments: HashMap<String, ExprId>,
     /// Sequential ID counter for generating unique ExprIds
     next_seq_id: usize,
+    /// Struct field types: struct_name → field_name → Type
+    struct_field_types: HashMap<String, HashMap<String, Type>>,
 }
 
 impl FloatInference {
@@ -62,13 +64,15 @@ impl FloatInference {
             function_signatures: HashMap::new(),
             var_assignments: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
+            struct_field_types: HashMap::new(),
         }
     }
 
     /// Main entry point: Infer float types for a program
     pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
-        // Pass 0: Build function signature registry
+        // Pass 0: Build struct field registry and function signatures
         for item in &program.items {
+            self.register_struct_fields(item);
             self.register_function_signature(item);
         }
         
@@ -77,12 +81,22 @@ impl FloatInference {
             self.collect_item_constraints(item);
         }
 
-
         // Pass 2: Solve constraints (unification)
         self.solve_constraints();
         
         for (expr_id, float_type) in &self.inferred_types {
             eprintln!("  seq_id={}, {}:{} -> {:?}", expr_id.seq_id, expr_id.line, expr_id.col, float_type);
+        }
+    }
+
+    /// Register struct field types for constraint propagation
+    fn register_struct_fields<'ast>(&mut self, item: &Item<'ast>) {
+        if let Item::Struct { decl, .. } = item {
+            let mut field_map = HashMap::new();
+            for field in &decl.fields {
+                field_map.insert(field.name.clone(), field.field_type.clone());
+            }
+            self.struct_field_types.insert(decl.name.clone(), field_map);
         }
     }
 
@@ -223,7 +237,36 @@ impl FloatInference {
                     }
                 }
             }
-            other => {
+            Statement::Match { value, arms, .. } => {
+                // THE WINDJAMMER WAY: Match arms must have compatible types
+                self.collect_expression_constraints(value, return_type);
+                
+                // All match arm bodies must have same float type
+                if arms.len() > 1 {
+                    for i in 0..arms.len() - 1 {
+                        self.collect_expression_constraints(arms[i].body, return_type);
+                        self.collect_expression_constraints(arms[i + 1].body, return_type);
+                        
+                        let id1 = self.get_expr_id(arms[i].body);
+                        let id2 = self.get_expr_id(arms[i + 1].body);
+                        self.constraints.push(Constraint::MustMatch(
+                            id1,
+                            id2,
+                            format!("match arms {} and {}", i, i + 1),
+                        ));
+                    }
+                } else if arms.len() == 1 {
+                    self.collect_expression_constraints(arms[0].body, return_type);
+                }
+                
+                // Guard expressions if present
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        self.collect_expression_constraints(guard, return_type);
+                    }
+                }
+            }
+            _other => {
             }
         }
     }
@@ -334,7 +377,41 @@ impl FloatInference {
                 }
             }
             Expression::StructLiteral { name, fields, .. } => {
-                // TODO: Look up struct field types and constrain field expressions
+                // THE WINDJAMMER WAY: Constrain struct field expressions to match field types
+                
+                // Collect field type constraints (two-phase to avoid borrow checker issues)
+                let field_constraints: Vec<(String, &'ast Expression<'ast>, FloatType)> = if let Some(struct_fields) = self.struct_field_types.get(name) {
+                    fields.iter().filter_map(|(field_name, field_expr)| {
+                        if let Some(field_type) = struct_fields.get(field_name) {
+                            self.extract_float_type(field_type).map(|float_ty| {
+                                (field_name.clone(), *field_expr, float_ty)
+                            })
+                        } else {
+                            None
+                        }
+                    }).collect()
+                } else {
+                    Vec::new()
+                };
+                
+                // Now create constraints with mutable access
+                for (field_name, field_expr, float_ty) in field_constraints {
+                    let expr_id = self.get_expr_id(field_expr);
+                    let constraint = match float_ty {
+                        FloatType::F32 => Constraint::MustBeF32(
+                            expr_id,
+                            format!("struct {}.{} is f32", name, field_name),
+                        ),
+                        FloatType::F64 => Constraint::MustBeF64(
+                            expr_id,
+                            format!("struct {}.{} is f64", name, field_name),
+                        ),
+                        FloatType::Unknown => continue,
+                    };
+                    self.constraints.push(constraint);
+                }
+                
+                // Recursively collect constraints from field expressions
                 for (_field_name, expr) in fields {
                     self.collect_expression_constraints(expr, return_type);
                 }
@@ -522,6 +599,7 @@ impl FloatInference {
                         let ty2 = self.inferred_types.get(&id2).copied();
 
                         match (ty1, ty2) {
+                            // Conflict: f32 vs f64
                             (Some(FloatType::F32), Some(FloatType::F64)) |
                             (Some(FloatType::F64), Some(FloatType::F32)) => {
                                 self.errors.push(format!(
@@ -529,14 +607,32 @@ impl FloatInference {
                                     id1, id2, reason
                                 ));
                             }
-                            (Some(t), None) => {
-                                self.inferred_types.insert(id2, t);
+                            // Propagate f32 to unknown or untyped
+                            (Some(FloatType::F32), Some(FloatType::Unknown)) |
+                            (Some(FloatType::F32), None) => {
+                                self.inferred_types.insert(id2, FloatType::F32);
                                 changed = true;
                             }
-                            (None, Some(t)) => {
-                                self.inferred_types.insert(id1, t);
+                            (Some(FloatType::Unknown), Some(FloatType::F32)) |
+                            (None, Some(FloatType::F32)) => {
+                                self.inferred_types.insert(id1, FloatType::F32);
                                 changed = true;
                             }
+                            // Propagate f64 to unknown or untyped
+                            (Some(FloatType::F64), Some(FloatType::Unknown)) |
+                            (Some(FloatType::F64), None) => {
+                                self.inferred_types.insert(id2, FloatType::F64);
+                                changed = true;
+                            }
+                            (Some(FloatType::Unknown), Some(FloatType::F64)) |
+                            (None, Some(FloatType::F64)) => {
+                                self.inferred_types.insert(id1, FloatType::F64);
+                                changed = true;
+                            }
+                            // Both same concrete type - no change
+                            (Some(FloatType::F32), Some(FloatType::F32)) |
+                            (Some(FloatType::F64), Some(FloatType::F64)) => {}
+                            // Both unknown or untyped - wait for more constraints
                             _ => {}
                         }
                     }
