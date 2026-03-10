@@ -3,7 +3,6 @@
 /// Tracks constraints for float literals and unifies them across expressions.
 
 use crate::parser::ast::core::{Expression, Statement, Item};
-use crate::parser::ast::literals::Literal;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use std::collections::HashMap;
@@ -63,6 +62,8 @@ pub struct FloatInference {
     source_root: Option<std::path::PathBuf>,
     /// Current impl block type (for resolving `self` field access)
     current_impl_type: Option<String>,
+    /// Variable element types: var_name → element_type (for Vec<T>, HashMap<K,V>)
+    var_element_types: HashMap<String, Type>,
 }
 
 impl FloatInference {
@@ -79,6 +80,7 @@ impl FloatInference {
             expr_id_cache: HashMap::new(),
             source_root: None,
             current_impl_type: None,
+            var_element_types: HashMap::new(),
         }
     }
     
@@ -311,7 +313,18 @@ impl FloatInference {
                     self.var_types.insert(param.name.clone(), param.type_.clone());
                 }
                 
-                // Collect return type constraints
+                // TDD FIX: Handle implicit returns FIRST (before collecting constraints)
+                // This populates var_element_types so that .push()/.insert() can use them
+                if let Some(last_stmt) = decl.body.last() {
+                    if let Statement::Expression { expr, .. } = last_stmt {
+                        // This is an implicit return - store variable element types
+                        if let Some(return_type) = &decl.return_type {
+                            self.constrain_expr_to_type(expr, return_type);
+                        }
+                    }
+                }
+                
+                // Collect return type constraints (now var_element_types is populated)
                 for (_i, stmt) in decl.body.iter().enumerate() {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
@@ -333,6 +346,15 @@ impl FloatInference {
                     // TDD FIX: Register function parameters for type tracking
                     for param in &func.parameters {
                         self.var_types.insert(param.name.clone(), param.type_.clone());
+                    }
+                    
+                    // TDD FIX: Handle implicit returns FIRST (before collecting constraints)
+                    if let Some(last_stmt) = func.body.last() {
+                        if let Statement::Expression { expr, .. } = last_stmt {
+                            if let Some(return_type) = &func.return_type {
+                                self.constrain_expr_to_type(expr, return_type);
+                            }
+                        }
                     }
                     
                     for (_i, stmt) in func.body.iter().enumerate() {
@@ -723,6 +745,26 @@ impl FloatInference {
                                 }
                             }
                         }
+                    // TDD FIX: Also check var_element_types for inferred collection types
+                    } else if let Some(elem_type) = self.var_element_types.get(name).cloned() {
+                        eprintln!("DEBUG PUSH_HANDLER: Found {} in var_element_types: {:?}", name, elem_type);
+                        if method == "push" {
+                            eprintln!("DEBUG PUSH_HANDLER: Handling push");
+                            if arguments.len() >= 1 {
+                                let value_arg = arguments[0].1;
+                                eprintln!("DEBUG PUSH_HANDLER: Constraining arg with type {:?}", elem_type);
+                                
+                                // TDD FIX: Recursively constrain with the element type
+                                // This handles both simple types (f32) and complex types (Tuple)
+                                self.collect_expression_constraints(value_arg, Some(&elem_type));
+                            }
+                        } else if method == "insert" {
+                            if arguments.len() >= 2 {
+                                let value_arg = arguments[1].1;
+                                // TDD FIX: Recursively constrain with the value type
+                                self.collect_expression_constraints(value_arg, Some(&elem_type));
+                            }
+                        }
                     }
                 }
                 
@@ -962,6 +1004,27 @@ impl FloatInference {
                                 }
                             }
                         }
+                    }
+                }
+            }
+            Expression::Literal { value, .. } => {
+                // TDD FIX: Constrain float literals to return type
+                if matches!(value, crate::parser::ast::literals::Literal::Float(_)) {
+                    if let Some(float_ty) = return_type.and_then(|rt| self.extract_float_type(rt)) {
+                        let expr_id = self.get_expr_id(expr);
+                        eprintln!("DEBUG LITERAL: Creating constraint for literal at {:?}: {:?}", expr_id, float_ty);
+                        let constraint = match float_ty {
+                            FloatType::F32 => Constraint::MustBeF32(
+                                expr_id,
+                                "literal constrained by return type".to_string(),
+                            ),
+                            FloatType::F64 => Constraint::MustBeF64(
+                                expr_id,
+                                "literal constrained by return type".to_string(),
+                            ),
+                            FloatType::Unknown => return,
+                        };
+                        self.constraints.push(constraint);
                     }
                 }
             }
@@ -1295,12 +1358,6 @@ impl FloatInference {
             (0, 0)
         };
         
-        // DEBUG: Print all inferred types
-        if line > 0 {
-            for (expr_id, float_type) in &self.inferred_types {
-            }
-        }
-        
         // Search for any ExprId with matching location
         for (expr_id, float_type) in &self.inferred_types {
             if expr_id.line == line && expr_id.col == col {
@@ -1309,5 +1366,42 @@ impl FloatInference {
         }
         
         FloatType::F64 // Default to f64
+    }
+
+    /// TDD FIX: Constrain an expression to match a specific type
+    /// Used for implicit returns: return type → variable type → collection elements
+    fn constrain_expr_to_type<'ast>(&mut self, expr: &Expression<'ast>, target_type: &Type) {
+        eprintln!("DEBUG CONSTRAIN_TO_TYPE: Called for expr, target_type={:?}", target_type);
+        match expr {
+            Expression::Identifier { name, .. } => {
+                eprintln!("DEBUG CONSTRAIN_TO_TYPE: Is Identifier: {}", name);
+                // Variable being returned - store its element type if it's a collection
+                match target_type {
+                    Type::Vec(inner) => {
+                        // Vec<T>
+                        eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from Vec: {:?}", name, inner);
+                        self.var_element_types.insert(name.clone(), (**inner).clone());
+                    }
+                    Type::Parameterized(type_name, parameters) => {
+                        // Vec<T>, HashMap<K,V>, Option<T>, etc.
+                        if type_name == "Vec" && parameters.len() == 1 {
+                            eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from Parameterized Vec: {:?}", name, parameters[0]);
+                            self.var_element_types.insert(name.clone(), parameters[0].clone());
+                        } else if type_name == "HashMap" && parameters.len() == 2 {
+                            // Store the value type (second parameter)
+                            eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from HashMap: {:?}", name, parameters[1]);
+                            self.var_element_types.insert(name.clone(), parameters[1].clone());
+                        }
+                    }
+                    _ => {
+                        eprintln!("DEBUG CONSTRAIN_TO_TYPE: target_type not Vec/HashMap");
+                    }
+                }
+            }
+            _ => {
+                eprintln!("DEBUG CONSTRAIN_TO_TYPE: expr not Identifier");
+                // For other expressions, continue normal constraint collection
+            }
+        }
     }
 }
