@@ -67,8 +67,12 @@ fn test_const_fold_simple() {
 
 // Helper function to compile Windjammer source and get generated Rust
 fn compile_and_get_rust(source: &str) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    
     let temp_dir = std::env::temp_dir();
-    let test_name = format!("const_fold_test_{}", std::process::id());
+    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let test_name = format!("const_fold_test_{}_{}", std::process::id(), unique_id);
     let test_file = temp_dir.join(format!("{}.wj", test_name));
     let output_dir = temp_dir.join(&test_name);
     let output_file = output_dir.join(format!("{}.rs", test_name));
