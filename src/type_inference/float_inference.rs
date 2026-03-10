@@ -599,17 +599,30 @@ impl FloatInference {
                 // Method call: infer argument types from method signature
                 self.collect_expression_constraints(object, return_type);
                 
-                // TDD FIX: Constrain method call return type if it returns f32/f64
-                // For method() -> f32, constrain the MethodCall expression itself to F32
-                // This propagates through MustMatch constraints in binary operations
+                // TDD FIX: Constrain MethodCall expression to its return type
+                // This is critical for binary ops: `t.sin() * 0.8` needs the MethodCall
+                // to be constrained to f32, which then propagates through MustMatch to the literal
                 
-                // Known methods that return f32:
-                if matches!(method.as_str(), "get_cost" | "get" | "distance" | "length" | "dot" | "cross") {
+                // First, try to determine the method's return type
+                let method_return_type = self.determine_method_return_type(object, method);
+                
+                if let Some(float_ty) = method_return_type {
                     let method_call_id = self.get_expr_id(expr);
-                    self.constraints.push(Constraint::MustBeF32(
-                        method_call_id,
-                        format!("method {} returns f32", method),
-                    ));
+                    match float_ty {
+                        FloatType::F32 => {
+                            self.constraints.push(Constraint::MustBeF32(
+                                method_call_id,
+                                format!("method {} returns f32", method),
+                            ));
+                        }
+                        FloatType::F64 => {
+                            self.constraints.push(Constraint::MustBeF64(
+                                method_call_id,
+                                format!("method {} returns f64", method),
+                            ));
+                        }
+                        FloatType::Unknown => {}
+                    }
                 }
                 
                 // TDD FIX: Method calls on fields (self.field.method(...))
@@ -1038,6 +1051,74 @@ impl FloatInference {
         }
         
         expr_id
+    }
+
+    /// Determine the return type of a method call
+    /// Returns Some(FloatType) if the method is known to return f32/f64, None otherwise
+    fn determine_method_return_type(&self, object: &Expression, method: &str) -> Option<FloatType> {
+        // TDD FIX: For methods on f32/f64 primitives, return the same type
+        // Standard library f32 methods that return f32:
+        const F32_METHODS: &[&str] = &[
+            // Trigonometric
+            "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+            "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+            // Exponential/logarithmic
+            "exp", "exp2", "exp_m1", "ln", "log", "log2", "log10", "ln_1p",
+            // Power/root
+            "sqrt", "cbrt", "hypot", "powf", "powi",
+            // Rounding
+            "floor", "ceil", "round", "trunc", "fract",
+            // Absolute/sign
+            "abs", "signum", "copysign",
+            // Min/max
+            "max", "min", "clamp",
+            // Misc
+            "recip", "to_degrees", "to_radians",
+            // Custom (from game code)
+            "get_cost", "get", "distance", "length", "dot", "cross", "magnitude",
+        ];
+        
+        // Check if this is a method call on an identifier
+        if let Expression::Identifier { name, .. } = object {
+            // Look up the identifier's type from var_types
+            if let Some(var_type) = self.var_types.get(name) {
+                // Check if it's an f32 or f64 type
+                let is_f32 = matches!(var_type, Type::Float) || 
+                             matches!(var_type, Type::Custom(s) if s == "f32");
+                let is_f64 = matches!(var_type, Type::Custom(s) if s == "f64");
+                
+                if is_f32 && F32_METHODS.contains(&method) {
+                    return Some(FloatType::F32);
+                }
+                if is_f64 && F32_METHODS.contains(&method) {
+                    return Some(FloatType::F64);
+                }
+            }
+        }
+        
+        // Check if this is a method call on a FieldAccess (e.g., self.field.method())
+        if let Expression::FieldAccess { .. } = object {
+            // Try to find method signature from metadata
+            for (func_name, (_, ret_type_opt)) in self.function_signatures.iter() {
+                if func_name.split("::").last() == Some(method) {
+                    if let Some(ret_type) = ret_type_opt {
+                        return self.extract_float_type(ret_type);
+                    }
+                }
+            }
+        }
+        
+        // For MethodCall on MethodCall (chaining), try to infer from the inner call
+        if let Expression::MethodCall { .. } = object {
+            // Check if the method is a known f32-returning method
+            if F32_METHODS.contains(&method) {
+                // Assume it returns the same type as the input (common for math methods)
+                // This is a heuristic - ideally we'd recursively determine the type
+                return Some(FloatType::F32);
+            }
+        }
+        
+        None
     }
 
     /// Solve constraints using unification
