@@ -112,6 +112,12 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Literal(Literal::Char(c)))
             }
+            Token::FloatLiteral(f) => {
+                // TDD: Support float literal patterns in match (0.0 => ...)
+                let f = *f;
+                self.advance();
+                Ok(Pattern::Literal(Literal::Float(f)))
+            }
             Token::Ident(name) => {
                 let mut qualified_path = name.clone();
                 self.advance();
