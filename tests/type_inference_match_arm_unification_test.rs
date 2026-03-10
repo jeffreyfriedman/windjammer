@@ -50,6 +50,7 @@ pub fn get_score(scores: HashMap<i32, f32>, key: i32) -> f32 {
 
 #[test]
 fn test_match_result_with_f32() {
+    // TDD: Testing literal patterns in match (0.0 => ...)
     let source = r#"pub fn safe_divide(a: f32, b: f32) -> f32 {
     match b {
         0.0 => 0.0,
