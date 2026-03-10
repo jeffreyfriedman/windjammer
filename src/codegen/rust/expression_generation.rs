@@ -3306,7 +3306,10 @@ impl<'ast> CodeGenerator<'ast> {
                     let suffix = match inferred {
                         FloatType::F32 => "f32",
                         FloatType::F64 => "f64",
-                        FloatType::Unknown => "f64", // Default
+                        FloatType::Unknown => {
+                            // TDD FIX: Fall through to context-sensitive when Unknown
+                            return self.generate_literal_context_sensitive(lit);
+                        }
                     };
                     
                     let s = f.to_string();
