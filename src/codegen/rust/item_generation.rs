@@ -418,10 +418,45 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&method.name);
             output.push('(');
 
+            // TDD FIX: Trait Method Ownership Inference
+            // THE WINDJAMMER WAY: If trait method has no explicit self parameter,
+            // infer it automatically based on the method type:
+            // - Constructors (new, default, from, etc.) → No self (associated function)
+            // - All other methods → &mut self (method)
+            let has_self_param = method.parameters.iter().any(|p| p.name == "self");
+            let is_constructor = matches!(
+                method.name.as_str(),
+                "new" | "default" | "from" | "from_str" | "from_bytes" 
+                | "with_capacity" | "empty" | "zero" | "one"
+            );
+            
+            let mut params: Vec<String> = Vec::new();
+            
+            // Add self parameter if missing and not a constructor
+            if !has_self_param && !is_constructor {
+                // Check if we have analyzed ownership for this method
+                let self_ownership = if let Some(analyzed) = analyzed_method {
+                    analyzed.inferred_ownership.get("self").copied()
+                } else if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_decl.name) {
+                    trait_methods.get(&method.name)
+                        .and_then(|m| m.inferred_ownership.get("self").copied())
+                } else {
+                    None
+                };
+                
+                // Default to &mut self for methods (most common case)
+                let self_param = match self_ownership {
+                    Some(OwnershipMode::Borrowed) => "&self",
+                    Some(OwnershipMode::MutBorrowed) | None => "&mut self",
+                    Some(OwnershipMode::Owned) => "self",
+                };
+                params.push(self_param.to_string());
+            }
+
             // Generate parameters
             // NOTE: Trait method signatures cannot have 'mut' keyword in Rust
             // Only implementations can have 'mut self' or 'mut param'
-            let params: Vec<String> = method
+            let method_params: Vec<String> = method
                 .parameters
                 .iter()
                 .map(|param| {
@@ -515,6 +550,9 @@ impl<'ast> CodeGenerator<'ast> {
                     format!("{}: {}", param.name, type_str)
                 })
                 .collect();
+            
+            // Append method parameters to params (which may already have self)
+            params.extend(method_params);
 
             output.push_str(&params.join(", "));
             output.push(')');
