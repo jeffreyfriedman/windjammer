@@ -576,8 +576,19 @@ impl FloatInference {
                     }
                 }
                 
-                // Also check if identifier is a float primitive type itself
-                // (This shouldn't conflict with the above since var_types contains Type, not primitive float values)
+                // TDD FIX: Variable assignment type propagation
+                // When a variable is used (e.g., "det" in "1.0 / det"), 
+                // link it to its assigned value so type propagates through
+                // Example: let det = a * b; let inv_det = 1.0 / det
+                //   -> det must match (a * b) -> 1.0 must match det -> 1.0 matches a's type
+                if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                    let identifier_id = self.get_expr_id(expr);
+                    self.constraints.push(Constraint::MustMatch(
+                        identifier_id,
+                        value_id,
+                        format!("variable {} matches its assigned value", name),
+                    ));
+                }
             }
             Expression::Binary { left, right, op, .. } => {
                 // Binary ops require both operands to have same type
