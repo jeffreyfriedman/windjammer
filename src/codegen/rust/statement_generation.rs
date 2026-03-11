@@ -1670,6 +1670,14 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             let target_type = self.infer_expression_type(target);
+            let right_type = self.infer_expression_type(right);
+            
+            // TDD FIX: String += String doesn't work in Rust (needs String += &str)
+            // If both sides are String and op is Add, disable compound assignment
+            let is_string_addition = matches!(op, BinaryOp::Add)
+                && matches!(target_type, Some(Type::String))
+                && matches!(right_type, Some(Type::String));
+            
             let is_known_non_assignable = target_type.as_ref().is_some_and(|t| {
                 if let Type::Custom(name) = t {
                     matches!(
@@ -1688,7 +1696,7 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             });
-            let is_compound_safe = !is_known_non_assignable;
+            let is_compound_safe = !is_known_non_assignable && !is_string_addition;
 
             if targets_match && is_compound_safe {
                 let compound_op_str = match op {
