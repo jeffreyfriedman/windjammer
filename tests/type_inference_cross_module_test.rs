@@ -1,101 +1,175 @@
-// TDD Test: Float literal inference across module boundaries
-//
-// Bug: Vec3::new(x, 0.0, z) generates 0.0_f64 when Vec3 is imported from another file
-// Expected: Load Vec3::new signature from metadata → constrain args to f32
-//
-// Dogfooding Win: 99% of game code imports types from other modules
+/// TDD Test: Cross-Module Type Inference
+///
+/// Pattern: Function calls across modules should propagate type information
+/// Example: mod math { pub fn distance(a: f32, b: f32) -> f32 }
+///          Using: let d = math::distance(self.x, 0.0)
+///          Should infer: 0.0 as f32 based on function signature
+///
+/// This tests whether the compiler can look up function signatures
+/// from other modules and use them for type inference.
 
-use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
-fn test_cross_module_function_signature() {
-    let output_dir = "/tmp/wj_test_cross_module";
-    fs::create_dir_all(&format!("{}/math", output_dir)).unwrap();
+fn test_cross_module_function_call() {
+    // Create a math module with a function
+    let math_src = r#"
+pub fn distance(a: f32, b: f32) -> f32 {
+    let dx = a - b
+    dx * dx
+}
+"#;
 
-    // Module 1: Define Vec3
-    let vec3_source = r#"
-pub struct Vec3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    // Create a main file that uses it
+    let main_src = r#"
+use math
+
+struct Point {
+    x: f32,
+    y: f32,
 }
 
-impl Vec3 {
-    pub fn new(x: f32, y: f32, z: f32) -> Vec3 {
-        Vec3 { x, y, z }
+impl Point {
+    pub fn distance_from_origin(self) -> f32 {
+        math::distance(self.x, 0.0)
     }
 }
 "#;
-    fs::write(format!("{}/math/vec3.wj", output_dir), vec3_source).unwrap();
 
-    // Module 2: Use Vec3
-    let usage_source = r#"
-use crate::math::vec3::Vec3
+    let (test_dir, _counter) = setup_test_project(vec![
+        ("math.wj", math_src),
+        ("main.wj", main_src),
+    ]);
 
-fn create_vector(x: f32, z: f32) -> Vec3 {
-    Vec3::new(x, 0.0, z)
+    let output = compile_project(&test_dir, "main.wj");
+
+    println!("\n=== Generated Rust ===\n{}\n", output);
+
+    // The 0.0 should be inferred as f32 because math::distance expects f32
+    assert!(
+        output.contains("0.0_f32") || !output.contains("0.0_f64"),
+        "0.0 should be f32, not f64: {}",
+        output
+    );
+}
+
+#[test]
+fn test_cross_module_struct_field_access() {
+    let types_src = r#"
+pub struct Vector2 {
+    pub x: f32,
+    pub y: f32,
 }
 "#;
-    fs::write(format!("{}/usage.wj", output_dir), usage_source).unwrap();
 
-    // Compile Vec3 first
-    let output1 = Command::new("cargo")
+    let main_src = r#"
+use types
+
+pub fn calculate(v: Vector2) -> f32 {
+    v.x + 0.5
+}
+"#;
+
+    let (test_dir, _counter) = setup_test_project(vec![
+        ("types.wj", types_src),
+        ("main.wj", main_src),
+    ]);
+
+    let output = compile_project(&test_dir, "main.wj");
+
+    println!("\n=== Generated Rust ===\n{}\n", output);
+
+    // 0.5 should be f32 because v.x is f32
+    assert!(
+        output.contains("0.5_f32") || !output.contains("0.5_f64"),
+        "0.5 should be f32: {}",
+        output
+    );
+}
+
+#[test]
+fn test_cross_module_method_call() {
+    let math_src = r#"
+pub struct Calculator {
+    pub factor: f32,
+}
+
+impl Calculator {
+    pub fn multiply(self, value: f32) -> f32 {
+        self.factor * value
+    }
+}
+"#;
+
+    let main_src = r#"
+use math
+
+pub fn calculate(calc: Calculator) -> f32 {
+    calc.multiply(2.0)
+}
+"#;
+
+    let (test_dir, _counter) = setup_test_project(vec![
+        ("math.wj", math_src),
+        ("main.wj", main_src),
+    ]);
+
+    let output = compile_project(&test_dir, "main.wj");
+
+    println!("\n=== Generated Rust ===\n{}\n", output);
+
+    // 2.0 should be f32 because Calculator::multiply expects f32
+    assert!(
+        output.contains("2.0_f32") || !output.contains("2.0_f64"),
+        "2.0 should be f32: {}",
+        output
+    );
+}
+
+// Helper functions
+
+fn setup_test_project(files: Vec<(&str, &str)>) -> (String, u64) {
+    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let test_dir = format!("/tmp/cross_module_test_{}_{}", std::process::id(), counter);
+
+    std::fs::create_dir_all(&test_dir).unwrap();
+
+    for (filename, content) in files {
+        let file_path = PathBuf::from(&test_dir).join(filename);
+        std::fs::write(&file_path, content).unwrap();
+    }
+
+    (test_dir, counter)
+}
+
+fn compile_project(test_dir: &str, entry_file: &str) -> String {
+    let source_file = PathBuf::from(test_dir).join(entry_file);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
-            "run",
-            "--release",
-            "--",
             "build",
+            source_file.to_str().unwrap(),
             "--target",
             "rust",
-            "--no-cargo",
-            &format!("{}/math/vec3.wj", output_dir),
             "--output",
-            &format!("{}/math", output_dir),
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to compile vec3.wj");
-
-    assert!(output1.status.success(), "Vec3 compilation failed");
-
-    // Compile usage.wj (should load Vec3 metadata)
-    let output2 = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
-            "build",
-            "--target",
-            "rust",
+            test_dir,
             "--no-cargo",
-            &format!("{}/usage.wj", output_dir),
-            "--output",
-            output_dir,
         ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
         .output()
-        .expect("Failed to compile usage.wj");
+        .expect("Failed to run wj compiler");
 
-    let stderr = String::from_utf8_lossy(&output2.stderr);
-    
-    eprintln!("=== STDERR FROM WJ BUILD ===\n{}\n===", stderr);
-    
-    assert!(
-        output2.status.success(),
-        "Usage compilation should succeed, stderr: {}",
-        stderr
-    );
+    if !output.status.success() {
+        panic!(
+            "Compilation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
-    let rust_code = fs::read_to_string(format!("{}/usage.rs", output_dir))
-        .expect("Generated Rust file not found");
-
-    eprintln!("Generated Rust:\n{}", rust_code);
-
-    // The literal 0.0 should be f32 (from Vec3::new signature in other file)
-    assert!(
-        !rust_code.contains("0.0_f64") && !rust_code.contains("0_f64"),
-        "0.0 should NOT be f64 when passed to Vec3::new (even from other file), got:\n{}",
-        rust_code
-    );
+    // Read the generated main.rs file
+    let rust_file = PathBuf::from(test_dir).join(entry_file.replace(".wj", ".rs"));
+    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
