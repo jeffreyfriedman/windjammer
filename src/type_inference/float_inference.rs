@@ -647,6 +647,22 @@ impl FloatInference {
                     }
                 }
                 
+                // TDD FIX: .min() and .max() methods - argument must match receiver type
+                // Pattern: (self.level + amount).min(100.0) - the 100.0 must be f32
+                if method == "min" || method == "max" {
+                    if arguments.len() == 1 {
+                        let receiver_id = self.get_expr_id(object);
+                        let arg_id = self.get_expr_id(arguments[0].1);
+                        
+                        // Receiver and argument must be same type
+                        self.constraints.push(Constraint::MustMatch(
+                            receiver_id,
+                            arg_id,
+                            format!(".{}() argument must match receiver type", method),
+                        ));
+                    }
+                }
+                
                 // TDD FIX: Method calls on fields (self.field.method(...))
                 // Need to look up method signature from loaded metadata
                 if let Expression::FieldAccess { .. } = object {
