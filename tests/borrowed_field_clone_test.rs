@@ -1,12 +1,20 @@
-//! TDD Test: Borrowed reference fields need .clone() when passed to methods
+//! TDD Test: String concatenation optimization issue
 //!
-//! When iterating over borrowed items and passing their fields to methods,
-//! the fields need to be cloned since we can't move out of a reference.
+//! BUG: Compound assignment optimization (result = result + X → result += X)
+//! doesn't account for String return types from function/method calls.
 //!
-//! NOTE: These tests currently fail after removing .as_str() because the
-//! generated Rust code uses `+=` which expects `&str`, but removing .as_str()
-//! means we're concatenating String + String. This is a code generation issue
-//! that needs to be fixed properly in the compiler.
+//! Pattern: `result += process_property()` where process_property returns String
+//! Problem: `String += String` doesn't work in Rust (requires `String += &str`)
+//!
+//! Fix attempted: Check if right expression type is String before using +=
+//! Status: Partial - works for identifiers but not for method call return types
+//!
+//! TODO: Enhance infer_expression_type() to properly detect String returns from:
+//! - Method calls (self.method())
+//! - Function calls (func())
+//! - Format! macro
+//!
+//! Current workaround: Disable compound assignment for ALL String additions
 
 use std::fs;
 use std::process::Command;
@@ -59,7 +67,7 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // TODO: Fix after proper String + String codegen (currently uses += which expects &str)
+#[ignore] // BUG: += optimization doesn't detect String return from function calls (see file header)
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_item_field_access() {
     // When iterating over borrowed items, fields need .clone()
@@ -94,7 +102,7 @@ pub fn process_properties(props: &Vec<Property>) -> string {
 }
 
 #[test]
-#[ignore] // TODO: Fix after proper String + String codegen (currently uses += which expects &str)
+#[ignore] // BUG: += optimization doesn't detect String return from method calls (see file header)
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_borrowed_fields() {
     // Method calls with borrowed item fields
