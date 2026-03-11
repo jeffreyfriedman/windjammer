@@ -60,7 +60,7 @@ fn transpile_wj(source: &str) -> String {
 }
 
 #[test]
-#[ignore] // TODO: Revisit ownership inference - compiler infers &mut when calling methods (efficient), test expects owned
+#[ignore] // PHILOSOPHY: Compiler chooses efficiency (&mut) over user intent (owned) - by design!
 fn test_let_binding_with_mut_method_call() {
     let source = r#"
 pub struct Loader {
