@@ -1,20 +1,23 @@
-//! TDD Test: String concatenation optimization issue
+//! TDD Test: String concatenation with function/method calls
 //!
-//! BUG: Compound assignment optimization (result = result + X → result += X)
-//! doesn't account for String return types from function/method calls.
+//! FIXED: String + String concatenation now correctly borrows the right side.
 //!
-//! Pattern: `result += process_property()` where process_property returns String
-//! Problem: `String += String` doesn't work in Rust (requires `String += &str`)
+//! Pattern: `result = result + process_property()` where process_property returns String
+//! Solution: Automatic `&` prefix added to right side: `result = result + &process_property()`
 //!
-//! Fix attempted: Check if right expression type is String before using +=
-//! Status: Partial - works for identifiers but not for method call return types
+//! Implementation:
+//! 1. Enhanced infer_expression_type() to detect String returns from:
+//!    - Function calls (func() -> String)
+//!    - Method calls (self.method() -> String)
+//!    - Macro invocations (format!() -> String)
 //!
-//! TODO: Enhance infer_expression_type() to properly detect String returns from:
-//! - Method calls (self.method())
-//! - Function calls (func())
-//! - Format! macro
+//! 2. Disabled compound assignment (+=) when right side is String
+//!    - Checks right_type only (not target_type) for robustness
+//!    - Works even when target type can't be inferred
 //!
-//! Current workaround: Disable compound assignment for ALL String additions
+//! 3. Added automatic borrowing in binary expressions
+//!    - String + String → String + &String
+//!    - Skips string literals (already &str)
 
 use std::fs;
 use std::process::Command;
@@ -67,7 +70,6 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // BUG: += optimization doesn't detect String return from function calls (see file header)
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_item_field_access() {
     // When iterating over borrowed items, fields need .clone()
@@ -102,7 +104,6 @@ pub fn process_properties(props: &Vec<Property>) -> string {
 }
 
 #[test]
-#[ignore] // BUG: += optimization doesn't detect String return from method calls (see file header)
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_borrowed_fields() {
     // Method calls with borrowed item fields

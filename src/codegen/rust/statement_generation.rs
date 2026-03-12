@@ -1673,9 +1673,9 @@ impl<'ast> CodeGenerator<'ast> {
             let right_type = self.infer_expression_type(right);
             
             // TDD FIX: String += String doesn't work in Rust (needs String += &str)
-            // If both sides are String and op is Add, disable compound assignment
+            // If right side is String and op is Add, disable compound assignment
+            // Even if target type can't be inferred, we know it's String if += would work
             let is_string_addition = matches!(op, BinaryOp::Add)
-                && matches!(target_type, Some(Type::String))
                 && matches!(right_type, Some(Type::String));
             
             let is_known_non_assignable = target_type.as_ref().is_some_and(|t| {
