@@ -496,18 +496,21 @@ impl<'ast> CodeGenerator<'ast> {
                     right_str = format!("({})", right_str);
                 }
 
-                // TDD FIX: String + String concatenation needs borrowing
+                // TDD FIX: String + String/&str concatenation needs borrowing
                 // In Rust, String + String doesn't work - needs String + &str
-                // If right side is a String expression (not a literal), borrow it
+                // If LEFT side is String and op is Add, RIGHT must be borrowed (unless string literal)
+                // This catches all string concatenation: String + String, String + &str, etc.
                 if matches!(op, BinaryOp::Add) {
-                    let right_type = self.infer_expression_type(right);
-                    if matches!(right_type, Some(Type::String)) {
+                    let left_type = self.infer_expression_type(left);
+                    let left_is_string = matches!(left_type, Some(Type::String));
+                    
+                    if left_is_string {
                         // Don't add & for string literals (they're already &str)
                         let is_string_literal = matches!(
                             right,
                             Expression::Literal { value: Literal::String(_), .. }
                         );
-                        if !is_string_literal {
+                        if !is_string_literal && !right_str.starts_with('&') {
                             right_str = format!("&{}", right_str);
                         }
                     }
