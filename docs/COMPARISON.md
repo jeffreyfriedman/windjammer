@@ -20,8 +20,9 @@ Last Updated: March 12, 2026
 | **Concurrency** | Go-style | Send/Sync | Goroutines | Threading/Async | Promises/Async |
 | **Type System** | Strong, Inferred | Strong, Explicit | Strong, Explicit | Dynamic | Gradual |
 | **Package Ecosystem** | Rust crates | Massive | Growing | Massive | Massive (npm) |
-| **Multi-target** | Rust/JS/WASM | Native only | Native only | Interpreted | JS/Node only |
+| **Multi-target** | Rust/Go/JS/WASM | Native only | Native only | Interpreted | JS/Node only |
 | **IDE Support** | ⭐⭐⭐⭐⭐ LSP | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Scripting Mode** | WindjammerScript | N/A | N/A | Yes (default) | N/A |
 
 ---
 
@@ -447,17 +448,28 @@ async function fetchData() {
 
 ---
 
-### 7. Multi-Target Compilation
+### 7. Multi-Target Compilation & Execution Modes
 
 #### Windjammer
 ```bash
-wj build --target rust      # Native binary
+# Compile to different backends
+wj build --target rust      # Native binary (production)
+wj build --target go        # Go source (fast iteration)
 wj build --target js        # JavaScript (Node/Browser)
 wj build --target wasm      # WebAssembly
+
+# Interpreted mode (no compilation)
+wj run script.wj            # WindjammerScript (instant execution)
 ```
-- **Targets**: Rust, JavaScript, WASM
+- **Targets**: Rust, Go, JavaScript, WASM, WindjammerScript (interpreter)
 - **Single Codebase**: ✅ Yes
-- **Performance**: Native or near-native
+- **Performance**: Native (Rust), near-native (Go), fast (JS/WASM), interpreted (WindjammerScript)
+- **Use Cases**:
+  - **Rust**: Production binaries, maximum performance
+  - **Go**: Fast iteration during development, simpler deployment
+  - **JavaScript**: Browser/Node.js, web applications
+  - **WASM**: Browser with near-native speed
+  - **WindjammerScript**: Scripting, REPL, rapid prototyping
 
 #### Rust
 - **Targets**: Native only (many architectures)
@@ -479,7 +491,32 @@ wj build --target wasm      # WebAssembly
 - **Single Codebase**: ✅ Yes
 - **Performance**: V8 JIT
 
-**Winner**: 🏆 **Windjammer** (only language with native + JS + WASM from one source)
+**Winner**: 🏆 **Windjammer** (only language with Rust + Go + JS + WASM + interpreter from one source)
+
+#### WindjammerScript (Interpreted Mode)
+
+Windjammer uniquely offers an **interpreted mode** for instant execution:
+
+```bash
+# No compilation needed!
+wj run my_script.wj
+```
+
+**Benefits:**
+- ⚡ **Instant execution** (no wait for compilation)
+- 🔧 **REPL** for interactive development
+- 📝 **Scripting** like Python, but with Rust safety
+- 🎯 **Prototyping** - test ideas immediately
+- 🔄 **Hot reload** - edit and run instantly
+
+**Performance:** Interpreted (slower than compiled), but perfect for:
+- Development scripts
+- Build tools
+- Configuration
+- Exploratory programming
+- Teaching/learning
+
+**Upgrade path:** Same code compiles to Rust for production!
 
 ---
 
