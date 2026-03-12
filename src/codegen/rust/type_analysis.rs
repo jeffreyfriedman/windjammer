@@ -873,6 +873,18 @@ impl<'ast> CodeGenerator<'ast> {
                     None
                 }
             }
+            // TDD FIX: Macro invocations return known types
+            // format!() always returns String
+            // vec![] returns Vec<T> (but we don't infer T here)
+            Expression::MacroInvocation { name, .. } => {
+                match name.as_str() {
+                    "format" => Some(Type::String),
+                    "panic" => None, // Never returns (diverges)
+                    "println" | "print" | "eprintln" | "eprint" => None, // Returns ()
+                    "vec" => None, // TODO: Could infer Vec<T> from element types
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
