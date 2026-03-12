@@ -1,0 +1,17 @@
+{
+  "module_path": "module_import_resolution_user",
+  "functions": {
+    "test_collision": {
+      "params": [
+        "Custom(\"RigidBody2D\")",
+        "Custom(\"RigidBody2D\")"
+      ],
+      "return_type": "Bool",
+      "is_associated": false,
+      "parent_type": null
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "version": "0.46.0"
+}
