@@ -1076,12 +1076,45 @@ impl GoGenerator {
         let body_str = self.generate_expression(arm.body);
 
         match &arm.pattern {
-            Pattern::EnumVariant(variant_name, _binding) => {
+            Pattern::EnumVariant(variant_name, binding) => {
+                // TDD FIX: Extract enum variant values for pattern matching
                 // Convert Color::Red → ColorRed for Go type switch
                 let go_type = self.enum_variant_to_go_type(variant_name);
                 let mut out = format!("{}case {}:\n", indent, go_type);
                 self.indent_level += 1;
-                out.push_str(&format!("{}_ = _v\n", self.indent()));
+                
+                // Extract pattern variables from variant data
+                // For Maybe::Some(v), binding is EnumPatternBinding::Single("v")
+                // Need to extract: v := _v.Field0
+                use crate::parser::EnumPatternBinding;
+                match binding {
+                    EnumPatternBinding::Single(var_name) => {
+                        // Single value: v := _v.Field0
+                        out.push_str(&format!("{}{} := _v.Field0\n", self.indent(), var_name));
+                    }
+                    EnumPatternBinding::Tuple(patterns) => {
+                        // Multiple values: a := _v.Field0; b := _v.Field1; ...
+                        for (i, pat) in patterns.iter().enumerate() {
+                            if let Pattern::Identifier(var_name) = pat {
+                                out.push_str(&format!(
+                                    "{}{} := _v.Field{}\n",
+                                    self.indent(),
+                                    var_name,
+                                    i
+                                ));
+                            }
+                        }
+                    }
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
+                        // No binding or wildcard: just silence unused warning
+                        out.push_str(&format!("{}_ = _v\n", self.indent()));
+                    }
+                    EnumPatternBinding::Struct(_, _) => {
+                        // Struct variant: need field extraction (TODO)
+                        out.push_str(&format!("{}_ = _v\n", self.indent()));
+                    }
+                }
+                
                 out.push_str(&format!("{}{}\n", self.indent(), body_str));
                 self.indent_level -= 1;
                 out
@@ -1279,7 +1312,40 @@ impl GoGenerator {
 
         let mut out = format!("{}{}:\n", indent, case_label);
         self.indent_level += 1;
-        out.push_str(&format!("{}_ = _v\n", self.indent()));
+        
+        // TDD FIX: Extract pattern variables with returns
+        use crate::parser::EnumPatternBinding;
+        match &arm.pattern {
+            Pattern::EnumVariant(_, binding) => {
+                match binding {
+                    EnumPatternBinding::Single(var_name) => {
+                        out.push_str(&format!("{}{} := _v.Field0\n", self.indent(), var_name));
+                    }
+                    EnumPatternBinding::Tuple(patterns) => {
+                        for (i, pat) in patterns.iter().enumerate() {
+                            if let Pattern::Identifier(var_name) = pat {
+                                out.push_str(&format!(
+                                    "{}{} := _v.Field{}\n",
+                                    self.indent(),
+                                    var_name,
+                                    i
+                                ));
+                            }
+                        }
+                    }
+                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
+                        out.push_str(&format!("{}_ = _v\n", self.indent()));
+                    }
+                    EnumPatternBinding::Struct(_, _) => {
+                        out.push_str(&format!("{}_ = _v\n", self.indent()));
+                    }
+                }
+            }
+            _ => {
+                out.push_str(&format!("{}_ = _v\n", self.indent()));
+            }
+        }
+        
         out.push_str(&format!("{}return {}\n", self.indent(), body_str));
         self.indent_level -= 1;
         out
@@ -1423,6 +1489,27 @@ impl GoGenerator {
                             return self.generate_print_call(arguments);
                         }
                         _ => {}
+                    }
+                    
+                    // TDD FIX: Detect enum variant construction (Maybe::Some(42))
+                    // Generate struct literal: MaybeSome{Field0: 42}
+                    // NOT function call: MaybeSome{}(42)
+                    if name.contains("::") {
+                        let go_type = self.enum_variant_to_go_type(name);
+                        if !arguments.is_empty() {
+                            // Variant with data: MaybeSome{Field0: value}
+                            let fields: Vec<String> = arguments
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (_, arg))| {
+                                    format!("Field{}: {}", i, self.generate_expression(arg))
+                                })
+                                .collect();
+                            return format!("{}{{{}}}", go_type, fields.join(", "));
+                        } else {
+                            // Unit variant: MaybeNone{}
+                            return format!("{}{{}}", go_type);
+                        }
                     }
                 }
 
