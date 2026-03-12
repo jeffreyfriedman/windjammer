@@ -1,7 +1,7 @@
 {
   "module_path": "operator_precedence",
   "functions": {
-    "test_negation_complex": {
+    "test_negation_with_and": {
       "params": [],
       "return_type": "Bool",
       "is_associated": false,
@@ -13,7 +13,7 @@
       "is_associated": false,
       "parent_type": null
     },
-    "test_negation_with_and": {
+    "test_negation_complex": {
       "params": [],
       "return_type": "Bool",
       "is_associated": false,
