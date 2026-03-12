@@ -71,6 +71,22 @@ impl GoGenerator {
             declared_vars: vec![std::collections::HashSet::new()],
         }
     }
+    
+    /// TDD FIX: Escape Go keywords when used as identifiers
+    /// Go keywords: break, case, chan, const, continue, default, defer, else,
+    /// fallthrough, for, func, go, goto, if, import, interface, map, package,
+    /// range, return, select, struct, switch, type, var
+    fn escape_go_keyword(name: &str) -> String {
+        match name {
+            "break" | "case" | "chan" | "const" | "continue" | "default" | "defer" 
+            | "else" | "fallthrough" | "for" | "func" | "go" | "goto" | "if" 
+            | "import" | "interface" | "map" | "package" | "range" | "return" 
+            | "select" | "struct" | "switch" | "type" | "var" => {
+                format!("{}_", name) // Append underscore to avoid keyword conflict
+            }
+            _ => name.to_string(),
+        }
+    }
 
     /// Get operator precedence (higher = tighter binding)
     fn op_precedence(op: &BinaryOp) -> i32 {
@@ -425,12 +441,12 @@ impl GoGenerator {
         // Function name (capitalize for Go export if it's main)
         let func_name = &func.name;
 
-        // Parameters
+        // Parameters (TDD FIX: Escape Go keywords in param names)
         let params: Vec<String> = func
             .parameters
             .iter()
             .filter(|p| p.name != "self")
-            .map(|p| format!("{} {}", &p.name, self.type_to_go(&p.type_)))
+            .map(|p| format!("{} {}", Self::escape_go_keyword(&p.name), self.type_to_go(&p.type_)))
             .collect();
 
         // Return type
@@ -658,14 +674,23 @@ impl GoGenerator {
             } => {
                 let indent = self.indent();
                 let var_name = self.pattern_to_go(pattern);
-                let value_str = self.generate_expression(value);
+                let mut value_str = self.generate_expression(value);
+                
+                // TDD FIX: Always cast bare integer literals to int64 in Go
+                // Reason: Windjammer `int` → Go `int64`, but Go's `0` is `int`
+                // This prevents type mismatches: `var sum = 0` with Vec<int> iteration
+                let is_bare_int_literal = matches!(value, 
+                    Expression::Literal { value: Literal::Int(_), .. }
+                );
+                if is_bare_int_literal {
+                    value_str = format!("int64({})", value_str);
+                }
 
                 // Go doesn't allow re-declaration of a variable in the same scope.
                 // For shadowing, we use a temporary variable + assignment pattern.
                 let result = if self.is_var_declared(&var_name) {
                     // Variable shadowing: reassign using =
                     // Go allows assignment to an existing variable
-                    let _ = type_;
                     format!("{}{} = {}\n", indent, var_name, value_str)
                 } else if *mutable {
                     self.declare_var(&var_name);
@@ -811,8 +836,18 @@ impl GoGenerator {
 
                 // Check if this is a range expression
                 let output = if let Expression::Range { start, end, .. } = iterable {
-                    let start_str = self.generate_expression(start);
+                    let mut start_str = self.generate_expression(start);
                     let end_str = self.generate_expression(end);
+                    
+                    // TDD FIX: Cast range start to int64 for Windjammer int semantics
+                    // Go's `for i := 0` makes `i` an `int`, but we need `int64`
+                    let is_int_literal = matches!(start, 
+                        Expression::Literal { value: Literal::Int(_), .. }
+                    );
+                    if is_int_literal {
+                        start_str = format!("int64({})", start_str);
+                    }
+                    
                     format!(
                         "{}for {} := {}; {} < {}; {}++ {{\n",
                         indent, var, start_str, var, end_str, var
@@ -1302,7 +1337,8 @@ impl GoGenerator {
                         )
                     }
                 } else {
-                    name.clone()
+                    // TDD FIX: Escape Go keywords (e.g., "default" → "default_")
+                    Self::escape_go_keyword(name)
                 }
             }
 
