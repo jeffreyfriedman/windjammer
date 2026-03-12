@@ -515,8 +515,8 @@ fn test_module_import_resolution() {
     compile_and_check_generated_rust(
         "module_import_resolution_user.wj",
         &[
-            "use module_import_resolution::RigidBody2D",
-            "use module_import_resolution::Collider2D", // NOT collider2d!
+            "use self::module_import_resolution::RigidBody2D",
+            "use self::module_import_resolution::Collider2D", // NOT collider2d!
         ],
         "module_import_resolution",
     );
