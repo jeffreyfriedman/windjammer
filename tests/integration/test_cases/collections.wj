@@ -1,0 +1,38 @@
+// Integration Test: Collections
+//
+// Covers: Vec creation, push, len, indexing, iteration
+// EXPECTED: All backends produce identical output ending with PASSED
+
+fn main() {
+    let mut v = vec![1, 2, 3]
+    println("[collections] len: ${v.len()}")
+
+    v.push(4)
+    println("[collections] after push: ${v.len()}")
+
+    println("[collections] v[0]=${v[0]}, v[3]=${v[3]}")
+
+    let mut sum = 0
+    for item in v {
+        sum += item
+    }
+    println("[collections] sum: ${sum}")
+
+    let mut squares: Vec<int> = vec![]
+    for i in 0..5 {
+        squares.push(i * i)
+    }
+    let mut result = ""
+    for s in squares {
+        if result.len() > 0 {
+            result = result + " "
+        }
+        result = result + "${s}"
+    }
+    println("[collections] squares: ${result}")
+
+    let empty: Vec<int> = vec![]
+    println("[collections] empty: ${empty.is_empty()}")
+
+    println("PASSED")
+}
