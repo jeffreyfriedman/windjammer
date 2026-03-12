@@ -1640,9 +1640,29 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             let mut value_str = self.generate_expression(value);
+            
+            // TDD FIX: String += String doesn't work in Rust (needs String += &str)
+            // If value returns String and op is Add, add & prefix for borrowing
             if matches!(op, CompoundOp::Add) {
+                // Check owned string iterator vars (existing logic)
                 if let Expression::Identifier { name, .. } = value {
                     if self.owned_string_iterator_vars.contains(name) {
+                        value_str = format!("&{}", value_str);
+                    }
+                }
+                
+                // TDD FIX: Check if value expression returns String
+                let value_type = self.infer_expression_type(value);
+                if matches!(value_type, Some(Type::String)) {
+                    // Don't add & for string literals (already &str)
+                    let is_string_literal = matches!(
+                        value,
+                        Expression::Literal { value: Literal::String(_), .. }
+                    );
+                    // Don't double-borrow if already has &
+                    let already_borrowed = value_str.starts_with('&');
+                    
+                    if !is_string_literal && !already_borrowed {
                         value_str = format!("&{}", value_str);
                     }
                 }
