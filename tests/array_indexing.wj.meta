@@ -1,15 +1,6 @@
 {
   "module_path": "array_indexing",
   "functions": {
-    "get_element": {
-      "params": [
-        "Vec(Custom(\"i32\"))",
-        "Int"
-      ],
-      "return_type": "Custom(\"i32\")",
-      "is_associated": false,
-      "parent_type": null
-    },
     "get_element_with_cast": {
       "params": [
         "Vec(Custom(\"i32\"))",
@@ -21,6 +12,15 @@
     },
     "test_array_access": {
       "params": [],
+      "return_type": "Custom(\"i32\")",
+      "is_associated": false,
+      "parent_type": null
+    },
+    "get_element": {
+      "params": [
+        "Vec(Custom(\"i32\"))",
+        "Int"
+      ],
       "return_type": "Custom(\"i32\")",
       "is_associated": false,
       "parent_type": null
