@@ -91,30 +91,27 @@ fn main() {
 
     println!("Generated code:\n{}", generated);
 
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `agent: Agent` (owned),
-    // compiler preserves as owned even when mutated, since explicit intent is respected.
-    // seek_weighted mutates agent → inferred as `mut agent: Agent`
-    // seek passes through → stays `agent: Agent` (moves to seek_weighted)
-    //
-    // OLD BEHAVIOR (pre-v0.45.0): Would infer `&mut Agent` for efficiency
-    // NEW BEHAVIOR (v0.45.0+): Respect explicit owned, linter warns about inefficiency
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `agent: Agent` (no & or &mut)
+    // Compiler infers `&mut Agent` because agent.apply_force() mutates
+    // Both seek_weighted and seek are inferred as &mut
     assert!(
-        generated.contains("fn seek_weighted(mut agent: Agent"),
-        "seek_weighted should preserve owned as `mut T` (respect explicit intent). Generated:\n{}",
+        generated.contains("fn seek_weighted(agent: &mut Agent"),
+        "seek_weighted should infer &mut for mutated parameter. Generated:\n{}",
         generated
     );
     assert!(
-        generated.contains("fn seek(agent: Agent")
-            && !generated.contains("fn seek(mut agent: Agent"),
-        "seek should preserve owned (moves to seek_weighted). Generated:\n{}",
+        generated.contains("fn seek(agent: &mut Agent"),
+        "seek should infer &mut (passes through to seek_weighted). Generated:\n{}",
         generated
     );
 
-    // With owned parameters, seek just moves agent to seek_weighted
-    // No need for explicit &mut (it's a move, not a borrow)
+    // CRITICAL: When passing &mut param to function expecting &mut,
+    // should NOT add another &mut (would create illegal &mut &mut T)
+    // Just pass the parameter directly: seek_weighted(agent, ...)
     assert!(
         generated.contains("seek_weighted(agent,"),
-        "seek should move agent to seek_weighted. Generated:\n{}",
+        "seek should pass agent directly (reborrow, not &mut). Generated:\n{}",
         generated
     );
 
@@ -210,29 +207,25 @@ fn main() {
 
     println!("Generated code:\n{}", generated);
 
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `c: Counter` (owned),
-    // compiler preserves as owned throughout the call chain.
-    // do_increment mutates c → inferred as `mut c: Counter`
-    // wrapper/outer pass through → stay `c: Counter` (move semantics)
-    //
-    // OLD BEHAVIOR (pre-v0.45.0): Would infer `&mut Counter` for all three
-    // NEW BEHAVIOR (v0.45.0+): Respect explicit owned, moves through chain
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `c: Counter` (no & or &mut)
+    // Compiler infers `&mut Counter` throughout the chain because c.increment() mutates
+    // All three functions infer &mut
     assert!(
-        generated.contains("fn do_increment(mut c: Counter"),
-        "do_increment should preserve owned as `mut T` (respect explicit intent). Generated:\n{}",
+        generated.contains("fn do_increment(c: &mut Counter)"),
+        "do_increment should infer &mut for mutated parameter. Generated:\n{}",
         generated
     );
 
-    // wrapper and outer should just move (no mut needed for pass-through)
+    // wrapper and outer also infer &mut (pass through to mutating functions)
     assert!(
-        generated.contains("fn wrapper(c: Counter")
-            && !generated.contains("fn wrapper(mut c: Counter"),
-        "wrapper should preserve owned without mut (just moves). Generated:\n{}",
+        generated.contains("fn wrapper(c: &mut Counter)"),
+        "wrapper should infer &mut (passes through to do_increment). Generated:\n{}",
         generated
     );
     assert!(
-        generated.contains("fn outer(c: Counter") && !generated.contains("fn outer(mut c: Counter"),
-        "outer should preserve owned without mut (just moves). Generated:\n{}",
+        generated.contains("fn outer(c: &mut Counter)"),
+        "outer should infer &mut (passes through to wrapper). Generated:\n{}",
         generated
     );
 
