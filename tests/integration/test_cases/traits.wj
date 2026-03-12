@@ -1,0 +1,47 @@
+// Integration Test: Traits and Generics
+//
+// Covers: trait definitions, implementations, generic functions
+// EXPECTED: All backends produce identical output ending with PASSED
+// Note: Some backends may not support full trait system - test may be Rust+Interpreter only
+
+trait Describe {
+    fn describe(self) -> string
+}
+
+struct Circle {
+    radius: int,
+}
+
+struct Square {
+    side: int,
+}
+
+impl Describe for Circle {
+    fn describe(self) -> string {
+        "Circle(r=${self.radius})"
+    }
+}
+
+impl Describe for Square {
+    fn describe(self) -> string {
+        "Square(s=${self.side})"
+    }
+}
+
+fn identity<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    let c = Circle { radius: 5 }
+    let s = Square { side: 4 }
+    println("[traits] circle: ${c.describe()}")
+    println("[traits] square: ${s.describe()}")
+
+    let a = identity(42)
+    let b = identity("hello")
+    println("[traits] identity int: ${a}")
+    println("[traits] identity str: ${b}")
+
+    println("PASSED")
+}

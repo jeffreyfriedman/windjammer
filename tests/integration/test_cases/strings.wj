@@ -1,0 +1,39 @@
+// Integration Test: String Operations
+//
+// Covers: literals, concatenation, interpolation
+// EXPECTED: All backends produce identical output ending with PASSED
+
+fn main() {
+    let s = "hello"
+    println("[strings] literal: ${s}")
+
+    let a = "hello"
+    let b = " world"
+    let c = a + b
+    println("[strings] concat: ${c}")
+
+    let name = "world"
+    let x = 42
+    println("[strings] interp: Hello, ${name}! Answer=${x}")
+
+    let empty = ""
+    let hello = "hello"
+    println("[strings] len: empty=${empty.len()}, hello=${hello.len()}")
+
+    let p1 = "test"
+    let p2 = "test"
+    let p3 = "other"
+    println("[strings] eq: ${p1 == p2}, ${p1 != p3}")
+
+    let mut parts = vec!["a", "b", "c"]
+    let mut result = ""
+    for part in parts {
+        if result.len() > 0 {
+            result = result + "-"
+        }
+        result = result + part
+    }
+    println("[strings] join: ${result}")
+
+    println("PASSED")
+}
