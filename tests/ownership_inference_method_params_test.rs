@@ -64,15 +64,13 @@ fn fill_grid(grid: Grid) {
         Err(e) => panic!("Compilation failed: {}", e),
     };
 
-    // THE WINDJAMMER WAY (v0.45.0+): Explicit owned is respected!
-    // User writes `grid: Grid` (owned) → Compiler preserves as `mut grid: Grid`
-    // Linter warns about inefficiency, but compiler respects explicit intent.
-    //
-    // OLD BEHAVIOR (pre-v0.45.0): Would change to `grid: &mut Grid`
-    // NEW BEHAVIOR (v0.45.0+): Respects owned, adds `mut`, linter warns
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `grid: Grid` (no & or &mut)
+    // Compiler infers `grid: &mut Grid` because grid.set() mutates
+    // This is "Compiler does the hard work, not the developer"
     assert!(
-        rust_code.contains("fn fill_grid") && rust_code.contains("mut grid: Grid"),
-        "Should preserve explicit owned as `mut grid: Grid` (respect user intent).\n\nGenerated:\n{}",
+        rust_code.contains("fn fill_grid(grid: &mut Grid)"),
+        "Should automatically infer &mut for mutated parameter.\n\nGenerated:\n{}",
         rust_code
     );
 }
