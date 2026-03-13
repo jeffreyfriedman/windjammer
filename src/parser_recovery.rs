@@ -145,12 +145,27 @@ pub fn is_recovery_point(token: &Token, point: RecoveryPoint) -> bool {
 
 /// Generate a helpful error message for unexpected token
 pub fn unexpected_token_message(expected: &str, found: &Token) -> String {
-    format!("Expected {}, found {:?}", expected, found)
+    let found_str = format!("{:?}", found);
+    format!(
+        "expected `{}`, found `{}`",
+        expected,
+        found_str.trim_matches('"')
+    )
 }
 
 /// Generate a helpful error message for missing token
 pub fn missing_token_message(expected: &str) -> String {
-    format!("Expected {}, but reached end of input", expected)
+    format!("expected `{}`, but reached end of input", expected)
+}
+
+/// Generate delimiter-matching context (e.g., "to close function call")
+pub fn delimiter_context(opening: &str) -> Option<&'static str> {
+    match opening {
+        "(" => Some("to close function call or grouping"),
+        "[" => Some("to close array or index"),
+        "{" => Some("to close block or struct literal"),
+        _ => None,
+    }
 }
 
 /// Suggest a fix for common mistakes
@@ -235,6 +250,25 @@ mod tests {
             RecoveryPoint::TopLevelKeyword
         ));
         assert!(is_recovery_point(&Token::Semicolon, RecoveryPoint::Any));
+    }
+
+    #[test]
+    fn test_unexpected_token_message_format() {
+        let msg = unexpected_token_message(")", &Token::RBracket);
+        assert!(msg.contains("expected"));
+        assert!(msg.contains(")"));
+        assert!(msg.contains("RBracket") || msg.contains("]"));
+    }
+
+    #[test]
+    fn test_delimiter_context() {
+        assert_eq!(
+            delimiter_context("("),
+            Some("to close function call or grouping")
+        );
+        assert_eq!(delimiter_context("["), Some("to close array or index"));
+        assert_eq!(delimiter_context("{"), Some("to close block or struct literal"));
+        assert_eq!(delimiter_context("x"), None);
     }
 
     #[test]
