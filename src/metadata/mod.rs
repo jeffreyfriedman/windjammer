@@ -60,7 +60,7 @@ impl ModuleMetadata {
         format!("{:?}", ty)
     }
     
-    /// Deserialize Type from JSON string
+    /// Deserialize Type from JSON string (Debug format from serialize_type)
     pub fn deserialize_type(s: &str) -> Option<Type> {
         // For MVP: Parse simple types manually
         // TODO: Proper serde for Type enum
@@ -68,9 +68,33 @@ impl ModuleMetadata {
             "Custom(\"f32\")" => Some(Type::Custom("f32".to_string())),
             "Custom(\"f64\")" => Some(Type::Custom("f64".to_string())),
             "Custom(\"i32\")" => Some(Type::Custom("i32".to_string())),
+            "Custom(\"u32\")" => Some(Type::Custom("u32".to_string())),
+            "Custom(\"Self\")" => Some(Type::Custom("Self".to_string())),
             "Int32" => Some(Type::Int32),
             "Float" => Some(Type::Float),
-            _ => None, // TODO: Handle complex types
+            "Bool" => Some(Type::Bool),
+            "String" => Some(Type::String),
+            s if s.starts_with("Array(") && s.ends_with(')') => {
+                // Array(Custom("f32"), 16) or Array(InnerType, N)
+                let inner = &s[6..s.len() - 1];
+                if let Some(comma_pos) = inner.rfind(", ") {
+                    let (ty_str, n_str) = inner.split_at(comma_pos);
+                    let n_str = n_str.trim_start_matches(", ");
+                    if let (Some(inner_ty), Ok(n)) = (
+                        Self::deserialize_type(ty_str.trim()),
+                        n_str.parse::<usize>(),
+                    ) {
+                        return Some(Type::Array(Box::new(inner_ty), n));
+                    }
+                }
+                None
+            }
+            s if s.starts_with("Custom(") => {
+                // Custom("TypeName") - extract the inner string
+                let rest = s.strip_prefix("Custom(\"").and_then(|r| r.strip_suffix("\")"));
+                rest.map(|name| Type::Custom(name.to_string()))
+            }
+            _ => None,
         }
     }
 }

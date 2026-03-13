@@ -147,3 +147,57 @@ pub fn initialize_scores() -> HashMap<(i32, i32), f32> {
         rust_code
     );
 }
+
+/// TDD: Method call arguments infer f32 from function signature (same-module)
+/// When method has f32 params, float literals in call args should be f32
+#[test]
+fn test_method_call_f32_params_same_module() {
+    let source = r#"
+pub struct Voxelizer {}
+
+impl Voxelizer {
+    pub fn voxelize(self, x: f32, y: f32, z: f32, size: f32, sx: i32, sy: i32, sz: i32) -> i32 {
+        0
+    }
+}
+
+pub fn test_voxelize() {
+    let v = Voxelizer {}
+    let grid = v.voxelize(0.0, 0.0, 0.0, 0.0625, 64, 64, 64)
+}
+"#;
+
+    let mut lexer = lexer::Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = parser::Parser::new(tokens);
+    let program = parser.parse().expect("Failed to parse");
+
+    let mut float_inference = type_inference::FloatInference::new();
+    float_inference.infer_program(&program);
+
+    if !float_inference.errors.is_empty() {
+        panic!("Float inference errors: {:?}", float_inference.errors);
+    }
+
+    let mut analyzer = analyzer::Analyzer::new();
+    let (analyzed, _signatures, _trait_methods) = analyzer
+        .analyze_program(&program)
+        .expect("Failed to analyze");
+
+    let registry = analyzer::SignatureRegistry::new();
+    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
+    generator.set_float_inference(float_inference);
+    let rust_code = generator.generate_program(&program, &analyzed);
+
+    // Method call args (0.0, 0.0, 0.0, 0.0625) should be f32 from param types
+    assert!(
+        rust_code.contains("0.0_f32") && rust_code.contains("0.0625_f32"),
+        "Method call float args should match param types (f32).\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("0.0_f64") && !rust_code.contains("0.0625_f64"),
+        "Should not generate f64 when params are f32.\nGenerated:\n{}",
+        rust_code
+    );
+}
