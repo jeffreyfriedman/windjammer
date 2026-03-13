@@ -1068,12 +1068,39 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         crate::codegen::rust::type_to_rust(type_)
     }
 
+    /// Check if a type implements Copy.
+    ///
+    /// Handles:
+    /// 1. Primitives (via type_analysis::is_copy_type)
+    /// 2. Option<T> when T is Copy (Option<f32>, Option<AABB>, etc.)
+    /// 3. User structs with @derive(Copy) (copy_types_registry)
+    /// 4. Structs with all-Copy fields (struct_field_types recursive check)
+    /// 5. Known game engine types from external crates (Vec3, AABB, etc.)
     pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
-        crate::codegen::rust::type_analysis::is_copy_type(ty)
-            || match ty {
-                Type::Custom(name) => self.copy_types_registry.contains(name.as_str()),
-                _ => false,
+        if crate::codegen::rust::type_analysis::is_copy_type(ty) {
+            return true;
+        }
+        match ty {
+            Type::Option(inner) => self.is_type_copy(inner),
+            Type::Custom(name) => {
+                if self.copy_types_registry.contains(name.as_str()) {
+                    return true;
+                }
+                // Recursive check: if we have struct field types and all fields are Copy, struct is Copy
+                if let Some(fields) = self.struct_field_types.get(name.as_str()) {
+                    if fields
+                        .values()
+                        .all(|field_ty| self.is_type_copy(field_ty))
+                    {
+                        return true;
+                    }
+                }
+                // Fallback: known Copy types from external crates (windjammer-app, etc.)
+                // These are common game engine types that are always Copy (primitives-only structs)
+                crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())
             }
+            _ => false,
+        }
     }
 
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"

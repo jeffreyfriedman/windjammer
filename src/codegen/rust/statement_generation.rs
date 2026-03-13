@@ -137,6 +137,17 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
+                        // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return
+                        // Applies to all return types (SaveSlot, Option<String>, etc.), not just String
+                        // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
+                        if expr_str.starts_with("&") && !expr_str.ends_with(".clone()") {
+                            if let Some(inner) = self.infer_expression_type(expr) {
+                                if !self.is_type_copy(&inner) {
+                                    expr_str = format!("({}).clone()", expr_str);
+                                }
+                            }
+                        }
+
                         // FIXED: Auto-cast usize to i64 for implicit returns
                         let returns_int = match &self.current_function_return_type {
                             Some(Type::Int) => true,
@@ -860,6 +871,29 @@ impl<'ast> CodeGenerator<'ast> {
                         && !return_str.ends_with(".clone()")
                     {
                         return_str = format!("{}.cloned()", return_str);
+                    }
+
+                    // DOGFOODING FIX: Vec indexing returns &T for non-Copy, but return expects T
+                    // e.g. return self.slots[idx] where slots: Vec<SaveSlot> → need .clone()
+                    // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
+                    if return_str.starts_with("&") && !return_str.ends_with(".clone()") {
+                        let expects_owned = match &self.current_function_return_type {
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_)) => false,
+                            _ => true,
+                        };
+                        if expects_owned {
+                            let inner_type = self.infer_expression_type(e).and_then(|t| {
+                                match &t {
+                                    Type::Reference(inner) => Some(inner.as_ref().clone()),
+                                    _ => Some(t),
+                                }
+                            });
+                            if let Some(inner) = inner_type {
+                                if !self.is_type_copy(&inner) {
+                                    return_str = format!("({}).clone()", return_str);
+                                }
+                            }
+                        }
                     }
 
                     output.push_str(&return_str);
