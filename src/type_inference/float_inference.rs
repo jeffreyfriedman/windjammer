@@ -424,6 +424,10 @@ impl FloatInference {
                     // TDD FIX: Track explicit type annotations (let x: Type = ...)
                     if let Some(ty) = type_ {
                         self.var_types.insert(var_name.clone(), ty.clone());
+                    } else if let Some(inferred_ty) = self.infer_type_from_expression(value) {
+                        // TDD FIX: Infer variable type for assert_eq!(transform.x, 15.0)
+                        // Enables FieldAccess to resolve struct type → field type → MustBeF32
+                        self.var_types.insert(var_name.clone(), inferred_ty);
                     }
                     
                     // TDD FIX: Constrain value expression to match explicit type annotation
@@ -850,6 +854,24 @@ impl FloatInference {
                     None
                 };
                 
+                // TDD FIX: assert_eq/assert_ne (when written as Call, not MacroInvocation)
+                // Both args must have same type - e.g. assert_eq(transform.x, 15.0)
+                if let Some(name) = &func_name {
+                    if (name == "assert_eq" || name == "assert_ne") && arguments.len() >= 2 {
+                        for (_label, arg) in arguments.iter() {
+                            self.collect_expression_constraints(arg, return_type);
+                        }
+                        let first_id = self.get_expr_id(arguments[0].1);
+                        let second_id = self.get_expr_id(arguments[1].1);
+                        self.constraints.push(Constraint::MustMatch(
+                            first_id,
+                            second_id,
+                            format!("{} requires both arguments to have same type", name),
+                        ));
+                        return; // Already recursed
+                    }
+                }
+                
                 if let Some((param_types, _)) = func_sig {
                     // Match arguments to parameters
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
@@ -1078,7 +1100,71 @@ impl FloatInference {
                     }
                 }
             }
+            Expression::MacroInvocation { name, args, .. } => {
+                // TDD FIX: assert_eq!/assert_ne! - both args must have same type
+                // assert_eq!(transform.x, 15.0) → 15.0 should infer f32 from transform.x
+                if name == "assert_eq" || name == "assert_ne" {
+                    if args.len() >= 2 {
+                        // Recurse into args first (FieldAccess adds MustBeF32 for transform.x)
+                        for arg in args {
+                            self.collect_expression_constraints(arg, return_type);
+                        }
+                        // Link first and second arg: same type required
+                        let first_id = self.get_expr_id(args[0]);
+                        let second_id = self.get_expr_id(args[1]);
+                        self.constraints.push(Constraint::MustMatch(
+                            first_id,
+                            second_id,
+                            format!("{}! requires both arguments to have same type", name),
+                        ));
+                        return; // Already recursed
+                    }
+                }
+                // Other macros (format!, vec!, etc.): just recurse into args
+                for arg in args {
+                    self.collect_expression_constraints(arg, return_type);
+                }
+            }
             _ => {}
+        }
+    }
+
+    /// Infer Type from an expression (for variable type tracking)
+    /// Used when let x = expr has no explicit type - infer from expr for assert_eq!(x.field, literal)
+    fn infer_type_from_expression<'ast>(&self, expr: &Expression<'ast>) -> Option<Type> {
+        match expr {
+            Expression::StructLiteral { name, .. } => Some(Type::Custom(name.clone())),
+            Expression::Call { function, .. } => {
+                // Type::new() or Type::method() - get return type from function signature
+                let func_name = match function {
+                    Expression::FieldAccess { object, field, .. } => {
+                        if let Expression::Identifier { name: type_name, .. } = object {
+                            Some(format!("{}::{}", type_name, field))
+                        } else {
+                            None
+                        }
+                    }
+                    Expression::Identifier { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                func_name.and_then(|name| {
+                    self.function_signatures.get(&name).and_then(|(_, ret)| ret.clone())
+                })
+            }
+            Expression::MethodCall { object, method, .. } => {
+                // object.method() - need object's type to find method signature
+                let object_type = self.infer_type_from_expression(object)?;
+                let type_name = match &object_type {
+                    Type::Custom(name) => name.clone(),
+                    _ => return None,
+                };
+                let full_name = format!("{}::{}", type_name, method);
+                self.function_signatures
+                    .get(&full_name)
+                    .and_then(|(_, ret)| ret.clone())
+            }
+            Expression::Identifier { name, .. } => self.var_types.get(name).cloned(),
+            _ => None,
         }
     }
 

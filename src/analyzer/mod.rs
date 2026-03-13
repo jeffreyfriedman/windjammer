@@ -1596,9 +1596,15 @@ impl<'ast> Analyzer<'ast> {
         // &GameSaveData because we only read data fields. But we assign to current_data and
         // return that - we need to own the input to produce the output.
         // Handles: fn(T) -> T, fn(T) -> Result<T,E>, fn(T) -> Option<T>
-        if let Some(return_type) = _return_type {
-            if self.param_type_matches_return(param_type, return_type) {
-                return Ok(OwnershipMode::Owned);
+        //
+        // TDD FIX: Skip when param is ONLY used as &param (e.g., a + &b + &c).
+        // For concatenate(a, b, c) -> a + &b + &c, b and c are borrowed, not consumed.
+        // param_type_matches_return would incorrectly infer Owned for all string params.
+        if !self.is_only_used_as_borrow(param_name, body) {
+            if let Some(return_type) = _return_type {
+                if self.param_type_matches_return(param_type, return_type) {
+                    return Ok(OwnershipMode::Owned);
+                }
             }
         }
 
@@ -1740,6 +1746,127 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// TDD: Check if parameter is ONLY used as &param or &mut param (never consumed directly).
+    /// Example: a + &b + &c - b and c are only used as &b, &c → true for b and c.
+    /// Used to avoid param_type_matches_return incorrectly inferring Owned for string params
+    /// in concatenation: fn(a, b, c) -> a + &b + &c.
+    fn is_only_used_as_borrow(&self, param_name: &str, body: &[&'ast Statement<'ast>]) -> bool {
+        for stmt in body {
+            if !self.stmt_param_only_borrowed(param_name, stmt, false) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn stmt_param_only_borrowed(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        _inside_ref: bool,
+    ) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.expr_param_only_borrowed(param_name, value, false)
+            }
+            Statement::Return { value, .. } => {
+                value.as_ref().map_or(true, |e| {
+                    self.expr_param_only_borrowed(param_name, e, false)
+                })
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_param_only_borrowed(param_name, expr, false)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_param_only_borrowed(param_name, condition, false)
+                    && then_block
+                        .iter()
+                        .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter()
+                            .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
+                    })
+            }
+            Statement::While { condition, body, .. } => {
+                self.expr_param_only_borrowed(param_name, condition, false)
+                    && body
+                        .iter()
+                        .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expr_param_only_borrowed(param_name, iterable, false)
+                    && body
+                        .iter()
+                        .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
+            }
+            _ => true,
+        }
+    }
+
+    fn expr_param_only_borrowed(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        inside_ref: bool,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => {
+                // Found param: must be inside & or &mut to be "only borrowed"
+                inside_ref
+            }
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => self.expr_param_only_borrowed(param_name, operand, true),
+            Expression::Binary { left, right, .. } => {
+                self.expr_param_only_borrowed(param_name, left, false)
+                    && self.expr_param_only_borrowed(param_name, right, false)
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expr_param_only_borrowed(param_name, function, false)
+                    && arguments
+                        .iter()
+                        .all(|(_, a)| self.expr_param_only_borrowed(param_name, a, false))
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                self.expr_param_only_borrowed(param_name, object, false)
+                    && arguments
+                        .iter()
+                        .all(|(_, a)| self.expr_param_only_borrowed(param_name, a, false))
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_param_only_borrowed(param_name, object, false)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_param_only_borrowed(param_name, object, false)
+                    && self.expr_param_only_borrowed(param_name, index, false)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .all(|s| self.stmt_param_only_borrowed(param_name, s, false)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .all(|e| self.expr_param_only_borrowed(param_name, e, false)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .all(|(_, v)| self.expr_param_only_borrowed(param_name, v, false)),
+            Expression::TryOp { expr, .. } => {
+                self.expr_param_only_borrowed(param_name, expr, false)
+            }
+            _ => true,
+        }
     }
 
     fn is_used_in_if_else_expression(
