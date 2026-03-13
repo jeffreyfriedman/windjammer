@@ -3,6 +3,7 @@
 /// This module intercepts rustc JSON output, maps errors using source maps,
 /// and provides a world-class error experience for Windjammer developers.
 use crate::error_codes;
+use crate::fuzzy_matcher::levenshtein_distance;
 use crate::source_map::{Location, SourceMap};
 use crate::syntax_highlighter::SyntaxHighlighter;
 use serde::{Deserialize, Serialize};
@@ -200,8 +201,11 @@ impl ErrorMapper {
                 }
             });
 
-        // Translate error message
-        let message = self.translate_message(&rustc_diag.message);
+        // Translate error message (use span labels for richer context, e.g. type mismatch)
+        let message = self.translate_message_with_context(
+            &rustc_diag.message,
+            primary_span.label.as_deref(),
+        );
 
         // Map additional spans
         let spans = rustc_diag
@@ -219,6 +223,23 @@ impl ErrorMapper {
                 "help" => help.push(child.message.clone()),
                 "note" => notes.push(child.message.clone()),
                 _ => {}
+            }
+        }
+
+        // Add "did you mean?" for field typos when we have "no field X" and notes list fields
+        if message.contains("No field `") && !notes.is_empty() {
+            if let Some(field_name) = self.extract_between(&message, "No field `", "`") {
+                for note in &notes {
+                    if note.contains("has fields") {
+                        let fields = Self::parse_struct_fields_from_note(note);
+                        if let Some(suggestion) =
+                            Self::fuzzy_match_field(&field_name, &fields)
+                        {
+                            help.push(format!("did you mean `{}`?", suggestion));
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -262,14 +283,25 @@ impl ErrorMapper {
         })
     }
 
-    /// Translate Rust error messages to Windjammer terminology
+    /// Translate Rust error messages to Windjammer terminology (used by tests)
+    #[allow(dead_code)]
     fn translate_message(&self, rust_msg: &str) -> String {
+        self.translate_message_with_context(rust_msg, None)
+    }
+
+    /// Translate with optional span label context (for richer type/field info)
+    fn translate_message_with_context(
+        &self,
+        rust_msg: &str,
+        span_label: Option<&str>,
+    ) -> String {
         // Pattern matching for common Rust error patterns
         // Translate to Windjammer-friendly terminology
 
-        // Type errors
+        // Type errors - span label often has "expected X, found Y"
         if rust_msg.contains("mismatched types") {
-            return self.translate_type_mismatch(rust_msg);
+            let context = span_label.unwrap_or(rust_msg);
+            return self.translate_type_mismatch(context);
         }
 
         if rust_msg.contains("cannot find type") {
@@ -280,18 +312,34 @@ impl ErrorMapper {
             return self.translate_value_not_found(rust_msg);
         }
 
-        // Ownership errors
+        // Struct field errors - "no field X on type Y"
+        if rust_msg.contains("no field") && rust_msg.contains("on type") {
+            return self.translate_missing_field(rust_msg, span_label);
+        }
+
+        // Ownership errors - include value name when available
         if rust_msg.contains("cannot move out of") {
-            return "Ownership error: This value was already moved".to_string();
+            if let Some(name) = self.extract_between(rust_msg, "cannot move out of `", "`") {
+                return format!(
+                    "Cannot move `{}` because it is borrowed. Consider using .clone() to create a copy.",
+                    name
+                );
+            }
+            return "Ownership error: Cannot move value because it is borrowed. Consider using .clone()".to_string();
         }
 
         if rust_msg.contains("cannot borrow") && rust_msg.contains("as mutable") {
-            return "Cannot modify: This value is not declared as mutable".to_string();
+            return "Cannot modify: This value is not declared as mutable. Add `mut`: let mut x = ...".to_string();
         }
 
         if rust_msg.contains("use of moved value") {
-            return "Ownership error: This value was already used and cannot be used again"
-                .to_string();
+            if let Some(name) = self.extract_between(rust_msg, "use of moved value: `", "`") {
+                return format!(
+                    "Cannot use `{}` because it was already moved. Consider cloning before the move: {}.clone()",
+                    name, name
+                );
+            }
+            return "Ownership error: This value was already used and cannot be used again. Consider cloning: value.clone()".to_string();
         }
 
         // Trait errors
@@ -373,11 +421,24 @@ impl ErrorMapper {
 
     /// Translate trait not implemented errors
     fn translate_trait_not_implemented(&self, rust_msg: &str) -> String {
-        if let Some(trait_name) = self.extract_between(rust_msg, "trait `", "`") {
-            return format!("Missing trait implementation: {}", trait_name);
+        let trait_name = self.extract_between(rust_msg, "trait `", "`");
+        let type_name = self.extract_between(rust_msg, "for `", "`");
+        match (trait_name, type_name) {
+            (Some(t), Some(ty)) => format!("`{}` doesn't implement `{}`", ty, t),
+            (Some(t), None) => format!("Missing trait implementation: {}", t),
+            _ => "Missing trait implementation".to_string(),
         }
+    }
 
-        "Missing trait implementation".to_string()
+    /// Translate "no field X on type Y" errors
+    fn translate_missing_field(&self, rust_msg: &str, _span_label: Option<&str>) -> String {
+        let field_name = self.extract_between(rust_msg, "no field `", "`");
+        let type_name = self.extract_between(rust_msg, "on type `", "`");
+        match (field_name, type_name) {
+            (Some(f), Some(t)) => format!("No field `{}` on struct `{}`", f, t),
+            (Some(f), None) => format!("No field `{}` on this type", f),
+            _ => "Field not found".to_string(),
+        }
     }
 
     /// Translate lifetime errors
@@ -441,6 +502,41 @@ impl ErrorMapper {
         let remaining = &text[start_idx..];
         let end_idx = remaining.find(end)?;
         Some(remaining[..end_idx].to_string())
+    }
+
+    /// Parse field names from rustc note: "struct `User` has fields `username`, `name`, `email`"
+    fn parse_struct_fields_from_note(note: &str) -> Vec<String> {
+        let after_has_fields = note.split("has fields").nth(1).unwrap_or(note);
+        let mut fields = Vec::new();
+        let mut remaining = after_has_fields;
+        while let Some(start) = remaining.find('`') {
+            remaining = &remaining[start + 1..];
+            if let Some(end) = remaining.find('`') {
+                let field = remaining[..end].trim().to_string();
+                if !field.is_empty() && field.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    fields.push(field);
+                }
+                remaining = &remaining[end + 1..];
+            } else {
+                break;
+            }
+        }
+        fields
+    }
+
+    /// Find best fuzzy match for a field name typo
+    fn fuzzy_match_field(typo: &str, fields: &[String]) -> Option<String> {
+        let mut best: Option<(String, usize)> = None;
+        for field in fields {
+            let d = levenshtein_distance(typo, field);
+            let max_distance = std::cmp::min(3, std::cmp::max(typo.len(), field.len()) * 3 / 10);
+            if d <= max_distance && d > 0 {
+                if best.as_ref().map(|(_, bd)| d < *bd).unwrap_or(true) {
+                    best = Some((field.clone(), d));
+                }
+            }
+        }
+        best.map(|(s, _)| s)
     }
 }
 
@@ -650,6 +746,18 @@ impl WindjammerDiagnostic {
                         .to_string(),
                 );
             }
+            if msg.contains("expected int") && msg.contains("found float") {
+                return Some(
+                    "Convert to integer: use `value as int` or `value.round() as int`"
+                        .to_string(),
+                );
+            }
+            if msg.contains("expected float") && msg.contains("found int") {
+                return Some(
+                    "Convert to float: add .0 to literal (e.g., 3.0) or use `value as float`"
+                        .to_string(),
+                );
+            }
             if msg.contains("expected &") {
                 return Some("Add & before the value to create a reference".to_string());
             }
@@ -669,9 +777,16 @@ impl WindjammerDiagnostic {
             );
         }
 
-        // Ownership errors
-        if msg.contains("ownership error") {
-            return Some("In Windjammer, values can only be used once unless they implement Copy. Consider using references (&) or cloning (.clone())".to_string());
+        // Ownership errors - match both old and new message formats
+        if msg.contains("ownership error")
+            || msg.contains("cannot move")
+            || msg.contains("cannot use")
+            || msg.contains("already moved")
+        {
+            return Some(
+                "Consider cloning: use value.clone() to create a copy before moving"
+                    .to_string(),
+            );
         }
 
         // Mutability errors
@@ -682,6 +797,14 @@ impl WindjammerDiagnostic {
         // Import errors
         if msg.contains("import error") {
             return Some("Use 'use module::item' to import, or check if the module exists in your project or stdlib".to_string());
+        }
+
+        // Trait not implemented - suggest impl block
+        if msg.contains("doesn't implement") || msg.contains("trait") && msg.contains("implement") {
+            return Some(
+                "Implement the trait: add `impl TraitName for YourType { fn required_method(self) -> ReturnType { ... } }`"
+                    .to_string(),
+            );
         }
 
         None
@@ -803,7 +926,12 @@ mod tests {
 
         let rust_msg = "use of moved value: `x`";
         let translated = mapper.translate_message(rust_msg);
-        assert!(translated.contains("Ownership error"));
+        assert!(
+            translated.contains("moved") || translated.contains("Ownership"),
+            "Should explain move/ownership. Got: {}",
+            translated
+        );
+        assert!(translated.contains("x"), "Should mention the value name");
     }
 
     #[test]
