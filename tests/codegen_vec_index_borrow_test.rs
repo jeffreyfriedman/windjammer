@@ -1,8 +1,9 @@
-/// TDD Test: Vec<String> indexing generates clone for non-Copy types
+/// TDD Test: Vec<String> indexing generates & (auto-borrow) for non-Copy types
 ///
-/// Bug: `let line = lines[i]` where lines: Vec<String> generates move instead of borrow/clone
+/// Bug: `let line = lines[i]` where lines: Vec<String> generates move instead of borrow
 /// Root cause: Rust doesn't allow moving out of Vec index (E0507)
-/// Fix: Generate .clone() for non-Copy element types
+/// Fix: Generate &vec[idx] (auto-borrow) for non-Copy - zero-cost, idiomatic
+///      Generate vec[idx].clone() only when owned value needed (e.g. struct literal)
 ///
 /// Discovered via dogfooding: breach-protocol save_manager.wj (split returns Vec<String>)
 
@@ -59,8 +60,9 @@ fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
 }
 
 #[test]
-fn test_vec_string_index_generates_clone() {
-    // Vec<String> indexing - need .clone() because String is not Copy
+fn test_vec_string_index_generates_borrow() {
+    // Vec<String> indexing - need & (auto-borrow) because String is not Copy
+    // Prefer & over .clone() - zero-cost, idiomatic
     let source = r#"
 pub fn get_line(lines: Vec<string>, index: i32) -> string {
     let line = lines[index]
@@ -75,9 +77,10 @@ fn main() {
 
     let (rust, compiles) = compile_wj_to_rust_and_check(source);
 
+    // Should generate &lines[index] (auto-borrow) - NOT raw lines[index] (E0507)
     assert!(
-        rust.contains(".clone()"),
-        "Vec<String> indexing should generate .clone(), got:\n{}",
+        rust.contains("&lines[") || rust.contains("& lines["),
+        "Vec<String> indexing should generate & (auto-borrow), got:\n{}",
         rust
     );
     assert!(compiles, "Generated Rust must compile:\n{}", rust);
@@ -117,7 +120,7 @@ fn main() {
 }
 
 #[test]
-fn test_local_var_vec_string_index_generates_clone() {
+fn test_local_var_vec_string_index_generates_borrow() {
     // Real-world case: local var from function returning Vec<String>
     // Simulates: let lines = split(...); let line = lines[i]
     let source = r#"
@@ -136,10 +139,10 @@ fn main() {}
 
     let (rust, compiles) = compile_wj_to_rust_and_check(source);
 
-    // parts[0] where parts: Vec<String> needs .clone()
+    // parts[0] where parts: Vec<String> needs & (auto-borrow) to avoid E0507
     assert!(
-        rust.contains(".clone()"),
-        "Vec<String> from local var indexing should generate .clone(), got:\n{}",
+        rust.contains("&parts[") || rust.contains("& parts["),
+        "Vec<String> from local var indexing should generate & (auto-borrow), got:\n{}",
         rust
     );
     assert!(compiles, "Generated Rust must compile:\n{}", rust);

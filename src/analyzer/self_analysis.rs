@@ -132,6 +132,13 @@ impl<'ast> Analyzer<'ast> {
             Statement::Let { value, .. } => {
                 self.expression_calls_mutating_self_methods(value, registry)
             }
+            Statement::Match { value, arms, .. } => {
+                // TDD FIX: Match arms can contain mutating method calls (e.g. match choice { 0 => self.companion.adjust_loyalty(-5.0) })
+                self.expression_calls_mutating_self_methods(value, registry)
+                    || arms.iter().any(|arm| {
+                        self.expression_calls_mutating_self_methods(arm.body, registry)
+                    })
+            }
             _ => false,
         }
     }
