@@ -499,12 +499,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX: String + String/&str concatenation needs borrowing
                 // In Rust, String + String doesn't work - needs String + &str
                 // If LEFT side is String and op is Add, RIGHT must be borrowed (unless string literal)
-                // This catches all string concatenation: String + String, String + &str, etc.
+                // Also: if RIGHT produces String (e.g., parts[j].clone()), add & for coercion
                 if matches!(op, BinaryOp::Add) {
                     let left_type = self.infer_expression_type(left);
+                    let right_type = self.infer_expression_type(right);
                     let left_is_string = matches!(left_type, Some(Type::String));
-                    
-                    if left_is_string {
+                    let right_is_string = matches!(right_type, Some(Type::String));
+
+                    // Add & when either side is String (covers result + parts[j].clone())
+                    if left_is_string || right_is_string {
                         // Don't add & for string literals (they're already &str)
                         let is_string_literal = matches!(
                             right,
@@ -1366,6 +1369,20 @@ impl<'ast> CodeGenerator<'ast> {
                         // Skip ownership inference for extern function calls - they have explicit types
                         if let Some(ref sig) = signature {
                             if sig.is_extern {
+                                // TDD: Extern FFI often expects &str for string params (read-only)
+                                // Auto-borrow String → &str when param is string and arg produces String
+                                if let Some(param_type) = sig.param_types.get(i) {
+                                    let param_expects_str =
+                                        matches!(param_type, Type::String)
+                                            || matches!(param_type, Type::Custom(n) if n == "string" || n == "String");
+                                    let arg_produces_string = self
+                                        .infer_expression_type(arg)
+                                        .as_ref()
+                                        .is_some_and(|t| matches!(t, Type::String));
+                                    if param_expects_str && arg_produces_string && !arg_str.starts_with('&') {
+                                        arg_str = format!("&{}", arg_str);
+                                    }
+                                }
                                 return vec![arg_str];
                             }
 
@@ -2824,10 +2841,28 @@ impl<'ast> CodeGenerator<'ast> {
                 // 2. Borrow context: &vec[i] (want reference to original, not to clone)
                 // 3. Field access: vec[i].field (Rust allows field access through ref)
                 // 4. Comparison context: vec[i] == val (comparisons work on &T)
+                // TDD: in_struct_literal_field means we need owned value (e.g., String for struct field)
+                // Vec index returns &T, so we need .clone() for non-Copy - do NOT suppress
                 let suppress_clone = self.generating_assignment_target
                     || self.in_borrow_context
                     || self.in_field_access_object
                     || self.suppress_borrowed_clone;
+
+                // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
+                let element_type = self.infer_expression_type(object).and_then(|t| {
+                    match &t {
+                        Type::Vec(inner) => Some(inner.as_ref().clone()),
+                        Type::Array(inner, _) => Some(inner.as_ref().clone()),
+                        _ => None,
+                    }
+                });
+                let force_clone_for_owned_context = self.in_struct_literal_field
+                    && element_type
+                        .as_ref()
+                        .map(|et| !self.is_type_copy(et))
+                        .unwrap_or(true); // Unknown type → need clone (conservative)
+
+                let suppress_clone = suppress_clone && !force_clone_for_owned_context;
 
                 if !suppress_clone {
                     // First check auto_clone_analysis (path-based analysis)
@@ -2851,17 +2886,25 @@ impl<'ast> CodeGenerator<'ast> {
                     // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
                     // If we can infer the collection's element type and it's not Copy, clone.
                     // This handles the common case: vec[i] passed to a function taking ownership.
-                    if let Some(obj_type) = self.infer_expression_type(object) {
+                    let needs_clone = if let Some(obj_type) = self.infer_expression_type(object) {
                         let element_type = match &obj_type {
                             Type::Vec(inner) => Some(inner.as_ref()),
                             Type::Array(inner, _) => Some(inner.as_ref()),
                             _ => None,
                         };
-                        if let Some(elem_type) = element_type {
-                            if !self.is_type_copy(elem_type) {
-                                return format!("{}.clone()", base_expr);
-                            }
+                        match element_type {
+                            Some(elem_type) => !self.is_type_copy(elem_type),
+                            None => false, // Unknown type, don't guess
                         }
+                    } else {
+                        // Type inference failed (e.g. split() return type not in signature registry).
+                        // Conservative: add .clone() to avoid E0507 "cannot move out of index".
+                        // Handles: let lines = split(...); let line = lines[i]
+                        true
+                    };
+
+                    if needs_clone {
+                        return format!("{}.clone()", base_expr);
                     }
                 }
 
