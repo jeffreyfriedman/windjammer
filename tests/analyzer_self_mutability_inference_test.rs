@@ -2,7 +2,22 @@
 // THE WINDJAMMER WAY: Compiler infers mutability, developer writes clean code
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+
+fn wj_binary() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Prefer release binary (faster), fallback to debug
+    let release = manifest_dir.join("target/release/wj");
+    let debug = manifest_dir.join("target/debug/wj");
+    if release.exists() {
+        release
+    } else if debug.exists() {
+        debug
+    } else {
+        release // Will fail with clear error if neither exists
+    }
+}
 
 fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String> {
     let test_dir = format!("tests/generated/self_mutability_{}", test_name);
@@ -10,12 +25,9 @@ fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String>
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    // Compile with Windjammer
-    let output = Command::new("cargo")
+    // Compile with Windjammer (use pre-built binary for fast test execution)
+    let output = Command::new(wj_binary())
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             &input_file,
             "--output",
@@ -212,6 +224,67 @@ fn test_method_mutating_vec_needs_mut_self() {
     assert!(
         result.is_ok(),
         "Method calling Vec::push should infer &mut self, got error:\n{}",
+        result.err().unwrap()
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_method_mutating_hashmap_needs_mut_self() {
+    // HashMap::insert also requires &mut
+    let code = r#"
+    use std::collections::HashMap
+    
+    pub struct Cache {
+        pub data: HashMap<string, i32>,
+    }
+    
+    impl Cache {
+        pub fn store(self, key: string, value: i32) {
+            self.data.insert(key, value)
+        }
+    }
+    "#;
+
+    let result = compile_and_check_rust(code, "hashmap_insert");
+
+    assert!(
+        result.is_ok(),
+        "Method calling HashMap::insert should infer &mut self, got error:\n{}",
+        result.err().unwrap()
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_nested_field_mutation_needs_mut_self() {
+    // Nested: self.player.position.x += ...
+    let code = r#"
+    pub struct Position {
+        pub x: f32,
+        pub y: f32,
+    }
+    
+    pub struct Player {
+        pub position: Position,
+    }
+    
+    pub struct Game {
+        pub player: Player,
+    }
+    
+    impl Game {
+        pub fn move_player(self, dx: f32) {
+            self.player.position.x += dx
+        }
+    }
+    "#;
+
+    let result = compile_and_check_rust(code, "nested_field_mutation");
+
+    assert!(
+        result.is_ok(),
+        "Method with nested field mutation should infer &mut self, got error:\n{}",
         result.err().unwrap()
     );
 }

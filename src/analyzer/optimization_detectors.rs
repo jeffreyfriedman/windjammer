@@ -1160,6 +1160,7 @@ impl<'ast> Analyzer<'ast> {
                 | "set"
                 | "fill"
                 | "normalize"
+                | "damage" // Game-specific: Player::damage, etc.
         )
     }
 }

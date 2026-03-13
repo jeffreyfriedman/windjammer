@@ -2831,19 +2831,19 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let base_expr = format!("{}[{}]", obj_str, final_idx);
 
-                // WINDJAMMER PHILOSOPHY: Auto-clone Vec indexing for non-Copy types.
+                // WINDJAMMER PHILOSOPHY: Auto-borrow Vec indexing for non-Copy types (E0507 fix).
                 // Rust doesn't allow moving out of a Vec index (E0507).
                 // For Copy types: vec[idx] works directly (value is copied).
-                // For non-Copy types: vec[idx].clone() is needed.
+                // For non-Copy types: &vec[idx] (borrow) or vec[idx].clone() when owned needed.
                 //
-                // CRITICAL: NEVER auto-clone in these contexts:
-                // 1. Assignment target: vec[i] = value (can't assign to .clone())
-                // 2. Borrow context: &vec[i] (want reference to original, not to clone)
+                // PREFER BORROW over clone: &vec[idx] is zero-cost; .clone() allocates.
+                //
+                // CRITICAL: NEVER add & or .clone() in these contexts:
+                // 1. Assignment target: vec[i] = value (can't assign to .clone() or &)
+                // 2. Borrow context: &vec[i] (parent adds &, we output vec[idx] only)
                 // 3. Field access: vec[i].field (Rust allows field access through ref)
                 // 4. Comparison context: vec[i] == val (comparisons work on &T)
-                // TDD: in_struct_literal_field means we need owned value (e.g., String for struct field)
-                // Vec index returns &T, so we need .clone() for non-Copy - do NOT suppress
-                let suppress_clone = self.generating_assignment_target
+                let suppress_borrow_or_clone = self.generating_assignment_target
                     || self.in_borrow_context
                     || self.in_field_access_object
                     || self.suppress_borrowed_clone;
@@ -2862,9 +2862,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .map(|et| !self.is_type_copy(et))
                         .unwrap_or(true); // Unknown type → need clone (conservative)
 
-                let suppress_clone = suppress_clone && !force_clone_for_owned_context;
+                let suppress_borrow_or_clone =
+                    suppress_borrow_or_clone && !force_clone_for_owned_context;
 
-                if !suppress_clone {
+                if !suppress_borrow_or_clone {
                     // First check auto_clone_analysis (path-based analysis)
                     if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
@@ -2877,16 +2878,17 @@ impl<'ast> CodeGenerator<'ast> {
                                     .as_ref()
                                     .is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
+                                    // Path analysis says clone needed (e.g. passed to owned param)
                                     return format!("{}.clone()", base_expr);
                                 }
                             }
                         }
                     }
 
-                    // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
-                    // If we can infer the collection's element type and it's not Copy, clone.
-                    // This handles the common case: vec[i] passed to a function taking ownership.
-                    let needs_clone = if let Some(obj_type) = self.infer_expression_type(object) {
+                    // Fallback: Type-based handling for Vec<NonCopy>[idx]
+                    // E0507 fix: vec[idx] for String tries to move → use &vec[idx] (borrow)
+                    // When owned value needed (struct literal): vec[idx].clone()
+                    let needs_borrow_or_clone = if let Some(obj_type) = self.infer_expression_type(object) {
                         let element_type = match &obj_type {
                             Type::Vec(inner) => Some(inner.as_ref()),
                             Type::Array(inner, _) => Some(inner.as_ref()),
@@ -2898,13 +2900,18 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     } else {
                         // Type inference failed (e.g. split() return type not in signature registry).
-                        // Conservative: add .clone() to avoid E0507 "cannot move out of index".
+                        // Conservative: add & to avoid E0507 "cannot move out of index".
                         // Handles: let lines = split(...); let line = lines[i]
                         true
                     };
 
-                    if needs_clone {
-                        return format!("{}.clone()", base_expr);
+                    if needs_borrow_or_clone {
+                        if force_clone_for_owned_context {
+                            return format!("{}.clone()", base_expr);
+                        } else {
+                            // Default: auto-borrow (zero-cost, idiomatic)
+                            return format!("&{}", base_expr);
+                        }
                     }
                 }
 
