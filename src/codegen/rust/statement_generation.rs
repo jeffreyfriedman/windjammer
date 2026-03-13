@@ -584,10 +584,21 @@ impl<'ast> CodeGenerator<'ast> {
                                             self.in_borrow_context = prev_borrow_ctx;
                                             value_str = format!("&{}", value_str);
                                         } else {
-                                            // Moved/returned → need explicit clone
-                                            // Example: let child = children[idx]; recursive(child);
-                                            // Expression::Index will add .clone() automatically
-                                            // (no need to add it here - already in value_str)
+                                            // Moved/returned → Expression::Index generates & (auto-borrow)
+                                            // For String: &str needs .to_string() when variable will be returned
+                                            // For other non-Copy: &T needs .clone() when variable will be moved
+                                            if value_str.starts_with('&') {
+                                                let is_string =
+                                                    matches!(elem_type, Type::String)
+                                                        || matches!(elem_type, Type::Custom(n) if n == "string");
+                                                if is_string {
+                                                    value_str =
+                                                        format!("({}).to_string()", value_str);
+                                                } else {
+                                                    value_str =
+                                                        format!("({}).clone()", value_str);
+                                                }
+                                            }
                                         }
                                     }
                                 } else {
