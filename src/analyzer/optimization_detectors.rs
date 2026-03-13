@@ -1118,13 +1118,14 @@ impl<'ast> Analyzer<'ast> {
             return true;
         }
         // TDD FIX: Add common mutation prefixes
-        // Methods like increment, decrement, add_, sub_, etc. are mutating
+        // Methods like increment, decrement, add_, sub_, adjust_, etc. are mutating
         if method.starts_with("increment")
             || method.starts_with("decrement")
             || method.starts_with("add_")
             || method.starts_with("sub_")
             || method.starts_with("mul_")
             || method.starts_with("div_")
+            || method.starts_with("adjust_") // adjust_reputation, adjust_loyalty, etc.
         {
             return true;
         }
