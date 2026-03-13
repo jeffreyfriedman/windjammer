@@ -89,6 +89,20 @@ impl FloatInference {
         self.source_root = Some(path.to_path_buf());
     }
 
+    /// Pre-populate struct field types from other modules in the same project
+    /// Used when compiling multi-file projects - structs from already-compiled files
+    pub fn set_global_struct_field_types(
+        &mut self,
+        field_types: &HashMap<String, HashMap<String, Type>>,
+    ) {
+        for (struct_name, fields) in field_types {
+            self.struct_field_types
+                .entry(struct_name.clone())
+                .or_default()
+                .extend(fields.clone());
+        }
+    }
+
     /// Main entry point: Infer float types for a program
     pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
         // Pass 0: Build struct field registry and function signatures
@@ -240,6 +254,19 @@ impl FloatInference {
                                     .and_then(|s| ModuleMetadata::deserialize_type(s));
                                 
                                 self.function_signatures.insert(func_name, (params, return_type));
+                            }
+                            // TDD FIX: Load struct field types for cross-module float inference
+                            // Enables LightingConfig { sun_dir_x: -0.5 } to infer f32 from imported struct
+                            for (struct_name, fields) in meta.structs {
+                                let mut field_map = HashMap::new();
+                                for (field_name, type_str) in fields {
+                                    if let Some(field_type) = ModuleMetadata::deserialize_type(&type_str) {
+                                        field_map.insert(field_name, field_type);
+                                    }
+                                }
+                                if !field_map.is_empty() {
+                                    self.struct_field_types.insert(struct_name, field_map);
+                                }
                             }
                             found_metadata = true;
                             break; // Found and loaded, stop trying candidates
@@ -674,42 +701,42 @@ impl FloatInference {
                     }
                 }
                 
-                // TDD FIX: Method calls on fields (self.field.method(...))
-                // Need to look up method signature from loaded metadata
-                if let Expression::FieldAccess { .. } = object {
-                    // Try to find method signature for Type::method
-                    // e.g., self.perception (PerceptionState).decrease_detection(...)
-                    
-                    // Collect method signature (two-phase to avoid borrow checker)
-                    let method_sig = self.function_signatures.iter()
-                        .find(|(func_name, _)| {
-                            // Check if this is a method matching our method name
-                            // Format: "TypeName::method_name"
-                            func_name.split("::").last() == Some(method.as_str())
-                        })
-                        .map(|(_, (params, ret))| (params.clone(), ret.clone()));
-                    
-                    if let Some((param_types, _)) = method_sig {
-                        // Found a matching method! Constrain arguments
-                        for (i, (_label, arg)) in arguments.iter().enumerate() {
-                            if let Some(param_type) = param_types.get(i) {
-                                if let Some(float_ty) = self.extract_float_type(param_type) {
-                                    let arg_id = self.get_expr_id(arg);
-                                    match float_ty {
-                                        FloatType::F32 => {
-                                            self.constraints.push(Constraint::MustBeF32(
-                                                arg_id,
-                                                format!("{}() parameter {}", method, i),
-                                            ));
-                                        }
-                                        FloatType::F64 => {
-                                            self.constraints.push(Constraint::MustBeF64(
-                                                arg_id,
-                                                format!("{}() parameter {}", method, i),
-                                            ));
-                                        }
-                                        FloatType::Unknown => {}
+                // TDD FIX: Method calls - constrain args from method signature (metadata)
+                // Handles both: self.field.method(...) and local_var.method(...) e.g. voxelizer.voxelize(...)
+                let method_sig = self.function_signatures.iter()
+                    .filter(|(func_name, (params, _))| {
+                        // Match method name and param count
+                        // Instance method: params.len() == arguments.len() + 1 (Self)
+                        // Associated fn (Type::new): params.len() == arguments.len()
+                        let name_match = func_name.split("::").last() == Some(method.as_str());
+                        let param_match = params.len() == arguments.len() + 1 || params.len() == arguments.len();
+                        name_match && param_match
+                    })
+                    .map(|(_, (params, ret))| (params.clone(), ret.clone()))
+                    .next();
+                
+                if let Some((param_types, _)) = method_sig {
+                    // Found a matching method! Constrain arguments
+                    // Instance method: skip index 0 (Self); associated fn: use index i
+                    let param_offset = if param_types.len() == arguments.len() + 1 { 1 } else { 0 };
+                    for (i, (_label, arg)) in arguments.iter().enumerate() {
+                        if let Some(param_type) = param_types.get(i + param_offset) {
+                            if let Some(float_ty) = self.extract_float_type(param_type) {
+                                let arg_id = self.get_expr_id(arg);
+                                match float_ty {
+                                    FloatType::F32 => {
+                                        self.constraints.push(Constraint::MustBeF32(
+                                            arg_id,
+                                            format!("{}() parameter {}", method, i),
+                                        ));
                                     }
+                                    FloatType::F64 => {
+                                        self.constraints.push(Constraint::MustBeF64(
+                                            arg_id,
+                                            format!("{}() parameter {}", method, i),
+                                        ));
+                                    }
+                                    FloatType::Unknown => {}
                                 }
                             }
                         }
@@ -774,12 +801,9 @@ impl FloatInference {
                         }
                     // TDD FIX: Also check var_element_types for inferred collection types
                     } else if let Some(elem_type) = self.var_element_types.get(name).cloned() {
-                        eprintln!("DEBUG PUSH_HANDLER: Found {} in var_element_types: {:?}", name, elem_type);
                         if method == "push" {
-                            eprintln!("DEBUG PUSH_HANDLER: Handling push");
                             if arguments.len() >= 1 {
                                 let value_arg = arguments[0].1;
-                                eprintln!("DEBUG PUSH_HANDLER: Constraining arg with type {:?}", elem_type);
                                 
                                 // TDD FIX: Recursively constrain with the element type
                                 // This handles both simple types (f32) and complex types (Tuple)
@@ -1039,7 +1063,6 @@ impl FloatInference {
                 if matches!(value, crate::parser::ast::literals::Literal::Float(_)) {
                     if let Some(float_ty) = return_type.and_then(|rt| self.extract_float_type(rt)) {
                         let expr_id = self.get_expr_id(expr);
-                        eprintln!("DEBUG LITERAL: Creating constraint for literal at {:?}: {:?}", expr_id, float_ty);
                         let constraint = match float_ty {
                             FloatType::F32 => Constraint::MustBeF32(
                                 expr_id,
@@ -1062,6 +1085,7 @@ impl FloatInference {
     /// Extract FloatType from a Type
     fn extract_float_type(&self, ty: &Type) -> Option<FloatType> {
         match ty {
+            Type::Float => Some(FloatType::F64), // Windjammer "float" keyword → f64
             Type::Custom(name) if name == "f32" => Some(FloatType::F32),
             Type::Custom(name) if name == "f64" => Some(FloatType::F64),
             Type::Tuple(types) => {
@@ -1075,6 +1099,12 @@ impl FloatInference {
             }
             Type::Vec(inner) => self.extract_float_type(inner),
             Type::Array(inner, _) => self.extract_float_type(inner),
+            Type::Parameterized(name, type_args) if name == "Vec" && !type_args.is_empty() => {
+                self.extract_float_type(&type_args[0])
+            }
+            Type::Parameterized(name, type_args) if name == "HashMap" && type_args.len() >= 2 => {
+                self.extract_float_type(&type_args[1])
+            }
             _ => None,
         }
     }
@@ -1398,37 +1428,27 @@ impl FloatInference {
     /// TDD FIX: Constrain an expression to match a specific type
     /// Used for implicit returns: return type → variable type → collection elements
     fn constrain_expr_to_type<'ast>(&mut self, expr: &Expression<'ast>, target_type: &Type) {
-        eprintln!("DEBUG CONSTRAIN_TO_TYPE: Called for expr, target_type={:?}", target_type);
         match expr {
             Expression::Identifier { name, .. } => {
-                eprintln!("DEBUG CONSTRAIN_TO_TYPE: Is Identifier: {}", name);
                 // Variable being returned - store its element type if it's a collection
                 match target_type {
                     Type::Vec(inner) => {
                         // Vec<T>
-                        eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from Vec: {:?}", name, inner);
                         self.var_element_types.insert(name.clone(), (**inner).clone());
                     }
                     Type::Parameterized(type_name, parameters) => {
                         // Vec<T>, HashMap<K,V>, Option<T>, etc.
                         if type_name == "Vec" && parameters.len() == 1 {
-                            eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from Parameterized Vec: {:?}", name, parameters[0]);
                             self.var_element_types.insert(name.clone(), parameters[0].clone());
                         } else if type_name == "HashMap" && parameters.len() == 2 {
                             // Store the value type (second parameter)
-                            eprintln!("DEBUG CONSTRAIN_TO_TYPE: Storing {} element type from HashMap: {:?}", name, parameters[1]);
                             self.var_element_types.insert(name.clone(), parameters[1].clone());
                         }
                     }
-                    _ => {
-                        eprintln!("DEBUG CONSTRAIN_TO_TYPE: target_type not Vec/HashMap");
-                    }
+                    _ => {}
                 }
             }
-            _ => {
-                eprintln!("DEBUG CONSTRAIN_TO_TYPE: expr not Identifier");
-                // For other expressions, continue normal constraint collection
-            }
+            _ => {}
         }
     }
 }
