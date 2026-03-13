@@ -1591,6 +1591,17 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 0c. Return-type-aware ownership: When return type contains param type, we need Owned.
+        // Bug: save_migration.wj - migrate(data) -> Result<GameSaveData, string> was inferring
+        // &GameSaveData because we only read data fields. But we assign to current_data and
+        // return that - we need to own the input to produce the output.
+        // Handles: fn(T) -> T, fn(T) -> Result<T,E>, fn(T) -> Option<T>
+        if let Some(return_type) = _return_type {
+            if self.param_type_matches_return(param_type, return_type) {
+                return Ok(OwnershipMode::Owned);
+            }
+        }
+
         // WINDJAMMER DESIGN: String parameters infer to &str (not &String!)
         //
         // When a string parameter is read-only, we generate `&str` (idiomatic Rust):
@@ -2854,6 +2865,34 @@ impl<'ast> Analyzer<'ast> {
             // impl Trait parameters (e.g., `item: impl Describable`) should always be Owned.
             // Borrowing would change from `impl Trait` to `&impl Trait`, breaking trait dispatch.
             Type::ImplTrait(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Check if param type appears in return type (direct, Result<T,E>, or Option<T>).
+    /// When fn(T) -> Result<T,E>, we need owned param to produce the return value.
+    fn param_type_matches_return(&self, param_type: &Type, return_type: &Type) -> bool {
+        match return_type {
+            // Direct match: fn(T) -> T
+            t if self.types_equal(param_type, t) => true,
+            // Result<T, E>: fn(T) -> Result<T, E>
+            Type::Result(ok_type, _err_type) => self.types_equal(param_type, ok_type),
+            // Option<T>: fn(T) -> Option<T>
+            Type::Option(inner) => self.types_equal(param_type, inner),
+            _ => false,
+        }
+    }
+
+    /// Compare two types for equality (custom types, primitives).
+    fn types_equal(&self, a: &Type, b: &Type) -> bool {
+        match (a, b) {
+            (Type::Custom(name_a), Type::Custom(name_b)) => name_a == name_b,
+            (Type::String, Type::String) => true,
+            (Type::Int, Type::Int) => true,
+            (Type::Int32, Type::Int32) => true,
+            (Type::Uint, Type::Uint) => true,
+            (Type::Float, Type::Float) => true,
+            (Type::Bool, Type::Bool) => true,
             _ => false,
         }
     }
