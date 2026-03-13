@@ -311,9 +311,15 @@ impl<'ast> CodeGenerator<'ast> {
                     let rust_type = self.type_to_rust(param_type);
 
                     // THE WINDJAMMER WAY: Owned parameters are always mutable
+                    // Borrowed string params use &str (idiomatic Rust), not &String
                     match ownership {
                         crate::analyzer::OwnershipMode::Borrowed => {
-                            format!("{}: &{}", param.name, rust_type)
+                            let ref_type = if rust_type == "String" {
+                                "&str".to_string()
+                            } else {
+                                format!("&{}", rust_type)
+                            };
+                            format!("{}: {}", param.name, ref_type)
                         }
                         crate::analyzer::OwnershipMode::MutBorrowed => {
                             format!("{}: &mut {}", param.name, rust_type)
