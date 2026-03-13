@@ -197,6 +197,33 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         },
     );
 
+    // windjammer_runtime::strings::split - used via "use ...::split"
+    // Return type critical for Vec<String> indexing: let lines = split(...); let line = lines[i]
+    registry.add_function(
+        "split".to_string(),
+        FunctionSignature {
+            name: "split".to_string(),
+            param_types: vec![],
+            param_ownership: vec![Borrowed, Borrowed],
+            return_type: Some(Type::Vec(Box::new(Type::String))),
+            return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
+    registry.add_function(
+        "strings::split".to_string(),
+        FunctionSignature {
+            name: "strings::split".to_string(),
+            param_types: vec![],
+            param_ownership: vec![Borrowed, Borrowed],
+            return_type: Some(Type::Vec(Box::new(Type::String))),
+            return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
+
     Ok(())
 }
 
