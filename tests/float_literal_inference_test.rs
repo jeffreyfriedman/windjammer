@@ -159,3 +159,32 @@ impl Point {
         output
     );
 }
+
+#[test]
+fn test_assert_eq_float_inference() {
+    let source = r#"
+struct Point { x: f32, y: f32 }
+
+pub fn test() {
+    let p = Point { x: 10.0, y: 20.0 }
+    assert_eq!(p.x, 10.0)
+    assert_eq!(p.y, 20.0)
+}
+"#;
+    let output = compile_and_get_rust(source);
+    assert!(
+        output.contains("10.0_f32"),
+        "assert_eq!(p.x, 10.0) should generate 10.0_f32, got:\n{}",
+        output
+    );
+    assert!(
+        output.contains("20.0_f32"),
+        "assert_eq!(p.y, 20.0) should generate 20.0_f32, got:\n{}",
+        output
+    );
+    assert!(
+        !output.contains("10.0_f64") && !output.contains("20.0_f64"),
+        "assert_eq! should not default to f64 when first arg is f32, got:\n{}",
+        output
+    );
+}

@@ -14,13 +14,11 @@ pub fn generate_literal(lit: &Literal) -> String {
             // Ensure float literals have a decimal point AND f64 suffix
             // to avoid ambiguous numeric type errors in Rust (E0689)
             // Note: Windjammer's Float type maps to Rust's f64 (see types.rs)
-            let result = if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+            if !s.contains('.') && !s.contains('e') && !s.contains('E') {
                 format!("{}.0_f64", s)
             } else {
                 format!("{}_f64", s)
-            };
-            eprintln!("DEBUG: generate_literal(Float({})) → {}", f, result);
-            result
+            }
         }
         Literal::String(s) => format!("\"{}\"", escape_string(s)),
         Literal::Char(c) => format!("'{}'", escape_char(*c)),

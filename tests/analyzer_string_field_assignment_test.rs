@@ -159,3 +159,33 @@ impl User {
         generated
     );
 }
+
+#[test]
+fn test_concatenate_string_params_ownership() {
+    // TDD: a + &b + &c - a is owned (consumed), b and c are borrowed (only &param)
+    // Related: auto_to_string_test::test_multiple_string_params
+    let code = r#"
+    pub fn concatenate(a: string, b: string, c: string) -> string {
+        return a + &b + &c
+    }
+    "#;
+
+    let program = parse_code(code);
+    let mut analyzer = Analyzer::new();
+    let (analyzed_functions, analyzed_structs, _analyzed_trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
+    let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
+    let generated = generator.generate_program(&program, &analyzed_functions);
+
+    // a: Owned (used in addition), b and c: Borrowed (only &b, &c)
+    assert!(
+        generated.contains("a: String") || generated.contains("mut a: String"),
+        "First param (a) should be String (owned). Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("b: &str") && generated.contains("c: &str"),
+        "Params b and c should be &str (borrowed). Generated:\n{}",
+        generated
+    );
+}
