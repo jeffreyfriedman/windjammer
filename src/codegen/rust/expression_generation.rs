@@ -1604,6 +1604,21 @@ impl<'ast> CodeGenerator<'ast> {
                                                 }
                                             }
                                         }
+                                        // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param
+                                        // e.g. enterable.push(self.buildings[i]) → need (.clone())
+                                        if let Expression::Index { .. } = arg {
+                                            if arg_str.starts_with("&")
+                                                && !arg_str.ends_with(".clone()")
+                                            {
+                                                if let Some(inner) = self.infer_expression_type(arg)
+                                                {
+                                                    if !self.is_type_copy(&inner) {
+                                                        arg_str =
+                                                            format!("({}).clone()", arg_str);
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1993,6 +2008,31 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.current_function_return_type,
                         ) {
                             arg_str = format!("{}.clone()", arg_str);
+                        }
+
+                        // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param (e.g. push)
+                        // should_add_clone handles Identifier/FieldAccess; Index needs explicit check
+                        // Vec::push uses stdlib heuristics (method_signature=None) - param 0 expects Owned
+                        if let Expression::Index { .. } = arg {
+                            let sig_param_idx = method_signature
+                                .as_ref()
+                                .map(|s| if s.has_self_receiver { i + 1 } else { i })
+                                .unwrap_or(i);
+                            let param_expects_owned = method_signature
+                                .as_ref()
+                                .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                                .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
+                                || (method == "push" && i == 0); // Vec::push(item) expects owned
+                            if param_expects_owned
+                                && arg_str.starts_with("&")
+                                && !arg_str.ends_with(".clone()")
+                            {
+                                if let Some(inner) = self.infer_expression_type(arg) {
+                                    if !self.is_type_copy(&inner) {
+                                        arg_str = format!("({}).clone()", arg_str);
+                                    }
+                                }
+                            }
                         }
 
                         // TDD FIX: Strip unnecessary .clone() when method param is Borrowed
