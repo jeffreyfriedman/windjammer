@@ -59,6 +59,9 @@ struct GoGenerator {
     declared_structs: Vec<String>,
     /// Track variables declared in current scope (for shadowing detection)
     declared_vars: Vec<std::collections::HashSet<String>>,
+    /// TDD: Track enum names and their variants for interface casting
+    /// Map: enum name → vec of variant names
+    declared_enums: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl GoGenerator {
@@ -69,6 +72,7 @@ impl GoGenerator {
             needs_math_import: false,
             declared_structs: Vec::new(),
             declared_vars: vec![std::collections::HashSet::new()],
+            declared_enums: std::collections::HashMap::new(),
         }
     }
     
@@ -171,6 +175,13 @@ impl GoGenerator {
                 }
                 Item::Enum { decl, .. } => {
                     self.declared_structs.push(decl.name.clone());
+                    // TDD: Track enum variants for interface casting
+                    let variant_names: Vec<String> = decl
+                        .variants
+                        .iter()
+                        .map(|v| format!("{}{}", decl.name, v.name))
+                        .collect();
+                    self.declared_enums.insert(decl.name.clone(), variant_names);
                 }
                 _ => {}
             }
@@ -686,17 +697,46 @@ impl GoGenerator {
                     value_str = format!("int64({})", value_str);
                 }
 
+                // TDD FIX: Detect enum variant construction (Maybe::Some(...))
+                // Need explicit type annotation for interface: var opt Maybe = MaybeSome{...}
+                let needs_interface_type = if let Expression::Call { function, .. } = value {
+                    if let Expression::Identifier { name, .. } = &**function {
+                        // Check if this is an enum variant (Type::Variant)
+                        if let Some((enum_name, _variant)) = name.split_once("::") {
+                            self.declared_enums.contains_key(enum_name)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                
                 // Go doesn't allow re-declaration of a variable in the same scope.
                 // For shadowing, we use a temporary variable + assignment pattern.
                 let result = if self.is_var_declared(&var_name) {
                     // Variable shadowing: reassign using =
-                    // Go allows assignment to an existing variable
                     format!("{}{} = {}\n", indent, var_name, value_str)
+                } else if needs_interface_type {
+                    // TDD: Enum variant assignment needs interface type
+                    // Extract enum name from variant construction
+                    if let Expression::Call { function, .. } = value {
+                        if let Expression::Identifier { name, .. } = &**function {
+                            if let Some((enum_name, _)) = name.split_once("::") {
+                                self.declare_var(&var_name);
+                                return format!("{}var {} {} = {}\n", indent, var_name, enum_name, value_str);
+                            }
+                        }
+                    }
+                    // Fallback (shouldn't reach here)
+                    self.declare_var(&var_name);
+                    format!("{}{} := {}\n", indent, var_name, value_str)
                 } else if *mutable {
                     self.declare_var(&var_name);
                     format!("{}var {} = {}\n", indent, var_name, value_str)
                 } else {
-                    let _ = type_;
                     self.declare_var(&var_name);
                     format!("{}{} := {}\n", indent, var_name, value_str)
                 };
