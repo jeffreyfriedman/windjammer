@@ -1792,6 +1792,18 @@ impl<'ast> CodeGenerator<'ast> {
                         obj_str = format!("{}.clone()", obj_str);
                     }
                 }
+
+                // E0507 fix: Option::map on self.field with &self must use .as_ref().map(...)
+                // self.children.map(|c| ...) with &self → self.children.as_ref().map(|c| ...)
+                if method == "map"
+                    && self.inferred_borrowed_params.contains("self")
+                    && self.codegen_expression_traces_to_self(object)
+                {
+                    if !obj_str.contains(".as_ref()") {
+                        obj_str = format!("{}.as_ref()", obj_str);
+                    }
+                }
+
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
                 let type_name = self.infer_type_name(object);
@@ -3530,5 +3542,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
+    }
+
+    /// Check if expression traces to self (self.field, self.field.subfield, etc.)
+    /// Used for E0507 Option::map fix - self.children.map() needs .as_ref()
+    fn codegen_expression_traces_to_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    || self.codegen_expression_traces_to_self(object)
+            }
+            Expression::Index { object, .. } => self.codegen_expression_traces_to_self(object),
+            _ => false,
+        }
     }
 }
