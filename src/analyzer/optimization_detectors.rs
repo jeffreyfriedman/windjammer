@@ -1131,6 +1131,7 @@ impl<'ast> Analyzer<'ast> {
         }
         matches!(
             method,
+            // Vec/String methods
             "push"
                 | "push_str"
                 | "clear"
@@ -1152,6 +1153,12 @@ impl<'ast> Analyzer<'ast> {
                 | "dedup"
                 | "reverse"
                 | "swap"
+                // Option/Result methods (mutate in place)
+                | "take"
+                | "replace"
+                | "get_or_insert"
+                | "get_or_insert_with"
+                // Other
                 | "allocate"
                 | "free"
                 | "update"

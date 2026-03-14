@@ -1,0 +1,21 @@
+{
+  "module_path": "generic_method",
+  "functions": {
+    "Scene::add_entity": {
+      "params": [
+        "Custom(\"Self\")",
+        "Custom(\"T\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Scene"
+    }
+  },
+  "structs": {
+    "Scene": {
+      "count": "Custom(\"i64\")"
+    }
+  },
+  "trait_impls": {},
+  "version": "0.46.0"
+}

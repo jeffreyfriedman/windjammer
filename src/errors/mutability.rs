@@ -325,6 +325,11 @@ impl MutabilityChecker {
                 | "resize"
                 | "reserve"
                 | "shrink_to_fit"
+                // Option/Result methods
+                | "take"
+                | "replace"
+                | "get_or_insert"
+                | "get_or_insert_with"
         ) {
             return true;
         }

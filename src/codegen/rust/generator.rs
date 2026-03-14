@@ -12,6 +12,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) signature_registry: SignatureRegistry,
     pub(crate) in_wasm_bindgen_impl: bool,
     pub(crate) in_trait_impl: bool, // true if currently generating code for a trait implementation
+    /// When in a trait impl, the trait name (for looking up analyzed_trait_methods)
+    pub(crate) current_trait_impl_name: Option<String>,
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
@@ -217,6 +219,7 @@ impl<'ast> CodeGenerator<'ast> {
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
             in_trait_impl: false,
+            current_trait_impl_name: None, // Set when generating trait impl methods
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,

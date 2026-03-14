@@ -57,6 +57,35 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
+    /// Impl methods MUST match trait signature exactly.
+    fn get_effective_self_ownership(
+        &self,
+        func_name: &str,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> Option<OwnershipMode> {
+        if self.in_trait_impl {
+            if let Some(trait_name) = &self.current_trait_impl_name {
+                let methods = self
+                    .analyzed_trait_methods
+                    .get(trait_name)
+                    .or_else(|| {
+                        trait_name
+                            .rfind("::")
+                            .map(|i| &trait_name[i + 2..])
+                            .and_then(|key| self.analyzed_trait_methods.get(key))
+                    });
+                if let Some(ownership) = methods
+                    .and_then(|m| m.get(func_name))
+                    .and_then(|m| m.inferred_ownership.get("self").copied())
+                {
+                    return Some(ownership);
+                }
+            }
+        }
+        analyzed.inferred_ownership.get("self").copied()
+    }
+
     fn statement_modifies_self(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Assignment { target, .. } => {
@@ -119,6 +148,10 @@ impl<'ast> CodeGenerator<'ast> {
                         | "resize"
                         | "swap_remove"
                         | "retain"
+                        | "take"
+                        | "replace"
+                        | "get_or_insert"
+                        | "get_or_insert_with"
                 );
 
                 if is_mutating_method {
@@ -292,6 +325,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         output.push_str("fn ");
         output.push_str(&func.name);
+
+        // TDD FIX: Preserve generic type parameters in wrapping path (e.g. @test, @timeout)
+        // Bug: E0425 - "cannot find type 'T' in this scope" when generic fn has decorators
+        if !func.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&self.format_type_params(&func.type_params));
+            output.push('>');
+        }
+
         output.push('(');
 
         // For @property_test, remove parameters (they become generators)
@@ -1196,8 +1238,35 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         // Priority 1: Use analyzer's inferred self if available
-        if has_inferred_self && !has_explicit_self {
-            if let Some(ownership) = analyzed.inferred_ownership.get("self") {
+        // E0053 FIX: For trait impls, use TRAIT's ownership (impl must match trait exactly)
+        // Trait impl methods MUST have self if trait has it - even when impl body doesn't use self
+        let needs_self_from_trait = self.in_trait_impl
+            && !has_explicit_self
+            && self.current_trait_impl_name.as_ref().is_some_and(|trait_name| {
+                self.analyzed_trait_methods
+                    .get(trait_name)
+                    .or_else(|| {
+                        trait_name
+                            .rfind("::")
+                            .map(|i| &trait_name[i + 2..])
+                            .and_then(|key| self.analyzed_trait_methods.get(key))
+                    })
+                    .is_some_and(|methods| methods.contains_key(&func.name))
+            });
+
+        if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
+            let ownership = self
+                .get_effective_self_ownership(&func.name, analyzed)
+                .or_else(|| {
+                    // Trait has method but no self in analyzed - default to &mut self (trait convention)
+                    if needs_self_from_trait {
+                        Some(OwnershipMode::MutBorrowed)
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some(ownership) = ownership {
                 let self_param = match ownership {
                     OwnershipMode::Borrowed => "&self",
                     OwnershipMode::MutBorrowed => "&mut self",
@@ -1283,9 +1352,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership for self
+                            // E0053 FIX: Use trait's ownership when in trait impl
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
@@ -1313,9 +1382,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership (e.g., &mut self)
+                            // E0053 FIX: Use trait's ownership when in trait impl
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
@@ -1348,6 +1417,22 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Mut => {
                         if param.name == "self" {
+                            // E0053 FIX: Use trait's ownership when in trait impl
+                            if let Some(ownership_mode) =
+                                self.get_effective_self_ownership(&func.name, analyzed)
+                            {
+                                return match ownership_mode {
+                                    OwnershipMode::Borrowed => "&self".to_string(),
+                                    OwnershipMode::MutBorrowed => "&mut self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            "mut self".to_string()
+                                        } else {
+                                            "self".to_string()
+                                        }
+                                    }
+                                };
+                            }
                             return "&mut self".to_string();
                         }
                         // Don't add &mut if the type is already a MutableReference
@@ -1363,10 +1448,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // For other types: Apply ownership mode from analyzer
 
                         // Special handling for `self` parameters (trait impl methods)
+                        // E0053 FIX: Use trait's ownership when in trait impl
                         if param.name == "self" {
-                            // Check analyzer for inferred ownership
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
