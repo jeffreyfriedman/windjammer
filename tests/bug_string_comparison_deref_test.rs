@@ -177,7 +177,7 @@ fn test_str_comparison() {
     let source = r#"
 fn has_tag(tags: &Vec<String>, tag: &str) -> bool {
     for t in tags.iter() {
-        if t.as_str() == tag {
+        if t == tag {
             return true
         }
     }
