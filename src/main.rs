@@ -100,6 +100,10 @@ enum Commands {
         /// Auto-generate mod.rs with pub mod declarations and re-exports
         #[arg(long)]
         module_file: bool,
+
+        /// Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)
+        #[arg(long)]
+        no_lint: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -242,8 +246,9 @@ pub fn run_main_cli() -> Result<()> {
             raw_errors,
             library,
             module_file,
+            no_lint,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, !no_lint)?;
 
             // Generate mod.rs if requested
             if module_file {
@@ -265,7 +270,7 @@ pub fn run_main_cli() -> Result<()> {
             target,
             raw_errors,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, true)?;
             check_with_cargo(&output, raw_errors)?;
         }
         Commands::Lint {
@@ -384,7 +389,12 @@ fn is_type_copy_quick(
     }
 }
 
-pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
+pub fn build_project(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+) -> Result<()> {
     use colored::*;
 
     println!(
@@ -412,7 +422,7 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     let mut all_external_crates = Vec::new();
 
     // Create a single ModuleCompiler for all files to share trait registry
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, enable_lint);
 
     // Load windjammer.toml if it exists (search up directory tree)
     let mut search_dir = if path.is_file() {
@@ -939,6 +949,7 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
 struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
+    enable_lint: bool, // Run Rust leakage linter (W0001-W0004)
     stdlib_path: PathBuf,
     source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
@@ -965,7 +976,7 @@ struct ModuleCompiler {
 
 #[allow(dead_code)]
 impl ModuleCompiler {
-    fn new(target: CompilationTarget) -> Self {
+    fn new(target: CompilationTarget, enable_lint: bool) -> Self {
         // Check for WINDJAMMER_STDLIB env var, otherwise use ./std
         let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
             .map(PathBuf::from)
@@ -974,6 +985,7 @@ impl ModuleCompiler {
         Self {
             compiled_modules: HashMap::new(),
             target,
+            enable_lint,
             stdlib_path,
             source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
@@ -1479,7 +1491,7 @@ fn compile_file(
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, true);
     // For single-file compilation, use parent directory as source root
     let source_root = input_path.parent().unwrap_or(Path::new("."));
     let is_multi_file = false; // Single file compilation
@@ -1636,6 +1648,16 @@ fn compile_file_impl(
         checker_analyzer.check_forbidden_rust_patterns(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
+    }
+
+    // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
+    if module_compiler.enable_lint {
+        let file_name = input_path.to_string_lossy().to_string();
+        let mut rust_leakage = linter::rust_leakage::RustLeakageLinter::new(&file_name);
+        rust_leakage.lint_program(&program);
+        for diag in rust_leakage.diagnostics() {
+            eprintln!("{}", diag);
+        }
     }
 
     // DEBUG: Print Item::Mod entries in the AST
@@ -3508,7 +3530,7 @@ fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<(
     fs::create_dir_all(&temp_dir)?;
 
     // Build the project
-    build_project(file, &temp_dir, target)?;
+    build_project(file, &temp_dir, target, true)?;
 
     // Handle execution based on target
     match target {
@@ -4227,7 +4249,7 @@ fn detect_and_compile_library(
 
     // Use build_project to compile the library
     eprintln!("DEBUG: About to call build_project");
-    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
+    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust, true) {
         Ok(_) => {
             eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
