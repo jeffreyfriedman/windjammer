@@ -185,11 +185,15 @@ enum Commands {
         check: bool,
     },
 
-    /// Run linter (clippy)
+    /// Run Rust leakage linter on .wj files (W0001-W0004)
     Lint {
-        /// Automatically fix warnings
+        /// File or directory to lint
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Fail on warnings (for CI)
         #[arg(long)]
-        fix: bool,
+        strict: bool,
     },
 
     /// Type check without building
@@ -371,8 +375,8 @@ fn main() -> anyhow::Result<()> {
         Commands::Fmt { check } => {
             windjammer::cli::fmt::execute(check)?;
         }
-        Commands::Lint { fix } => {
-            windjammer::cli::lint::execute(fix)?;
+        Commands::Lint { path, strict } => {
+            windjammer::cli::lint::execute(&path, strict)?;
         }
         Commands::Check => {
             windjammer::cli::check::execute()?;

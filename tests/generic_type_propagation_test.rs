@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// Helper to compile a test fixture and return the generated Rust code
+/// Uses windjammer::build_project (library API) instead of invoking wj binary
 fn compile_fixture(fixture_name: &str) -> Result<String, String> {
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -20,23 +21,13 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
         .join(fixture_name);
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
-    let compiler_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            fixture_path.to_str().unwrap(),
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to run compiler: {}", e))?;
-
-    if !compiler_output.status.success() {
-        return Err(format!(
-            "Compiler failed: {}",
-            String::from_utf8_lossy(&compiler_output.stderr)
-        ));
-    }
+    windjammer::build_project(
+        &fixture_path,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    )
+    .map_err(|e| format!("Compiler failed: {}", e))?;
 
     let rust_file = output_dir.join(format!("{}.rs", fixture_name));
     std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
