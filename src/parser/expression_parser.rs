@@ -781,7 +781,7 @@ impl Parser {
                 let looks_like_type = last_component
                     .chars()
                     .next()
-                    .is_some_and(|c| c.is_uppercase());
+                    .is_some_and(|c: char| c.is_uppercase());
 
                 let looks_like_struct_literal =
                     if looks_like_type && self.current_token() == &Token::LBrace {
