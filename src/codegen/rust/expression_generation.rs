@@ -1300,17 +1300,41 @@ impl<'ast> CodeGenerator<'ast> {
                         self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
 
-                        // WINDJAMMER FFI: Convert string arguments to (*const u8, usize) for extern functions
+                        // WINDJAMMER FFI: Convert string arguments for extern functions
                         if is_extern_call {
                             if let Some(ref sig) = signature {
                                 if let Some(param_type) = sig.param_types.get(i) {
                                     if matches!(param_type, Type::Custom(name) if name == "str") {
                                         // Expand str to (ptr, len)
-                                        // Always use .as_bytes() for consistency (works for both &str and String)
                                         return vec![
                                             format!("{}.as_bytes().as_ptr()", arg_str),
                                             format!("{}.as_bytes().len()", arg_str),
                                         ];
+                                    }
+                                    // string/String params → FfiString via string_to_ffi
+                                    // TDD FIX: Always use .to_string() - infer_expression_type returns
+                                    // declared param type (Type::String), not actual Rust type. When
+                                    // ownership infers Borrowed, param becomes &str in Rust, but we
+                                    // thought it was String and passed directly → E0308.
+                                    // .to_string() works for both &str and String (String::to_string = clone).
+                                    //
+                                    // TDD FIX: Strip redundant .to_string() before wrapping.
+                                    // Bug: User writes render_text(label.to_string(), x, y). Expression
+                                    // generation produces "label.to_string()", then we added another
+                                    // → string_to_ffi(label.to_string().to_string()). Fix: If arg_str
+                                    // already ends with .to_string(), don't add another.
+                                    if matches!(param_type, Type::String)
+                                        || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
+                                    {
+                                        let inner = if arg_str.ends_with(".to_string()") {
+                                            arg_str.clone()
+                                        } else {
+                                            format!("{}.to_string()", arg_str)
+                                        };
+                                        return vec![format!(
+                                            "windjammer_runtime::ffi::string_to_ffi({})",
+                                            inner
+                                        )];
                                     }
                                 }
                             }
@@ -1369,20 +1393,8 @@ impl<'ast> CodeGenerator<'ast> {
                         // Skip ownership inference for extern function calls - they have explicit types
                         if let Some(ref sig) = signature {
                             if sig.is_extern {
-                                // TDD: Extern FFI often expects &str for string params (read-only)
-                                // Auto-borrow String → &str when param is string and arg produces String
-                                if let Some(param_type) = sig.param_types.get(i) {
-                                    let param_expects_str =
-                                        matches!(param_type, Type::String)
-                                            || matches!(param_type, Type::Custom(n) if n == "string" || n == "String");
-                                    let arg_produces_string = self
-                                        .infer_expression_type(arg)
-                                        .as_ref()
-                                        .is_some_and(|t| matches!(t, Type::String));
-                                    if param_expects_str && arg_produces_string && !arg_str.starts_with('&') {
-                                        arg_str = format!("&{}", arg_str);
-                                    }
-                                }
+                                // Extern string params are handled above (FfiString via string_to_ffi)
+                                // For non-string params, pass through
                                 return vec![arg_str];
                             }
 
@@ -1637,9 +1649,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // Check if any contain format!() and extract them
                 let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
 
+                // WINDJAMMER FFI: Extern functions returning string use FfiString - wrap with ffi_to_string
+                let returns_string = signature.as_ref().and_then(|s| s.return_type.as_ref()).is_some_and(|t| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                });
+
                 // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
                 // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
-                if has_format_arg {
+                let call_result = if has_format_arg {
                     // Extract format!() macros to temp variables
                     let mut temp_decls = String::new();
                     let mut temp_counter = 0;
@@ -1691,6 +1709,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         call_str
                     }
+                };
+
+                // Wrap extern string return with ffi_to_string
+                if is_extern_call && returns_string {
+                    format!("windjammer_runtime::ffi::ffi_to_string({})", call_result)
+                } else {
+                    call_result
                 }
             }
             Expression::MethodCall {
