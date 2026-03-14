@@ -7,6 +7,8 @@
 //!
 //! This follows the Rust/Clippy model: code compiles, but warnings guide toward better patterns.
 
+pub mod rust_leakage;
+
 use crate::analyzer::AnalyzedFunction;
 use crate::error::SourceLocation;
 use crate::parser::{Expression, Statement};
@@ -94,6 +96,11 @@ impl LintCollector {
 
     pub fn diagnostics(&self) -> &[LintDiagnostic] {
         &self.diagnostics
+    }
+
+    /// Consume the collector and return all diagnostics
+    pub fn into_diagnostics(self) -> Vec<LintDiagnostic> {
+        self.diagnostics
     }
 
     pub fn has_errors(&self) -> bool {

@@ -81,7 +81,7 @@ pub fn execute(
         }
     };
 
-    crate::build_project(path, output_dir, target)?;
+    crate::build_project(path, output_dir, target, true)?;
 
     // Generate mod.rs if requested
     if module_file {
