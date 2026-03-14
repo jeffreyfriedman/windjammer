@@ -72,7 +72,7 @@ impl Parser {
         };
 
         // Check if this is "impl Trait for Type" or just "impl Type"
-        let (trait_name, trait_type_args, type_name) = if self.current_token() == &Token::For {
+        let (trait_name, trait_type_args, type_name): (_, _, String) = if self.current_token() == &Token::For {
             self.advance(); // consume "for"
 
             // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
@@ -491,7 +491,7 @@ impl Parser {
         loop {
             // THE WINDJAMMER WAY: Support Rust-style path keywords (self, super, crate)
             // Allow keywords as identifiers in module paths
-            let name_opt = match self.current_token() {
+            let name_opt: Option<String> = match self.current_token() {
                 Token::Ident(n) => Some(n.clone()), // Includes "super" and "crate" (not reserved)
                 Token::Thread => Some("thread".to_string()),
                 Token::Async => Some("async".to_string()),
@@ -771,17 +771,19 @@ impl Parser {
                     decorators: decorators.clone(),
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
-                // mut self (owned mutable) - only if next token is Self_
-                self.advance(); // consume mut
-                self.advance(); // consume self
-                params.push(Parameter {
-                    name: "self".to_string(),
-                    pattern: None,
-                    type_: Type::Custom("Self".to_string()),
-                    ownership: OwnershipHint::Owned,
-                    is_mutable: true,
-                    decorators: decorators.clone(),
-                });
+                // WINDJAMMER PHILOSOPHY: Reject `mut self` - ownership is inferred automatically
+                let (file, line, col) = self
+                    .current_location()
+                    .map(|loc| (format!("{}", loc.file.display()), loc.line, loc.column))
+                    .unwrap_or(("unknown".to_string(), 0, 0));
+                return Err(format!(
+                    "error: `mut` is not needed for method parameters\n \
+                     --> {}:{}:{}\n  |\n \
+                     {} | fn ...(mut self) {{\n  |           ^^^ help: remove `mut`, ownership is inferred automatically\n  |\n \
+                     = note: Windjammer infers `&self`, `&mut self`, or owned based on usage\n \
+                     = note: Use `let mut x` for local variable mutability",
+                    file, line, col, line
+                ));
             } else {
                 // Regular parameter - could be a simple name or a pattern
                 // Check if this is a pattern parameter (starts with '(')
