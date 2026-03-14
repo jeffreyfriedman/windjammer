@@ -274,6 +274,17 @@ enum Commands {
         code: String,
     },
 
+    /// Compile .wjsl shader to WGSL (with type checking)
+    ShaderCompile {
+        /// Path to .wjsl file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output path for .wgsl file (default: stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+    },
+
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
@@ -479,6 +490,20 @@ fn main() -> anyhow::Result<()> {
                 println!("\n{}", "Usage:".yellow());
                 println!("  wj explain WJ0001");
                 println!("  wj explain E0425  (Rust error code)");
+            }
+        }
+        Commands::ShaderCompile { input, output } => {
+            let source = std::fs::read_to_string(&input)
+                .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", input.display(), e))?;
+            let wgsl = windjammer::shader::compile_shader(&source)?;
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &wgsl)?;
+                    println!("Compiled {} -> {}", input.display(), path.display());
+                }
+                None => {
+                    print!("{}", wgsl);
+                }
             }
         }
         Commands::Errors { file, output } => {

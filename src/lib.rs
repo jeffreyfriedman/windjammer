@@ -30,6 +30,7 @@ pub mod type_registry;
 pub mod compiler;
 pub mod ejector;
 pub mod error_mapper;
+pub mod shader;
 
 // CLI-related modules (required for wj binary)
 #[cfg(feature = "cli")]
