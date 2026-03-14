@@ -1,0 +1,22 @@
+{
+  "module_path": "mut_borrowed",
+  "functions": {
+    "main": {
+      "params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null
+    },
+    "increment": {
+      "params": [
+        "Int"
+      ],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "version": "0.46.0"
+}

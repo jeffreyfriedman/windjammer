@@ -1218,6 +1218,15 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     self.generate_expression(value)
                 };
+                // E0507 fix: if let Some(x) = self.field with &self must use &self.field
+                let value_str = if self.match_scrutinee_is_self_field(value)
+                    && self.inferred_borrowed_params.contains("self")
+                    && matches!(&arms[0].pattern, Pattern::EnumVariant(name, _) if name == "Some")
+                {
+                    format!("&{}", value_str)
+                } else {
+                    value_str
+                };
                 let main_arm = &arms[0];
 
                 let mut bound_vars = std::collections::HashSet::new();
@@ -1386,6 +1395,18 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else {
             self.generate_expression(value)
+        };
+
+        // E0507 fix: match self.field { Some(x) => ... } with &self must use &self.field
+        let value_str = if self.match_scrutinee_is_self_field(value)
+            && self.inferred_borrowed_params.contains("self")
+            && arms.iter().any(|arm| {
+                matches!(&arm.pattern, Pattern::EnumVariant(name, _) if name == "Some")
+            })
+        {
+            format!("&{}", value_str)
+        } else {
+            value_str
         };
 
         let match_binds_refs_early = self.match_expression_binds_refs(value);
@@ -2054,6 +2075,18 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(_) | Type::MutableReference(_) => true,
             Type::Option(inner) => Self::type_contains_reference(inner),
             Type::Result(ok, _err) => Self::type_contains_reference(ok),
+            _ => false,
+        }
+    }
+
+    /// Check if expression is self.field (or self.field.subfield) - traces to self
+    fn match_scrutinee_is_self_field(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    || self.match_scrutinee_is_self_field(object)
+            }
+            Expression::Index { object, .. } => self.match_scrutinee_is_self_field(object),
             _ => false,
         }
     }

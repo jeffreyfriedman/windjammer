@@ -181,6 +181,11 @@ impl<'ast> Analyzer<'ast> {
                     return true;
                 }
 
+                // Recurse into object for chained calls: self.nodes.get_mut(id).unwrap()
+                if self.expression_calls_mutating_self_methods(object, registry) {
+                    return true;
+                }
+
                 // Recurse into arguments to find nested mutation patterns
                 for (_, arg) in arguments {
                     if self.expression_calls_mutating_self_methods(arg, registry) {
