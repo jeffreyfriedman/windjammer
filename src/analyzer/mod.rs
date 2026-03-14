@@ -1196,6 +1196,22 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        // E0053 FIX: Trait methods without explicit self (e.g. fn initialize()) need self for impl matching.
+        // Windjammer trait methods often omit self - add default so infer_trait_signatures_from_impls can upgrade.
+        let is_constructor = matches!(
+            func.name.as_str(),
+            "new" | "default" | "from" | "from_str" | "from_bytes"
+                | "with_capacity" | "empty" | "zero" | "one"
+        );
+        if !analyzed.inferred_ownership.contains_key("self")
+            && !is_constructor
+            && !func.parameters.iter().any(|p| p.name == "self")
+        {
+            analyzed
+                .inferred_ownership
+                .insert("self".to_string(), OwnershipMode::Borrowed);
+        }
+
         Ok(analyzed)
     }
 
@@ -3138,6 +3154,9 @@ mod tests {
         assert!(analyzer.is_mutating_method("remove"));
         assert!(analyzer.is_mutating_method("clear"));
         assert!(analyzer.is_mutating_method("append"));
+        assert!(analyzer.is_mutating_method("take"));
+        assert!(analyzer.is_mutating_method("replace"));
+        assert!(analyzer.is_mutating_method("get_or_insert"));
 
         // Non-mutating methods
         assert!(!analyzer.is_mutating_method("len"));

@@ -1,0 +1,28 @@
+{
+  "module_path": "generic_struct_impl",
+  "functions": {
+    "Container<T>::get": {
+      "params": [
+        "Custom(\"Self\")"
+      ],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Container<T>"
+    },
+    "Container<T>::new": {
+      "params": [
+        "Custom(\"T\")"
+      ],
+      "return_type": "Parameterized(\"Container\", [Custom(\"T\")])",
+      "is_associated": true,
+      "parent_type": "Container<T>"
+    }
+  },
+  "structs": {
+    "Container": {
+      "value": "Custom(\"T\")"
+    }
+  },
+  "trait_impls": {},
+  "version": "0.46.0"
+}

@@ -293,6 +293,10 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
                         | "reverse"
                         | "swap"
                         | "update"
+                        | "take"
+                        | "replace"
+                        | "get_or_insert"
+                        | "get_or_insert_with"
                 );
 
             if is_mutating_method {

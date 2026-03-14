@@ -1,0 +1,17 @@
+// TDD: Generic struct and impl type parameter propagation
+// Tests: pub struct Container<T> { value: T }
+//       impl<T> Container<T> { ... }
+
+pub struct Container<T> {
+    value: T,
+}
+
+impl<T> Container<T> {
+    pub fn new(value: T) -> Container<T> {
+        Container { value }
+    }
+
+    pub fn get(self) -> T {
+        self.value
+    }
+}
