@@ -1131,9 +1131,21 @@ impl FloatInference {
 
     /// Infer Type from an expression (for variable type tracking)
     /// Used when let x = expr has no explicit type - infer from expr for assert_eq!(x.field, literal)
+    /// TDD FIX: Added Binary and MethodCall fallback for len > 0.0 pattern (physics/advanced_collision.wj)
     fn infer_type_from_expression<'ast>(&self, expr: &Expression<'ast>) -> Option<Type> {
         match expr {
             Expression::StructLiteral { name, .. } => Some(Type::Custom(name.clone())),
+            Expression::Binary { left, right, op, .. } => {
+                use crate::parser::ast::operators::BinaryOp;
+                if matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod) {
+                    let left_ty = self.infer_type_from_expression(left)?;
+                    let right_ty = self.infer_type_from_expression(right)?;
+                    if left_ty == right_ty {
+                        return Some(left_ty);
+                    }
+                }
+                None
+            }
             Expression::Call { function, .. } => {
                 // Type::new() or Type::method() - get return type from function signature
                 let func_name = match function {
@@ -1159,11 +1171,48 @@ impl FloatInference {
                     _ => return None,
                 };
                 let full_name = format!("{}::{}", type_name, method);
-                self.function_signatures
-                    .get(&full_name)
-                    .and_then(|(_, ret)| ret.clone())
+                if let Some((_, ret)) = self.function_signatures.get(&full_name) {
+                    return ret.clone();
+                }
+                // TDD FIX: Fallback for primitive methods (sqrt, length, etc.) - return same type as receiver
+                // Handles (x*x + y*y).sqrt() where x,y are f32 - sqrt returns f32
+                const PRIMITIVE_SAME_TYPE: &[&str] = &[
+                    "sqrt", "sin", "cos", "tan", "abs", "floor", "ceil", "round",
+                    "length", "magnitude", "distance", "dot", "recip",
+                ];
+                if PRIMITIVE_SAME_TYPE.contains(&method.as_str()) {
+                    if matches!(object_type, Type::Custom(ref s) if s == "f32" || s == "f64")
+                        || matches!(object_type, Type::Float)
+                    {
+                        return Some(object_type);
+                    }
+                }
+                None
             }
-            Expression::Identifier { name, .. } => self.var_types.get(name).cloned(),
+            Expression::Identifier { name, .. } => {
+                if name == "self" {
+                    self.current_impl_type
+                        .as_ref()
+                        .map(|s| Type::Custom(s.clone()))
+                } else {
+                    self.var_types.get(name).cloned()
+                }
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                let object_type = self.infer_type_from_expression(object)?;
+                let struct_name = match &object_type {
+                    Type::Custom(name) => name.clone(),
+                    _ => return None,
+                };
+                self.struct_field_types
+                    .get(&struct_name)
+                    .and_then(|fields| fields.get(field))
+                    .cloned()
+            }
+            Expression::Index { object, .. } => {
+                let object_type = self.infer_type_from_expression(object)?;
+                self.extract_vec_element_type(&object_type)
+            }
             _ => None,
         }
     }
@@ -1321,6 +1370,16 @@ impl FloatInference {
                 // Assume it returns the same type as the input (common for math methods)
                 // This is a heuristic - ideally we'd recursively determine the type
                 return Some(FloatType::F32);
+            }
+        }
+        
+        // TDD FIX: For MethodCall on Binary (e.g., (x*x + y*y).sqrt()), infer from operands
+        // Handles physics/advanced_collision.wj: len = (edge_x*edge_x + edge_y*edge_y).sqrt()
+        if let Expression::Binary { .. } = object {
+            if F32_METHODS.contains(&method) {
+                if let Some(object_type) = self.infer_type_from_expression(object) {
+                    return self.extract_float_type(&object_type);
+                }
             }
         }
         
