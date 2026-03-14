@@ -1,0 +1,13 @@
+// TDD: Generic type parameter propagation
+// Bug: E0425 - "cannot find type 'T' in this scope"
+// Root cause: Codegen doesn't preserve <T> in function signatures
+
+pub fn identity<T>(value: T) -> T {
+    value
+}
+
+pub fn test_generics() {
+    let x = identity(42)
+    let y = identity("hello")
+    assert_eq(x, 42)
+}

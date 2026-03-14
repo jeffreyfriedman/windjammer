@@ -692,8 +692,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Store the wasm export flag and trait impl flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
         let old_in_trait_impl = self.in_trait_impl;
+        let old_trait_impl_name = self.current_trait_impl_name.take();
         self.in_wasm_bindgen_impl = has_wasm_export;
         self.in_trait_impl = impl_block.trait_name.is_some();
+        // E0053 FIX: Track trait name so impl methods use trait's ownership (not impl's inferred)
+        self.current_trait_impl_name = impl_block.trait_name.clone();
 
         // Pre-classify methods as instance (takes self) vs static for Self:: vs self. dispatch.
         // A method is instance if: it has explicit self, analyzer inferred self, or it accesses fields.
@@ -735,6 +738,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_instance_methods.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
+        self.current_trait_impl_name = old_trait_impl_name;
 
         self.indent_level -= 1;
         output.push('}');
