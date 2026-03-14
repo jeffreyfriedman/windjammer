@@ -539,11 +539,10 @@ impl<'ast> CodeGenerator<'ast> {
                             // TRAIT SIGNATURES: Default to &self for trait methods
                             // This prevents E0277 (Self not Sized) errors
                             if param.name == "self" {
-                                "&self".to_string()
-                            } else {
-                                // Owned parameter (no &)
-                                self.type_to_rust(&param.type_)
+                                return "&self".to_string();
                             }
+                            // Owned parameter (no &)
+                            self.type_to_rust(&param.type_)
                         }
                     };
 
