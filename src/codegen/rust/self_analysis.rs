@@ -183,8 +183,10 @@ pub fn statement_accesses_fields(ctx: &AnalysisContext, stmt: &Statement) -> boo
 pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool {
     match stmt {
         Statement::Assignment { target, .. } => {
-            // Check if we're assigning to a field: self.field = ...
+            // Check if we're assigning to a field: self.field = ..., self.field[i] = ..., self.a.b = ...
+            // Compound assignment (+=, -=, etc.) also mutates the target
             expression_is_field_access(ctx, target)
+                || expression_is_self_field_index_access(ctx, target)
         }
         Statement::Expression { expr, .. } => {
             // Check for mutating method calls on fields: self.field.push(...)
@@ -387,16 +389,29 @@ pub fn expression_accesses_fields(ctx: &AnalysisContext, expr: &Expression) -> b
     }
 }
 
-/// Check if an expression is a field access (self.field or just field)
+/// Check if an expression is a field access (self.field, self.field.subfield, or bare field)
 pub fn expression_is_field_access(ctx: &AnalysisContext, expr: &Expression) -> bool {
     match expr {
         Expression::Identifier { name, .. } => ctx.current_struct_fields.contains(name),
         Expression::FieldAccess { object, .. } => {
-            if let Expression::Identifier { name: obj_name, .. } = &**object {
-                obj_name == "self"
-            } else {
-                false
+            match &**object {
+                Expression::Identifier { name: obj_name, .. } => obj_name == "self",
+                // Nested: self.field.subfield or self.field[i].subfield
+                Expression::FieldAccess { .. } => expression_is_field_access(ctx, object),
+                Expression::Index { .. } => expression_is_self_field_index_access(ctx, object),
+                _ => false,
             }
+        }
+        _ => false,
+    }
+}
+
+/// Check if an expression is an index access on a self field (self.field[i] or self.field[i][j])
+fn expression_is_self_field_index_access(ctx: &AnalysisContext, expr: &Expression) -> bool {
+    match expr {
+        Expression::Index { object, .. } => {
+            expression_is_field_access(ctx, object)
+                || expression_is_self_field_index_access(ctx, object)
         }
         _ => false,
     }
@@ -410,8 +425,10 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
             statements.iter().any(|s| statement_mutates_fields(ctx, s))
         }
         Expression::MethodCall { object, method, .. } => {
-            // Check if this is a mutating method call on a field: self.field.push(...)
-            if expression_is_field_access(ctx, object) {
+            // Check if this is a mutating method call on a field: self.field.push(...) or self.field[i].push(...)
+            if expression_is_field_access(ctx, object)
+                || expression_is_self_field_index_access(ctx, object)
+            {
                 // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
                 method.ends_with("_mut")
                     || matches!(

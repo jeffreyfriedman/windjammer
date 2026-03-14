@@ -6,10 +6,14 @@ use clap::ValueEnum;
 
 pub mod analyzer;
 pub mod auto_clone;
+pub mod auto_fix;
 pub mod codegen;
 pub mod component_analyzer;
+pub mod config;
 pub mod error;
+pub mod error_codes;
 pub mod errors;
+pub mod fuzzy_matcher;
 pub mod inference;
 pub mod interpreter;
 pub mod lexer;
@@ -19,9 +23,27 @@ pub mod parser;
 pub mod parser_impl;
 pub mod source_map;
 pub mod stdlib_scanner;
+pub mod syntax_highlighter;
 pub mod test_utils;
 pub mod type_inference;
 pub mod type_registry;
+pub mod compiler;
+pub mod ejector;
+pub mod error_mapper;
+
+// CLI-related modules (required for wj binary)
+#[cfg(feature = "cli")]
+pub mod cli;
+#[cfg(feature = "cli")]
+pub mod plugin;
+#[cfg(feature = "cli")]
+pub mod error_catalog;
+#[cfg(feature = "cli")]
+pub mod error_statistics;
+
+/// Build a Windjammer project - compiles .wj files to Rust.
+/// Used by integration tests and CLI.
+pub use compiler::build_project;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {

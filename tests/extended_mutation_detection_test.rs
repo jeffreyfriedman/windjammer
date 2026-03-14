@@ -6,38 +6,24 @@
 ///
 /// Philosophy: "Compiler does hard work" - automatic &mut self inference
 use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
 use tempfile::TempDir;
 
 fn compile_windjammer_code(code: &str) -> Result<String, String> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let test_dir = temp_dir.path();
     let input_file = test_dir.join("test.wj");
+    let output_dir = test_dir.join("build");
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    windjammer::build_project(
+        &input_file,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    )
+    .map_err(|e| format!("Windjammer compilation failed: {}", e))?;
 
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
+    let generated_file = output_dir.join("test.rs");
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
     Ok(generated)
 }
