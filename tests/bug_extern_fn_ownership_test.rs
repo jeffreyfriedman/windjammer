@@ -75,7 +75,7 @@ pub fn draw_text(label: &str, x: f32, y: f32) {
     println!("Generated:\n{}", generated);
 
     // The call should NOT have & wrapping the argument
-    // Should be: render_text(label.to_string(), x, y)
+    // Should be: render_text(string_to_ffi(label.to_string()), x, y)
     // NOT: render_text(&label.to_string(), x, y)
     assert!(
         !generated.contains("&label.to_string()"),
@@ -83,8 +83,8 @@ pub fn draw_text(label: &str, x: f32, y: f32) {
         generated
     );
     assert!(
-        generated.contains("render_text(label.to_string()"),
-        "extern fn call should pass owned String directly. Got:\n{}",
+        generated.contains("string_to_ffi(label.to_string())"),
+        "extern fn call should pass String via string_to_ffi. Got:\n{}",
         generated
     );
 }
@@ -106,6 +106,42 @@ pub fn move_to(pos_x: f32, pos_y: f32) {
     assert!(
         !generated.contains("&mut pos_x"),
         "extern fn call should NOT add &mut to args. Got:\n{}",
+        generated
+    );
+}
+
+/// TDD test: extern fn string args should NOT have double .to_string()
+///
+/// Bug: When user writes render_text(label.to_string(), x, y), codegen produced
+/// string_to_ffi(label.to_string().to_string()) - double conversion!
+///
+/// Root Cause: Expression generation produces "label.to_string()", then extern
+/// wrapping added another .to_string() before string_to_ffi().
+///
+/// Fix: Strip trailing .to_string() from arg_str before adding string_to_ffi wrapper.
+#[test]
+fn test_extern_fn_no_double_to_string() {
+    let source = r#"
+extern fn render_text(text: String, x: f32, y: f32)
+
+pub fn draw_text(label: &str, x: f32, y: f32) {
+    render_text(label.to_string(), x, y)
+}
+"#;
+
+    let generated = transpile_wj(source);
+    println!("Generated:\n{}", generated);
+
+    // Should NOT have double .to_string().to_string()
+    assert!(
+        !generated.contains(".to_string().to_string()"),
+        "extern fn call should NOT have double .to_string(). Got:\n{}",
+        generated
+    );
+    // Should have single .to_string() inside string_to_ffi
+    assert!(
+        generated.contains("string_to_ffi(label.to_string())"),
+        "extern fn call should have single string_to_ffi(label.to_string()). Got:\n{}",
         generated
     );
 }

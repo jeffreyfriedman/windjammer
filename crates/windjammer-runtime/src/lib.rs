@@ -44,6 +44,7 @@ pub mod property;
 pub mod random;
 pub mod regex_mod;
 pub mod setup_teardown;
+pub mod ffi;
 pub mod strings;
 pub mod sync;
 pub mod test;
