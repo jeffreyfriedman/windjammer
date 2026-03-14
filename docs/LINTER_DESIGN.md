@@ -32,6 +32,25 @@ Warnings do not block compilation—they guide developers toward better patterns
 - **Level:** Note (Style)
 - **Note:** Windjammer infers borrowing automatically
 
+## CLI: `wj lint`
+
+Run the Rust leakage linter on .wj files (standalone, without full build):
+
+```bash
+# Lint a single file
+wj lint path/to/file.wj
+
+# Lint a directory (recursive)
+wj lint path/to/src/
+
+# Strict mode: fail on warnings (for CI)
+wj lint --strict path/to/file.wj
+```
+
+**CI Integration:** Use `--strict` in CI to prevent Rust leakage regressions. See `.github/workflows/windjammer-linter.yml`.
+
+**Pre-commit hook:** Copy `scripts/pre-commit-hook` to `.git/hooks/pre-commit` to lint staged .wj files before commit.
+
 ## Configuration
 
 ### Enable/Disable

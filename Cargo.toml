@@ -15,12 +15,20 @@ license = "MIT"
 [dependencies]
 # Compiler dependencies
 clap = { version = "4.5", features = ["derive"] }
+toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
 typed-arena = "2.0"
 colored = "2.0"
+
+# Full compiler functionality (error TUI, syntax highlighting, incremental)
+tempfile = "3.10"
+crossterm = "0.28"
+ratatui = "0.28"
+syntect = "5.2"
+salsa = "0.24"
 
 # Runtime dependencies
 chrono = "0.4"
@@ -36,12 +44,34 @@ winit = "0.29"
 bytemuck = { version = "1.14", features = ["derive"] }  # For safe type casting
 windjammer-runtime = { path = "/Users/jeffreyfriedman/src/wj/windjammer/crates/windjammer-runtime" }
 
+[features]
+default = []
+# Enable to build wj CLI binary (requires full compiler modules in lib)
+cli = []
+
 [dev-dependencies]
 tempfile = "3.0"
 
 [[bin]]
 name = "wj-build-helper"
 path = "build.rs"
+
+# wj binary requires cli feature - excluded from default build so tests can run
+[[bin]]
+name = "wj"
+path = "src/bin/wj.rs"
+required-features = ["cli"]
+
+# wj-lint: Minimal Rust leakage linter (no cli deps) - for CI
+[[bin]]
+name = "wj-lint"
+path = "src/bin/wj-lint.rs"
+
+# main.rs binary (windjammer) - incomplete, excluded from default build
+[[bin]]
+name = "windjammer"
+path = "src/main.rs"
+required-features = ["cli"]
 
 [profile.release]
 opt-level = 3

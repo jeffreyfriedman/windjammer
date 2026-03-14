@@ -44,7 +44,7 @@ impl GameLoop for MyGame {
     // First compilation
     let output_dir = temp_dir.path().join("build");
     let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust);
+        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust, true);
 
     assert!(
         result.is_ok(),
@@ -142,7 +142,7 @@ impl GameLoop for MyGame {
     // Compile
     let output_dir = temp_dir.path().join("build");
     let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust);
+        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust, true);
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     // THE WINDJAMMER WAY: The trait should infer &Input since the impl only reads
