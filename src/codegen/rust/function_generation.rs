@@ -155,14 +155,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         output.push('(');
 
-        // Generate parameters
-        // WINDJAMMER FFI: Convert `str` parameters to FFI-compatible (*const u8, usize) pairs
+        // Generate parameters - use FFI-safe types for extern "C"
+        // string/String -> windjammer_runtime::ffi::FfiString (Rust String/&str are not C-compatible)
         let mut params: Vec<String> = Vec::new();
         for param in &func.parameters {
             if matches!(&param.type_, Type::Custom(name) if name == "str") {
-                // FFI: str -> (*const u8, usize)
                 params.push(format!("{}_ptr: *const u8", param.name));
                 params.push(format!("{}_len: usize", param.name));
+            } else if matches!(&param.type_, Type::String)
+                || matches!(&param.type_, Type::Custom(name) if name == "string" || name == "String")
+            {
+                params.push(format!("{}: windjammer_runtime::ffi::FfiString", param.name));
             } else {
                 params.push(format!(
                     "{}: {}",
@@ -175,10 +178,17 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&params.join(", "));
         output.push(')');
 
-        // Add return type if present
+        // Add return type - use FfiString for string returns
         if let Some(ret_type) = &func.return_type {
             output.push_str(" -> ");
-            output.push_str(&self.type_to_rust(ret_type));
+            let rust_ret = if matches!(ret_type, Type::String)
+                || matches!(ret_type, Type::Custom(name) if name == "string" || name == "String")
+            {
+                "windjammer_runtime::ffi::FfiString".to_string()
+            } else {
+                self.type_to_rust(ret_type)
+            };
+            output.push_str(&rust_ret);
         }
 
         output.push_str(";\n");

@@ -1,11 +1,10 @@
 {
   "module_path": "param_mutability_inference",
   "functions": {
-    "move_point": {
+    "swap_points": {
       "params": [
         "Custom(\"Point\")",
-        "Custom(\"f32\")",
-        "Custom(\"f32\")"
+        "Custom(\"Point\")"
       ],
       "return_type": null,
       "is_associated": false,
@@ -20,10 +19,11 @@
       "is_associated": false,
       "parent_type": null
     },
-    "swap_points": {
+    "move_point": {
       "params": [
         "Custom(\"Point\")",
-        "Custom(\"Point\")"
+        "Custom(\"f32\")",
+        "Custom(\"f32\")"
       ],
       "return_type": null,
       "is_associated": false,
@@ -32,8 +32,8 @@
   },
   "structs": {
     "Point": {
-      "x": "Custom(\"f32\")",
-      "y": "Custom(\"f32\")"
+      "y": "Custom(\"f32\")",
+      "x": "Custom(\"f32\")"
     }
   },
   "trait_impls": {},
