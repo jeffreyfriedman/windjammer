@@ -3,6 +3,16 @@
 //! Provides rich error reporting with source locations, code snippets,
 //! and helpful suggestions - inspired by Rust's excellent error messages.
 
+#[cfg(feature = "cli")]
+pub mod context_builder;
+#[cfg(feature = "cli")]
+pub mod suggestions;
+
+#[cfg(feature = "cli")]
+pub use context_builder::ErrorContext;
+#[cfg(feature = "cli")]
+pub use suggestions::suggest_fix;
+
 use std::fmt;
 
 /// Source location for an error

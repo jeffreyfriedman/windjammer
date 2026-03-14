@@ -2,6 +2,8 @@
 ///
 /// This module intercepts rustc JSON output, maps errors using source maps,
 /// and provides a world-class error experience for Windjammer developers.
+#[cfg(feature = "cli")]
+use crate::error::suggest_fix;
 use crate::error_codes;
 use crate::fuzzy_matcher::levenshtein_distance;
 use crate::source_map::{Location, SourceMap};
@@ -248,6 +250,16 @@ impl ErrorMapper {
             let registry = error_codes::get_registry();
             registry.map_rust_code(&c.code).map(|wj| wj.code.clone())
         });
+
+        // Add suggestion from suggest_fix when we have an error code but no help
+        #[cfg(feature = "cli")]
+        if help.is_empty() {
+            if let Some(code) = rustc_diag.code.as_ref().map(|c| c.code.as_str()) {
+                if let Some(suggestion) = suggest_fix(code, &message) {
+                    help.push(suggestion);
+                }
+            }
+        }
 
         Some(WindjammerDiagnostic {
             message,
