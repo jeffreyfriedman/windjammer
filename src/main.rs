@@ -5885,3 +5885,10 @@ mod tests {
         // If this test compiles and passes, the concept is sound
     }
 }
+
+fn main() {
+    if let Err(e) = run_main_cli() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
