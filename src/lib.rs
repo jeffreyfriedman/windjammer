@@ -34,6 +34,8 @@ pub mod shader;
 
 // CLI-related modules (required for wj binary)
 #[cfg(feature = "cli")]
+pub mod build_utils;
+#[cfg(feature = "cli")]
 pub mod cli;
 #[cfg(feature = "cli")]
 pub mod plugin;
@@ -41,10 +43,18 @@ pub mod plugin;
 pub mod error_catalog;
 #[cfg(feature = "cli")]
 pub mod error_statistics;
+#[cfg(feature = "cli")]
+pub mod test_runner;
 
 /// Build a Windjammer project - compiles .wj files to Rust.
 /// Used by integration tests and CLI.
 pub use compiler::build_project;
+
+// CLI exports (used by cli/build.rs, cli/test.rs, wj binary)
+#[cfg(feature = "cli")]
+pub use build_utils::{generate_mod_file, strip_main_functions};
+#[cfg(feature = "cli")]
+pub use test_runner::run_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {

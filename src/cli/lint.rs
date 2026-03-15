@@ -13,9 +13,9 @@ pub fn execute(path: &Path, strict: bool) -> Result<()> {
     lint_path(path, strict)
 }
 
-use windjammer::lexer::Lexer;
-use windjammer::linter::rust_leakage::RustLeakageLinter;
-use windjammer::parser::Parser;
+use crate::lexer::Lexer;
+use crate::linter::rust_leakage::RustLeakageLinter;
+use crate::parser::Parser;
 
 /// Lint a single .wj file for Rust leakage
 pub fn lint_file(path: &Path, strict: bool) -> Result<()> {
