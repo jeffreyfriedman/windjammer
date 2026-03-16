@@ -848,16 +848,85 @@ impl<'ast> Analyzer<'ast> {
                 Item::Impl {
                     block: impl_block, ..
                 } => {
-                    // Analyze methods in impl blocks
+                    // TDD FIX: Multi-pass fixed-point iteration for transitive mutability inference
+                    // 
+                    // Problem: Single-pass analysis fails for multi-level call chains:
+                    //   update() calls poll_input() which calls keyboard.update_key(&mut self)
+                    //   Single pass: update(&self) ❌ (wrong!)
+                    //   Multi-pass: update(&mut self) ✅ (correct!)
+                    //
+                    // Solution: Iterate until no signatures change (fixed-point)
+                    let mut analyzed_funcs: std::collections::HashMap<
+                        String,
+                        AnalyzedFunction<'ast>,
+                    > = std::collections::HashMap::new();
+                    let mut local_registry = registry.clone();
+
+                    // Pass 1: Initial analysis (direct mutations only)
                     for func in &impl_block.functions {
-                        // Check if this is a trait implementation
-                        let mut analyzed_func = if let Some(trait_name) = &impl_block.trait_name {
-                            // This is a trait impl - use trait method signatures
-                            self.analyze_trait_impl_function(func, trait_name, &registry)?
+                        let analyzed_func = if let Some(trait_name) = &impl_block.trait_name {
+                            self.analyze_trait_impl_function(func, trait_name, &local_registry)?
                         } else {
-                            // Regular impl - infer as usual (pass impl_block for cross-method analysis)
-                            self.analyze_function_in_impl(func, impl_block, &registry)?
+                            self.analyze_function_in_impl(func, impl_block, &local_registry)?
                         };
+                        analyzed_funcs.insert(func.name.clone(), analyzed_func);
+                    }
+
+                    // Pass 2-N: Fixed-point iteration (propagate transitive mutations)
+                    let mut changed = true;
+                    let mut iteration = 0;
+                    const MAX_ITERATIONS: usize = 10; // Safety limit
+
+                    while changed && iteration < MAX_ITERATIONS {
+                        changed = false;
+                        iteration += 1;
+
+                        // Update local registry with current analyzed signatures
+                        for (name, analyzed_func) in &analyzed_funcs {
+                            let signature = self.build_signature(analyzed_func);
+                            let qualified_name =
+                                format!("{}::{}", impl_block.type_name, name);
+                            local_registry.add_function(qualified_name, signature.clone());
+                            local_registry.add_function(name.clone(), signature);
+                        }
+
+                        // Re-analyze all methods with updated registry
+                        for func in &impl_block.functions {
+                            let new_analyzed = if let Some(trait_name) = &impl_block.trait_name {
+                                self.analyze_trait_impl_function(
+                                    func,
+                                    trait_name,
+                                    &local_registry,
+                                )?
+                            } else {
+                                self.analyze_function_in_impl(func, impl_block, &local_registry)?
+                            };
+
+                            // Check if self ownership changed
+                            let old_analyzed = &analyzed_funcs[&func.name];
+                            let old_self_ownership = old_analyzed
+                                .inferred_ownership
+                                .get("self")
+                                .copied()
+                                .unwrap_or(OwnershipMode::Owned);
+                            let new_self_ownership = new_analyzed
+                                .inferred_ownership
+                                .get("self")
+                                .copied()
+                                .unwrap_or(OwnershipMode::Owned);
+
+                            if old_self_ownership != new_self_ownership {
+                                analyzed_funcs.insert(func.name.clone(), new_analyzed);
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    // Process all analyzed functions (after fixed-point convergence)
+                    for func in &impl_block.functions {
+                        let mut analyzed_func = analyzed_funcs
+                            .remove(&func.name)
+                            .expect("Function should have been analyzed");
 
                         // PHASE 7: Detect const/static optimizations
                         analyzed_func.const_static_optimizations =
@@ -978,23 +1047,99 @@ impl<'ast> Analyzer<'ast> {
                             Item::Impl {
                                 block: impl_block, ..
                             } => {
-                                // Analyze methods in impl blocks inside modules
+                                // TDD FIX: Multi-pass fixed-point iteration (same as top-level impl blocks)
+                                let mut analyzed_funcs: std::collections::HashMap<
+                                    String,
+                                    AnalyzedFunction<'ast>,
+                                > = std::collections::HashMap::new();
+                                let mut local_registry = registry.clone();
+
+                                // Pass 1: Initial analysis
                                 for func in &impl_block.functions {
-                                    let mut analyzed_func = if let Some(trait_name) =
+                                    let analyzed_func = if let Some(trait_name) =
                                         &impl_block.trait_name
                                     {
                                         self.analyze_trait_impl_function(
-                                            func, trait_name, &registry,
+                                            func,
+                                            trait_name,
+                                            &local_registry,
                                         )?
                                     } else {
-                                        self.analyze_function_in_impl(func, impl_block, &registry)?
+                                        self.analyze_function_in_impl(
+                                            func,
+                                            impl_block,
+                                            &local_registry,
+                                        )?
                                     };
+                                    analyzed_funcs.insert(func.name.clone(), analyzed_func);
+                                }
+
+                                // Pass 2-N: Fixed-point iteration
+                                let mut changed = true;
+                                let mut iteration = 0;
+                                const MAX_ITERATIONS: usize = 10;
+
+                                while changed && iteration < MAX_ITERATIONS {
+                                    changed = false;
+                                    iteration += 1;
+
+                                    // Update registry
+                                    for (name, analyzed_func) in &analyzed_funcs {
+                                        let signature = self.build_signature(analyzed_func);
+                                        local_registry.add_function(name.clone(), signature);
+                                    }
+
+                                    // Re-analyze
+                                    for func in &impl_block.functions {
+                                        let new_analyzed = if let Some(trait_name) =
+                                            &impl_block.trait_name
+                                        {
+                                            self.analyze_trait_impl_function(
+                                                func,
+                                                trait_name,
+                                                &local_registry,
+                                            )?
+                                        } else {
+                                            self.analyze_function_in_impl(
+                                                func,
+                                                impl_block,
+                                                &local_registry,
+                                            )?
+                                        };
+
+                                        // Check if ownership changed
+                                        let old_analyzed = &analyzed_funcs[&func.name];
+                                        let old_self = old_analyzed
+                                            .inferred_ownership
+                                            .get("self")
+                                            .copied()
+                                            .unwrap_or(OwnershipMode::Owned);
+                                        let new_self = new_analyzed
+                                            .inferred_ownership
+                                            .get("self")
+                                            .copied()
+                                            .unwrap_or(OwnershipMode::Owned);
+
+                                        if old_self != new_self {
+                                            analyzed_funcs.insert(func.name.clone(), new_analyzed);
+                                            changed = true;
+                                        }
+                                    }
+                                }
+
+                                // Process converged results
+                                for func in &impl_block.functions {
+                                    let mut analyzed_func = analyzed_funcs
+                                        .remove(&func.name)
+                                        .expect("Function should exist");
+
                                     analyzed_func.const_static_optimizations =
                                         self.detect_const_static_opportunities(&analyzed_func);
                                     analyzed_func.smallvec_optimizations =
                                         self.detect_smallvec_opportunities(func);
                                     analyzed_func.cow_optimizations =
                                         self.detect_cow_opportunities(func);
+
                                     let signature = self.build_signature(&analyzed_func);
                                     registry.add_function(func.name.clone(), signature);
                                     analyzed.push(analyzed_func);
