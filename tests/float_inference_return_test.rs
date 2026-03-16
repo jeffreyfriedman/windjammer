@@ -157,9 +157,9 @@ pub fn foo() -> f64 {
     );
 }
 
-/// No return type: default to f32 (game engine standard)
+/// No return type: default remains f64 (architecture constraint)
 #[test]
-fn test_no_return_type_defaults_f32() {
+fn test_no_return_type_defaults_f64() {
     let source = r#"
 pub fn foo() {
     let x = 1.0
@@ -167,8 +167,8 @@ pub fn foo() {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("1.0_f32") || output.contains("1.0f32"),
-        "Literal in function with no return type should default to f32, got:\n{}",
+        output.contains("1.0_f64") || output.contains("1.0f64"),
+        "Literal in function with no return type should default to f64, got:\n{}",
         output
     );
 }

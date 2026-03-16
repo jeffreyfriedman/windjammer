@@ -1567,9 +1567,7 @@ impl FloatInference {
             }
         }
         
-        // Return Unknown so caller falls through to context-sensitive logic
-        // (e.g., folded literals, expressions with (0,0) location)
-        FloatType::Unknown
+        FloatType::F64 // Default to f64
     }
 
     /// TDD FIX: Constrain an expression to match a specific type

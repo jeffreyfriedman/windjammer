@@ -205,7 +205,7 @@ pub fn foo() {
 }
 
 #[test]
-fn test_unannotated_let_defaults_to_f32() {
+fn test_unannotated_let_defaults_to_f64() {
     let source = r#"
 pub fn foo() {
     let x = 1.0
@@ -234,10 +234,10 @@ pub fn foo() {
     generator.set_float_inference(float_inference);
     let rust_code = generator.generate_program(&program, &analyzed);
 
-    // Unannotated let x = 1.0 should default to f32 (game engine standard)
+    // Unannotated let x = 1.0 should default to f64
     assert!(
-        rust_code.contains("1.0_f32") || rust_code.contains("1.0f32"),
-        "let x = 1.0 (no annotation) should default to f32.\nGenerated:\n{}",
+        rust_code.contains("1.0_f64") || rust_code.contains("1.0f64"),
+        "let x = 1.0 (no annotation) should default to f64.\nGenerated:\n{}",
         rust_code
     );
 }
