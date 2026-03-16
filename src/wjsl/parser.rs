@@ -235,8 +235,29 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.expect(Token::LAngle)?;
                 let inner = self.parse_type()?;
+                let size = if matches!(self.current, Token::Comma) {
+                    self.advance(); // consume comma
+                    if let Token::IntLiteral(n) = self.current {
+                        self.advance(); // consume number
+                        Some(n as u32)
+                    } else {
+                        return Err(anyhow!(
+                            "Expected array size after comma, found {:?}",
+                            self.current
+                        ));
+                    }
+                } else {
+                    None
+                };
                 self.expect(Token::RAngle)?;
-                Type::Array(Box::new(inner))
+                Type::Array(Box::new(inner), size)
+            }
+            Token::Atomic => {
+                self.advance();
+                self.expect(Token::LAngle)?;
+                let st = self.parse_scalar_type_in_generic()?;
+                self.expect(Token::RAngle)?;
+                Type::Atomic(st)
             }
             Token::Texture2dType | Token::Texture2d => {
                 self.advance();
@@ -552,8 +573,12 @@ impl<'a> Parser<'a> {
         self.expect(Token::Fn)?;
         let name = self.expect_ident()?;
         let params = self.parse_function_params()?;
-        self.expect(Token::Arrow)?;
-        let return_type = self.parse_type()?;
+        let return_type = if matches!(self.current, Token::Arrow) {
+            self.advance();
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
 
         self.expect(Token::LBrace)?;
         let body_start = self.lexer.position();
@@ -573,7 +598,7 @@ impl<'a> Parser<'a> {
                         return Ok(Function {
                             name,
                             params,
-                            return_type,
+                            return_type: return_type,
                             body: body.to_string(),
                         });
                     }
@@ -589,9 +614,25 @@ impl<'a> Parser<'a> {
         Err(anyhow!("Unclosed function body"))
     }
 
+    fn parse_private_var(&mut self) -> Result<PrivateVar> {
+        self.expect(Token::Var)?;
+        self.expect(Token::LAngle)?;
+        if !matches!(self.current, Token::Private) {
+            return Err(anyhow!("Expected 'private' in var<private>"));
+        }
+        self.advance();
+        self.expect(Token::RAngle)?;
+        let name = self.expect_ident()?;
+        self.expect(Token::Colon)?;
+        let ty = self.parse_type()?;
+        self.expect(Token::Semicolon)?;
+        Ok(PrivateVar { name, ty })
+    }
+
     fn parse_module(&mut self) -> Result<ShaderModule> {
         let mut structs = Vec::new();
         let mut bindings = Vec::new();
+        let mut private_vars = Vec::new();
         let mut functions = Vec::new();
         let mut entry_points = Vec::new();
 
@@ -672,12 +713,21 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            // var<private> name: Type;
+            if matches!(self.current, Token::Var) {
+                if let Ok(pv) = self.parse_private_var() {
+                    private_vars.push(pv);
+                    continue;
+                }
+            }
+
             self.advance(); // Skip unknown
         }
 
         Ok(ShaderModule {
             structs,
             bindings,
+            private_vars,
             functions,
             entry_points,
         })
