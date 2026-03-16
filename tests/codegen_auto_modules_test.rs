@@ -5,7 +5,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 #[test]
 fn test_auto_gen_creates_windjammer_modules_file() {
@@ -168,6 +167,22 @@ fn create_wj_file(dir: &Path, path: &str, content: &str) {
     fs::write(full_path, content).unwrap();
 }
 
+fn find_wj_files(dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let Ok(entries) = fs::read_dir(dir) else {
+        return result;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            result.extend(find_wj_files(&path));
+        } else if path.extension().and_then(|s| s.to_str()) == Some("wj") {
+            result.push(path);
+        }
+    }
+    result
+}
+
 fn compile_project(dir: &Path) {
     // TODO: Call actual compiler with auto-module generation
     // For now, stub that creates a basic file
@@ -183,24 +198,20 @@ fn compile_project(dir: &Path) {
 
     let src_wj_dir = dir.join("src_wj");
 
-    // Find all .wj files
-    for entry in WalkDir::new(&src_wj_dir).into_iter().flatten() {
-        let path = entry.path();
+    // Find all .wj files (recursive walk using std::fs)
+    for path in find_wj_files(&src_wj_dir) {
+        let relative = path.strip_prefix(&src_wj_dir).unwrap();
+        let module_name = relative
+            .with_extension("")
+            .to_str()
+            .unwrap()
+            .replace("/", "_")
+            .replace("\\", "_");
 
-        if path.extension().and_then(|s| s.to_str()) == Some("wj") {
-            let relative = path.strip_prefix(&src_wj_dir).unwrap();
-            let module_name = relative
-                .with_extension("")
-                .to_str()
-                .unwrap()
-                .replace("/", "_")
-                .replace("\\", "_");
+        let rs_path = relative.with_extension("rs");
 
-            let rs_path = relative.with_extension("rs");
-
-            content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
-            content.push_str(&format!("pub mod wj_{};\n\n", module_name));
-        }
+        content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
+        content.push_str(&format!("pub mod wj_{};\n\n", module_name));
     }
 
     // Create wj:: namespace

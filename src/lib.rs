@@ -28,6 +28,7 @@ pub mod test_utils;
 pub mod type_inference;
 pub mod type_registry;
 pub mod compiler;
+pub mod lib_rs_generator;
 pub mod ejector;
 pub mod error_mapper;
 pub mod shader;
