@@ -7,7 +7,6 @@
 //! when mixed with f32 operands. Fix: Constraint-based inference propagates
 //! known types (FieldAccess, Identifier, etc.) to float literals via MustMatch.
 
-use std::path::PathBuf;
 use tempfile::TempDir;
 use windjammer::{build_project, CompilationTarget};
 
