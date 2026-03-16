@@ -240,7 +240,7 @@ pub fn compute() -> f32 {
 }
 
 // =============================================================================
-// Unconstrained LHS: 1.0 + 2.0 with f64 return type → f64 from return type
+// Unconstrained LHS: 1.0 + 2.0 (no typed context) → default f64
 // =============================================================================
 
 #[test]
