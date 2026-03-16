@@ -228,13 +228,14 @@ fn test_nested_module_reexports_unique() {
 
     assert!(status.success());
 
-    // Check nested mod.rs
-    let nested_mod = fs::read_to_string(output_dir.join("ui/mod.rs")).unwrap();
-    println!("Nested ui/mod.rs:\n{}", nested_mod);
+    // Build outputs flat structure: all .wj files → output_dir/*.rs, output_dir/mod.rs
+    // (nested src/ui/button.wj, src/ui/input.wj → output/button.rs, output/input.rs)
+    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
+    println!("Generated mod.rs:\n{}", mod_rs);
 
     // Should have unique re-exports (no conflicts)
-    assert!(nested_mod.contains("pub use button::*;"));
-    assert!(nested_mod.contains("pub use input::*;"));
+    assert!(mod_rs.contains("pub use button::*;"));
+    assert!(mod_rs.contains("pub use input::*;"));
 }
 
 #[test]
@@ -289,17 +290,18 @@ pub struct State {
 
     assert!(status.success());
 
-    // Check nested components/mod.rs
-    let nested_mod = fs::read_to_string(output_dir.join("components/mod.rs")).unwrap();
-    println!("Nested components/mod.rs:\n{}", nested_mod);
+    // Build outputs flat structure: all .wj files → output_dir/*.rs, output_dir/mod.rs
+    // (nested src/components/toggle.wj, slider.wj → output/toggle.rs, output/slider.rs)
+    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
+    println!("Generated mod.rs:\n{}", mod_rs);
 
-    // Should NOT have glob re-exports due to conflict
+    // Should NOT have glob re-exports due to conflict (both export "State")
     let has_glob_reexports =
-        nested_mod.contains("pub use toggle::*;") && nested_mod.contains("pub use slider::*;");
+        mod_rs.contains("pub use toggle::*;") && mod_rs.contains("pub use slider::*;");
 
     if has_glob_reexports {
         // If it has glob re-exports, verify it would cause an error
-        panic!("Nested module should also detect and prevent ambiguous re-exports");
+        panic!("Compiler should detect and prevent ambiguous re-exports when both modules export State");
     }
 }
 

@@ -117,7 +117,7 @@ fn test() {
 }
 
 #[test]
-fn test_float_default_is_f64() {
+fn test_float_default_is_f32() {
     let source = r#"
 fn test() {
     let x = 1.0
@@ -125,8 +125,8 @@ fn test() {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("_f64"),
-        "Unconstrained 1.0 should default to f64, got:\n{}",
+        output.contains("_f32") || output.contains("f32"),
+        "Unconstrained 1.0 should default to f32 (game engine standard), got:\n{}",
         output
     );
 }
