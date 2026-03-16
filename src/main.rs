@@ -1260,10 +1260,11 @@ impl ModuleCompiler {
         // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
         let mut float_inference = type_inference::FloatInference::new();
         float_inference.set_global_struct_field_types(&self.global_struct_field_types);
+        float_inference.set_debug_source(&source);
         float_inference.infer_program(&program);
         
         if !float_inference.errors.is_empty() {
-            eprintln!("🚨 Float type inference errors in module {}:", module_path);
+            eprintln!("🚨 Float type inference errors in module {} (file {:?}):", module_path, file_path);
             for error in &float_inference.errors {
                 eprintln!("  {}", error);
             }
@@ -2030,6 +2031,7 @@ fn compile_file_impl(
             let mut float_inference = type_inference::FloatInference::new();
             float_inference.set_source_root(source_root);
             float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+            float_inference.set_debug_source(&source);
             float_inference.infer_program(&program);
             
             if !float_inference.errors.is_empty() {
@@ -2097,6 +2099,7 @@ fn compile_file_impl(
         let mut float_inference = type_inference::FloatInference::new();
         float_inference.set_source_root(source_root);
         float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        float_inference.set_debug_source(&source);
         float_inference.infer_program(&program);
         
         if !float_inference.errors.is_empty() {

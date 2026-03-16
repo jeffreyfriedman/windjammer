@@ -86,7 +86,7 @@ pub fn choose(cond: bool, f32_var: f32) -> f32 {
 
 #[test]
 fn test_if_f64_var_else_literal() {
-    // if cond { f64_var } else { 2.0 } → 2.0_f64
+    // if cond { f64_var } else { 2.0 } → 2.0_f64 (not f32!)
     let source = r#"
 pub fn choose(cond: bool, f64_var: f64) -> f64 {
     if cond {
@@ -96,7 +96,8 @@ pub fn choose(cond: bool, f64_var: f64) -> f64 {
     }
 }
 "#;
-    let rust = compile_and_assert(source, &["2.0"], false);
+    // Don't use expect_f32 - we want f64 for this case
+    let rust = compile_and_assert(source, &[], false);
     assert!(rust.contains("2.0_f64") || rust.contains("2.0f64"),
         "Literal in else branch should be f64 to match if branch.\n{}", rust);
 }
