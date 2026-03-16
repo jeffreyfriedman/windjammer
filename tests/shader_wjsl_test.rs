@@ -1,7 +1,6 @@
 //! TDD tests for .wjsl (Windjammer Shader Language)
 
-use windjammer::shader::{compile_shader, parse_shader, TypeChecker};
-use windjammer::shader::ast::{Type, ScalarType};
+use windjammer::shader::{compile_shader, parse_shader, ScalarType, Type, TypeChecker};
 
 #[test]
 fn test_parse_and_compile_simple_shader() {
