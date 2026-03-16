@@ -295,7 +295,72 @@ impl<'a> BodyParser<'a> {
     }
 
     fn parse_expr(&mut self) -> Result<Type> {
-        self.parse_additive()
+        self.parse_bitwise_or()
+    }
+
+    fn parse_bitwise_or(&mut self) -> Result<Type> {
+        let mut left = self.parse_bitwise_xor()?;
+        loop {
+            match &self.current {
+                Token::BitOr => {
+                    self.advance();
+                    let right = self.parse_bitwise_xor()?;
+                    left = check_binary_op(&left, BinaryOp::BitOr, &right)?;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_bitwise_xor(&mut self) -> Result<Type> {
+        let mut left = self.parse_bitwise_and()?;
+        loop {
+            match &self.current {
+                Token::BitXor => {
+                    self.advance();
+                    let right = self.parse_bitwise_and()?;
+                    left = check_binary_op(&left, BinaryOp::BitXor, &right)?;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_bitwise_and(&mut self) -> Result<Type> {
+        let mut left = self.parse_shift()?;
+        loop {
+            match &self.current {
+                Token::BitAnd => {
+                    self.advance();
+                    let right = self.parse_shift()?;
+                    left = check_binary_op(&left, BinaryOp::BitAnd, &right)?;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_shift(&mut self) -> Result<Type> {
+        let mut left = self.parse_additive()?;
+        loop {
+            match &self.current {
+                Token::Shl => {
+                    self.advance();
+                    let right = self.parse_additive()?;
+                    left = check_binary_op(&left, BinaryOp::Shl, &right)?;
+                }
+                Token::Shr => {
+                    self.advance();
+                    let right = self.parse_additive()?;
+                    left = check_binary_op(&left, BinaryOp::Shr, &right)?;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
     }
 
     fn parse_additive(&mut self) -> Result<Type> {
@@ -356,6 +421,18 @@ impl<'a> BodyParser<'a> {
             let ty = self.parse_unary()?;
             if !matches!(ty, Type::Scalar(ScalarType::Bool)) {
                 return Err(anyhow!("Cannot apply ! to non-bool type"));
+            }
+            Ok(ty)
+        } else if matches!(self.current, Token::BitAnd) {
+            // Address-of: &expr (e.g. atomicAdd(&draw_count, n))
+            self.advance();
+            let ty = self.parse_unary()?;
+            Ok(ty)
+        } else if matches!(self.current, Token::BitNot) {
+            self.advance();
+            let ty = self.parse_unary()?;
+            if !is_integer_scalar(&ty) {
+                return Err(anyhow!("Bitwise NOT (~) requires integer type, got {}", type_to_string(&ty)));
             }
             Ok(ty)
         } else {
@@ -525,10 +602,32 @@ enum BinaryOp {
     Mul,
     Div,
     Mod,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }
 
 fn check_binary_op(left: &Type, op: BinaryOp, right: &Type) -> Result<Type> {
     match op {
+        BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr => {
+            if !is_integer_scalar(left) || !is_integer_scalar(right) {
+                return Err(anyhow!(
+                    "Bitwise operator requires integer types, got {} and {}",
+                    type_to_string(left),
+                    type_to_string(right)
+                ));
+            }
+            if !types_match(left, right) {
+                return Err(anyhow!(
+                    "Bitwise operator requires same integer type on both sides, got {} and {}",
+                    type_to_string(left),
+                    type_to_string(right)
+                ));
+            }
+            Ok(left.clone())
+        }
         BinaryOp::Add | BinaryOp::Sub => {
             if vec_scalar_mismatch(left, right) {
                 let op_str = match op {
