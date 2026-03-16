@@ -165,10 +165,11 @@ pub fn build_project_ext(
         float_inference.infer_program(&program);
         if !float_inference.errors.is_empty() {
             for error in &float_inference.errors {
-                eprintln!("Float inference error: {}", error);
+                eprintln!("Float inference error in {}: {}", file.display(), error);
             }
             return Err(anyhow::anyhow!(
-                "Float type inference failed: {} error(s)",
+                "Float type inference failed in {}: {} error(s)",
+                file.display(),
                 float_inference.errors.len()
             ));
         }
@@ -180,9 +181,28 @@ pub fn build_project_ext(
         codegen.set_float_inference(float_inference);
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
-        let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
-        let output_file = output.join(format!("{}.rs", stem));
-        std::fs::write(output_file, rust_code)?;
+        // TDD: Preserve directory structure for library builds (hierarchical imports)
+        // Instead of flattening all .rs to output root, maintain relative path structure.
+        // This allows crate::module::submodule::* imports to resolve correctly.
+        let output_file = if wj_files.len() > 1 && library {
+            // Multi-file library build: preserve directory structure
+            let base_path = if path.is_file() {
+                path.parent().unwrap_or(path)
+            } else {
+                path
+            };
+            let relative_path = file.strip_prefix(base_path)?;
+            let output_with_structure = output.join(relative_path).with_extension("rs");
+            if let Some(parent) = output_with_structure.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            output_with_structure
+        } else {
+            // Single-file or non-library: flatten to output root (legacy behavior)
+            let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+            output.join(format!("{}.rs", stem))
+        };
+        std::fs::write(&output_file, rust_code)?;
     }
 
     // Emit metadata.json when building library
