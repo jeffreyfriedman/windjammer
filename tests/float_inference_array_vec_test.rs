@@ -117,8 +117,8 @@ fn test() {
 }
 
 #[test]
-fn test_no_annotation_remains_f64() {
-    // vec![1.0, 2.0] without type annotation → should remain f64
+fn test_no_annotation_defaults_f32() {
+    // vec![1.0, 2.0] without type annotation → defaults to f32 (game engine standard)
     let source = r#"
 fn test() {
     let v = vec![1.0, 2.0]
@@ -126,8 +126,8 @@ fn test() {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("_f64") || output.contains("1.0_f64") || output.contains("2.0_f64"),
-        "Unannotated vec![1.0, 2.0] should default to f64, got:\n{}",
+        output.contains("_f32") || output.contains("1.0_f32") || output.contains("2.0_f32"),
+        "Unannotated vec![1.0, 2.0] should default to f32, got:\n{}",
         output
     );
 }
