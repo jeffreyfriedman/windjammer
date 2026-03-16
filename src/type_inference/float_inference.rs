@@ -710,6 +710,29 @@ impl FloatInference {
                             format!("binary operation {:?}", op),
                         ));
                         
+                        // TDD FIX: Backward propagation - when either operand is a variable with float
+                        // literal initializer, add DIRECT constraint from the typed operand to the
+                        // literal. This ensures `self.player.position.x + offset_x` propagates f32
+                        // to `let offset_x = 0.0`. Without this, multi-file builds may fail.
+                        if let Expression::Identifier { name, .. } = right {
+                            if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                                self.constraints.push(Constraint::MustMatch(
+                                    left_id,
+                                    value_id,
+                                    format!("backward propagation: {} used with typed LHS", name),
+                                ));
+                            }
+                        }
+                        if let Expression::Identifier { name, .. } = left {
+                            if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                                self.constraints.push(Constraint::MustMatch(
+                                    right_id,
+                                    value_id,
+                                    format!("backward propagation: {} used with typed RHS", name),
+                                ));
+                            }
+                        }
+                        
                         // Recursively constrain nested float literals
                         self.constrain_nested_floats(left, return_type);
                         self.constrain_nested_floats(right, return_type);
@@ -723,6 +746,25 @@ impl FloatInference {
                             right_id,
                             format!("comparison {:?} operands", op),
                         ));
+                        // Backward propagation for comparison: variable + typed operand
+                        if let Expression::Identifier { name, .. } = right {
+                            if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                                self.constraints.push(Constraint::MustMatch(
+                                    left_id,
+                                    value_id,
+                                    format!("backward propagation: {} in comparison", name),
+                                ));
+                            }
+                        }
+                        if let Expression::Identifier { name, .. } = left {
+                            if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                                self.constraints.push(Constraint::MustMatch(
+                                    right_id,
+                                    value_id,
+                                    format!("backward propagation: {} in comparison", name),
+                                ));
+                            }
+                        }
                     }
                     _ => {
                         // Logical ops (&&, ||) don't constrain float types
