@@ -192,6 +192,47 @@ struct Example {
 - **`@size(N)`** — Override size (for explicit padding blocks).
 - **Default:** Compiler uses WGSL rules (vec2=8, vec3=16, vec4=16, etc.).
 
+### 3.6 Type Checking Rules (Compile-Time Validation)
+
+WJSL performs compile-time type checking before codegen. The following rules are enforced:
+
+#### Binary Operations
+
+| Left | Op | Right | Result | Notes |
+|------|-----|-------|--------|-------|
+| `vec3` | `+` `-` | `vec3` | `vec3` | ✅ Same-size vectors |
+| `vec3` | `+` `-` | `f32` | **ERROR** | ❌ Use `vec3 + vec3(1.0, 1.0, 1.0)` |
+| `vec2` | `+` `-` | `vec2` | `vec2` | ✅ |
+| `vec4` | `+` `-` | `vec4` | `vec4` | ✅ |
+| `vec3` | `+` `-` | `vec2` | **ERROR** | ❌ Vector sizes must match |
+| `f32` | `*` | `vec3` | `vec3` | ✅ Scalar multiplication |
+| `vec3` | `*` | `f32` | `vec3` | ✅ Scalar multiplication |
+| `mat4x4` | `*` | `vec4` | `vec4` | ✅ Matrix-vector multiply |
+| `mat3x3` | `*` | `vec3` | `vec3` | ✅ |
+
+**Error message for vec + scalar:**
+```
+Cannot add f32 to vec3. Did you mean vec3 + vec3(f32, f32, f32)?
+```
+
+#### Binding Validation
+
+- **Unique bindings per group:** `@binding(N)` must be unique within each `@group(G)`.
+- **Error:** `Duplicate @binding(0) in @group(0): 'b' conflicts with 'a'`
+- Different groups may reuse binding numbers: `@group(0) @binding(0)` and `@group(1) @binding(0)` are valid.
+
+#### Function Signatures
+
+- Return type must match the type of the `return` expression.
+- Struct field access (`material.base_color`) is type-checked against struct declarations.
+- Swizzles (`.rgb`, `.xy`, `.xyz`) are validated.
+
+#### Implementation
+
+- **Module:** `windjammer/src/wjsl/type_checker.rs`
+- **API:** `type_check_wjsl(source: &str) -> Result<()>`
+- **Integration:** Type checking runs automatically in `transpile_wjsl()` before codegen.
+
 ---
 
 ## 4. Three Example Shaders
