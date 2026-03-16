@@ -42,6 +42,48 @@ pub struct FunctionSignature {
     pub parent_type: Option<String>,
 }
 
+/// Crate-level metadata for cross-crate type inference.
+/// Emitted as metadata.json when building libraries (--library).
+/// Loaded when compiling apps that depend on external Windjammer crates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrateMetadata {
+    /// All structs: struct_name → field_name → serialized Type
+    pub structs: HashMap<String, HashMap<String, String>>,
+    /// All function signatures: name → signature
+    pub functions: HashMap<String, FunctionSignature>,
+    /// Version for compatibility
+    pub version: String,
+}
+
+impl Default for CrateMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CrateMetadata {
+    pub fn new() -> Self {
+        CrateMetadata {
+            structs: HashMap::new(),
+            functions: HashMap::new(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }
+    }
+
+    /// Merge in struct/function data from a ModuleMetadata
+    pub fn merge_module(&mut self, module: &ModuleMetadata) {
+        for (struct_name, fields) in &module.structs {
+            self.structs
+                .entry(struct_name.clone())
+                .or_default()
+                .extend(fields.clone());
+        }
+        for (func_name, sig) in &module.functions {
+            self.functions.insert(func_name.clone(), sig.clone());
+        }
+    }
+}
+
 impl ModuleMetadata {
     pub fn new(module_path: String) -> Self {
         ModuleMetadata {

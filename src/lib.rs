@@ -50,7 +50,7 @@ pub mod test_runner;
 
 /// Build a Windjammer project - compiles .wj files to Rust.
 /// Used by integration tests and CLI.
-pub use compiler::build_project;
+pub use compiler::{build_project, build_project_ext};
 
 // CLI exports (used by cli/build.rs, cli/test.rs, wj binary)
 #[cfg(feature = "cli")]

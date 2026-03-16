@@ -122,6 +122,10 @@ enum Commands {
         /// Skip cargo build after transpilation (transpile only)
         #[arg(long)]
         no_cargo: bool,
+
+        /// External crate metadata for cross-crate type inference (NAME=PATH, repeatable)
+        #[arg(long, value_name = "NAME=PATH")]
+        metadata: Vec<String>,
     },
 
     /// Compile and run a Windjammer file
@@ -320,6 +324,7 @@ fn main() -> anyhow::Result<()> {
             library,
             module_file,
             no_cargo,
+            metadata,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -346,6 +351,7 @@ fn main() -> anyhow::Result<()> {
                 library,
                 module_file,
                 !no_cargo, // run_cargo = !no_cargo
+                &metadata,
             )?;
         }
         Commands::Run {
@@ -536,6 +542,7 @@ fn main() -> anyhow::Result<()> {
                 false, // library
                 false, // module_file
                 false, // run_cargo - not needed when check=true
+                &[],   // metadata
             )
             .ok(); // Ignore errors, we'll get them from the TUI
 
