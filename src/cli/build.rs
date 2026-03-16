@@ -210,24 +210,31 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
 }
 
 fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
-    use crate::codegen;
-    use crate::lexer::Lexer;
-    use crate::parser::Parser;
     use std::fs;
 
     // Read source file
     let source = fs::read_to_string(path)?;
 
-    // Lex and parse
-    let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
-    let program = parser
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+    // Detect .wjsl files - use WJSL transpiler (RFC syntax: @vertex, @fragment, etc.)
+    let (wgsl_source, additional_files) = if path.extension().and_then(|e| e.to_str()) == Some("wjsl") {
+        let wgsl = crate::wjsl::transpile_wjsl(&source)?;
+        (wgsl, Vec::new())
+    } else {
+        // Use Windjammer parser for .wj files
+        use crate::codegen;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
 
-    // Generate WGSL
-    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+        let mut lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+        let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+        (output.source, output.additional_files)
+    };
 
     // Create output directory
     fs::create_dir_all(&config.output_dir)?;
@@ -237,11 +244,11 @@ fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> R
     let output_path = config.output_dir.join(format!("{}.wgsl", input_stem));
     
     // Write WGSL output
-    fs::write(&output_path, &output.source)?;
+    fs::write(&output_path, &wgsl_source)?;
     println!("  {} {:?}", "Generated".green(), output_path);
 
     // Write additional files if any
-    for (filename, content) in &output.additional_files {
+    for (filename, content) in &additional_files {
         let file_path = config.output_dir.join(filename);
         fs::write(&file_path, content)?;
         println!("  {} {:?}", "Generated".green(), file_path);
