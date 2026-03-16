@@ -165,7 +165,20 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        // 2. Check methods in current impl block
+                        // 2. TDD FIX: Check signature registry FIRST (has analyzed ownership from previous passes)
+                        if let Some(reg) = registry {
+                            if let Some(sig) = reg.get_signature(method) {
+                                if sig.has_self_receiver {
+                                    if let Some(&ownership) = sig.param_ownership.first() {
+                                        if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Check methods in current impl block (fallback for first pass)
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
                                 if self.function_modifies_self_fields_recursive(called_func) {
