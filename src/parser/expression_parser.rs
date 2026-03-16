@@ -653,34 +653,38 @@ impl Parser {
             }
             Token::IntLiteral(n) => {
                 let n = *n;
+                let loc = self.current_location(); // Capture BEFORE advance
                 self.advance();
                 self.alloc_expr(Expression::Literal {
                     value: Literal::Int(n),
-                    location: self.current_location(),
+                    location: loc,
                 })
             }
             Token::FloatLiteral(f) => {
                 let f = *f;
+                let loc = self.current_location(); // Capture BEFORE advance - critical for float type inference
                 self.advance();
                 self.alloc_expr(Expression::Literal {
                     value: Literal::Float(f),
-                    location: self.current_location(),
+                    location: loc,
                 })
             }
             Token::StringLiteral(s) => {
                 let s = s.clone();
+                let loc = self.current_location();
                 self.advance();
                 self.alloc_expr(Expression::Literal {
                     value: Literal::String(s),
-                    location: self.current_location(),
+                    location: loc,
                 })
             }
             Token::CharLiteral(c) => {
                 let c = *c;
+                let loc = self.current_location();
                 self.advance();
                 self.alloc_expr(Expression::Literal {
                     value: Literal::Char(c),
-                    location: self.current_location(),
+                    location: loc,
                 })
             }
             Token::InterpolatedString(parts) => {

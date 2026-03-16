@@ -27,6 +27,7 @@ use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
 use crate::linter::rust_leakage::RustLeakageLinter;
 use crate::parser::Parser;
+use crate::type_inference::FloatInference;
 use crate::CompilationTarget;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -86,10 +87,25 @@ pub fn build_project(
             .infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
+        // TDD: Float literal type inference - propagate f32/f64 through binary ops
+        // Enables pos.x + 10.0 to infer 10.0 as f32 when pos.x is f32
+        let mut float_inference = FloatInference::new();
+        float_inference.infer_program(&program);
+        if !float_inference.errors.is_empty() {
+            for error in &float_inference.errors {
+                eprintln!("Float inference error: {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Float type inference failed: {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
         // Single-file builds: use is_module=false to avoid `use super::*` which fails
         // when the generated .rs is compiled standalone (no parent module)
         let mut codegen = CodeGenerator::new(registry, target);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
+        codegen.set_float_inference(float_inference);
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
         let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");

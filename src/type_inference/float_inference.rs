@@ -1567,7 +1567,9 @@ impl FloatInference {
             }
         }
         
-        FloatType::F64 // Default to f64
+        // Return Unknown when no match - enables fallback to context-sensitive inference
+        // (struct field type, return type, etc.) in generate_literal_with_context
+        FloatType::Unknown
     }
 
     /// TDD FIX: Constrain an expression to match a specific type
