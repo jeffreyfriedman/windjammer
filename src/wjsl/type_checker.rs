@@ -407,20 +407,29 @@ impl<'a> BodyParser<'a> {
                 let name = name.clone();
                 self.advance();
                 if matches!(self.current, Token::LParen) {
-                    self.parse_function_call(&name)
-                } else if matches!(self.current, Token::Dot) {
-                    self.advance();
-                    let member = self.expect_ident()?;
-                    if let Some(ty) = self.symbols.get(&name) {
-                        self.get_swizzle_or_field_type(ty, &member)
-                    } else {
-                        Err(anyhow!("Unknown identifier '{}'", name))
-                    }
-                } else if let Some(ty) = self.symbols.get(&name) {
-                    Ok(ty.clone())
-                } else {
-                    Err(anyhow!("Unknown identifier '{}'", name))
+                    return self.parse_function_call(&name);
                 }
+                let mut ty = self
+                    .symbols
+                    .get(&name)
+                    .ok_or_else(|| anyhow!("Unknown identifier '{}'", name))?
+                    .clone();
+                // Postfix: [index] and .member can chain (e.g. arr[i], arr[i].x, m[0][3])
+                loop {
+                    if matches!(self.current, Token::LBracket) {
+                        self.advance();
+                        let _index = self.parse_expr()?;
+                        self.expect(Token::RBracket)?;
+                        ty = element_type_for_index(&ty)?;
+                    } else if matches!(self.current, Token::Dot) {
+                        self.advance();
+                        let member = self.expect_ident()?;
+                        ty = self.get_swizzle_or_field_type(&ty, &member)?;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(ty)
             }
             Token::LParen => {
                 self.advance();
@@ -634,6 +643,23 @@ fn is_numeric(ty: &Type) -> bool {
 
 fn is_integer_scalar(ty: &Type) -> bool {
     matches!(ty, Type::Scalar(ScalarType::U32) | Type::Scalar(ScalarType::I32))
+}
+
+/// Element type when indexing: array[i] -> element, vec4[i] -> f32, mat4x4[i] -> vec4
+fn element_type_for_index(ty: &Type) -> Result<Type> {
+    match ty {
+        Type::Array(inner, _) => Ok((**inner).clone()),
+        Type::Vec2(e) => Ok(Type::Scalar((*e).unwrap_or(ScalarType::F32))),
+        Type::Vec3(e) => Ok(Type::Scalar((*e).unwrap_or(ScalarType::F32))),
+        Type::Vec4(e) => Ok(Type::Scalar((*e).unwrap_or(ScalarType::F32))),
+        Type::Mat2x2(e) => Ok(Type::Vec2(*e)),
+        Type::Mat3x3(e) => Ok(Type::Vec3(*e)),
+        Type::Mat4x4(e) => Ok(Type::Vec4(*e)),
+        _ => Err(anyhow!(
+            "Cannot index type {}",
+            type_to_string(ty)
+        )),
+    }
 }
 
 fn scalar_of(ty: &Type) -> ScalarType {
