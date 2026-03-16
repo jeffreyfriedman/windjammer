@@ -148,6 +148,10 @@ impl KeyboardState {
             self.keys[key as usize] = pressed
         }
     }
+    
+    pub fn is_key_down(self, key: i32) -> bool {
+        key >= 0 && key < (self.keys.len() as i32) && self.keys[key as usize]
+    }
 }
 
 pub struct Game {
@@ -162,10 +166,24 @@ impl Game {
     }
     
     // Calls self.keyboard.update_key(...) which mutates keyboard
-    // Should infer &mut self, NOT self
+    // ALSO calls self.keyboard.is_key_down(...) which reads keyboard
+    // Should infer &mut self, NOT &self (mutation takes precedence)
     pub fn poll_input(self) {
-        self.keyboard.update_key(1, true)
+        let w_down = true
+        let was_down = self.keyboard.is_key_down(1)
+        self.keyboard.update_key(1, w_down && !was_down)
         self.keyboard.update_key(2, false)
+    }
+    
+    // CRITICAL TEST: Private method calling mutating method on field
+    // This reproduces the exact breach-protocol pattern
+    fn private_poll(self) {
+        self.keyboard.update_key(5, true)
+    }
+    
+    // Public method calling private method that mutates
+    pub fn update(self) {
+        self.private_poll()
     }
 }
 "#,
@@ -177,18 +195,25 @@ impl Game {
     
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
     
-    // ASSERT: poll_input should be &mut self
+    // ASSERT: poll_input should be &mut self (transitive mutation)
     assert!(
         rust_code.contains("pub fn poll_input(&mut self)"),
-        "poll_input should be &mut self (mutates field via method call). Found:\n{}",
+        "poll_input should be &mut self (calls mutating method on field). Found:\n{}",
         rust_code.lines().find(|l| l.contains("fn poll_input")).unwrap_or("NOT FOUND")
     );
     
-    // ASSERT: update_key should also be &mut self
+    // ASSERT: update_key should be &mut self
     assert!(
         rust_code.contains("pub fn update_key(&mut self"),
         "update_key should be &mut self. Found:\n{}",
         rust_code.lines().find(|l| l.contains("fn update_key")).unwrap_or("NOT FOUND")
+    );
+    
+    // ASSERT: is_key_down should be &self (read-only)
+    assert!(
+        rust_code.contains("pub fn is_key_down(&self"),
+        "is_key_down should be &self (read-only). Found:\n{}",
+        rust_code.lines().find(|l| l.contains("fn is_key_down")).unwrap_or("NOT FOUND")
     );
 }
 
