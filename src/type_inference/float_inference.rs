@@ -622,6 +622,23 @@ impl FloatInference {
                         self.collect_statement_constraints(stmt, return_type);
                     }
                 }
+                // TDD FIX: Unify then/else branches for if-expr used as value (e.g. x = if c { a } else { b })
+                // Ensures 0.0 in else branch gets f32 from 1.0/dt in then branch when dt: f32
+                if let (Some(then_last), Some(else_stmts)) = (then_block.last(), else_block) {
+                    if let Some(else_last) = else_stmts.last() {
+                        if let (Statement::Expression { expr: te, .. }, Statement::Expression { expr: ee, .. }) =
+                            (then_last, else_last)
+                        {
+                            let id1 = self.get_expr_id(te);
+                            let id2 = self.get_expr_id(ee);
+                            self.constraints.push(Constraint::MustMatch(
+                                id1,
+                                id2,
+                                "if/else branches must have same type".to_string(),
+                            ));
+                        }
+                    }
+                }
             }
             Statement::While { condition, body, .. } => {
                 // TDD FIX: Traverse while loop body to find float literals in struct fields
@@ -751,11 +768,66 @@ impl FloatInference {
                         let left_id = self.get_expr_id(left);
                         let right_id = self.get_expr_id(right);
                         
+                        let binary_id = self.get_expr_id(expr);
                         self.constraints.push(Constraint::MustMatch(
                             left_id,
                             right_id,
                             format!("binary operation {:?}", op),
                         ));
+                        // TDD FIX: Link binary result to operands so if/else MustMatch propagates
+                        // e.g. 1.0/dt has type f32 → binary result gets f32 → else 0.0 gets f32
+                        self.constraints.push(Constraint::MustMatch(
+                            left_id,
+                            binary_id,
+                            "binary result matches LHS".to_string(),
+                        ));
+                        
+                        // TDD FIX: Direct propagation from function params to literals
+                        // When LHS is Identifier with explicit float type (e.g. dt: f32), constrain RHS directly.
+                        // Fixes dt * 1000.0 when dt: f32 - ensures 1000.0 gets f32 in multi-file builds.
+                        if let Expression::Identifier { name, .. } = left {
+                            if let Some(var_type) = self.var_types.get(name).or_else(|| self.const_types.get(name)) {
+                                if let Some(float_ty) = self.extract_float_type(var_type) {
+                                    match float_ty {
+                                        FloatType::F32 => {
+                                            self.constraints.push(Constraint::MustBeF32(
+                                                right_id,
+                                                format!("binary op RHS: {} has type f32", name),
+                                            ));
+                                        }
+                                        FloatType::F64 => {
+                                            self.constraints.push(Constraint::MustBeF64(
+                                                right_id,
+                                                format!("binary op RHS: {} has type f64", name),
+                                            ));
+                                        }
+                                        FloatType::Unknown => {}
+                                    }
+                                }
+                            }
+                        }
+                        // Same for RHS identifier (e.g. 1000.0 * dt)
+                        if let Expression::Identifier { name, .. } = right {
+                            if let Some(var_type) = self.var_types.get(name).or_else(|| self.const_types.get(name)) {
+                                if let Some(float_ty) = self.extract_float_type(var_type) {
+                                    match float_ty {
+                                        FloatType::F32 => {
+                                            self.constraints.push(Constraint::MustBeF32(
+                                                left_id,
+                                                format!("binary op LHS: {} has type f32", name),
+                                            ));
+                                        }
+                                        FloatType::F64 => {
+                                            self.constraints.push(Constraint::MustBeF64(
+                                                left_id,
+                                                format!("binary op LHS: {} has type f64", name),
+                                            ));
+                                        }
+                                        FloatType::Unknown => {}
+                                    }
+                                }
+                            }
+                        }
                         
                         // TDD FIX: Backward propagation - when either operand is a variable with float
                         // literal initializer, add DIRECT constraint from the typed operand to the
@@ -793,6 +865,49 @@ impl FloatInference {
                             right_id,
                             format!("comparison {:?} operands", op),
                         ));
+                        // TDD FIX: Direct propagation from params to literals in comparisons (dt > 0.0)
+                        if let Expression::Identifier { name, .. } = left {
+                            if let Some(var_type) = self.var_types.get(name).or_else(|| self.const_types.get(name)) {
+                                if let Some(float_ty) = self.extract_float_type(var_type) {
+                                    match float_ty {
+                                        FloatType::F32 => {
+                                            self.constraints.push(Constraint::MustBeF32(
+                                                right_id,
+                                                format!("comparison RHS: {} has type f32", name),
+                                            ));
+                                        }
+                                        FloatType::F64 => {
+                                            self.constraints.push(Constraint::MustBeF64(
+                                                right_id,
+                                                format!("comparison RHS: {} has type f64", name),
+                                            ));
+                                        }
+                                        FloatType::Unknown => {}
+                                    }
+                                }
+                            }
+                        }
+                        if let Expression::Identifier { name, .. } = right {
+                            if let Some(var_type) = self.var_types.get(name).or_else(|| self.const_types.get(name)) {
+                                if let Some(float_ty) = self.extract_float_type(var_type) {
+                                    match float_ty {
+                                        FloatType::F32 => {
+                                            self.constraints.push(Constraint::MustBeF32(
+                                                left_id,
+                                                format!("comparison LHS: {} has type f32", name),
+                                            ));
+                                        }
+                                        FloatType::F64 => {
+                                            self.constraints.push(Constraint::MustBeF64(
+                                                left_id,
+                                                format!("comparison LHS: {} has type f64", name),
+                                            ));
+                                        }
+                                        FloatType::Unknown => {}
+                                    }
+                                }
+                            }
+                        }
                         // Backward propagation for comparison: variable + typed operand
                         if let Expression::Identifier { name, .. } = right {
                             if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
@@ -1180,6 +1295,33 @@ impl FloatInference {
                 // Match statements inside blocks weren't being visited!
                 for stmt in statements {
                     self.collect_statement_constraints(stmt, return_type);
+                }
+                // TDD FIX: Constrain block result to return_type when block is used as value
+                // For `x = if c { a } else { b }`, the block wraps the If; constrain both branches
+                if let Some(last_stmt) = statements.last() {
+                    let block_id = self.get_expr_id(expr);
+                    if let Statement::If { then_block, else_block, .. } = last_stmt {
+                        if let (Some(then_last), Some(else_stmts)) = (then_block.last(), else_block) {
+                            if let Some(else_last) = else_stmts.last() {
+                                if let (Statement::Expression { expr: te, .. }, Statement::Expression { expr: ee, .. }) =
+                                    (then_last, else_last)
+                                {
+                                    let then_id = self.get_expr_id(te);
+                                    let else_id = self.get_expr_id(ee);
+                                    self.constraints.push(Constraint::MustMatch(
+                                        block_id,
+                                        then_id,
+                                        "block result from if then".to_string(),
+                                    ));
+                                    self.constraints.push(Constraint::MustMatch(
+                                        block_id,
+                                        else_id,
+                                        "block result from if else".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Expression::FieldAccess { object, field, .. } => {
