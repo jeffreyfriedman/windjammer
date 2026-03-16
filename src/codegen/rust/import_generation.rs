@@ -586,11 +586,12 @@ impl CodeGenerator<'_> {
                                 // Internal module - add crate:: prefix
                                 format!("use crate::{};\n", rust_path)
                             } else {
-                                // TDD FIX: For unknown modules, assume same-file module and use self:: prefix
-                                // This handles pub use statements like "pub use inner_module::MyType"
-                                // where inner_module is defined in the same file.
-                                // Default to self:: instead of bare paths to avoid Rust errors.
-                                format!("use self::{};\n", rust_path)
+                                // TDD FIX: For external crates and crate-level re-exports, use crate:: prefix
+                                // This handles imports like "windjammer_game_core::math::Vec3" where
+                                // windjammer_game_core is re-exported at crate root with:
+                                //   pub use windjammer_app as windjammer_game_core;
+                                // Submodules access it via crate::windjammer_game_core, not self::
+                                format!("use crate::{};\n", rust_path)
                             }
                         } else {
                             // Single identifier (Vec3) - likely a type, keep as-is
