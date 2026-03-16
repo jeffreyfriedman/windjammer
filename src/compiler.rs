@@ -26,10 +26,13 @@ use crate::analyzer::Analyzer;
 use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
 use crate::linter::rust_leakage::RustLeakageLinter;
+use crate::metadata::{CrateMetadata, FunctionSignature, ModuleMetadata};
 use crate::parser::Parser;
+use crate::parser::ast::core::Item;
 use crate::type_inference::FloatInference;
 use crate::CompilationTarget;
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Build a Windjammer project - compiles .wj files to Rust.
@@ -44,11 +47,30 @@ pub fn build_project(
     target: CompilationTarget,
     enable_lint: bool,
 ) -> Result<()> {
+    build_project_ext(path, output, target, enable_lint, false, &[])
+}
+
+/// Extended build with library mode and external crate metadata.
+pub fn build_project_ext(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+) -> Result<()> {
     let wj_files = find_wj_files(path)?;
     if wj_files.is_empty() {
         return Ok(());
     }
     std::fs::create_dir_all(output)?;
+
+    let external_paths: HashMap<String, PathBuf> = external_metadata
+        .iter()
+        .map(|(name, p)| (name.replace('-', "_"), (*p).to_path_buf()))
+        .collect();
+
+    let mut crate_metadata = CrateMetadata::new();
 
     for file in &wj_files {
         let source = std::fs::read_to_string(file)?;
@@ -62,6 +84,54 @@ pub fn build_project(
         let program = parser
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+        // Collect metadata for library emission
+        if library {
+            let mut module_meta = ModuleMetadata::new(
+                file.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+            );
+            for item in &program.items {
+                match item {
+                    Item::Struct { decl, .. } => {
+                        let mut fields = HashMap::new();
+                        for field in &decl.fields {
+                            fields.insert(
+                                field.name.clone(),
+                                ModuleMetadata::serialize_type(&field.field_type),
+                            );
+                        }
+                        module_meta.structs.insert(decl.name.clone(), fields);
+                    }
+                    Item::Function { decl, .. } => {
+                        module_meta.functions.insert(
+                            decl.name.clone(),
+                            FunctionSignature {
+                                params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                                return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                is_associated: false,
+                                parent_type: None,
+                            },
+                        );
+                    }
+                    Item::Impl { block, .. } => {
+                        for func_decl in &block.functions {
+                            let full_name = format!("{}::{}", block.type_name, func_decl.name);
+                            module_meta.functions.insert(
+                                full_name,
+                                FunctionSignature {
+                                    params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                                    return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                    is_associated: true,
+                                    parent_type: Some(block.type_name.clone()),
+                                },
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            crate_metadata.merge_module(&module_meta);
+        }
 
         let mut analyzer = Analyzer::new();
         analyzer
@@ -87,9 +157,11 @@ pub fn build_project(
             .infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        // TDD: Float literal type inference - propagate f32/f64 through binary ops
-        // Enables pos.x + 10.0 to infer 10.0 as f32 when pos.x is f32
+        // TDD: Float literal type inference - with external crate metadata for cross-crate inference
         let mut float_inference = FloatInference::new();
+        if !external_paths.is_empty() {
+            float_inference.set_external_crate_metadata_paths(&external_paths);
+        }
         float_inference.infer_program(&program);
         if !float_inference.errors.is_empty() {
             for error in &float_inference.errors {
@@ -112,6 +184,14 @@ pub fn build_project(
         let output_file = output.join(format!("{}.rs", stem));
         std::fs::write(output_file, rust_code)?;
     }
+
+    // Emit metadata.json when building library
+    if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {
+        let metadata_path = output.join("metadata.json");
+        let metadata_json = serde_json::to_string_pretty(&crate_metadata)?;
+        std::fs::write(&metadata_path, metadata_json)?;
+    }
+
     Ok(())
 }
 

@@ -66,6 +66,9 @@ pub struct FloatInference {
     var_element_types: HashMap<String, Type>,
     /// Const/static types: name → Type (for const F: f32 = 1.0)
     const_types: HashMap<String, Type>,
+    /// External crate metadata: crate_name → path to metadata.json directory
+    /// Used for cross-crate type inference (e.g., windjammer_game_core)
+    external_crate_metadata_paths: std::collections::HashMap<String, std::path::PathBuf>,
 }
 
 impl FloatInference {
@@ -84,6 +87,7 @@ impl FloatInference {
             current_impl_type: None,
             var_element_types: HashMap::new(),
             const_types: HashMap::new(),
+            external_crate_metadata_paths: std::collections::HashMap::new(),
         }
     }
     
@@ -104,6 +108,16 @@ impl FloatInference {
                 .or_default()
                 .extend(fields.clone());
         }
+    }
+
+    /// Register external crate metadata paths for cross-crate type inference.
+    /// When loading imports like `use mylib::vec3::Vec3`, loads metadata.json
+    /// from the given path to get Vec3's field types (e.g., x: f32).
+    pub fn set_external_crate_metadata_paths(
+        &mut self,
+        paths: &std::collections::HashMap<String, std::path::PathBuf>,
+    ) {
+        self.external_crate_metadata_paths = paths.clone();
     }
 
     /// Main entry point: Infer float types for a program
@@ -129,7 +143,7 @@ impl FloatInference {
     
     /// TDD FIX: Load function signatures from imported modules' metadata files
     fn load_imported_metadata<'ast>(&mut self, program: &Program<'ast>) {
-        use crate::metadata::ModuleMetadata;
+        use crate::metadata::{CrateMetadata, ModuleMetadata};
         use std::path::PathBuf;
         
         
@@ -137,6 +151,7 @@ impl FloatInference {
             if let Item::Use { path, .. } = item {
                 // Convert import path to file path
                 // e.g., "crate::math::vec3::Vec3" → "math/vec3.wj.meta" (skip type name!)
+                // e.g., "mylib::vec3::Vec3" → external crate, load from metadata.json
                 let mut module_path: Vec<String> = path.iter()
                     .skip_while(|s| s.as_str() == "crate" || s.as_str() == "self" || s.as_str() == "super")
                     .map(|s| s.clone())
@@ -148,10 +163,42 @@ impl FloatInference {
                 }
                 
                 // TDD FIX: Last element is type/function name, not module!
-                // "crate::math::vec3::Vec3" → ["math", "vec3", "Vec3"]
-                // We want "math/vec3.wj.meta", not "math/vec3/Vec3.wj.meta"
                 let type_name = module_path.pop(); // Remove type name (Vec3)
                 
+                // CROSS-CRATE: Check for external crate metadata first
+                if let (Some(ref crate_name), Some(ref ty_name)) = (module_path.first(), &type_name) {
+                    let crate_key = crate_name.replace('-', "_");
+                    if let Some(meta_dir) = self.external_crate_metadata_paths.get(&crate_key) {
+                        let metadata_path = meta_dir.join("metadata.json");
+                        if let Ok(meta_json) = std::fs::read_to_string(&metadata_path) {
+                            if let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&meta_json) {
+                                // Load struct field types for the imported type
+                                if let Some(fields) = crate_meta.structs.get(ty_name) {
+                                    let mut field_map = HashMap::new();
+                                    for (field_name, type_str) in fields {
+                                        if let Some(field_type) = ModuleMetadata::deserialize_type(type_str) {
+                                            field_map.insert(field_name.clone(), field_type);
+                                        }
+                                    }
+                                    if !field_map.is_empty() {
+                                        self.struct_field_types.insert(ty_name.clone(), field_map);
+                                    }
+                                }
+                                // Load function signatures
+                                for (func_name, sig) in &crate_meta.functions {
+                                    let params: Vec<Type> = sig.params.iter()
+                                        .filter_map(|s| ModuleMetadata::deserialize_type(s))
+                                        .collect();
+                                    let return_type = sig.return_type
+                                        .as_ref()
+                                        .and_then(|s| ModuleMetadata::deserialize_type(s));
+                                    self.function_signatures.insert(func_name.clone(), (params, return_type));
+                                }
+                                continue; // Handled, skip .wj.meta lookup
+                            }
+                        }
+                    }
+                }
                 
                 if module_path.is_empty() {
                     continue; // Import from current module

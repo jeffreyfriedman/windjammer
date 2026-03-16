@@ -32,6 +32,7 @@ pub fn execute(
     library: bool,
     module_file: bool,
     run_cargo: bool,
+    metadata: &[String],
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
@@ -81,7 +82,18 @@ pub fn execute(
         }
     };
 
-    crate::build_project(path, output_dir, target, true)?;
+    // Parse --metadata NAME=PATH into (name, path) pairs
+    let external_metadata: Vec<(&str, &Path)> = metadata
+        .iter()
+        .filter_map(|s| {
+            let mut split = s.splitn(2, '=');
+            let name = split.next()?;
+            let path_str = split.next()?;
+            Some((name, Path::new(path_str)))
+        })
+        .collect();
+
+    crate::build_project_ext(path, output_dir, target, true, library, &external_metadata)?;
 
     // Generate mod.rs if requested
     if module_file {
