@@ -39,6 +39,7 @@ pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_utils; // Syntax highlighting for error snippets
 pub mod type_inference; // Expression-level float type inference
+pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
