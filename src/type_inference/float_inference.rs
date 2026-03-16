@@ -64,6 +64,8 @@ pub struct FloatInference {
     current_impl_type: Option<String>,
     /// Variable element types: var_name → element_type (for Vec<T>, HashMap<K,V>)
     var_element_types: HashMap<String, Type>,
+    /// Const/static types: name → Type (for const F: f32 = 1.0)
+    const_types: HashMap<String, Type>,
 }
 
 impl FloatInference {
@@ -81,6 +83,7 @@ impl FloatInference {
             source_root: None,
             current_impl_type: None,
             var_element_types: HashMap::new(),
+            const_types: HashMap::new(),
         }
     }
     
@@ -105,10 +108,11 @@ impl FloatInference {
 
     /// Main entry point: Infer float types for a program
     pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
-        // Pass 0: Build struct field registry and function signatures
+        // Pass 0: Build struct field registry, function signatures, and const types
         for item in &program.items {
             self.register_struct_fields(item);
             self.register_function_signature(item);
+            self.register_const_and_static(item);
         }
         
         // TDD FIX: Load metadata from imported modules for cross-module inference
@@ -291,6 +295,24 @@ impl FloatInference {
         }
     }
 
+    /// Register const and static types for constraint propagation
+    fn register_const_and_static<'ast>(&mut self, item: &Item<'ast>) {
+        match item {
+            Item::Const { name, type_, .. } => {
+                self.const_types.insert(name.clone(), type_.clone());
+            }
+            Item::Static { name, type_, .. } => {
+                self.const_types.insert(name.clone(), type_.clone());
+            }
+            Item::Mod { items, .. } => {
+                for sub_item in items {
+                    self.register_const_and_static(sub_item);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Register function signatures for constraint propagation
     fn register_function_signature<'ast>(&mut self, item: &Item<'ast>) {
         match item {
@@ -402,6 +424,53 @@ impl FloatInference {
             Item::Enum { .. } => {
             }
             Item::Trait { .. } => {
+            }
+            Item::Const { name, type_, value, .. } => {
+                self.collect_expression_constraints(value, None);
+                if let Some(float_ty) = self.extract_float_type(type_) {
+                    let expr_id = self.get_expr_id(value);
+                    match float_ty {
+                        FloatType::F32 => {
+                            self.constraints.push(Constraint::MustBeF32(
+                                expr_id,
+                                format!("const {} is f32", name),
+                            ));
+                        }
+                        FloatType::F64 => {
+                            self.constraints.push(Constraint::MustBeF64(
+                                expr_id,
+                                format!("const {} is f64", name),
+                            ));
+                        }
+                        FloatType::Unknown => {}
+                    }
+                }
+            }
+            Item::Static { name, type_, value, .. } => {
+                self.collect_expression_constraints(value, None);
+                if let Some(float_ty) = self.extract_float_type(type_) {
+                    let expr_id = self.get_expr_id(value);
+                    match float_ty {
+                        FloatType::F32 => {
+                            self.constraints.push(Constraint::MustBeF32(
+                                expr_id,
+                                format!("static {} is f32", name),
+                            ));
+                        }
+                        FloatType::F64 => {
+                            self.constraints.push(Constraint::MustBeF64(
+                                expr_id,
+                                format!("static {} is f64", name),
+                            ));
+                        }
+                        FloatType::Unknown => {}
+                    }
+                }
+            }
+            Item::Mod { items, .. } => {
+                for sub_item in items {
+                    self.collect_item_constraints(sub_item);
+                }
             }
             _ => {}
         }
@@ -585,8 +654,9 @@ impl FloatInference {
     fn collect_expression_constraints<'ast>(&mut self, expr: &Expression<'ast>, return_type: Option<&Type>) {
         match expr {
             Expression::Identifier { name, .. } => {
-                // TDD FIX: Constrain identifier to its declared type (function param, let with type annotation)
-                if let Some(var_type) = self.var_types.get(name) {
+                // TDD FIX: Constrain identifier to its declared type (function param, let with type annotation, const)
+                let var_type = self.var_types.get(name).or_else(|| self.const_types.get(name));
+                if let Some(var_type) = var_type {
                     if let Some(float_ty) = self.extract_float_type(var_type) {
                         let id = self.get_expr_id(expr);
                         match float_ty {
@@ -1048,7 +1118,14 @@ impl FloatInference {
                         })
                     }
                 } else {
-                    None
+                    // TDD FIX: Chained FieldAccess - self.player.position.x
+                    // Use infer_type_from_expression to resolve object's type
+                    self.infer_type_from_expression(object).and_then(|obj_ty| {
+                        match &obj_ty {
+                            Type::Custom(name) => Some(name.clone()),
+                            _ => None,
+                        }
+                    })
                 };
                 
                 // If we know the struct type, constrain the FieldAccess expression to the field's type
@@ -1076,6 +1153,35 @@ impl FloatInference {
                                     FloatType::Unknown => {}
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                // TDD FIX: Index expression (arr[i]) yields element type - constrain for binary ops
+                // e.g., arr[i] / 2.0 when arr: Vec<f32> → Index is f32, so 2.0 must be f32
+                self.collect_expression_constraints(object, return_type);
+                self.collect_expression_constraints(index, return_type);
+                
+                if let Some(elem_type) = self.infer_type_from_expression(object)
+                    .and_then(|ty| self.extract_vec_element_type(&ty))
+                {
+                    if let Some(float_ty) = self.extract_float_type(&elem_type) {
+                        let index_expr_id = self.get_expr_id(expr);
+                        match float_ty {
+                            FloatType::F32 => {
+                                self.constraints.push(Constraint::MustBeF32(
+                                    index_expr_id,
+                                    "Index yields Vec<f32> element".to_string(),
+                                ));
+                            }
+                            FloatType::F64 => {
+                                self.constraints.push(Constraint::MustBeF64(
+                                    index_expr_id,
+                                    "Index yields Vec<f64> element".to_string(),
+                                ));
+                            }
+                            FloatType::Unknown => {}
                         }
                     }
                 }
@@ -1195,7 +1301,9 @@ impl FloatInference {
                         .as_ref()
                         .map(|s| Type::Custom(s.clone()))
                 } else {
-                    self.var_types.get(name).cloned()
+                    self.var_types.get(name)
+                        .or_else(|| self.const_types.get(name))
+                        .cloned()
                 }
             }
             Expression::FieldAccess { object, field, .. } => {
