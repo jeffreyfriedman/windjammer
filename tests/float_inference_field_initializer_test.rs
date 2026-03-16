@@ -228,9 +228,9 @@ pub fn default_keyframe() -> Keyframe {
     );
 }
 
-/// Literal in f64 return context gets f64 from return type
+/// Unconstrained literal (no struct context) defaults to f64
 #[test]
-fn test_f64_return_constrains_literal() {
+fn test_unconstrained_defaults_to_f64() {
     let source = r#"
 pub fn standalone() -> f64 {
     2.718
@@ -240,7 +240,7 @@ pub fn standalone() -> f64 {
     let rust = compile_and_get_rust(source);
     assert!(
         rust.contains("2.718_f64") || rust.contains("2.718f64"),
-        "Literal in f64 return should generate f64. Got:\n{}",
+        "Unconstrained literal should default to f64. Got:\n{}",
         rust
     );
 }

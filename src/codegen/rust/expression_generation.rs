@@ -3499,9 +3499,8 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if let Some(return_type) = &self.current_function_return_type {
                     Self::extract_float_type_from_context(return_type)
                 } else {
-                    // Default: f32 (game engine standard - Breach Protocol, rendering, physics)
-                    // Prevents manual fixes after regeneration when f32 is expected
-                    "f32"
+                    // Default: f64 (Rust standard, scientific computing, general-purpose default)
+                    "f64"
                 };
                 
                 let s = f.to_string();

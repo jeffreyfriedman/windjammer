@@ -228,14 +228,13 @@ fn test_nested_module_reexports_unique() {
 
     assert!(status.success());
 
-    // Build outputs flat structure: all .wj files → output_dir/*.rs, output_dir/mod.rs
-    // (nested src/ui/button.wj, src/ui/input.wj → output/button.rs, output/input.rs)
-    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
-    println!("Generated mod.rs:\n{}", mod_rs);
+    // Check nested mod.rs
+    let nested_mod = fs::read_to_string(output_dir.join("ui/mod.rs")).unwrap();
+    println!("Nested ui/mod.rs:\n{}", nested_mod);
 
     // Should have unique re-exports (no conflicts)
-    assert!(mod_rs.contains("pub use button::*;"));
-    assert!(mod_rs.contains("pub use input::*;"));
+    assert!(nested_mod.contains("pub use button::*;"));
+    assert!(nested_mod.contains("pub use input::*;"));
 }
 
 #[test]
@@ -290,18 +289,17 @@ pub struct State {
 
     assert!(status.success());
 
-    // Build outputs flat structure: all .wj files → output_dir/*.rs, output_dir/mod.rs
-    // (nested src/components/toggle.wj, slider.wj → output/toggle.rs, output/slider.rs)
-    let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
-    println!("Generated mod.rs:\n{}", mod_rs);
+    // Check nested components/mod.rs
+    let nested_mod = fs::read_to_string(output_dir.join("components/mod.rs")).unwrap();
+    println!("Nested components/mod.rs:\n{}", nested_mod);
 
-    // Should NOT have glob re-exports due to conflict (both export "State")
+    // Should NOT have glob re-exports due to conflict
     let has_glob_reexports =
-        mod_rs.contains("pub use toggle::*;") && mod_rs.contains("pub use slider::*;");
+        nested_mod.contains("pub use toggle::*;") && nested_mod.contains("pub use slider::*;");
 
     if has_glob_reexports {
         // If it has glob re-exports, verify it would cause an error
-        panic!("Compiler should detect and prevent ambiguous re-exports when both modules export State");
+        panic!("Nested module should also detect and prevent ambiguous re-exports");
     }
 }
 
