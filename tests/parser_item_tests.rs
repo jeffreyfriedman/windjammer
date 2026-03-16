@@ -176,6 +176,28 @@ fn test_struct_with_derive() {
 }
 
 #[test]
+fn test_struct_doc_comment_after_derive() {
+    // Bug: Parser rejected @derive(Clone)\n/// doc\npub struct S with "Unexpected token: DocComment"
+    // Doc comments between @derive and struct should be accepted (prefab_system.wj pattern)
+    let code = r#"
+@derive(Clone)
+/// A reusable entity template
+pub struct Prefab {
+    pub id: i32,
+    pub name: string,
+}
+"#;
+    let item = first_item(code);
+    if let Item::Struct { decl, .. } = item {
+        assert_eq!(decl.name, "Prefab");
+        assert!(!decl.decorators.is_empty());
+        assert_eq!(decl.doc_comment.as_deref(), Some("A reusable entity template"));
+    } else {
+        panic!("Expected Struct, got {:?}", item);
+    }
+}
+
+#[test]
 fn test_struct_nested_type() {
     let item = first_item("struct Container { items: Vec<String> }");
     assert!(matches!(item, Item::Struct { .. }));
