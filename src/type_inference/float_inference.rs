@@ -69,6 +69,8 @@ pub struct FloatInference {
     /// External crate metadata: crate_name → path to metadata.json directory
     /// Used for cross-crate type inference (e.g., windjammer_game_core)
     external_crate_metadata_paths: std::collections::HashMap<String, std::path::PathBuf>,
+    /// Debug: Optional source text for error context (line extraction)
+    debug_source: Option<String>,
 }
 
 impl FloatInference {
@@ -88,7 +90,13 @@ impl FloatInference {
             var_element_types: HashMap::new(),
             const_types: HashMap::new(),
             external_crate_metadata_paths: std::collections::HashMap::new(),
+            debug_source: None,
         }
+    }
+
+    /// Set source text for debug output (extracts line context on type conflicts)
+    pub fn set_debug_source(&mut self, source: &str) {
+        self.debug_source = Some(source.to_string());
     }
     
     /// Set source root for resolving metadata file paths
@@ -1726,8 +1734,29 @@ impl FloatInference {
     }
 
     /// Solve constraints using unification
+    /// THE WINDJAMMER WAY: Process explicit type constraints (MustBeF32/MustBeF64) before
+    /// MustMatch to prevent propagation from unconstrained literals (default f64) from
+    /// overwriting parameter types (e.g., dt: f32). Fixes multi-file float type conflicts.
     fn solve_constraints(&mut self) {
-        // Simple constraint solver: Apply constraints repeatedly until convergence
+        // Pass 0: Establish explicit types first (params, const, struct fields)
+        // This prevents MustMatch from propagating f64 from untyped literals to typed params
+        for constraint in &self.constraints {
+            match constraint {
+                Constraint::MustBeF32(expr_id, _) => {
+                    if self.inferred_types.get(expr_id).is_none() {
+                        self.inferred_types.insert(*expr_id, FloatType::F32);
+                    }
+                }
+                Constraint::MustBeF64(expr_id, _) => {
+                    if self.inferred_types.get(expr_id).is_none() {
+                        self.inferred_types.insert(*expr_id, FloatType::F64);
+                    }
+                }
+                Constraint::MustMatch(_, _, _) => {}
+            }
+        }
+
+        // Pass 1+: Unification with conflict detection
         let mut changed = true;
         let mut iterations = 0;
         const MAX_ITERATIONS: usize = 100;
@@ -1743,6 +1772,18 @@ impl FloatInference {
                         let current = self.inferred_types.get(&expr_id).copied();
                         match current {
                             Some(FloatType::F64) => {
+                                if std::env::var("WJ_DEBUG_FLOAT_CONFLICT").is_ok() {
+                                    let source_text = self
+                                        .debug_source
+                                        .as_ref()
+                                        .and_then(|s| s.lines().nth(expr_id.line.saturating_sub(1)))
+                                        .unwrap_or("")
+                                        .trim();
+                                    eprintln!("DEBUG: Type conflict at expr seq_id={} ({}:{})", expr_id.seq_id, expr_id.line, expr_id.col);
+                                    eprintln!("  Current type: F64");
+                                    eprintln!("  Required type: F32 ({})", reason);
+                                    eprintln!("  Source line {}: {}", expr_id.line, source_text);
+                                }
                                 self.errors.push(format!(
                                     "Type conflict at seq_id={}, {}:{}: must be f32 ({}) but was inferred as f64",
                                     expr_id.seq_id, expr_id.line, expr_id.col, reason
@@ -1768,6 +1809,18 @@ impl FloatInference {
                         let current = self.inferred_types.get(&expr_id).copied();
                         match current {
                             Some(FloatType::F32) => {
+                                if std::env::var("WJ_DEBUG_FLOAT_CONFLICT").is_ok() {
+                                    let source_text = self
+                                        .debug_source
+                                        .as_ref()
+                                        .and_then(|s| s.lines().nth(expr_id.line.saturating_sub(1)))
+                                        .unwrap_or("")
+                                        .trim();
+                                    eprintln!("DEBUG: Type conflict at expr seq_id={} ({}:{})", expr_id.seq_id, expr_id.line, expr_id.col);
+                                    eprintln!("  Current type: F32");
+                                    eprintln!("  Required type: F64 ({})", reason);
+                                    eprintln!("  Source line {}: {}", expr_id.line, source_text);
+                                }
                                 self.errors.push(format!(
                                     "Type conflict at seq_id={}, {}:{}: must be f64 ({}) but was inferred as f32",
                                     expr_id.seq_id, expr_id.line, expr_id.col, reason
