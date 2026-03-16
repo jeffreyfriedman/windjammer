@@ -78,14 +78,15 @@ impl<'a> TypeChecker<'a> {
 
     fn check_functions(&self) -> Result<()> {
         for f in &self.ast.functions {
+            let return_type_wrapper = f.return_type.as_ref().map(|t| ReturnType {
+                ty: t.clone(),
+                location: None,
+                builtin: None,
+            });
             self.check_function_body(
                 &f.body,
                 &f.params,
-                f.return_type.as_ref().map(|t| ReturnType {
-                    ty: t.clone(),
-                    location: None,
-                    builtin: None,
-                }),
+                return_type_wrapper.as_ref(),
                 &f.name,
                 false,
             )?;
@@ -508,7 +509,7 @@ impl<'a> BodyParser<'a> {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum BinaryOp {
     Add,
     Sub,
