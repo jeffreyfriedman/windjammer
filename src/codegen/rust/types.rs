@@ -18,6 +18,9 @@ pub fn type_to_rust(type_: &Type) -> String {
             // Special case: "string" as custom type -> String (for type aliases)
             } else if name == "string" {
                 "String".to_string()
+            // Special case: "str" in containers -> String (HashMap<str,T>, Vec<str>, etc.)
+            } else if name == "str" {
+                "String".to_string()
             } else {
                 // Convert Windjammer module.Type syntax to Rust module::Type
                 name.replace('.', "::")

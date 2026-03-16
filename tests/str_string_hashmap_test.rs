@@ -7,7 +7,7 @@
 //!
 //! Philosophy: "Compiler Does the Hard Work" - users shouldn't think about String vs &str.
 
-use windjammer::codegen::rust::types::{type_to_rust, type_to_rust_for_field, type_to_rust_with_lifetime};
+use windjammer::codegen::rust::types::{type_to_rust, type_to_rust_with_lifetime};
 use windjammer::parser::Type;
 
 // =============================================================================
@@ -77,7 +77,7 @@ fn test_hashmap_i32_str_value_emits_string() {
     );
 }
 
-/// type_to_rust_for_field: HashMap<str, T> in struct field
+/// type_to_rust: HashMap<str, T> in struct field (same as general - str -> String)
 #[test]
 fn test_hashmap_str_in_struct_field() {
     let ty = Type::Parameterized(
@@ -87,7 +87,7 @@ fn test_hashmap_str_in_struct_field() {
             Type::Custom("PropertyValue".to_string()),
         ],
     );
-    let rust = type_to_rust_for_field(&ty);
+    let rust = type_to_rust(&ty);
     assert_eq!(
         rust, "HashMap<String, PropertyValue>",
         "Struct field HashMap<str, PropertyValue> should emit HashMap<String, PropertyValue>, got {}",

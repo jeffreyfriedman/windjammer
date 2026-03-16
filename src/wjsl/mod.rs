@@ -38,4 +38,22 @@ mod tests {
             _ => panic!("Expected array<f32, 16>"),
         }
     }
+
+    #[test]
+    fn test_array_indexing_in_body() {
+        let source = r#"
+@group(0) @binding(0) storage read clusters: array<vec4>;
+@group(0) @binding(1) storage read_write instances: array<u32>;
+
+@compute @workgroup_size(64, 1, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let cluster_id = id.x;
+    let cluster = clusters[cluster_id];
+    instances[cluster_id] = 1u;
+}
+"#;
+        let wgsl = transpile_wjsl(source).unwrap();
+        assert!(wgsl.contains("clusters[cluster_id]"));
+        assert!(wgsl.contains("instances[cluster_id]"));
+    }
 }
