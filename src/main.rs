@@ -7,6 +7,7 @@ pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
 pub mod cli;
 pub mod codegen;
+pub mod compiler;
 pub mod component_analyzer;
 pub mod error;
 pub mod errors;
@@ -388,6 +389,32 @@ fn is_type_copy_quick(
         }
         _ => false,
     }
+}
+
+/// Extended build with library mode and external crate metadata.
+/// Used by CLI when --library or --metadata is passed.
+/// The full main.rs build_project doesn't yet support these - delegate to compiler for simple builds.
+pub fn build_project_ext(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+) -> Result<()> {
+    // When we have metadata or library, use the compiler's simpler build (handles cross-crate)
+    if !external_metadata.is_empty() || (library && path.is_file()) {
+        return crate::compiler::build_project_ext(
+            path,
+            output,
+            target,
+            enable_lint,
+            library,
+            external_metadata,
+        );
+    }
+    // Full multi-file build
+    build_project(path, output, target, enable_lint)
 }
 
 pub fn build_project(
