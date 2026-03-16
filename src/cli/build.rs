@@ -216,6 +216,7 @@ fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> R
     let source = fs::read_to_string(path)?;
 
     // Detect .wjsl files - use WJSL transpiler (RFC syntax: @vertex, @fragment, etc.)
+    // Note: .wjsl uses array<T, N> syntax; main Windjammer parser expects .wj syntax
     let (wgsl_source, additional_files) = if path.extension().and_then(|e| e.to_str()) == Some("wjsl") {
         let wgsl = crate::wjsl::transpile_wjsl(&source)?;
         (wgsl, Vec::new())

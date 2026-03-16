@@ -29,6 +29,18 @@ impl WjslCodegen {
             self.emit_binding(&mut out, b);
         }
 
+        // 2b. Private variables
+        for pv in &self.module.private_vars {
+            out.push_str("var<private> ");
+            out.push_str(&pv.name);
+            out.push_str(": ");
+            out.push_str(&self.type_to_wgsl(&pv.ty));
+            out.push_str(";\n");
+        }
+        if !self.module.private_vars.is_empty() {
+            out.push('\n');
+        }
+
         // 3. Helper functions
         for f in &self.module.functions {
             self.emit_function(&mut out, f);
@@ -141,7 +153,14 @@ impl WjslCodegen {
                 let e = elem.unwrap_or(ScalarType::F32);
                 format!("mat4x4<{}>", self.scalar_to_wgsl(e))
             }
-            Type::Array(inner) => format!("array<{}>", self.type_to_wgsl(inner)),
+            Type::Array(inner, size) => {
+                if let Some(n) = size {
+                    format!("array<{}, {}>", self.type_to_wgsl(inner), n)
+                } else {
+                    format!("array<{}>", self.type_to_wgsl(inner))
+                }
+            }
+            Type::Atomic(st) => format!("atomic<{}>", self.scalar_to_wgsl(*st)),
             Type::Struct(name) => name.clone(),
             Type::Texture2D(st) => format!("texture_2d<{}>", self.scalar_to_wgsl(*st)),
             Type::TextureCube(st) => format!("texture_cube<{}>", self.scalar_to_wgsl(*st)),
@@ -161,8 +180,11 @@ impl WjslCodegen {
             }
             self.emit_param(out, p);
         }
-        out.push_str(") -> ");
-        out.push_str(&self.type_to_wgsl(&f.return_type));
+        out.push_str(")");
+        if let Some(ref ret) = f.return_type {
+            out.push_str(" -> ");
+            out.push_str(&self.type_to_wgsl(ret));
+        }
         out.push_str(" {\n");
         if !f.body.is_empty() {
             for line in f.body.lines() {

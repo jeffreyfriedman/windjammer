@@ -9,10 +9,19 @@ pub struct ShaderModule {
     pub structs: Vec<StructDecl>,
     /// Global bindings (uniforms, storage, textures, samplers)
     pub bindings: Vec<Binding>,
+    /// Module-level private variables (var<private>)
+    pub private_vars: Vec<PrivateVar>,
     /// Helper functions (non-entry-point)
     pub functions: Vec<Function>,
     /// Entry point functions (@vertex, @fragment, @compute)
     pub entry_points: Vec<EntryPoint>,
+}
+
+/// Private module-level variable (var<private>)
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrivateVar {
+    pub name: String,
+    pub ty: Type,
 }
 
 /// Struct declaration with fields
@@ -96,7 +105,7 @@ pub struct EntryPoint {
 pub struct Function {
     pub name: String,
     pub params: Vec<Param>,
-    pub return_type: Type,
+    pub return_type: Option<Type>, // None = void (no return type in WGSL)
     pub body: String,
 }
 
@@ -127,7 +136,8 @@ pub enum Type {
     Mat2x2(Option<ScalarType>),
     Mat3x3(Option<ScalarType>),
     Mat4x4(Option<ScalarType>),
-    Array(Box<Type>),
+    Array(Box<Type>, Option<u32>), // Optional fixed size: array<T, N>
+    Atomic(ScalarType),
     Struct(String),
     Texture2D(ScalarType),
     TextureCube(ScalarType),

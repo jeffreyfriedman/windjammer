@@ -207,3 +207,21 @@ fn main(@location(0) uv: vec2) -> @location(0) vec4 {
         windjammer::wjsl::BindingKind::Sampler
     ));
 }
+
+#[test]
+fn test_parse_fixed_size_array() {
+    let source = "struct Data { values: array<f32, 16> }";
+    let ast = parse_wjsl(source).unwrap();
+    let struct_decl = &ast.structs[0];
+    let field_ty = &struct_decl.fields[0].ty;
+    if let windjammer::wjsl::Type::Array(element_type, size) = field_ty {
+        assert_eq!(*size, Some(16), "Expected array<f32, 16> with size 16");
+        assert!(
+            matches!(**element_type, windjammer::wjsl::Type::Scalar(windjammer::wjsl::ScalarType::F32)),
+            "Expected element type f32, got {:?}",
+            element_type
+        );
+    } else {
+        panic!("Expected array<f32, 16>, got {:?}", field_ty);
+    }
+}
