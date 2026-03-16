@@ -93,6 +93,7 @@ pub enum Token {
     BitAnd,
     BitOr,
     BitXor,
+    BitNot,
     Shl,
     Shr,
     Assign,
@@ -435,6 +436,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             '^' => Token::BitXor,
+            '~' => Token::BitNot,
             c if c.is_ascii_digit() => self.read_number(c),
             c if c.is_alphabetic() || c == '_' => {
                 let s = self.read_ident(c);
