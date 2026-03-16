@@ -35,6 +35,8 @@ pub enum Token {
     Texture2d,
     Sampler,
     Array,
+    Atomic,
+    Private,
     Type,
 
     // Builtin types
@@ -318,7 +320,9 @@ impl<'a> Lexer<'a> {
             "texture_2d" => Token::Texture2d,
             "sampler" => Token::Sampler,
             "array" => Token::Array,
+            "atomic" => Token::Atomic,
             "type" => Token::Type,
+            "private" => Token::Private,
             "f32" => Token::F32,
             "f64" => Token::F64,
             "u32" => Token::U32,
