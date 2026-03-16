@@ -6,6 +6,28 @@ use crate::wjsl::ast::*;
 use crate::wjsl::lexer::{Lexer, Token};
 use anyhow::{anyhow, Result};
 
+/// Find the position after the '{' that matches the '}' at rbrace_pos.
+/// Searches backwards from rbrace_pos, counting braces to find the matching '{'.
+fn find_matching_lbrace(source: &str, rbrace_pos: usize) -> usize {
+    let bytes = source.as_bytes();
+    let mut depth = 1;
+    let mut i = rbrace_pos;
+    while i > 0 {
+        i -= 1;
+        match bytes[i] {
+            b'}' => depth += 1,
+            b'{' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    0
+}
+
 struct Parser<'a> {
     lexer: Lexer<'a>,
     current: Token,
@@ -533,7 +555,6 @@ impl<'a> Parser<'a> {
         };
 
         self.expect(Token::LBrace)?;
-        let body_start = self.lexer.position();
         let mut depth = 1;
 
         while depth > 0 && !self.is_eof() {
@@ -546,6 +567,7 @@ impl<'a> Parser<'a> {
                     depth -= 1;
                     if depth == 0 {
                         let body_end = self.lexer.position() - 1;
+                        let body_start = find_matching_lbrace(self.lexer.source(), body_end);
                         let body = self.lexer.source()[body_start..body_end].trim();
                         self.advance();
                         return Ok(EntryPoint {
@@ -581,7 +603,6 @@ impl<'a> Parser<'a> {
         };
 
         self.expect(Token::LBrace)?;
-        let body_start = self.lexer.position();
         let mut depth = 1;
         while depth > 0 && !self.is_eof() {
             match &self.current {
@@ -593,6 +614,7 @@ impl<'a> Parser<'a> {
                     depth -= 1;
                     if depth == 0 {
                         let body_end = self.lexer.position() - 1;
+                        let body_start = find_matching_lbrace(self.lexer.source(), body_end);
                         let body = self.lexer.source()[body_start..body_end].trim();
                         self.advance();
                         return Ok(Function {

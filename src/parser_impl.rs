@@ -260,7 +260,7 @@ impl Parser {
             doc_lines.push(content.clone());
             self.advance();
         }
-        let doc_comment = if doc_lines.is_empty() {
+        let mut doc_comment = if doc_lines.is_empty() {
             None
         } else {
             Some(doc_lines.join("\n"))
@@ -270,6 +270,16 @@ impl Parser {
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
             decorators.push(self.parse_decorator()?);
+        }
+
+        // Doc comments may appear after @derive and before the item (e.g. @derive(Clone)\n/// doc\npub struct S)
+        let mut doc_lines_after = Vec::new();
+        while let Token::DocComment(content) = self.current_token() {
+            doc_lines_after.push(content.clone());
+            self.advance();
+        }
+        if !doc_lines_after.is_empty() {
+            doc_comment = Some(doc_lines_after.join("\n"));
         }
 
         // Check for pub keyword (for module functions)
