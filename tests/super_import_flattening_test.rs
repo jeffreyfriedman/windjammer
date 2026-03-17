@@ -35,11 +35,7 @@ pub struct Camera3D {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             &input_file,
             "--output",
@@ -103,11 +99,7 @@ pub struct Camera3D {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             &input_file,
             "--output",
@@ -162,11 +154,7 @@ pub struct Foo {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             &input_file,
             "--output",

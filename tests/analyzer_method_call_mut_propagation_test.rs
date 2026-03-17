@@ -86,7 +86,7 @@ pub struct FactionManager {
 }
 
 impl FactionManager {
-    pub fn adjust_reputation(self, index: i32, amount: f32) {
+    pub fn adjust_reputation(self, index: usize, amount: f32) {
         self.factions[index].adjust_reputation(amount)
     }
 }
@@ -101,7 +101,7 @@ impl FactionManager {
 
     let rust = result.unwrap();
     assert!(
-        rust.contains("pub fn adjust_reputation(&mut self, index: i32"),
+        rust.contains("pub fn adjust_reputation(&mut self, index: usize"),
         "FactionManager::adjust_reputation should have &mut self. Generated:\n{}",
         rust
     );

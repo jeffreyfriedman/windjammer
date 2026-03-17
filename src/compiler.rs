@@ -29,7 +29,7 @@ use crate::linter::rust_leakage::RustLeakageLinter;
 use crate::metadata::{CrateMetadata, FunctionSignature, ModuleMetadata};
 use crate::parser::Parser;
 use crate::parser::ast::core::Item;
-use crate::type_inference::FloatInference;
+use crate::type_inference::{FloatInference, IntInference};
 use crate::CompilationTarget;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -73,8 +73,21 @@ pub fn build_project_ext(
     let mut crate_metadata = CrateMetadata::new();
 
     // TDD FIX: For multi-file builds, use global multi-pass analysis
-    // Parse all files first, then analyze together with shared registry
-    if wj_files.len() > 1 && library {
+    // Parse all files first, then analyze together with shared registry.
+    // Also use multipass when we have nested structure (files in subdirs) to preserve
+    // directory layout - required for nested mod.rs generation.
+    let base_path = if path.is_file() {
+        path.parent().unwrap_or(path)
+    } else {
+        path
+    };
+    let has_nested_structure = wj_files.iter().any(|f| {
+        f.strip_prefix(base_path)
+            .map(|r| r.parent().is_some())
+            .unwrap_or(false)
+    });
+    // Use multipass when: multiple files in library mode, OR any file in nested path
+    if (wj_files.len() > 1 && library) || has_nested_structure {
         return build_library_multipass(
             &wj_files,
             path,
@@ -190,11 +203,26 @@ pub fn build_project_ext(
             ));
         }
 
+        // TDD: Integer literal type inference (i32, i64, u32, etc.)
+        let mut int_inference = IntInference::new();
+        int_inference.infer_program(&program);
+        if !int_inference.errors.is_empty() {
+            for error in &int_inference.errors {
+                eprintln!("Int inference error in {}: {}", file.display(), error);
+            }
+            return Err(anyhow::anyhow!(
+                "Int type inference failed in {}: {} error(s)",
+                file.display(),
+                int_inference.errors.len()
+            ));
+        }
+
         // Single-file builds: use is_module=false to avoid `use super::*` which fails
         // when the generated .rs is compiled standalone (no parent module)
         let mut codegen = CodeGenerator::new(registry, target);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);
+        codegen.set_int_inference(int_inference);
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
         // TDD: Preserve directory structure for library builds (hierarchical imports)
@@ -228,6 +256,17 @@ pub fn build_project_ext(
         std::fs::write(&metadata_path, metadata_json)?;
     }
 
+    // TDD FIX (Bug #2): Generate Cargo.toml for single-file Rust builds
+    // Enables `wj build file.wj` to produce runnable `cargo build` output
+    if target == CompilationTarget::Rust {
+        let source_dir = if path.is_file() {
+            path.parent().unwrap_or(path)
+        } else {
+            path
+        };
+        crate::cargo_toml::generate_single_file_cargo_toml(output, source_dir, target)?;
+    }
+
     Ok(())
 }
 
@@ -254,8 +293,13 @@ fn build_library_multipass(
         sources.push((file.clone(), source));
     }
     
-    // Step 2: Build initial registry from ALL files (first pass)
+    // Step 2: Build initial registries from ALL files (first pass)
+    // - global_registry: For ownership inference (SignatureRegistry)
+    // - global_float_signatures: For float inference (function param types)
+    // - global_struct_fields: For float inference (struct field types)
     let mut global_registry = SignatureRegistry::new();
+    let mut global_float_signatures: HashMap<String, (Vec<crate::parser::ast::types::Type>, Option<crate::parser::ast::types::Type>)> = HashMap::new();
+    let mut global_struct_fields: HashMap<String, HashMap<String, crate::parser::ast::types::Type>> = HashMap::new();
     
     for (file, source) in &sources {
         // Parse with proper lifetime (program borrows source)
@@ -314,6 +358,46 @@ fn build_library_multipass(
         }
         crate_metadata.merge_module(&module_meta);
         
+        // Collect function signatures for float inference
+        for item in &program.items {
+            match item {
+                Item::Function { decl, .. } => {
+                    let param_types: Vec<crate::parser::ast::types::Type> = 
+                        decl.parameters.iter().map(|p| p.type_.clone()).collect();
+                    global_float_signatures.insert(
+                        decl.name.clone(),
+                        (param_types, decl.return_type.clone()),
+                    );
+                }
+                Item::Impl { block, .. } => {
+                    for func_decl in &block.functions {
+                        let param_types: Vec<crate::parser::ast::types::Type> = 
+                            func_decl.parameters.iter().map(|p| p.type_.clone()).collect();
+                        let full_name = format!("{}::{}", block.type_name, func_decl.name);
+                        global_float_signatures.insert(
+                            full_name,
+                            (param_types, func_decl.return_type.clone()),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // Collect struct field types for float inference
+        for item in &program.items {
+            match item {
+                Item::Struct { decl, .. } => {
+                    let mut fields = HashMap::new();
+                    for field in &decl.fields {
+                        fields.insert(field.name.clone(), field.field_type.clone());
+                    }
+                    global_struct_fields.insert(decl.name.clone(), fields);
+                }
+                _ => {}
+            }
+        }
+        
         // First-pass analysis
         let mut analyzer = Analyzer::new();
         let (_, registry, _) = analyzer.analyze_program(&program)
@@ -363,7 +447,66 @@ fn build_library_multipass(
         pass_number += 1;
     }
     
-    // Step 4: Final analysis with converged registry + code generation
+    // Step 4A: Global float inference pass (collect constraints from ALL files first)
+    let mut global_float_inference = FloatInference::new();
+    if !external_paths.is_empty() {
+        global_float_inference.set_external_crate_metadata_paths(external_paths);
+    }
+    global_float_inference.set_global_function_signatures(global_float_signatures.clone());
+    global_float_inference.set_global_struct_field_types(&global_struct_fields);
+    
+    // Collect constraints from ALL files into one FloatInference instance
+    for (file, source) in &sources {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new_with_source(
+            tokens,
+            file.to_string_lossy().to_string(),
+            source.clone(),
+        );
+        let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        global_float_inference.infer_program(&program);
+    }
+    
+    // Check for float inference errors
+    if !global_float_inference.errors.is_empty() {
+        for error in &global_float_inference.errors {
+            eprintln!("Float inference error: {}", error);
+        }
+        return Err(anyhow::anyhow!(
+            "Float type inference failed: {} error(s)",
+            global_float_inference.errors.len()
+        ));
+    }
+
+    // Step 4A2: Global int inference pass (same architecture as float)
+    let mut global_int_inference = IntInference::new();
+    global_int_inference.set_global_function_signatures(global_float_signatures.clone());
+    global_int_inference.set_global_struct_field_types(&global_struct_fields);
+
+    for (file, source) in &sources {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new_with_source(
+            tokens,
+            file.to_string_lossy().to_string(),
+            source.clone(),
+        );
+        let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        global_int_inference.infer_program(&program);
+    }
+
+    if !global_int_inference.errors.is_empty() {
+        for error in &global_int_inference.errors {
+            eprintln!("Int inference error: {}", error);
+        }
+        return Err(anyhow::anyhow!(
+            "Int type inference failed: {} error(s)",
+            global_int_inference.errors.len()
+        ));
+    }
+    
+    // Step 4B: Final analysis + code generation (using shared global_float_inference)
     for (file, source) in &sources {
         // Final parse
         let mut lexer = Lexer::new(source);
@@ -395,27 +538,11 @@ fn build_library_multipass(
         analyzer.infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         
-        // Float inference
-        let mut float_inference = FloatInference::new();
-        if !external_paths.is_empty() {
-            float_inference.set_external_crate_metadata_paths(external_paths);
-        }
-        float_inference.infer_program(&program);
-        if !float_inference.errors.is_empty() {
-            for error in &float_inference.errors {
-                eprintln!("Float inference error in {}: {}", file.display(), error);
-            }
-            return Err(anyhow::anyhow!(
-                "Float type inference failed in {}: {} error(s)",
-                file.display(),
-                float_inference.errors.len()
-            ));
-        }
-        
-        // Code generation
+        // Code generation (using SHARED global_float_inference and global_int_inference)
         let mut codegen = CodeGenerator::new(registry, target);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
-        codegen.set_float_inference(float_inference);
+        codegen.set_float_inference(global_float_inference.clone());  // TDD FIX: Use shared instance!
+        codegen.set_int_inference(global_int_inference.clone());
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
         
         // Preserve directory structure
@@ -438,7 +565,17 @@ fn build_library_multipass(
         let metadata_json = serde_json::to_string_pretty(&crate_metadata)?;
         std::fs::write(&metadata_path, metadata_json)?;
     }
-    
+
+    // TDD FIX (Bug #2): Generate Cargo.toml for Rust target
+    if target == CompilationTarget::Rust {
+        let source_dir = if base_path.is_file() {
+            base_path.parent().unwrap_or(base_path)
+        } else {
+            base_path
+        };
+        crate::cargo_toml::generate_single_file_cargo_toml(output, source_dir, target)?;
+    }
+
     Ok(())
 }
 

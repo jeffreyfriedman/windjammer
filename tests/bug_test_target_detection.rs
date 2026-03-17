@@ -54,7 +54,7 @@ fn helper() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("dummy.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -118,7 +118,7 @@ fn main() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("my_game.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -200,7 +200,7 @@ fn test_something() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("dummy.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -264,7 +264,7 @@ struct Point {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("math.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");

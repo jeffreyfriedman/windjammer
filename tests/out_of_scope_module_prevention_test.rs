@@ -39,11 +39,7 @@ use tempfile::tempdir;
 fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String> {
     use std::process::Command;
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             source_dir.to_str().unwrap(),
             "--output",
