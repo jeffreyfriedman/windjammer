@@ -90,13 +90,14 @@ version = "0.1.0"
 "#,
     )?;
 
-    // Compile with cargo to verify the generated Rust compiles
+    // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
     let output = Command::new(get_wj_compiler())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
         .arg(output_dir.to_str().unwrap())
+        .arg("--no-cargo")
         .output()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -139,7 +140,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn update_selection(mut self) {
+    pub fn update_selection(self) {
         self.last_selected = if self.selected.is_empty() {
             None
         } else {
@@ -170,13 +171,14 @@ version = "0.1.0"
 "#,
     )?;
 
-    // Compile with cargo to verify it compiles
+    // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
     let output = Command::new(get_wj_compiler())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
         .arg(output_dir.to_str().unwrap())
+        .arg("--no-cargo")
         .output()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);

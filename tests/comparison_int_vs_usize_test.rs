@@ -11,11 +11,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     let input_file = test_dir.join("test.wj");
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             input_file.to_str().unwrap(),
             "--output",

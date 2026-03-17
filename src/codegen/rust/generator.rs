@@ -175,6 +175,8 @@ pub struct CodeGenerator<'ast> {
     // Maps expression locations to inferred float types (f32 vs f64)
     // Enables accurate float literal suffix generation without mixing errors
     pub(crate) float_inference: Option<crate::type_inference::FloatInference>,
+    // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub(crate) int_inference: Option<crate::type_inference::IntInference>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -292,6 +294,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_literal_name: None,
             current_struct_field_name: None,
             float_inference: None,
+            int_inference: None,
             enum_variant_types: std::collections::HashMap::new(),
         }
     }
@@ -352,6 +355,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// Enables accurate f32/f64 suffix generation based on constraint solving
     pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
         self.float_inference = Some(inference);
+    }
+
+    /// Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub fn set_int_inference(&mut self, inference: crate::type_inference::IntInference) {
+        self.int_inference = Some(inference);
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {

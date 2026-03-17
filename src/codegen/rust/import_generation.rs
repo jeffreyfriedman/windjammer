@@ -106,6 +106,14 @@ impl CodeGenerator<'_> {
 
         let full_path = path.join(".");
 
+        // SPECIAL CASE: crate::super:: is invalid in Rust - super must be at path start
+        // Windjammer "use super::enemy::Enemy" may be parsed as crate.super.enemy.Enemy
+        let normalized_for_super = full_path.replace('.', "::");
+        if normalized_for_super.starts_with("crate::super::") {
+            let path_without_crate = normalized_for_super.strip_prefix("crate::").unwrap();
+            return format!("use {};\n", path_without_crate);
+        }
+
         // SPECIAL CASE: Handle crate:: imports when in nested module output
         // Examples:
         // - use crate::scene::{A, B} -> use crate::generated::scene::{A, B}
@@ -344,6 +352,12 @@ impl CodeGenerator<'_> {
         // Heuristic: If the last segment starts with an uppercase letter, it's likely a type/struct
         // Otherwise, it's a module and we should add ::*
         let rust_path = full_path.replace('.', "::");
+
+        // TDD FIX: Paths starting with super:: must NOT get crate:: prepended
+        // Rust requires super at path start: "use super::enemy::Enemy" not "use crate::super::enemy::Enemy"
+        if rust_path.starts_with("super::") {
+            return format!("use {};\n", rust_path);
+        }
 
         // TDD FIX: Handle imports from sibling modules (Part 2 - Nested Import Bug)
         // When in a subdirectory (e.g., rendering/sprite.wj) and importing a sibling (texture::Texture),

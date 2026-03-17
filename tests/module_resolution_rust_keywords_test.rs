@@ -10,11 +10,7 @@ fn compile_code_to_cargo_toml(code: &str, test_name: &str) -> Result<String, Str
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             &input_file,
             "--output",

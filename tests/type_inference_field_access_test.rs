@@ -34,8 +34,7 @@ pub fn compute(radius: f32) -> Vec3 {
     let mut file = std::fs::File::create(&wj_file).unwrap();
     file.write_all(source.as_bytes()).unwrap();
     
-    let output = Command::new("cargo")
-        .args(&["run", "--release", "--bin", "wj", "--", "build", wj_file.to_str().unwrap(), "--output", temp_dir.to_str().unwrap(), "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args(["build", wj_file.to_str().unwrap(), "--output", temp_dir.to_str().unwrap(), "--no-cargo"])
         .current_dir(std::env::current_dir().unwrap())
         .output()
         .expect("Failed to run wj build");

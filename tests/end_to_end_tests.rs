@@ -116,11 +116,7 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
 
     fs::write(&source_file, source).map_err(|e| format!("Failed to write source: {}", e))?;
 
-    let output = Command::new("cargo")
-        .arg("run")
-        .arg("--bin")
-        .arg("wj")
-        .arg("--")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg("--target")
         .arg(target)

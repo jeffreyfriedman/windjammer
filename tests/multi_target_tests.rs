@@ -14,11 +14,7 @@ fn compile_to_target(source: &str, target: &str) -> Result<TempDir, String> {
 
     fs::write(&source_file, source).map_err(|e| format!("Failed to write source file: {}", e))?;
 
-    let output = Command::new("cargo")
-        .arg("run")
-        .arg("--bin")
-        .arg("wj")
-        .arg("--")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg("--target")
         .arg(target)
