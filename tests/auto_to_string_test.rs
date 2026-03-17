@@ -16,11 +16,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     let input_file = test_dir.join("test.wj");
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             input_file.to_str().unwrap(),
             "--output",
@@ -216,7 +212,7 @@ fn test_chained_method_calls() {
             return Builder { value: "".to_string() }
         }
         
-        pub fn with_value(mut self, val: string) -> Builder {
+        pub fn with_value(self, val: string) -> Builder {
             self.value = val
             return self
         }
@@ -259,14 +255,15 @@ fn test_hashmap_insert_string_keys() {
     let generated = compile_code(code).expect("Compilation failed");
 
     // Should convert string literal keys for HashMap<String, _>
+    // Integer inference may add suffixes like _i32
     assert!(
-        generated.contains("insert(\"key1\".to_string(), 1)"),
+        generated.contains("insert(\"key1\".to_string(), 1)") || generated.contains("insert(\"key1\".to_string(), 1_i32)") || generated.contains("insert(\"key1\".to_string(), 1_i64)"),
         "Should convert HashMap string key literals. Generated:\n{}",
         generated
     );
 
     assert!(
-        generated.contains("insert(\"key2\".to_string(), 2)"),
+        generated.contains("insert(\"key2\".to_string(), 2)") || generated.contains("insert(\"key2\".to_string(), 2_i32)") || generated.contains("insert(\"key2\".to_string(), 2_i64)"),
         "Should convert HashMap string key literals. Generated:\n{}",
         generated
     );

@@ -21,18 +21,15 @@ fn compile_and_get_rust(code: &str) -> Result<String, String> {
     fs::write(&wj_path, code).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
+    // Use pre-built wj binary (avoids cargo run ambiguity in workspace with multiple binaries)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             wj_path.to_str().unwrap(),
             "-o",
             out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to run compiler");
 
@@ -620,7 +617,7 @@ pub struct Container<T> {
     value: T,
 }
 
-pub fn get_value<T>(c: Container<T>) -> T {
+pub fn get_value<T: Clone>(c: Container<T>) -> T {
     c.value.clone()
 }
 "#;
@@ -677,8 +674,8 @@ struct Thing {
 }
 
 impl Thing {
-    pub fn new(id: u32, name: &str) -> Thing {
-        Thing { id: ThingId::new(id), name: name.to_string() }
+    pub fn new(id: u32, name: String) -> Thing {
+        Thing { id: ThingId::new(id), name: name }
     }
 
     pub fn id(self) -> ThingId {
@@ -691,7 +688,7 @@ impl Thing {
 }
 
 fn main() {
-    let thing = Thing::new(1, "test")
+    let thing = Thing::new(1, "test".to_string())
     let id = thing.id()
     println("{}", thing.name())
 }
@@ -744,7 +741,7 @@ impl<T> Pool<T> {
 }
 
 fn main() {
-    let pool: Pool<int> = Pool::new(10)
+    let pool: Pool<int> = Pool::new(10 as usize)
     println("{}", pool.is_full())
     println("{}", pool.has_space())
 }

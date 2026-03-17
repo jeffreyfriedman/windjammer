@@ -3441,9 +3441,20 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(super) fn generate_literal_with_context(&self, lit: &Literal, expr: &Expression<'ast>) -> String {
-        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
-        // Use constraint-based inference results when available, fallback to context-sensitive
+        // WINDJAMMER PHILOSOPHY: Expression-level type inference for literals
+        // Int: Check IntInference first (i32, i64, u32, etc.)
+        // Float: Check FloatInference (f32, f64)
         match lit {
+            Literal::Int(i) => {
+                if let Some(inference) = &self.int_inference {
+                    let inferred = inference.get_int_type(expr);
+                    let suffix = inferred.rust_suffix();
+                    // Always add suffix when we have inference (Unknown defaults to i32 per Rust)
+                    return format!("{}_{}", i, suffix);
+                }
+                // No inference: fallback to bare literal (backward compat for tests)
+                crate::codegen::rust::literals::generate_literal(lit)
+            }
             Literal::Float(f) => {
                 // Priority 1: Use inference engine results (most accurate)
                 if let Some(inference) = &self.float_inference {

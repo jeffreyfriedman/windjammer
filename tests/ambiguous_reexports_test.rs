@@ -4,6 +4,20 @@
 use std::fs;
 use tempfile::TempDir;
 
+/// Helper: build with library API (faster than spawning wj binary)
+fn build_with_module_file(src_dir: &std::path::Path, output_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    windjammer::build_project_ext(
+        src_dir,
+        output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,  // enable_lint
+        true,  // library - required for nested structure preservation
+        &[],
+    )?;
+    windjammer::generate_mod_file(output_dir)?;
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_detect_duplicate_struct_exports() {
@@ -198,6 +212,7 @@ pub struct Error {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
+#[cfg(feature = "cli")]
 fn test_nested_module_reexports_unique() {
     // Test that nested modules handle re-exports correctly when no conflicts
     let temp_dir = TempDir::new().unwrap();
@@ -214,19 +229,7 @@ fn test_nested_module_reexports_unique() {
     let output_dir = temp_dir.path().join("out");
     fs::create_dir(&output_dir).unwrap();
 
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&src_dir)
-        .arg("-o")
-        .arg(&output_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--module-file")
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj");
-
-    assert!(status.success());
+    build_with_module_file(&src_dir, &output_dir).expect("Build should succeed");
 
     // Check nested mod.rs
     let nested_mod = fs::read_to_string(output_dir.join("ui/mod.rs")).unwrap();
@@ -239,6 +242,7 @@ fn test_nested_module_reexports_unique() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
+#[cfg(feature = "cli")]
 fn test_nested_module_conflicts() {
     // Test that nested modules also detect and handle conflicts
     let temp_dir = TempDir::new().unwrap();
@@ -275,19 +279,7 @@ pub struct State {
     let output_dir = temp_dir.path().join("out");
     fs::create_dir(&output_dir).unwrap();
 
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&src_dir)
-        .arg("-o")
-        .arg(&output_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--module-file")
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj");
-
-    assert!(status.success());
+    build_with_module_file(&src_dir, &output_dir).expect("Build should succeed");
 
     // Check nested components/mod.rs
     let nested_mod = fs::read_to_string(output_dir.join("components/mod.rs")).unwrap();
@@ -301,6 +293,68 @@ pub struct State {
         // If it has glob re-exports, verify it would cause an error
         panic!("Nested module should also detect and prevent ambiguous re-exports");
     }
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+#[cfg(feature = "cli")]
+fn test_deeply_nested_module_structure() {
+    // TDD: Deeply nested (a/b/c) should generate a/mod.rs, a/b/mod.rs, a/b/c/mod.rs
+    let temp_dir = TempDir::new().unwrap();
+    let src_dir = temp_dir.path().join("src");
+    fs::create_dir_all(src_dir.join("a/b/c")).unwrap();
+
+    fs::write(src_dir.join("a/b/c/widget.wj"), "pub struct Widget {}").unwrap();
+
+    let output_dir = temp_dir.path().join("out");
+    fs::create_dir(&output_dir).unwrap();
+
+    build_with_module_file(&src_dir, &output_dir).expect("Build should succeed");
+
+    // Check nested mod.rs at each level
+    assert!(
+        output_dir.join("a/b/c/mod.rs").exists(),
+        "a/b/c/mod.rs should exist"
+    );
+    assert!(
+        output_dir.join("a/b/c/widget.rs").exists(),
+        "a/b/c/widget.rs should exist"
+    );
+
+    let c_mod = fs::read_to_string(output_dir.join("a/b/c/mod.rs")).unwrap();
+    assert!(c_mod.contains("pub mod widget;"));
+    assert!(c_mod.contains("pub use widget::*;"));
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+#[cfg(feature = "cli")]
+fn test_mixed_flat_and_nested_modules() {
+    // TDD: Root has both flat files and nested dirs - root mod.rs should declare both
+    let temp_dir = TempDir::new().unwrap();
+    let src_dir = temp_dir.path().join("src");
+    fs::create_dir(&src_dir).unwrap();
+
+    // Flat file at root
+    fs::write(src_dir.join("root.wj"), "pub struct Root {}").unwrap();
+    // Nested dir
+    let ui_dir = src_dir.join("ui");
+    fs::create_dir(&ui_dir).unwrap();
+    fs::write(ui_dir.join("button.wj"), "pub struct Button {}").unwrap();
+
+    let output_dir = temp_dir.path().join("out");
+    fs::create_dir(&output_dir).unwrap();
+
+    build_with_module_file(&src_dir, &output_dir).expect("Build should succeed");
+
+    // Root mod.rs should have both root and ui
+    let root_mod = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
+    assert!(root_mod.contains("pub mod root;"));
+    assert!(root_mod.contains("pub mod ui;"));
+
+    // Nested ui/mod.rs
+    let ui_mod = fs::read_to_string(output_dir.join("ui/mod.rs")).unwrap();
+    assert!(ui_mod.contains("pub mod button;"));
 }
 
 #[test]

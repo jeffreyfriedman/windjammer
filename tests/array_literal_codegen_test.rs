@@ -107,15 +107,15 @@ version = "0.1.0"
         generated
     );
 
-    // ASSERTION 2: [10, 20, 30] should also generate fixed-size array
+    // ASSERTION 2: [10, 20, 30] should also generate fixed-size array (with int suffixes from inference)
     assert!(
-        !generated.contains("vec![10, 20, 30]"),
-        "Array literal [10, 20, 30] should NOT generate vec![10, 20, 30].\nGenerated:\n{}",
+        !generated.contains("vec![10") && !generated.contains("vec![20") && !generated.contains("vec![30"),
+        "Array literal [10, 20, 30] should NOT generate vec!.\nGenerated:\n{}",
         generated
     );
     assert!(
-        generated.contains("[10, 20, 30]"),
-        "Array literal [10, 20, 30] should generate fixed-size array [10, 20, 30].\nGenerated:\n{}",
+        generated.contains("[10_i32, 20_i32, 30_i32]") || generated.contains("[10, 20, 30]"),
+        "Array literal [10, 20, 30] should generate fixed-size array (with optional int suffixes).\nGenerated:\n{}",
         generated
     );
 
@@ -186,17 +186,17 @@ version = "0.1.0"
         )
     });
 
-    // ASSERTION: vec![1, 2, 3] should still generate vec![1, 2, 3]
+    // ASSERTION: vec![1, 2, 3] should still generate vec![] (with int suffixes from inference)
     assert!(
-        generated.contains("vec![1, 2, 3]"),
-        "vec![] macro should still generate vec![].\nGenerated:\n{}",
+        generated.contains("vec![1_i32, 2_i32, 3_i32]") || generated.contains("vec![1, 2, 3]"),
+        "vec![] macro should still generate vec![] (with optional int suffixes).\nGenerated:\n{}",
         generated
     );
 
-    // ASSERTION: vec![10, 20, 30] should still generate vec![10, 20, 30]
+    // ASSERTION: vec![10, 20, 30] should still generate vec![] (with int suffixes from inference)
     assert!(
-        generated.contains("vec![10, 20, 30]"),
-        "vec![] macro should still generate vec![].\nGenerated:\n{}",
+        generated.contains("vec![10_i32, 20_i32, 30_i32]") || generated.contains("vec![10, 20, 30]"),
+        "vec![] macro should still generate vec![] (with optional int suffixes).\nGenerated:\n{}",
         generated
     );
 

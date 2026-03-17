@@ -17,11 +17,7 @@ fn compile_with_source_map(source: &str, test_name: &str) -> Result<PathBuf, Str
     std::fs::write(&wj_path, source).map_err(|e| e.to_string())?;
 
     // Compile with wj
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             wj_path.to_str().unwrap(),
             "-o",

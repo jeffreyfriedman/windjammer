@@ -34,11 +34,7 @@ fn compile_wj_project(files: &[(&str, &str)]) -> std::collections::HashMap<Strin
     }
 
     // Compile the project (multi-file)
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             src_dir.to_str().unwrap(),
             "--no-cargo",

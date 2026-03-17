@@ -23,11 +23,7 @@ fn compile_and_check_warnings(code: &str) -> (bool, String, Vec<String>) {
     fs::write(&wj_path, code).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             wj_path.to_str().unwrap(),
             "-o",

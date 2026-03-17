@@ -5,12 +5,53 @@
 use anyhow::Result;
 use std::path::Path;
 
-/// Generate mod.rs file with pub mod declarations and re-exports
+/// Generate mod.rs file with pub mod declarations and re-exports.
+/// Recursively generates mod.rs for nested subdirectories (e.g., ui/mod.rs, components/mod.rs).
 pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
+    generate_mod_file_recursive(output_dir)
+}
+
+/// Recursively generate mod.rs for a directory and all its subdirectories.
+/// Processes subdirectories first (depth-first) so parent mod.rs can reference child modules.
+fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
     use colored::*;
     use std::fs;
 
-    // Find all .rs files (excluding mod.rs itself) and extract their public types
+    // Step 1: Recursively generate mod.rs for subdirectories that have .rs files
+    let subdirs: Vec<_> = fs::read_dir(output_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+
+    for subdir in &subdirs {
+        let has_rs_files = fs::read_dir(subdir)
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .any(|e| {
+                        let p = e.path();
+                        p.is_file()
+                            && p.extension().and_then(|s| s.to_str()) == Some("rs")
+                            && p.file_name().and_then(|n| n.to_str()) != Some("mod.rs")
+                    })
+            })
+            .unwrap_or(false);
+        let has_rs_subdirs = fs::read_dir(subdir)
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .any(|e| e.path().is_dir())
+            })
+            .unwrap_or(false);
+        if has_rs_files || has_rs_subdirs {
+            generate_mod_file_recursive(subdir)?;
+        }
+    }
+
+    // Step 2: Generate mod.rs for this directory
     let mut modules = Vec::new();
     let mut type_exports: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
@@ -69,10 +110,6 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
     }
 
     if modules.is_empty() {
-        println!(
-            "{} No modules found to generate mod.rs",
-            "Warning:".yellow().bold()
-        );
         return Ok(());
     }
 
@@ -95,7 +132,6 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         .any(|modules_list| modules_list.len() > 1);
 
     if has_conflicts {
-        use colored::*;
         println!("{} Detected conflicting symbol exports:", "⚠".yellow());
         for (symbol, modules_list) in &symbol_conflicts {
             if modules_list.len() > 1 {
@@ -145,9 +181,10 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
     fs::write(&mod_file_path, content)?;
 
     println!(
-        "{} Generated mod.rs with {} modules",
+        "{} Generated mod.rs with {} modules in {}",
         "✓".green(),
-        modules.len()
+        modules.len(),
+        output_dir.display()
     );
 
     Ok(())

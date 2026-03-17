@@ -151,11 +151,7 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -231,11 +227,7 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -323,11 +315,7 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",

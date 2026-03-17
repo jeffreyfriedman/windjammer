@@ -13,11 +13,7 @@ fn compile_and_check(code: &str) -> (bool, String) {
 
     fs::write(&test_file, code).expect("Failed to write test file");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             test_file.to_str().unwrap(),
             "--output",

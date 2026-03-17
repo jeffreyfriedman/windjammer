@@ -32,12 +32,7 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
     // Compile to unique output directory (absolute path)
     let output_dir = temp_dir.join(format!("output_{}", unique_id));
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--bin",
-            "wj",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--output",
             output_dir.to_str().unwrap(),
