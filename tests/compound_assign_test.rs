@@ -17,11 +17,7 @@ fn compile_wj(source: &str) -> String {
     let mut file = std::fs::File::create(&wj_path).unwrap();
     file.write_all(source.as_bytes()).unwrap();
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             wj_path.to_str().unwrap(),
             "--no-cargo",

@@ -10,5 +10,7 @@
 /// 5. Assign final types (each literal gets f32 or f64)
 
 pub mod float_inference;
+pub mod int_inference;
 
 pub use float_inference::{FloatInference, FloatType, ExprId};
+pub use int_inference::{IntInference, IntType};

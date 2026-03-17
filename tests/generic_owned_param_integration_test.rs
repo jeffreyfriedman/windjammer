@@ -13,13 +13,8 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_generic_owned_param_inference() {
     // Compile the Windjammer test file
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
             "build",
             "tests/generic_owned_param_test.wj",
             "--output",

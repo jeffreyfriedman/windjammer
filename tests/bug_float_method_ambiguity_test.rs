@@ -64,6 +64,7 @@ fn main() {
         .arg("rust")
         .arg("--output")
         .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run windjammer compiler");
 
@@ -186,6 +187,7 @@ fn main() {
         .arg("rust")
         .arg("--output")
         .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run windjammer compiler");
 

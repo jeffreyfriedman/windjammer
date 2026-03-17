@@ -197,15 +197,7 @@ pub fn make_vec() -> Vec3 {
     fs::write(format!("{}/game.wj", output_dir), game_source).unwrap();
 
     // Build via wj binary (full multi-file flow with metadata)
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
-            "build",
-            "--target",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args(["build", "--target",
             "rust",
             "--no-cargo",
             &format!("{}/game.wj", output_dir),

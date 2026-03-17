@@ -6,6 +6,7 @@ use clap::ValueEnum;
 
 pub mod analyzer;
 pub mod auto_clone;
+pub mod cargo_toml;
 pub mod auto_fix;
 pub mod codegen;
 pub mod component_analyzer;

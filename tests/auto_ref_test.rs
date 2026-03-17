@@ -17,11 +17,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     let input_file = test_dir.join("test.wj");
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             input_file.to_str().unwrap(),
             "--output",
@@ -185,8 +181,10 @@ fn test_mixed_owned_and_literal() {
     let generated = compile_code(code).expect("Compilation failed");
 
     // insert takes owned key, no & needed (already implemented)
+    // Note: Integer inference may add _i32 or _i64 suffix based on HashMap value type
     assert!(
-        generated.contains("map.insert(key, 42)") && !generated.contains("map.insert(&key"),
+        (generated.contains("map.insert(key, 42)") || generated.contains("map.insert(key, 42_i32)") || generated.contains("map.insert(key, 42_i64)"))
+        && !generated.contains("map.insert(&key"),
         "insert should not add & to owned key. Generated:\n{}",
         generated
     );

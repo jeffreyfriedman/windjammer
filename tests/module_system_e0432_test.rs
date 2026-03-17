@@ -23,15 +23,7 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
         fs::write(&full_path, content).unwrap();
     }
 
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--features",
-            "cli",
-            "--bin",
-            "wj",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             src_dir.to_str().unwrap(),
             "-o",

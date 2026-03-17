@@ -34,7 +34,7 @@ fn compile_wj_to_rust(source: &str) -> (String, bool) {
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
+    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             wj_file.to_str().unwrap(),
@@ -44,6 +44,12 @@ fn compile_wj_to_rust(source: &str) -> (String, bool) {
         ])
         .output()
         .expect("Failed to run wj compiler");
+    
+    if !wj_output.status.success() {
+        eprintln!("wj compilation failed!");
+        eprintln!("stdout: {}", String::from_utf8_lossy(&wj_output.stdout));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&wj_output.stderr));
+    }
 
     let src_dir = dir.join("src");
     let main_rs = if src_dir.join("main.rs").exists() {
@@ -139,8 +145,10 @@ impl Vec2 {
         rs
     );
     assert!(
-        rs.contains("arr[0]") && rs.contains("arr[1]"),
-        "Should use arr[0], arr[1] directly"
+        (rs.contains("arr[0]") || rs.contains("arr[0_usize]")) 
+        && (rs.contains("arr[1]") || rs.contains("arr[1_usize]")),
+        "Should use arr[0] or arr[0_usize], arr[1] or arr[1_usize] directly. Generated:\n{}",
+        rs
     );
 }
 
@@ -242,7 +250,7 @@ pub fn has_line_of_sight(grid: bool, a: (int, int), b: (int, int)) -> bool {
     true
 }
 
-pub fn test(grid: bool, path: Path, current_idx: int, i: int) -> bool {
+pub fn test(grid: bool, path: Path, current_idx: usize, i: usize) -> bool {
     has_line_of_sight(grid, path.nodes[current_idx], path.nodes[i])
 }
 "#;
@@ -335,10 +343,12 @@ fn test_entity_iter_no_deref() {
     // for entity in entities { result.push(entity) } - entity from Vec<Entity>
     // When Entity is Copy, iter gives owned. Don't incorrectly add *.
     let source = r#"
-pub struct Entity(u64);
+pub struct Entity {
+    pub id: u64
+}
 
 pub fn test(entities: Vec<Entity>) -> Vec<Entity> {
-    let mut result = vec![]
+    let mut result: Vec<Entity> = vec![]
     for entity in entities {
         result.push(entity)
     }

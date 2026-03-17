@@ -5,6 +5,7 @@
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
+pub mod cargo_toml;
 pub mod cli;
 pub mod codegen;
 pub mod compiler;
@@ -2113,6 +2114,21 @@ fn compile_file_impl(
             ));
         }
 
+        // TDD: Integer literal type inference (i32, i64, u32, etc.)
+        let mut int_inference = type_inference::IntInference::new();
+        int_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        int_inference.infer_program(&program);
+        if !int_inference.errors.is_empty() {
+            eprintln!("🚨 Int type inference errors in {}:", input_path.display());
+            for error in &int_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Int type inference failed with {} error(s)",
+                int_inference.errors.len()
+            ));
+        }
+
         // Use old generator for Rust target
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Always start with global signatures (for cross-module lookups),
@@ -2125,6 +2141,7 @@ fn compile_file_impl(
             codegen::CodeGenerator::new(generator_signatures, target)
         };
         generator.set_float_inference(float_inference);
+        generator.set_int_inference(int_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs

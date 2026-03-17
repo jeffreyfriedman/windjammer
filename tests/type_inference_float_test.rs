@@ -33,11 +33,7 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -108,11 +104,7 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -177,11 +169,7 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -242,11 +230,7 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",
@@ -310,11 +294,7 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new("cargo")
-        .args(&[
-            "run",
-            "--release",
-            "--",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
             "build",
             "--target",
             "rust",

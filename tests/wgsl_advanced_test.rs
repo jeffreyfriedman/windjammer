@@ -12,11 +12,8 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
     
     fs::write(&input_file, source).unwrap();
     
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--bin",
-            "wj",
             "build",
             input_file.to_str().unwrap(),
             "--target",
