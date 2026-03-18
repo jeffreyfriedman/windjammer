@@ -154,6 +154,45 @@ This fix brings Windjammer's incremental compilation to parity with modern langu
 
 **The proper architectural solution: cache inference results, don't disable fingerprinting.**
 
+## Cache Maintenance: Stale Entry Cleanup
+
+**Problem**: Without cleanup, cache grows unbounded as files are deleted/renamed.
+
+**Solution**: Automatically clean stale entries before saving.
+
+```rust
+fn cleanup_stale_entries(&mut self, current_files: &[PathBuf]) {
+    let current_paths: HashSet<String> = current_files
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    
+    // Remove entries for files that no longer exist
+    self.source_hashes.retain(|path, _| current_paths.contains(path));
+    self.cached_errors.retain(|path, _| current_paths.contains(path));
+}
+```
+
+**Called before every save** - ensures cache only contains active files.
+
+### TDD Validation
+
+**Test 1: File deletion**
+```bash
+Build 1: 3 files (A, B, C) → cache has 3 entries
+Delete B
+Build 2: 2 files (A, C) → cache has 2 entries ✅
+```
+
+**Test 2: File rename**
+```bash
+Build 1: old_name.wj → cache has 1 entry (old_name)
+Rename: old_name.wj → new_name.wj
+Build 2: new_name.wj → cache has 1 entry (new_name) ✅
+```
+
+**Results**: Both tests PASS (2/2)
+
 ## Future Enhancements
 
 1. **Cache ownership inference results** (not just errors)
@@ -161,4 +200,4 @@ This fix brings Windjammer's incremental compilation to parity with modern langu
 3. **Parallel compilation** (cache enables safe parallelism)
 4. **Distributed builds** (cache can be shared)
 
-**Status**: ✅ COMPLETE (TDD tests pass, error counts stable)
+**Status**: ✅ COMPLETE (TDD tests pass, error counts stable, cleanup working)
