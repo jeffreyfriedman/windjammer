@@ -51,6 +51,7 @@ cli = []
 
 [dev-dependencies]
 tempfile = "3.0"
+assert_cmd = "2.0"
 
 [[bin]]
 name = "wj-build-helper"
