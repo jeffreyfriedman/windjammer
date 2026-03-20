@@ -7,6 +7,7 @@ use crate::parser::ast::core::{Expression, Statement, Item};
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use crate::type_inference::ExprId;
+use crate::type_inference::int_implicit_casts::{is_safe_implicit_cast, promote_types};
 use std::collections::HashMap;
 
 /// Integer type (i32, i64, u32, u64, usize, etc.)
@@ -1246,12 +1247,17 @@ impl IntInference {
                         match current {
                             Some(other) if other != int_ty && other != IntType::Unknown => {
                                 if int_ty != IntType::Unknown {
-                                    let file_path = self.id_to_file_name.get(&expr_id.file_id)
-                                        .map(|s| s.as_str()).unwrap_or("?");
-                                    self.errors.push(format!(
-                                        "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
-                                        file_path, expr_id.line, expr_id.col, int_ty, reason, other
-                                    ));
+                                    // TDD FIX: Only emit error if NOT a safe implicit cast
+                                    // DON'T modify inferred types - let codegen insert casts
+                                    if !is_safe_implicit_cast(other, int_ty) {
+                                        let file_path = self.id_to_file_name.get(&expr_id.file_id)
+                                            .map(|s| s.as_str()).unwrap_or("?");
+                                        self.errors.push(format!(
+                                            "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
+                                            file_path, expr_id.line, expr_id.col, int_ty, reason, other
+                                        ));
+                                    }
+                                    // else: Safe cast - silently allow it
                                 }
                             }
                             Some(IntType::Unknown) | None => {
@@ -1272,12 +1278,17 @@ impl IntInference {
 
                         match (t1, t2) {
                             (Some(a), Some(b)) if a != b && a != IntType::Unknown && b != IntType::Unknown => {
-                                let file_path = self.id_to_file_name.get(&id1.file_id)
-                                    .map(|s| s.as_str()).unwrap_or("?");
-                                self.errors.push(format!(
-                                    "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
-                                    file_path, id1.line, id1.col, reason, a, b, reason
-                                ));
+                                // TDD FIX: Only emit error if NOT a safe implicit cast in either direction
+                                // DON'T modify inferred types - let codegen insert casts
+                                if !is_safe_implicit_cast(a, b) && !is_safe_implicit_cast(b, a) {
+                                    let file_path = self.id_to_file_name.get(&id1.file_id)
+                                        .map(|s| s.as_str()).unwrap_or("?");
+                                    self.errors.push(format!(
+                                        "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
+                                        file_path, id1.line, id1.col, reason, a, b, reason
+                                    ));
+                                }
+                                // else: Safe cast in at least one direction - silently allow it
                             }
                             (Some(concrete), None | Some(IntType::Unknown)) => {
                                 let to_use = if concrete == IntType::Unknown {

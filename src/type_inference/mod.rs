@@ -11,6 +11,8 @@
 
 pub mod float_inference;
 pub mod int_inference;
+pub mod int_implicit_casts;
 
 pub use float_inference::{FloatInference, FloatType, ExprId};
 pub use int_inference::{IntInference, IntType};
+pub use int_implicit_casts::{is_safe_implicit_cast, get_cast_suffix, promote_types};
