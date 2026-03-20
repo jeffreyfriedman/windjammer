@@ -87,13 +87,17 @@ pub fn generate_single_file_cargo_toml(
 
     let has_lib_rs = output_dir.join("lib.rs").exists();
     let has_main_rs = output_dir.join("main.rs").exists();
+    
+    let project_name = infer_project_name(source_dir);
+    let lib_name = project_name.replace('-', "_");  // Rust lib names can't have hyphens
 
     let lib_or_bin_section = if has_lib_rs {
         format!(
-            "[lib]\nname = \"windjammer-app\"\npath = \"lib.rs\"\n\n"
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n",
+            lib_name
         )
     } else if has_main_rs {
-        format!("[[bin]]\nname = \"windjammer-app\"\npath = \"main.rs\"\n\n")
+        format!("[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n", project_name)
     } else {
         // TDD FIX (Bug #2): Detect file type and generate [[bin]] or [[test]]
         let mut target_sections = Vec::new();
@@ -176,6 +180,7 @@ fn write_cargo_toml(
     );
 
     let project_name = infer_project_name(source_dir);
+    let package_name = project_name.replace('-', "_");  // Package name for consistency
 
     let cargo_toml = format!(
         r#"[package]
@@ -189,7 +194,7 @@ edition = "2021"
 {}{}[profile.release]
 opt-level = 3
 "#,
-        project_name, deps_section, lib_or_bin_section
+        package_name, deps_section, lib_or_bin_section
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
@@ -231,7 +236,7 @@ fn infer_project_name(source_dir: &Path) -> String {
         }
     }
 
-    "windjammer-app".to_string()
+    "windjammer".to_string()
 }
 
 #[cfg(test)]
