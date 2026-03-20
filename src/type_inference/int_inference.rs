@@ -315,7 +315,9 @@ impl IntInference {
         match stmt {
             Statement::Let { pattern, value, type_, .. } => {
                 let explicit_type = type_.as_ref().and_then(|ty| self.extract_int_type(ty));
-                self.collect_expression_constraints(value, return_type);
+                
+                // Don't pass return_type to let statement values - they have their own types!
+                self.collect_expression_constraints(value, type_.as_ref());
 
                 if let crate::parser::ast::core::Pattern::Identifier(var_name) = pattern {
                     let value_id = self.get_expr_id(value);
@@ -335,16 +337,9 @@ impl IntInference {
                     }
                 }
 
-                if let Some(ret_ty) = return_type {
-                    if let Some(int_ty) = self.extract_int_type(ret_ty) {
-                        let expr_id = self.get_expr_id(value);
-                        self.constraints.push(IntConstraint::MustBe(
-                            expr_id,
-                            int_ty,
-                            "function return type".to_string(),
-                        ));
-                    }
-                }
+                // TDD FIX: REMOVED buggy code that constrained let values to function return type!
+                // Let statements should NOT be constrained by function return type.
+                // Only implicit returns (Expression statements) should be.
             }
             Statement::Expression { expr, .. } => {
                 self.collect_expression_constraints(expr, return_type);
@@ -683,31 +678,99 @@ impl IntInference {
                             right_id,
                             format!("binary op {:?}", op),
                         ));
-                        if let Expression::Identifier { name, .. } = left {
-                            if let Some(var_type) =
-                                self.var_types.get(name).or_else(|| self.const_types.get(name))
-                            {
-                                if let Some(int_ty) = self.extract_int_type(var_type) {
-                                    self.constraints.push(IntConstraint::MustBe(
-                                        right_id,
-                                        int_ty,
-                                        format!("LHS {} has type", name),
-                                    ));
+                        
+                        // TDD FIX: Propagate type from left side (identifier or field access)
+                        let left_int_ty = match left {
+                            Expression::Identifier { name, .. } => {
+                                self.var_types.get(name)
+                                    .or_else(|| self.const_types.get(name))
+                                    .and_then(|ty| self.extract_int_type(ty))
+                            }
+                            Expression::FieldAccess { object, field, .. } => {
+                                // Handle self.field or obj.field
+                                if let Expression::Identifier { ref name, .. } = **object {
+                                    // Get struct name from variable or self
+                                    let struct_name = if name == "self" {
+                                        self.current_impl_type.as_ref()
+                                    } else {
+                                        self.var_types.get(name.as_str())
+                                            .and_then(|ty| {
+                                                if let Type::Custom(sname) = ty {
+                                                    Some(sname)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                    };
+                                    
+                                    struct_name.and_then(|sname| {
+                                        self.struct_field_types.get(sname.as_str())
+                                            .and_then(|fields| fields.get(field.as_str()))
+                                            .and_then(|field_ty| self.extract_int_type(field_ty))
+                                    })
+                                } else {
+                                    None
                                 }
                             }
+                            _ => {
+                                // TDD FIX: Fallback to expression type inference for complex expressions
+                                self.infer_type_from_expression(left)
+                                    .and_then(|ty| self.extract_int_type(&ty))
+                            }
+                        };
+                        
+                        if let Some(int_ty) = left_int_ty {
+                            self.constraints.push(IntConstraint::MustBe(
+                                right_id,
+                                int_ty,
+                                format!("LHS has type {:?}", int_ty),
+                            ));
                         }
-                        if let Expression::Identifier { name, .. } = right {
-                            if let Some(var_type) =
-                                self.var_types.get(name).or_else(|| self.const_types.get(name))
-                            {
-                                if let Some(int_ty) = self.extract_int_type(var_type) {
-                                    self.constraints.push(IntConstraint::MustBe(
-                                        left_id,
-                                        int_ty,
-                                        format!("RHS {} has type", name),
-                                    ));
+                        
+                        // TDD FIX: Propagate type from right side (identifier or field access)
+                        let right_int_ty = match right {
+                            Expression::Identifier { name, .. } => {
+                                self.var_types.get(name)
+                                    .or_else(|| self.const_types.get(name))
+                                    .and_then(|ty| self.extract_int_type(ty))
+                            }
+                            Expression::FieldAccess { object, field, .. } => {
+                                if let Expression::Identifier { ref name, .. } = **object {
+                                    let struct_name = if name == "self" {
+                                        self.current_impl_type.as_ref()
+                                    } else {
+                                        self.var_types.get(name.as_str())
+                                            .and_then(|ty| {
+                                                if let Type::Custom(sname) = ty {
+                                                    Some(sname)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                    };
+                                    
+                                    struct_name.and_then(|sname| {
+                                        self.struct_field_types.get(sname.as_str())
+                                            .and_then(|fields| fields.get(field.as_str()))
+                                            .and_then(|field_ty| self.extract_int_type(field_ty))
+                                    })
+                                } else {
+                                    None
                                 }
                             }
+                            _ => {
+                                // TDD FIX: Fallback to expression type inference
+                                self.infer_type_from_expression(right)
+                                    .and_then(|ty| self.extract_int_type(&ty))
+                            }
+                        };
+                        
+                        if let Some(int_ty) = right_int_ty {
+                            self.constraints.push(IntConstraint::MustBe(
+                                left_id,
+                                int_ty,
+                                format!("RHS has type {:?}", int_ty),
+                            ));
                         }
                     }
                     BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le
@@ -717,6 +780,100 @@ impl IntInference {
                             right_id,
                             format!("comparison {:?}", op),
                         ));
+                        
+                        // TDD FIX: Propagate type from left side for comparisons
+                        // First try pattern matching for direct field access/identifier
+                        let left_int_ty = match left {
+                            Expression::Identifier { name, .. } => {
+                                self.var_types.get(name)
+                                    .or_else(|| self.const_types.get(name))
+                                    .and_then(|ty| self.extract_int_type(ty))
+                            }
+                            Expression::FieldAccess { object, field, .. } => {
+                                if let Expression::Identifier { ref name, .. } = **object {
+                                    let struct_name = if name == "self" {
+                                        self.current_impl_type.as_ref()
+                                    } else {
+                                        self.var_types.get(name.as_str())
+                                            .and_then(|ty| {
+                                                if let Type::Custom(sname) = ty {
+                                                    Some(sname)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                    };
+                                    
+                                    struct_name.and_then(|sname| {
+                                        self.struct_field_types.get(sname.as_str())
+                                            .and_then(|fields| fields.get(field.as_str()))
+                                            .and_then(|field_ty| self.extract_int_type(field_ty))
+                                    })
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => {
+                                // TDD FIX: Fallback to expression type inference for complex expressions
+                                // This handles cases like (self.count % 60) where the result type matters
+                                self.infer_type_from_expression(left)
+                                    .and_then(|ty| self.extract_int_type(&ty))
+                            }
+                        };
+                        
+                        if let Some(int_ty) = left_int_ty {
+                            self.constraints.push(IntConstraint::MustBe(
+                                right_id,
+                                int_ty,
+                                format!("comparison LHS has type {:?}", int_ty),
+                            ));
+                        }
+                        
+                        // TDD FIX: Propagate type from right side for comparisons
+                        let right_int_ty = match right {
+                            Expression::Identifier { name, .. } => {
+                                self.var_types.get(name)
+                                    .or_else(|| self.const_types.get(name))
+                                    .and_then(|ty| self.extract_int_type(ty))
+                            }
+                            Expression::FieldAccess { object, field, .. } => {
+                                if let Expression::Identifier { ref name, .. } = **object {
+                                    let struct_name = if name == "self" {
+                                        self.current_impl_type.as_ref()
+                                    } else {
+                                        self.var_types.get(name.as_str())
+                                            .and_then(|ty| {
+                                                if let Type::Custom(sname) = ty {
+                                                    Some(sname)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                    };
+                                    
+                                    struct_name.and_then(|sname| {
+                                        self.struct_field_types.get(sname.as_str())
+                                            .and_then(|fields| fields.get(field.as_str()))
+                                            .and_then(|field_ty| self.extract_int_type(field_ty))
+                                    })
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => {
+                                // TDD FIX: Fallback to expression type inference
+                                self.infer_type_from_expression(right)
+                                    .and_then(|ty| self.extract_int_type(&ty))
+                            }
+                        };
+                        
+                        if let Some(int_ty) = right_int_ty {
+                            self.constraints.push(IntConstraint::MustBe(
+                                left_id,
+                                int_ty,
+                                format!("comparison RHS has type {:?}", int_ty),
+                            ));
+                        }
                     }
                     _ => {}
                 }
@@ -770,7 +927,24 @@ impl IntInference {
                 self.collect_expression_constraints(object, return_type);
             }
             Expression::Index { object, index, .. } => {
-                self.collect_expression_constraints(object, return_type);
+                // TDD FIX: Vec<T>[idx] should infer result as T, not usize
+                // Extract Vec element type and constrain Index result accordingly
+                if let Some(object_type) = self.infer_type_from_expression(object) {
+                    if let Some(elem_type) = self.extract_vec_element_type(&object_type) {
+                        if let Some(int_ty) = self.extract_nested_int_type(&elem_type) {
+                            let expr_id = self.get_expr_id(expr);
+                            self.constraints.push(IntConstraint::MustBe(
+                                expr_id,
+                                int_ty,
+                                format!("Vec<{:?}> element type", int_ty),
+                            ));
+                        }
+                    }
+                }
+                
+                // Don't pass return_type to object - Vec has its own type
+                self.collect_expression_constraints(object, None);
+                
                 // TDD FIX: Array indices must be usize in Rust
                 let index_id = self.get_expr_id(index);
                 self.constraints.push(IntConstraint::MustBe(
@@ -778,7 +952,7 @@ impl IntInference {
                     IntType::Usize,
                     "array index must be usize".to_string(),
                 ));
-                self.collect_expression_constraints(index, return_type);
+                self.collect_expression_constraints(index, None);
             }
             Expression::Array { elements, .. } => {
                 // TDD FIX: [a, b, c] with expected Vec<T> - constrain elements to T
@@ -961,6 +1135,30 @@ impl IntInference {
                 self.extract_vec_element_type(&object_type)
             }
             Expression::Cast { type_, .. } => Some(type_.clone()),
+            Expression::Binary { left, op, .. } => {
+                // TDD FIX: Binary operations return the type of their operands
+                // For arithmetic (Add, Sub, Mul, Div, Mod): result type = operand type
+                // For comparison (Eq, Lt, Gt, etc.): result type = bool
+                use crate::parser::ast::operators::BinaryOp;
+                match op {
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                    | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor
+                    | BinaryOp::Shl | BinaryOp::Shr => {
+                        // Arithmetic: result has same type as operands
+                        self.infer_type_from_expression(left)
+                    }
+                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le
+                    | BinaryOp::Gt | BinaryOp::Ge => {
+                        // Comparison: result is bool
+                        Some(Type::Bool)
+                    }
+                    BinaryOp::And | BinaryOp::Or => {
+                        // Logical: result is bool
+                        Some(Type::Bool)
+                    }
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
