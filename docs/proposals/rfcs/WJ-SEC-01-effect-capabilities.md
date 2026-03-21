@@ -115,6 +115,347 @@ npm install colors
 
 ---
 
+## The Zero-Config Experience (Design Goal: 90% Need Zero Configuration)
+
+### Philosophy: Security Should Be Invisible for Common Use Cases
+
+**Problem:** Security systems add friction. Developers skip them.
+
+**Windjammer Approach:** Make security automatic and invisible for 90% of use cases.
+
+### Zero-Config for New Projects
+
+```bash
+# Create a new CLI tool
+wj new my-cli
+
+Creating CLI tool...
+✅ Project created
+✅ Security auto-configured for CLI tools
+✅ Ready to code!
+
+# That's it! No security configuration needed.
+# Windjammer detected project type and applied appropriate defaults.
+```
+
+**What happened behind the scenes:**
+
+```toml
+# wj.toml (auto-generated)
+[security]
+mode = "auto"  # Learns from your code
+
+# No explicit capabilities! 
+# Compiler infers what you need and auto-approves common patterns.
+```
+
+**Adding dependencies (zero prompts for common cases):**
+
+```bash
+wj add serde      # Serialization library
+# ✅ Added (logic_only) - Auto-approved, zero prompts
+
+wj add clap       # CLI argument parser  
+# ✅ Added (logic_only) - Auto-approved, zero prompts
+
+wj add tokio      # Async runtime
+# ✅ Added (logic_only + async) - Auto-approved, zero prompts
+
+wj add reqwest    # HTTP client
+# ⚠️  Quick question (one-time): Allow network access? (Y/n) y
+# ✅ Added - Future HTTP clients auto-approved
+```
+
+**Key: Only prompt for UNUSUAL capabilities, not common ones.**
+
+### Auto-Approval Rules
+
+**Automatically approved (zero prompts):**
+
+```
+Category: Parsers, Serializers
+├─> JSON, YAML, TOML parsers → logic_only ✅ auto-approved
+├─> Protobuf, MessagePack → logic_only ✅ auto-approved
+└─> Reason: Pure computation, common pattern
+
+Category: Data Structures
+├─> Vectors, hash maps, trees → logic_only ✅ auto-approved
+├─> String utilities → logic_only ✅ auto-approved
+└─> Reason: Pure computation, no I/O
+
+Category: CLI Tools (detected project type)
+├─> Argument parsers → logic_only ✅ auto-approved
+├─> Terminal colors → logic_only ✅ auto-approved
+├─> Progress bars → logic_only ✅ auto-approved
+└─> fs_read:* → ✅ auto-approved (CLI tools read files)
+└─> fs_write:* → ✅ auto-approved (CLI tools write output)
+
+Category: Web Servers (detected project type)
+├─> HTTP frameworks → net_ingress ✅ auto-approved
+├─> Template engines → logic_only ✅ auto-approved
+├─> Session management → logic_only ✅ auto-approved
+└─> fs_read:./config/* → ✅ auto-approved (servers need config)
+└─> fs_write:./logs/* → ✅ auto-approved (servers need logging)
+```
+
+**Requires one-time prompt (first use only):**
+
+```
+Category: Network I/O
+├─> HTTP clients (reqwest, ureq) → net_egress
+│   └─> Prompt once: "Allow network access?"
+│   └─> Future HTTP clients: auto-approved ✅
+├─> Database clients (postgres, mysql) → net_egress
+│   └─> Prompt once: "Allow database connections?"
+│   └─> Future DB clients: auto-approved ✅
+
+Category: External Programs
+├─> Process spawning → spawn
+│   └─> Prompt once: "Allow running external programs?"
+│   └─> Context: "Which programs? (git, docker, etc.)"
+```
+
+**Always prompts (security-critical):**
+
+```
+Category: Dangerous Operations
+├─> Eval, dynamic code execution → eval ⚠️  ALWAYS prompt
+├─> Reading sensitive files (~/.ssh/*, /etc/shadow) → ⚠️  ALWAYS prompt
+├─> System modification (fs_write:/etc/*, /usr/*) → ⚠️  ALWAYS prompt
+└─> Reason: High-risk operations, never auto-approve
+```
+
+### Learning from User Behavior
+
+**After first build:**
+
+```bash
+wj build
+
+Building...
+
+Security configuration learned:
+  ✅ Detected: Web API project
+  ✅ Auto-approved: 15 common dependencies (HTTP framework, JSON, logging)
+  ✅ Saved preferences: Future builds won't prompt for these patterns
+  
+Build complete in 2.3s
+```
+
+**Preference file (auto-generated):**
+
+```toml
+# .wj-preferences.toml (git-tracked, team-shared)
+[learned_patterns]
+# User approved HTTP clients, so auto-approve similar packages
+http_clients = "auto-approve"
+
+# User approved logging to ./logs/*, so auto-approve similar patterns
+logging_to_logs_dir = "auto-approve"
+
+# User has never used process spawning, so still prompt
+process_spawning = "prompt"
+```
+
+**Team benefits:**
+
+```bash
+# Alice's first build (prompts)
+wj build
+⚠️  Allow network access? (Y/n) y
+✅ Build complete
+
+# Commits .wj-preferences.toml
+
+# Bob clones repo (zero prompts)
+wj build
+✅ Build complete (used team preferences, zero prompts)
+```
+
+### Silent Success, Loud Failure
+
+**Bad UX (noisy):**
+
+```
+✅ Analyzing dependency 1/20: serde
+✅ Analyzing dependency 2/20: tokio
+✅ Analyzing dependency 3/20: clap
+...
+✅ All dependencies approved
+✅ Capability check passed
+✅ Build succeeded
+```
+
+**Good UX (silent success):**
+
+```
+wj build
+
+Build complete in 2.3s ✅
+```
+
+**Only show details on failure or warnings:**
+
+```
+wj build
+
+⚠️  Security review flagged 1 package
+
+  suspicious-lib@1.0.0
+  └─> Unusual: JSON parser making network calls
+  └─> Recommendation: Review before approving
+  
+  Review: wj show suspicious-lib@1.0.0
+  Approve: wj allow suspicious-lib --audit "Reviewed, legitimate use"
+  Deny: wj deny suspicious-lib@1.0.0
+
+Build blocked (1 security issue)
+```
+
+### Smart Project Templates
+
+**Zero-config templates:**
+
+```bash
+# Web API (auto-configured for web services)
+wj init --template web-api
+
+✅ Created web API project
+✅ Pre-configured security:
+   - net_ingress (HTTP server)
+   - fs_read:./config/*
+   - fs_write:./logs/*
+   - env:DATABASE_URL
+   - Common web dependencies auto-approved
+
+Ready to code! No security configuration needed.
+
+# CLI tool (auto-configured for command-line apps)
+wj init --template cli-tool
+
+✅ Created CLI tool project
+✅ Pre-configured security:
+   - fs_read:*
+   - fs_write:*
+   - env:*
+   - Common CLI dependencies auto-approved
+
+# Microservice (auto-configured for backend services)
+wj init --template microservice
+
+✅ Created microservice project
+✅ Pre-configured security:
+   - net_ingress (HTTP/gRPC server)
+   - net_egress (database, message queue, external APIs)
+   - fs_read:./config/*
+   - fs_write:./logs/*
+   - env:* (12-factor app)
+```
+
+### One-Command Workflows
+
+**Bad UX (multiple steps):**
+
+```bash
+# Step 1: Analyze security
+wj security audit
+
+# Step 2: Review report
+cat security-report.json
+
+# Step 3: Fix issues
+wj allow package-a net_egress
+wj allow package-b fs_write
+
+# Step 4: Rebuild
+wj build
+```
+
+**Good UX (one command):**
+
+```bash
+# One command does everything
+wj build
+
+⚠️  Quick security review (2 packages need approval)
+
+  1. http-client: needs net_egress
+     Allow network access? (Y/n) y ✅
+
+  2. logger: needs fs_write:./logs/*
+     Allow logging? (Y/n) y ✅
+
+Build complete in 2.3s ✅
+```
+
+### Escaping the Prompt Hell
+
+**Before (prompt overload):**
+
+```
+⚠️  Allow fs_read? (y/n)
+⚠️  Allow fs_write? (y/n)
+⚠️  Allow net_egress? (y/n)
+⚠️  Allow net_ingress? (y/n)
+⚠️  Allow env? (y/n)
+⚠️  Allow spawn? (y/n)
+
+# User: "I'll just type 'yyyyyy' to make it stop"
+# Security fatigue achieved! ❌
+```
+
+**After (bundled + smart):**
+
+```
+⚠️  Security Configuration (first time only)
+
+Your web API needs standard server capabilities:
+  ✅ HTTP server (net_ingress:8080)
+  ✅ Config files (fs_read:./config/*)
+  ✅ Logging (fs_write:./logs/*)
+  ✅ Database (env:DATABASE_URL)
+
+These are normal for web APIs. Apply? (Y/n) y
+
+✅ Configured
+✅ Future builds won't prompt (saved to .wj-preferences.toml)
+
+Build complete in 2.3s ✅
+```
+
+**Result: 6 prompts → 1 prompt**
+
+### Default to Safe, Not to Annoying
+
+**Bad default (too restrictive):**
+
+```toml
+[security]
+mode = "paranoid"  # Deny everything by default
+
+# User adds simple JSON parser
+wj add serde_json
+
+❌ Denied (no capabilities allowed)
+Action required: Add explicit allowlist
+```
+
+**Good default (smart restrictions):**
+
+```toml
+[security]
+mode = "auto"  # Learn from code, auto-approve common patterns
+
+# User adds simple JSON parser
+wj add serde_json
+
+✅ Added (auto-approved: common parser, logic_only)
+```
+
+**Philosophy:** Trust common, well-known packages. Flag unusual patterns.
+
+---
+
 ## Technical Design
 
 ### 1. Capability Manifest (`wj.toml`)
@@ -825,6 +1166,449 @@ wj build
 - Compliance tracking (SOC 2, ISO 27001)
 - Audit trail for all capability usage
 - Consistent policy across organization
+
+---
+
+## Non-Alarming Language (Avoid Security Theater)
+
+### The Problem: Scary Words Create Alert Fatigue
+
+**Bad UX (alarming):**
+
+```
+🚨 CRITICAL SECURITY ALERT 🚨
+⚠️  DANGEROUS VULNERABILITY DETECTED ⚠️  
+🔴 MALICIOUS CODE FOUND 🔴
+
+Package: http-client@2.0.0
+Threat Level: HIGH
+CVE: NONE (zero-day exploit!)
+Attack Vector: Network exfiltration
+
+❌ BUILD BLOCKED ❌
+❌ DO NOT PROCEED ❌
+❌ SYSTEM COMPROMISED ❌
+```
+
+**User reaction:** "Oh no! ... wait, this happens every build. Clicking OK."
+→ Alert fatigue achieved! Security ignored.
+
+**Good UX (informative, not alarming):**
+
+```
+Security review found something unusual
+
+http-client@2.0.0 
+└─> This HTTP library is trying to read files (unusual pattern)
+
+Why this matters:
+  HTTP libraries normally only make network requests.
+  Reading files suggests it might be doing something unexpected.
+
+What to do:
+  1. Review the package: wj show http-client@2.0.0
+  2. If legitimate: wj allow http-client@2.0.0 --audit "Uses config files"
+  3. If suspicious: wj deny http-client@2.0.0
+
+Not urgent, but worth a quick look.
+```
+
+**Key differences:**
+- No emoji alarm bells
+- Explains WHY it's flagged (unusual, not necessarily bad)
+- Provides context (HTTP libs don't normally read files)
+- Gives clear options
+- Doesn't claim attack/exploit (just unusual pattern)
+
+### Tone Guidelines
+
+**❌ Avoid:**
+- CRITICAL, DANGEROUS, MALICIOUS (unless actually malware)
+- ALL CAPS for emphasis
+- Multiple emoji (🚨⚠️🔴)
+- "DO NOT PROCEED" (too authoritarian)
+- "SYSTEM COMPROMISED" (rarely true)
+
+**✅ Use instead:**
+- "Unusual pattern"
+- "Worth reviewing"
+- "Unexpected behavior"
+- "Seems suspicious"
+- "Doesn't match typical usage"
+
+**Philosophy:** Most flags are false positives. Don't scare users with every flag.
+
+---
+
+## Contextual Help (Right When You Need It)
+
+### The Problem: Generic Error Messages Don't Help
+
+**Bad UX:**
+
+```
+Error: Capability violation
+  Package: http-client
+  Code: WJ-SEC-01-042
+  
+Help: See documentation at windjammer.org/docs/security
+```
+
+**User:** "I don't want to read docs. Just tell me what to do!"
+
+**Good UX:**
+
+```
+Security question about http-client
+
+This package wants to: Make network requests
+
+Context for your project:
+  └─> You're building: Web scraper
+  └─> Network access: Expected for this use case ✅
+
+Quick action:
+  [A]llow  [D]eny  [R]eview code first
+
+> A
+
+✅ Allowed
+✅ Similar packages (reqwest, ureq) will be auto-approved
+
+Need more info? Type '?' for details or 'help' for full explanation.
+```
+
+**Key: Context-aware help based on project type and user's goal.**
+
+### Interactive Help
+
+```bash
+> ?
+
+Detailed explanation:
+
+http-client is a popular HTTP library with 1.2M downloads/month.
+Trust score: 8.7/10 (high)
+
+What it does:
+  - Makes GET/POST requests
+  - Handles redirects
+  - TLS encryption
+
+Why it needs network access:
+  - HTTP requests require net_egress capability
+  - Normal for HTTP libraries
+
+Security notes:
+  ✅ Well-maintained (updated 2 days ago)
+  ✅ No known vulnerabilities
+  ✅ Good reputation (5000+ GitHub stars)
+  ⚠️  Can access ANY domain (consider restricting)
+
+Recommendation: ALLOW (safe for most use cases)
+
+Restrict to specific domains? (y/N) n
+
+[A]llow  [D]eny  [R]eview code
+```
+
+---
+
+## Smart Defaults Based on Context
+
+### The Problem: One-Size-Fits-All Doesn't Work
+
+**Different project types need different defaults:**
+
+```
+CLI tool:
+  - Needs: fs_read:*, fs_write:*, env:*
+  - Doesn't need: net_ingress (not a server)
+
+Web API:
+  - Needs: net_ingress, fs_read:./config/*, env:DATABASE_URL
+  - Might need: net_egress (external APIs)
+
+Library:
+  - Usually: logic_only
+  - Rarely needs: I/O capabilities
+```
+
+### Context Detection
+
+**Automatic project type detection:**
+
+```rust
+fn detect_project_type(manifest: &Manifest) -> ProjectType {
+    // Check dependencies
+    if manifest.has_dependency("axum") || manifest.has_dependency("actix-web") {
+        return ProjectType::WebServer;
+    }
+    
+    if manifest.has_dependency("clap") || manifest.has_dependency("structopt") {
+        return ProjectType::CliTool;
+    }
+    
+    // Check binary vs library
+    if manifest.has_bin_target() {
+        return ProjectType::Application;
+    } else {
+        return ProjectType::Library;
+    }
+}
+```
+
+**Apply appropriate defaults:**
+
+```bash
+wj init
+
+Detected project type: Web API
+
+Applying smart defaults:
+  ✅ Allow HTTP server (net_ingress)
+  ✅ Allow reading config files (fs_read:./config/*)
+  ✅ Allow writing logs (fs_write:./logs/*)
+  ✅ Allow environment variables (env:*)
+  
+These are standard for web APIs.
+Change later: wj config security
+
+Ready to code! ✅
+```
+
+---
+
+## Batch Approval for Related Packages
+
+### The Problem: Approving 10 HTTP Clients Individually
+
+**Bad UX:**
+
+```
+wj add reqwest
+⚠️  Allow network access? (y/n) y
+
+wj add ureq
+⚠️  Allow network access? (y/n) y
+
+wj add hyper
+⚠️  Allow network access? (y/n) y
+
+# User: "WHY am I answering this 10 times?!"
+```
+
+**Good UX:**
+
+```
+wj add reqwest
+⚠️  Allow network access? (y/n) y
+
+✅ Allowed
+✅ Auto-approve future HTTP libraries? (Y/n) y
+   └─> Similar packages (ureq, hyper, etc.) won't prompt
+
+wj add ureq
+✅ Added (auto-approved: HTTP client pattern)
+
+wj add hyper
+✅ Added (auto-approved: HTTP client pattern)
+```
+
+**One decision, many packages. Cognitive load: 10 → 1.**
+
+---
+
+## Fast Approval Shortcuts
+
+### The Problem: Too Many Keystrokes
+
+**Bad UX:**
+
+```
+⚠️  Package http-client needs network access
+
+Do you want to allow this capability?
+Please type 'yes' or 'no' and press Enter:
+> yes
+
+Confirm your choice (type 'yes' again to confirm):
+> yes
+
+Are you sure? This will modify your security configuration (yes/no):
+> yes
+
+✅ Allowed (finally!)
+```
+
+**Good UX:**
+
+```
+⚠️  Package http-client needs network access
+
+Allow? (Y/n) y
+✅ Allowed
+```
+
+**3 confirmations → 1 keystroke.**
+
+**Super-fast mode:**
+
+```bash
+# Trust mode: Auto-approve everything for this session
+wj build --trust-all
+
+⚠️  Trust mode enabled (auto-approving all capabilities)
+✅ Build complete in 1.2s
+
+Changes saved to .wj-capabilities.lock
+Review: wj security audit
+```
+
+**Use case:** Rapid prototyping, trusted environment, you'll review later.
+
+---
+
+## Learning System: Remember User Preferences
+
+### The Problem: Answering Same Questions Repeatedly
+
+**Bad UX:**
+
+```
+# Monday
+wj add serde
+⚠️  Allow serde? (y/n) y
+
+# Tuesday  
+wj add serde_json
+⚠️  Allow serde_json? (y/n) y
+
+# Wednesday
+wj add toml
+⚠️  Allow toml? (y/n) y
+
+# User: "They're all parsers! Stop asking!"
+```
+
+**Good UX (learns from behavior):**
+
+```
+# Monday
+wj add serde
+⚠️  Allow serde (parser)? (y/n) y
+✅ Learning: User approves parsers
+
+# Tuesday
+wj add serde_json
+✅ Added (auto-approved: parser, matches learned pattern)
+
+# Wednesday
+wj add toml
+✅ Added (auto-approved: parser, matches learned pattern)
+```
+
+**System learns:** User approves parsers → Auto-approve future parsers.
+
+### Preference Learning
+
+```toml
+# .wj-learning.toml (auto-generated)
+[learned_preferences]
+parsers = "always-approve"              # User approved 3+ parsers
+http_clients = "always-approve"         # User approved 2+ HTTP libs
+database_drivers = "always-approve"     # User approved postgres, mysql
+cli_argument_parsers = "always-approve" # User approved clap, structopt
+
+process_spawning = "always-deny"        # User denied 2+ spawn requests
+reading_home_dir = "always-deny"        # User denied ~/.ssh/* access
+```
+
+**Benefit:** System becomes smarter over time, asks fewer questions.
+
+---
+
+## Reducing Notification Fatigue
+
+### Silent Approvals
+
+**90% of builds should be silent (zero output):**
+
+```bash
+wj build
+# (no output, just builds)
+
+wj run
+# (runs the program)
+```
+
+**Only show messages for:**
+1. Failures (build errors, security blocks)
+2. First-time questions (new capabilities)
+3. Unusual patterns (potential security issues)
+
+### Aggregated Reports (Not Real-Time Spam)
+
+**Bad UX (real-time spam):**
+
+```
+Checking dependency 1/50: serde... ✅
+Checking dependency 2/50: tokio... ✅
+Checking dependency 3/50: clap... ✅
+...
+(47 more lines of spam)
+```
+
+**Good UX (silent, then summary):**
+
+```
+wj build
+
+Build complete in 2.3s ✅
+
+Security summary: wj security summary
+```
+
+**On request:**
+
+```bash
+wj security summary
+
+Security Summary
+
+Dependencies checked: 50
+  ✅ Auto-approved: 48 (common patterns)
+  ⚠️  Flagged: 2 (unusual, review recommended)
+
+Capabilities used:
+  ✅ fs_read:./config/* (3 packages)
+  ✅ fs_write:./logs/* (2 packages)
+  ✅ net_egress (5 packages)
+
+No action needed ✅
+
+Details: wj security audit --full
+```
+
+---
+
+## Intelligent Defaults: 80/20 Rule
+
+### 80% of Users Need Zero Configuration
+
+**Design goal:** 
+- 80% of users: Zero security configuration needed
+- 15% of users: One or two quick questions
+- 5% of users: Custom configuration (power users)
+
+**How to achieve 80% zero-config:**
+
+1. **Smart templates** (web-api, cli-tool, library)
+2. **Auto-approval for common packages** (serde, tokio, clap)
+3. **Learning from project structure** (has main.wj → application, has lib.wj → library)
+4. **Industry-standard defaults** (web servers need HTTP, CLI tools need filesystem)
+
+**Result: Most developers never see a security prompt.**
 
 ---
 
