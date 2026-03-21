@@ -765,6 +765,276 @@ fn validate_dependency_capabilities(dep: &Dependency) -> Result<(), Error> {
 
 ---
 
+## Runtime Capability Enforcement (Opt-In)
+
+### The TOCTOU Problem
+
+**Time-of-Check/Time-of-Use vulnerability:**
+
+```bash
+# Build time
+wj build --release
+# ✅ Security analysis passes (clean code)
+
+# Deploy time
+./deploy.sh
+# ❌ Attacker swaps binary with malicious version
+
+# Runtime
+./my-app
+# ❓ Is this the verified binary or the malicious one?
+```
+
+**Gap:** Compile-time checks are great, but don't protect against post-compile tampering.
+
+### Solution: Optional Runtime Enforcement
+
+**Embed capability manifest in binary:**
+```rust
+// Generated Rust code (when --runtime-checks enabled)
+#[cfg(feature = "runtime-capability-checks")]
+static CAPABILITY_MANIFEST: &[u8] = include_bytes!("wj-capabilities.lock");
+
+#[cfg(feature = "runtime-capability-checks")]
+fn fs_read_file(path: &str) -> Result<String, Error> {
+    // Runtime check against embedded manifest
+    let manifest = parse_manifest(CAPABILITY_MANIFEST)?;
+    
+    if !manifest.allows_fs_read(path) {
+        return Err(Error::CapabilityViolation {
+            operation: "fs.read",
+            path: path.to_string(),
+            reason: "Not in capability manifest",
+        });
+    }
+    
+    // Proceed with actual read
+    std::fs::read_to_string(path)
+}
+```
+
+**Opt-in via feature flag:**
+```toml
+# Cargo.toml (generated)
+[features]
+default = []
+runtime-capability-checks = []  # Opt-in (adds ~1-2% overhead)
+
+# Build with runtime checks
+# wj build --release --features runtime-capability-checks
+```
+
+**Benefits:**
+- Detects binary tampering (embedded manifest won't match malicious code)
+- Defense-in-depth (compile-time + runtime)
+- Helps debugging (clear error messages for capability violations)
+
+**Trade-off:**
+- Small runtime overhead (~1-2% for capability checks)
+- Larger binary size (~10KB for embedded manifest)
+- Opt-in only (not enabled by default)
+
+**When to use:**
+- High-security environments (finance, healthcare, government)
+- Untrusted deployment pipelines
+- Defense against sophisticated attacks
+
+---
+
+## Binary Reproducibility & Attestation
+
+### The Problem
+
+**Can't verify that deployed binary matches source + security analysis.**
+
+```bash
+# Developer builds
+wj build --release
+# ✅ Security analysis passes
+
+# CI builds
+wj build --release
+# ✅ Security analysis passes
+
+# Are these the SAME binary?
+sha256sum target/release/my-app
+# Different hashes! Why?
+```
+
+**Causes of non-reproducibility:**
+- Timestamps embedded in binary
+- Build hostname, username
+- Random number generation during build
+- Nondeterministic linking order
+
+### Solution: Reproducible Builds
+
+**Enable reproducibility:**
+```bash
+wj build --reproducible --output build-manifest.json
+```
+
+**Build manifest:**
+```json
+{
+  "source_hash": "sha256:abc123...",
+  "compiler_version": "0.51.0",
+  "build_timestamp": "2026-03-21T10:30:00Z",
+  "build_environment": {
+    "os": "Linux 5.15",
+    "arch": "x86_64"
+  },
+  "dependencies": {
+    "json-parser": {
+      "version": "1.0.0",
+      "hash": "sha256:def456...",
+      "capabilities": ["logic_only"]
+    }
+  },
+  "security_analysis": {
+    "capabilities_used": ["fs_read:./config/*", "net_egress:api.example.com"],
+    "profile_violations": 0,
+    "anomaly_score": 0.3,
+    "verdict": "safe"
+  },
+  "binary_hash": "sha256:ghi789...",
+  "signature": "ed25519:..." // Signed by build system
+}
+```
+
+**Verification:**
+```bash
+# Anyone can verify the binary
+wj verify my-app --manifest build-manifest.json
+
+Verifying binary: my-app
+
+✅ Source hash matches manifest
+✅ Compiler version matches (0.51.0)
+✅ Dependencies match lock file
+✅ Binary hash matches manifest
+✅ Signature valid (signed by: ci-builder@example.com)
+✅ Security analysis verified
+
+Binary is AUTHENTIC and matches security analysis.
+
+Capabilities verified:
+├─> fs_read:./config/*
+├─> net_egress:api.example.com
+└─> All capabilities within manifest allowlist ✅
+
+This binary is safe to deploy.
+```
+
+**CI/CD integration:**
+```yaml
+# .github/workflows/release.yml
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Build reproducibly
+        run: |
+          wj build --release --reproducible \
+            --output build-manifest.json
+      
+      - name: Sign manifest
+        run: |
+          wj sign build-manifest.json \
+            --key ${{ secrets.SIGNING_KEY }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: release
+          path: |
+            target/release/my-app
+            build-manifest.json
+      
+      - name: Verify reproducibility
+        run: |
+          # Build again, verify same hash
+          wj build --release --reproducible \
+            --output build-manifest-2.json
+          
+          diff <(jq .binary_hash build-manifest.json) \
+               <(jq .binary_hash build-manifest-2.json) \
+            || exit 1
+```
+
+**Deployment verification:**
+```bash
+# Before deploying to production
+wj verify ./my-app --manifest build-manifest.json --strict
+
+Strict verification mode:
+
+✅ Binary hash matches manifest
+✅ Signature valid
+✅ Security analysis passed
+✅ No revoked dependencies
+✅ All dependencies within trust threshold
+✅ Build was reproducible
+
+⚠️  Additional checks:
+├─> Binary built 3 days ago (recent: ✅)
+├─> Signed by: ci-builder@example.com (authorized: ✅)
+├─> Compiler version: 0.51.0 (latest: 0.51.2) ⚠️  Consider updating
+└─> No known vulnerabilities: ✅
+
+Binary approved for production deployment.
+```
+
+**Supply chain transparency:**
+```bash
+# Show provenance
+wj provenance my-app
+
+Binary: my-app (sha256:ghi789...)
+
+Source:
+├─> Repository: https://github.com/mycompany/my-app
+├─> Commit: abc123... (2026-03-21 10:00:00)
+├─> Branch: main
+└─> Tag: v1.0.0
+
+Build:
+├─> Builder: GitHub Actions
+├─> Build ID: 1234567
+├─> Build time: 2026-03-21 10:30:00
+├─> Compiler: Windjammer 0.51.0
+└─> Reproducible: ✅ (verified by 3 independent rebuilds)
+
+Security:
+├─> Analysis: Passed (anomaly score: 0.3)
+├─> Capabilities: fs_read, net_egress
+├─> Dependencies: 12 (all verified)
+├─> Revocations: 0
+└─> Trust score: 9.5/10
+
+Signature chain:
+├─> Developer: alice@example.com (GPG: 0xABC...)
+├─> CI: ci-builder@example.com (ed25519: 0xDEF...)
+└─> Verified: ✅
+
+This binary has a complete provenance chain.
+```
+
+**Benefits:**
+- Verify binary hasn't been tampered with
+- Complete supply chain transparency
+- Enables independent verification
+- Supports compliance (SOC 2, ISO 27001)
+
+---
+
 ## Open Questions
 
 ### 1. Dynamic Plugin Systems
