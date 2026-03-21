@@ -3560,4 +3560,413 @@ my-app (allows: fs_read, net_egress)
 
 ---
 
-*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates.*
+## False Positive Handling at Scale
+
+### The Problem
+
+**3% false positive rate seems low, but for 1000 dependencies = 30 false positives!**
+
+**Example: Large enterprise application:**
+```
+Project with 1000 dependencies:
+├─> False positive rate: 3%
+├─> False positives: 30 packages
+├─> Developer time: 30 × 5 minutes = 2.5 hours
+└─> This is a BLOCKER for large projects!
+```
+
+### Solution 1: Batch Approval Workflow
+
+**Group similar false positives and approve together:**
+
+```bash
+wj approve-batch
+
+Security review: 30 flagged dependencies
+
+🟡 Category: HTTP clients with caching (15 packages)
+Pattern: HTTP clients writing responses to ./cache/*
+
+├─> http-client-a@2.1.0: <fs_write:./cache/*>
+├─> http-client-b@1.9.0: <fs_write:./cache/*>
+├─> ... (13 more)
+
+Analysis:
+  ├─> 42% of HTTP clients use filesystem caching
+  ├─> Common pattern (not suspicious)
+  └─> Likely false positive
+
+Approve all 15? (Y/n) y
+  ✅ Approved 15 packages with common pattern
+
+🟡 Category: Loggers with remote sinks (8 packages)
+Pattern: Loggers sending to monitoring services
+
+├─> logger-a@3.4.0: <net_egress:sentry.io>
+├─> logger-b@2.1.0: <net_egress:datadog.com>
+├─> ... (6 more)
+
+Analysis:
+  ├─> 38% of loggers support remote logging
+  ├─> Common pattern (not suspicious)
+  └─> Likely false positive
+
+Approve all 8? (Y/n) y
+  ✅ Approved 8 packages with common pattern
+
+🔴 Category: Suspicious (7 packages) ⚠️
+Pattern: ANOMALOUS BEHAVIOR
+
+├─> colors@1.4.1: <spawn> + <net_egress> [CRITICAL]
+│   └─> Why: Terminal color library should NOT spawn processes or use network
+├─> sketchy-lib@1.0.0: <fs_read:~/.ssh/*> [CRITICAL]
+│   └─> Why: Reading SSH keys is HIGHLY SUSPICIOUS
+├─> ... (5 more)
+
+These require individual review.
+
+Review individually? (Y/n) y
+```
+
+**Results:**
+- **Before:** 30 packages × 5 minutes = 2.5 hours
+- **After:** 2 batch approvals (30 seconds) + 7 individual reviews (35 minutes) = **36 minutes total**
+- **Speedup: 4x faster!**
+
+### Solution 2: Adaptive Thresholds
+
+**Adjust sensitivity based on project size:**
+
+```rust
+fn adjust_threshold_by_project_size(
+    base_threshold: f64,
+    dep_count: usize
+) -> f64 {
+    // Stricter for small projects, looser for large
+    match dep_count {
+        0..=10 => base_threshold,          // 3% false positive
+        11..=100 => base_threshold * 1.5,  // 2% false positive
+        101.. => base_threshold * 2.0,     // 1.5% false positive
+    }
+}
+```
+
+**Results:**
+- Small project (10 deps): 0.3 false positives (acceptable)
+- Medium project (100 deps): 2 false positives (acceptable)
+- Large project (1000 deps): 15 false positives (manageable, was 30)
+
+### Solution 3: Learning from Approvals
+
+**Remember what the team approves:**
+
+```toml
+# .wj-approvals.toml (git-tracked, team-wide)
+[approved_patterns]
+"http-client-caching" = { capability = "fs_write:./cache/*", reason = "HTTP caching" }
+"remote-logging" = { capability = "net_egress:<logging-service>", reason = "Log aggregation" }
+
+[organizational_allowlist]
+domains = ["sentry.io", "datadog.com", "newrelic.com"]  # Pre-approved logging services
+```
+
+**On next build:**
+```bash
+wj build
+
+Security review: 5 flagged dependencies
+
+✅ Auto-approved (2 packages) - Matches team pattern
+  ├─> http-client-c: <fs_write:./cache/*> [HTTP caching pattern]
+  └─> logger-c: <net_egress:datadog.com> [Remote logging pattern]
+
+⚠️  Manual review required (3 packages)
+  ├─> new-suspicious-lib: <fs_read:~/.aws/*>
+  └─> ... (2 more)
+```
+
+**Benefits:**
+- Team learns from approvals
+- Patterns propagate across projects
+- False positives decrease over time
+
+---
+
+## Progressive Onboarding & Documentation
+
+### The Problem
+
+**4 RFCs × 3,000 lines each = 12,000 lines of docs!**
+
+**User perspective:** "I just want to build a web app, not read a PhD thesis."
+
+### Solution: Three-Tier Documentation
+
+#### Tier 1: Quick Start (5 minutes)
+
+```markdown
+# Windjammer Security: Quick Start
+
+TL;DR: Windjammer blocks malicious dependencies automatically.
+
+Just use `wj build`. Security is handled for you.
+
+If you get a security error:
+1. Run: wj copilot "Why was X blocked?"
+2. Follow the suggestions
+3. Done!
+
+Read more: windjammer.org/docs/security-quickstart
+```
+
+**Most users stop here!**
+
+#### Tier 2: Common Patterns (15 minutes)
+
+```markdown
+# Windjammer Security: Common Patterns
+
+Building a web API? Use template:
+  wj init --template secure-web-api
+  # Pre-configured with sensible defaults
+
+Building a CLI tool? Use template:
+  wj init --template secure-cli-tool
+  # Minimal capabilities for CLI apps
+
+Custom project?
+  wj new my-project
+  # Security auto-configured based on your code
+
+Read more: windjammer.org/docs/security-patterns
+```
+
+**Power users read this when customizing.**
+
+#### Tier 3: Deep Dive (when needed)
+
+```markdown
+# Windjammer Security: Architecture
+
+For security engineers and curious developers.
+
+Read the RFCs: windjammer.org/docs/rfcs
+- WJ-SEC-01: Effect Capabilities
+- WJ-SEC-02: Taint Tracking
+- WJ-SEC-03: Capability Lock File
+- WJ-SEC-04: Capability Profiles
+
+Full technical details, threat model, implementation.
+```
+
+**Only security engineers read this!**
+
+### Zero-Config Onboarding
+
+**Before (manual configuration):**
+```
+Step 1: Read RFC to understand capability theory (2 hours)
+Step 2: Configure wj.toml manifest (1 hour)
+Step 3: Analyze dependencies manually (30 minutes)
+Step 4: Write justifications (1 hour)
+Total: 4.5 hours before writing first line of code
+```
+
+**After (auto-configuration):**
+```bash
+# Zero-config for simple projects
+wj new my-cli-tool
+
+Creating CLI tool project...
+✅ Detected project type: CLI tool
+✅ Auto-configured security (appropriate defaults)
+✅ Ready to code!
+
+ls
+├─> wj.toml (pre-configured with sensible capabilities)
+├─> .wj-capabilities.lock (empty, will populate on first dep)
+├─> src/main.wj (hello world example)
+└─> README.md (includes security best practices)
+
+# Just start coding
+vim src/main.wj
+
+# Add dependencies (auto-vetted)
+wj add clap  # CLI args
+# ✅ Auto-approved: logic_only (safe for parsers)
+
+wj add reqwest  # HTTP client
+# ⚠️  Quick question: Allow network access? (Y/n) y
+# ✅ Added to manifest: net_egress:*
+
+# Build and run
+wj build && wj run
+# Works! Security configured automatically.
+
+Total time: 5 minutes (not 4.5 hours)
+```
+
+### Avoiding Security Fatigue
+
+**Bad (alert overload):**
+```
+⚠️  Allow net_egress? (y/n) y
+⚠️  Allow fs_read? (y/n) y  
+⚠️  Allow fs_write? (y/n) y
+⚠️  Allow env? (y/n) y
+⚠️  Allow spawn? (y/n) y
+⚠️  Allow eval? (y/n) y
+# User stops reading and just types "yyyyyy"
+```
+
+**Good (bundled with context):**
+```
+⚠️  Security Configuration
+
+Your web API needs these capabilities:
+
+✅ Standard web server permissions:
+  ├─> net_ingress:0.0.0.0:8080 (HTTP server)
+  ├─> fs_read:./config/* (configuration)
+  ├─> fs_write:./logs/* (logging)
+  └─> env:DATABASE_URL (database connection)
+
+These are typical for web APIs. Allow? (Y/n) y
+  ✅ Applied standard web server profile
+
+⚠️  Additional permission required:
+  ├─> net_egress:api.stripe.com (Stripe API)
+  └─> Reason: Payment processing
+  
+This is UNUSUAL for web servers (external API access).
+Allow? (y/N) y
+  ✅ Added with audit trail
+
+🚩 DANGEROUS permission requested:
+  ├─> spawn (process spawning)
+  └─> Reason: Unknown
+  
+Web servers should NOT spawn processes (security risk).
+This is HIGHLY SUSPICIOUS.
+Allow? (y/N) n
+  ❌ Denied. Build will fail if required.
+```
+
+**Key insights:**
+- Bundle common patterns (reduce prompt count)
+- Highlight unusual requests (increase attention)
+- Flag dangerous requests (prevent mistakes)
+
+---
+
+## Improved Error Messages
+
+### Bad Error Message
+
+```
+Error: Capability violation
+  Package: http-client
+  Required: net_egress:api.github.com
+  Allowed: net_egress:api.stripe.com
+  Code: WJ-SEC-01-003
+```
+
+**Problems:**
+- No explanation of WHY this matters
+- No suggestion on HOW to fix
+- Technical jargon (capability violation)
+
+### Good Error Message
+
+```
+🔴 Security Error: Network access not allowed
+
+Package: http-client@2.0.0
+Location: src/github.rs:45
+
+Attempted: Connect to api.github.com
+Allowed: api.stripe.com (from manifest)
+
+Why this matters:
+  This package tried to connect to GitHub's API, but your
+  application's security manifest only allows Stripe API access.
+  
+  This could be:
+  1. Bug: Package using wrong API endpoint
+  2. Attack: Malicious code trying to exfiltrate data
+  3. Mistake: Forgot to add github.com to manifest
+
+How to fix:
+  Option 1: If GitHub access is legitimate, add to manifest
+    wj allow http-client net_egress:api.github.com --audit "GitHub API integration"
+  
+  Option 2: If this is unexpected, investigate
+    wj show http-client@2.0.0 --source
+    wj diff http-client@1.9.0 @2.0.0  # See what changed
+  
+  Option 3: Block this version
+    wj deny http-client@2.0.0 --keep 1.9.0
+
+Need help? wj copilot "Why is http-client blocked?"
+```
+
+**Improvements:**
+- Explains WHY (context)
+- Provides actionable HOW (3 options)
+- Links to helpful tools (copilot, show, diff)
+- Friendly tone (collaborative, not authoritarian)
+
+---
+
+## Capability Tracing for Debugging
+
+### The Scenario
+
+**Build fails, user doesn't understand why:**
+
+```bash
+wj build
+
+Error: Capability violation
+  Package: http-client
+  Function: request()
+  Capability: net_egress:api.github.com
+
+# User: "Why? How did api.github.com get called?"
+```
+
+### Solution: Capability Trace
+
+```bash
+wj trace net_egress:api.github.com
+
+Tracing capability: net_egress:api.github.com
+
+Call chain:
+  main() [src/main.rs:10]
+  └─> sync_repos() [src/sync.rs:45]
+      └─> github::fetch_repos() [deps/github-client/src/lib.rs:120]
+          └─> http_client::request("https://api.github.com/repos") 
+              [deps/http-client/src/client.rs:89]
+
+This capability was used in:
+  Context: Syncing GitHub repositories
+  Added in: commit abc123 (2026-03-20)
+  Author: alice@example.com
+  PR: #123 "Add GitHub sync feature"
+
+To fix:
+  Add to manifest: wj allow http-client net_egress:api.github.com --audit "GitHub sync"
+  Or remove: git revert abc123
+  Or refactor: Use read-only GitHub API (no token required)
+```
+
+**Benefits:**
+- Clear understanding of WHY capability is needed
+- WHERE it's used (full call chain)
+- WHEN it was added (git history)
+- HOW to fix (actionable steps)
+
+---
+
+*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates. Round 2 improvements address false positives at scale, progressive onboarding, and better error messages for production-ready adoption.*
