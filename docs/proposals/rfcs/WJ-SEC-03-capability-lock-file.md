@@ -1550,6 +1550,222 @@ wj security scan
 
 ---
 
+## Federated Trust Networks
+
+### The Problem: Small Organizations Can't Run Full Security Infrastructure
+
+**Challenge:**
+- Large enterprises: Can run dedicated security teams, vulnerability scanners, malware analysis
+- Small teams (2-5 developers): Can't afford specialized security infrastructure
+- Individual developers: No resources for deep package analysis
+
+**Current approach:** Everyone re-analyzes same packages (wasteful duplication).
+
+### Solution: Delegate Security Analysis to Trusted Vendors
+
+**Design: Trust Federation**
+
+```toml
+# wj.toml
+[security.trust]
+# Delegate analysis to specialized security vendors
+trusted_analyzers = [
+    "https://security.chainguard.dev",  # Chainguard (container/supply chain security)
+    "https://scan.snyk.io",             # Snyk (vulnerability scanning)
+    "https://api.socket.dev"            # Socket (npm/PyPI supply chain)
+]
+
+# Require N-of-M agreement (consensus)
+consensus_threshold = "2-of-3"  # At least 2 vendors must agree package is safe
+
+# Fallback if vendors unreachable
+offline_mode = "use-cache"  # or "fail-closed" or "warn-only"
+```
+
+**How It Works:**
+
+```
+1. Developer adds dependency: wj add some-package
+
+2. Windjammer queries trusted analyzers in parallel:
+   ├─> Chainguard: Analyzing some-package@1.0.0...
+   ├─> Snyk: Analyzing some-package@1.0.0...
+   └─> Socket: Analyzing some-package@1.0.0...
+
+3. Collect verdicts:
+   ├─> Chainguard: ✅ SAFE (score: 9.2/10)
+   │   └─> No malware, no suspicious network calls
+   ├─> Snyk: ✅ SAFE (score: 8.7/10)
+   │   └─> No known CVEs, good maintainer reputation
+   └─> Socket: ⚠️  CAUTION (score: 6.5/10)
+       └─> New package (<6 months old), limited community trust
+
+4. Apply consensus threshold (2-of-3):
+   ├─> 2 vendors say SAFE ✅
+   ├─> 1 vendor says CAUTION ⚠️
+   └─> Consensus: SAFE (meets 2-of-3 threshold)
+
+5. Cache verdict locally:
+   └─> .wj-trust-cache/some-package@1.0.0.json
+
+6. Add to lock file:
+   └─> .wj-capabilities.lock
+```
+
+**Vendor Response Format:**
+
+```json
+{
+  "package": "some-package",
+  "version": "1.0.0",
+  "analyzer": "chainguard",
+  "timestamp": "2026-03-21T14:30:00Z",
+  "verdict": "safe",
+  "confidence": 0.92,
+  "details": {
+    "malware_scan": "clean",
+    "capability_analysis": {
+      "declared": ["logic_only"],
+      "verified": ["logic_only"],
+      "suspicious": false
+    },
+    "cve_scan": "no-known-vulnerabilities",
+    "reputation": {
+      "downloads_last_90_days": 1250000,
+      "maintainer_trust_score": 0.88,
+      "age_days": 456
+    }
+  },
+  "signature": "..."  # Cryptographic signature from vendor
+}
+```
+
+**Consensus Resolution:**
+
+| Threshold | Chainguard | Snyk | Socket | Result |
+|-----------|------------|------|--------|--------|
+| 2-of-3 | ✅ Safe | ✅ Safe | ✅ Safe | ✅ ALLOWED |
+| 2-of-3 | ✅ Safe | ✅ Safe | ⚠️  Caution | ✅ ALLOWED |
+| 2-of-3 | ✅ Safe | ⚠️  Caution | ⚠️  Caution | ⚠️  WARN (ask user) |
+| 2-of-3 | ✅ Safe | ❌ Deny | ❌ Deny | ❌ BLOCKED |
+| 2-of-3 | ❌ Deny | ❌ Deny | ❌ Deny | ❌ BLOCKED |
+
+**User Experience:**
+
+```bash
+wj add some-package
+
+Querying trusted security vendors...
+  ✅ Chainguard: SAFE (9.2/10)
+  ✅ Snyk: SAFE (8.7/10)
+  ⚠️  Socket: CAUTION (6.5/10) - New package
+
+Consensus: ✅ SAFE (2-of-3 vendors agree)
+
+Adding some-package@1.0.0...
+  ✅ Capability analysis: logic_only
+  ✅ Added to wj.toml
+  ✅ Updated .wj-capabilities.lock
+
+View detailed security report:
+  wj security show some-package
+```
+
+**Conflict Resolution (Disagreement):**
+
+```bash
+wj add suspicious-lib
+
+Querying trusted security vendors...
+  ✅ Chainguard: SAFE (7.2/10)
+  ❌ Snyk: DENY (2.1/10) - Malware detected
+  ❌ Socket: DENY (1.5/10) - Suspicious network calls
+
+Consensus: ❌ BLOCKED (2-of-3 vendors deny)
+
+⚠️  SECURITY ALERT: Package rejected by majority of vendors
+
+Details:
+  Snyk: Detected malware signature in minified code
+  Socket: Package makes network calls to unknown domains
+
+This package is LIKELY MALICIOUS.
+
+Do NOT proceed unless you have manually reviewed the source code.
+
+Override (not recommended):
+  wj add suspicious-lib --trust-override --reason "Reviewed source, false positive"
+```
+
+**Benefits:**
+
+1. **Economies of Scale:** One vendor analyzes package once, benefits all users
+2. **Redundancy:** No single point of failure (N-of-M consensus)
+3. **Specialization:** Vendors focus on security, developers focus on features
+4. **Real-time Protection:** Vendors update verdicts as new threats discovered
+5. **Small Team Friendly:** Access enterprise-grade security without in-house team
+
+**Privacy Protection:**
+
+```toml
+[security.trust]
+# Don't send package names to vendors (privacy-preserving)
+query_method = "hash-based"  # or "package-name" or "disabled"
+
+# When hash-based:
+# - Windjammer hashes package name + version
+# - Queries vendor with hash
+# - Vendor can't see what packages you're using
+```
+
+**Offline Mode (Air-Gapped Environments):**
+
+```toml
+[security.trust]
+offline_mode = "use-cache"  # Use cached verdicts when vendors unreachable
+
+# Pre-populate cache for air-gapped deployment
+# On internet-connected machine:
+# wj trust cache-populate --packages-file packages.txt
+
+# Copy .wj-trust-cache/ to air-gapped machine
+# Builds work offline using cached verdicts
+```
+
+**Vendor Registration:**
+
+```toml
+# Custom vendor (for organizations with internal security team)
+[security.trust.vendors.internal]
+url = "https://security.internal.acme.com"
+api_key_env = "ACME_SECURITY_API_KEY"
+public_key = "..."  # For signature verification
+weight = 2.0  # Count as 2 votes in consensus (trusted more than external)
+```
+
+**Ecosystem:**
+
+```
+Windjammer Core:
+  ├─> Provides trust federation protocol
+  └─> Implements consensus algorithm
+
+Security Vendors (ecosystem):
+  ├─> Chainguard (container security experts)
+  ├─> Snyk (vulnerability database)
+  ├─> Socket (supply chain analysis)
+  ├─> GitHub (Dependabot integration)
+  ├─> ... (anyone can build a vendor)
+  └─> ACME Internal Security (custom vendor)
+
+Protocol:
+  ├─> Open specification (JSON-RPC over HTTPS)
+  ├─> Cryptographically signed responses
+  └─> Rate-limited (prevent abuse)
+```
+
+---
+
 ## Conclusion
 
 The capability lock file is **essential** for making WJ-SEC-01 (Effect Capabilities) secure against real-world supply chain attacks. Without it, malicious dependencies can piggyback on legitimate permissions.
