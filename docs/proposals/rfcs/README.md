@@ -8,6 +8,7 @@ This directory contains formal proposals for significant changes to the Windjamm
 
 - **[WJ-SEC-01: Inferred Effect Capabilities](./WJ-SEC-01-effect-capabilities.md)** - Compile-time permission system to prevent supply chain attacks
 - **[WJ-SEC-02: Taint Tracking](./WJ-SEC-02-taint-tracking.md)** - Type-level injection prevention (SQL injection, XSS, command injection)
+- **[WJ-SEC-03: Capability Lock File](./WJ-SEC-03-capability-lock-file.md)** - Per-dependency capability sandboxing and escalation detection
 
 ### Syntax Improvements
 
@@ -47,6 +48,7 @@ This directory contains formal proposals for significant changes to the Windjamm
 |-----|--------|----------------|----------|
 | WJ-SEC-01 | 🟡 Draft | v0.50 | High |
 | WJ-SEC-02 | 🟡 Draft | v0.55 | High |
+| WJ-SEC-03 | 🟡 Draft | v0.50 | Critical |
 | WJ-SYN-01 | 🟡 Draft | v0.60+ | Low |
 | WJ-SYN-02 | ⚫ Implemented | v0.46.0 | N/A |
 | WJ-LANG-01 | 🟡 Draft | v0.48+ | Medium |

@@ -75,7 +75,7 @@ pub struct IntInference {
 
 impl IntInference {
     pub fn new() -> Self {
-        IntInference {
+        let mut inference = IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
@@ -91,7 +91,47 @@ impl IntInference {
             next_file_id: 1,
             current_impl_type: None,
             const_types: HashMap::new(),
-        }
+        };
+        
+        // TDD FIX: Register stdlib method signatures (Vec, HashMap, etc.)
+        inference.register_stdlib_signatures();
+        
+        inference
+    }
+    
+    /// Register common stdlib method signatures for type inference
+    fn register_stdlib_signatures(&mut self) {
+        use crate::parser::Type;
+        
+        // Vec<T> methods
+        self.function_signatures.insert(
+            "Vec::with_capacity".to_string(),
+            (vec![Type::Custom("usize".to_string())], None),
+        );
+        self.function_signatures.insert(
+            "Vec::reserve".to_string(),
+            (vec![Type::Custom("usize".to_string())], None),
+        );
+        self.function_signatures.insert(
+            "Vec::resize".to_string(),
+            (vec![Type::Custom("usize".to_string()), Type::Int], None), // (new_len: usize, value: T)
+        );
+        self.function_signatures.insert(
+            "Vec::truncate".to_string(),
+            (vec![Type::Custom("usize".to_string())], None),
+        );
+        
+        // HashMap<K,V> methods
+        self.function_signatures.insert(
+            "HashMap::with_capacity".to_string(),
+            (vec![Type::Custom("usize".to_string())], None),
+        );
+        
+        // String methods
+        self.function_signatures.insert(
+            "String::with_capacity".to_string(),
+            (vec![Type::Custom("usize".to_string())], None),
+        );
     }
 
     pub fn set_current_file(&mut self, file: String) -> usize {
@@ -651,6 +691,18 @@ impl IntInference {
                     }
                 }
 
+                // TDD FIX: Vec::with_capacity, HashMap::with_capacity - first arg must be usize
+                if (method == "with_capacity" || method == "reserve" || method == "truncate") && !arguments.is_empty() {
+                    if let Some((_label, arg)) = arguments.first() {
+                        let arg_id = self.get_expr_id(arg);
+                        self.constraints.push(IntConstraint::MustBe(
+                            arg_id,
+                            IntType::Usize,
+                            format!(".{}() capacity parameter must be usize", method),
+                        ));
+                    }
+                }
+                
                 // TDD FIX: HashMap<K,V>::insert and Vec<T>::push - propagate generic types from receiver
                 // Handles: mgr.name_to_id.insert("test", 42) where name_to_id: HashMap<string, int>
                 if let Some(receiver_type) = self.infer_type_from_expression(object) {

@@ -983,9 +983,15 @@ Taint tracking is **not** a silver bullet. It works best as part of a layered se
 
 1. **Taint Tracking** (this RFC) - Prevents injection at compile time
 2. **Effect Capabilities** (WJ-SEC-01) - Prevents unauthorized I/O
-3. **Runtime Validation** - Additional checks at runtime
-4. **OS Sandboxing** - seccomp, pledge, containers
-5. **Network Security** - Firewalls, TLS, CSP
+3. **Capability Lock File** (WJ-SEC-03) - Per-dependency capability sandboxing
+4. **Runtime Validation** - Additional checks at runtime
+5. **OS Sandboxing** - seccomp, pledge, containers
+6. **Network Security** - Firewalls, TLS, CSP
+
+**Example: Combined Protection:**
+- Taint tracking prevents SQL injection (can't inject malicious query)
+- Effect capabilities prevent unauthorized network (can't exfiltrate data)
+- Lock file prevents escalation (can't gain new capabilities in updates)
 
 ### Limitations
 
@@ -1048,6 +1054,8 @@ let restored = json.deserialize(json)  // Taint lost!
 - **Flow-Sensitive Type Qualifiers:** (UC Berkeley, 2002)
 - **OWASP Injection Prevention:** https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html
 - **Phyton Type Qualifiers for Security:** (MIT, 2011)
+- **WJ-SEC-01:** [Effect Capabilities](./WJ-SEC-01-effect-capabilities.md) - Capability-based I/O control
+- **WJ-SEC-03:** [Capability Lock File](./WJ-SEC-03-capability-lock-file.md) - Per-dependency enforcement
 
 ---
 
