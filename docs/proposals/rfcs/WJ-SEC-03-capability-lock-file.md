@@ -902,7 +902,13 @@ If malicious-util gains net_egress:
 
 **When a package is discovered to be malicious AFTER installation, respond quickly.**
 
-### Registry Revocation System
+### Hybrid Revocation System (Online + Offline)
+
+**Challenge:** Some environments are air-gapped (no internet access).
+
+**Solution:** Multi-mode revocation system.
+
+#### Mode 1: Online Revocation (Default)
 
 **Registry publishes revocation:**
 ```json
@@ -959,7 +965,10 @@ Cannot proceed until revoked package is removed.
 
 **Revocation cache:**
 ```toml
-# ~/.wj/revocations-cache.toml (updated hourly)
+# ~/.wj/revocations-cache.toml (updated hourly when online)
+cache_version = "2026.03.21.10"
+last_updated = "2026-03-21T10:00:00Z"
+
 [revocations.colors]
 version = "1.4.1"
 revoked_at = "2026-03-21T10:30:00Z"
@@ -971,6 +980,221 @@ version = "3.3.6"
 revoked_at = "2018-11-26T08:00:00Z"
 severity = "critical"
 cve = "CVE-2018-3721"
+```
+
+#### Mode 2: Air-Gapped Environments (Offline)
+
+**Problem:** No internet access means no revocation checks.
+
+**Solution 1: Bundled Revocation Database**
+
+**Compiler includes revocation database:**
+```bash
+# Windjammer compiler ships with revocation database
+wj version
+
+Windjammer 0.51.0
+├─> Rust backend: 1.75.0
+├─> Revocation DB: 2026.03.21 (12,345 revocations)
+└─> Last updated: 2026-03-21
+```
+
+**Update mechanism:**
+```bash
+# Online: Auto-updates with compiler
+wj self-update
+
+Updating Windjammer...
+├─> Compiler: 0.51.0 → 0.51.1 ✅
+├─> Revocation DB: 2026.03.21 → 2026.03.25 ✅
+│   └─> New revocations: 47
+└─> Restart required: No
+
+# Offline: Sneakernet update (USB, internal mirror)
+# 1. Download bundle on internet-connected machine
+wget https://windjammer.org/offline/revocations-2026.03.25.tar.gz
+
+# 2. Transfer to air-gapped machine (USB, etc.)
+cp revocations-2026.03.25.tar.gz /mnt/usb/
+
+# 3. Install on air-gapped machine
+wj revocations install /mnt/usb/revocations-2026.03.25.tar.gz
+
+Installing revocation database...
+├─> Version: 2026.03.25
+├─> Revocations: 12,392 total (+47 new)
+├─> Verified: Signature valid (Windjammer Security Team)
+└─> Installed: ~/.wj/revocations-db/
+
+✅ Revocation database updated
+```
+
+**Solution 2: Project-Specific Revocation Manifest**
+
+**For air-gapped projects:**
+```toml
+# .wj-revocations.toml (committed to version control)
+# Generated from online environment, frozen for air-gap
+
+version = "2026.03.21"
+generated_at = "2026-03-21T10:00:00Z"
+generated_by = "alice@example.com"
+
+# Only include revocations relevant to THIS project
+[revocations.colors]
+version = "1.4.1"
+severity = "critical"
+reason = "DoS attack"
+safe_versions = ["1.4.0", "1.4.2"]
+
+# This project doesn't use event-stream, so it's not included
+```
+
+**Workflow:**
+```bash
+# 1. On internet-connected machine
+wj revocations generate --output .wj-revocations.toml
+
+Generating revocation manifest for current project...
+├─> Analyzing dependencies: 12
+├─> Checking revocations: 12,345 in database
+├─> Relevant revocations: 1 (colors@1.4.1)
+└─> Generated: .wj-revocations.toml
+
+✅ Commit this file to version control
+
+# 2. Commit to version control
+git add .wj-revocations.toml
+git commit -m "Add revocation manifest for air-gap deployment"
+
+# 3. On air-gapped machine (pulls from internal git)
+git pull
+wj build --offline
+
+Building in offline mode...
+├─> Using bundled revocations: ~/.wj/revocations-db/ (2026.03.21)
+├─> Using project revocations: .wj-revocations.toml
+│   └─> colors@1.4.1: REVOKED ❌
+│
+🚨 CRITICAL: Revoked dependency detected
+
+Package: colors@1.4.1
+Reason: DoS attack
+Source: Project revocation manifest (committed 2026-03-21)
+
+❌ Build blocked (even in offline mode)
+
+Actions:
+1. Downgrade: wj add colors@1.4.0
+2. Alternative: wj add chalk
+```
+
+**Solution 3: Organizational Revocation Authority**
+
+**For large organizations with air-gapped networks:**
+
+```bash
+# Setup internal revocation authority
+wj revocations init-authority --org "MyCompany"
+
+Initializing revocation authority...
+├─> Generating signing key...
+├─> Creating revocation repository...
+└─> Authority: MyCompany Revocation Authority
+
+Configuration:
+├─> Authority URL: https://security.mycompany.internal/revocations
+├─> Signing key: ~/.wj/revocation-authority/signing.key
+└─> Public key: ~/.wj/revocation-authority/public.pem
+
+Distribute public key to all developers:
+cp ~/.wj/revocation-authority/public.pem /shared/windjammer/
+
+# Security team publishes org-specific revocations
+wj revocations publish colors@1.4.1 \
+  --reason "DoS attack" \
+  --severity critical \
+  --authority MyCompany
+
+Publishing revocation...
+├─> Package: colors@1.4.1
+├─> Signed by: MyCompany Revocation Authority
+├─> Published to: https://security.mycompany.internal/revocations
+└─> Notified: 1,234 internal projects
+
+# Developers configure trust
+wj config set revocation.trust.mycompany \
+  --key /shared/windjammer/public.pem \
+  --priority 1
+
+Trust configuration:
+├─> Priority 1: MyCompany (internal authority)
+├─> Priority 2: Windjammer (upstream authority)
+└─> Mode: Require signature from trusted authority
+
+# Builds check both upstream and org revocations
+wj build
+
+Checking revocations...
+├─> Upstream (Windjammer): 12,345 revocations
+├─> MyCompany (internal): 23 revocations
+└─> Total: 12,368 revocations (merged)
+
+All dependencies clean ✅
+```
+
+#### Revocation Policy Configuration
+
+```toml
+# wj.toml
+[security.revocations]
+# Online mode (default)
+mode = "online"
+check_frequency = "daily"  # hourly, daily, weekly
+fail_on_network_error = false  # Don't block builds if registry down
+
+# Offline mode (air-gapped)
+# mode = "offline"
+# require_manifest = true  # Require .wj-revocations.toml
+# fail_on_missing_manifest = true
+
+# Hybrid mode (check online, fallback to cache)
+# mode = "hybrid"
+# cache_expiry_days = 30
+# warn_on_stale_cache = true
+
+# Trusted authorities (in priority order)
+trusted_authorities = [
+    "windjammer",  # Upstream (default)
+    "mycompany"    # Organization-specific
+]
+```
+
+#### Revocation Transparency Log
+
+**For auditing and non-repudiation:**
+
+```bash
+wj revocations log
+
+Revocation transparency log:
+
+2026-03-21 10:30:00 [REVOKE] colors@1.4.1
+├─> Authority: Windjammer Security Team
+├─> Reason: DoS attack (infinite loop)
+├─> CVE: CVE-2026-12345
+├─> Signature: ed25519:abc123...
+└─> Log entry: https://transparency.windjammer.org/log/12345
+
+2026-03-20 14:22:00 [REVOKE] event-stream@3.3.6
+├─> Authority: Windjammer Security Team
+├─> Reason: Cryptocurrency wallet theft
+├─> CVE: CVE-2018-3721
+├─> Signature: ed25519:def456...
+└─> Log entry: https://transparency.windjammer.org/log/12344
+
+All revocations are cryptographically signed and logged.
+Audit trail is immutable and publicly verifiable.
 ```
 
 **CI/CD integration:**
