@@ -889,6 +889,7 @@ only_in = "debug"
 - **Log4Shell Analysis:** CVE-2021-44228 Technical Report
 - **Ambient Authority Problem:** Mark Miller, "Capability Myths Demolished" (2003)
 - **WJ-SEC-03:** [Capability Lock File](./WJ-SEC-03-capability-lock-file.md) - Per-dependency enforcement
+- **WJ-SEC-04:** [Capability Profiles](./WJ-SEC-04-capability-profiles.md) - First-import security
 
 ---
 

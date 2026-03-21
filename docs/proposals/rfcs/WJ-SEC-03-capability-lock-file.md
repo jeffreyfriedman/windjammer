@@ -34,9 +34,13 @@
 
 ## Problem Statement
 
-### The Global Manifest Vulnerability
+### The Capability Escalation Problem
 
 **Credit:** Identified by Jeffrey Friedman during WJ-SEC-01 review (2026-03-21)
+
+**Note:** This RFC solves the *update* problem. For *first-import* security, see [WJ-SEC-04: Capability Profiles](./WJ-SEC-04-capability-profiles.md).
+
+### The Global Manifest Vulnerability
 
 **Attack Scenario:**
 
@@ -873,6 +877,8 @@ wj security scan
 - **Deno lock file:** https://deno.land/manual/basics/modules/integrity_checking
 - **Software Supply Chain Attacks:** "Backstabber's Knife Collection" (IEEE S&P 2020)
 - **Capability Confinement:** Mark Miller, "Robust Composition" (PhD Thesis, 2006)
+- **WJ-SEC-01:** [Effect Capabilities](./WJ-SEC-01-effect-capabilities.md)
+- **WJ-SEC-04:** [Capability Profiles](./WJ-SEC-04-capability-profiles.md) - First-import security
 
 ---
 
