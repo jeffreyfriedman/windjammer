@@ -281,6 +281,233 @@ pub fn exec(cmd: str, args: List<str>) -> Result<Output, Error> {
 
 ---
 
+## Capability Refinement Types
+
+### The Problem: Coarse-Grained Capabilities
+
+**Current capabilities are too broad:**
+
+```toml
+# Current: Can read ANY file in ./data/
+fs_read = ["./data/*"]
+
+# Current: Can connect to ANY endpoint at api.example.com
+net_egress = ["api.example.com"]
+
+# Current: Can write ANY file in ./logs/
+fs_write = ["./logs/*"]
+```
+
+**Problems:**
+- Over-permission: Package only needs JSON files, but gets access to all files
+- Attack surface: Compromised dependency can abuse broad permission
+- Audit difficulty: Hard to track what was ACTUALLY accessed
+
+### Solution: Refinement Types for Fine-Grained Control
+
+**Extend capabilities with type-level constraints:**
+
+```toml
+[security.capabilities]
+# Fine-grained file access
+fs_read = [
+    { path = "./data/*.json", mode = "readonly" },
+    { path = "./config/*.toml", mode = "readonly" },
+    { path = "./cache/*", mode = "readonly", max_size = "10MB" }
+]
+
+# Fine-grained network access
+net_egress = [
+    { domain = "api.stripe.com", methods = ["POST"], ports = [443], paths = ["/v1/charges"] },
+    { domain = "cdn.example.com", methods = ["GET"], ports = [443, 80] }
+]
+
+# Fine-grained write access
+fs_write = [
+    { path = "./logs/*.log", mode = "append-only", max_size = "100MB", rotation = true },
+    { path = "./tmp/*", mode = "overwrite", ttl = "1h" }  # Auto-delete after 1 hour
+]
+
+# Environment variable access
+env = [
+    { name = "DATABASE_URL", read_only = true },
+    { name = "LOG_LEVEL", read_only = true }
+]
+
+# Process spawning
+spawn = [
+    { executable = "/usr/bin/convert", args_pattern = ["*.png", "*.jpg"] }  # ImageMagick only
+]
+```
+
+### Refinement Type System
+
+**Implementation:**
+
+```rust
+// Capability tokens with type-level refinement
+pub struct FsRead<Path, Mode> {
+    _path: PhantomData<Path>,
+    _mode: PhantomData<Mode>
+}
+
+pub struct NetEgress<Domain, Methods, Ports> {
+    _domain: PhantomData<Domain>,
+    _methods: PhantomData<Methods>,
+    _ports: PhantomData<Ports>
+}
+
+// Type-level constraints
+pub trait Path {
+    fn matches(path: &str) -> bool;
+}
+
+pub trait Methods {
+    fn allows(method: &str) -> bool;
+}
+
+// At compile-time, check refinements
+fn read_file<P: Path>(path: &str, _token: FsRead<P, ReadOnly>) -> Result<String, Error> {
+    if !P::matches(path) {
+        return Err(Error::PathNotAllowed(path));
+    }
+    std::fs::read_to_string(path)
+}
+
+fn http_post<D: Domain, M: Methods>(
+    url: &str,
+    method: &str,
+    _token: NetEgress<D, M, Https>
+) -> Result<Response, Error> {
+    if !D::matches_domain(url) {
+        return Err(Error::DomainNotAllowed(url));
+    }
+    if !M::allows(method) {
+        return Err(Error::MethodNotAllowed(method));
+    }
+    // Make request
+}
+```
+
+### Benefits
+
+**1. Principle of Least Privilege:**
+```toml
+# Before: Can read any file in ./data/
+fs_read = ["./data/*"]
+
+# After: Can ONLY read JSON files (not executables, not config)
+fs_read = [{ path = "./data/*.json" }]
+```
+
+**2. Limit Blast Radius:**
+```toml
+# Before: Can POST to any Stripe endpoint
+net_egress = ["api.stripe.com"]
+
+# After: Can ONLY create charges (not refunds, not customer deletion)
+net_egress = [
+    { domain = "api.stripe.com", methods = ["POST"], paths = ["/v1/charges"] }
+]
+```
+
+**3. Automatic Resource Limits:**
+```toml
+# Prevent DoS via infinite log files
+fs_write = [
+    { path = "./logs/*.log", max_size = "100MB", rotation = true }
+]
+
+# Prevent disk exhaustion via /tmp
+fs_write = [
+    { path = "./tmp/*", max_size = "1GB", ttl = "1h" }
+]
+```
+
+**4. Better Audit Trail:**
+```bash
+wj audit --show-refinements
+
+Capability usage:
+
+fs_read:
+  ./data/*.json (152 accesses) ✅
+    ├─> json-parser: 152 reads
+    └─> Average file size: 2.3KB
+
+net_egress:api.stripe.com:
+  POST /v1/charges (47 requests) ✅
+    ├─> stripe-client: 47 requests
+    ├─> Average response time: 234ms
+    └─> All successful (no errors)
+
+fs_write:./logs/*.log:
+  app.log (12.4MB written) ⚠️ Approaching limit (100MB)
+    ├─> logger: 1,247 writes
+    └─> Recommendation: Enable rotation or increase limit
+```
+
+### Capability Witnesses (Usage Tracking)
+
+**Problem:** Approved capabilities might not be used.
+
+**Example:**
+```toml
+# Approved in manifest
+net_egress = [
+    "api.stripe.com",
+    "api.github.com",  # Over-provisioned!
+]
+
+# But code only uses Stripe, not GitHub
+```
+
+**Solution: Track actual usage at runtime (opt-in telemetry):**
+
+```bash
+# Enable capability telemetry
+wj build --with-capability-telemetry
+
+# At runtime, log actual usage
+# (writes to .wj-capability-usage.log)
+
+# After 30 days of production:
+wj capabilities analyze
+
+Capability Usage Analysis (30 days):
+
+✅ Used capabilities:
+  net_egress:api.stripe.com: 12,459 requests (100% of days)
+  fs_write:./logs/*.log: 1.2M writes (100% of days)
+
+⚠️  Unused capabilities (over-provisioned):
+  net_egress:api.github.com: 0 requests (0% of days)
+  fs_read:./cache/*: 0 reads (0% of days)
+
+Recommendation: Remove unused capabilities
+  wj restrict net_egress:api.github.com
+  wj restrict fs_read:./cache/*
+
+This reduces attack surface by 40%.
+```
+
+**Auto-optimization:**
+```bash
+wj capabilities optimize --dry-run
+
+Proposed changes to wj.toml:
+
+- net_egress = ["api.stripe.com", "api.github.com"]
++ net_egress = ["api.stripe.com"]
+
+- fs_read = ["./config/*", "./cache/*"]
++ fs_read = ["./config/*"]
+
+Apply? (Y/n)
+```
+
+---
+
 ## Backend-Specific Implementation
 
 ### Rust Backend (Compile-Time)
@@ -390,6 +617,518 @@ Content-Security-Policy: connect-src 'self' api.stripe.com; script-src 'self'
 ⚠️  Code requires filesystem read: ./data/users.json
    Allow? [y/N/always/never]
 ```
+
+---
+
+## Progressive Capability Requests
+
+### The Problem: All-or-Nothing Approval
+
+**Current approach:** Declare all capabilities upfront.
+
+**Problem:** Some operations are optional (export to file, upload to CDN).
+
+### Solution: Request Capabilities On-Demand
+
+**Design:**
+
+```windjammer
+pub fn export_data(format: str, destination: str) {
+    let data = generate_export()
+    
+    match destination {
+        "stdout" => {
+            // No capabilities needed
+            println!("{}", data)
+        }
+        
+        "file" => {
+            // Request capability at runtime
+            request_capability!(<fs_write:./exports/>) {
+                fs.write_file("./exports/data.json", data)
+            }
+        }
+        
+        "upload" => {
+            // Request multiple capabilities
+            request_capabilities!(<fs_read:./data/*, net_egress:cdn.example.com>) {
+                let archive = create_archive("./data/")
+                http.put("https://cdn.example.com/backup.tar.gz", archive)
+            }
+        }
+    }
+}
+```
+
+**Runtime Prompt (First Use):**
+
+```
+⚠️  Application requesting capability
+
+Operation: Export data to file
+Capability: fs_write:./exports/
+
+This will allow the application to write files to ./exports/
+The application will be able to write future files there.
+
+Allow this operation?
+  [A]lways  [O]nce  [N]ever  [D]etails
+
+> D
+
+Details:
+  Function: export_data() [src/export.rs:45]
+  Called from: main() [src/main.rs:120]
+  Stack trace:
+    main()
+    └─> handle_command("export")
+        └─> export_data("file", "./exports/")
+
+  Files to be written:
+    ./exports/data.json (estimated: 2.3MB)
+
+  Security notes:
+    - This is a LOCAL file operation (not network)
+    - Data stays on your machine
+    - You can revoke this permission later: wj revoke fs_write:./exports/
+
+Your choice: [A/O/N] A
+
+✅ Capability granted and saved
+   Future exports will not prompt
+```
+
+**Benefit:** User consent for sensitive operations, principle of least privilege.
+
+**Implementation:**
+
+```toml
+# wj.toml (auto-updated after user grants)
+[security.runtime_capabilities]
+fs_write_exports = { path = "./exports/*", granted = "2026-03-21T14:30:00Z", user = "alice" }
+```
+
+---
+
+## Organizational Capability Policies
+
+### The Problem: Inconsistent Security Across Teams
+
+**Without central policy:**
+- Team A allows network access in all apps
+- Team B forbids process spawning
+- Team C has no security standards
+- Auditors can't verify compliance
+
+### Solution: Centralized Capability Firewall
+
+**System-wide policy:** `/etc/windjammer/policy.toml`
+
+```toml
+[policy]
+organization = "ACME Corp"
+version = "1.0"
+enforced_at = "system"  # system | project | advisory
+
+# FORBIDDEN capabilities (cannot be used by ANY application)
+forbidden = [
+    "spawn",           # No process spawning (company policy)
+    "eval",            # No dynamic code execution
+    "fs_write:~/*",    # No writing to user home directories
+    "fs_read:/etc/*"   # No reading system files
+]
+
+# RESTRICTED capabilities (require approval)
+restricted = [
+    { capability = "net_egress", requires_approval_from = "security@acme.com" },
+    { capability = "fs_write:/var/*", requires_approval_from = "infra@acme.com" }
+]
+
+# AUTO-ALLOWED for specific project types
+[policy.templates]
+web-api = [
+    "net_ingress:0.0.0.0:8080",
+    "fs_read:./config/*",
+    "fs_write:./logs/*",
+    "env:DATABASE_URL"
+]
+
+cli-tool = [
+    "fs_read",
+    "fs_write",
+    "env"
+]
+
+# AUDIT requirements
+[policy.audit]
+log_all_capabilities = true
+log_destination = "syslog://security-logs.acme.com"
+retention_days = 90
+
+# COMPLIANCE mappings
+[policy.compliance]
+soc2 = true  # Enforce SOC 2 controls
+iso27001 = true  # Enforce ISO 27001 controls
+```
+
+**Enforcement:**
+
+```bash
+wj build
+
+Checking organizational policy...
+
+❌ Policy violation: Forbidden capability
+
+Capability: spawn (process spawning)
+Package: task-runner@1.0.0
+Location: src/executor.rs:89
+
+Policy: FORBIDDEN by ACME Corp Security Policy (version 1.0)
+Reason: Company policy prohibits process spawning (security risk)
+Contact: security@acme.com for exceptions
+
+Build blocked by organizational policy.
+
+Override (requires admin approval):
+  wj build --policy-override="ticket:SEC-1234"
+```
+
+**Approval Workflow:**
+
+```bash
+# Request approval for restricted capability
+wj request-approval net_egress:api.github.com
+
+Requesting approval for restricted capability
+
+Capability: net_egress:api.github.com
+Project: my-web-app
+Justification: GitHub API integration for CI/CD status
+
+Approver: security@acme.com
+Ticket created: SEC-5678
+
+Status: Pending approval
+  Check status: wj approval-status SEC-5678
+  Expected response time: 24 hours
+
+# After approval
+wj build
+
+✅ Capability approved (ticket: SEC-5678)
+✅ Build proceeding with approved capabilities
+```
+
+**Benefits:**
+- Centralized security enforcement
+- Compliance tracking (SOC 2, ISO 27001)
+- Audit trail for all capability usage
+- Consistent policy across organization
+
+---
+
+## Virtualized Capabilities for Testing
+
+### The Problem: Can't Test Capabilities Without Actual I/O
+
+**Challenge:** How to test file/network code without real filesystem/network?
+
+**Current workaround:** Mock libraries (fragile, not standard).
+
+### Solution: Virtual Capability Layer
+
+**Design: In-Memory Capability Virtualization**
+
+```windjammer
+#[test]
+pub fn test_upload_function() {
+    // Use virtual filesystem (in-memory)
+    with_virtual_fs(|vfs| {
+        // Seed virtual filesystem
+        vfs.create_file("./data.json", "{\"test\": true}")
+        vfs.create_dir("./exports/")
+        
+        // Function thinks it's using real filesystem
+        let result = process_file("./data.json")
+        
+        // Assert operations on virtual fs
+        assert_eq(vfs.read_calls(), 1)
+        assert_eq(vfs.files_created(), ["./exports/processed.json"])
+        assert_eq(vfs.read_file("./exports/processed.json"), expected_output)
+    })
+    
+    // Use virtual network (mocked)
+    with_virtual_network(|vnet| {
+        // Configure virtual responses
+        vnet.mock_response("https://api.example.com/upload", 200, "OK")
+        vnet.mock_response("https://api.example.com/status", 200, "{\"status\": \"ready\"}")
+        
+        // Function makes "real" HTTP calls (but virtualized)
+        let result = upload_data("./data.json")
+        
+        // Assert network calls
+        assert_eq(vnet.post_calls("api.example.com"), 1)
+        assert_eq(vnet.posted_path(), "/upload")
+        assert_eq(vnet.posted_data(), expected_payload)
+        
+        // Verify request headers
+        assert_eq(vnet.request_headers("api.example.com")["Authorization"], "Bearer ...")
+    })
+    
+    // Combine virtual fs + network
+    with_virtual_capabilities(|vcaps| {
+        vcaps.fs.create_file("./data.json", test_data)
+        vcaps.network.mock_response("https://cdn.example.com/upload", 200, "OK")
+        
+        // Test full workflow
+        let result = backup_to_cloud("./data.json")
+        
+        // Assert both fs and network operations
+        assert(vcaps.fs.was_read("./data.json"))
+        assert(vcaps.network.was_posted_to("cdn.example.com"))
+    })
+}
+```
+
+**Implementation:**
+
+```rust
+// Virtual filesystem (in-memory)
+pub struct VirtualFs {
+    files: HashMap<PathBuf, Vec<u8>>,
+    read_calls: Vec<PathBuf>,
+    write_calls: Vec<(PathBuf, Vec<u8>)>,
+}
+
+impl VirtualFs {
+    pub fn create_file(&mut self, path: &str, contents: &str) {
+        self.files.insert(PathBuf::from(path), contents.as_bytes().to_vec());
+    }
+    
+    pub fn read_file(&mut self, path: &str) -> Result<String, Error> {
+        self.read_calls.push(PathBuf::from(path));
+        let bytes = self.files.get(&PathBuf::from(path))
+            .ok_or(Error::NotFound)?;
+        Ok(String::from_utf8(bytes.clone())?)
+    }
+    
+    pub fn write_file(&mut self, path: &str, contents: &str) -> Result<(), Error> {
+        self.write_calls.push((PathBuf::from(path), contents.as_bytes().to_vec()));
+        self.files.insert(PathBuf::from(path), contents.as_bytes().to_vec());
+        Ok(())
+    }
+}
+
+// Virtual network (mocked)
+pub struct VirtualNetwork {
+    mocked_responses: HashMap<String, (u16, String)>,
+    post_calls: Vec<(String, String, String)>,  // (url, path, body)
+}
+
+impl VirtualNetwork {
+    pub fn mock_response(&mut self, url: &str, status: u16, body: &str) {
+        self.mocked_responses.insert(url.to_string(), (status, body.to_string()));
+    }
+    
+    pub fn post(&mut self, url: &str, body: &str) -> Result<Response, Error> {
+        self.post_calls.push((url.to_string(), extract_path(url), body.to_string()));
+        
+        let (status, response_body) = self.mocked_responses
+            .get(url)
+            .ok_or(Error::UnmockedUrl(url))?;
+        
+        Ok(Response {
+            status: *status,
+            body: response_body.clone(),
+        })
+    }
+}
+```
+
+**Benefits:**
+- Fast tests (no actual I/O)
+- Reproducible (no network flakes)
+- CI-friendly (no real filesystem/network needed)
+- Deterministic (same inputs = same outputs)
+
+---
+
+## Gradual Migration Path
+
+### The Problem: Existing Codebases Can't Enable Security Overnight
+
+**Challenge:** Legacy project with 100 dependencies, many use unsafe patterns.
+
+**Can't:** Enable security all at once (too many violations).
+
+### Solution: Incremental Adoption Strategy
+
+**Phase 1: Audit (No Enforcement)**
+
+```bash
+# Analyze current security state
+wj security audit
+
+Security Audit: my-legacy-app
+
+Violations found: 47
+├─> 12 dependencies exceed capability profiles
+├─> 23 sensitive file accesses (reading ~/.ssh/, /etc/)
+├─> 8 capability escalations (packages gained capabilities)
+└─> 4 potential injection vulnerabilities
+
+Estimated effort: 40 hours to fix all violations
+
+Recommended strategy: Gradual migration
+  1. Enable audit-only mode (no build failures)
+  2. Fix violations incrementally
+  3. Enable enforcement when violations = 0
+
+Next steps:
+  wj config set security.mode=audit-only
+  wj security fix --interactive
+```
+
+**Phase 2: Audit-Only Mode (Warnings, No Errors)**
+
+```toml
+# wj.toml
+[security]
+mode = "audit-only"  # Log violations but don't fail builds
+report_destination = "./security-audit.log"
+```
+
+```bash
+wj build
+
+Security audit (warnings only):
+
+⚠️  Capability violation (grandfathered)
+  Package: legacy-lib@1.2.0
+  Capability: net_egress:* (unrestricted network)
+  Recommendation: Restrict to specific domains
+
+⚠️  Sensitive file access (grandfathered)
+  Package: config-reader@0.9.0
+  Access: fs_read:/etc/passwd
+  Recommendation: Use application config instead
+
+... (47 warnings total)
+
+✅ Build succeeded (audit-only mode)
+   Review: ./security-audit.log
+```
+
+**Phase 3: Grandfather Existing Violations**
+
+```toml
+# wj.toml
+[security]
+mode = "enforced"  # Enforce for NEW code only
+
+# Grandfather existing violations (to be fixed later)
+[security.grandfathered]
+legacy-lib = [
+    { capability = "net_egress:*", reason = "Legacy code, refactor in Q2 2026" },
+    { added = "2026-03-21", issue = "SEC-1234" }
+]
+
+config-reader = [
+    { capability = "fs_read:/etc/*", reason = "Legacy config, migrate to ./config/" },
+    { added = "2026-03-21", issue = "SEC-1235" }
+]
+```
+
+**Build behavior:**
+```bash
+wj build
+
+Security check...
+
+✅ New dependencies: Fully enforced
+⚠️  Grandfathered violations: 47 (warnings only)
+  ├─> legacy-lib: net_egress:* (issue: SEC-1234)
+  ├─> config-reader: fs_read:/etc/* (issue: SEC-1235)
+  └─> ... (45 more)
+
+✅ Build succeeded
+   To fix grandfathered violations: wj security fix --interactive
+```
+
+**Phase 4: Incremental Fixing**
+
+```bash
+# Interactive violation fixing
+wj security fix --interactive
+
+Fixing grandfathered violation 1 of 47:
+
+Package: legacy-lib@1.2.0
+Violation: net_egress:* (unrestricted network access)
+Issue: SEC-1234
+
+Options:
+  1. Restrict to specific domains
+     wj restrict legacy-lib net_egress:api.example.com
+  
+  2. Find secure alternative
+     wj search --secure-alternative legacy-lib
+     
+  3. Keep grandfathered (skip for now)
+     
+  4. Remove dependency (if not needed)
+
+Your choice: [1/2/3/4] 1
+
+Enter allowed domains (comma-separated):
+> api.example.com, cdn.example.com
+
+✅ Restriction applied
+✅ Grandfathered violation removed (1 of 47 fixed)
+
+Continue? (Y/n) y
+
+Fixing grandfathered violation 2 of 47:
+...
+```
+
+**Phase 5: Full Enforcement**
+
+```bash
+# After all violations fixed
+wj security status
+
+Security Status: ✅ FULLY COMPLIANT
+
+✅ All dependencies meet security policies
+✅ No grandfathered violations
+✅ Ready for full enforcement
+
+Remove audit-only mode?
+  wj config set security.mode=enforced
+
+Build will fail on ANY security violation going forward.
+```
+
+**Timeline Example:**
+
+```
+Week 1: Enable audit-only mode, assess violations (47 found)
+Week 2-4: Fix 20 violations (high-priority)
+Week 5-8: Fix 20 more violations (medium-priority)
+Week 9-10: Fix remaining 7 violations (low-priority)
+Week 11: Enable full enforcement, celebrate! 🎉
+
+Total time: 11 weeks for gradual, low-friction migration
+```
+
+**Benefits:**
+- No "big bang" migration (low risk)
+- Can adopt Windjammer with existing unsafe dependencies
+- Fix violations incrementally (spread out work)
+- Always building (no long periods of broken builds)
+- Track progress (47 → 0 violations over time)
 
 ---
 
