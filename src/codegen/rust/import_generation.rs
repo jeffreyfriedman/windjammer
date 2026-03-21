@@ -364,17 +364,19 @@ impl CodeGenerator<'_> {
         // we need to detect this and rewrite to super::texture::Texture
         //
         // Detection strategy:
-        // 1. Check if we're in a subdirectory (output_file contains a directory separator)
+        // 1. Check if we're in a subdirectory - check the INPUT file (.wj), not the output (.rs)
+        //    because output might be flat (build/mod.rs) while input is nested (achievement/mod.wj)
         // 2. Check if the import is bare (no std::, crate::, super:: prefix)
         // 3. Assume it's a sibling module and use super:: prefix
         //
         // THE WINDJAMMER WAY: Smart defaults that work 99% of the time
-        // TDD FIX: Check for both Unix (/) and Windows (\) path separators
+        // TDD COMPILER FIX: Check INPUT file structure, not OUTPUT structure!
+        // Output might be flat (build/*.rs) while input is nested (src_wj/achievement/mod.wj)
         let is_in_subdirectory = self
-            .current_output_file
-            .to_str()
-            .map(|s| s.contains('/') || s.contains('\\'))
-            .unwrap_or(false);
+            .current_wj_file
+            .parent()
+            .and_then(|p| p.file_name())
+            .is_some(); // If parent has a name, we're in a subdirectory
 
         // TDD FIX: Detect imports from parent module's re-exports
         // When in rendering/sprite.wj and seeing "use rendering::Texture",
@@ -440,9 +442,10 @@ impl CodeGenerator<'_> {
         // TDD FIX: Detect sibling modules dynamically by checking file existence
         // If we're in a subdirectory and the import doesn't have a known prefix (std::, crate::, super::),
         // check if it's a sibling module file that needs super:: prefix
+        // TDD COMPILER FIX: Check INPUT file directory, not OUTPUT directory!
         let is_sibling_module_file = if is_in_subdirectory {
-            // Check if a .wj or .rs file exists for this module in the same directory
-            if let Some(parent_dir) = self.current_output_file.parent() {
+            // Check if a .wj or .rs file exists for this module in the INPUT directory
+            if let Some(parent_dir) = self.current_wj_file.parent() {
                 let potential_wj_file = parent_dir.join(format!("{}.wj", first_segment));
                 let potential_rs_file = parent_dir.join(format!("{}.rs", first_segment));
                 let potential_subdir = parent_dir.join(first_segment);
@@ -508,9 +511,17 @@ impl CodeGenerator<'_> {
                 // or use crate::math::Vec2; (in flat output)
                 format!("use {}{};\n", import_prefix, rust_path)
             } else if is_actual_module_file {
-                // Keep full path for actual module files to avoid ambiguity
-                // texture_atlas::TextureAtlas -> use super::texture_atlas::TextureAtlas;
-                format!("use super::{};\n", rust_path)
+                // TDD COMPILER FIX: If the first segment matches a submodule declared in the SAME file,
+                // don't add ANY prefix (not super::, not crate::).
+                // In mod.rs files, "pub mod foo;" declares foo as a submodule accessible without prefix.
+                //
+                // Example in achievement/mod.rs:
+                //   pub mod achievement_id;
+                //   pub use achievement_id::AchievementId;  // ✅ CORRECT (no prefix)
+                //   NOT: pub use super::achievement_id::AchievementId;  // ❌ super is PARENT module
+                //
+                // Only use super:: for imports from sibling FILES, not submodules in same file.
+                format!("use {};\n", rust_path)
             } else {
                 // Check for crate:: prefix FIRST (before checking if it's a type)
                 // This ensures crate::scene::Vec3 gets rewritten to super::super::scene::Vec3
@@ -532,17 +543,29 @@ impl CodeGenerator<'_> {
                         .next()
                         .is_some_and(|c| c.is_uppercase())
                     {
-                        // TDD FIX: For bare module imports (math::Vec3), convert to crate:: prefix
-                        // This ensures cross-module imports are absolute, not relative
-                        // THE WINDJAMMER WAY: Default to absolute paths for clarity
+                        // TDD COMPILER FIX: pub use in mod.wj should preserve relative paths for submodules
+                        // When in achievement/mod.wj doing "pub use achievement_id::AchievementId",
+                        // achievement_id is a SUBMODULE (declared in same file), so keep it relative!
                         //
-                        // But we need to distinguish between:
-                        // - Internal modules (math, physics, rendering) -> add crate:: prefix
-                        // - External crates (serde, tokio, some_external_crate) -> keep as-is
-                        //
-                        // Heuristic: Check if first segment matches common internal module names
-                        if rust_path.contains("::") {
-                            let common_internal_modules = [
+                        // Check if this is likely a relative import of a submodule:
+                        // - We're in a directory (is_in_subdirectory)
+                        // - First segment is a sibling module file (is_sibling_module_file)
+                        if is_in_subdirectory && is_sibling_module_file {
+                            // Keep relative - this is re-exporting a local submodule
+                            format!("use {};\n", rust_path)
+                        } else {
+                            // Otherwise, add crate:: prefix for absolute import
+                            // TDD FIX: For bare module imports (math::Vec3), convert to crate:: prefix
+                            // This ensures cross-module imports are absolute, not relative
+                            // THE WINDJAMMER WAY: Default to absolute paths for clarity
+                            //
+                            // But we need to distinguish between:
+                            // - Internal modules (math, physics, rendering) -> add crate:: prefix
+                            // - External crates (serde, tokio, some_external_crate) -> keep as-is
+                            //
+                            // Heuristic: Check if first segment matches common internal module names
+                            if rust_path.contains("::") {
+                                let common_internal_modules = [
                                 "math",
                                 "physics",
                                 "rendering",
@@ -607,9 +630,10 @@ impl CodeGenerator<'_> {
                                 // Submodules access it via crate::windjammer_game_core, not self::
                                 format!("use crate::{};\n", rust_path)
                             }
-                        } else {
-                            // Single identifier (Vec3) - likely a type, keep as-is
-                            format!("use {};\n", rust_path)
+                            } else {
+                                // Single identifier (Vec3) - likely a type, keep as-is
+                                format!("use {};\n", rust_path)
+                            }
                         }
                     } else {
                         // Likely a module, add ::*

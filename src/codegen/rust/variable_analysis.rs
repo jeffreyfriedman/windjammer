@@ -237,17 +237,20 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
 
-            if let Expression::Identifier { name, .. } = &**left {
-                if self.expression_produces_usize(right) {
-                    self.usize_variables.insert(name.clone());
-                }
-            }
-
-            if let Expression::Identifier { name, .. } = &**right {
-                if self.expression_produces_usize(left) {
-                    self.usize_variables.insert(name.clone());
-                }
-            }
+            // TDD COMPILER FIX: Track variables as usize ONLY when explicitly assigned/declared as usize
+            // 
+            // STRATEGY: Don't track comparison operands as usize - let comparison codegen handle casts.
+            // This allows:
+            // 1. `i < vec.len()` → generates `(i as usize) < vec.len()` (comparison cast)
+            // 2. `vec[i]` → generates `vec[i as usize]` (indexing cast)
+            // 3. `i += 1` → generates `i += 1_i32` (keeps i32 type)
+            //
+            // Only mark as usize for:
+            // - Explicit assignment: `i = expr as usize`
+            // - Explicit declaration: `let i: usize = 0`
+            // - Range iteration: `for i in 0..vec.len()` (i gets type from range)
+            //
+            // The indexing auto-cast logic in expression_generation.rs will handle `vec[i]` correctly.
         }
     }
 

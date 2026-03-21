@@ -2756,7 +2756,28 @@ impl<'ast> CodeGenerator<'ast> {
                 inclusive,
                 ..
             } => {
-                let start_str = self.generate_expression(start);
+                // TDD FIX: Range type unification for 0..vec.len()
+                // If end is .len() (returns usize), cast start to usize to avoid type mismatch
+                let end_is_len = matches!(end, Expression::MethodCall { method, .. } if method == "len");
+                
+                let mut start_str = self.generate_expression(start);
+                
+                // If end is .len() and start has _i32 suffix, replace with _usize or add cast
+                if end_is_len {
+                    if start_str.ends_with("_i32") {
+                        // Replace _i32 with _usize for literals
+                        start_str = start_str.replace("_i32", "_usize");
+                    } else if matches!(start, Expression::Identifier { .. } | Expression::Binary { .. }) 
+                        && !start_str.contains("as usize") {
+                        // Add cast for identifiers or expressions without existing cast
+                        if matches!(start, Expression::Binary { .. }) {
+                            start_str = format!("({} as usize)", start_str);
+                        } else {
+                            start_str = format!("{} as usize", start_str);
+                        }
+                    }
+                }
+                
                 let end_str = self.generate_expression(end);
                 if *inclusive {
                     format!("{}..={}", start_str, end_str)
@@ -2868,39 +2889,44 @@ impl<'ast> CodeGenerator<'ast> {
                         .trim_end_matches("as int")
                         .trim();
                     format!("{} as usize", base)
-                } else if matches!(
-                    &**index,
-                    Expression::Identifier { .. }
-                        | Expression::Literal {
-                            value: Literal::Int(_),
-                            ..
+                } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
+                    // TDD FIX: Auto-cast ANY integer expression to usize (unless already cast)
+                    // Handles:
+                    // - Identifiers: items[i] → items[i as usize]
+                    // - Literals: items[0] → items[0] (Rust infers)
+                    // - Binary: items[i + 1] → items[(i + 1) as usize]  ← NEWLY FIXED!
+                    // - Method calls: items[get_index()] → items[get_index() as usize]
+                    //
+                    // Skip cast only if:
+                    // 1. Already has cast: items[i as usize]
+                    // 2. Expression produces usize: items[vec.len()]
+                    // 3. Identifier tracked as usize: for i in 0..10 { items[i] }
+                    // 4. Non-negative literal: items[0] (Rust infers)
+                    
+                    // Check special cases where cast is NOT needed
+                    let needs_cast = match &**index {
+                        Expression::Identifier { name, .. } => {
+                            // Skip if tracked as usize variable
+                            !self.usize_variables.contains(name)
                         }
-                ) && !idx_str.contains(" as ")
-                {
-                    // Skip cast if identifier is already usize (e.g. assigned from `expr as usize`)
-                    if let Expression::Identifier { name, .. } = &**index {
-                        if self.usize_variables.contains(name)
-                            || self.expression_produces_usize(index)
-                        {
-                            idx_str // Already usize — no cast needed
+                        Expression::Literal { value: Literal::Int(n), .. } => {
+                            // Skip non-negative literals (Rust infers type from context)
+                            *n < 0
+                        }
+                        _ => true // All other expressions need cast
+                    };
+                    
+                    if needs_cast {
+                        // TDD FIX: Add parens for complex expressions to prevent precedence issues
+                        // `i + 1` → `(i + 1) as usize` (not `i + 1 as usize` which is parsed as `i + (1 as usize)`)
+                        let needs_parens = matches!(&**index, Expression::Binary { .. });
+                        if needs_parens {
+                            format!("({}) as usize", idx_str)
                         } else {
                             format!("{} as usize", idx_str)
-                        }
-                    } else if let Expression::Literal {
-                        value: Literal::Int(n),
-                        ..
-                    } = &**index
-                    {
-                        // Integer literal: Rust infers type from context in index position,
-                        // so `arr[0]` works without `as usize`. Only cast if negative
-                        // (which would be a logic error, but preserve the cast for clarity).
-                        if *n < 0 {
-                            format!("{} as usize", idx_str)
-                        } else {
-                            idx_str
                         }
                     } else {
-                        format!("{} as usize", idx_str)
+                        idx_str
                     }
                 } else {
                     idx_str

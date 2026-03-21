@@ -4,6 +4,7 @@
 /// Mirrors FloatInference architecture. Defaults to i32 for unknown contexts (Rust convention).
 
 use crate::parser::ast::core::{Expression, Statement, Item};
+use crate::parser::ast::operators::BinaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use crate::type_inference::ExprId;
@@ -203,6 +204,8 @@ impl IntInference {
         match item {
             Item::Function { decl, .. } => {
                 self.expr_id_cache.clear();
+                self.var_assignments.clear(); // TDD FIX: Clear per-function scope
+                let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                 for param in &decl.parameters {
                     self.var_types.insert(param.name.clone(), param.type_.clone());
                 }
@@ -228,14 +231,15 @@ impl IntInference {
                 for stmt in &decl.body {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
-                for param in &decl.parameters {
-                    self.var_types.remove(&param.name);
-                }
+                // TDD FIX: Restore saved var_types (clear function-local variables)
+                self.var_types = saved_var_types;
             }
             Item::Impl { block, .. } => {
                 self.current_impl_type = Some(block.type_name.clone());
                 for func in &block.functions {
                     self.expr_id_cache.clear();
+                    self.var_assignments.clear(); // TDD FIX: Clear per-function scope
+                    let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                     for param in &func.parameters {
                         self.var_types.insert(param.name.clone(), param.type_.clone());
                     }
@@ -259,9 +263,8 @@ impl IntInference {
                     for stmt in &func.body {
                         self.collect_statement_constraints(stmt, func.return_type.as_ref());
                     }
-                    for param in &func.parameters {
-                        self.var_types.remove(&param.name);
-                    }
+                    // TDD FIX: Restore saved var_types (clear function-local variables)
+                    self.var_types = saved_var_types.clone();
                 }
                 self.current_impl_type = None;
             }
@@ -403,16 +406,69 @@ impl IntInference {
                     value_id,
                     "assignment".to_string(),
                 ));
+                
+                // TDD FIX: Detect compound assignment pattern even when compound_op is None
+                // Parser generates: x = x + 1 (compound_op: None, value: Binary)
+                // Codegen optimizes to: x += 1
+                // We need to constrain the literal to match x's type!
+                //
+                // Pattern: target = Binary { left: target, op: Add/Sub/Mul/Div, right: literal }
+                let is_compound_pattern = if let Expression::Binary { left, op, .. } = value {
+                    let targets_match = match (target, &**left) {
+                        (Expression::Identifier { name: t, .. }, Expression::Identifier { name: l, .. }) => t == l,
+                        (Expression::FieldAccess { object: to, field: tf, .. }, Expression::FieldAccess { object: lo, field: lf, .. }) => {
+                            // Both are field accesses - check if same field
+                            tf == lf && match (&**to, &**lo) {
+                                (Expression::Identifier { name: ton, .. }, Expression::Identifier { name: lon, .. }) => ton == lon,
+                                _ => false
+                            }
+                        }
+                        _ => false
+                    };
+                    targets_match && matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod)
+                } else {
+                    false
+                };
+                
                 // TDD FIX: Compound assignment (+=, -=, etc.) - RHS literal must match LHS type
                 // e.g. count += 1 where count: u32 → 1 must be u32, not i32
-                if compound_op.is_some() {
-                    if let Some(target_type) = self.infer_type_from_expression(target) {
-                        if let Some(int_ty) = self.extract_int_type(&target_type) {
-                            self.constraints.push(IntConstraint::MustBe(
-                                value_id,
-                                int_ty,
-                                "compound assignment RHS must match LHS type".to_string(),
-                            ));
+                if compound_op.is_some() || is_compound_pattern {
+                    if let Expression::FieldAccess { field, .. } = target {
+                        if field == "in_use" || field == "total_acquired" {
+                            eprintln!("TDD DEBUG is_compound_pattern={}, checking type...", is_compound_pattern);
+                        }
+                    }
+                    let target_type = self.infer_type_from_expression(target);
+                    if let Expression::FieldAccess { field, .. } = target {
+                        if field == "in_use" || field == "total_acquired" {
+                            eprintln!("TDD DEBUG infer returned: {:?}", target_type);
+                        }
+                    }
+                    if let Some(ref tt) = target_type {
+                        if let Some(int_ty) = self.extract_int_type(tt) {
+                            if let Expression::FieldAccess { field, .. } = target {
+                                if field == "in_use" || field == "total_acquired" {
+                                    eprintln!("TDD DEBUG ADDING CONSTRAINT: int_ty={:?}", int_ty);
+                                }
+                            }
+                            // For compound pattern (x = x + 1), constrain the RHS of the binary op
+                            if is_compound_pattern {
+                                if let Expression::Binary { right, .. } = value {
+                                    let right_id = self.get_expr_id(right);
+                                    self.constraints.push(IntConstraint::MustBe(
+                                        right_id,
+                                        int_ty,
+                                        format!("compound pattern RHS must match LHS type {:?}", int_ty),
+                                    ));
+                                }
+                            } else {
+                                // Explicit compound_op: constrain the value directly
+                                self.constraints.push(IntConstraint::MustBe(
+                                    value_id,
+                                    int_ty,
+                                    format!("compound assignment target has type {:?}", int_ty),
+                                ));
+                            }
                         }
                     }
                 }
@@ -1015,6 +1071,37 @@ impl IntInference {
                     }
                 }
             }
+            Expression::Range { start, end, .. } => {
+                // TDD FIX: Ranges like 0..vec.len() should have unified types
+                // If end is .len() (returns usize), constrain start to usize
+                // Otherwise, unify both expressions to the same type
+                
+                // Collect constraints from both expressions
+                self.collect_expression_constraints(start, return_type);
+                self.collect_expression_constraints(end, return_type);
+                
+                // Check if end is a .len() call (returns usize)
+                let end_is_len = matches!(end, Expression::MethodCall { method, .. } if method == "len");
+                
+                if end_is_len {
+                    // Constrain start to usize to match .len()
+                    let start_id = self.get_expr_id(start);
+                    self.constraints.push(IntConstraint::MustBe(
+                        start_id,
+                        IntType::Usize,
+                        "range start must match .len() return type (usize)".to_string(),
+                    ));
+                } else {
+                    // General case: unify both sides of range
+                    let start_id = self.get_expr_id(start);
+                    let end_id = self.get_expr_id(end);
+                    self.constraints.push(IntConstraint::MustMatch(
+                        start_id,
+                        end_id,
+                        "range bounds must have same type".to_string(),
+                    ));
+                }
+            }
             _ => {}
         }
     }
@@ -1126,10 +1213,21 @@ impl IntInference {
                     Type::Custom(name) => name.clone(),
                     _ => return None,
                 };
-                self.struct_field_types
-                    .get(&struct_name)
+                // TDD FIX: Strip generic params for struct field lookup
+                // `ObjectPool<T>` → `ObjectPool`
+                let base_name = if let Some(idx) = struct_name.find('<') {
+                    &struct_name[..idx]
+                } else {
+                    &struct_name
+                };
+                let result = self.struct_field_types
+                    .get(base_name)
                     .and_then(|fields| fields.get(field))
-                    .cloned()
+                    .cloned();
+                if field == "in_use" || field == "total_acquired" {
+                    eprintln!("TDD DEBUG infer_type_from_expression: struct={}, base_name={}, field={}, type={:?}", struct_name, base_name, field, result);
+                }
+                result
             }
             Expression::Index { object, .. } => {
                 let object_type = self.infer_type_from_expression(object)?;
