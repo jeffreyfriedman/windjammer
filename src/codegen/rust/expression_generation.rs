@@ -120,9 +120,42 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 let func_str = self.generate_expression_immut(function);
+                
+                // TDD FIX: Check if this is a stdlib method that needs usize parameters
+                // e.g., Vec::with_capacity(size) where size: int should generate: Vec::with_capacity(size as usize)
+                let func_name = match function {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    Expression::FieldAccess { object, field, .. } => {
+                        if let Expression::Identifier { name: type_name, .. } = &**object {
+                            Some(format!("{}::{}", type_name, field).leak() as &str)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                
+                let needs_usize_first_arg = func_name.map_or(false, |name| {
+                    name == "Vec::with_capacity" || name == "HashMap::with_capacity" || 
+                    name == "String::with_capacity" || name == "Vec::reserve"
+                });
+                
                 let args_str = arguments
                     .iter()
-                    .map(|(_label, arg)| self.generate_expression_immut(arg))
+                    .enumerate()
+                    .map(|(idx, (_label, arg))| {
+                        let arg_str = self.generate_expression_immut(arg);
+                        // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
+                        if idx == 0 && needs_usize_first_arg {
+                            if matches!(arg, Expression::Identifier { .. }) {
+                                format!("{} as usize", arg_str)
+                            } else {
+                                arg_str
+                            }
+                        } else {
+                            arg_str
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", func_str, args_str)
@@ -407,11 +440,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // Casting i64 → usize is UNSAFE for negative values (wraps to huge number).
                 // Casting usize → i64 is SAFE (vec lengths always fit in i64).
                 //
-                // For int literals compared to usize: cast literal to usize (always non-negative).
-                // For int variables compared to usize: cast usize to i64 (preserves negative semantics).
+                // TDD FIX: Comparison type casting strategy
+                // For int literals compared to usize: Rust infers literal type from context (no cast needed)
+                // For int variables compared to usize: Cast int variable to usize
                 //
-                // Example: items.len() >= 10 → items.len() >= 10usize (literal, always safe)
-                // Example: index >= items.len() → index >= (items.len() as i64) (safe cast)
+                // Example: items.len() >= 10 → items.len() >= 10 (Rust infers 10 as usize)
+                // Example: i < items.len() → (i as usize) < items.len() (cast variable to usize)
                 //
                 // IMPORTANT: Wrap the cast operand in ((...) as i64) to handle compound
                 // expressions like `width * height` → ((width * height) as i64), not
@@ -422,15 +456,14 @@ impl<'ast> CodeGenerator<'ast> {
                         // Int literals in comparisons with usize don't need explicit cast —
                         // Rust infers the literal type from context. `vec.len() > 0` is fine.
                     } else {
-                        // Cast the usize side (LEFT) to i64 for safety
-                        // Use parens around compound expressions to prevent precedence issues
-                        // because `as` has higher precedence than arithmetic:
-                        // `a + b as i64` → `a + (b as i64)` (wrong), need `(a + b) as i64`
-                        let needs_inner_parens = matches!(left, Expression::Binary { .. });
+                        // TDD FIX: Cast the RIGHT side (int variable) to usize, not left to i64!
+                        // OLD (BROKEN): items.len() > i → (items.len() as i64) > i → i64 > i32 ❌
+                        // NEW (CORRECT): items.len() > i → items.len() > (i as usize) → usize > usize ✅
+                        let needs_inner_parens = matches!(right, Expression::Binary { .. });
                         if needs_inner_parens {
-                            left_str = format!("({}) as i64", left_str);
+                            right_str = format!("({}) as usize", right_str);
                         } else {
-                            left_str = format!("{} as i64", left_str);
+                            right_str = format!("{} as usize", right_str);
                         }
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
@@ -439,13 +472,14 @@ impl<'ast> CodeGenerator<'ast> {
                         // Int literals in comparisons with usize don't need explicit cast —
                         // Rust infers the literal type from context.
                     } else {
-                        // Cast the usize side (RIGHT) to i64 for safety
-                        // Use parens around compound expressions to prevent precedence issues
-                        let needs_inner_parens = matches!(right, Expression::Binary { .. });
+                        // TDD FIX: Cast the LEFT side (int variable) to usize, not right to i64!
+                        // OLD (BROKEN): i < items.len() → i < (items.len() as i64) → i32 < i64 ❌
+                        // NEW (CORRECT): i < items.len() → (i as usize) < items.len() → usize < usize ✅
+                        let needs_inner_parens = matches!(left, Expression::Binary { .. });
                         if needs_inner_parens {
-                            right_str = format!("({}) as i64", right_str);
+                            left_str = format!("({}) as usize", left_str);
                         } else {
-                            right_str = format!("{} as i64", right_str);
+                            left_str = format!("{} as usize", left_str);
                         }
                     }
                 }
@@ -1299,6 +1333,29 @@ impl<'ast> CodeGenerator<'ast> {
 
                         self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
+                        
+                        // TDD FIX: Cast int arguments to usize for stdlib methods
+                        // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
+                        // Vec::with_capacity(10) where 10: int literal → Vec::with_capacity(10_usize)
+                        if i == 0 && (func_name == "Vec::with_capacity" || func_name == "HashMap::with_capacity" ||
+                                      func_name == "String::with_capacity" || func_name == "Vec::reserve") {
+                            match arg {
+                                Expression::Identifier { .. } => {
+                                    // Variables: add explicit cast
+                                    arg_str = format!("{} as usize", arg_str);
+                                }
+                                Expression::Literal { value: Literal::Int(val), .. } => {
+                                    // Literals: use usize suffix
+                                    arg_str = format!("{}_usize", val);
+                                }
+                                _ => {
+                                    // Other expressions (e.g., calculations): wrap in (expr) as usize
+                                    if !arg_str.ends_with("_usize") && !arg_str.contains(" as usize") {
+                                        arg_str = format!("({}) as usize", arg_str);
+                                    }
+                                }
+                            }
+                        }
 
                         // WINDJAMMER FFI: Convert string arguments for extern functions
                         if is_extern_call {
