@@ -220,6 +220,8 @@ pub fn build_project_ext(
         // Single-file builds: use is_module=false to avoid `use super::*` which fails
         // when the generated .rs is compiled standalone (no parent module)
         let mut codegen = CodeGenerator::new(registry, target);
+        // TDD COMPILER FIX: Set source file for import path resolution
+        codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);
         codegen.set_int_inference(int_inference);
@@ -540,6 +542,8 @@ fn build_library_multipass(
         
         // Code generation (using SHARED global_float_inference and global_int_inference)
         let mut codegen = CodeGenerator::new(registry, target);
+        // TDD COMPILER FIX: Set source file for import path resolution
+        codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(global_float_inference.clone());  // TDD FIX: Use shared instance!
         codegen.set_int_inference(global_int_inference.clone());

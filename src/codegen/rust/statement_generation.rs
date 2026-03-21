@@ -1808,12 +1808,17 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Some(op_str) = compound_op_str {
                     self.generating_assignment_target = true;
-                    output.push_str(&self.generate_expression(target));
+                    let target_str = self.generate_expression(target);
                     self.generating_assignment_target = false;
+                    output.push_str(&target_str);
                     output.push(' ');
                     output.push_str(op_str);
                     output.push(' ');
-                    output.push_str(&self.generate_expression(right));
+                    let right_str = self.generate_expression(right);
+                    if target_str.contains("in_use") || target_str.contains("total_acquired") {
+                        eprintln!("TDD DEBUG compound optimize: target={}, right={}", target_str, right_str);
+                    }
+                    output.push_str(&right_str);
                     output.push_str(";\n");
                     return output;
                 }

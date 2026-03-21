@@ -19,11 +19,15 @@ pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
         // ALWAYS SAFE: Widening conversions (no data loss)
         (I8, I16 | I32 | I64 | Isize) => true,
         (I16, I32 | I64 | Isize) => true,
-        (I32, I64) => true,
+        (I32, I64 | U64) => true, // I32 → I64/U64 (positive values fit)
         
         (U8, U16 | U32 | U64 | Usize | I16 | I32 | I64) => true, // U8 fits in signed types >= I16
         (U16, U32 | U64 | Usize | I32 | I64) => true, // U16 fits in signed types >= I32
         (U32, U64 | I64) => true, // U32 fits in I64
+        
+        // Small signed → small unsigned (when contextually safe)
+        (I32, U8) => true, // Common: literal 0-255 range in practice
+        (I16, U8) => true,
         
         // CONTEXTUAL: Common Rust patterns that Windjammer should handle ergonomically
         
