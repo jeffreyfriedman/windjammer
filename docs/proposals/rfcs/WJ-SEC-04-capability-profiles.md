@@ -3969,4 +3969,450 @@ To fix:
 
 ---
 
-*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates. Round 2 improvements address false positives at scale, progressive onboarding, and better error messages for production-ready adoption.*
+## Trust Score Transparency (Build User Confidence)
+
+### The Problem: Black Box Decisions Erode Trust
+
+**Bad UX:**
+
+```
+wj add some-package
+
+❌ Denied (suspicious behavior)
+
+# User: "WHY?! What did it do? How do I know you're not wrong?"
+```
+
+**User loses trust in system, adds `--trust-override` to everything.**
+
+### Solution: Transparent Trust Scores
+
+**Good UX:**
+
+```
+wj add some-package
+
+Security review: some-package@1.0.0
+
+Trust Score: 6.2/10 (Below threshold: 7.0)
+
+Breakdown:
+  ✅ Code analysis: 8.5/10
+     └─> Public API matches claimed purpose (JSON parser)
+     └─> No hidden network calls
+     
+  ⚠️  Community trust: 4.5/10
+     └─> Package published 3 days ago (very new)
+     └─> Only 12 downloads (low adoption)
+     └─> Maintainer has 1 package (unproven)
+     
+  ✅ Behavioral profile: 9.0/10
+     └─> Matches "parser" profile closely
+     └─> No anomalous patterns
+     
+  ⚠️  Anomaly score: 5.0/10
+     └─> Uses unusual dependencies (rare combination)
+
+Recommendation: WAIT
+  └─> Give it 2-4 weeks, let community vet it
+  └─> Check again: wj add some-package (will re-check)
+
+Alternatives (well-established):
+  └─> serde_json (trust: 9.8/10, 50M downloads)
+  └─> json (trust: 9.1/10, 12M downloads)
+
+Override (use at your own risk):
+  wj add some-package --trust-override --audit "Reviewed source, looks OK"
+```
+
+**Key: User understands WHY it's flagged and can make informed decision.**
+
+---
+
+## Community Feedback Loop
+
+### The Problem: AI Can't Catch Everything
+
+**Some false positives are unavoidable. Let users help.**
+
+### Solution: Quick Feedback Mechanism
+
+```bash
+wj add legitimate-package
+
+⚠️  Flagged as suspicious (trust: 6.8/10)
+
+# User reviews code, it's legitimate
+
+wj feedback legitimate-package --legitimate --reason "Reviewed source, false positive"
+
+✅ Feedback submitted to Windjammer Security Team
+✅ This helps improve our detection (thank you!)
+✅ Allowing legitimate-package for your project
+
+Your contribution will help other developers ❤️
+```
+
+**Benefit: Crowdsourced ground truth improves detection over time.**
+
+### False Positive Reporting
+
+```bash
+# Mark as false positive
+wj report-false-positive suspicious-lib
+
+Reporting false positive: suspicious-lib@1.0.0
+
+Why was it flagged?
+  └─> Anomaly: HTTP client writing to ./cache/*
+  
+Why is this legitimate?
+> HTTP clients cache responses to improve performance
+
+✅ Reported
+✅ This will help reduce future false positives
+✅ Allowed for your project
+
+Thank you for improving Windjammer! 🙏
+```
+
+---
+
+## Graduated Trust: New Packages Start Restricted
+
+### The Problem: New Packages Are Highest Risk
+
+**Historical data shows:**
+- 90% of malicious packages are <30 days old
+- 95% have <1000 downloads
+- 99% are from new/unknown maintainers
+
+### Solution: Automatic Trust Graduation
+
+**Day 0-7 (New Package):**
+
+```
+Trust level: UNTRUSTED (default: deny)
+Reason: Too new to vet
+
+Allowed uses:
+  - Dev dependencies (testing, not production)
+  - Sandboxed environments only
+  
+To use in production: Wait 1 week for community vetting
+```
+
+**Day 8-30 (Emerging Package):**
+
+```
+Trust level: LOW (allow with extra scrutiny)
+Reason: Some community validation
+
+Required:
+  - Must match capability profile
+  - Anomaly score < 3.0
+  - At least 100 downloads
+```
+
+**Day 31-90 (Established Package):**
+
+```
+Trust level: MEDIUM (normal rules apply)
+Reason: Community-vetted
+
+Standard capability analysis applies
+```
+
+**Day 91+ (Mature Package):**
+
+```
+Trust level: HIGH (fast-track approval)
+Reason: Well-established
+
+If matches common patterns → Auto-approve
+```
+
+**User Experience:**
+
+```bash
+# Day 2: Try to add brand new package
+wj add super-new-lib
+
+⚠️  Package is very new (published 2 days ago)
+
+Windjammer recommends waiting 1 week for community vetting.
+New packages are highest risk for supply chain attacks.
+
+Options:
+  1. Wait 5 more days (check back: 2026-03-26)
+  2. Use alternative (wj search super-new-lib:alternatives)
+  3. Override (dev only): wj add super-new-lib --dev-only
+  4. Override (production): wj add super-new-lib --trust-override
+
+Recommendation: Wait or use established alternative
+
+# Day 30: Check again
+wj add super-new-lib
+
+Security review: super-new-lib@1.0.0
+
+Trust Score: 7.8/10 ✅
+  └─> Package now has 30 days history
+  └─> 1,250 downloads (community adoption)
+  └─> No reports of issues
+
+✅ Added (trust level: MEDIUM)
+```
+
+**Philosophy: Time is a security feature. Let community vet new packages.**
+
+---
+
+## Silence is Golden: Minimize Interruptions
+
+### The Problem: Every Build Shouldn't Be a Security Quiz
+
+**Bad UX (noisy):**
+
+```
+wj build
+
+Checking security...
+  ✅ serde@1.0.0 (trusted)
+  ✅ tokio@1.0.0 (trusted)
+  ✅ clap@4.0.0 (trusted)
+  ... (47 more)
+  
+✅ All dependencies approved
+✅ No security issues found
+✅ Capability checks passed
+✅ Build proceeding...
+
+Build complete ✅
+```
+
+**Good UX (silent):**
+
+```
+wj build
+
+Build complete in 2.3s ✅
+```
+
+**Only interrupt for:**
+1. **First-time imports** (never seen before)
+2. **Security issues** (actual problems)
+3. **Version updates** (capabilities changed)
+
+**Silent approval for:**
+1. **Cached/known packages** (seen before, approved)
+2. **Re-builds** (no dependency changes)
+3. **Common patterns** (matches learned preferences)
+
+---
+
+## Smart Caching: Don't Re-Analyze Same Package
+
+### The Problem: Re-Analyzing Same Package Wastes Time
+
+**Bad:**
+
+```
+# Monday
+wj add reqwest
+Security analysis: 5 seconds ⏱️
+✅ Approved
+
+# Tuesday (different project)
+wj add reqwest
+Security analysis: 5 seconds ⏱️  ← WASTED TIME!
+✅ Approved
+```
+
+**Good (global cache):**
+
+```
+# Monday
+wj add reqwest
+Security analysis: 5 seconds ⏱️
+✅ Approved
+✅ Cached globally (~/.wj-security-cache/)
+
+# Tuesday (different project)
+wj add reqwest
+✅ Approved (used cached analysis, instant)
+```
+
+**Cache location:** `~/.wj-security-cache/reqwest@1.0.0.json`
+
+**Cache includes:**
+- Trust score
+- Capability analysis
+- Community signals
+- Timestamp (expires after 30 days)
+
+**Benefit: Analysis happens once, used everywhere.**
+
+---
+
+## Progressive Onboarding: Gradual Complexity
+
+### Tier 1: Beginners (Day 1-7)
+
+**Zero security prompts. Just build.**
+
+```bash
+wj new hello-world
+
+✅ Created project
+✅ Auto-configured security (smart defaults)
+
+wj build
+✅ Build complete
+
+# That's it! No security concepts introduced.
+```
+
+**All security happens silently in the background.**
+
+### Tier 2: Casual Users (Week 2-4)
+
+**Minimal prompts for common decisions.**
+
+```bash
+wj add reqwest
+
+⚠️  Quick question: Allow network access? (Y/n) y
+✅ Added
+
+# One prompt, simple choice. No scary details.
+```
+
+### Tier 3: Power Users (Month 2+)
+
+**More control, but still streamlined.**
+
+```bash
+wj add some-package --restrict net_egress:api.example.com
+
+✅ Added with domain restriction
+
+# Advanced features available when needed.
+```
+
+### Tier 4: Security Engineers (Anytime)
+
+**Full control and transparency.**
+
+```bash
+wj security audit --full
+wj security show some-package --detailed
+wj security trace net_egress:api.example.com
+wj capabilities optimize
+
+# All tools available, but hidden from beginners.
+```
+
+**Philosophy: Reveal complexity gradually. Don't overwhelm beginners.**
+
+---
+
+## Frictionless Updates: Smart Capability Change Detection
+
+### The Problem: Every Update Triggers Review
+
+**Bad UX:**
+
+```
+# Monday: Upgrade http-client 1.0 → 2.0
+wj update http-client
+
+⚠️  Capability change detected
+
+Old: <net_egress>
+New: <net_egress> + <fs_write:./cache/*>
+
+New capability: fs_write:./cache/*
+Reason: Added response caching
+
+Allow? (y/n) y
+
+# Tuesday: Upgrade logger 1.0 → 1.1
+wj update logger
+
+⚠️  Capability change detected
+...
+
+# Wednesday: Upgrade database-driver 2.0 → 2.1
+wj update database-driver
+
+⚠️  Capability change detected
+...
+
+# User: "I'm drowning in capability reviews!"
+```
+
+**Good UX (smart change detection):**
+
+```
+wj update http-client
+
+Capability change review:
+
+http-client 1.0.0 → 2.0.0
+└─> Added: fs_write:./cache/*
+└─> Reason: Response caching (common pattern)
+
+Analysis:
+  ✅ 65% of HTTP clients add caching in v2+
+  ✅ Common, expected pattern
+  ✅ Low risk
+
+Auto-approve similar changes? (Y/n) y
+  ✅ Future caching additions will be auto-approved
+
+✅ Updated
+
+# Later updates are silent
+wj update ureq
+✅ Updated (auto-approved: added caching, matches pattern)
+
+wj update hyper
+✅ Updated (auto-approved: added caching, matches pattern)
+```
+
+**One decision, many updates. Cognitive load: 10 → 1.**
+
+---
+
+## Visual Trust Indicators (At-a-Glance Safety)
+
+### The Problem: Can't Tell at a Glance If Package Is Safe
+
+**Solution: Visual trust indicators in `wj list`:**
+
+```bash
+wj list
+
+Dependencies (50):
+
+🟢 serde@1.0.0            (trust: 9.8, 50M downloads) ✅ SAFE
+🟢 tokio@1.0.0            (trust: 9.7, 40M downloads) ✅ SAFE
+🟢 clap@4.0.0             (trust: 9.5, 30M downloads) ✅ SAFE
+🟡 new-json-lib@0.1.0     (trust: 7.2, 150 downloads) ⚠️  NEW
+🔴 suspicious-lib@1.0.0   (trust: 4.1, 8 downloads)   ⚠️  REVIEW
+
+Legend:
+🟢 High trust (9.0-10.0) - Well-established, safe
+🟡 Medium trust (7.0-8.9) - Emerging, monitor
+🔴 Low trust (0-6.9) - New/suspicious, review
+
+Review suspicious:
+  wj security show suspicious-lib
+```
+
+**At-a-glance: Most dependencies are green (safe), one red (needs attention).**
+
+---
+
+*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates. Round 2 improvements address false positives at scale, progressive onboarding, and better error messages. Round 3 improvements focus on eliminating security fatigue through silent success, smart defaults, and graduated complexity.*

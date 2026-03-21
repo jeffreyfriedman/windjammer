@@ -1538,6 +1538,12 @@ impl FloatInference {
                 }
                 None
             }
+            // TDD: `let x = (n as f32) / (m as f32)` must record x as f32 so `x < 0.3` constrains the literal.
+            Expression::Cast { type_, .. } => self.extract_float_type(type_).and_then(|ft| match ft {
+                FloatType::F32 => Some(Type::Custom("f32".to_string())),
+                FloatType::F64 => Some(Type::Custom("f64".to_string())),
+                FloatType::Unknown => None,
+            }),
             Expression::Call { function, .. } => {
                 // Type::new() or Type::method() - get return type from function signature
                 let func_name = match function {
