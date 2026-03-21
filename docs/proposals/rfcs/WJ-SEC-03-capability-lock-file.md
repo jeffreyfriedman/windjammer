@@ -1572,11 +1572,13 @@ wj security scan
 trusted_analyzers = [
     "https://security.chainguard.dev",  # Chainguard (container/supply chain security)
     "https://scan.snyk.io",             # Snyk (vulnerability scanning)
-    "https://api.socket.dev"            # Socket (npm/PyPI supply chain)
+    "https://api.socket.dev",           # Socket (npm/PyPI supply chain)
+    "https://api.anchore.io",           # Anchore (container scanning, SBOM analysis)
+    "https://scan.aquasec.com/trivy"   # Trivy (comprehensive vulnerability scanner)
 ]
 
 # Require N-of-M agreement (consensus)
-consensus_threshold = "2-of-3"  # At least 2 vendors must agree package is safe
+consensus_threshold = "3-of-5"  # At least 3 vendors must agree package is safe
 
 # Fallback if vendors unreachable
 offline_mode = "use-cache"  # or "fail-closed" or "warn-only"
@@ -1751,10 +1753,12 @@ Windjammer Core:
   └─> Implements consensus algorithm
 
 Security Vendors (ecosystem):
-  ├─> Chainguard (container security experts)
-  ├─> Snyk (vulnerability database)
-  ├─> Socket (supply chain analysis)
-  ├─> GitHub (Dependabot integration)
+  ├─> Chainguard (container security, supply chain analysis)
+  ├─> Snyk (vulnerability database, dependency scanning)
+  ├─> Socket (npm/PyPI supply chain protection)
+  ├─> Anchore (container scanning, SBOM generation, policy enforcement)
+  ├─> Trivy (comprehensive vulnerability/misconfiguration/secret scanner)
+  ├─> GitHub (Dependabot integration, security advisories)
   ├─> ... (anyone can build a vendor)
   └─> ACME Internal Security (custom vendor)
 
@@ -1762,6 +1766,13 @@ Protocol:
   ├─> Open specification (JSON-RPC over HTTPS)
   ├─> Cryptographically signed responses
   └─> Rate-limited (prevent abuse)
+
+Vendor Specializations:
+  ├─> Anchore: SBOM analysis, policy compliance, Kubernetes security
+  ├─> Trivy: Broad scanner (OS pkgs, app deps, IaC, secrets, licenses)
+  ├─> Chainguard: Minimal container images, supply chain security
+  ├─> Snyk: Developer-first security, IDE integration
+  └─> Socket: Real-time supply chain protection, malware detection
 ```
 
 ---
