@@ -12,6 +12,16 @@ This directory contains formal proposals for significant changes to the Windjamm
 ### Syntax Improvements
 
 - **[WJ-SYN-01: Pipe Operator](./WJ-SYN-01-pipe-operator.md)** - Optional ergonomic improvement for chaining functions
+- **[WJ-SYN-02: Syntax Improvements](./WJ-SYN-02-syntax-improvements.md)** - Ternary operator, auto-derive, impl keyword (implemented)
+
+### Language Features
+
+- **[WJ-LANG-01: Shader Language (WJSL)](./WJ-LANG-01-shader-language.md)** - Type-safe shader language that compiles to WGSL
+
+### Implementation
+
+- **[WJ-IMPL-01: Compiler Refactoring](./WJ-IMPL-01-compiler-refactoring.md)** - Modular compiler architecture for maintainability
+- **[WJ-IMPL-02: FFI Generation](./WJ-IMPL-02-ffi-generation.md)** - Automatic C FFI binding generation from IDL
 
 ## RFC Process
 
@@ -38,6 +48,10 @@ This directory contains formal proposals for significant changes to the Windjamm
 | WJ-SEC-01 | 🟡 Draft | v0.50 | High |
 | WJ-SEC-02 | 🟡 Draft | v0.55 | High |
 | WJ-SYN-01 | 🟡 Draft | v0.60+ | Low |
+| WJ-SYN-02 | ⚫ Implemented | v0.46.0 | N/A |
+| WJ-LANG-01 | 🟡 Draft | v0.48+ | Medium |
+| WJ-IMPL-01 | 🔵 Review | v0.47+ | Medium |
+| WJ-IMPL-02 | 🟡 Draft | v0.48+ | Low |
 
 ## Contributing
 
