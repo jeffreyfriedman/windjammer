@@ -18,7 +18,11 @@
 5. [Workflow Examples](#workflow-examples)
 6. [Security Guarantees](#security-guarantees)
 7. [Implementation Details](#implementation-details)
-8. [Comparison with Other Lock Files](#comparison-with-other-lock-files)
+8. [Dependency Confusion Protection](#dependency-confusion-protection)
+9. [Transitive Dependency Analysis](#transitive-dependency-analysis)
+10. [Capability Revocation](#capability-revocation)
+11. [Differential Analysis](#differential-analysis)
+12. [Comparison with Other Lock Files](#comparison-with-other-lock-files)
 
 ---
 
@@ -718,6 +722,368 @@ Recommend: Stay on 1.0.0 or find alternative package.
 | **Transitive attacks** | Full dependency tree analyzed |
 | **Time-of-check/time-of-use** | Hash checked at compile time |
 | **Capability lying** | Declared vs verified mismatch flagged |
+
+---
+
+## Dependency Confusion Protection
+
+### The Attack Vector
+
+**Problem:** Attacker publishes malicious package with same name as internal package.
+
+**Attack scenario:**
+```bash
+# Company has internal package "json-parser" (private registry)
+# Attacker publishes "json-parser" to public registry (crates.io)
+# Developer's wj.toml doesn't specify registry
+
+wj add json-parser
+# Which one? Public (malicious) might be checked first!
+```
+
+### Solution: Registry Scoping & Pinning
+
+**Scoped packages:**
+```toml
+# wj.toml
+[dependencies]
+"@mycompany/json-parser" = "1.0.0"  # Private registry (scoped)
+"json-parser" = "1.0.0"  # Public registry (unscoped)
+```
+
+**Registry prioritization:**
+```toml
+# wj.toml
+[registries]
+mycompany = { url = "https://registry.mycompany.internal", priority = 1 }
+crates-io = { url = "https://crates.io", priority = 2 }
+
+[dependencies]
+json-parser = { version = "1.0.0", registry = "mycompany" }  # Explicit
+http-client = "2.0.0"  # Uses priority order (mycompany first, then crates-io)
+```
+
+**Lock file enforcement:**
+```toml
+# .wj-capabilities.lock
+[dependencies.json-parser]
+version = "1.0.0"
+registry = "mycompany"  # Locked to specific registry
+registry_url = "https://registry.mycompany.internal"
+hash = "sha256:abc123..."
+
+# If attacker tries to substitute from public registry:
+# Build fails: "Registry mismatch: expected mycompany, got crates-io"
+```
+
+**Audit trail:**
+```bash
+wj audit registries
+
+Package source audit:
+├─> json-parser@1.0.0
+│   ├─> Registry: mycompany (https://registry.mycompany.internal)
+│   ├─> Verified: ✅ (matches lock file)
+│   └─> Hash: sha256:abc123...
+│
+├─> http-client@2.0.0
+│   ├─> Registry: crates-io (https://crates.io)
+│   ├─> Verified: ✅
+│   └─> Hash: sha256:def456...
+│
+└─> rogue-parser@1.0.0
+    ├─> Registry: crates-io (https://crates.io)
+    ├─> Expected: mycompany ❌
+    └─> WARNING: Potential dependency confusion attack!
+```
+
+---
+
+## Transitive Dependency Analysis
+
+### The Problem
+
+**Direct dependencies are reviewed, but transitive dependencies might be malicious:**
+
+```
+my-app (I review this)
+├─> trusted-lib@1.0.0 (I review this)
+│   └─> helper-lib@2.0.0 (transitive, maybe I don't notice?)
+│       └─> malicious-util@1.0.0 (deeply nested, invisible!)
+```
+
+### Solution: Full Dependency Tree Analysis
+
+**Lock file tracks ALL dependencies (direct + transitive):**
+```toml
+# .wj-capabilities.lock
+[dependencies.trusted-lib]
+version = "1.0.0"
+depth = 1  # Direct dependency
+allowed = ["fs_read:./config/*"]
+dependencies = ["helper-lib"]  # Tracks what it depends on
+
+[dependencies.helper-lib]
+version = "2.0.0"
+depth = 2  # Transitive (via trusted-lib)
+allowed = ["logic_only"]
+dependencies = ["malicious-util"]
+required_by = ["trusted-lib"]  # Who pulls this in
+
+[dependencies.malicious-util]
+version = "1.0.0"
+depth = 3  # Deeply nested
+allowed = ["logic_only"]  # Initially clean
+required_by = ["helper-lib"]
+```
+
+**Visibility command:**
+```bash
+wj tree --security
+
+my-app
+├─> trusted-lib@1.0.0 [fs_read:./config/*]
+│   └─> helper-lib@2.0.0 [logic_only]
+│       └─> malicious-util@1.0.0 [logic_only] ⚠️  DEEP (depth 3)
+├─> http-client@2.0.0 [net_egress:api.example.com]
+└─> logger@1.0.0 [fs_write:./logs/*]
+
+Security summary:
+├─> Total dependencies: 4 (1 direct, 3 transitive)
+├─> Maximum depth: 3 (malicious-util)
+├─> Total capabilities: 3 distinct
+└─> Deep dependencies (depth >2): 1 ⚠️  Review recommended
+```
+
+**Transitive capability escalation detection:**
+```bash
+# malicious-util@1.1.0 adds network access
+wj update helper-lib  # Pulls in malicious-util@1.1.0
+
+🚨 TRANSITIVE DEPENDENCY ESCALATION
+
+Package: malicious-util (transitive via helper-lib)
+Old: 1.0.0 [logic_only]
+New: 1.1.0 [logic_only, net_egress:attacker.com]
+
+Dependency chain:
+  my-app → trusted-lib → helper-lib → malicious-util
+
+This is a DEEPLY NESTED dependency (depth 3).
+Even though you didn't directly add it, it can still attack you.
+
+Action required:
+1. Review: wj show malicious-util@1.1.0
+2. Block: wj deny malicious-util@1.1.0
+3. Alternative: wj search helper-lib:no-network-deps
+```
+
+**Capability aggregation:**
+```bash
+wj caps aggregate
+
+Aggregated capabilities by path:
+
+trusted-lib (direct):
+├─> Own capabilities: [fs_read:./config/*]
+├─> Transitive capabilities: [logic_only] (from helper-lib, malicious-util)
+└─> Total exposure: [fs_read:./config/*, logic_only]
+
+If malicious-util gains net_egress:
+└─> Total exposure: [fs_read:./config/*, logic_only, net_egress] ⚠️
+    Explanation: trusted-lib could now read configs AND send to network
+```
+
+---
+
+## Capability Revocation
+
+### The Need
+
+**When a package is discovered to be malicious AFTER installation, respond quickly.**
+
+### Registry Revocation System
+
+**Registry publishes revocation:**
+```json
+// Registry API: /api/v1/revocations
+{
+  "package": "colors",
+  "version": "1.4.1",
+  "reason": "Malicious code: infinite loop DoS attack",
+  "severity": "critical",
+  "cve": "CVE-2026-12345",
+  "revoked_at": "2026-03-21T10:30:00Z",
+  "safe_versions": ["1.4.0", "1.4.2"],
+  "alternative_packages": ["chalk", "ansi-colors"]
+}
+```
+
+**Build-time checking:**
+```bash
+wj build
+
+Checking for revocations...
+
+🚨 CRITICAL: Revoked dependency detected
+
+Package: colors@1.4.1
+Reason: Malicious code (DoS attack via infinite loop)
+Revoked: 2026-03-21
+CVE: CVE-2026-12345
+Severity: CRITICAL
+
+Your code uses this package:
+├─> src/main.wj:12 (import colors)
+├─> src/ui.wj:45 (colors.red())
+└─> 8 total usages
+
+❌ Build blocked
+
+Actions required (choose one):
+1. Downgrade to safe version:
+   wj add colors@1.4.0
+
+2. Upgrade to patched version:
+   wj add colors@1.4.2
+
+3. Switch to alternative:
+   wj add chalk  # (recommended alternative)
+   wj remove colors
+
+4. Remove functionality:
+   wj remove colors
+
+Cannot proceed until revoked package is removed.
+```
+
+**Revocation cache:**
+```toml
+# ~/.wj/revocations-cache.toml (updated hourly)
+[revocations.colors]
+version = "1.4.1"
+revoked_at = "2026-03-21T10:30:00Z"
+severity = "critical"
+cve = "CVE-2026-12345"
+
+[revocations.event-stream]
+version = "3.3.6"
+revoked_at = "2018-11-26T08:00:00Z"
+severity = "critical"
+cve = "CVE-2018-3721"
+```
+
+**CI/CD integration:**
+```yaml
+# .github/workflows/security.yml
+name: Security Checks
+on: [push, pull_request, schedule]
+
+jobs:
+  revocation-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: wj check-revocations --fail-on-critical
+      # Fails if any dependencies are revoked
+```
+
+---
+
+## Differential Analysis
+
+### The Need
+
+**Understand exactly what changed between package versions before approving updates.**
+
+### Version Comparison
+
+**Compare capabilities:**
+```bash
+wj diff colors@1.4.0 colors@1.4.1
+
+═══════════════════════════════════════════
+PACKAGE DIFF: colors@1.4.0 → colors@1.4.1
+═══════════════════════════════════════════
+
+CAPABILITY CHANGES:
+├─> Added: spawn (process spawning) 🚩
+├─> Added: net_egress:* (unrestricted network) 🚩🚩🚩
+└─> Removed: (none)
+
+CODE CHANGES:
+├─> New function: getRandomColor()
+│   └─> Contains: while (true) { ... } ⚠️  INFINITE LOOP
+│
+├─> Modified: colorize()
+│   └─> Now calls: getRandomColor()
+│
+└─> New dependencies: (none)
+
+SECURITY ANALYSIS:
+├─> Infinite loop detected (DoS risk)
+├─> Unrestricted network access (exfiltration risk)
+├─> Process spawning (arbitrary code execution risk)
+└─> Risk level: CRITICAL
+
+STATISTICS:
+├─> Lines added: 47
+├─> Lines removed: 3
+├─> Functions added: 1
+├─> Cyclomatic complexity: +25
+
+RECOMMENDATION: 🚨 DO NOT UPGRADE
+This version exhibits malicious behavior patterns.
+
+Actions:
+1. Report: wj report colors@1.4.1 --reason "DoS + network access"
+2. Stay on: colors@1.4.0 (safe version)
+3. Alternative: wj search colors:safe
+```
+
+**Detailed code diff:**
+```bash
+wj diff colors@1.4.0 colors@1.4.1 --code
+
+File: src/lib.wj
+
+@@ -10,6 +10,18 @@
+ pub fn colorize(text: str, color: Color) -> str {
+-    format!("\x1b[{}m{}\x1b[0m", color.code(), text)
++    // Call new helper
++    let randomized = getRandomColor()
++    format!("\x1b[{}m{}\x1b[0m", randomized.code(), text)
+ }
+
++// NEW FUNCTION (SUSPICIOUS!)
++fn getRandomColor() -> Color {
++    // Infinite loop (DoS attack)
++    while (true) {
++        println!("LIBERTY LIBERTY LIBERTY")
++    }
++}
+```
+
+**Aggregate historical changes:**
+```bash
+wj history colors --security
+
+colors capability history:
+
+v1.0.0 (2020-01-01): [logic_only]
+v1.1.0 (2020-06-01): [logic_only]
+v1.2.0 (2021-01-01): [logic_only]
+v1.3.0 (2021-06-01): [logic_only]
+v1.4.0 (2022-01-01): [logic_only]
+v1.4.1 (2022-01-10): [logic_only, spawn, net_egress] 🚨 ESCALATION
+
+Trend analysis:
+├─> Stable for 2 years (v1.0.0 - v1.4.0)
+├─> Sudden escalation in v1.4.1 (10 days after v1.4.0)
+└─> Pattern: Maintainer account likely compromised
+
+Recommendation: Avoid v1.4.1, use v1.4.0 or find alternative
+```
 
 ---
 

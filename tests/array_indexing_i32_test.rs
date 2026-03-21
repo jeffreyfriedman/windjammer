@@ -34,7 +34,7 @@ fn test_array_index() {
     
     // Transpile
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
     
@@ -44,7 +44,7 @@ fn test_array_index() {
     }
     
     // Read generated Rust
-    let rs_file = "/tmp/build/test_array_index.rs";
+    let rs_file = "./build/test_array_index.rs";
     let rust_code = fs::read_to_string(rs_file)
         .expect("Failed to read generated .rs file");
     
@@ -56,7 +56,6 @@ fn test_array_index() {
     
     // Cleanup
     let _ = fs::remove_file(test_file);
-    let _ = fs::remove_dir_all("/tmp/build");
     
     println!("✅ Array indexing with i32 test PASSED");
 }
@@ -78,7 +77,7 @@ fn process_items() {
     fs::write(test_file, test_wj).expect("Failed to write test file");
     
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
     
@@ -87,19 +86,24 @@ fn process_items() {
         panic!("Compilation failed: {}", stderr);
     }
     
-    let rs_file = "/tmp/build/test_loop_index.rs";
+    let rs_file = "./build/test_loop_index.rs";
     let rust_code = fs::read_to_string(rs_file)
         .expect("Failed to read generated .rs file");
     
     println!("Generated Rust:\n{}", rust_code);
     
-    // Verify auto-cast in loop
-    assert!(rust_code.contains("as usize"),
-        "Should auto-cast loop index to usize\nGenerated:\n{}", rust_code);
+    // TDD FIX: After range fix, i is inferred as usize from 0_usize..len()
+    // So items[i] doesn't need a cast! This is CORRECT and more efficient.
+    // Verify i is usize in the range
+    assert!(rust_code.contains("0_usize..items.len()") || rust_code.contains("for i in 0..items.len()"),
+        "Loop should use usize range\nGenerated:\n{}", rust_code);
+    
+    // Verify array indexing works (no cast needed since i is already usize)
+    assert!(rust_code.contains("items[i]"),
+        "Should index array with i\nGenerated:\n{}", rust_code);
     
     // Cleanup
     let _ = fs::remove_file(test_file);
-    let _ = fs::remove_dir_all("/tmp/build");
     
     println!("✅ Loop variable indexing test PASSED");
 }

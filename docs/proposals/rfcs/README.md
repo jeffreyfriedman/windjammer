@@ -5,7 +5,6 @@ This directory contains formal proposals for significant changes to the Windjamm
 ## Overview Documents
 
 - **[Security Framework Overview](./SECURITY-FRAMEWORK-OVERVIEW.md)** - Complete guide to all security RFCs
-- **[Security RFC Review](./SECURITY-RFC-REVIEW.md)** - Multi-perspective analysis (attacker, security engineer, staff engineer, manager, user)
 
 ## Active RFCs
 

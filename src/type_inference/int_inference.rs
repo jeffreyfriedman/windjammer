@@ -447,6 +447,23 @@ impl IntInference {
                     "assignment".to_string(),
                 ));
                 
+                // TDD FIX: Simple assignment to usize field/variable - constrain value to usize
+                // e.g., self.current_frame_index = 0 where current_frame_index: usize
+                if compound_op.is_none() {
+                    let target_type = self.infer_type_from_expression(target);
+                    if let Some(ref tt) = target_type {
+                        if let Some(int_ty) = self.extract_int_type(tt) {
+                            if int_ty == IntType::Usize {
+                                self.constraints.push(IntConstraint::MustBe(
+                                    value_id,
+                                    IntType::Usize,
+                                    "assignment to usize field/variable".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+                
                 // TDD FIX: Detect compound assignment pattern even when compound_op is None
                 // Parser generates: x = x + 1 (compound_op: None, value: Binary)
                 // Codegen optimizes to: x += 1
@@ -473,24 +490,9 @@ impl IntInference {
                 // TDD FIX: Compound assignment (+=, -=, etc.) - RHS literal must match LHS type
                 // e.g. count += 1 where count: u32 → 1 must be u32, not i32
                 if compound_op.is_some() || is_compound_pattern {
-                    if let Expression::FieldAccess { field, .. } = target {
-                        if field == "in_use" || field == "total_acquired" {
-                            eprintln!("TDD DEBUG is_compound_pattern={}, checking type...", is_compound_pattern);
-                        }
-                    }
                     let target_type = self.infer_type_from_expression(target);
-                    if let Expression::FieldAccess { field, .. } = target {
-                        if field == "in_use" || field == "total_acquired" {
-                            eprintln!("TDD DEBUG infer returned: {:?}", target_type);
-                        }
-                    }
                     if let Some(ref tt) = target_type {
                         if let Some(int_ty) = self.extract_int_type(tt) {
-                            if let Expression::FieldAccess { field, .. } = target {
-                                if field == "in_use" || field == "total_acquired" {
-                                    eprintln!("TDD DEBUG ADDING CONSTRAINT: int_ty={:?}", int_ty);
-                                }
-                            }
                             // For compound pattern (x = x + 1), constrain the RHS of the binary op
                             if is_compound_pattern {
                                 if let Expression::Binary { right, .. } = value {
@@ -890,6 +892,28 @@ impl IntInference {
                             format!("comparison {:?}", op),
                         ));
                         
+                        // TDD FIX: When comparing with .len() (returns usize), constrain literal to usize
+                        // e.g., items.len() > 0 → 0 should be usize, not i32
+                        let left_is_len = matches!(left, Expression::MethodCall { method, .. } if method == "len");
+                        let right_is_len = matches!(right, Expression::MethodCall { method, .. } if method == "len");
+                        let left_is_literal = matches!(left, Expression::Literal { .. });
+                        let right_is_literal = matches!(right, Expression::Literal { .. });
+                        
+                        if left_is_len && right_is_literal {
+                            self.constraints.push(IntConstraint::MustBe(
+                                right_id,
+                                IntType::Usize,
+                                "comparison with .len() (usize)".to_string(),
+                            ));
+                        }
+                        if right_is_len && left_is_literal {
+                            self.constraints.push(IntConstraint::MustBe(
+                                left_id,
+                                IntType::Usize,
+                                "comparison with .len() (usize)".to_string(),
+                            ));
+                        }
+                        
                         // TDD FIX: Propagate type from left side for comparisons
                         // First try pattern matching for direct field access/identifier
                         let left_int_ty = match left {
@@ -1272,14 +1296,10 @@ impl IntInference {
                 } else {
                     &struct_name
                 };
-                let result = self.struct_field_types
+                self.struct_field_types
                     .get(base_name)
                     .and_then(|fields| fields.get(field))
-                    .cloned();
-                if field == "in_use" || field == "total_acquired" {
-                    eprintln!("TDD DEBUG infer_type_from_expression: struct={}, base_name={}, field={}, type={:?}", struct_name, base_name, field, result);
-                }
-                result
+                    .cloned()
             }
             Expression::Index { object, .. } => {
                 let object_type = self.infer_type_from_expression(object)?;
