@@ -5527,4 +5527,537 @@ Review suspicious:
 
 ---
 
-*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates. Round 2 improvements address false positives at scale, progressive onboarding, and better error messages. Round 3 improvements focus on eliminating security fatigue through silent success, smart defaults, and graduated complexity.*
+## Smart Command Suggestions (Reduce Cognitive Load)
+
+### The Problem: 50+ Security Commands, Which One Do I Need?
+
+**Current state:**
+```
+wj security --help
+(Shows 50+ commands)
+
+Developer: "I just want to check if my app is secure... which command?"
+```
+
+### Solution: Context-Aware Command Suggestions
+
+**Ambiguous intent detection:**
+
+```bash
+# User doesn't know exact command
+wj security
+
+What would you like to do?
+
+Common tasks:
+  1. Check for vulnerabilities       → wj security audit
+  2. Review suspicious package       → wj show <package>
+  3. Approve a package              → wj allow <package>
+  4. See why package was blocked    → wj security why <package>
+  5. Update security databases      → wj security update-db
+  6. See security dashboard         → wj security dashboard
+  7. Check dependency health        → wj deps health
+  8. Generate compliance report     → wj compliance report
+  
+Type number or command: 1
+
+Running: wj security audit
+...
+```
+
+**Error-specific suggestions:**
+
+```bash
+# Build fails with security error
+wj build
+
+❌ Capability violation: http-client needs net_egress
+
+Suggested next steps:
+  → wj allow http-client net_egress  (approve)
+  → wj show http-client              (review first)
+  → wj deny http-client              (block package)
+
+Quick fix (copy-paste):
+  wj allow http-client net_egress --audit "HTTP client needs network"
+  
+Success rate: 94% | Time: ~30 seconds
+```
+
+**Interactive mode:**
+
+```bash
+wj security interactive
+
+🛡️  Windjammer Security Assistant
+
+I can help you with:
+  - Finding vulnerabilities
+  - Approving packages
+  - Understanding security errors
+  - Generating reports
+
+What do you need help with?
+> check for vulnerabilities
+
+Running security audit...
+
+✅ No vulnerabilities found
+
+Anything else? (q to quit)
+> why was json-parser blocked?
+
+json-parser@2.0.0 was flagged because:
+  - New version added net_egress capability
+  - Parsers typically don't need network access
+  - Risk: Potential data exfiltration
+
+Review code: wj show json-parser@2.0.0
+Approve: wj allow json-parser net_egress
+
+Anything else?
+> q
+
+Goodbye! 👋
+```
+
+---
+
+## Security Dashboard (Measure Value)
+
+### The Problem: "Is Security Actually Helping?"
+
+**Manager asks:** "Are we getting ROI on these security features?"
+
+**Current:** No way to measure security value.
+
+### Solution: Security Dashboard with Metrics
+
+**Command:**
+
+```bash
+wj security dashboard
+
+🛡️  Security Dashboard: my-app
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 ATTACKS PREVENTED (Last 30 days)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total incidents blocked: 14
+  ├─> Typosquatting attempts: 7
+  │   └─> Packages: "reqeuest" (vs "request"), "serde-json" (vs "serde_json")
+  ├─> Capability violations: 4
+  │   └─> Packages tried to exceed approved capabilities
+  ├─> Known vulnerabilities: 2
+  │   └─> CVE-2024-1234 (CRITICAL), CVE-2024-5678 (HIGH)
+  └─> Abandoned packages: 1
+      └─> Package not updated in 3+ years
+
+Estimated incident cost: $50,000/each
+Total value delivered: $700,000 💰
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏱️  DEVELOPER IMPACT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Average approval time: 12 seconds ✅
+  └─> 94% approved in <30 seconds
+
+False positive rate: 1.8% ✅
+  └─> Goal: <3% (MEETING TARGET)
+
+Builds blocked: 0% ✅
+  └─> Warnings only (no hard blocks)
+
+Security overhead: 6% of build time ✅
+  └─> 0.7s security / 11.7s total
+
+Developer satisfaction: 4.3/5 ⭐
+  └─> Survey: "Security doesn't slow me down"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👥 TEAM COMPLIANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Projects with security enabled: 47/50 (94%) ✅
+  └─> 3 legacy projects (migration in progress)
+
+Emergency overrides used: 2 (last 90 days)
+  └─> Both resolved within 24 hours ✅
+
+Security incidents: 0 (last 90 days) 🎉
+  └─> Zero production security incidents
+
+Policy compliance: 100% ✅
+  └─> All projects pass security policies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 RECOMMENDATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Security is working well!
+   - Low false positives
+   - High developer satisfaction
+   - Blocking real attacks
+
+Next steps:
+  1. Migrate 3 legacy projects (wj migrate --legacy)
+  2. Review emergency override process (2 uses)
+  3. Consider tightening policies (currently: balanced)
+
+ROI: 📈 POSITIVE (467x return)
+  └─> Security value >> Developer time cost
+
+Export report: wj security dashboard --export dashboard-2026-03.pdf
+```
+
+**Historical trends:**
+
+```bash
+wj security dashboard --historical
+
+Security Trends (Last 6 months)
+
+Attacks Prevented:
+  Jan: ██████████ 10
+  Feb: ████████████ 12
+  Mar: ██████████████ 14
+  (Trend: ↑ Increasing, good detection)
+
+False Positives:
+  Jan: ███ 2.4%
+  Feb: ██ 2.1%
+  Mar: █ 1.8%
+  (Trend: ↓ Decreasing, improving heuristics)
+
+Build Time Overhead:
+  Jan: ████████ 8%
+  Feb: ███████ 7%
+  Mar: ██████ 6%
+  (Trend: ↓ Decreasing, faster analysis)
+
+Security Score: 9.2/10 ✅ (A+)
+  └─> Industry average: 6.5/10
+  └─> You're in top 5% of projects
+```
+
+---
+
+## Compliance Reporting (Auditor-Friendly)
+
+### The Problem: Manual Compliance Evidence Collection
+
+**Auditor asks:** "How do you ensure supply chain security?"
+
+**Developer:** *Spends 2 weeks gathering evidence manually*
+
+### Solution: Automated Compliance Reports
+
+**SOC 2 compliance:**
+
+```bash
+wj compliance report --standard soc2 --period 2026-Q1
+
+Generating SOC 2 compliance report...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOC 2 Compliance Report: Q1 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Control: CC6.1 - Logical and Physical Access Controls
+Status: ✅ COMPLIANT
+
+Evidence:
+  ✅ All binaries cryptographically signed (Sigstore)
+     └─> 247 builds, 247 signed (100%)
+  ✅ All dependencies verified (SHA-256 hashes)
+     └─> Lock file: .wj-capabilities.lock
+  ✅ Capability-based access control (runtime)
+     └─> Runtime checks enabled (default)
+  
+Artifacts:
+  - build-logs/2026-Q1/
+  - .wj-capabilities.lock (all commits)
+  - sigstore-transparency-logs/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Control: CC6.6 - Vulnerability Management
+Status: ✅ COMPLIANT
+
+Evidence:
+  ✅ Daily automated vulnerability scanning
+     └─> 90 scans conducted (90/90 days)
+  ✅ Zero unpatched critical vulnerabilities
+     └─> All criticals patched within 24h
+  ✅ Average patch time: 2.3 days
+     └─> Target: <7 days ✅
+
+Artifacts:
+  - security-audit-logs/2026-Q1/
+  - vulnerability-reports/
+  - patch-evidence/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Control: CC6.8 - Malware Protection
+Status: ✅ COMPLIANT
+
+Evidence:
+  ✅ Supply chain attack prevention (active)
+     └─> 14 attacks blocked (Q1)
+  ✅ Multi-vendor security verification
+     └─> 5 trusted vendors (N-of-M consensus)
+  ✅ Federated trust verification
+     └─> All packages verified before use
+
+Artifacts:
+  - .wj-trust-cache/
+  - attack-prevention-logs/
+  - security-incidents/ (none)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Control: CC7.2 - System Monitoring
+Status: ✅ COMPLIANT
+
+Evidence:
+  ✅ Continuous security monitoring
+  ✅ Audit trail for all security decisions
+  ✅ Emergency override tracking
+     └─> 2 overrides, both resolved <24h
+
+Artifacts:
+  - .wj-emergency-overrides.log
+  - security-decisions.log
+  - monitoring-alerts/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Overall compliance: ✅ COMPLIANT (100%)
+  └─> All 15 controls passed
+
+Report generated: 2026-03-21T16:00:00Z
+Period: 2026-01-01 to 2026-03-31
+Prepared by: Windjammer Security Framework
+Auditor access: compliance-reports/soc2-2026-Q1.pdf
+
+Evidence package: compliance-reports/evidence-2026-Q1.zip
+  └─> Contains all artifacts for auditor review
+```
+
+**Other standards:**
+
+```bash
+# ISO 27001
+wj compliance report --standard iso27001
+
+# PCI-DSS (for payment systems)
+wj compliance report --standard pcidss
+
+# HIPAA (for healthcare)
+wj compliance report --standard hipaa
+
+# Custom policy
+wj compliance report --policy custom-policy.rego
+```
+
+**Continuous compliance:**
+
+```bash
+# Run daily in CI
+wj compliance check --standard soc2
+
+✅ All controls passing
+✅ Compliance maintained
+✅ No action needed
+
+# Alert if compliance drops
+❌ Control CC6.6 FAILING
+   └─> Unpatched critical vulnerability detected
+   └─> Action required: Patch within 24h
+```
+
+---
+
+## Total Cost of Ownership (TCO) Analysis
+
+### The Problem: "How Much Does Security Cost Us?"
+
+**CFO asks:** "What's the ROI on this security investment?"
+
+**Current:** No cost data, can't answer.
+
+### Solution: TCO Calculator with ROI Analysis
+
+**Command:**
+
+```bash
+wj security cost-analysis
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 Total Cost of Ownership Analysis
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Project: my-app
+Team size: 5 developers
+Analysis period: Last 12 months
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏱️  TIME COSTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Initial setup:
+  └─> 5 minutes (one-time)
+  └─> Cost: $4 (@ $50/hour)
+
+Daily overhead per developer:
+  └─> 2 minutes/day (approval prompts)
+  └─> 520 minutes/year/developer
+  └─> 2,600 minutes/year for team of 5
+  └─> Cost: $2,167/year (43 hours @ $50/hour)
+
+Security audits:
+  └─> 10 minutes/week (automated)
+  └─> 520 minutes/year
+  └─> Cost: $433/year (8.7 hours @ $50/hour)
+
+Policy maintenance:
+  └─> 30 minutes/quarter
+  └─> 120 minutes/year
+  └─> Cost: $100/year (2 hours @ $50/hour)
+
+TOTAL TIME COST: $2,704/year
+  └─> 54 hours/year for team of 5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💸 BENEFIT ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Incidents prevented (last 12 months): 168
+  ├─> Typosquatting: 84 (50%)
+  ├─> Capability violations: 48 (29%)
+  ├─> Vulnerabilities: 24 (14%)
+  └─> Other: 12 (7%)
+
+Average incident cost: $50,000
+  └─> Industry data: Ponemon Cost of Data Breach 2025
+
+Total incidents prevented value: $8,400,000
+  └─> 168 × $50,000
+
+Conservative estimate (10% would materialize): $840,000
+  └─> Actual prevented losses
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 BUILD TIME IMPACT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Without security: 11.7s average build
+With security: 12.4s average build
+Overhead: +0.7s (6%)
+
+Annual build count: ~10,000 builds
+  └─> 5 developers × 10 builds/day × 200 days
+
+Total overhead: 7,000s = 1.9 hours
+Cost: $97/year
+
+Cached builds: +0.05s (<1%)
+  └─> ~8,000 cached builds
+  └─> 400s = 0.1 hours
+  └─> Negligible cost
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 ROI CALCULATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Cost:
+  Time cost: $2,704/year
+  Build overhead: $97/year
+  TOTAL: $2,801/year
+
+Total Benefit:
+  Conservative prevented incidents: $840,000/year
+  
+ROI: 29,890%
+  └─> 299x return on investment
+
+Payback period: 1.2 days
+  └─> Security pays for itself in 1 day
+
+Break-even: 0.06 incidents prevented/year
+  └─> Need to prevent just 1 incident every 17 years
+  └─> Actually prevented: 168/year
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 RECOMMENDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ KEEP SECURITY ENABLED
+
+Rationale:
+  - ROI is EXTREMELY POSITIVE (299x)
+  - Cost is minimal ($2,801/year)
+  - Benefit is enormous ($840,000/year)
+  - Risk of disabling is unacceptable
+
+Even if only 1% of blocked packages were malicious:
+  └─> Still $8,400 benefit vs $2,801 cost
+  └─> Still 3x ROI ✅
+
+Security is a bargain, not an expense.
+
+Export report: wj security cost-analysis --export cost-report.pdf
+Share with CFO: wj security cost-analysis --format executive-summary
+```
+
+**Executive summary (for management):**
+
+```bash
+wj security cost-analysis --format executive-summary
+
+Executive Summary: Security ROI
+
+Cost: $2,801/year (54 hours/year, team of 5)
+Benefit: $840,000/year (168 incidents prevented)
+ROI: 299x
+
+Bottom line:
+  For every $1 spent on security, we save $299.
+  
+Recommendation: Continue investment.
+
+Detailed report: cost-report-2026.pdf
+```
+
+**Comparison mode:**
+
+```bash
+wj security cost-analysis --compare-alternatives
+
+Alternative 1: No security (disable Windjammer security)
+  Cost: $0/year
+  Benefit: $0/year
+  Risk: $8,400,000/year (168 potential incidents)
+  Expected loss (10% materialization): $840,000/year
+  NET: -$840,000/year ❌
+
+Alternative 2: Manual security reviews
+  Cost: $125,000/year (1 FTE security engineer)
+  Benefit: ~$400,000/year (50% detection rate)
+  NET: +$275,000/year ⚠️
+
+Alternative 3: Windjammer automated security (CURRENT)
+  Cost: $2,801/year (automated)
+  Benefit: $840,000/year (95% detection rate)
+  NET: +$837,199/year ✅ BEST
+
+Recommendation: Continue with Windjammer security.
+  → 3x better than manual reviews
+  → 300x better than no security
+```
+
+---
+
+*This RFC addresses the critical "first import" vulnerability identified during WJ-SEC-03 review. By adding capability profiles and multi-signal analysis, Windjammer can detect malicious packages at import time, not just on updates. Round 2 improvements address false positives at scale, progressive onboarding, and better error messages. Round 3 improvements focus on eliminating security fatigue through silent success, smart defaults, and graduated complexity. Round 4 adds EOL tracking, policy language support (OPA, CEL, Cedar, Sigma), and air-gapped support. Round 5 focuses on ergonomics: emergency overrides, copy-pasteable fixes, pre-commit hooks, per-developer profiles, global approvals, team config sync, demo mode, bulk operations, PR security diffs, smart command suggestions, security dashboard, compliance reporting, and TCO analysis.*
