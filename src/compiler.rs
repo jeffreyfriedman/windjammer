@@ -540,15 +540,6 @@ fn build_library_multipass(
         analyzer.infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         
-        // Code generation (using SHARED global_float_inference and global_int_inference)
-        let mut codegen = CodeGenerator::new(registry, target);
-        // TDD COMPILER FIX: Set source file for import path resolution
-        codegen.set_source_file(file);
-        codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
-        codegen.set_float_inference(global_float_inference.clone());  // TDD FIX: Use shared instance!
-        codegen.set_int_inference(global_int_inference.clone());
-        let rust_code = codegen.generate_program(&program, &analyzed_functions);
-        
         // Preserve directory structure
         let base = if base_path.is_file() {
             base_path.parent().unwrap_or(base_path)
@@ -560,6 +551,15 @@ fn build_library_multipass(
         if let Some(parent) = output_file.parent() {
             std::fs::create_dir_all(parent)?;
         }
+
+        // Library-style modules: `use super::*` + automatic sibling `use super::Type` imports.
+        let mut codegen = CodeGenerator::new_for_module(registry, target);
+        codegen.set_output_file(&output_file);
+        codegen.set_source_file(file);
+        codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
+        codegen.set_float_inference(global_float_inference.clone()); // TDD FIX: Use shared instance!
+        codegen.set_int_inference(global_int_inference.clone());
+        let rust_code = codegen.generate_program(&program, &analyzed_functions);
         std::fs::write(&output_file, rust_code)?;
     }
     

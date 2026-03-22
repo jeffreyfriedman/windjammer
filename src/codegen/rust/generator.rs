@@ -929,6 +929,13 @@ impl<'ast> CodeGenerator<'ast> {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
+        // Cross-module type references: explicit `use super::Type` for types defined in sibling `.wj`
+        // files. Complements (or replaces when glob imports are ambiguous) `use super::*`.
+        let auto_super_type_imports = self.format_auto_super_type_imports(program);
+        if !auto_super_type_imports.is_empty() {
+            implicit_imports.push_str(&auto_super_type_imports);
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -1073,6 +1080,27 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output.push_str(&body);
 
         output
+    }
+
+    /// Generate `use super::...` lines for types referenced in this file but defined elsewhere.
+    pub(crate) fn format_auto_super_type_imports(&self, program: &Program<'ast>) -> String {
+        if !self.is_module {
+            return String::new();
+        }
+        let paths = crate::analyzer::type_collector::external_type_import_paths(program);
+        if paths.is_empty() {
+            return String::new();
+        }
+        let super_chain = self
+            .get_import_prefix_for_nested_output()
+            .map(|n| "super::".repeat(n))
+            .unwrap_or_else(|| "super::".to_string());
+        let mut out = String::from("#[allow(unused_imports)]\n");
+        for path in paths {
+            let rust_path = path.replace('.', "::");
+            out.push_str(&format!("use {}{};\n", super_chain, rust_path));
+        }
+        out
     }
 
     pub(crate) fn type_to_rust(&self, type_: &Type) -> String {

@@ -5027,6 +5027,259 @@ jobs:
 
 ---
 
+### Air-Gapped EOL Tracking (Offline Mode)
+
+#### The Problem: Air-Gapped Systems Can't Access External Databases
+
+**Air-gapped environments:**
+- No internet access (by design)
+- Can't query: NVD, OSV, GitHub, endoflife.date, libraries.io
+- Still need dependency hygiene
+- But inherently MORE secure (no remote attacks)
+
+**Design goals:**
+1. Work entirely offline (use only local data)
+2. Non-noisy (air-gapped = safer, fewer warnings)
+3. Focus on staleness, not vulnerabilities
+4. Actionable insights without external lookups
+
+#### Solution: Lock File Timestamp Analysis
+
+**Use `.wj-capabilities.lock` timestamps:**
+
+```toml
+# .wj-capabilities.lock (tracks when dependencies were approved)
+lock_version = 1
+
+[dependencies.some-package]
+version = "1.0.0"
+first_seen = "2024-01-15T10:30:00Z"     # When first added
+last_updated = "2024-01-15T10:30:00Z"   # When last changed
+last_reviewed = "2024-01-15T10:30:00Z"  # When last manually reviewed
+allowed = ["logic_only"]
+hash = "sha256:abc123..."
+
+[dependencies.old-package]
+version = "2.0.0"
+first_seen = "2022-03-20T14:00:00Z"     # 2+ years ago
+last_updated = "2022-03-20T14:00:00Z"   # Never updated
+last_reviewed = "2022-03-20T14:00:00Z"  # Never re-reviewed
+allowed = ["fs_read"]
+hash = "sha256:def456..."
+```
+
+**Offline audit (simplified):**
+
+```bash
+wj security audit --offline
+
+Offline security audit (air-gapped mode)
+
+Using local data only (no external databases)
+
+Dependency staleness analysis:
+
+✅ Recently reviewed (<1 year): 18 packages (78%)
+⚠️  Due for review (1-2 years): 3 packages (13%)
+📋 Overdue for review (>2 years): 2 packages (9%)
+
+📋 REVIEW RECOMMENDED (2 packages):
+
+  old-package@2.0.0
+    ├─> First added: 2022-03-20 (4 years ago)
+    ├─> Last updated: Never (same version)
+    ├─> Last reviewed: 2022-03-20 (4 years ago)
+    └─> Action: Review this dependency
+        └─> Still needed? wj deps why old-package
+        └─> Consider updating (when next online)
+        └─> Mark as reviewed: wj deps review old-package
+
+  legacy-lib@1.5.0
+    ├─> First added: 2023-01-10 (3 years ago)
+    ├─> Last updated: Never
+    ├─> Last reviewed: 2023-01-10 (3 years ago)
+    └─> Action: Review this dependency
+
+⚠️  STALE (1-2 years) (3 packages):
+  └─> Consider reviewing when convenient
+
+Note: Air-gapped mode (offline)
+  - No vulnerability lookup (requires network)
+  - No EOL date checking (requires network)
+  - Staleness based on local timestamps only
+  - Air-gapped systems are inherently more secure
+  
+Next review recommended: 2027-03-21 (1 year from now)
+```
+
+**Configuration (air-gapped friendly):**
+
+```toml
+# wj.toml
+[security.eol]
+# Detect network availability automatically
+mode = "auto"  # online | offline | auto
+
+# For offline mode: Less aggressive thresholds
+offline_review_threshold_days = 730   # 2 years (vs 365 for online)
+offline_abandoned_threshold_days = 1460  # 4 years (vs 730 for online)
+
+# Offline mode action (default: "info" for air-gapped)
+offline_action = "info"  # info | warn | block
+
+# Reasoning: Air-gapped systems are inherently safer
+# No remote exploits possible, so stale packages less risky
+```
+
+**Automatic mode detection:**
+
+```rust
+fn detect_mode() -> AuditMode {
+    // Try to reach registry
+    if can_reach("https://registry.windjammer.org", timeout_ms: 1000) {
+        AuditMode::Online
+    } else {
+        eprintln!("Note: Network unavailable, using offline mode");
+        AuditMode::Offline
+    }
+}
+```
+
+**Offline vs Online behavior:**
+
+| Feature | Online Mode | Offline Mode (Air-Gapped) |
+|---------|-------------|---------------------------|
+| **Vulnerability lookup** | ✅ Check NVD, OSV, etc. | ❌ Skip (no network) |
+| **EOL date checking** | ✅ Check endoflife.date | ❌ Skip (no network) |
+| **Maintainer activity** | ✅ Check GitHub API | ❌ Skip (no network) |
+| **Staleness threshold** | 365 days | 730 days (2x lenient) |
+| **Abandoned threshold** | 730 days | 1460 days (2x lenient) |
+| **Action on stale** | ⚠️  Warn | ℹ️  Info only |
+| **Action on abandoned** | 🔴 Block | ⚠️  Warn (not block) |
+| **Alternatives suggested** | ✅ From registry | ❌ None (can't query) |
+| **Trust score** | ✅ Full analysis | ⚠️  Local only |
+
+**Offline audit output (non-noisy):**
+
+```bash
+wj security audit --offline
+
+Offline audit: my-app (air-gapped mode)
+
+Dependencies: 23
+  ✅ All present in lock file
+  ✅ Hashes verified
+  ℹ️  2 dependencies not reviewed in 2+ years (normal for air-gapped)
+
+Recommendations (when next online):
+  1. Update vulnerability databases: wj security update-db
+  2. Check for updates: wj outdated
+  3. Review old dependencies: wj deps review-old
+
+Current risk: ✅ LOW (air-gapped environment)
+
+No action needed now.
+```
+
+**Key differences for air-gapped:**
+- ℹ️  Info-level messages (not warnings)
+- 2x longer thresholds (2 years, not 1 year)
+- No blocking (just informational)
+- Acknowledges air-gapped = safer
+- Suggests actions "when next online"
+
+**Manual review workflow:**
+
+```bash
+# Mark dependency as reviewed (resets timer)
+wj deps review old-package
+
+Reviewing old-package@2.0.0...
+
+Questions:
+  1. Is this package still needed? (Y/n) y
+  2. Any known issues in your environment? (y/N) n
+  3. Plan to update when next online? (y/N) n
+     Reason: Stable, working, no need to change
+
+✅ Marked as reviewed (timestamp: 2026-03-21)
+✅ Next review: 2028-03-21 (2 years)
+
+Updated .wj-capabilities.lock:
+  [dependencies.old-package]
+  last_reviewed = "2026-03-21T16:00:00Z"
+  review_notes = "Stable, working, no need to change"
+```
+
+**Periodic review prompts (gentle):**
+
+```bash
+wj build
+
+Building my-app...
+✅ Build complete
+
+ℹ️  Note: 2 dependencies are due for review (added 2+ years ago)
+
+This is normal for air-gapped environments.
+When convenient, run: wj deps review-old
+
+(This message shown quarterly, not every build)
+```
+
+**Philosophy:**
+- **Air-gapped = inherently safer** (no remote attacks)
+- **Don't cry wolf** (noisy warnings ignored)
+- **Focus on hygiene** (not panic)
+- **Quarterly reminders** (not every build)
+- **Respect offline constraints** (no unreachable suggestions)
+
+**Bundled security database (offline support):**
+
+```bash
+# While online: Download security database for offline use
+wj security download-db --offline-bundle
+
+Downloading security databases for offline use...
+
+✅ NVD: 142,000 CVEs (482 MB)
+✅ OSV: 45,000 vulnerabilities (123 MB)
+✅ GitHub Advisories: 12,000 advisories (34 MB)
+✅ RustSec: 420 advisories (1.2 MB)
+
+Total: 640 MB
+
+Saving to: ~/.wj-security-db-offline/
+  └─> Expires: 2026-06-21 (90 days)
+
+# Now disconnect from network
+
+# Later, in air-gapped environment:
+wj security audit --use-offline-db
+
+Using offline security database (downloaded 2026-03-21)...
+
+✅ Scanned 23 dependencies
+⚠️  Found 1 vulnerability (from offline DB)
+
+old-package@2.0.0
+  └─> CVE-2024-1234 (HIGH)
+  └─> Info from offline DB (may be outdated)
+
+Database age: 15 days old
+Recommendation: Update database when next online
+  └─> wj security download-db --offline-bundle
+```
+
+**Benefits:**
+- Security audits work offline
+- Vulnerability data bundled (640 MB)
+- 90-day validity (update quarterly when online)
+- No network needed for daily builds
+- Best of both worlds (security + air-gapped)
+
+---
+
 ## Silence is Golden: Minimize Interruptions
 
 ### The Problem: Every Build Shouldn't Be a Security Quiz
