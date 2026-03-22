@@ -434,6 +434,10 @@ impl<'ast> CodeGenerator<'ast> {
             
             // Add self parameter if missing and not a constructor
             if !has_self_param && !is_constructor {
+                let returns_bare_self = matches!(
+                    &method.return_type,
+                    Some(Type::Custom(name)) if name == "Self"
+                );
                 // Check if we have analyzed ownership for this method
                 let self_ownership = if let Some(analyzed) = analyzed_method {
                     analyzed.inferred_ownership.get("self").copied()
@@ -443,14 +447,16 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     None
                 };
-                
-                // Default to &mut self for methods (most common case)
-                let self_param = match self_ownership {
-                    Some(OwnershipMode::Borrowed) => "&self",
-                    Some(OwnershipMode::MutBorrowed) | None => "&mut self",
-                    Some(OwnershipMode::Owned) => "self",
-                };
-                params.push(self_param.to_string());
+
+                // Associated function: `fn create() -> Self` has no receiver — do not emit &mut self.
+                if !(self_ownership.is_none() && returns_bare_self) {
+                    let self_param = match self_ownership {
+                        Some(OwnershipMode::Borrowed) => "&self",
+                        Some(OwnershipMode::MutBorrowed) | None => "&mut self",
+                        Some(OwnershipMode::Owned) => "self",
+                    };
+                    params.push(self_param.to_string());
+                }
             }
 
             // Generate parameters

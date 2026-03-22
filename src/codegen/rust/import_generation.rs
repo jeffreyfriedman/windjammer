@@ -9,7 +9,7 @@ use super::CodeGenerator;
 impl CodeGenerator<'_> {
     /// Calculate the import prefix for cross-module imports based on output file nesting
     /// Returns the number of directory levels to go up (for super:: prefixes)
-    fn get_import_prefix_for_nested_output(&self) -> Option<usize> {
+    pub(crate) fn get_import_prefix_for_nested_output(&self) -> Option<usize> {
         if self.current_output_file.as_os_str().is_empty() {
             return None;
         }
@@ -99,6 +99,27 @@ impl CodeGenerator<'_> {
         None
     }
 
+    /// True when the Rust file being generated is a directory module root (`mod.rs`).
+    fn is_output_mod_rs(&self) -> bool {
+        self.current_output_file
+            .file_name()
+            .and_then(|n| n.to_str())
+            == Some("mod.rs")
+    }
+
+    /// True if `first_segment` names a submodule living in the same directory as this `mod.rs`
+    /// (matches sibling `.wj` file, submodule directory, or `name/mod.wj`).
+    fn is_child_module_of_mod_rs_dir(&self, first_segment: &str) -> bool {
+        if !self.is_output_mod_rs() {
+            return false;
+        }
+        let Some(mod_dir) = self.current_output_file.parent() else {
+            return false;
+        };
+        let child = mod_dir.join(first_segment);
+        child.is_dir() || mod_dir.join(format!("{}.wj", first_segment)).exists()
+    }
+
     pub(super) fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
         if path.is_empty() {
             return String::new();
@@ -112,6 +133,30 @@ impl CodeGenerator<'_> {
         if normalized_for_super.starts_with("crate::super::") {
             let path_without_crate = normalized_for_super.strip_prefix("crate::").unwrap();
             return format!("use {};\n", path_without_crate);
+        }
+
+        // mod.rs: `crate::<this_module>::X` means the current directory module, not the crate root.
+        // Emit `self::` so Rust resolves child modules (fixes E0432).
+        if self.is_output_mod_rs() {
+            let norm = full_path.replace('.', "::");
+            if norm.starts_with("crate::") && !norm.starts_with("crate::super::") {
+                if let Some(rest) = norm.strip_prefix("crate::") {
+                    if let Some(mod_dir) = self
+                        .current_output_file
+                        .parent()
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                    {
+                        let first_seg = rest.split("::").next().unwrap_or("");
+                        if first_seg == mod_dir {
+                            if let Some(alias_name) = alias {
+                                return format!("use self::{} as {};\n", rest, alias_name);
+                            }
+                            return format!("use self::{};\n", rest);
+                        }
+                    }
+                }
+            }
         }
 
         // SPECIAL CASE: Handle crate:: imports when in nested module output
@@ -390,10 +435,20 @@ impl CodeGenerator<'_> {
             {
                 // Check if the import starts with our parent directory name
                 if rust_path.starts_with(&format!("{}::", parent_dir)) {
+                    if self.is_output_mod_rs() {
+                        // mod.wj: `pub use animation::Animation` → self::animation::Animation (not super::Animation)
+                        if let Some(alias_name) = alias {
+                            return format!("use self::{} as {};\n", rust_path, alias_name);
+                        }
+                        return format!("use self::{};\n", rust_path);
+                    }
                     // Strip the parent directory name and use super:: instead
                     let path_without_parent = rust_path
                         .strip_prefix(&format!("{}::", parent_dir))
                         .unwrap();
+                    if let Some(alias_name) = alias {
+                        return format!("use super::{} as {};\n", path_without_parent, alias_name);
+                    }
                     return format!("use super::{};\n", path_without_parent);
                 }
             }
@@ -414,9 +469,12 @@ impl CodeGenerator<'_> {
         let first_segment = rust_path.split("::").next().unwrap_or("");
 
         // TDD FIX: Dynamically detect if first_segment is a directory by checking the generated output directory
-        let is_directory_prefix =
-            if let Some(output_dir) = self.current_output_file.parent().and_then(|p| p.parent()) {
-                // Check if a directory exists in the output root for this module name
+        // When generating mod.rs, prefer a local child module (./state_machine) over a same-named top-level
+        // folder under the output root; otherwise we wrongly emit super::state_machine::... (E0432).
+        let is_child_of_mod_rs = self.is_child_module_of_mod_rs_dir(first_segment);
+        let is_directory_prefix = !is_child_of_mod_rs
+            && if let Some(output_dir) = self.current_output_file.parent().and_then(|p| p.parent())
+            {
                 let potential_dir = output_dir.join(first_segment);
                 potential_dir.is_dir()
             } else {
@@ -496,8 +554,12 @@ impl CodeGenerator<'_> {
                 // or use crate::math::Vec2 as V; (in flat output)
                 format!("use {}{} as {};\n", import_prefix, rust_path, alias_name)
             } else if is_actual_module_file {
-                // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
-                format!("use super::{} as {};\n", rust_path, alias_name)
+                if self.is_output_mod_rs() {
+                    format!("use self::{} as {};\n", rust_path, alias_name)
+                } else {
+                    // Keep module path for actual module files: texture_atlas::TextureAtlas as TA -> use super::texture_atlas::TextureAtlas as TA;
+                    format!("use super::{} as {};\n", rust_path, alias_name)
+                }
             } else {
                 format!("use {} as {};\n", rust_path, alias_name)
             }
@@ -521,7 +583,11 @@ impl CodeGenerator<'_> {
                 //   NOT: pub use super::achievement_id::AchievementId;  // ❌ super is PARENT module
                 //
                 // Only use super:: for imports from sibling FILES, not submodules in same file.
-                format!("use {};\n", rust_path)
+                if self.is_output_mod_rs() {
+                    format!("use self::{};\n", rust_path)
+                } else {
+                    format!("use {};\n", rust_path)
+                }
             } else {
                 // Check for crate:: prefix FIRST (before checking if it's a type)
                 // This ensures crate::scene::Vec3 gets rewritten to super::super::scene::Vec3
@@ -551,8 +617,12 @@ impl CodeGenerator<'_> {
                         // - We're in a directory (is_in_subdirectory)
                         // - First segment is a sibling module file (is_sibling_module_file)
                         if is_in_subdirectory && is_sibling_module_file {
-                            // Keep relative - this is re-exporting a local submodule
-                            format!("use {};\n", rust_path)
+                            if self.is_output_mod_rs() {
+                                format!("use self::{};\n", rust_path)
+                            } else {
+                                // Keep relative - this is re-exporting a local submodule
+                                format!("use {};\n", rust_path)
+                            }
                         } else {
                             // Otherwise, add crate:: prefix for absolute import
                             // TDD FIX: For bare module imports (math::Vec3), convert to crate:: prefix

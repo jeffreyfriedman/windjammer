@@ -1,154 +1,329 @@
-// TDD Test: Automatic import generation for cross-module type references
+// TDD: Automatic import generation for cross-module type references (E0425).
 //
-// Problem: Using types from other modules causes E0425 (cannot find type)
-// Example: manager.wj uses Achievement/AchievementId but no imports generated
-// Root cause: Codegen doesn't detect type usage and generate imports
-//
-// Solution: Analyze struct/function signatures, detect external types, generate imports
-//
-// This is a MAJOR architectural feature for ergonomic module system!
+// Phase 1–3: type collection + classification live in `analyzer::type_collector`;
+// `CodeGenerator::format_auto_super_type_imports` emits `use super::Type` for module builds.
 
 use std::fs;
-use std::process::Command;
+use tempfile::tempdir;
+use windjammer::build_project_ext;
+use windjammer::CompilationTarget;
 
 #[test]
-fn test_struct_field_external_type() {
-    // Test: Struct field references type from another module
-    let test_wj = r#"
-// This struct uses DialogueLineId which should be imported
-pub struct DialogueChoice {
-    pub id: u32,
-    pub next_line: DialogueLineId
-}
-"#;
-    
-    let test_file = "/tmp/test_external_type.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-    
-    let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-    
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-    
-    let rs_file = "./build/test_external_type.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
-    println!("Generated Rust:\n{}", rust_code);
-    
-    // For now, document current behavior
-    // Future: Should generate: use super::DialogueLineId; or use crate::DialogueLineId;
-    
-    // This test documents the NEED for auto-imports
-    // When implemented, we'll assert the import IS generated
-    
-    println!("⚠️  Current: No import generated for DialogueLineId");
-    println!("🎯 Future: Should generate 'use super::DialogueLineId;'");
-    
-    // Cleanup
-    let _ = fs::remove_file(test_file);
+fn test_library_build_generates_use_super_for_sibling_struct_type() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("user.wj"),
+        "pub struct User {\n    pub name: String\n}\n",
+    )
+    .expect("write user.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "pub struct UserManager {\n    pub users: Vec<User>\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected injected `use super::*` in generated manager.rs:\n{}",
+        manager_rs
+    );
+    assert!(
+        !manager_rs.contains("use super::User"),
+        "must not emit redundant `use super::User` when `use super::*` is injected:\n{}",
+        manager_rs
+    );
 }
 
 #[test]
-fn test_function_param_external_type() {
-    let test_wj = r#"
+fn test_library_build_generates_multiple_super_uses_for_hashmap_fields() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("achievement_id.wj"),
+        "pub struct AchievementId {\n    pub raw: i32\n}\n",
+    )
+    .expect("write achievement_id.wj");
+    fs::write(
+        src.path().join("achievement.wj"),
+        "pub struct Achievement {\n    pub title: String\n}\n",
+    )
+    .expect("write achievement.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "pub struct AchievementManager {\n    pub achievements: HashMap<AchievementId, Achievement>\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected `use super::*` for sibling types:\n{}",
+        manager_rs
+    );
+    assert!(
+        !manager_rs.contains("use super::AchievementId"),
+        "must not emit broken flat `use super::AchievementId` when glob covers mod.rs re-exports:\n{}",
+        manager_rs
+    );
+}
+
+#[test]
+fn test_library_build_generates_use_super_for_impl_param_type() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("item.wj"),
+        "pub struct Item {\n    pub id: i32\n}\n",
+    )
+    .expect("write item.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        r#"
 pub struct Manager {
     items: Vec<Item>
 }
 
 impl Manager {
-    pub fn add_item(self, item: Item) {
-        self.items.push(item)
-    }
+    pub fn add_item(self, item: Item) { }
 }
-"#;
-    
-    let test_file = "/tmp/test_param_type.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-    
-    let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-    
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-    
-    let rs_file = "./build/test_param_type.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
-    println!("Generated Rust:\n{}", rust_code);
-    
-    println!("⚠️  Current: No import for Item type");
-    println!("🎯 Future: Should generate 'use super::Item;'");
-    
-    // Cleanup
-    let _ = fs::remove_file(test_file);
+"#,
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected `use super::*` for sibling Item type:\n{}",
+        manager_rs
+    );
 }
 
 #[test]
-fn test_detect_external_types() {
-    // This test verifies we can detect which types are external
-    // (not defined in current file, not stdlib)
-    
-    let test_wj = r#"
-pub struct Manager {
-    // External types that need importing:
-    achievements: HashMap<AchievementId, Achievement>,
-    users: Vec<User>,
-    current_quest: Option<Quest>,
-    
-    // Stdlib types (no import needed):
-    count: i32,
-    name: String,
-    active: bool
+fn test_nested_module_directory_preserves_build_and_emits_imports() {
+    let src = tempdir().expect("tempdir");
+    let achievement = src.path().join("achievement");
+    fs::create_dir_all(&achievement).expect("mkdir");
+    fs::write(
+        achievement.join("achievement_id.wj"),
+        "pub struct AchievementId {\n    pub v: i32\n}\n",
+    )
+    .expect("write achievement_id.wj");
+    fs::write(
+        achievement.join("manager.wj"),
+        "pub struct M {\n    pub id: AchievementId\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("achievement/manager.rs"))
+        .expect("read achievement/manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected `use super::*` in nested manager.rs:\n{}",
+        manager_rs
+    );
+    assert!(
+        !manager_rs.contains("use super::AchievementId"),
+        "nested sibling types must not use flat `use super::AchievementId` (E0432):\n{}",
+        manager_rs
+    );
 }
-"#;
-    
-    let test_file = "/tmp/test_detect_types.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-    
-    let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-    
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-    
-    let rs_file = "./build/test_detect_types.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
-    println!("Generated Rust:\n{}", rust_code);
-    
-    // External types that should be imported:
-    // - AchievementId
-    // - Achievement
-    // - User
-    // - Quest
-    
-    // Stdlib types (no import):
-    // - HashMap (use std::collections::HashMap already generated)
-    // - Vec, Option (prelude)
-    // - i32, String, bool (primitives)
-    
-    println!("\n🎯 External types needing import:");
-    println!("   - AchievementId");
-    println!("   - Achievement");
-    println!("   - User");
-    println!("   - Quest");
-    
-    // Cleanup
-    let _ = fs::remove_file(test_file);
+
+/// When the user writes `use super::*`, sibling types are already in scope; auto-imports would
+/// duplicate them (Rust E0252).
+#[test]
+fn test_skip_auto_super_import_when_super_glob_present() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("user.wj"),
+        "pub struct User {\n    pub name: String\n}\n",
+    )
+    .expect("write user.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "use super::*\n\npub struct UserManager {\n    pub user: User\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected parent glob in manager.rs:\n{}",
+        manager_rs
+    );
+    assert!(
+        !manager_rs.contains("use super::User"),
+        "must not emit `use super::User` when `use super::*` is present (E0252):\n{}",
+        manager_rs
+    );
+}
+
+/// Without a user-written `use super::*`, the compiler injects `use super::*` for library modules.
+#[test]
+fn test_generates_auto_super_import_without_super_glob() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("user.wj"),
+        "pub struct User {\n    pub name: String\n}\n",
+    )
+    .expect("write user.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "pub struct UserManager {\n    pub user: User\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected injected `use super::*`:\n{}",
+        manager_rs
+    );
+}
+
+/// Explicit `use crate::...::Type` covers that name; sibling `User` comes from injected `use super::*`.
+#[test]
+fn test_mixed_explicit_crate_import_and_sibling_auto_import() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("math.wj"),
+        "pub struct Vec3 {\n    pub x: f32\n}\n",
+    )
+    .expect("write math.wj");
+    fs::write(
+        src.path().join("user.wj"),
+        "pub struct User {\n    pub name: String\n}\n",
+    )
+    .expect("write user.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "use crate::math::Vec3\n\npub struct Manager {\n    pub position: Vec3,\n    pub user: User\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        manager_rs.contains("use super::*"),
+        "expected `use super::*` for sibling User:\n{}",
+        manager_rs
+    );
+    assert!(
+        !manager_rs.contains("use super::Vec3"),
+        "must not emit `use super::Vec3` when `use crate::...::Vec3` exists:\n{}",
+        manager_rs
+    );
+}
+
+/// When a glob import is present (`::*`), we skip injecting `use super::*` and emit resolved paths.
+#[test]
+fn test_crate_glob_suppresses_super_star_uses_resolved_sibling_path() {
+    let src = tempdir().expect("tempdir");
+    fs::write(
+        src.path().join("user.wj"),
+        "pub struct User {\n    pub name: String\n}\n",
+    )
+    .expect("write user.wj");
+    fs::write(
+        src.path().join("manager.wj"),
+        "use std::fmt::*\n\npub struct UserManager {\n    pub user: User\n}\n",
+    )
+    .expect("write manager.wj");
+
+    let out = tempdir().expect("out");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+
+    let manager_rs = fs::read_to_string(out.path().join("manager.rs")).expect("read manager.rs");
+    assert!(
+        !manager_rs.contains("use super::*"),
+        "must not inject `use super::*` when another glob is present:\n{}",
+        manager_rs
+    );
+    assert!(
+        manager_rs.contains("use super::user::User"),
+        "expected resolved sibling import `use super::user::User`:\n{}",
+        manager_rs
+    );
 }

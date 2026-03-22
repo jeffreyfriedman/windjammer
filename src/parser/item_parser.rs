@@ -366,6 +366,18 @@ impl Parser {
                 None
             };
 
+            // Abstract trait methods: bare `self` as the only parameter means by-value receiver
+            // (`fn consume(self) -> T`). If there are other parameters, keep `Inferred` so the
+            // analyzer defaults to &self for read-only signatures (`fn process(self, data: T)`).
+            let mut parameters = parameters;
+            if body.is_none()
+                && parameters.len() == 1
+                && parameters[0].name == "self"
+                && parameters[0].ownership == OwnershipHint::Inferred
+            {
+                parameters[0].ownership = OwnershipHint::Owned;
+            }
+
             methods.push(TraitMethod {
                 name: method_name,
                 parameters,
