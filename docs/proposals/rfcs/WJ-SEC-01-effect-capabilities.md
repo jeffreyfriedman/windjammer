@@ -2393,7 +2393,7 @@ Comparing outputs:
 
 ---
 
-### Policy as Code Integration (OPA Support)
+### Policy as Code Integration (Multi-Language Support)
 
 #### The Problem: Security Policies Are Manual
 
@@ -2402,7 +2402,19 @@ Comparing outputs:
 - Manual review for compliance
 - Inconsistent enforcement
 
-#### Windjammer Solution: Built-in OPA Integration
+#### Windjammer Solution: Multi-Language Policy Support
+
+**Supported policy languages:**
+- **OPA/Rego**: General-purpose policy engine
+- **CEL (Common Expression Language)**: Google's policy language (Kubernetes, Firebase)
+- **Cedar**: Amazon's policy language (AWS Verified Permissions)
+- **Sigma**: Detection rules for security monitoring (SIEM integration)
+
+**Choose the policy language your team already uses.**
+
+---
+
+#### Option 1: OPA/Rego (General Purpose)
 
 **Define policies in Rego:**
 
@@ -2469,6 +2481,303 @@ Recommendation:
 
 Build blocked by security policy.
 ```
+
+---
+
+#### Option 2: CEL (Common Expression Language)
+
+**Google's lightweight policy language** - Used in Kubernetes, Firebase, Google Cloud.
+
+**Define policies in CEL:**
+
+```yaml
+# security-policy.cel.yaml
+apiVersion: policy.windjammer.org/v1
+kind: SecurityPolicy
+metadata:
+  name: my-app-policy
+spec:
+  rules:
+    # Deny critical vulnerabilities
+    - name: no-critical-vulns
+      expression: |
+        package.vulnerabilities.exists(v, v.severity == "CRITICAL")
+      action: deny
+      message: "Package has critical vulnerability"
+    
+    # Deny GPL licenses
+    - name: no-gpl
+      expression: |
+        package.license == "GPL-3.0" || package.license == "AGPL-3.0"
+      action: deny
+      message: "GPL/AGPL licenses not allowed"
+    
+    # Require SLSA Level 3 for production
+    - name: slsa-level-3-prod
+      expression: |
+        environment == "production" && build.slsa_level < 3
+      action: deny
+      message: "Production builds require SLSA Level 3"
+    
+    # Require package to be from approved registries
+    - name: approved-registries
+      expression: |
+        package.registry in ["registry.windjammer.org", "github.com"]
+      action: allow
+    
+    # Default deny unknown registries
+    - name: unknown-registry
+      expression: |
+        !(package.registry in ["registry.windjammer.org", "github.com"])
+      action: deny
+      message: "Package from unapproved registry"
+```
+
+**Enforcement:**
+
+```bash
+wj build --release --policy security-policy.cel.yaml
+
+Building my-app...
+
+Evaluating CEL policies...
+
+❌ Policy violation: no-critical-vulns
+
+Package: some-lib@1.0.0
+Expression: package.vulnerabilities.exists(v, v.severity == "CRITICAL")
+Result: true (policy denies)
+Message: Package has critical vulnerability
+
+Build blocked by CEL policy.
+```
+
+**Benefits of CEL:**
+- Lightweight, fast evaluation
+- Familiar to Kubernetes users
+- Type-safe expressions
+- No Turing-complete (terminates)
+
+---
+
+#### Option 3: Cedar (Amazon's Policy Language)
+
+**AWS's policy language** - Used in AWS Verified Permissions, Amazon Verified Access.
+
+**Define policies in Cedar:**
+
+```cedar
+// security-policy.cedar
+
+// Deny packages with critical vulnerabilities
+forbid (
+  principal,
+  action == Action::"build",
+  resource
+)
+when {
+  resource.package.vulnerabilities.exists(|v| v.severity == "CRITICAL")
+}
+reason("Package has critical vulnerability");
+
+// Deny GPL licenses
+forbid (
+  principal,
+  action == Action::"build",
+  resource
+)
+when {
+  resource.package.license == "GPL-3.0"
+}
+reason("GPL licenses not allowed by company policy");
+
+// Require SLSA Level 3 for production
+forbid (
+  principal,
+  action == Action::"build",
+  resource
+)
+when {
+  resource.environment == "production" &&
+  resource.build.slsa_level < 3
+}
+reason("Production builds require SLSA Level 3");
+
+// Allow packages from approved registries only
+permit (
+  principal,
+  action == Action::"build",
+  resource
+)
+when {
+  resource.package.registry in ["registry.windjammer.org", "github.com"]
+};
+```
+
+**Enforcement:**
+
+```bash
+wj build --release --policy security-policy.cedar
+
+Building my-app...
+
+Evaluating Cedar policies...
+
+❌ Policy forbids action
+
+Package: some-lib@1.0.0
+Action: build
+Policy: forbid-critical-vulns
+Reason: Package has critical vulnerability
+
+Build blocked by Cedar policy.
+```
+
+**Benefits of Cedar:**
+- Formal verification support
+- Explicit permit/forbid semantics
+- Validated and proven correct
+- Used in AWS production systems
+
+---
+
+#### Option 4: Sigma (Detection Rules)
+
+**SIEM integration** - Define threat detection rules that integrate with security monitoring.
+
+**Define detection rules in Sigma:**
+
+```yaml
+# security-detections.sigma.yaml
+title: Suspicious Package Behavior Detection
+id: wj-sec-001
+status: stable
+description: Detects suspicious package behavior during builds
+references:
+  - https://windjammer.org/docs/security/sigma
+tags:
+  - supply-chain
+  - build-security
+
+detection:
+  # Detect typosquatting attempts
+  selection_typosquat:
+    package.name: 
+      - "reqeust"  # Common typo of "request"
+      - "lodsh"    # Common typo of "lodash"
+      - "expres"   # Common typo of "express"
+    package.downloads: "<100"
+  
+  # Detect new maintainers with suspicious activity
+  selection_maintainer_compromise:
+    package.maintainer.days_active: "<30"
+    package.version_jump: ">1.0"  # Major version jump
+    package.code_size_increase: ">500%"
+  
+  # Detect time bombs
+  selection_time_bomb:
+    package.code_contains:
+      - "Date.now()"
+      - "fs.remove_dir_all"
+  
+  # Detect credential access
+  selection_credential_theft:
+    package.file_access:
+      - "~/.ssh/*"
+      - "~/.aws/*"
+      - "/etc/passwd"
+  
+  condition: 
+    - selection_typosquat
+    - selection_maintainer_compromise  
+    - selection_time_bomb
+    - selection_credential_theft
+
+level: high
+```
+
+**Integration with SIEM:**
+
+```bash
+wj build --release --policy security-detections.sigma.yaml --siem-export
+
+Building my-app...
+
+Running Sigma detection rules...
+
+🚨 DETECTION: Suspicious Package Behavior
+
+Rule: selection_maintainer_compromise
+Package: some-lib@3.0.0
+Indicators:
+  ├─> New maintainer: 15 days active
+  ├─> Version jump: 1.0 → 3.0 (200% increase)
+  ├─> Code size: +600% increase
+  └─> Obfuscation detected
+
+Exporting to SIEM:
+  ✅ Splunk: Event exported (index: windjammer-security)
+  ✅ ELK: Event exported (index: security-alerts)
+  ✅ Chronicle: Event exported
+
+Alert created: SEC-2026-0421
+```
+
+**Benefits of Sigma:**
+- SIEM integration (Splunk, ELK, Chronicle)
+- Detection rules (not just blocking)
+- Security monitoring
+- Industry-standard format
+
+---
+
+#### Multi-Policy Support (Use Multiple Languages)
+
+**Combine policy languages for different needs:**
+
+```toml
+# wj.toml
+[security.policies]
+# OPA for general policies
+opa = ["security-policy.rego"]
+
+# CEL for Kubernetes integration
+cel = ["k8s-policy.cel.yaml"]
+
+# Cedar for AWS integration
+cedar = ["aws-policy.cedar"]
+
+# Sigma for security monitoring
+sigma = ["detections.sigma.yaml"]
+
+# All evaluated, must pass all policies
+require_all = true
+```
+
+**Execution:**
+
+```bash
+wj build --release
+
+Evaluating policies (4 languages)...
+
+✅ OPA (Rego): PASS (3 rules)
+✅ CEL: PASS (5 rules)
+✅ Cedar: PASS (4 rules)
+⚠️  Sigma: 1 detection
+
+Sigma detection (non-blocking):
+  └─> Suspicious package behavior: flagged for review
+  └─> Alert sent to security team
+
+Build complete (policies passed, monitoring alert sent)
+```
+
+**Benefits of multi-policy:**
+- Use team's preferred policy language
+- Integrate with existing tools (Kubernetes, AWS, SIEM)
+- Gradual migration (add new policies without replacing old)
+- Best tool for each use case
 
 ---
 
