@@ -1,47 +1,38 @@
 /// TDD: f32/f64 unification when locals are inferred from float casts (dogfooding: squad_tactics.wj).
 ///
 /// Bug: `let survival_rate = (alive as f32) / (total as f32); survival_rate < 0.3` emitted `0.3_f64`.
-/// Root cause: `infer_type_from_expression` had no `Cast` arm, so `var_types` never stored `survival_rate`
-/// as f32 and float comparison did not constrain the literal.
+/// Root cause: `infer_type_from_expression` had no `Cast` arm, so `var_types` never stored the local as
+/// f32 and float comparison did not constrain the literal.
 ///
-/// Fix: Infer `Type::Custom("f32"|"f64")` from `expr as f32` / `as f64` for variable type tracking.
+/// Fix: Infer `Type::Custom("f32"|"f64")` from `expr as f32` / `as f64` for `let` variable type tracking.
+///
+/// Uses the in-process codegen path (same as f32_f64_codegen_e0308_test) so `cargo test` always matches
+/// the library under test — not a stale `target/release/wj` binary.
 
-use std::path::PathBuf;
-use std::process::Command;
+use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let mut lexer = lexer::Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = parser::Parser::new(tokens);
+    let program = parser.parse().expect("Failed to parse");
 
-    let temp_dir = std::env::temp_dir();
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_unify_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
+    let mut float_inference = type_inference::FloatInference::new();
+    float_inference.infer_program(&program);
 
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&test_file, source).expect("Failed to write test file");
+    if !float_inference.errors.is_empty() {
+        panic!("Float inference errors: {:?}", float_inference.errors);
+    }
 
-    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let mut analyzer = analyzer::Analyzer::new();
+    let (analyzed, _signatures, _trait_methods) = analyzer
+        .analyze_program(&program)
+        .expect("Failed to analyze");
 
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
-
-    rust_code
+    let registry = analyzer::SignatureRegistry::new();
+    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
+    generator.set_float_inference(float_inference);
+    generator.generate_program(&program, &analyzed)
 }
 
 #[test]
