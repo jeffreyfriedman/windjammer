@@ -10,6 +10,7 @@ mod mutation_detection;
 mod optimization_detectors;
 mod passthrough_inference;
 mod self_analysis;
+pub mod type_collector;
 
 // Type alias for complex return type
 type ProgramAnalysisResult<'ast> = (
