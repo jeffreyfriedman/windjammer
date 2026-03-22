@@ -38,10 +38,9 @@ pub trait Counter {
 }
 
 #[test]
-fn test_trait_method_infers_mut_self_by_default() {
-    // THE WINDJAMMER WAY: Trait methods without bodies default to &mut self
-    // This is the most permissive signature (allows all implementations)
-    // Individual implementations can use &self if they don't need mutation
+fn test_trait_method_abstract_with_return_defaults_to_ref_self() {
+    // Abstract methods that return a value are treated as getters: default `&self`.
+    // Void abstract methods default to `&mut self` (see increment/reset tests).
     let source = r#"
 pub trait Readable {
     fn get_value() -> i32
@@ -53,15 +52,14 @@ pub trait Readable {
     
     println!("\n=== Generated Rust ===\n{}\n", output);
     
-    // Trait methods default to &mut self (most permissive)
     assert!(
-        output.contains("fn get_value(&mut self) -> i32"),
-        "Expected 'fn get_value(&mut self) -> i32' (default for traits), got: {}",
+        output.contains("fn get_value(&self) -> i32"),
+        "Expected 'fn get_value(&self) -> i32', got: {}",
         output
     );
     assert!(
-        output.contains("fn is_empty(&mut self) -> bool"),
-        "Expected 'fn is_empty(&mut self) -> bool' (default for traits), got: {}",
+        output.contains("fn is_empty(&self) -> bool"),
+        "Expected 'fn is_empty(&self) -> bool', got: {}",
         output
     );
 }

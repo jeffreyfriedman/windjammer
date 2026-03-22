@@ -23,6 +23,15 @@ This directory contains formal proposals for significant changes to the Windjamm
 ### Language Features
 
 - **[WJ-LANG-01: Shader Language (WJSL)](./WJ-LANG-01-shader-language.md)** - Type-safe shader language that compiles to WGSL
+- **[WJ-CONC-01: Async/Await & Concurrency](./WJ-CONC-01-async-concurrency.md)** - Caller-controlled execution (v2.0): eliminates function coloring, enables single-version libraries
+
+### Package Management
+
+- **[WJ-PKG-01: Package Management & Registry](./WJ-PKG-01-package-management.md)** - Package manifest, dependency resolution, registry protocol, security/economics integration
+
+### Performance & Economics
+
+- **[WJ-PERF-01: Economic Efficiency Framework](./WJ-PERF-01-economic-efficiency.md)** - Optimization strategy for AI-agent-scale deployments (compilation speed, runtime performance, memory efficiency, binary size, energy efficiency)
 
 ### Implementation
 
@@ -58,6 +67,9 @@ This directory contains formal proposals for significant changes to the Windjamm
 | WJ-SYN-01 | 🟡 Draft | v0.60+ | Low |
 | WJ-SYN-02 | ⚫ Implemented | v0.46.0 | N/A |
 | WJ-LANG-01 | 🟡 Draft | v0.48+ | Medium |
+| WJ-CONC-01 | 🟡 Draft | v0.50 | **Critical** |
+| WJ-PKG-01 | 🟡 Draft | v0.50 | High |
+| WJ-PERF-01 | 🟡 Draft | v0.46+ | High |
 | WJ-IMPL-01 | 🔵 Review | v0.47+ | Medium |
 | WJ-IMPL-02 | 🟡 Draft | v0.48+ | Low |
 
@@ -76,6 +88,10 @@ To propose a new RFC:
 - **STD** - Standard library additions
 - **TOOL** - Tooling improvements
 - **LANG** - Core language features
+- **CONC** - Concurrency and async
+- **PKG** - Package management
+- **PERF** - Performance and economics
+- **IMPL** - Implementation/architecture
 
 ## Philosophy Alignment
 

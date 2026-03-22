@@ -1243,15 +1243,19 @@ impl<'ast> CodeGenerator<'ast> {
         let needs_self_from_trait = self.in_trait_impl
             && !has_explicit_self
             && self.current_trait_impl_name.as_ref().is_some_and(|trait_name| {
-                self.analyzed_trait_methods
+                let methods = self
+                    .analyzed_trait_methods
                     .get(trait_name)
                     .or_else(|| {
                         trait_name
                             .rfind("::")
                             .map(|i| &trait_name[i + 2..])
                             .and_then(|key| self.analyzed_trait_methods.get(key))
-                    })
-                    .is_some_and(|methods| methods.contains_key(&func.name))
+                    });
+                methods.is_some_and(|m| {
+                    m.get(&func.name)
+                        .is_some_and(|trait_fn| trait_fn.inferred_ownership.contains_key("self"))
+                })
             });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
