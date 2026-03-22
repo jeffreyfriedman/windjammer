@@ -123,7 +123,7 @@ npm install colors
 
 **Windjammer Approach:** Make security automatic and invisible for 90% of use cases.
 
-### Zero-Config for New Projects
+### Zero-Config for New Projects (First Experience is Critical)
 
 ```bash
 # Create a new CLI tool
@@ -132,10 +132,23 @@ wj new my-cli
 Creating CLI tool...
 ✅ Project created
 ✅ Security auto-configured for CLI tools
+
+🛡️  Security Summary (what we did for you):
+  ✅ Protected against 15 common attack patterns
+     └─> Typosquatting, dependency confusion, malicious code
+  ✅ Auto-approved 8 safe dependency categories
+     └─> Parsers, CLI libs, common utilities
+  ✅ Enabled automatic vulnerability scanning
+     └─> Daily checks against 5 security databases
+  ✅ Configured SBOM generation (CycloneDX, SPDX)
+  ✅ Enabled Sigstore signing for releases
+  
+This all happens automatically (zero config needed).
+Learn more: wj security explain
+
 ✅ Ready to code!
 
-# That's it! No security configuration needed.
-# Windjammer detected project type and applied appropriate defaults.
+# That's it! Security configured AND user sees the value.
 ```
 
 **What happened behind the scenes:**
@@ -1735,6 +1748,907 @@ impl VirtualNetwork {
 - Reproducible (no network flakes)
 - CI-friendly (no real filesystem/network needed)
 - Deterministic (same inputs = same outputs)
+
+---
+
+## Emergency Override (Safety Valve for Critical Incidents)
+
+### The Problem: Production Down, Can't Wait for Security Review
+
+**Scenario:**
+```
+03:00 AM: Production outage (database connection failing)
+03:05 AM: Fix identified (upgrade db driver)
+03:10 AM: Security blocks build (new db driver needs review)
+03:15 AM: Developer: "HOW DO I DEPLOY?! PRODUCTION IS DOWN!"
+```
+
+**Without escape hatch:** Developer disables security permanently.
+
+### Solution: Audited Emergency Override
+
+**Design: Emergency mode with full audit trail**
+
+```bash
+wj build --emergency-override \
+  --incident "INC-2026-0421" \
+  --approved-by "alice@company.com" \
+  --reason "Production database outage, critical fix"
+
+⚠️  EMERGENCY OVERRIDE ACTIVATED ⚠️
+
+This bypasses ALL security checks.
+USE ONLY FOR CRITICAL PRODUCTION INCIDENTS.
+
+Incident ID: INC-2026-0421
+Approved by: alice@company.com
+Reason: Production database outage, critical fix
+Timestamp: 2026-03-21T03:15:00Z
+
+Security checks BYPASSED:
+  ⚠️  Capability verification: SKIPPED
+  ⚠️  Vulnerability scanning: SKIPPED
+  ⚠️  Policy enforcement: SKIPPED
+
+✅ Build complete in 2.1s (emergency mode)
+
+📋 POST-INCIDENT ACTIONS REQUIRED:
+
+  1. Security audit (within 24 hours):
+     wj security audit --post-incident INC-2026-0421
+  
+  2. Fix violations (within 72 hours):
+     wj security fix --incident INC-2026-0421
+  
+  3. Update incident report:
+     Document security bypass in INC-2026-0421
+  
+  4. Review with security team:
+     Email: security@company.com
+     Attach: emergency-override-INC-2026-0421.log
+
+This override is LOGGED and AUDITABLE.
+Abuse will be flagged in security reviews.
+
+Deploy: ./target/release/my-app
+```
+
+**Audit trail (automatic):**
+
+```toml
+# .wj-emergency-overrides.log (git-tracked)
+[[override]]
+timestamp = "2026-03-21T03:15:00Z"
+incident = "INC-2026-0421"
+approved_by = "alice@company.com"
+reason = "Production database outage, critical fix"
+bypassed_checks = ["capabilities", "vulnerabilities", "policies"]
+post_incident_completed = false
+resolution_deadline = "2026-03-24T03:15:00Z"
+
+# Security team reviews monthly
+# Abuse patterns flagged automatically
+```
+
+**Follow-up enforcement:**
+
+```bash
+# 24 hours later
+wj build
+
+⚠️  Post-incident action overdue
+
+Emergency override: INC-2026-0421 (24 hours ago)
+Required: Security audit (OVERDUE)
+
+Run now: wj security audit --post-incident INC-2026-0421
+
+# If not resolved within 72 hours
+wj build
+
+❌ Build blocked: Emergency override not resolved
+
+Incident: INC-2026-0421 (73 hours ago)
+Deadline: MISSED (72 hours)
+
+Required actions:
+  1. Complete security audit
+  2. Fix violations
+  3. Document in incident report
+
+Override again? (requires VP approval):
+  wj build --emergency-override --incident INC-2026-0421-extended
+```
+
+**Benefits:**
+- Safety valve (prevents permanent disable)
+- Full audit trail (compliance)
+- Time-limited (forces resolution)
+- Escalation (VP approval for repeated use)
+- Team accountability
+
+---
+
+## Copy-Pasteable Fixes (Every Error Is Actionable)
+
+### The Problem: Error Messages Without Solutions Are Useless
+
+**Bad error:**
+```
+❌ Capability violation
+Package: http-client
+Required: net_egress
+```
+
+**User: "OK... NOW WHAT?!"**
+
+### Solution: Every Error Has Copy-Paste Fix
+
+**Good error (copy-paste ready):**
+
+```
+❌ Capability violation
+
+Package: http-client@2.0.0
+Required: net_egress (network access)
+Location: src/client.rs:89
+
+Why this failed:
+  http-client tried to make a network request, but your
+  application hasn't approved network access for this package.
+
+How to fix (choose one):
+
+✅ OPTION 1: Approve network access (RECOMMENDED)
+   Copy-paste this command:
+   
+   wj allow http-client net_egress --audit "HTTP client for API calls"
+   
+   Then run: wj build
+   Success rate: 94% ✅ | Time: ~30 seconds
+
+✅ OPTION 2: Approve with domain restriction (MORE SECURE)
+   Copy-paste this command:
+   
+   wj allow http-client net_egress:api.example.com --audit "API client"
+   
+   Then run: wj build
+   Success rate: 89% ✅ | Time: ~45 seconds
+
+⚠️  OPTION 3: Use different package
+   Copy-paste this command:
+   
+   wj search http-client:alternatives --secure
+   
+   Then: wj remove http-client && wj add <alternative>
+   Success rate: 76% ⚠️ | Time: ~10 minutes
+
+❌ OPTION 4: Disable security (NOT RECOMMENDED)
+   This removes ALL security protections.
+   Only use for rapid prototyping.
+   
+   wj build --no-security
+   
+   Warning: Your application will be vulnerable to supply chain attacks.
+
+Quick fix (most common):
+  wj allow http-client net_egress --audit "HTTP client for API calls" && wj build
+
+Need help choosing? wj copilot "http-client capability error"
+```
+
+**Key elements:**
+- ✅ Multiple options (not one-size-fits-all)
+- ✅ Copy-pasteable commands (no typing errors)
+- ✅ Success rate (set expectations)
+- ✅ Time estimate (plan accordingly)
+- ✅ Security implications (informed choice)
+- ✅ Interactive help (copilot)
+
+---
+
+## Pre-Commit Hooks (Catch Issues Early)
+
+### The Problem: Security Failures Surprise Developers in CI
+
+**Bad workflow:**
+```
+Local:  wj build ✅
+Commit: git commit ✅
+Push:   git push ✅
+CI:     ❌ Security policy violation!
+        (20 minutes wasted)
+```
+
+### Solution: Pre-Commit Security Checks
+
+**Auto-installation (opt-in, one-time):**
+
+```bash
+wj build
+
+✅ Build complete
+
+💡 Tip: Install git hooks to catch security issues before CI?
+
+Pre-commit hooks will:
+  ✅ Run security audit before commit
+  ✅ Check policy violations before push
+  ✅ Prevent CI failures (catch locally)
+  
+This takes 2-5 seconds per commit.
+
+Install? (Y/n) y
+
+Installing git hooks...
+  ✅ .git/hooks/pre-commit (security audit)
+  ✅ .git/hooks/pre-push (full policy check)
+
+Done! Security checks now run before CI.
+```
+
+**Pre-commit behavior:**
+
+```bash
+git commit -m "Add feature"
+
+Running pre-commit security checks...
+
+🔍 Checking new dependencies... ✅ (0.3s)
+🔍 Scanning for vulnerabilities... ✅ (0.8s)
+🔍 Validating capabilities... ✅ (0.2s)
+
+✅ Security checks passed (1.3s)
+
+[feature-branch abc123] Add feature
+```
+
+**When checks fail:**
+
+```bash
+git commit -m "Add suspicious lib"
+
+Running pre-commit security checks...
+
+❌ Security check failed
+
+Package: suspicious-lib@1.0.0
+Issue: Unusual capabilities (fs_read:~/.ssh/*)
+Risk: HIGH (credential theft pattern)
+
+This commit adds a suspicious dependency.
+
+Options:
+  1. Remove package: wj remove suspicious-lib
+  2. Review first: wj show suspicious-lib@1.0.0
+  3. Override (if you're sure): git commit --no-verify
+
+Recommendation: Review before committing
+
+Commit aborted (security check failed)
+```
+
+**Skip hook (when needed):**
+
+```bash
+# Emergency: Skip hook (with audit trail)
+git commit --no-verify -m "Emergency fix"
+
+⚠️  Security hook bypassed (--no-verify)
+
+This commit will NOT be security-checked.
+Post-commit review required: wj security audit
+
+Bypassed by: alice@company.com
+Timestamp: 2026-03-21T16:30:00Z
+Logged to: .git/security-bypass.log
+```
+
+**Benefits:**
+- Catch issues early (before CI)
+- Fast feedback (1-3 seconds)
+- Prevent wasted time (20 min CI waits)
+- Optional (not forced)
+- Can bypass (--no-verify)
+
+---
+
+## Per-Developer Security Profiles
+
+### The Problem: One Size Doesn't Fit All
+
+**Team dynamics:**
+- **Alice** (Security Engineer): Wants maximum security, every prompt
+- **Bob** (Senior Dev): Wants fast iteration, minimal prompts
+- **Charlie** (Junior Dev): Needs guidance, educational prompts
+
+**Current:** Everyone gets same experience → Someone is unhappy.
+
+### Solution: Per-Developer Profiles (Same Team Security)
+
+**Team-wide configuration:**
+
+```toml
+# .wj-profiles.toml (git-tracked)
+[profiles.paranoid]
+name = "Paranoid (Maximum Security)"
+description = "Review everything, trust nothing"
+auto_approve = []
+prompt_for = ["*"]
+educational_mode = true
+show_details = "always"
+
+[profiles.balanced]
+name = "Balanced (Default)"
+description = "Auto-approve common, review unusual"
+auto_approve = ["parsers", "http-clients", "loggers"]
+prompt_for = ["unusual", "dangerous"]
+educational_mode = false
+show_details = "on-error"
+
+[profiles.fast]
+name = "Fast Iteration"
+description = "Auto-approve most, review dangerous only"
+auto_approve = ["*"]
+prompt_for = ["dangerous", "credentials"]
+educational_mode = false
+show_details = "on-error"
+
+[team]
+default_profile = "balanced"
+
+# Per-developer overrides
+[developers]
+alice = "paranoid"    # Security engineer
+bob = "fast"          # Senior dev, fast iteration
+charlie = "balanced"  # Junior dev, default
+```
+
+**Alice's experience (paranoid):**
+
+```bash
+wj add serde
+
+Security review: serde@1.0.0
+
+Trust score: 9.8/10
+Capabilities: logic_only
+Risk: ✅ LOW
+
+Why it's safe:
+  ✅ 50M downloads (extremely popular)
+  ✅ Active maintenance (updated 3 days ago)
+  ✅ No vulnerabilities
+  ✅ Pure computation (no I/O)
+
+Approve? (y/n) y
+✅ Added
+```
+
+**Bob's experience (fast):**
+
+```bash
+wj add serde
+✅ Added (auto-approved: common parser)
+```
+
+**Same team security (same lock file), different developer UX.**
+
+**Charlie's experience (balanced + educational):**
+
+```bash
+wj add reqwest
+
+Security review: reqwest@1.0.0
+
+What is reqwest?
+  HTTP client library for making web requests
+
+Why does it need network access?
+  HTTP requests require net_egress capability
+
+Is this safe?
+  ✅ Yes, reqwest is well-established (12M downloads)
+  ✅ Active maintenance
+  ✅ No known vulnerabilities
+
+Allow network access? (Y/n) y
+✅ Added
+
+💡 Tip: HTTP clients need network access. Future HTTP clients
+   will be auto-approved. Disable: wj config set auto-approve-http false
+```
+
+**Profile selection:**
+
+```bash
+wj profile set fast
+
+Switching to profile: fast
+
+Fast iteration mode:
+  ✅ Auto-approve: Most packages
+  ✅ Prompt only for: Dangerous capabilities
+  ✅ Details: On error only
+
+Your local preference (doesn't affect team security)
+Change anytime: wj profile set <profile>
+
+Profiles available:
+  - paranoid: Maximum security (review everything)
+  - balanced: Default (auto-approve common)
+  - fast: Fast iteration (auto-approve most)
+```
+
+---
+
+## Global Approval Cache (Approve Once, Use Everywhere)
+
+### The Problem: Re-Approving Same Packages Across Projects
+
+**Bad UX:**
+```
+Project A: wj add reqwest
+⚠️  Allow network? (y/n) y
+
+Project B: wj add reqwest
+⚠️  Allow network? (y/n) y  ← WHY AGAIN?!
+
+Project C: wj add reqwest
+⚠️  Allow network? (y/n) y  ← SERIOUSLY?!
+```
+
+### Solution: Global Approval Cache
+
+**Design: User-wide approval cache**
+
+```bash
+# First time (any project)
+wj add reqwest
+
+⚠️  Allow network access? (y/n) y
+
+✅ Added
+✅ Saved to global cache (~/.wj-global-approvals.toml)
+
+Apply to all projects? (Y/n) y
+  ✅ This decision applies to all your projects
+
+# Second project (automatic)
+wj add reqwest
+✅ Added (using global approval)
+
+# Third project (automatic)
+wj add reqwest
+✅ Added (using global approval)
+```
+
+**Global approval file:**
+
+```toml
+# ~/.wj-global-approvals.toml (per-user)
+[approvals.reqwest]
+approved_on = "2026-03-21T16:00:00Z"
+approved_by = "alice@company.com"
+reason = "Standard HTTP client"
+applies_to = "all-projects"  # or "current-org" or "specific-project"
+capabilities = ["net_egress"]
+trust_score = 9.7
+
+[approvals.tokio]
+approved_on = "2026-03-21T15:30:00Z"
+applies_to = "all-projects"
+capabilities = ["logic_only", "async"]
+```
+
+**Per-project override:**
+
+```bash
+# For sensitive project, ignore global approvals
+wj config set security.use_global_approvals false
+
+✅ This project will ignore global approvals
+✅ All packages require explicit approval
+✅ Maximum security mode
+```
+
+**Organizational sync:**
+
+```bash
+# Share approvals with team
+wj approvals export > team-approvals.toml
+
+# Team members import
+wj approvals import team-approvals.toml
+
+✅ Imported 47 team approvals
+✅ These packages won't prompt anymore
+
+Benefit: New team members start with team's accumulated knowledge
+```
+
+---
+
+## Team Security Config Sync (Configure Once, Share)
+
+### The Problem: Every Developer Configures Security Separately
+
+**Without sync:**
+- Alice: 2 hours configuring security
+- Bob: 2 hours configuring security (duplicates Alice's work)
+- Charlie: 2 hours configuring security (duplicates again)
+- Total: 6 hours wasted
+
+### Solution: Git-Tracked Security Config
+
+**Design: Shared security configuration**
+
+```toml
+# .wj-security-config.toml (git-tracked, team-shared)
+version = "1.0"
+last_updated = "2026-03-21"
+configured_by = "alice@company.com"
+
+[auto_approvals]
+parsers = true
+http_clients = true
+database_drivers = true
+cli_tools = true
+
+[learned_patterns]
+# Team has approved these patterns
+http_response_caching = "always-allow"
+logging_to_sentry = "always-allow"
+config_file_reading = "always-allow"
+
+[organizational]
+# Team's organizational policies
+required_trust_score = 7.0
+max_dependency_age_days = 730
+vulnerability_tolerance = "medium"
+
+[preferences]
+# How team wants to be prompted
+bundled_prompts = true
+auto_approve_updates = "same-capabilities-only"
+demo_mode_available = true
+```
+
+**Alice sets up (first time):**
+
+```bash
+wj security configure --interactive
+
+Configuring security for web API project...
+
+What patterns should auto-approve?
+  [x] Parsers (JSON, YAML, TOML)
+  [x] HTTP clients
+  [x] Database drivers
+  [ ] Process spawning
+  [ ] Filesystem access
+
+Trust score threshold? (1-10) 7
+
+Save for team? (Y/n) y
+✅ Saved to .wj-security-config.toml
+
+Commit this file to share with team.
+```
+
+**Bob clones repo (zero config):**
+
+```bash
+wj build
+
+✅ Using team security config
+✅ Build complete (zero prompts)
+
+# Bob gets Alice's configuration automatically
+```
+
+**Charlie joins team (inherits config):**
+
+```bash
+wj add reqwest
+
+✅ Added (auto-approved: matches team pattern)
+
+# Zero setup for Charlie
+```
+
+**Benefits:**
+- Configure once (not per-developer)
+- Team consistency
+- New members: zero config
+- Accumulated knowledge shared
+
+---
+
+## Demo Mode (Silent During Presentations)
+
+### The Problem: Security Errors During Live Demos
+
+**Nightmare scenario:**
+```
+You're demoing to investors...
+$ wj add cool-feature
+
+⚠️  SECURITY ALERT: Package requires review!
+Trust score: 4.2/10 (SUSPICIOUS)
+...
+
+(Awkward silence. Demo derailed. Funding lost.)
+```
+
+### Solution: Demo Mode (Silent, Review After)
+
+**Enable demo mode:**
+
+```bash
+# Before demo/presentation
+wj demo-mode enable --duration 2h
+
+🎬 Demo mode enabled (2 hours)
+
+During demo mode:
+  ✅ Security runs silently in background
+  ✅ All prompts suppressed
+  ✅ Decisions logged for later review
+  ✅ No interruptions
+
+After demo: wj demo-mode review
+
+Demo mode will auto-disable in 2 hours.
+Disable early: wj demo-mode disable
+```
+
+**During demo (silent):**
+
+```bash
+wj build
+✅ Build complete (1.2s)
+
+wj add new-package
+✅ Added
+
+wj add suspicious-lib
+✅ Added
+
+# No prompts! Everything silent.
+```
+
+**After demo:**
+
+```bash
+wj demo-mode review
+
+Demo mode review (enabled 1h32m ago)
+
+Decisions made during demo (auto-approved):
+
+✅ new-package@1.0.0
+   └─> Trust score: 8.2/10 (SAFE)
+   └─> Action: Keep ✅
+
+⚠️  suspicious-lib@0.1.0
+   └─> Trust score: 3.1/10 (SUSPICIOUS)
+   └─> Action: REVIEW REQUIRED
+
+1 package needs review:
+
+suspicious-lib@0.1.0
+  Why suspicious:
+    - Very new (published 5 days ago)
+    - Low downloads (7 total)
+    - Unusual capabilities (fs_read:~/.config/*)
+  
+  Options:
+    1. Keep anyway: wj approve suspicious-lib
+    2. Remove: wj remove suspicious-lib
+    3. Review code: wj show suspicious-lib@0.1.0
+
+Choice: 2
+
+✅ Removed suspicious-lib
+✅ Demo mode review complete
+
+Next time: Enable demo mode before presentations
+  wj demo-mode enable --duration <time>
+```
+
+**Benefits:**
+- Professional demos (no interruptions)
+- Security still runs (silently)
+- Review after (catch issues)
+- Time-limited (auto-disables)
+
+---
+
+## Bulk Operations (Handle Large Changes)
+
+### The Problem: Large Refactors = 50+ Approvals
+
+**Scenario: Microservices refactor**
+```
+Splitting monolith into 15 microservices
+Each needs: HTTP client, database, logger, metrics
+Total: 15 × 4 = 60 new packages
+
+Current: 60 individual approvals (30 minutes)
+```
+
+### Solution: Bulk Approval Workflows
+
+**Pattern-based bulk approval:**
+
+```bash
+wj add-bulk microservices-packages.txt
+
+Reading package list (60 packages)...
+
+Categorizing packages...
+
+📦 HTTP clients (15 packages)
+  ├─> reqwest, ureq, hyper, ...
+  └─> All need: net_egress
+
+📦 Database drivers (15 packages)
+  ├─> postgres, mysql, mongodb, ...
+  └─> All need: net_egress:database
+
+📦 Loggers (15 packages)
+  ├─> tracing, env_logger, ...
+  └─> All need: fs_write:./logs/*
+
+📦 Metrics (15 packages)
+  ├─> prometheus, statsd, ...
+  └─> All need: net_egress:metrics
+
+Bulk approve by category? (Y/n) y
+
+Approve all HTTP clients? (Y/n) y
+  ✅ Approved 15 HTTP clients
+
+Approve all database drivers? (Y/n) y
+  ✅ Approved 15 database drivers
+
+Approve all loggers? (Y/n) y
+  ✅ Approved 15 loggers
+
+Approve all metrics? (Y/n) y
+  ✅ Approved 15 metrics
+
+✅ Added 60 packages (4 decisions instead of 60)
+
+Time saved: 26 minutes
+```
+
+**Refactor-safe approvals:**
+
+```bash
+# During refactor, trust your judgment
+wj set-approval-mode refactor --duration 1h
+
+Refactor mode enabled (1 hour)
+
+During refactor:
+  ✅ Auto-approve all common patterns
+  ✅ Only block clearly dangerous packages
+  ✅ All decisions logged
+
+After refactor: wj review-refactor-approvals
+
+This is a "trust but verify" mode.
+
+# After refactor
+wj review-refactor-approvals
+
+Refactor mode decisions (last hour): 23 packages
+
+✅ Safe: 20 packages (auto-approved correctly)
+⚠️  Review: 3 packages (unusual patterns)
+
+Review 3 packages? (Y/n) y
+```
+
+---
+
+## PR Security Diff (Automated PR Comments)
+
+### The Problem: PR Reviewers Don't See Security Impact
+
+**Scenario:**
+```
+PR adds 5 dependencies
+Reviewer: "LGTM" (didn't check security)
+Merge
+Production incident (malicious dependency)
+```
+
+### Solution: Automatic PR Security Comments
+
+**GitHub Actions integration:**
+
+```yaml
+# .github/workflows/security-pr.yml
+name: Security Review
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: windjammer-lang/setup-wj@v1
+      - name: Security diff
+        run: wj security diff ${{ github.base_ref }}..${{ github.head_ref }} > security-diff.md
+      - name: Comment on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: security-diff.md
+```
+
+**Auto-generated PR comment:**
+
+```markdown
+## 🔐 Security Impact Analysis
+
+### Added Dependencies (3)
+
+✅ **reqwest@1.0.0** (HTTP client)
+- Trust score: 9.7/10 ✅ HIGH
+- Capabilities: net_egress
+- Risk: ✅ LOW (well-established)
+- Downloads: 12M/month
+
+✅ **serde_json@1.0.0** (JSON parser)
+- Trust score: 9.8/10 ✅ HIGH
+- Capabilities: logic_only
+- Risk: ✅ LOW (pure computation)
+- Downloads: 50M/month
+
+⚠️ **new-parser@0.1.0** (New package)
+- Trust score: 4.2/10 🔴 LOW
+- Capabilities: fs_read, net_egress (UNUSUAL FOR PARSER)
+- Risk: 🔴 HIGH (new package + suspicious capabilities)
+- Downloads: 8 total (just published)
+
+**⚠️ REVIEW REQUIRED: new-parser**
+
+Why it's flagged:
+  - Parsers typically use logic_only (no I/O)
+  - This parser reads files AND makes network calls
+  - Package is brand new (3 days old)
+  - Very low adoption (8 downloads)
+
+Recommendation: Review code before merging
+  → wj show new-parser@0.1.0
+
+### Capability Changes
+
+No changes to approved capabilities.
+
+### Overall Risk: ⚠️ MEDIUM
+
+2/3 packages are safe, 1 requires review.
+
+**Checklist for reviewers:**
+- [ ] Reviewed new-parser source code
+- [ ] Verified new-parser is legitimate
+- [ ] Approved by security team (if required)
+
+---
+Generated by [windjammer-security-action](https://github.com/windjammer-lang/security-action)
+```
+
+**Benefits:**
+- Reviewers see security impact
+- Automated (no manual work)
+- Blocks merge if critical
+- Educational (team learns)
 
 ---
 
