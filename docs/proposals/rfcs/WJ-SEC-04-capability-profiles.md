@@ -4168,6 +4168,548 @@ Trust Score: 7.8/10 ✅
 
 ---
 
+## Integrated Vulnerability Scanning (Trivy, Grype, Snyk)
+
+### The Problem: Vulnerability Scanning Is Manual
+
+**Current workflow:**
+```bash
+# Manual scanning (developers skip)
+trivy fs .
+grype dir:.
+snyk test
+```
+
+**Problems:**
+- Separate tool, extra command
+- Developers forget to run it
+- No enforcement (warnings ignored)
+
+### Windjammer Solution: Automatic Vulnerability Scanning
+
+**Zero-ceremony vulnerability checking:**
+
+```bash
+wj add some-package
+
+Adding some-package@1.0.0...
+
+🔍 Security scan (automatic)...
+  ├─> Trivy: Checking vulnerabilities...
+  ├─> Grype: Checking CVEs...
+  └─> Windjammer Security: Checking capability profiles...
+
+⚠️  Vulnerability found
+
+Package: some-package@1.0.0
+CVE: CVE-2024-1234 (HIGH)
+Description: Buffer overflow in parse_json()
+Fixed in: 1.0.1
+
+Action required:
+  1. Upgrade: wj add some-package@1.0.1
+  2. Review: wj show CVE-2024-1234
+  3. Override (not recommended): wj add some-package@1.0.0 --ignore-vuln CVE-2024-1234
+
+Build blocked (HIGH severity vulnerability)
+```
+
+**Configuration:**
+
+```toml
+# wj.toml
+[security.vulnerability_scanning]
+# Enable automatic scanning (default: true)
+enabled = true
+
+# Scanners to use (default: all available)
+scanners = ["trivy", "grype", "windjammer"]
+
+# Severity threshold (default: "medium")
+# Block builds for vulnerabilities at or above this level
+block_threshold = "medium"  # low, medium, high, critical
+
+# Allow specific CVEs (with justification)
+allowed_cves = [
+    { id = "CVE-2024-1234", reason = "False positive for our use case", expires = "2026-06-01" }
+]
+```
+
+**Automatic daily scans:**
+
+```bash
+# Run security audit (checks all dependencies)
+wj security audit
+
+Security audit: my-app
+
+Scanning dependencies: 23
+  ├─> Trivy: 23/23 ✅
+  ├─> Grype: 23/23 ✅
+  └─> Windjammer: 23/23 ✅
+
+Vulnerabilities found: 2
+
+🔴 CRITICAL (1):
+  some-package@1.0.0 (CVE-2024-9999)
+  └─> Remote code execution
+  └─> Fix: Upgrade to 1.0.2
+  
+🟡 MEDIUM (1):
+  other-lib@2.0.0 (CVE-2024-8888)
+  └─> Denial of service
+  └─> Fix: Upgrade to 2.0.1
+
+Action: wj update --fix-vulns
+```
+
+**CI Integration:**
+
+```yaml
+# .github/workflows/security.yml
+name: Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: windjammer-lang/setup-wj@v1
+      - run: wj security audit --ci
+        # Fails if vulnerabilities found
+```
+
+---
+
+## License Compliance Automation
+
+### The Problem: License Compliance Is Manual
+
+**Questions legal teams ask:**
+- What licenses are in our dependencies?
+- Are there GPL licenses (copyleft)?
+- Do we have attribution files?
+
+**Current state:** Manual review, spreadsheets.
+
+### Windjammer Solution: Automatic License Tracking
+
+**Zero-ceremony license compliance:**
+
+```bash
+wj build --release
+
+Building my-app...
+
+📜 License compliance check...
+
+Licenses found: 3 types
+  ✅ MIT: 15 packages (65%)
+  ✅ Apache-2.0: 8 packages (35%)
+  ⚠️  GPL-3.0: 1 package (4%)
+
+⚠️  License policy violation
+
+Package: some-gpl-lib@1.0.0
+License: GPL-3.0 (copyleft)
+Policy: GPL licenses require legal review
+
+Options:
+  1. Find alternative: wj search some-gpl-lib:alternatives --exclude-license GPL
+  2. Request approval: wj license request some-gpl-lib@1.0.0 --reason "..."
+  3. Update policy: Edit wj.toml [security.licenses]
+
+Build blocked (license policy violation)
+```
+
+**License policy configuration:**
+
+```toml
+# wj.toml
+[security.licenses]
+# Allowed licenses (default: permissive licenses)
+allowed = ["MIT", "Apache-2.0", "BSD-3-Clause", "ISC"]
+
+# Licenses requiring review
+requires_review = ["GPL-3.0", "AGPL-3.0", "LGPL-3.0"]
+
+# Forbidden licenses
+forbidden = ["SSPL", "Proprietary"]
+
+# Generate attribution file (default: true)
+generate_attribution = true
+# Output: target/release/ATTRIBUTION.txt
+```
+
+**Attribution file (auto-generated):**
+
+```text
+# ATTRIBUTION
+
+This software includes the following third-party packages:
+
+## serde (MIT)
+Copyright (c) 2014 The Rust Project Developers
+https://github.com/serde-rs/serde
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
+
+## tokio (MIT)
+Copyright (c) 2020 Tokio Contributors
+https://github.com/tokio-rs/tokio
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
+
+... (all dependencies listed)
+```
+
+**License audit report:**
+
+```bash
+wj licenses report
+
+License Compliance Report
+
+Total packages: 23
+
+License breakdown:
+  MIT: 15 (65.2%)
+  Apache-2.0: 8 (34.8%)
+
+Compliance status: ✅ PASS
+  ├─> All licenses approved
+  ├─> Attribution file generated
+  └─> No copyleft licenses
+
+Export options:
+  JSON: wj licenses report --format json > licenses.json
+  CSV: wj licenses report --format csv > licenses.csv
+  SPDX: wj licenses report --format spdx > licenses.spdx
+```
+
+---
+
+## Dependency Graph Visualization
+
+### The Problem: Can't See Dependency Relationships
+
+**Questions:**
+- Why is package X included?
+- What depends on vulnerable package Y?
+- Can I remove unused dependencies?
+
+### Windjammer Solution: Interactive Dependency Graph
+
+**Visualize dependencies:**
+
+```bash
+wj deps graph
+
+Generating dependency graph...
+
+my-app@1.0.0
+├─> serde@1.0.0
+│   ├─> serde_derive@1.0.0
+│   └─> serde_json@1.0.0
+├─> tokio@1.0.0
+│   ├─> tokio-macros@1.0.0
+│   ├─> mio@0.8.0
+│   └─> socket2@0.5.0
+└─> clap@4.0.0
+    ├─> clap_derive@4.0.0
+    └─> clap_lex@0.3.0
+
+Direct dependencies: 3
+Transitive dependencies: 8
+Total: 11
+
+Export: wj deps graph --format svg > deps.svg
+Interactive: wj deps graph --web (opens browser)
+```
+
+**Why is package included:**
+
+```bash
+wj deps why some-package
+
+Why is some-package@1.0.0 included?
+
+my-app@1.0.0
+└─> tokio@1.0.0
+    └─> mio@0.8.0
+        └─> some-package@1.0.0
+
+Reason: Transitive dependency (3 levels deep)
+Used by: tokio (async I/O)
+Can be removed: No (required by tokio)
+```
+
+**Find reverse dependencies:**
+
+```bash
+wj deps reverse serde
+
+Packages depending on serde@1.0.0:
+
+Direct dependents: 2
+  ├─> my-app@1.0.0 (uses serde directly)
+  └─> serde_json@1.0.0 (derives from serde)
+
+Transitive dependents: 5
+  └─> (packages that depend on serde_json)
+
+Impact if removed: 7 packages affected
+```
+
+**Unused dependency detection:**
+
+```bash
+wj deps unused
+
+Analyzing dependency usage...
+
+Unused dependencies: 2
+
+⚠️  http-client@2.0.0
+  └─> Added but never imported
+  └─> Remove: wj remove http-client
+
+⚠️  old-parser@1.0.0
+  └─> Was used, no longer imported
+  └─> Remove: wj remove old-parser
+
+Space savings: 2.4 MB
+Build time savings: ~3 seconds
+```
+
+---
+
+## Supply Chain Attack Detection (Advanced Heuristics)
+
+### The Problem: Sophisticated Attacks Bypass Simple Checks
+
+**Modern supply chain attacks:**
+- **Typosquatting**: `reqeust` instead of `request`
+- **Dependency confusion**: Private name, public malicious version
+- **Maintainer compromise**: Legitimate package turned malicious
+- **Trojan source**: Hidden Unicode characters
+- **Time bombs**: Malicious code activates after delay
+
+### Windjammer Solution: Multi-Layered Detection
+
+**Typosquatting detection:**
+
+```bash
+wj add reqeust
+
+⚠️  Potential typosquatting detected
+
+You typed: reqeust
+Did you mean: request (12M downloads, trusted)?
+
+Similarity: 91% (one character difference)
+
+reqeust@1.0.0:
+  ├─> 3 downloads (suspicious!)
+  ├─> Published 2 days ago (new)
+  ├─> Maintainer: unknown-user (0 reputation)
+  └─> Risk: ⚠️  HIGH (likely typosquatting)
+
+request@2.0.0:
+  ├─> 12M downloads
+  ├─> Published 5 years ago
+  ├─> Maintainer: trusted-org
+  └─> Risk: ✅ LOW (well-established)
+
+Recommendation: Use 'request' instead
+
+Proceed with 'reqeust'? (y/N) n
+```
+
+**Dependency confusion protection:**
+
+```bash
+wj add internal-lib
+
+⚠️  Dependency confusion warning
+
+Package name: internal-lib
+Found in: 2 registries
+
+Registry 1: registry.windjammer.org (public)
+  └─> internal-lib@1.0.0 (published yesterday)
+  └─> Maintainer: unknown-user
+  └─> Risk: 🔴 HIGH (suspicious timing)
+
+Registry 2: internal.mycompany.com (private)
+  └─> internal-lib@2.0.0 (published 6 months ago)
+  └─> Maintainer: mycompany-team
+  └─> Risk: ✅ LOW (internal package)
+
+Which registry to use?
+  1. Private (internal.mycompany.com) ← RECOMMENDED
+  2. Public (registry.windjammer.org)
+  3. Cancel
+
+Choice: 1
+
+✅ Using private registry (protected against dependency confusion)
+```
+
+**Maintainer compromise detection:**
+
+```bash
+wj add trusted-lib
+
+Analyzing trusted-lib@3.0.0...
+
+⚠️  Maintainer change detected
+
+trusted-lib history:
+  v1.0.0 - v2.9.0: original-maintainer (2 years, 1000 commits)
+  v3.0.0: new-maintainer (1 commit, added 3 days ago)
+
+Suspicious activity:
+  ├─> New maintainer with no history
+  ├─> Version 3.0.0 adds network capabilities (unusual)
+  ├─> 10x code size increase (suspicious)
+  └─> Obfuscated code detected (red flag)
+
+Risk: 🔴 CRITICAL (possible maintainer compromise)
+
+Recommendation:
+  1. Use v2.9.0 (last version by original maintainer)
+  2. Wait for community vetting (2-4 weeks)
+  3. Contact original maintainer: original-maintainer@example.com
+
+Automatically downgrading to: trusted-lib@2.9.0
+```
+
+**Trojan source detection:**
+
+```bash
+wj build
+
+Analyzing source code...
+
+⚠️  Trojan source detected
+
+File: src/auth.rs:42
+Issue: Hidden Unicode character (U+202E - RIGHT-TO-LEFT OVERRIDE)
+
+This character reverses text direction, hiding malicious code:
+
+Visible code:
+  if user.is_admin() { /* allow access */ }
+
+Actual code (with Unicode revealed):
+  if user.is_admin() { /* <U+202E>kcatta wolla// */ revoke_all_access() }
+
+This is a SECURITY VULNERABILITY (CVE-2021-42574)
+
+Action required:
+  1. Review: wj show src/auth.rs:42 --reveal-unicode
+  2. Fix: Remove hidden characters
+  3. Reject: This code appears malicious
+
+Build blocked (trojan source detected)
+```
+
+**Time bomb detection:**
+
+```bash
+wj add time-bomb-lib
+
+Analyzing time-bomb-lib@1.0.0...
+
+⚠️  Time-based behavior detected
+
+Code analysis:
+  ├─> Checks current date (suspicious for library)
+  ├─> Deletes files after 2026-04-01 (🚨 TIME BOMB!)
+  ├─> Network call activated after 30 days (suspicious)
+  
+Suspicious code:
+  ```
+  if Date::now() > Date::from_str("2026-04-01") {
+      fs::remove_dir_all("/important/data")  // 🚨 MALICIOUS!
+  }
+  ```
+
+Risk: 🔴 CRITICAL (time bomb detected)
+
+This is CLEARLY MALICIOUS code.
+
+Package rejected.
+Report: wj report time-bomb-lib@1.0.0 --malware
+```
+
+---
+
+## Integration with Security Databases (NVD, OSV, GitHub)
+
+### The Problem: Vulnerability Data Is Scattered
+
+**Vulnerability databases:**
+- NVD (National Vulnerability Database)
+- OSV (Open Source Vulnerabilities)
+- GitHub Security Advisories
+- Rust Security Advisory Database
+- Snyk Vulnerability Database
+
+### Windjammer Solution: Unified Vulnerability Database
+
+**Automatic database integration:**
+
+```bash
+wj security update-db
+
+Updating vulnerability databases...
+
+✅ NVD: Updated (142,000 CVEs)
+✅ OSV: Updated (45,000 vulnerabilities)
+✅ GitHub Advisories: Updated (12,000 advisories)
+✅ RustSec: Updated (420 advisories)
+✅ Snyk: Updated (via API)
+
+Last updated: 2026-03-21T16:00:00Z
+Next update: Automatic (daily)
+```
+
+**Cross-database vulnerability checking:**
+
+```bash
+wj security check some-package@1.0.0
+
+Checking some-package@1.0.0 across 5 databases...
+
+Vulnerabilities found: 3
+
+CVE-2024-1234 (CRITICAL) - Found in:
+  ├─> NVD: 9.8/10 (critical)
+  ├─> OSV: Critical
+  ├─> GitHub: Critical
+  └─> Consensus: 🔴 CRITICAL
+
+CVE-2024-5678 (HIGH) - Found in:
+  ├─> NVD: 7.5/10 (high)
+  ├─> OSV: High
+  └─> Consensus: 🟠 HIGH
+
+WJ-2024-0001 (MEDIUM) - Found in:
+  └─> Windjammer Database: Medium
+      (Capability violation, not in other DBs yet)
+
+Recommendation: Upgrade to 1.0.2 (all vulnerabilities fixed)
+```
+
+---
+
 ## Silence is Golden: Minimize Interruptions
 
 ### The Problem: Every Build Shouldn't Be a Security Quiz

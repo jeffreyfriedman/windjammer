@@ -1916,6 +1916,707 @@ Total time: 11 weeks for gradual, low-friction migration
 
 ---
 
+## Cloud-Native Security Integration (Sigstore, SLSA, SBOM)
+
+### Philosophy: Learn from the Best, Make It Automatic
+
+**Modern cloud-native security practices:**
+- [Sigstore/Cosign](https://github.com/sigstore/cosign): Keyless signing, transparency logs
+- [SLSA Framework](https://slsa.dev/): Supply chain levels for software artifacts
+- [SBOM](https://www.cisa.gov/sbom): Software Bill of Materials (CycloneDX, SPDX)
+- [In-toto Attestations](https://in-toto.io/): Supply chain metadata
+- [Binary Transparency](https://transparency.dev/): Verifiable, reproducible builds
+
+**Windjammer approach: Make these automatic, zero-ceremony.**
+
+---
+
+### Sigstore Integration (Automatic Signing & Verification)
+
+#### The Problem: Manual Signing is Skipped
+
+**Current state (other languages):**
+
+```bash
+# Manual signing (developers forget)
+docker build -t myapp .
+docker push myapp
+# Oops, forgot to sign! ❌
+
+# Even with signing, it's extra steps:
+cosign sign --key cosign.key myapp@sha256:...
+# Enter password...
+# Push signature...
+```
+
+**Result:** Signing is optional → Most developers skip it.
+
+#### Windjammer Solution: Automatic Sigstore Integration
+
+**Zero-ceremony signing:**
+
+```bash
+# Just build (signing happens automatically)
+wj build --release
+
+Compiling my-app...
+✅ Build complete
+
+🔐 Signing artifacts (automatic)...
+  ✅ Signed with Sigstore (keyless)
+  ✅ Logged to Rekor transparency log
+  ✅ Certificate from Fulcio CA
+  
+Binary: target/release/my-app (signed ✅)
+Signature: target/release/my-app.sig
+Certificate: target/release/my-app.crt
+Bundle: target/release/my-app.bundle (Rekor proof)
+
+Verification:
+  wj verify target/release/my-app
+  cosign verify-blob --bundle target/release/my-app.bundle target/release/my-app
+```
+
+**What happened automatically:**
+1. **OIDC authentication** (via GitHub Actions, GitLab CI, etc.)
+2. **Fulcio certificate** (short-lived code signing cert)
+3. **Sigstore signing** (keyless, no private keys to manage)
+4. **Rekor transparency log** (immutable record)
+5. **Bundle creation** (portable signature + cert + log proof)
+
+#### Configuration (Optional, Smart Defaults)
+
+```toml
+# wj.toml (optional, has smart defaults)
+[signing]
+# Automatic Sigstore signing (default: true in CI, false locally)
+auto_sign = "ci-only"  # or "always" or "never"
+
+# Identity for signing (default: auto-detect from CI)
+identity = "https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main"
+
+# OIDC issuer (default: auto-detect)
+oidc_issuer = "https://token.actions.githubusercontent.com"
+
+# Rekor instance (default: public good)
+rekor_url = "https://rekor.sigstore.dev"
+
+# Include build provenance (default: true)
+include_provenance = true
+```
+
+**Zero config for 90% of users** (auto-detect everything).
+
+#### Verification (Zero-Ceremony)
+
+```bash
+# Verify a Windjammer binary
+wj verify my-app
+
+Verifying my-app...
+
+✅ Signature valid (Sigstore)
+✅ Certificate valid (Fulcio CA)
+✅ Transparency log entry found (Rekor)
+
+Signed by:
+  Identity: https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main
+  Issuer: GitHub Actions
+  Timestamp: 2026-03-21T15:30:00Z
+  
+Build provenance:
+  Git commit: abc123...
+  Build platform: GitHub Actions (ubuntu-22.04)
+  Compiler: wj 0.51.0
+  Reproducible: ✅ Yes
+
+Trust this binary? ✅
+```
+
+**Also works with standard Cosign tooling:**
+
+```bash
+# Verify with Cosign (for non-Windjammer users)
+cosign verify-blob \
+  --bundle my-app.bundle \
+  --certificate-identity "https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  my-app
+
+Verified OK
+```
+
+---
+
+### SLSA Framework Compliance (Automatic Build Levels)
+
+#### What is SLSA?
+
+**Supply-chain Levels for Software Artifacts** - Framework for ensuring integrity of software artifacts throughout the software supply chain.
+
+**Levels:**
+- **SLSA 1**: Documentation of build process
+- **SLSA 2**: Signed provenance, tamper resistance
+- **SLSA 3**: Source and build platforms hardened
+- **SLSA 4**: Two-person review + hermetic builds
+
+[Learn more](https://slsa.dev/)
+
+#### Windjammer's Automatic SLSA Compliance
+
+**Built-in SLSA Level 3 compliance:**
+
+```bash
+wj build --release
+
+Building with SLSA Level 3 compliance...
+
+✅ SLSA 1: Build process documented
+  └─> Metadata: wj-build-info.json
+  
+✅ SLSA 2: Signed provenance generated
+  └─> Provenance: target/release/my-app.provenance.json
+  └─> Signed with Sigstore
+  
+✅ SLSA 3: Source and build platforms hardened
+  └─> Git commit: verified
+  └─> Build environment: isolated container
+  └─> Dependencies: locked and verified
+
+SLSA attestation: target/release/my-app.slsa.json
+```
+
+**Provenance file (auto-generated):**
+
+```json
+{
+  "_type": "https://in-toto.io/Statement/v0.1",
+  "subject": [
+    {
+      "name": "my-app",
+      "digest": {
+        "sha256": "abc123..."
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "predicate": {
+    "builder": {
+      "id": "https://github.com/windjammer-lang/wj-builder@v0.51.0"
+    },
+    "buildType": "https://windjammer.org/build/v1",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://github.com/myorg/myrepo@refs/heads/main",
+        "digest": {
+          "sha1": "abc123..."
+        },
+        "entryPoint": "wj.toml"
+      }
+    },
+    "metadata": {
+      "buildStartedOn": "2026-03-21T15:30:00Z",
+      "buildFinishedOn": "2026-03-21T15:32:00Z",
+      "completeness": {
+        "parameters": true,
+        "environment": true,
+        "materials": true
+      },
+      "reproducible": true
+    },
+    "materials": [
+      {
+        "uri": "git+https://github.com/myorg/myrepo",
+        "digest": {
+          "sha1": "abc123..."
+        }
+      }
+    ]
+  }
+}
+```
+
+**Verification:**
+
+```bash
+wj verify my-app --check-slsa
+
+Verifying SLSA provenance...
+
+✅ SLSA Level: 3
+✅ Builder: GitHub Actions (trusted)
+✅ Build reproducible: Yes
+✅ Source: github.com/myorg/myrepo (verified)
+✅ Dependencies: All verified
+
+SLSA compliance: ✅ PASS
+```
+
+---
+
+### SBOM Generation (Automatic Software Bill of Materials)
+
+#### The Problem: No Visibility into Dependencies
+
+**Current state:**
+- What dependencies does this binary use?
+- Are there known vulnerabilities?
+- What licenses are included?
+- **Manual SBOM generation is tedious and skipped.**
+
+#### Windjammer Solution: Automatic SBOM
+
+**Zero-ceremony SBOM generation:**
+
+```bash
+wj build --release
+
+Building my-app...
+✅ Compiled successfully
+
+📦 Generating SBOM (automatic)...
+  ✅ CycloneDX: target/release/my-app.cdx.json
+  ✅ SPDX: target/release/my-app.spdx.json
+  
+Dependencies: 23
+  ├─> Direct: 5
+  └─> Transitive: 18
+
+Vulnerabilities: 0 ✅
+Licenses: MIT (15), Apache-2.0 (8)
+```
+
+**CycloneDX SBOM (auto-generated):**
+
+```json
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:...",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-03-21T15:30:00Z",
+    "tools": [
+      {
+        "vendor": "Windjammer",
+        "name": "wj",
+        "version": "0.51.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "my-app",
+      "version": "1.0.0",
+      "purl": "pkg:windjammer/my-app@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "serde",
+      "version": "1.0.0",
+      "purl": "pkg:windjammer/serde@1.0.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "abc123..."
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/serde-rs/serde"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:windjammer/my-app@1.0.0",
+      "dependsOn": [
+        "pkg:windjammer/serde@1.0.0"
+      ]
+    }
+  ]
+}
+```
+
+**SBOM verification and querying:**
+
+```bash
+# Query SBOM
+wj sbom query my-app --show licenses
+
+Licenses in my-app:
+  MIT: 15 packages (65%)
+  Apache-2.0: 8 packages (35%)
+
+# Check for vulnerabilities
+wj sbom check-vulns my-app
+
+Checking vulnerabilities (via Trivy)...
+✅ No known vulnerabilities found
+
+# Compare SBOMs (for updates)
+wj sbom diff my-app-v1.0.0 my-app-v1.1.0
+
+SBOM comparison:
+
+Added dependencies:
+  + reqwest@1.0.0 (MIT)
+
+Removed dependencies:
+  - ureq@0.9.0 (MIT)
+
+Updated dependencies:
+  ~ serde: 1.0.0 → 1.0.1
+  
+License changes: None
+Vulnerability changes: None
+```
+
+---
+
+### Binary Attestation & Transparency
+
+#### The Problem: Can't Prove What Was Built
+
+**Questions users ask:**
+- Was this binary built from the claimed source?
+- Were dependencies tampered with?
+- Can I reproduce this build?
+
+#### Windjammer Solution: Automatic Attestations
+
+**Build attestation (automatic):**
+
+```bash
+wj build --release
+
+Building my-app...
+
+🔐 Creating build attestation...
+  ✅ Source: git commit abc123
+  ✅ Dependencies: from .wj-capabilities.lock (verified)
+  ✅ Compiler: wj 0.51.0 (deterministic)
+  ✅ Build environment: recorded
+  ✅ Output hash: sha256:def456...
+
+Attestation: target/release/my-app.attestation.json
+Signed: target/release/my-app.attestation.sig
+```
+
+**Attestation file:**
+
+```json
+{
+  "attestation_type": "windjammer-build",
+  "version": "1.0",
+  "build": {
+    "timestamp": "2026-03-21T15:30:00Z",
+    "builder": "wj@0.51.0",
+    "source": {
+      "repo": "https://github.com/myorg/myrepo",
+      "commit": "abc123...",
+      "branch": "main",
+      "clean": true
+    },
+    "dependencies": {
+      "locked": true,
+      "verified": true,
+      "count": 23,
+      "hash": "sha256:..."
+    },
+    "environment": {
+      "os": "Linux",
+      "arch": "x86_64",
+      "compiler_flags": ["--release"],
+      "reproducible": true
+    },
+    "output": {
+      "artifacts": [
+        {
+          "name": "my-app",
+          "hash": "sha256:def456...",
+          "size": 1234567
+        }
+      ]
+    }
+  },
+  "reproducibility": {
+    "deterministic": true,
+    "instructions": "wj build --release --reproducible"
+  }
+}
+```
+
+**Verification:**
+
+```bash
+# Verify attestation
+wj verify my-app --check-attestation
+
+Verifying build attestation...
+
+✅ Signature valid (Sigstore)
+✅ Source: github.com/myorg/myrepo@abc123
+✅ Dependencies: Locked and verified
+✅ Build: Reproducible
+✅ Output hash matches
+
+Build provenance verified ✅
+
+# Reproduce the build
+wj reproduce my-app.attestation.json
+
+Reproducing build from attestation...
+
+Cloning source: github.com/myorg/myrepo@abc123
+Restoring dependencies: .wj-capabilities.lock
+Building with: wj 0.51.0 --release
+
+Build complete: my-app (reproduced)
+
+Comparing outputs:
+  Original: sha256:def456...
+  Reproduced: sha256:def456...
+  
+✅ MATCH! Build is reproducible.
+```
+
+---
+
+### Policy as Code Integration (OPA Support)
+
+#### The Problem: Security Policies Are Manual
+
+**Current state:**
+- Security policies in wikis/docs
+- Manual review for compliance
+- Inconsistent enforcement
+
+#### Windjammer Solution: Built-in OPA Integration
+
+**Define policies in Rego:**
+
+```rego
+# security-policy.rego
+package windjammer.security
+
+# Deny packages with critical vulnerabilities
+deny[msg] {
+  input.package.vulnerabilities[_].severity == "CRITICAL"
+  msg = sprintf("Package %s has critical vulnerability", [input.package.name])
+}
+
+# Deny GPL licenses (example company policy)
+deny[msg] {
+  input.package.license == "GPL-3.0"
+  msg = sprintf("GPL license not allowed: %s", [input.package.name])
+}
+
+# Require SLSA Level 3 for production
+deny[msg] {
+  input.environment == "production"
+  input.build.slsa_level < 3
+  msg = "Production builds require SLSA Level 3"
+}
+
+# Deny packages from unknown registries
+deny[msg] {
+  not allowed_registry(input.package.registry)
+  msg = sprintf("Unknown registry: %s", [input.package.registry])
+}
+
+allowed_registry(registry) {
+  registry == "registry.windjammer.org"
+}
+
+allowed_registry(registry) {
+  registry == "github.com"
+}
+```
+
+**Automatic policy enforcement:**
+
+```bash
+wj build --release --policy security-policy.rego
+
+Building my-app...
+
+Checking security policy...
+
+❌ Policy violation
+
+Package: some-lib@1.0.0
+Violation: Package some-lib has critical vulnerability
+Policy: security-policy.rego:6
+
+Details:
+  CVE-2024-1234 (CRITICAL)
+  └─> Buffer overflow in parse_json()
+  
+Recommendation:
+  Upgrade to: some-lib@1.0.1 (fixed)
+  Or deny: wj deny some-lib@1.0.0
+
+Build blocked by security policy.
+```
+
+---
+
+### Container Integration (OCI Image Signing)
+
+#### The Problem: Container Signing Is Separate
+
+**Current workflow:**
+1. Build binary with `wj build`
+2. Create Dockerfile
+3. Build container with `docker build`
+4. Sign container with `cosign sign`
+5. Push container
+
+**Too many steps! Most developers skip signing.**
+
+#### Windjammer Solution: Integrated Container Workflow
+
+**One-command container build + sign:**
+
+```bash
+wj build --release --container
+
+Building my-app...
+✅ Binary compiled
+
+Building container image...
+✅ Using windjammer base image (distroless)
+✅ Including signed binary
+✅ Generating SBOM for container
+✅ Signing container with Sigstore
+
+Container: myorg/my-app:latest
+Digest: sha256:abc123...
+Signature: Logged to Rekor
+SBOM: Embedded in image
+
+Ready to push:
+  docker push myorg/my-app@sha256:abc123...
+```
+
+**Generated Dockerfile (smart defaults):**
+
+```dockerfile
+# Auto-generated by wj build --container
+FROM gcr.io/distroless/static-debian11:nonroot
+
+# Copy signed binary
+COPY target/release/my-app /app/my-app
+
+# Embed SBOM and attestations
+COPY target/release/my-app.cdx.json /sbom/my-app.cdx.json
+COPY target/release/my-app.attestation.json /attestation/
+
+USER nonroot:nonroot
+ENTRYPOINT ["/app/my-app"]
+```
+
+**Container verification:**
+
+```bash
+# Verify container
+cosign verify myorg/my-app:latest \
+  --certificate-identity "https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+Verification for myorg/my-app:latest
+✅ Signature verified
+✅ SBOM embedded
+✅ SLSA provenance included
+
+# Inspect SBOM in container
+cosign attach sbom myorg/my-app@sha256:abc123...
+# or
+wj sbom extract myorg/my-app:latest
+```
+
+---
+
+### Zero-Trust Architecture Support
+
+#### Principle: Never Trust, Always Verify
+
+**Windjammer builds with zero-trust by default:**
+
+```bash
+wj build --release --zero-trust
+
+Building with zero-trust mode...
+
+🔐 Security checks:
+  ✅ All dependencies verified (signatures + hashes)
+  ✅ All capability grants reviewed
+  ✅ SBOM generated and signed
+  ✅ SLSA Level 3 provenance
+  ✅ Binary signed with Sigstore
+  ✅ Reproducible build
+  
+🔍 Runtime verification enabled:
+  ✅ Capability checks at runtime
+  ✅ Dependency integrity checks
+  ✅ Certificate validation
+  
+Zero-trust mode: ✅ ENABLED
+
+This binary will:
+  - Verify all dependencies at startup
+  - Check capability grants at runtime
+  - Validate certificates before trust
+  - Log all security events
+```
+
+**Runtime behavior:**
+
+```bash
+./my-app
+
+🔐 Zero-trust verification...
+  ✅ Binary signature valid
+  ✅ Dependencies verified
+  ✅ Capabilities granted
+  
+Starting my-app... ✅
+```
+
+---
+
+### Modern Best Practices Summary
+
+**What Windjammer does automatically (zero-ceremony):**
+
+| Practice | Manual (Other Languages) | Automatic (Windjammer) |
+|----------|-------------------------|------------------------|
+| **Code signing** | cosign sign (manual) | ✅ Auto-signed with Sigstore |
+| **Transparency log** | cosign upload (manual) | ✅ Auto-logged to Rekor |
+| **SBOM generation** | syft/cyclonedx-cli (manual) | ✅ Auto-generated (CycloneDX, SPDX) |
+| **SLSA provenance** | slsa-github-generator (manual) | ✅ Auto-generated (Level 3) |
+| **Reproducible builds** | Complex setup | ✅ Default (deterministic) |
+| **Vulnerability scanning** | trivy/grype (manual) | ✅ Integrated (Trivy, Anchore) |
+| **Policy enforcement** | Manual review | ✅ OPA integration |
+| **Container signing** | docker build + cosign sign | ✅ One command |
+| **Attestations** | in-toto-run (manual) | ✅ Auto-generated |
+| **Zero-trust runtime** | Manual implementation | ✅ Built-in |
+
+**Result: Security best practices become zero-ceremony defaults.** 🚀
+
+---
+
 ## Case Studies
 
 ### Case Study 1: Preventing Log4Shell
