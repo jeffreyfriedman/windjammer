@@ -4710,6 +4710,323 @@ Recommendation: Upgrade to 1.0.2 (all vulnerabilities fixed)
 
 ---
 
+## End-of-Life (EOL) and Abandoned Package Detection
+
+### The Problem: Unmaintained Dependencies Are Security Risks
+
+**Risks of abandoned packages:**
+- No security patches for vulnerabilities
+- No bug fixes
+- No compatibility updates
+- Eventual incompatibility
+- Supply chain risk (maintainer account compromise)
+
+**Current state:** Developers don't know packages are abandoned until problems arise.
+
+### Windjammer Solution: Automatic EOL Tracking
+
+**Zero-ceremony EOL detection:**
+
+```bash
+wj add some-package
+
+Adding some-package@1.0.0...
+
+⚠️  End-of-Life warning
+
+Package: some-package@1.0.0
+Status: ⚠️  UNMAINTAINED
+
+Indicators:
+  ├─> Last update: 847 days ago (2024-06-01)
+  ├─> Last commit: 912 days ago
+  ├─> Open issues: 47 (23 security-related)
+  ├─> Unpatched CVEs: 3 (2 high, 1 medium)
+  └─> Maintainer: No activity in 2+ years
+
+Risk: 🔴 HIGH (abandoned package)
+
+Alternatives (actively maintained):
+  1. better-package@2.0.0
+     └─> Last update: 3 days ago
+     └─> Active maintainer (50+ commits/year)
+     └─> No known vulnerabilities
+     └─> 10x more downloads
+  
+  2. modern-lib@1.5.0
+     └─> Last update: 1 week ago
+     └─> Active community (200+ contributors)
+     └─> Compatible API
+
+Recommendation: Use better-package@2.0.0 instead
+
+Proceed with abandoned package? (y/N) n
+```
+
+**Configuration:**
+
+```toml
+# wj.toml
+[security.eol]
+# Enable EOL detection (default: true)
+enabled = true
+
+# Days since last update to consider "stale" (default: 365)
+stale_threshold_days = 365
+
+# Days since last update to consider "abandoned" (default: 730)
+abandoned_threshold_days = 730
+
+# Block builds with abandoned packages (default: warn)
+abandoned_action = "warn"  # or "block" or "allow"
+
+# Track EOL dates from official sources
+track_official_eol = true
+
+# Sources: endoflife.date, libraries.io, deps.dev
+```
+
+**Automatic EOL checks:**
+
+```bash
+wj security audit
+
+Security audit: my-app
+
+Checking dependencies: 23
+
+EOL Status:
+  ✅ Active: 18 packages (78%)
+  ⚠️  Stale: 3 packages (13%)
+  🔴 Abandoned: 2 packages (9%)
+
+🔴 ABANDONED (2):
+
+  old-parser@1.0.0
+    ├─> Last update: 1,247 days ago
+    ├─> Unpatched CVEs: 2 (HIGH)
+    ├─> Alternative: modern-parser@2.0.0
+    └─> Action: wj replace old-parser modern-parser
+
+  legacy-http@0.9.0
+    ├─> Last update: 982 days ago
+    ├─> Official EOL: 2024-12-31 (reached)
+    ├─> Alternative: reqwest@1.0.0 (standard)
+    └─> Action: wj replace legacy-http reqwest
+
+⚠️  STALE (3):
+
+  some-lib@2.0.0
+    ├─> Last update: 456 days ago
+    ├─> Still receiving security patches
+    ├─> Monitor: Check for updates quarterly
+    └─> Status: LOW RISK (watch)
+
+Action: wj security fix-eol
+```
+
+**Official EOL date tracking:**
+
+```bash
+wj security eol-info python
+
+Python EOL dates (from endoflife.date):
+
+Version    | Release    | EOL Date    | Status
+-----------|------------|-------------|--------
+3.12       | 2023-10-02 | 2028-10     | ✅ Active
+3.11       | 2022-10-24 | 2027-10     | ✅ Active
+3.10       | 2021-10-04 | 2026-10     | ✅ Active
+3.9        | 2020-10-05 | 2025-10     | ⚠️  EOL soon (7 months)
+3.8        | 2019-10-14 | 2024-10     | 🔴 EOL reached
+3.7        | 2018-06-27 | 2023-06     | 🔴 EOL reached
+
+Your project uses: Python 3.9 ⚠️  (EOL in 7 months)
+
+Recommendation: Upgrade to Python 3.11 or 3.12
+Plan migration: wj migrate python 3.12
+```
+
+**Dependency health scoring:**
+
+```bash
+wj deps health
+
+Dependency Health Report
+
+Overall health: 8.2/10 ✅
+
+Health breakdown:
+
+🟢 Excellent (9.0-10.0): 12 packages (52%)
+  └─> Active development, no issues, well-maintained
+
+🟡 Good (7.0-8.9): 6 packages (26%)
+  └─> Stable, occasional updates, minor issues
+
+🟠 Fair (5.0-6.9): 3 packages (13%)
+  └─> Infrequent updates, some open issues
+  └─> Action: Monitor for alternatives
+
+🔴 Poor (0-4.9): 2 packages (9%)
+  └─> Abandoned or near-EOL
+  └─> Action: Replace immediately
+
+Health factors:
+  ✅ Update frequency: 8.5/10
+  ✅ Security patches: 9.2/10
+  ⚠️  Maintenance activity: 7.8/10 (3 stale)
+  ✅ Community engagement: 8.9/10
+  ⚠️  EOL status: 7.5/10 (2 abandoned)
+
+Recommendations:
+  1. Replace 2 abandoned packages
+  2. Monitor 3 stale packages
+  3. All others: healthy ✅
+```
+
+**Maintenance activity tracking:**
+
+```bash
+wj deps activity some-package
+
+Maintenance Activity: some-package
+
+Recent activity:
+  Last commit: 456 days ago (2024-10-15)
+  Last release: 523 days ago (2024-08-10)
+  Last security patch: 701 days ago (2024-02-15)
+
+Commit frequency:
+  Last 30 days: 0 commits
+  Last 90 days: 0 commits
+  Last 365 days: 2 commits (very low)
+  
+Issues:
+  Open: 47 issues
+  Closed (last year): 3 issues
+  Response time: >30 days (slow)
+
+Pull requests:
+  Open: 12 PRs (oldest: 389 days)
+  Merged (last year): 1 PR
+  
+Maintainer activity:
+  Last seen: 489 days ago
+  Other projects: 0 active (1 total)
+  Response rate: 8% (very low)
+
+Community:
+  Contributors: 5 (all inactive)
+  Forks: 23 (3 more active than upstream)
+  Stars: 1,247 (declining)
+
+Status: 🔴 ABANDONED
+  └─> No meaningful activity in 12+ months
+  └─> Maintainer appears to have moved on
+  └─> Consider forks or alternatives
+
+Active forks:
+  1. user/some-package (fork)
+     └─> Last update: 12 days ago
+     └─> 89 commits ahead of upstream
+     └─> Maintained by active developer
+     └─> Use: wj add user/some-package
+     
+  2. org/some-package-maintained (fork)
+     └─> Last update: 5 days ago
+     └─> 124 commits ahead
+     └─> Security fixes backported
+     └─> Use: wj add org/some-package-maintained
+```
+
+**Auto-replacement suggestions:**
+
+```bash
+wj security fix-eol --auto-suggest
+
+Fixing EOL/abandoned dependencies...
+
+Found 2 abandoned packages with automatic replacements:
+
+1. old-parser@1.0.0 → modern-parser@2.0.0
+   ├─> API compatible: 95%
+   ├─> Performance: 3x faster
+   ├─> Migration effort: Low (2 breaking changes)
+   └─> Migration guide: wj migrate old-parser modern-parser
+
+2. legacy-http@0.9.0 → reqwest@1.0.0
+   ├─> API compatible: 80%
+   ├─> Industry standard (12M downloads)
+   ├─> Migration effort: Medium (API redesign)
+   └─> Migration guide: wj migrate legacy-http reqwest
+
+Apply all replacements? (Y/n) y
+
+Replacing old-parser with modern-parser...
+  ✅ Updated wj.toml
+  ✅ Updated imports (3 files)
+  ✅ Fixed breaking changes (2 locations)
+  ✅ Tests passing ✅
+
+Replacing legacy-http with reqwest...
+  ✅ Updated wj.toml
+  ⚠️  Manual migration needed (see migration-guide.md)
+  └─> API redesign requires code changes
+
+Migration summary:
+  ├─> 1 automatic (old-parser)
+  ├─> 1 manual (legacy-http)
+  └─> Estimated time: 30 minutes
+
+Next steps:
+  1. Review changes: git diff
+  2. Complete manual migration: See migration-guide.md
+  3. Test: wj test
+  4. Commit: git commit -m "Replace EOL dependencies"
+```
+
+**Integration with EOL databases:**
+
+- **endoflife.date**: Official EOL dates for languages, frameworks, OS
+- **libraries.io**: Package activity and health metrics
+- **deps.dev**: Google's dependency health data
+- **GitHub API**: Commit activity, issue response times
+- **npm/crates.io/PyPI**: Download trends, publication dates
+
+**Proactive monitoring:**
+
+```yaml
+# .github/workflows/eol-check.yml
+name: EOL Check
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly
+
+jobs:
+  eol-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: windjammer-lang/setup-wj@v1
+      - run: wj security audit --eol-only
+      - run: |
+          if wj deps health | grep "Poor"; then
+            echo "::error::Abandoned dependencies found"
+            exit 1
+          fi
+```
+
+**Benefits:**
+- Proactive security (catch abandoned packages early)
+- Reduced maintenance burden (avoid unmaintained code)
+- Better long-term stability
+- Automatic migration suggestions
+- Zero-ceremony monitoring
+
+---
+
 ## Silence is Golden: Minimize Interruptions
 
 ### The Problem: Every Build Shouldn't Be a Security Quiz
