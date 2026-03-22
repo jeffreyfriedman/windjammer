@@ -72,10 +72,6 @@ pub fn build_project_ext(
 
     let mut crate_metadata = CrateMetadata::new();
 
-    // TDD FIX: For multi-file builds, use global multi-pass analysis
-    // Parse all files first, then analyze together with shared registry.
-    // Also use multipass when we have nested structure (files in subdirs) to preserve
-    // directory layout - required for nested mod.rs generation.
     let base_path = if path.is_file() {
         path.parent().unwrap_or(path)
     } else {
@@ -86,8 +82,14 @@ pub fn build_project_ext(
             .map(|r| r.parent().is_some())
             .unwrap_or(false)
     });
-    // Use multipass when: multiple files in library mode, OR any file in nested path
-    if (wj_files.len() > 1 && library) || has_nested_structure {
+    // Multipass: shared global analysis for multi-file projects, or a single file under a
+    // nested path in library mode (preserve `a/b/c/file.rs` for `generate_mod_file`).
+    //
+    // A single *flat* .wj file must use the single-file path (`is_module = false`) so `main()`
+    // is emitted and `use super::*` is not injected (see analyzer_auto_mutability_method_test).
+    // `has_nested_structure` alone is not enough: nested layout + `library` avoids spurious
+    // multipass for `wj build foo.wj` when the project root accidentally contains subdirs.
+    if wj_files.len() > 1 || (library && has_nested_structure) {
         return build_library_multipass(
             &wj_files,
             path,
@@ -507,6 +509,14 @@ fn build_library_multipass(
             global_int_inference.errors.len()
         ));
     }
+
+    let src_base = if base_path.is_file() {
+        base_path.parent().unwrap_or(base_path)
+    } else {
+        base_path
+    };
+    let type_defining_modules =
+        build_type_defining_modules_for_library(&sources, src_base)?;
     
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
     for (file, source) in &sources {
@@ -541,12 +551,7 @@ fn build_library_multipass(
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         
         // Preserve directory structure
-        let base = if base_path.is_file() {
-            base_path.parent().unwrap_or(base_path)
-        } else {
-            base_path
-        };
-        let relative_path = file.strip_prefix(base)?;
+        let relative_path = file.strip_prefix(src_base)?;
         let output_file = output.join(relative_path).with_extension("rs");
         if let Some(parent) = output_file.parent() {
             std::fs::create_dir_all(parent)?;
@@ -556,6 +561,8 @@ fn build_library_multipass(
         let mut codegen = CodeGenerator::new_for_module(registry, target);
         codegen.set_output_file(&output_file);
         codegen.set_source_file(file);
+        codegen.set_library_source_root(src_base.to_path_buf());
+        codegen.set_type_defining_modules(type_defining_modules.clone());
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(global_float_inference.clone()); // TDD FIX: Use shared instance!
         codegen.set_int_inference(global_int_inference.clone());
@@ -581,6 +588,35 @@ fn build_library_multipass(
     }
 
     Ok(())
+}
+
+/// Map struct/enum/trait/type-alias names to Rust module path segments (from library root) for auto-import resolution.
+fn build_type_defining_modules_for_library(
+    sources: &[(PathBuf, String)],
+    base: &Path,
+) -> Result<HashMap<String, Vec<String>>> {
+    let mut map = HashMap::new();
+    for (file, source) in sources {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new_with_source(
+            tokens,
+            file.to_string_lossy().to_string(),
+            source.clone(),
+        );
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
+        else {
+            continue;
+        };
+        for name in crate::analyzer::type_collector::collect_local_type_names(&program) {
+            // Last definition wins if the same name exists in multiple modules (rare).
+            map.insert(name, module_path.clone());
+        }
+    }
+    Ok(map)
 }
 
 fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {

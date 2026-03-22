@@ -866,9 +866,15 @@ impl<'ast> Analyzer<'ast> {
                     // Pass 1: Initial analysis (direct mutations only)
                     for func in &impl_block.functions {
                         let analyzed_func = if let Some(trait_name) = &impl_block.trait_name {
-                            self.analyze_trait_impl_function(func, trait_name, &local_registry)?
+                            self.analyze_trait_impl_function(
+                                func,
+                                trait_name,
+                                impl_block,
+                                program,
+                                &local_registry,
+                            )?
                         } else {
-                            self.analyze_function_in_impl(func, impl_block, &local_registry)?
+                            self.analyze_function_in_impl(func, impl_block, program, &local_registry)?
                         };
                         analyzed_funcs.insert(func.name.clone(), analyzed_func);
                     }
@@ -897,10 +903,12 @@ impl<'ast> Analyzer<'ast> {
                                 self.analyze_trait_impl_function(
                                     func,
                                     trait_name,
+                                    impl_block,
+                                    program,
                                     &local_registry,
                                 )?
                             } else {
-                                self.analyze_function_in_impl(func, impl_block, &local_registry)?
+                                self.analyze_function_in_impl(func, impl_block, program, &local_registry)?
                             };
 
                             // Check if self ownership changed
@@ -1063,12 +1071,15 @@ impl<'ast> Analyzer<'ast> {
                                         self.analyze_trait_impl_function(
                                             func,
                                             trait_name,
+                                            impl_block,
+                                            program,
                                             &local_registry,
                                         )?
                                     } else {
                                         self.analyze_function_in_impl(
                                             func,
                                             impl_block,
+                                            program,
                                             &local_registry,
                                         )?
                                     };
@@ -1098,12 +1109,15 @@ impl<'ast> Analyzer<'ast> {
                                             self.analyze_trait_impl_function(
                                                 func,
                                                 trait_name,
+                                                impl_block,
+                                                program,
                                                 &local_registry,
                                             )?
                                         } else {
                                             self.analyze_function_in_impl(
                                                 func,
                                                 impl_block,
+                                                program,
                                                 &local_registry,
                                             )?
                                         };
@@ -1216,62 +1230,65 @@ impl<'ast> Analyzer<'ast> {
                 let mut updated_methods = HashMap::new();
 
                 for (method_name, mut trait_method_analysis) in trait_methods {
-                    // WINDJAMMER PHILOSOPHY: Infer optimal trait signature from ALL implementations
-                    // - Start with trait's default implementation inference (if any)
-                    // - Upgrade based on what implementations actually need
-                    // - If any impl needs `&mut self`, upgrade trait to `&mut self`
-                    // - This ensures implementations don't violate borrow checker
+                    // Trait receiver is the contract. When any impl exists in this program, derive
+                    // `self` **only** from those impls (merge with max-permissive: &mut beats &).
+                    // Trait-only crates keep `analyze_trait_method` defaults (abstract → &mut self).
+                    //
+                    // Associated functions (`fn create() -> Self`) have no `self` entry — skip.
 
-                    let initial_self_ownership = trait_method_analysis
+                    if !trait_method_analysis
                         .inferred_ownership
-                        .get("self")
-                        .copied()
-                        .unwrap_or(OwnershipMode::Borrowed);
+                        .contains_key("self")
+                    {
+                        updated_methods.insert(method_name, trait_method_analysis);
+                        continue;
+                    }
 
-                    let mut most_permissive_self = initial_self_ownership;
+                    if matches!(
+                        trait_method_analysis.inferred_ownership.get("self"),
+                        Some(OwnershipMode::Owned)
+                    ) {
+                        // Consuming `self` on the trait is authoritative; do not refine from impls.
+                        updated_methods.insert(method_name, trait_method_analysis);
+                        continue;
+                    }
 
-                    // Examine ALL implementations to find what they actually need for `self`
-                    // IMPORTANT: We only upgrade `self`, not other parameters
-                    // Parameters stay as the trait defines them (user's explicit choice)
+                    let mut merged_from_impls: Option<OwnershipMode> = None;
+
                     for impl_block in &impl_blocks {
                         for func in &impl_block.functions {
                             if func.name == method_name {
-                                // Use empty registry for trait signature inference
-                                // (this is cross-file, signatures don't exist yet)
                                 let empty_registry = SignatureRegistry::new();
                                 let impl_analysis = self.analyze_function_in_impl(
                                     func,
                                     impl_block,
+                                    program,
                                     &empty_registry,
                                 )?;
 
-                                // Upgrade self ownership if implementation needs more permission
                                 if let Some(&impl_self_ownership) =
                                     impl_analysis.inferred_ownership.get("self")
                                 {
-                                    // Upgrade: Owned > MutBorrowed > Borrowed
-                                    match (most_permissive_self, impl_self_ownership) {
-                                        (OwnershipMode::Borrowed, OwnershipMode::MutBorrowed) => {
-                                            most_permissive_self = OwnershipMode::MutBorrowed;
+                                    let normalized = match impl_self_ownership {
+                                        OwnershipMode::Owned => OwnershipMode::Borrowed,
+                                        o => o,
+                                    };
+                                    merged_from_impls = Some(match merged_from_impls {
+                                        None => normalized,
+                                        Some(acc) => {
+                                            Self::merge_borrow_trait_receivers(acc, normalized)
                                         }
-                                        (OwnershipMode::Borrowed, OwnershipMode::Owned) => {
-                                            most_permissive_self = OwnershipMode::Owned;
-                                        }
-                                        (OwnershipMode::MutBorrowed, OwnershipMode::Owned) => {
-                                            most_permissive_self = OwnershipMode::Owned;
-                                        }
-                                        _ => {}
-                                    }
+                                    });
                                 }
                             }
                         }
                     }
 
-                    // Update trait method with upgraded self ownership
-                    // Parameters stay as originally analyzed (from trait definition)
-                    trait_method_analysis
-                        .inferred_ownership
-                        .insert("self".to_string(), most_permissive_self);
+                    if let Some(merged_self) = merged_from_impls {
+                        trait_method_analysis
+                            .inferred_ownership
+                            .insert("self".to_string(), merged_self);
+                    }
 
                     updated_methods.insert(method_name, trait_method_analysis);
                 }
@@ -1314,13 +1331,24 @@ impl<'ast> Analyzer<'ast> {
                             .inferred_ownership
                             .insert("self".to_string(), OwnershipMode::MutBorrowed);
                     }
-                    OwnershipHint::Owned | OwnershipHint::Inferred => {
-                        // User wrote `self` (inferred) - optimize based on usage
-                        // If body exists, infer from body; otherwise will be refined by infer_trait_signatures_from_impls
+                    OwnershipHint::Owned => {
+                        // Explicit consuming `self` in the trait (e.g. fn consume(self) -> T)
+                        analyzed
+                            .inferred_ownership
+                            .insert("self".to_string(), OwnershipMode::Owned);
+                    }
+                    OwnershipHint::Inferred => {
+                        // Omitted receiver: infer from trait body. Abstract: void → &mut self; with return → &self.
                         let modifies_self =
                             self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let self_ownership = if modifies_self {
                             OwnershipMode::MutBorrowed
+                        } else if func.body.is_empty() {
+                            if func.return_type.is_some() {
+                                OwnershipMode::Borrowed
+                            } else {
+                                OwnershipMode::MutBorrowed
+                            }
                         } else {
                             OwnershipMode::Borrowed
                         };
@@ -1349,16 +1377,73 @@ impl<'ast> Analyzer<'ast> {
             "new" | "default" | "from" | "from_str" | "from_bytes"
                 | "with_capacity" | "empty" | "zero" | "one"
         );
+        // Associated functions on the trait (return Self, no receiver) must not get implicit &self.
+        let returns_bare_self = matches!(
+            &func.return_type,
+            Some(Type::Custom(name)) if name == "Self"
+        );
         if !analyzed.inferred_ownership.contains_key("self")
             && !is_constructor
             && !func.parameters.iter().any(|p| p.name == "self")
+            && !returns_bare_self
         {
+            let default_receiver = if func.return_type.is_some() {
+                OwnershipMode::Borrowed
+            } else {
+                OwnershipMode::MutBorrowed
+            };
             analyzed
                 .inferred_ownership
-                .insert("self".to_string(), OwnershipMode::Borrowed);
+                .insert("self".to_string(), default_receiver);
         }
 
         Ok(analyzed)
+    }
+
+    /// Merge `&self` vs `&mut self` from impls (`&mut` if any impl needs it). Impl `self` receivers
+    /// inferred as `Owned` (e.g. returning a moved field) are treated as `&self` for the trait contract;
+    /// consuming methods use explicit `self` on the trait and skip this pass.
+    fn merge_borrow_trait_receivers(a: OwnershipMode, b: OwnershipMode) -> OwnershipMode {
+        use OwnershipMode::*;
+        match (a, b) {
+            (MutBorrowed, _) | (_, MutBorrowed) => MutBorrowed,
+            _ => Borrowed,
+        }
+    }
+
+    /// All methods for `type_name` across every `impl` block in the program (including inherent + trait impls).
+    /// Used so `self.helper()` in `impl Trait for T` resolves `helper` from `impl T` on the same type.
+    fn merged_impl_methods_for_type(
+        program: &Program<'ast>,
+        type_name: &str,
+    ) -> HashMap<String, FunctionDecl<'ast>> {
+        let type_base = type_name.split('<').next().unwrap_or(type_name);
+        let mut merged = HashMap::new();
+        Self::collect_impl_methods_recursive(&program.items, type_base, &mut merged);
+        merged
+    }
+
+    fn collect_impl_methods_recursive(
+        items: &[Item<'ast>],
+        type_base: &str,
+        merged: &mut HashMap<String, FunctionDecl<'ast>>,
+    ) {
+        for item in items {
+            match item {
+                Item::Impl { block, .. } => {
+                    let block_base = block.type_name.split('<').next().unwrap_or(&block.type_name);
+                    if block_base == type_base {
+                        for f in &block.functions {
+                            merged.insert(f.name.clone(), f.clone());
+                        }
+                    }
+                }
+                Item::Mod { items: inner, .. } => {
+                    Self::collect_impl_methods_recursive(inner, type_base, merged);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Analyze a function within an impl block (has access to other methods for cross-method analysis)
@@ -1366,16 +1451,14 @@ impl<'ast> Analyzer<'ast> {
         &mut self,
         func: &FunctionDecl<'ast>,
         impl_block: &crate::parser::ast::ImplBlock<'ast>,
+        program: &Program<'ast>,
         registry: &SignatureRegistry,
     ) -> Result<AnalyzedFunction<'ast>, String> {
-        // Store current impl block for cross-method lookups
-        self.current_impl_functions = Some(
-            impl_block
-                .functions
-                .iter()
-                .map(|f| (f.name.clone(), f.clone()))
-                .collect(),
-        );
+        // Same-type impl merge: trait impl methods can call inherent helpers on the same type.
+        self.current_impl_functions = Some(Self::merged_impl_methods_for_type(
+            program,
+            &impl_block.type_name,
+        ));
 
         let result = self.analyze_function(func, registry);
 
@@ -1606,10 +1689,18 @@ impl<'ast> Analyzer<'ast> {
         &mut self,
         func: &FunctionDecl<'ast>,
         trait_name: &str,
+        impl_block: &crate::parser::ast::ImplBlock<'ast>,
+        program: &Program<'ast>,
         registry: &SignatureRegistry,
     ) -> Result<AnalyzedFunction<'ast>, String> {
-        // Start with regular analysis
-        let mut analyzed = self.analyze_function(func, registry)?;
+        // Trait impl bodies may call `self.inherent_helper()` from `impl Type` — merge those decls.
+        self.current_impl_functions = Some(Self::merged_impl_methods_for_type(
+            program,
+            &impl_block.type_name,
+        ));
+        let analyzed_base = self.analyze_function(func, registry);
+        self.current_impl_functions = None;
+        let mut analyzed = analyzed_base?;
 
         // Look up the trait definition
         // Try both the full trait name and just the last segment (e.g., "std::ops::Add" -> "Add")
@@ -1664,9 +1755,11 @@ impl<'ast> Analyzer<'ast> {
                         // WINDJAMMER PHILOSOPHY: Use ANALYZED trait method ownership, not AST ownership!
                         // The AST might have `self` (Owned) but analysis infers `&self` (Borrowed).
                         // Check if this trait method was analyzed (has default implementation)
-                        let trait_mode = if let Some(trait_methods) =
-                            self.analyzed_trait_methods.get(trait_key)
-                        {
+                        let trait_methods_opt = self
+                            .analyzed_trait_methods
+                            .get(trait_key)
+                            .or_else(|| self.analyzed_trait_methods.get(trait_name));
+                        let trait_mode = if let Some(trait_methods) = trait_methods_opt {
                             if let Some(analyzed_trait_method) = trait_methods.get(&func.name) {
                                 // Use analyzed ownership (takes priority!)
                                 if let Some(analyzed_ownership) = analyzed_trait_method
@@ -1708,25 +1801,38 @@ impl<'ast> Analyzer<'ast> {
                             .insert(impl_param.name.clone(), final_mode);
                     }
                 }
-
-                // WINDJAMMER PHILOSOPHY: For traits WITHOUT default implementations,
-                // update the trait method's analyzed ownership from the impl.
-                // This ensures the trait signature matches the impl's inferred signature.
-                if trait_method.body.is_none() {
-                    // Trait has no default implementation - use impl's analyzed ownership
-                    // Create or update the analyzed trait method entry
-                    let analyzed_trait_methods_for_trait = self
-                        .analyzed_trait_methods
-                        .entry(trait_key.to_string())
-                        .or_default();
-
-                    // Store the impl's analyzed ownership for this trait method
-                    analyzed_trait_methods_for_trait.insert(func.name.clone(), analyzed.clone());
-                }
             }
         }
 
+        // E0186 / E0053: Impl receiver must match the trait — never infer only from the impl body.
+        // Replacing analyzed_trait_methods with the impl used to drop implicit `self` when the impl
+        // body was empty or omitted `self`, producing trait/impl mismatches in Rust.
+        if let Some(self_mode) =
+            self.trait_method_receiver_ownership(trait_name, trait_key, &func.name)
+        {
+            analyzed
+                .inferred_ownership
+                .insert("self".to_string(), self_mode);
+        }
+
         Ok(analyzed)
+    }
+
+    /// Look up the analyzed receiver (`self`) ownership for a trait method (trait is the contract).
+    fn trait_method_receiver_ownership(
+        &self,
+        trait_name: &str,
+        trait_key: &str,
+        method_name: &str,
+    ) -> Option<OwnershipMode> {
+        for key in [trait_key, trait_name] {
+            if let Some(methods) = self.analyzed_trait_methods.get(key) {
+                if let Some(trait_fn) = methods.get(method_name) {
+                    return trait_fn.inferred_ownership.get("self").copied();
+                }
+            }
+        }
+        None
     }
 
     fn infer_parameter_ownership(
