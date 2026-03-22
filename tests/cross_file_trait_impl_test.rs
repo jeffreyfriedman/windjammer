@@ -179,10 +179,10 @@ fn test_cross_file_trait_impl_no_default() {
 
 #[test]
 fn test_cross_file_trait_impl_with_mutation() {
-    // Trait with default implementation that mutates
+    // Trait with default implementation that mutates (idiomatic: no `mut self` in source)
     let trait_file = r#"
     pub trait Counter {
-        fn increment(mut self) {
+        fn increment() {
             self.count = self.count + 1
         }
     }
@@ -196,7 +196,7 @@ fn test_cross_file_trait_impl_with_mutation() {
     use counter::CounterData
     
     impl Counter for CounterData {
-        fn increment(mut self) {
+        fn increment() {
             self.count = self.count + 2
         }
     }
