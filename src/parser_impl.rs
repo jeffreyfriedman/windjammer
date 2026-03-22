@@ -260,7 +260,7 @@ impl Parser {
             doc_lines.push(content.clone());
             self.advance();
         }
-        let doc_comment = if doc_lines.is_empty() {
+        let mut doc_comment = if doc_lines.is_empty() {
             None
         } else {
             Some(doc_lines.join("\n"))
@@ -272,6 +272,16 @@ impl Parser {
             decorators.push(self.parse_decorator()?);
         }
 
+        // Doc comments may appear after @derive and before the item (e.g. @derive(Clone)\n/// doc\npub struct S)
+        let mut doc_lines_after = Vec::new();
+        while let Token::DocComment(content) = self.current_token() {
+            doc_lines_after.push(content.clone());
+            self.advance();
+        }
+        if !doc_lines_after.is_empty() {
+            doc_comment = Some(doc_lines_after.join("\n"));
+        }
+
         // Check for pub keyword (for module functions)
         let is_pub = if self.current_token() == &Token::Pub {
             self.advance();
@@ -281,19 +291,6 @@ impl Parser {
         };
 
         match self.current_token() {
-            Token::Extern => {
-                self.advance(); // Consume the Extern token
-                self.expect(Token::Fn)?; // Expect fn after extern
-                let mut func = self.parse_function()?;
-                func.is_extern = true; // Mark as extern function
-                func.is_pub = is_pub;
-                func.decorators = decorators;
-                func.doc_comment = doc_comment;
-                Ok(Item::Function {
-                    decl: func,
-                    location: self.current_location(),
-                })
-            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -390,6 +387,50 @@ impl Parser {
                     value,
                     location: self.current_location(),
                 })
+            }
+            Token::Extern => {
+                // Check if this is `extern let` (GPU bindings) or `extern fn` (FFI)
+                if self.peek(1) == Some(&Token::Let) {
+                    self.advance(); // consume extern
+                    self.advance(); // consume let
+                    
+                    let name = if let Token::Ident(n) = self.current_token() {
+                        let n = n.clone();
+                        self.advance();
+                        n
+                    } else {
+                        return Err("Expected variable name after extern let".to_string());
+                    };
+                    
+                    self.expect(Token::Colon)?;
+                    let type_ = self.parse_type()?;
+                    
+                    // Semicolon optional (ASI)
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                    }
+                    
+                    Ok(Item::ExternLet {
+                        name,
+                        type_,
+                        decorators,
+                        is_pub,
+                        location: self.current_location(),
+                    })
+                } else {
+                    // extern fn - existing code path
+                    self.advance(); // Consume the Extern token
+                    self.expect(Token::Fn)?; // Expect fn after extern
+                    let mut func = self.parse_function()?;
+                    func.is_extern = true; // Mark as extern function
+                    func.is_pub = is_pub;
+                    func.decorators = decorators;
+                    func.doc_comment = doc_comment;
+                    Ok(Item::Function {
+                        decl: func,
+                        location: self.current_location(),
+                    })
+                }
             }
             Token::Use => {
                 self.advance(); // consume 'use'

@@ -5,8 +5,10 @@
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
+pub mod cargo_toml;
 pub mod cli;
 pub mod codegen;
+pub mod compiler;
 pub mod component_analyzer;
 pub mod error;
 pub mod errors;
@@ -27,6 +29,7 @@ pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
+pub mod metadata; // Cross-module type inference metadata
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -37,6 +40,8 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_utils; // Syntax highlighting for error snippets
+pub mod type_inference; // Expression-level float type inference
+pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -98,6 +103,10 @@ enum Commands {
         /// Auto-generate mod.rs with pub mod declarations and re-exports
         #[arg(long)]
         module_file: bool,
+
+        /// Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)
+        #[arg(long)]
+        no_lint: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -240,8 +249,9 @@ pub fn run_main_cli() -> Result<()> {
             raw_errors,
             library,
             module_file,
+            no_lint,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, !no_lint)?;
 
             // Generate mod.rs if requested
             if module_file {
@@ -263,7 +273,7 @@ pub fn run_main_cli() -> Result<()> {
             target,
             raw_errors,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, true)?;
             check_with_cargo(&output, raw_errors)?;
         }
         Commands::Lint {
@@ -382,7 +392,38 @@ fn is_type_copy_quick(
     }
 }
 
-pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
+/// Extended build with library mode and external crate metadata.
+/// Used by CLI when --library or --metadata is passed.
+/// The full main.rs build_project doesn't yet support these - delegate to compiler for simple builds.
+pub fn build_project_ext(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+) -> Result<()> {
+    // When we have metadata or library, use the compiler's simpler build (handles cross-crate)
+    if !external_metadata.is_empty() || (library && path.is_file()) {
+        return crate::compiler::build_project_ext(
+            path,
+            output,
+            target,
+            enable_lint,
+            library,
+            external_metadata,
+        );
+    }
+    // Full multi-file build
+    build_project(path, output, target, enable_lint)
+}
+
+pub fn build_project(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+) -> Result<()> {
     use colored::*;
 
     println!(
@@ -410,7 +451,7 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     let mut all_external_crates = Vec::new();
 
     // Create a single ModuleCompiler for all files to share trait registry
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, enable_lint);
 
     // Load windjammer.toml if it exists (search up directory tree)
     let mut search_dir = if path.is_file() {
@@ -589,6 +630,14 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         let mut parser = parser_impl::Parser::new(tokens);
 
         if let Ok(program) = parser.parse() {
+            // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+            // Check immediately after parsing, before trait registration
+            let checker_analyzer = analyzer::Analyzer::new();
+            if let Err(e) = checker_analyzer.check_forbidden_rust_patterns(&program) {
+                eprintln!("{}", e);
+                anyhow::bail!("{}", e);
+            }
+            
             // Register any trait definitions found
             let mut has_traits = false;
             for item in &program.items {
@@ -909,6 +958,14 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            // TDD FIX: Skip "shaders" directory - contains WGSL files, not Rust
+            // Shader files use WGSL types (vec3<float>, mat4x4<float>) which don't exist in Rust
+            // They should be compiled separately to WGSL, not to Rust
+            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if dir_name == "shaders" {
+                continue; // Skip shaders directory
+            }
+            
             // Recurse into subdirectories
             find_wj_files_recursive(&path, files)?;
         }
@@ -921,6 +978,7 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
 struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
+    enable_lint: bool, // Run Rust leakage linter (W0001-W0004)
     stdlib_path: PathBuf,
     source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
@@ -947,7 +1005,7 @@ struct ModuleCompiler {
 
 #[allow(dead_code)]
 impl ModuleCompiler {
-    fn new(target: CompilationTarget) -> Self {
+    fn new(target: CompilationTarget, enable_lint: bool) -> Self {
         // Check for WINDJAMMER_STDLIB env var, otherwise use ./std
         let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
             .map(PathBuf::from)
@@ -956,6 +1014,7 @@ impl ModuleCompiler {
         Self {
             compiled_modules: HashMap::new(),
             target,
+            enable_lint,
             stdlib_path,
             source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
@@ -1074,6 +1133,16 @@ impl ModuleCompiler {
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
 
+        // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+        // This must happen immediately after parsing, before any other processing
+        {
+            eprintln!("🔍 LANGUAGE CHECK (compile_module): Scanning {} for .as_str()", module_path);
+            let checker_analyzer = analyzer::Analyzer::new();
+            checker_analyzer.check_forbidden_rust_patterns(&program)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            eprintln!("✅ LANGUAGE CHECK (compile_module): No .as_str() found in {}", module_path);
+        }
+
         // Mark as "being compiled" to prevent infinite recursion
         // We'll update this with the actual code later
         self.compiled_modules
@@ -1188,6 +1257,24 @@ impl ModuleCompiler {
             );
         }
 
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.set_global_struct_field_types(&self.global_struct_field_types);
+        float_inference.set_debug_source(&source);
+        float_inference.infer_program(&program);
+        
+        if !float_inference.errors.is_empty() {
+            eprintln!("🚨 Float type inference errors in module {} (file {:?}):", module_path, file_path);
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Create a per-file registry that starts with global signatures (for cross-module lookups)
         // then overlays per-file signatures (for local type priority).
@@ -1197,6 +1284,7 @@ impl ModuleCompiler {
         per_file_registry.merge(&signatures);
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
+        generator.set_float_inference(float_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
@@ -1433,7 +1521,7 @@ fn compile_file(
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, true);
     // For single-file compilation, use parent directory as source root
     let source_root = input_path.parent().unwrap_or(Path::new("."));
     let is_multi_file = false; // Single file compilation
@@ -1563,6 +1651,7 @@ fn compile_file_impl(
     store_program: bool,
     _path_key: &str,
 ) -> Result<(HashSet<String>, Vec<String>)> {
+    eprintln!("🚀 ENTERED compile_file_impl for {:?}", input_path.file_name());
     let target = module_compiler.target;
 
     // Read source file
@@ -1580,6 +1669,26 @@ fn compile_file_impl(
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+    // This must happen immediately after parsing, before any other processing
+    {
+        eprintln!("🔍 LANGUAGE CHECK (file_impl): Scanning for .as_str() in {:?}", input_path.file_name());
+        let checker_analyzer = analyzer::Analyzer::new();
+        checker_analyzer.check_forbidden_rust_patterns(&program)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
+    }
+
+    // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
+    if module_compiler.enable_lint {
+        let file_name = input_path.to_string_lossy().to_string();
+        let mut rust_leakage = linter::rust_leakage::RustLeakageLinter::new(&file_name);
+        rust_leakage.lint_program(&program);
+        for diag in rust_leakage.diagnostics() {
+            eprintln!("{}", diag);
+        }
+    }
 
     // DEBUG: Print Item::Mod entries in the AST
     if std::env::var("WJ_DEBUG_AST").is_ok() {
@@ -1919,6 +2028,24 @@ fn compile_file_impl(
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
         } else {
+            // WINDJAMMER PHILOSOPHY: Expression-level float type inference (WASM target)
+            let mut float_inference = type_inference::FloatInference::new();
+            float_inference.set_source_root(source_root);
+            float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+            float_inference.set_debug_source(&source);
+            float_inference.infer_program(&program);
+            
+            if !float_inference.errors.is_empty() {
+                eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+                for error in &float_inference.errors {
+                    eprintln!("  {}", error);
+                }
+                return Err(anyhow::anyhow!(
+                    "Type inference failed with {} error(s)",
+                    float_inference.errors.len()
+                ));
+            }
+
             // Use old generator for non-component WASM
             // MODULE-SCOPED SIGNATURE RESOLUTION:
             // Always start with global signatures (for cross-module lookups),
@@ -1932,6 +2059,7 @@ fn compile_file_impl(
             } else {
                 codegen::CodeGenerator::new(generator_signatures, target)
             };
+            generator.set_float_inference(float_inference);
             generator.set_inferred_bounds(inferred_bounds_map);
             generator.set_analyzed_trait_methods(analyzed_trait_methods);
             // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
@@ -1967,6 +2095,40 @@ fn compile_file_impl(
             result
         }
     } else {
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference (Rust target)
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.set_source_root(source_root);
+        float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        float_inference.set_debug_source(&source);
+        float_inference.infer_program(&program);
+        
+        if !float_inference.errors.is_empty() {
+            eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
+        // TDD: Integer literal type inference (i32, i64, u32, etc.)
+        let mut int_inference = type_inference::IntInference::new();
+        int_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        int_inference.infer_program(&program);
+        if !int_inference.errors.is_empty() {
+            eprintln!("🚨 Int type inference errors in {}:", input_path.display());
+            for error in &int_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Int type inference failed with {} error(s)",
+                int_inference.errors.len()
+            ));
+        }
+
         // Use old generator for Rust target
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Always start with global signatures (for cross-module lookups),
@@ -1978,6 +2140,8 @@ fn compile_file_impl(
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
         };
+        generator.set_float_inference(float_inference);
+        generator.set_int_inference(int_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
@@ -2123,6 +2287,65 @@ fn compile_file_impl(
 
         #[cfg(not(target_os = "linux"))]
         drop(file); // Close file handle on non-Linux systems
+    }
+
+    // TDD FIX: Emit metadata file for cross-module type inference
+    if target == CompilationTarget::Rust {
+        use crate::metadata::{ModuleMetadata, FunctionSignature};
+        
+        let module_path = input_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        
+        let mut meta = ModuleMetadata::new(module_path.to_string());
+        
+        // Extract function signatures from program
+        for item in &program.items {
+            match item {
+                parser::Item::Function { decl, .. } => {
+                    meta.functions.insert(
+                        decl.name.clone(),
+                        FunctionSignature {
+                            params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                            return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                            is_associated: false,
+                            parent_type: None,
+                        },
+                    );
+                }
+                parser::Item::Impl { block, .. } => {
+                    let type_name = &block.type_name;
+                    for func_decl in &block.functions {
+                        let full_name = format!("{}::{}", type_name, func_decl.name);
+                        meta.functions.insert(
+                            full_name,
+                            FunctionSignature {
+                                params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
+                                return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                is_associated: true,
+                                parent_type: Some(type_name.clone()),
+                            },
+                        );
+                    }
+                }
+                parser::Item::Struct { decl, .. } => {
+                    let mut fields = std::collections::HashMap::new();
+                    for field in &decl.fields {
+                        fields.insert(field.name.clone(), ModuleMetadata::serialize_type(&field.field_type));
+                    }
+                    meta.structs.insert(decl.name.clone(), fields);
+                }
+                _ => {}
+            }
+        }
+        
+        // Write metadata file: file.wj → file.wj.meta (JSON)
+        let meta_path = input_path.with_extension("wj.meta");
+        let meta_json = serde_json::to_string_pretty(&meta)?;
+        std::fs::write(&meta_path, meta_json)?;
+        
+        eprintln!("📋 METADATA: {} ({} functions, {} structs)", meta_path.display(), meta.functions.len(), meta.structs.len());
     }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
@@ -3355,7 +3578,7 @@ fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<(
     fs::create_dir_all(&temp_dir)?;
 
     // Build the project
-    build_project(file, &temp_dir, target)?;
+    build_project(file, &temp_dir, target, true)?;
 
     // Handle execution based on target
     match target {
@@ -4074,7 +4297,7 @@ fn detect_and_compile_library(
 
     // Use build_project to compile the library
     eprintln!("DEBUG: About to call build_project");
-    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
+    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust, true) {
         Ok(_) => {
             eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
@@ -5708,5 +5931,12 @@ mod tests {
         //
         // The actual implementation is in build_project()
         // If this test compiles and passes, the concept is sound
+    }
+}
+
+fn main() {
+    if let Err(e) = run_main_cli() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }

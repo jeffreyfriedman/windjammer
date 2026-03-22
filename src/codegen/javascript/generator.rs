@@ -67,6 +67,27 @@ impl JavaScriptGenerator {
         }
         name.to_string()
     }
+    
+    /// TDD FIX: Escape JavaScript reserved keywords
+    /// JS keywords: break, case, catch, class, const, continue, debugger, default,
+    /// delete, do, else, export, extends, finally, for, function, if, import, in,
+    /// instanceof, let, new, return, super, switch, this, throw, try, typeof, var,
+    /// void, while, with, yield, async, await, enum, implements, interface, package,
+    /// private, protected, public, static
+    fn escape_js_keyword(name: &str) -> String {
+        match name {
+            "break" | "case" | "catch" | "class" | "const" | "continue" | "debugger"
+            | "default" | "delete" | "do" | "else" | "export" | "extends" | "finally"
+            | "for" | "function" | "if" | "import" | "in" | "instanceof" | "let"
+            | "new" | "return" | "super" | "switch" | "this" | "throw" | "try"
+            | "typeof" | "var" | "void" | "while" | "with" | "yield" | "async"
+            | "await" | "enum" | "implements" | "interface" | "package" | "private"
+            | "protected" | "public" | "static" => {
+                format!("{}_", name) // Append underscore to avoid keyword conflict
+            }
+            _ => name.to_string(),
+        }
+    }
 
     pub fn generate(&mut self, program: &Program) -> String {
         let mut output = String::new();
@@ -310,14 +331,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     fn generate_function(&mut self, func: &FunctionDecl) -> String {
         let mut output = String::new();
 
-        // Generate JSDoc
+        // Generate JSDoc (TDD FIX: Escape keywords in param names)
         if !func.parameters.is_empty() || func.return_type.is_some() {
             output.push_str("/**\n");
             for param in &func.parameters {
+                let param_name = Self::escape_js_keyword(&param.name);
                 output.push_str(&format!(
                     " * @param {{{}}} {}\n",
                     Self::type_to_jsdoc(&param.type_),
-                    param.name
+                    param_name
                 ));
             }
             if let Some(ref ret_type) = func.return_type {
@@ -345,29 +367,41 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         output.push_str(&func.name);
         output.push('(');
 
-        // Parameters
-        let params: Vec<String> = func.parameters.iter().map(|p| p.name.clone()).collect();
+        // Parameters (TDD FIX: Escape JavaScript keywords)
+        let params: Vec<String> = func.parameters
+            .iter()
+            .map(|p| Self::escape_js_keyword(&p.name))
+            .collect();
         output.push_str(&params.join(", "));
         output.push_str(") {\n");
 
         // Body
         self.push_var_scope();
-        // Declare parameters in scope
+        // Declare parameters in scope (TDD FIX: Use escaped names)
         for p in &func.parameters {
-            self.declare_var(&p.name);
+            let escaped = Self::escape_js_keyword(&p.name);
+            self.var_scopes.last_mut().unwrap().insert(p.name.clone(), escaped);
         }
         self.indent_level += 1;
         let body_len = func.body.len();
         let has_return_type = func.return_type.is_some();
         for (i, stmt) in func.body.iter().enumerate() {
             let is_last = i == body_len - 1;
-            // Auto-insert return for last expression in functions with return type
+            // TDD FIX: Auto-insert return for tail expressions
             if is_last && has_return_type {
-                if let Statement::Expression { expr, .. } = stmt {
-                    let indent = self.indent();
-                    let expr_str = self.generate_expression(expr);
-                    output.push_str(&format!("{}return {};\n", indent, expr_str));
-                    continue;
+                match stmt {
+                    Statement::Expression { expr, .. } => {
+                        let indent = self.indent();
+                        let expr_str = self.generate_expression(expr);
+                        output.push_str(&format!("{}return {};\n", indent, expr_str));
+                        continue;
+                    }
+                    Statement::Match { .. } => {
+                        // Match in tail position: need returns in each arm
+                        output.push_str(&self.generate_statement_match_with_return(stmt));
+                        continue;
+                    }
+                    _ => {}
                 }
             }
             output.push_str(&self.generate_statement(stmt));
@@ -689,17 +723,43 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     self.generate_expression(value)
                 ));
 
-                // Pre-declare any variables used in guard patterns (e.g., `x if x > 0`)
-                // so they're in scope for both the binding and the guard expression.
+                // TDD FIX: Pre-declare variables used in patterns (including enum variants)
+                // JavaScript requires variables to be declared before assignment in expressions
                 // Deduplicate: multiple arms may bind the same variable name.
                 {
+                    use crate::parser::EnumPatternBinding;
                     let mut declared = std::collections::HashSet::new();
                     for arm in arms.iter() {
-                        if let Pattern::Identifier(id) = &arm.pattern {
-                            if id != "_" && declared.insert(id.clone()) {
-                                output.push_str(&self.indent());
-                                output.push_str(&format!("let {};\n", id));
+                        match &arm.pattern {
+                            Pattern::Identifier(id) => {
+                                if id != "_" && declared.insert(id.clone()) {
+                                    output.push_str(&self.indent());
+                                    output.push_str(&format!("let {};\n", id));
+                                }
                             }
+                            Pattern::EnumVariant(_, binding) => {
+                                // TDD FIX: Extract variables from enum variant patterns
+                                match binding {
+                                    EnumPatternBinding::Single(var) => {
+                                        if declared.insert(var.clone()) {
+                                            output.push_str(&self.indent());
+                                            output.push_str(&format!("let {};\n", var));
+                                        }
+                                    }
+                                    EnumPatternBinding::Tuple(patterns) => {
+                                        for pat in patterns {
+                                            if let Pattern::Identifier(var) = pat {
+                                                if declared.insert(var.clone()) {
+                                                    output.push_str(&self.indent());
+                                                    output.push_str(&format!("let {};\n", var));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -720,7 +780,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
                     self.indent_level += 1;
                     output.push_str(&self.indent());
-                    output.push_str(&format!("return {};\n", self.generate_expression(arm.body)));
+                    // TDD FIX: Statement::Match should NOT return from function
+                    // This is a statement-level match (like if-let), just execute the body
+                    output.push_str(&format!("{};\n", self.generate_expression(arm.body)));
                     self.indent_level -= 1;
 
                     output.push_str(&self.indent());
@@ -807,10 +869,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             Expression::Identifier { name: id, .. } => {
                 // Convert Rust-style path syntax (Type::Variant) to JS dot notation (Type.Variant)
                 if id.contains("::") {
-                    id.replace("::", ".")
+                    // TDD FIX: Escape keywords in path components (Type::default → Type.default_)
+                    let parts: Vec<String> = id
+                        .split("::")
+                        .map(|part| Self::escape_js_keyword(part))
+                        .collect();
+                    parts.join(".")
                 } else {
-                    // Resolve shadowed variable names
-                    self.resolve_var(id)
+                    // TDD FIX: Escape JavaScript keywords
+                    // Resolve shadowed variable names first, then escape if needed
+                    let resolved = self.resolve_var(id);
+                    Self::escape_js_keyword(&resolved)
                 }
             }
 
@@ -1120,6 +1189,91 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         }
     }
 
+    /// TDD: Generate match statement with returns (for tail position in functions)
+    fn generate_statement_match_with_return(&mut self, stmt: &Statement) -> String {
+        if let Statement::Match { value, arms, .. } = stmt {
+            let mut output = String::new();
+            output.push_str(&self.indent());
+            output.push_str("{\n");
+
+            self.indent_level += 1;
+            output.push_str(&self.indent());
+            output.push_str(&format!(
+                "let __match_value = {};\n",
+                self.generate_expression(value)
+            ));
+
+            // Pre-declare variables
+            {
+                use crate::parser::EnumPatternBinding;
+                let mut declared = std::collections::HashSet::new();
+                for arm in arms.iter() {
+                    match &arm.pattern {
+                        Pattern::Identifier(id) => {
+                            if id != "_" && declared.insert(id.clone()) {
+                                output.push_str(&self.indent());
+                                output.push_str(&format!("let {};\n", id));
+                            }
+                        }
+                        Pattern::EnumVariant(_, binding) => {
+                            match binding {
+                                EnumPatternBinding::Single(var) => {
+                                    if declared.insert(var.clone()) {
+                                        output.push_str(&self.indent());
+                                        output.push_str(&format!("let {};\n", var));
+                                    }
+                                }
+                                EnumPatternBinding::Tuple(patterns) => {
+                                    for pat in patterns {
+                                        if let Pattern::Identifier(var) = pat {
+                                            if declared.insert(var.clone()) {
+                                                output.push_str(&self.indent());
+                                                output.push_str(&format!("let {};\n", var));
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            for (i, arm) in arms.iter().enumerate() {
+                output.push_str(&self.indent());
+                if i == 0 {
+                    output.push_str("if (");
+                } else {
+                    output.push_str("else if (");
+                }
+                output.push_str(&self.generate_pattern_match(&arm.pattern, "__match_value"));
+                if let Some(guard) = arm.guard {
+                    output.push_str(" && ");
+                    output.push_str(&self.generate_expression(guard));
+                }
+                output.push_str(") {\n");
+
+                self.indent_level += 1;
+                output.push_str(&self.indent());
+                // TDD: Tail position match - add return
+                output.push_str(&format!("return {};\n", self.generate_expression(arm.body)));
+                self.indent_level -= 1;
+
+                output.push_str(&self.indent());
+                output.push_str("}\n");
+            }
+
+            self.indent_level -= 1;
+            output.push_str(&self.indent());
+            output.push_str("}\n");
+            output
+        } else {
+            String::new()
+        }
+    }
+
     fn generate_pattern_match(&self, pattern: &Pattern, match_value: &str) -> String {
         match pattern {
             Pattern::Wildcard => "true".to_string(),
@@ -1318,6 +1472,7 @@ mod tests {
                     is_extern: false,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![],
                     decorators: vec![],
                     is_async: false,

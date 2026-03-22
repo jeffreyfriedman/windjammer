@@ -10,11 +10,8 @@ fn compile_code(code: &str, test_name: &str) -> Result<String, String> {
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             &input_file,
             "--output",
@@ -47,8 +44,8 @@ fn test_array_index_of_copy_type_should_not_add_mut_ref() {
     }
     
     impl Storage {
-        pub fn get(&self, index: int) -> i64 {
-            let value = self.data[index as usize]
+        pub fn get(self, index: usize) -> i64 {
+            let value = self.data[index]
             return value
         }
     }
@@ -82,13 +79,13 @@ fn test_inline_array_index_copy_type_in_return() {
     }
     
     pub struct Entity {
-        pub id: i64,
+        pub id: usize,
         pub gen: i64,
     }
     
     impl Manager {
-        pub fn create(&self, index: i64) -> Entity {
-            let generation = self.generations[index as usize]
+        pub fn create(self, index: usize) -> Entity {
+            let generation = self.generations[index]
             return Entity { id: index, gen: generation }
         }
     }

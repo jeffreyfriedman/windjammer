@@ -11,11 +11,13 @@ pub fn generate_literal(lit: &Literal) -> String {
         Literal::Int(i) => i.to_string(),
         Literal::Float(f) => {
             let s = f.to_string();
-            // Ensure float literals have a decimal point
+            // Ensure float literals have a decimal point AND f64 suffix
+            // to avoid ambiguous numeric type errors in Rust (E0689)
+            // Note: Windjammer's Float type maps to Rust's f64 (see types.rs)
             if !s.contains('.') && !s.contains('e') && !s.contains('E') {
-                format!("{}.0", s)
+                format!("{}.0_f64", s)
             } else {
-                s
+                format!("{}_f64", s)
             }
         }
         Literal::String(s) => format!("\"{}\"", escape_string(s)),
@@ -65,13 +67,13 @@ mod tests {
 
     #[test]
     fn test_float_literal() {
-        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5");
-        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0");
-        // Integer-like floats should have .0
+        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5_f64");
+        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0_f64");
+        // Integer-like floats should have .0_f64
         let result = generate_literal(&Literal::Float(10.0));
         assert!(
-            result.contains('.'),
-            "Float literal should have decimal point: {}",
+            result.contains('.') && result.contains("f64"),
+            "Float literal should have decimal point and f64 suffix: {}",
             result
         );
     }

@@ -439,6 +439,7 @@ mod tests {
                     name: "sum_array".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![
                         test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("sum".to_string()),
@@ -525,6 +526,7 @@ mod tests {
                     name: "complex".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {

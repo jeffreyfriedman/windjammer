@@ -204,9 +204,26 @@ impl Ejector {
             }
         }
 
-        // Generate Rust code
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = crate::type_inference::FloatInference::new();
+        float_inference.infer_program(&program);
+        
+        if !float_inference.errors.is_empty() {
+            eprintln!("🚨 Float type inference errors:");
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
+        // Generate Rust code with type inference results
         let mut generator = codegen::CodeGenerator::new(signatures, self.config.target);
         generator.set_inferred_bounds(inferred_bounds_map);
+        generator.set_float_inference(float_inference);
         let mut rust_code = generator.generate_program(&program, &analyzed);
 
         // Add helpful comments if requested

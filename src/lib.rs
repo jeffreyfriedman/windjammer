@@ -2,4 +2,75 @@
 // This is common in AST traversal code
 #![allow(clippy::only_used_in_recursion)]
 
+use clap::ValueEnum;
+
+pub mod analyzer;
+pub mod auto_clone;
+pub mod cargo_toml;
+pub mod auto_fix;
+pub mod codegen;
+pub mod component_analyzer;
+pub mod config;
+pub mod error;
+pub mod error_codes;
+pub mod errors;
+pub mod fuzzy_matcher;
+pub mod inference;
+pub mod interpreter;
+pub mod lexer;
+pub mod linter;
+pub mod metadata;
+pub mod parser;
+pub mod parser_impl;
+pub mod source_map;
+pub mod stdlib_scanner;
+pub mod syntax_highlighter;
+pub mod test_utils;
+pub mod type_inference;
 pub mod type_registry;
+pub mod compiler;
+pub mod lib_rs_generator;
+pub mod ejector;
+pub mod error_mapper;
+pub mod shader;
+pub mod wjsl;
+
+// CLI-related modules (required for wj binary)
+#[cfg(feature = "cli")]
+pub mod build_utils;
+#[cfg(feature = "cli")]
+pub mod cli;
+#[cfg(feature = "cli")]
+pub mod plugin;
+#[cfg(feature = "cli")]
+pub mod error_catalog;
+#[cfg(feature = "cli")]
+pub mod error_statistics;
+#[cfg(feature = "cli")]
+pub mod test_runner;
+
+/// Build a Windjammer project - compiles .wj files to Rust.
+/// Used by integration tests and CLI.
+pub use compiler::{build_project, build_project_ext};
+
+// CLI exports (used by cli/build.rs, cli/test.rs, wj binary)
+#[cfg(feature = "cli")]
+pub use build_utils::{generate_mod_file, strip_main_functions};
+#[cfg(feature = "cli")]
+pub use test_runner::run_tests;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CompilationTarget {
+    /// Native Rust binary
+    Rust,
+    /// Go source code (experimental)
+    Go,
+    /// WebAssembly
+    Wasm,
+    /// Node.js native modules (future)
+    Node,
+    /// Python FFI via PyO3 (future)
+    Python,
+    /// C FFI (future)
+    C,
+}

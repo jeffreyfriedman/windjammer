@@ -449,6 +449,21 @@ pub fn is_copy_type(ty: &Type) -> bool {
     }
 }
 
+/// Known Copy types from external crates (windjammer-app, game engines).
+/// These are common structs with only primitive fields - always Copy in Rust.
+/// Used when struct definition isn't available (cross-crate compilation).
+/// NOTE: SaveSlot/SaveSlotInfo have String fields - NOT included.
+pub fn is_known_copy_type(name: &str) -> bool {
+    matches!(
+        name,
+        "Vec2" | "Vec3" | "Vec4"
+            | "Vec2i" | "Vec3i"
+            | "AABB"
+            | "Rect" | "Point" | "Color"
+            | "Vec3Save"
+    )
+}
+
 // =============================================================================
 // CodeGenerator Type Inference Helpers
 // =============================================================================
@@ -871,6 +886,18 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 } else {
                     None
+                }
+            }
+            // TDD FIX: Macro invocations return known types
+            // format!() always returns String
+            // vec![] returns Vec<T> (but we don't infer T here)
+            Expression::MacroInvocation { name, .. } => {
+                match name.as_str() {
+                    "format" => Some(Type::String),
+                    "panic" => None, // Never returns (diverges)
+                    "println" | "print" | "eprintln" | "eprint" => None, // Returns ()
+                    "vec" => None, // TODO: Could infer Vec<T> from element types
+                    _ => None,
                 }
             }
             _ => None,

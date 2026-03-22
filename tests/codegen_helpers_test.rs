@@ -117,6 +117,7 @@ fn test_get_item_location_function() {
 
     let item = Item::Function {
         decl: windjammer::parser::FunctionDecl {
+            return_decorators: Vec::new(),
             name: "test".to_string(),
             parameters: vec![],
             return_type: Some(Type::Int),
@@ -164,6 +165,7 @@ fn test_get_item_location_struct() {
 fn test_get_item_location_none() {
     let item = Item::Function {
         decl: windjammer::parser::FunctionDecl {
+            return_decorators: Vec::new(),
             name: "test".to_string(),
             parameters: vec![],
             return_type: Some(Type::Int),

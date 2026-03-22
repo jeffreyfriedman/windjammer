@@ -38,6 +38,15 @@ impl<'ast> CodeGenerator<'ast> {
             if decorator.name == "component" || decorator.name == "game" {
                 continue;
             }
+            
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
+                continue;
+            }
 
             if decorator.name == "command" {
                 // Special handling for @command decorator - generates clap attributes
@@ -409,10 +418,51 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&method.name);
             output.push('(');
 
+            // TDD FIX: Trait Method Ownership Inference
+            // THE WINDJAMMER WAY: If trait method has no explicit self parameter,
+            // infer it automatically based on the method type:
+            // - Constructors (new, default, from, etc.) → No self (associated function)
+            // - All other methods → &mut self (method)
+            let has_self_param = method.parameters.iter().any(|p| p.name == "self");
+            let is_constructor = matches!(
+                method.name.as_str(),
+                "new" | "default" | "from" | "from_str" | "from_bytes" 
+                | "with_capacity" | "empty" | "zero" | "one"
+            );
+            
+            let mut params: Vec<String> = Vec::new();
+            
+            // Add self parameter if missing and not a constructor
+            if !has_self_param && !is_constructor {
+                let returns_bare_self = matches!(
+                    &method.return_type,
+                    Some(Type::Custom(name)) if name == "Self"
+                );
+                // Check if we have analyzed ownership for this method
+                let self_ownership = if let Some(analyzed) = analyzed_method {
+                    analyzed.inferred_ownership.get("self").copied()
+                } else if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_decl.name) {
+                    trait_methods.get(&method.name)
+                        .and_then(|m| m.inferred_ownership.get("self").copied())
+                } else {
+                    None
+                };
+
+                // Associated function: `fn create() -> Self` has no receiver — do not emit &mut self.
+                if !(self_ownership.is_none() && returns_bare_self) {
+                    let self_param = match self_ownership {
+                        Some(OwnershipMode::Borrowed) => "&self",
+                        Some(OwnershipMode::MutBorrowed) | None => "&mut self",
+                        Some(OwnershipMode::Owned) => "self",
+                    };
+                    params.push(self_param.to_string());
+                }
+            }
+
             // Generate parameters
             // NOTE: Trait method signatures cannot have 'mut' keyword in Rust
             // Only implementations can have 'mut self' or 'mut param'
-            let params: Vec<String> = method
+            let method_params: Vec<String> = method
                 .parameters
                 .iter()
                 .map(|param| {
@@ -495,17 +545,19 @@ impl<'ast> CodeGenerator<'ast> {
                             // TRAIT SIGNATURES: Default to &self for trait methods
                             // This prevents E0277 (Self not Sized) errors
                             if param.name == "self" {
-                                "&self".to_string()
-                            } else {
-                                // Owned parameter (no &)
-                                self.type_to_rust(&param.type_)
+                                return "&self".to_string();
                             }
+                            // Owned parameter (no &)
+                            self.type_to_rust(&param.type_)
                         }
                     };
 
                     format!("{}: {}", param.name, type_str)
                 })
                 .collect();
+            
+            // Append method parameters to params (which may already have self)
+            params.extend(method_params);
 
             output.push_str(&params.join(", "));
             output.push(')');
@@ -645,8 +697,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Store the wasm export flag and trait impl flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
         let old_in_trait_impl = self.in_trait_impl;
+        let old_trait_impl_name = self.current_trait_impl_name.take();
         self.in_wasm_bindgen_impl = has_wasm_export;
         self.in_trait_impl = impl_block.trait_name.is_some();
+        // E0053 FIX: Track trait name so impl methods use trait's ownership (not impl's inferred)
+        self.current_trait_impl_name = impl_block.trait_name.clone();
 
         // Pre-classify methods as instance (takes self) vs static for Self:: vs self. dispatch.
         // A method is instance if: it has explicit self, analyzer inferred self, or it accesses fields.
@@ -688,6 +743,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_instance_methods.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
+        self.current_trait_impl_name = old_trait_impl_name;
 
         self.indent_level -= 1;
         output.push('}');

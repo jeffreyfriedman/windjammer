@@ -1,0 +1,236 @@
+// Voxel Ray March Compute Shader
+//
+// Marches rays through a Sparse Voxel Octree to produce a G-buffer.
+// Each invocation handles one pixel.
+// Workgroup: 8x8 threads (64 total)
+
+pub struct CameraUniforms {
+    view_matrix: mat4x4<float>,
+    proj_matrix: mat4x4<float>,
+    inv_view: mat4x4<float>,
+    inv_proj: mat4x4<float>,
+    position: vec3<float>,
+    screen_size: vec2<float>,
+    near_plane: float,
+    far_plane: float,
+}
+
+pub struct RayMarchParams {
+    world_size: vec3<float>,
+    max_steps: uint,
+    svo_depth: uint,
+    node_count: uint,
+}
+
+pub struct GBufferPixel {
+    position: vec3<float>,
+    normal: vec3<float>,
+    material_id: float,
+    depth: float,
+    geometry_source: float,
+}
+
+@group(0) @binding(0) @uniform
+extern let camera: CameraUniforms;
+
+@group(0) @binding(1) @uniform
+extern let params: RayMarchParams;
+
+@group(0) @binding(2) @storage(read)
+extern let svo_nodes: array<uint>;
+
+@group(0) @binding(3) @storage(read_write)
+extern let gbuffer: array<GBufferPixel>;
+
+// SVO node decoding
+pub fn svo_get_material(node: uint) -> uint {
+    node & 255
+}
+
+pub fn svo_is_leaf(node: uint) -> bool {
+    (node & 256) != 0
+}
+
+pub fn svo_child_ptr(node: uint) -> uint {
+    node >> 9
+}
+
+// Get child index for a point within a node
+pub fn get_octant(p: vec3<float>, center: vec3<float>) -> uint {
+    let mut idx = 0;
+    if p.x >= center.x {
+        idx |= 1
+    }
+    if p.y >= center.y {
+        idx |= 2
+    }
+    if p.z >= center.z {
+        idx |= 4
+    }
+    idx
+}
+
+// Ray-AABB intersection
+pub fn ray_aabb(origin: vec3<float>, inv_dir: vec3<float>, box_min: vec3<float>, box_max: vec3<float>) -> vec2<float> {
+    let t1 = (box_min - origin) * inv_dir;
+    let t2 = (box_max - origin) * inv_dir;
+    let tmin = min(t1, t2);
+    let tmax = max(t1, t2);
+    let t_near = max(max(tmin.x, tmin.y), tmin.z);
+    let t_far = min(min(tmax.x, tmax.y), tmax.z);
+    vec2(t_near, t_far)
+}
+
+// Look up a voxel's material in the SVO
+pub fn lookup_svo(pos: vec3<float>, world_size: float) -> uint {
+    if params.node_count == 0 {
+        return 0
+    }
+
+    let mut node_idx = 0;
+    let mut node_min = vec3(0.0, 0.0, 0.0);
+    let mut node_size = world_size;
+
+    let mut depth = 0;
+    while depth < params.svo_depth {
+        if node_idx >= params.node_count {
+            return 0
+        }
+
+        let node = svo_nodes[node_idx];
+
+        if svo_is_leaf(node) {
+            return svo_get_material(node)
+        }
+
+        // Interior node -- descend
+        let half = node_size * 0.5;
+        let center = node_min + vec3(half, half, half);
+        let octant = get_octant(pos, center);
+        let child_base = svo_child_ptr(node);
+        node_idx = child_base + octant;
+
+        // Update bounding box for child
+        let ox = if (octant & 1) != 0 { half } else { 0.0 };
+        let oy = if (octant & 2) != 0 { half } else { 0.0 };
+        let oz = if (octant & 4) != 0 { half } else { 0.0 };
+        node_min = node_min + vec3(ox, oy, oz);
+        node_size = half;
+
+        depth += 1
+    }
+
+    // Reached max depth
+    if node_idx < params.node_count {
+        let node = svo_nodes[node_idx];
+        return svo_get_material(node)
+    }
+    0
+}
+
+// Calculate hit normal from ray direction and hit position
+pub fn calculate_hit_normal(origin: vec3<float>, dir: vec3<float>, hit: vec3<float>) -> vec3<float> {
+    let frac = fract(hit);
+    let eps = 0.01;
+
+    if frac.x < eps {
+        return vec3(-1.0, 0.0, 0.0)
+    }
+    if frac.x > 1.0 - eps {
+        return vec3(1.0, 0.0, 0.0)
+    }
+    if frac.y < eps {
+        return vec3(0.0, -1.0, 0.0)
+    }
+    if frac.y > 1.0 - eps {
+        return vec3(0.0, 1.0, 0.0)
+    }
+    if frac.z < eps {
+        return vec3(0.0, 0.0, -1.0)
+    }
+    vec3(0.0, 0.0, 1.0)
+}
+
+// March a ray through the SVO
+pub fn march_svo(origin: vec3<float>, dir: vec3<float>) -> GBufferPixel {
+    let mut result = GBufferPixel {
+        material_id: 0.0,
+        depth: camera.far_plane,
+        normal: vec3(0.0, 0.0, 0.0),
+        position: vec3(0.0, 0.0, 0.0),
+        geometry_source: 0.0,
+    };
+
+    let world_size = params.world_size;
+    let inv_dir = 1.0 / dir;
+
+    // Check intersection with world bounding box
+    let bounds = ray_aabb(origin, inv_dir, vec3(0.0, 0.0, 0.0), world_size);
+    if bounds.x > bounds.y || bounds.y < 0.0 {
+        return result
+    }
+
+    // DDA-style stepping through voxel grid
+    let t_start = max(bounds.x, 0.0) + 0.001;
+    let mut pos = origin + dir * t_start;
+    let mut t = t_start;
+
+    // Simple linear raymarch
+    let step_size = 0.05;
+    let max_dist = bounds.y - t_start;
+    
+    let mut dist = 0.0;
+    while dist < max_dist {
+        let sample_pos = origin + dir * (t_start + dist);
+        
+        // Bounds check
+        if any(sample_pos < vec3(0.0, 0.0, 0.0)) || any(sample_pos >= world_size) {
+            break
+        }
+        
+        let material = lookup_svo(sample_pos, world_size.x);
+        
+        if material > 0 {
+            // Hit!
+            result.material_id = material as float;
+            result.position = sample_pos;
+            result.depth = t_start + dist;
+            result.normal = calculate_hit_normal(origin, dir, sample_pos);
+            result.geometry_source = 0.0;
+            return result
+        }
+
+        dist += step_size
+    }
+
+    result
+}
+
+// Generate ray from pixel coordinates
+pub fn generate_ray(pixel: vec2<float>) -> vec3<float> {
+    let ndc = vec2(
+        (2.0 * pixel.x / camera.screen_size.x - 1.0),
+        (1.0 - 2.0 * pixel.y / camera.screen_size.y)
+    );
+    let clip = vec4(ndc.x, ndc.y, -1.0, 1.0);
+    let mut eye = camera.inv_proj * clip;
+    eye.z = -1.0;
+    eye.w = 0.0;
+    let world_dir = (camera.inv_view * eye).xyz;
+    normalize(world_dir)
+}
+
+@compute(workgroup_size = [8, 8, 1])
+pub fn main(@builtin(global_invocation_id) id: vec3<uint>) {
+    let pixel = vec2(id.x as float, id.y as float);
+    if pixel.x >= camera.screen_size.x || pixel.y >= camera.screen_size.y {
+        return
+    }
+
+    let pixel_idx = id.y * (camera.screen_size.x as uint) + id.x;
+
+    let ray_dir = generate_ray(pixel + vec2(0.5, 0.5));
+    let result = march_svo(camera.position, ray_dir);
+    
+    gbuffer[pixel_idx] = result
+}

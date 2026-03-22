@@ -1,125 +1,78 @@
-[workspace]
-members = [
-    ".",
-    "crates/windjammer-lsp",
-    "crates/windjammer-mcp",
-    "crates/windjammer-runtime",
-    "rendering_ffi",
-]
-
-[workspace.package]
-version = "0.45.0"
-edition = "2021"
-authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
-license = "MIT OR Apache-2.0"
-rust-version = "1.90"
-
 [package]
 name = "windjammer"
-version.workspace = true
-edition.workspace = true
-default-run = "wj"
-authors.workspace = true
-license.workspace = true
-description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
-repository = "https://github.com/jeffreyfriedman/windjammer"
-homepage = "https://github.com/jeffreyfriedman/windjammer"
-documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
-keywords = ["compiler", "transpiler", "rust", "go", "language"]
-categories = ["development-tools", "compilers"]
-readme = "README.md"
-rust-version.workspace = true
-# Disable automatic binary target from src/main.rs
-autobins = false
-exclude = [
-    "test_output_*",
-    "examples/*/build_output",
-    "examples/*/pkg",
-    "examples/*/target",
-    "examples/taskflow/rust",
-    "examples/taskflow/windjammer",
-    ".github",
-    "docs/*.md"
-]
+version = "0.46.0"
+edition = "2021"
 
-[lib]
-name = "windjammer"
-path = "src/main.rs"
+# Prevent this from being treated as part of parent workspace
+[workspace]
 
-[[bin]]
-name = "wj"
-path = "src/bin/wj.rs"
+[workspace.package]
+version = "0.46.0"
+edition = "2021"
+authors = ["Jeffrey Friedman"]
+license = "MIT"
+
+[dependencies]
+# Compiler dependencies
+clap = { version = "4.5", features = ["derive"] }
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+typed-arena = "2.0"
+colored = "2.0"
+
+# Full compiler functionality (error TUI, syntax highlighting, incremental)
+tempfile = "3.10"
+crossterm = "0.28"
+ratatui = "0.28"
+syntect = "5.2"
+salsa = "0.24"
+
+# Runtime dependencies
+chrono = "0.4"
+env_logger = "0.11"  # For logging during development
+image = "0.24"  # For texture loading (PNG, JPG, BMP, etc.)
+once_cell = "1.19"  # For Lazy statics in runtime
+pollster = "0.3"  # For blocking on async operations
+rapier3d = "0.17"  # Real physics simulation
+rolt = "0.3.1"  # Safe Rust bindings to Jolt Physics - REAL IMPLEMENTATION!
+smallvec = "1.13"
+wgpu = "0.19"
+winit = "0.29"
+bytemuck = { version = "1.14", features = ["derive"] }  # For safe type casting
+windjammer-runtime = { path = "/Users/jeffreyfriedman/src/wj/windjammer/crates/windjammer-runtime" }
 
 [features]
 default = []
-which = ["dep:which"]
-
-[dependencies]
-# Parser combinator library
-nom = "7.1.3"  # Bumped to force CI cache invalidation
-# CLI argument parsing
-clap = { version = "4.5", features = ["derive"] }
-# Error handling
-anyhow = "1.0"
-thiserror = "1.0"
-# Code generation
-indoc = "2.0"
-# Pretty printing
-colored = "2.1"
-# JSON/TOML parsing for rustc diagnostics and windjammer.toml
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-# Syntax highlighting for error snippets
-syntect = "5.2"
-
-# Terminal UI for interactive error navigation
-ratatui = "0.29"
-crossterm = "0.29"
-# TOML parsing for wj.toml
-toml = "0.9"
-# Temporary directories for wj run
-tempfile = "3.8"
-# Incremental compilation with Salsa
-salsa = "0.24"
-# Arena allocation for AST (eliminates Drop recursion, improves performance)
-typed-arena = "2.0"
-which = { version = "8.0.0", optional = true }
+# Enable to build wj CLI binary (requires full compiler modules in lib)
+cli = []
 
 [dev-dependencies]
-# Benchmarking
-criterion = { version = "0.7", features = ["html_reports"] }
-smallvec = "1.13.0"
-walkdir = "2.5"
+tempfile = "3.0"
+assert_cmd = "2.0"
 
-[[bench]]
-name = "compilation"
-harness = false
+[[bin]]
+name = "wj-build-helper"
+path = "build.rs"
 
-[[bench]]
-name = "runtime"
-harness = false
+# wj binary requires cli feature - excluded from default build so tests can run
+[[bin]]
+name = "wj"
+path = "src/bin/wj.rs"
+required-features = ["cli"]
 
-[[bench]]
-name = "defer_drop_bench"
-harness = false
+# wj-lint: Minimal Rust leakage linter (no cli deps) - for CI
+[[bin]]
+name = "wj-lint"
+path = "src/bin/wj-lint.rs"
 
-[[bench]]
-name = "smallvec_bench"
-harness = false
+# main.rs binary (windjammer) - incomplete, excluded from default build
+[[bin]]
+name = "windjammer"
+path = "src/main.rs"
+required-features = ["cli"]
 
-[[bench]]
-name = "cow_bench"
-harness = false
-
-# Note: defer_drop_latency is a benchmark, not a standalone binary
-[[bench]]
-name = "defer_drop_latency"
-harness = false
-
-[[bench]]
-name = "incremental_compilation"
-harness = false
-
-[[bench]]
-name = "regression_benchmarks"
-harness = false
+[profile.release]
+opt-level = 3

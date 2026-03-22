@@ -92,18 +92,13 @@ pub fn load_stuff(loader: Loader) -> Vec<String> {
     let generated = transpile_wj(source);
     println!("Generated:\n{}", generated);
 
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `loader: Loader` (owned),
-    // compiler preserves it as `mut loader: Loader` even though `&mut Loader` would be more efficient.
-    // This respects explicit user intent! Linter warns about inefficiency.
-    //
-    // OLD BEHAVIOR (pre-v0.45.0): Compiler would change to `loader: &mut Loader`
-    // NEW BEHAVIOR (v0.45.0+): Compiler preserves as `mut loader: Loader` + linter warns
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `loader: Loader` (no & or &mut)
+    // Compiler infers `loader: &mut Loader` because loader.load() mutates (self.count++)
+    // This is automatic ownership inference - compiler does the hard work!
     assert!(
-        generated.contains("mut loader: Loader"),
-        "Parameter should be `mut loader: Loader` (respect explicit owned). Got:\n{}",
+        generated.contains("loader: &mut Loader"),
+        "Parameter should be inferred as `&mut Loader` (automatic ownership). Got:\n{}",
         generated
     );
-
-    // THE WINDJAMMER WAY: Also verify the linter warning appears!
-    // (Not checked here since this test uses old transpile_wj helper that doesn't capture stderr)
 }

@@ -1118,18 +1118,20 @@ impl<'ast> Analyzer<'ast> {
             return true;
         }
         // TDD FIX: Add common mutation prefixes
-        // Methods like increment, decrement, add_, sub_, etc. are mutating
+        // Methods like increment, decrement, add_, sub_, adjust_, etc. are mutating
         if method.starts_with("increment")
             || method.starts_with("decrement")
             || method.starts_with("add_")
             || method.starts_with("sub_")
             || method.starts_with("mul_")
             || method.starts_with("div_")
+            || method.starts_with("adjust_") // adjust_reputation, adjust_loyalty, etc.
         {
             return true;
         }
         matches!(
             method,
+            // Vec/String methods
             "push"
                 | "push_str"
                 | "clear"
@@ -1151,6 +1153,12 @@ impl<'ast> Analyzer<'ast> {
                 | "dedup"
                 | "reverse"
                 | "swap"
+                // Option/Result methods (mutate in place)
+                | "take"
+                | "replace"
+                | "get_or_insert"
+                | "get_or_insert_with"
+                // Other
                 | "allocate"
                 | "free"
                 | "update"
@@ -1159,6 +1167,7 @@ impl<'ast> Analyzer<'ast> {
                 | "set"
                 | "fill"
                 | "normalize"
+                | "damage" // Game-specific: Player::damage, etc.
         )
     }
 }

@@ -27,7 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::ast::operators::{BinaryOp, UnaryOp};
 
         match expr {
-            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Literal { value: lit, .. } => self.generate_literal_with_context(lit, expr),
             Expression::Identifier { name, .. } => name.clone(),
             Expression::Unary { op, operand, .. } => {
                 let op_str = match op {
@@ -80,6 +80,32 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // TDD FIX: Redundant .as_str() on &str
+                // When method is .as_str() and object is already &str, skip the call
+                if method == "as_str" && arguments.is_empty() {
+                    // Check if object is already &str
+                    let is_already_str = match object {
+                        Expression::Identifier { name, .. } => {
+                            // Check if this is an inferred &str parameter
+                            self.inferred_borrowed_params.contains(name.as_str())
+                        }
+                        Expression::MethodCall { method: inner_method, .. } => {
+                            // Methods like .as_str(), .trim(), etc. already return &str
+                            matches!(
+                                inner_method.as_str(),
+                                "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                "strip_prefix" | "strip_suffix"
+                            )
+                        }
+                        _ => false,
+                    };
+                    
+                    if is_already_str {
+                        // Skip the redundant .as_str() call, just return the object
+                        return self.generate_expression_immut(object);
+                    }
+                }
+                
                 let obj_str = self.generate_expression_immut(object);
                 let args_str = arguments
                     .iter()
@@ -94,9 +120,42 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 let func_str = self.generate_expression_immut(function);
+                
+                // TDD FIX: Check if this is a stdlib method that needs usize parameters
+                // e.g., Vec::with_capacity(size) where size: int should generate: Vec::with_capacity(size as usize)
+                let func_name = match function {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    Expression::FieldAccess { object, field, .. } => {
+                        if let Expression::Identifier { name: type_name, .. } = &**object {
+                            Some(format!("{}::{}", type_name, field).leak() as &str)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                
+                let needs_usize_first_arg = func_name.map_or(false, |name| {
+                    name == "Vec::with_capacity" || name == "HashMap::with_capacity" || 
+                    name == "String::with_capacity" || name == "Vec::reserve"
+                });
+                
                 let args_str = arguments
                     .iter()
-                    .map(|(_label, arg)| self.generate_expression_immut(arg))
+                    .enumerate()
+                    .map(|(idx, (_label, arg))| {
+                        let arg_str = self.generate_expression_immut(arg);
+                        // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
+                        if idx == 0 && needs_usize_first_arg {
+                            if matches!(arg, Expression::Identifier { .. }) {
+                                format!("{} as usize", arg_str)
+                            } else {
+                                arg_str
+                            }
+                        } else {
+                            arg_str
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", func_str, args_str)
@@ -195,7 +254,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn generate_expression_impl(&mut self, expr_to_generate: &Expression<'ast>) -> String {
         match expr_to_generate {
-            Expression::Literal { value: lit, .. } => self.generate_literal(lit),
+            Expression::Literal { value: lit, .. } => self.generate_literal_with_context(lit, expr_to_generate),
             Expression::Identifier { name, .. } => {
                 // Qualified paths use :: from parser (e.g., std::fs::read)
                 // Simple identifiers: variable_name -> variable_name
@@ -381,11 +440,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // Casting i64 → usize is UNSAFE for negative values (wraps to huge number).
                 // Casting usize → i64 is SAFE (vec lengths always fit in i64).
                 //
-                // For int literals compared to usize: cast literal to usize (always non-negative).
-                // For int variables compared to usize: cast usize to i64 (preserves negative semantics).
+                // TDD FIX: Comparison type casting strategy
+                // For int literals compared to usize: Rust infers literal type from context (no cast needed)
+                // For int variables compared to usize: Cast int variable to usize
                 //
-                // Example: items.len() >= 10 → items.len() >= 10usize (literal, always safe)
-                // Example: index >= items.len() → index >= (items.len() as i64) (safe cast)
+                // Example: items.len() >= 10 → items.len() >= 10 (Rust infers 10 as usize)
+                // Example: i < items.len() → (i as usize) < items.len() (cast variable to usize)
                 //
                 // IMPORTANT: Wrap the cast operand in ((...) as i64) to handle compound
                 // expressions like `width * height` → ((width * height) as i64), not
@@ -396,15 +456,14 @@ impl<'ast> CodeGenerator<'ast> {
                         // Int literals in comparisons with usize don't need explicit cast —
                         // Rust infers the literal type from context. `vec.len() > 0` is fine.
                     } else {
-                        // Cast the usize side (LEFT) to i64 for safety
-                        // Use parens around compound expressions to prevent precedence issues
-                        // because `as` has higher precedence than arithmetic:
-                        // `a + b as i64` → `a + (b as i64)` (wrong), need `(a + b) as i64`
-                        let needs_inner_parens = matches!(left, Expression::Binary { .. });
+                        // TDD FIX: Cast the RIGHT side (int variable) to usize, not left to i64!
+                        // OLD (BROKEN): items.len() > i → (items.len() as i64) > i → i64 > i32 ❌
+                        // NEW (CORRECT): items.len() > i → items.len() > (i as usize) → usize > usize ✅
+                        let needs_inner_parens = matches!(right, Expression::Binary { .. });
                         if needs_inner_parens {
-                            left_str = format!("({}) as i64", left_str);
+                            right_str = format!("({}) as usize", right_str);
                         } else {
-                            left_str = format!("{} as i64", left_str);
+                            right_str = format!("{} as usize", right_str);
                         }
                     }
                 } else if is_comparison && right_is_usize && !left_is_usize {
@@ -413,13 +472,14 @@ impl<'ast> CodeGenerator<'ast> {
                         // Int literals in comparisons with usize don't need explicit cast —
                         // Rust infers the literal type from context.
                     } else {
-                        // Cast the usize side (RIGHT) to i64 for safety
-                        // Use parens around compound expressions to prevent precedence issues
-                        let needs_inner_parens = matches!(right, Expression::Binary { .. });
+                        // TDD FIX: Cast the LEFT side (int variable) to usize, not right to i64!
+                        // OLD (BROKEN): i < items.len() → i < (items.len() as i64) → i32 < i64 ❌
+                        // NEW (CORRECT): i < items.len() → (i as usize) < items.len() → usize < usize ✅
+                        let needs_inner_parens = matches!(left, Expression::Binary { .. });
                         if needs_inner_parens {
-                            right_str = format!("({}) as i64", right_str);
+                            left_str = format!("({}) as usize", left_str);
                         } else {
-                            right_str = format!("{} as i64", right_str);
+                            left_str = format!("{} as usize", left_str);
                         }
                     }
                 }
@@ -470,6 +530,29 @@ impl<'ast> CodeGenerator<'ast> {
                     right_str = format!("({})", right_str);
                 }
 
+                // TDD FIX: String + String/&str concatenation needs borrowing
+                // In Rust, String + String doesn't work - needs String + &str
+                // If LEFT side is String and op is Add, RIGHT must be borrowed (unless string literal)
+                // Also: if RIGHT produces String (e.g., parts[j].clone()), add & for coercion
+                if matches!(op, BinaryOp::Add) {
+                    let left_type = self.infer_expression_type(left);
+                    let right_type = self.infer_expression_type(right);
+                    let left_is_string = matches!(left_type, Some(Type::String));
+                    let right_is_string = matches!(right_type, Some(Type::String));
+
+                    // Add & when either side is String (covers result + parts[j].clone())
+                    if left_is_string || right_is_string {
+                        // Don't add & for string literals (they're already &str)
+                        let is_string_literal = matches!(
+                            right,
+                            Expression::Literal { value: Literal::String(_), .. }
+                        );
+                        if !is_string_literal && !right_str.starts_with('&') {
+                            right_str = format!("&{}", right_str);
+                        }
+                    }
+                }
+
                 // TDD FIX: Smart XOR deref logic for string comparisons
                 // Check if BOTH sides are borrowed, or only ONE side is borrowed
                 //
@@ -488,10 +571,22 @@ impl<'ast> CodeGenerator<'ast> {
                 // - Literal values
                 // - Method calls returning owned types
 
+                // TDD FIX: Check if parameter is &str type (never needs deref in comparisons)
+                let is_str_param = |name: &str| {
+                    self.current_function_params.iter().any(|p| {
+                        p.name == name
+                            && (matches!(p.type_, crate::parser::Type::String)
+                                || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "string"))
+                            && self.inferred_borrowed_params.contains(name)
+                    })
+                };
+
                 let left_is_borrowed = match left {
                     Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
+                        // Don't treat &str params as "borrowed" for deref purposes
+                        !is_str_param(name)
+                            && (self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name))
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)
@@ -502,8 +597,10 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let right_is_borrowed = match right {
                     Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
+                        // Don't treat &str params as "borrowed" for deref purposes
+                        !is_str_param(name)
+                            && (self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name))
                     }
                     Expression::MethodCall { method, .. } => {
                         // Methods like .as_str() return &str (borrowed)
@@ -1236,18 +1333,65 @@ impl<'ast> CodeGenerator<'ast> {
 
                         self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
+                        
+                        // TDD FIX: Cast int arguments to usize for stdlib methods
+                        // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
+                        // Vec::with_capacity(10) where 10: int literal → Vec::with_capacity(10_usize)
+                        if i == 0 && (func_name == "Vec::with_capacity" || func_name == "HashMap::with_capacity" ||
+                                      func_name == "String::with_capacity" || func_name == "Vec::reserve") {
+                            match arg {
+                                Expression::Identifier { .. } => {
+                                    // Variables: add explicit cast
+                                    arg_str = format!("{} as usize", arg_str);
+                                }
+                                Expression::Literal { value: Literal::Int(val), .. } => {
+                                    // Literals: use usize suffix
+                                    arg_str = format!("{}_usize", val);
+                                }
+                                _ => {
+                                    // Other expressions (e.g., calculations): wrap in (expr) as usize
+                                    if !arg_str.ends_with("_usize") && !arg_str.contains(" as usize") {
+                                        arg_str = format!("({}) as usize", arg_str);
+                                    }
+                                }
+                            }
+                        }
 
-                        // WINDJAMMER FFI: Convert string arguments to (*const u8, usize) for extern functions
+                        // WINDJAMMER FFI: Convert string arguments for extern functions
                         if is_extern_call {
                             if let Some(ref sig) = signature {
                                 if let Some(param_type) = sig.param_types.get(i) {
                                     if matches!(param_type, Type::Custom(name) if name == "str") {
                                         // Expand str to (ptr, len)
-                                        // Always use .as_bytes() for consistency (works for both &str and String)
                                         return vec![
                                             format!("{}.as_bytes().as_ptr()", arg_str),
                                             format!("{}.as_bytes().len()", arg_str),
                                         ];
+                                    }
+                                    // string/String params → FfiString via string_to_ffi
+                                    // TDD FIX: Always use .to_string() - infer_expression_type returns
+                                    // declared param type (Type::String), not actual Rust type. When
+                                    // ownership infers Borrowed, param becomes &str in Rust, but we
+                                    // thought it was String and passed directly → E0308.
+                                    // .to_string() works for both &str and String (String::to_string = clone).
+                                    //
+                                    // TDD FIX: Strip redundant .to_string() before wrapping.
+                                    // Bug: User writes render_text(label.to_string(), x, y). Expression
+                                    // generation produces "label.to_string()", then we added another
+                                    // → string_to_ffi(label.to_string().to_string()). Fix: If arg_str
+                                    // already ends with .to_string(), don't add another.
+                                    if matches!(param_type, Type::String)
+                                        || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
+                                    {
+                                        let inner = if arg_str.ends_with(".to_string()") {
+                                            arg_str.clone()
+                                        } else {
+                                            format!("{}.to_string()", arg_str)
+                                        };
+                                        return vec![format!(
+                                            "windjammer_runtime::ffi::string_to_ffi({})",
+                                            inner
+                                        )];
                                     }
                                 }
                             }
@@ -1306,6 +1450,8 @@ impl<'ast> CodeGenerator<'ast> {
                         // Skip ownership inference for extern function calls - they have explicit types
                         if let Some(ref sig) = signature {
                             if sig.is_extern {
+                                // Extern string params are handled above (FfiString via string_to_ffi)
+                                // For non-string params, pass through
                                 return vec![arg_str];
                             }
 
@@ -1527,6 +1673,21 @@ impl<'ast> CodeGenerator<'ast> {
                                                 }
                                             }
                                         }
+                                        // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param
+                                        // e.g. enterable.push(self.buildings[i]) → need (.clone())
+                                        if let Expression::Index { .. } = arg {
+                                            if arg_str.starts_with("&")
+                                                && !arg_str.ends_with(".clone()")
+                                            {
+                                                if let Some(inner) = self.infer_expression_type(arg)
+                                                {
+                                                    if !self.is_type_copy(&inner) {
+                                                        arg_str =
+                                                            format!("({}).clone()", arg_str);
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1545,9 +1706,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // Check if any contain format!() and extract them
                 let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
 
+                // WINDJAMMER FFI: Extern functions returning string use FfiString - wrap with ffi_to_string
+                let returns_string = signature.as_ref().and_then(|s| s.return_type.as_ref()).is_some_and(|t| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                });
+
                 // WINDJAMMER PHILOSOPHY: Auto-wrap extern function calls in unsafe blocks
                 // THE WINDJAMMER WAY: Users shouldn't have to write `unsafe` manually
-                if has_format_arg {
+                let call_result = if has_format_arg {
                     // Extract format!() macros to temp variables
                     let mut temp_decls = String::new();
                     let mut temp_counter = 0;
@@ -1599,6 +1766,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         call_str
                     }
+                };
+
+                // Wrap extern string return with ffi_to_string
+                if is_extern_call && returns_string {
+                    format!("windjammer_runtime::ffi::ffi_to_string({})", call_result)
+                } else {
+                    call_result
                 }
             }
             Expression::MethodCall {
@@ -1608,6 +1782,22 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // TDD FIX: Strip redundant .as_str() on &str parameters
+                // If method is .as_str() and object is already inferred as &str, just return object
+                if method == "as_str" && arguments.is_empty() {
+                    eprintln!("TDD: .as_str() call found, checking object");
+                    if let Expression::Identifier { name, .. } = object {
+                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());
+                        eprintln!("TDD: object={}, is_borrowed={}, borrowed_params={:?}", 
+                            name, is_borrowed, self.inferred_borrowed_params);
+                        if is_borrowed {
+                            // Parameter is already &str, .as_str() is redundant
+                            eprintln!("TDD: Stripping redundant .as_str() on {}", name);
+                            return self.generate_expression(object);
+                        }
+                    }
+                }
+
                 // METHOD CALL CONTEXT: Suppress Vec index auto-clone when generating the
                 // object of a method call. Methods take &self or &mut self, so Rust allows
                 // calling methods on &T returned by Vec indexing without cloning.
@@ -1659,6 +1849,18 @@ impl<'ast> CodeGenerator<'ast> {
                         obj_str = format!("{}.clone()", obj_str);
                     }
                 }
+
+                // E0507 fix: Option::map on self.field with &self must use .as_ref().map(...)
+                // self.children.map(|c| ...) with &self → self.children.as_ref().map(|c| ...)
+                if method == "map"
+                    && self.inferred_borrowed_params.contains("self")
+                    && self.codegen_expression_traces_to_self(object)
+                {
+                    if !obj_str.contains(".as_ref()") {
+                        obj_str = format!("{}.as_ref()", obj_str);
+                    }
+                }
+
                 // BUG #8 FIX: Look up method signature with qualified name (Type::method)
                 // First try to infer the type from the object expression
                 let type_name = self.infer_type_name(object);
@@ -1900,6 +2102,31 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.current_function_return_type,
                         ) {
                             arg_str = format!("{}.clone()", arg_str);
+                        }
+
+                        // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param (e.g. push)
+                        // should_add_clone handles Identifier/FieldAccess; Index needs explicit check
+                        // Vec::push uses stdlib heuristics (method_signature=None) - param 0 expects Owned
+                        if let Expression::Index { .. } = arg {
+                            let sig_param_idx = method_signature
+                                .as_ref()
+                                .map(|s| if s.has_self_receiver { i + 1 } else { i })
+                                .unwrap_or(i);
+                            let param_expects_owned = method_signature
+                                .as_ref()
+                                .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                                .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
+                                || (method == "push" && i == 0); // Vec::push(item) expects owned
+                            if param_expects_owned
+                                && arg_str.starts_with("&")
+                                && !arg_str.ends_with(".clone()")
+                            {
+                                if let Some(inner) = self.infer_expression_type(arg) {
+                                    if !self.is_type_copy(&inner) {
+                                        arg_str = format!("({}).clone()", arg_str);
+                                    }
+                                }
+                            }
                         }
 
                         // TDD FIX: Strip unnecessary .clone() when method param is Borrowed
@@ -2448,6 +2675,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
                 let _has_optimization_hint = self.struct_mapping_hints.get(name);
 
+                // CONTEXT-SENSITIVE INFERENCE: Set struct literal context for float type inference
+                let prev_struct_name = self.current_struct_literal_name.clone();
+                self.current_struct_literal_name = Some(name.to_string());
+
                 // Generate field assignments
                 let field_str: Vec<String> = fields
                     .iter()
@@ -2456,7 +2687,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // fixed-size [...] syntax, not vec![...], because struct fields have
                         // explicit type annotations (e.g., position: [f32; 3]).
                         let prev_in_struct_field = self.in_struct_literal_field;
+                        let prev_field_name = self.current_struct_field_name.clone();
                         self.in_struct_literal_field = true;
+                        self.current_struct_field_name = Some(field_name.to_string());
 
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // In Windjammer, `string` type is always owned (maps to Rust String)
@@ -2465,6 +2698,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Restore previous context
                         self.in_struct_literal_field = prev_in_struct_field;
+                        self.current_struct_field_name = prev_field_name;
 
                         // Auto-convert string literals to String for struct fields
                         if matches!(
@@ -2534,6 +2768,9 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .collect();
 
+                // Restore struct literal context
+                self.current_struct_literal_name = prev_struct_name;
+
                 format!("{} {{ {} }}", name, field_str.join(", "))
             }
             Expression::MapLiteral { pairs, .. } => {
@@ -2576,7 +2813,28 @@ impl<'ast> CodeGenerator<'ast> {
                 inclusive,
                 ..
             } => {
-                let start_str = self.generate_expression(start);
+                // TDD FIX: Range type unification for 0..vec.len()
+                // If end is .len() (returns usize), cast start to usize to avoid type mismatch
+                let end_is_len = matches!(end, Expression::MethodCall { method, .. } if method == "len");
+                
+                let mut start_str = self.generate_expression(start);
+                
+                // If end is .len() and start has _i32 suffix, replace with _usize or add cast
+                if end_is_len {
+                    if start_str.ends_with("_i32") {
+                        // Replace _i32 with _usize for literals
+                        start_str = start_str.replace("_i32", "_usize");
+                    } else if matches!(start, Expression::Identifier { .. } | Expression::Binary { .. }) 
+                        && !start_str.contains("as usize") {
+                        // Add cast for identifiers or expressions without existing cast
+                        if matches!(start, Expression::Binary { .. }) {
+                            start_str = format!("({} as usize)", start_str);
+                        } else {
+                            start_str = format!("{} as usize", start_str);
+                        }
+                    }
+                }
+                
                 let end_str = self.generate_expression(end);
                 if *inclusive {
                     format!("{}..={}", start_str, end_str)
@@ -2688,39 +2946,44 @@ impl<'ast> CodeGenerator<'ast> {
                         .trim_end_matches("as int")
                         .trim();
                     format!("{} as usize", base)
-                } else if matches!(
-                    &**index,
-                    Expression::Identifier { .. }
-                        | Expression::Literal {
-                            value: Literal::Int(_),
-                            ..
+                } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
+                    // TDD FIX: Auto-cast ANY integer expression to usize (unless already cast)
+                    // Handles:
+                    // - Identifiers: items[i] → items[i as usize]
+                    // - Literals: items[0] → items[0] (Rust infers)
+                    // - Binary: items[i + 1] → items[(i + 1) as usize]  ← NEWLY FIXED!
+                    // - Method calls: items[get_index()] → items[get_index() as usize]
+                    //
+                    // Skip cast only if:
+                    // 1. Already has cast: items[i as usize]
+                    // 2. Expression produces usize: items[vec.len()]
+                    // 3. Identifier tracked as usize: for i in 0..10 { items[i] }
+                    // 4. Non-negative literal: items[0] (Rust infers)
+                    
+                    // Check special cases where cast is NOT needed
+                    let needs_cast = match &**index {
+                        Expression::Identifier { name, .. } => {
+                            // Skip if tracked as usize variable
+                            !self.usize_variables.contains(name)
                         }
-                ) && !idx_str.contains(" as ")
-                {
-                    // Skip cast if identifier is already usize (e.g. assigned from `expr as usize`)
-                    if let Expression::Identifier { name, .. } = &**index {
-                        if self.usize_variables.contains(name)
-                            || self.expression_produces_usize(index)
-                        {
-                            idx_str // Already usize — no cast needed
+                        Expression::Literal { value: Literal::Int(n), .. } => {
+                            // Skip non-negative literals (Rust infers type from context)
+                            *n < 0
+                        }
+                        _ => true // All other expressions need cast
+                    };
+                    
+                    if needs_cast {
+                        // TDD FIX: Add parens for complex expressions to prevent precedence issues
+                        // `i + 1` → `(i + 1) as usize` (not `i + 1 as usize` which is parsed as `i + (1 as usize)`)
+                        let needs_parens = matches!(&**index, Expression::Binary { .. });
+                        if needs_parens {
+                            format!("({}) as usize", idx_str)
                         } else {
                             format!("{} as usize", idx_str)
-                        }
-                    } else if let Expression::Literal {
-                        value: Literal::Int(n),
-                        ..
-                    } = &**index
-                    {
-                        // Integer literal: Rust infers type from context in index position,
-                        // so `arr[0]` works without `as usize`. Only cast if negative
-                        // (which would be a logic error, but preserve the cast for clarity).
-                        if *n < 0 {
-                            format!("{} as usize", idx_str)
-                        } else {
-                            idx_str
                         }
                     } else {
-                        format!("{} as usize", idx_str)
+                        idx_str
                     }
                 } else {
                     idx_str
@@ -2728,22 +2991,41 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let base_expr = format!("{}[{}]", obj_str, final_idx);
 
-                // WINDJAMMER PHILOSOPHY: Auto-clone Vec indexing for non-Copy types.
+                // WINDJAMMER PHILOSOPHY: Auto-borrow Vec indexing for non-Copy types (E0507 fix).
                 // Rust doesn't allow moving out of a Vec index (E0507).
                 // For Copy types: vec[idx] works directly (value is copied).
-                // For non-Copy types: vec[idx].clone() is needed.
+                // For non-Copy types: &vec[idx] (borrow) or vec[idx].clone() when owned needed.
                 //
-                // CRITICAL: NEVER auto-clone in these contexts:
-                // 1. Assignment target: vec[i] = value (can't assign to .clone())
-                // 2. Borrow context: &vec[i] (want reference to original, not to clone)
+                // PREFER BORROW over clone: &vec[idx] is zero-cost; .clone() allocates.
+                //
+                // CRITICAL: NEVER add & or .clone() in these contexts:
+                // 1. Assignment target: vec[i] = value (can't assign to .clone() or &)
+                // 2. Borrow context: &vec[i] (parent adds &, we output vec[idx] only)
                 // 3. Field access: vec[i].field (Rust allows field access through ref)
                 // 4. Comparison context: vec[i] == val (comparisons work on &T)
-                let suppress_clone = self.generating_assignment_target
+                let suppress_borrow_or_clone = self.generating_assignment_target
                     || self.in_borrow_context
                     || self.in_field_access_object
                     || self.suppress_borrowed_clone;
 
-                if !suppress_clone {
+                // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
+                let element_type = self.infer_expression_type(object).and_then(|t| {
+                    match &t {
+                        Type::Vec(inner) => Some(inner.as_ref().clone()),
+                        Type::Array(inner, _) => Some(inner.as_ref().clone()),
+                        _ => None,
+                    }
+                });
+                let force_clone_for_owned_context = self.in_struct_literal_field
+                    && element_type
+                        .as_ref()
+                        .map(|et| !self.is_type_copy(et))
+                        .unwrap_or(true); // Unknown type → need clone (conservative)
+
+                let suppress_borrow_or_clone =
+                    suppress_borrow_or_clone && !force_clone_for_owned_context;
+
+                if !suppress_borrow_or_clone {
                     // First check auto_clone_analysis (path-based analysis)
                     if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
@@ -2756,25 +3038,39 @@ impl<'ast> CodeGenerator<'ast> {
                                     .as_ref()
                                     .is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
+                                    // Path analysis says clone needed (e.g. passed to owned param)
                                     return format!("{}.clone()", base_expr);
                                 }
                             }
                         }
                     }
 
-                    // Fallback: Type-based auto-clone for Vec<NonCopy>[idx]
-                    // If we can infer the collection's element type and it's not Copy, clone.
-                    // This handles the common case: vec[i] passed to a function taking ownership.
-                    if let Some(obj_type) = self.infer_expression_type(object) {
+                    // Fallback: Type-based handling for Vec<NonCopy>[idx]
+                    // E0507 fix: vec[idx] for String tries to move → use &vec[idx] (borrow)
+                    // When owned value needed (struct literal): vec[idx].clone()
+                    let needs_borrow_or_clone = if let Some(obj_type) = self.infer_expression_type(object) {
                         let element_type = match &obj_type {
                             Type::Vec(inner) => Some(inner.as_ref()),
                             Type::Array(inner, _) => Some(inner.as_ref()),
                             _ => None,
                         };
-                        if let Some(elem_type) = element_type {
-                            if !self.is_type_copy(elem_type) {
-                                return format!("{}.clone()", base_expr);
-                            }
+                        match element_type {
+                            Some(elem_type) => !self.is_type_copy(elem_type),
+                            None => false, // Unknown type, don't guess
+                        }
+                    } else {
+                        // Type inference failed (e.g. split() return type not in signature registry).
+                        // Conservative: add & to avoid E0507 "cannot move out of index".
+                        // Handles: let lines = split(...); let line = lines[i]
+                        true
+                    };
+
+                    if needs_borrow_or_clone {
+                        if force_clone_for_owned_context {
+                            return format!("{}.clone()", base_expr);
+                        } else {
+                            // Default: auto-borrow (zero-cost, idiomatic)
+                            return format!("&{}", base_expr);
                         }
                     }
                 }
@@ -3185,108 +3481,138 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn generate_literal(&self, lit: &Literal) -> String {
-        match lit {
-            Literal::Int(n) => n.to_string(),
-            Literal::Float(f) => {
-                let s = f.to_string();
-                // Ensure float literals always have a decimal point
-                if !s.contains('.') && !s.contains('e') {
-                    format!("{}.0", s)
-                } else {
-                    s
-                }
+    /// Helper: Extract float type from a Type (handles tuples, arrays, Vec, etc.)
+    /// Searches recursively for float types, prioritizing f32 over f64.
+    fn extract_float_type_from_context(ty: &Type) -> &str {
+        match ty {
+            Type::Custom(name) if name == "f32" => "f32",
+            Type::Custom(name) if name == "f64" => "f64",
+            Type::Vec(inner) => {
+                // Recurse into Vec<T> to find float type
+                Self::extract_float_type_from_context(inner)
             }
-            Literal::String(s) => {
-                // Check for string interpolation: {variable}
-                if s.contains('{') && s.contains('}') {
-                    // Convert to format! macro
-                    // "Count: {count}" -> format!("Count: {}", count)
-                    let mut format_str = String::new();
-                    let mut args = Vec::new();
-                    let mut chars = s.chars().peekable();
-
-                    while let Some(ch) = chars.next() {
-                        if ch == '{' {
-                            // Check if it's {variable} pattern or {} placeholder
-                            let mut var_name = String::new();
-                            let mut is_variable = true;
-
-                            while let Some(&next_ch) = chars.peek() {
-                                if next_ch == '}' {
-                                    chars.next(); // consume }
-                                    break;
-                                } else if next_ch.is_alphanumeric() || next_ch == '_' {
-                                    var_name.push(next_ch);
-                                    chars.next();
-                                } else {
-                                    // Not a simple variable pattern
-                                    is_variable = false;
-                                    break;
-                                }
-                            }
-
-                            if is_variable && !var_name.is_empty() {
-                                // It's a variable interpolation: {count} -> {}, count
-                                format_str.push_str("{}");
-                                args.push(var_name);
-                            } else if is_variable && var_name.is_empty() {
-                                // It's an empty placeholder: {} -> keep as-is (format! placeholder)
-                                format_str.push_str("{}");
-                            } else {
-                                // Not a variable, escape the literal brace
-                                format_str.push_str("{{");
-                                format_str.push_str(&var_name);
-                            }
-                        } else if ch == '}' {
-                            // Escape literal closing brace (not part of a placeholder)
-                            format_str.push_str("}}");
-                        } else {
-                            format_str.push(ch);
-                        }
+            Type::Tuple(types) => {
+                // Search ALL tuple elements for f32 (prioritize f32 over f64)
+                for t in types {
+                    let float_ty = Self::extract_float_type_from_context(t);
+                    if float_ty == "f32" {
+                        return "f32"; // Found f32 anywhere in tuple
                     }
-
-                    if args.is_empty() {
-                        // No interpolation found, just a regular string
-                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
-                    } else {
-                        // Generate format! call with implicit self for struct fields
-                        let formatted_args = args
-                            .iter()
-                            .map(|a| {
-                                // Check if this is a struct field and add self. prefix
-                                if self.in_impl_block && self.current_struct_fields.contains(a) {
-                                    format!(", self.{}", a)
-                                } else {
-                                    format!(", {}", a)
-                                }
-                            })
-                            .collect::<String>();
-
-                        format!(
-                            "format!(\"{}\"{})",
-                            format_str.replace('\\', "\\\\").replace('"', "\\\""),
-                            formatted_args
-                        )
+                }
+                // Check again for f64
+                for t in types {
+                    let float_ty = Self::extract_float_type_from_context(t);
+                    if float_ty == "f64" {
+                        return "f64"; // Found f64 somewhere
                     }
+                }
+                "f64" // No float type found, default to f64
+            }
+            Type::Array(inner, _) => Self::extract_float_type_from_context(inner),
+            Type::Custom(name) if name.starts_with("Vec<") => {
+                // Legacy string-based Vec check (shouldn't be needed with Type::Vec)
+                if name.contains("f32") {
+                    "f32"
+                } else if name.contains("f64") {
+                    "f64"
                 } else {
-                    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                    "f64"
                 }
             }
-            Literal::Char(c) => {
-                // Escape special characters
-                match c {
-                    '\n' => "'\\n'".to_string(),
-                    '\t' => "'\\t'".to_string(),
-                    '\r' => "'\\r'".to_string(),
-                    '\\' => "'\\\\'".to_string(),
-                    '\'' => "'\\''".to_string(),
-                    '\0' => "'\\0'".to_string(),
-                    _ => format!("'{}'", c),
-                }
-            }
-            Literal::Bool(b) => b.to_string(),
+            _ => "f64",
         }
+    }
+
+    pub(super) fn generate_literal_with_context(&self, lit: &Literal, expr: &Expression<'ast>) -> String {
+        // WINDJAMMER PHILOSOPHY: Expression-level type inference for literals
+        // Int: Check IntInference first (i32, i64, u32, etc.)
+        // Float: Check FloatInference (f32, f64)
+        match lit {
+            Literal::Int(i) => {
+                if let Some(inference) = &self.int_inference {
+                    let inferred = inference.get_int_type(expr);
+                    let suffix = inferred.rust_suffix();
+                    // Always add suffix when we have inference (Unknown defaults to i32 per Rust)
+                    return format!("{}_{}", i, suffix);
+                }
+                // No inference: fallback to bare literal (backward compat for tests)
+                crate::codegen::rust::literals::generate_literal(lit)
+            }
+            Literal::Float(f) => {
+                // Priority 1: Use inference engine results (most accurate)
+                if let Some(inference) = &self.float_inference {
+                    use crate::type_inference::FloatType;
+                    let inferred = inference.get_float_type(expr);
+                    
+                    let suffix = match inferred {
+                        FloatType::F32 => "f32",
+                        FloatType::F64 => "f64",
+                        FloatType::Unknown => {
+                            // TDD FIX: Fall through to context-sensitive when Unknown
+                            return self.generate_literal_context_sensitive(lit);
+                        }
+                    };
+                    
+                    let s = f.to_string();
+                    return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                        format!("{}.0_{}", s, suffix)
+                    } else {
+                        format!("{}_{}", s, suffix)
+                    };
+                }
+                
+                // Priority 2: Fallback to old context-sensitive approach
+                self.generate_literal_context_sensitive(lit)
+            }
+            _ => crate::codegen::rust::literals::generate_literal(lit),
+        }
+    }
+
+    /// Old context-sensitive approach (fallback when inference not available)
+    fn generate_literal_context_sensitive(&self, lit: &Literal) -> String {
+        // WINDJAMMER PHILOSOPHY: Context-sensitive float type inference
+        // The compiler should infer f32 vs f64 based on the surrounding context
+        // to avoid ambiguous numeric type errors (Rust E0689)
+        match lit {
+            Literal::Float(f) => {
+                // Priority 1: Struct field type (most specific)
+                let float_type = if let (Some(struct_name), Some(field_name)) = (
+                    &self.current_struct_literal_name,
+                    &self.current_struct_field_name,
+                ) {
+                    if let Some(fields) = self.struct_field_types.get(struct_name) {
+                        if let Some(field_type) = fields.get(field_name) {
+                            Self::extract_float_type_from_context(field_type)
+                        } else {
+                            "f64"
+                        }
+                    } else {
+                        "f64"
+                    }
+                // Priority 2: Function return type (handles tuples like (bool, f32))
+                } else if let Some(return_type) = &self.current_function_return_type {
+                    Self::extract_float_type_from_context(return_type)
+                } else {
+                    // Default: f64 (Rust standard, scientific computing, general-purpose default)
+                    "f64"
+                };
+                
+                let s = f.to_string();
+                if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                    format!("{}.0_{}", s, float_type)
+                } else {
+                    format!("{}_{}", s, float_type)
+                }
+            }
+            // For other literal types, delegate to canonical implementation
+            _ => crate::codegen::rust::literals::generate_literal(lit),
+        }
+    }
+
+    /// Generate literal without expression context (used in older code paths)
+    pub(super) fn generate_literal(&self, lit: &Literal) -> String {
+        // Delegate to context-sensitive version
+        self.generate_literal_context_sensitive(lit)
     }
 
     /// Generate efficient string concatenation using format! macro
@@ -3310,5 +3636,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         format!("format!(\"{}\", {})", format_str, args.join(", "))
+    }
+
+    /// Check if expression traces to self (self.field, self.field.subfield, etc.)
+    /// Used for E0507 Option::map fix - self.children.map() needs .as_ref()
+    fn codegen_expression_traces_to_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    || self.codegen_expression_traces_to_self(object)
+            }
+            Expression::Index { object, .. } => self.codegen_expression_traces_to_self(object),
+            _ => false,
+        }
     }
 }

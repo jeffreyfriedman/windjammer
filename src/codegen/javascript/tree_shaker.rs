@@ -200,6 +200,7 @@ impl TreeShaker {
             Item::Enum { .. } => true,   // Keep all enums for now
             Item::Const { .. } => true,  // Keep all constants
             Item::Static { .. } => true, // Keep all statics
+            Item::ExternLet { .. } => true, // Keep all extern bindings (GPU resources, etc.)
             Item::Trait { .. } => true,  // Keep all traits
             Item::Impl { .. } => true,   // Keep all impls
             Item::Use { .. } => true,    // Keep all imports (could be smarter here)
@@ -273,6 +274,7 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
+                        return_decorators: Vec::new(),
                         body: vec![test_alloc_stmt(Statement::Expression {
                             expr: test_alloc_expr(Expression::Call {
                                 function: test_alloc_expr(Expression::Identifier {
@@ -300,6 +302,7 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
+                        return_decorators: Vec::new(),
                         body: vec![],
                         parent_type: None,
                         doc_comment: None,
@@ -317,6 +320,7 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
+                        return_decorators: Vec::new(),
                         body: vec![],
                         parent_type: None,
                         doc_comment: None,
@@ -348,6 +352,7 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
+                        return_decorators: Vec::new(),
                         body: vec![],
                         parent_type: None,
                         doc_comment: None,
@@ -365,6 +370,7 @@ mod tests {
                         is_async: false,
                         parameters: vec![],
                         return_type: None,
+                        return_decorators: Vec::new(),
                         body: vec![],
                         parent_type: None,
                         doc_comment: None,

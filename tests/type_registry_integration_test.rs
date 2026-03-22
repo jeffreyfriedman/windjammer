@@ -85,13 +85,8 @@ fn test_type_registry_fixes_import_paths() {
     let src_dir = project_dir.join("src");
 
     // Compile the project
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
             "build",
             "--output",
             output_dir.to_str().unwrap(),

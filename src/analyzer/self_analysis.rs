@@ -132,6 +132,13 @@ impl<'ast> Analyzer<'ast> {
             Statement::Let { value, .. } => {
                 self.expression_calls_mutating_self_methods(value, registry)
             }
+            Statement::Match { value, arms, .. } => {
+                // TDD FIX: Match arms can contain mutating method calls (e.g. match choice { 0 => self.companion.adjust_loyalty(-5.0) })
+                self.expression_calls_mutating_self_methods(value, registry)
+                    || arms.iter().any(|arm| {
+                        self.expression_calls_mutating_self_methods(arm.body, registry)
+                    })
+            }
             _ => false,
         }
     }
@@ -158,7 +165,20 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        // 2. Check methods in current impl block
+                        // 2. TDD FIX: Check signature registry FIRST (has analyzed ownership from previous passes)
+                        if let Some(reg) = registry {
+                            if let Some(sig) = reg.get_signature(method) {
+                                if sig.has_self_receiver {
+                                    if let Some(&ownership) = sig.param_ownership.first() {
+                                        if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Check methods in current impl block (fallback for first pass)
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
                                 if self.function_modifies_self_fields_recursive(called_func) {
@@ -174,6 +194,11 @@ impl<'ast> Analyzer<'ast> {
                     return true;
                 }
 
+                // Recurse into object for chained calls: self.nodes.get_mut(id).unwrap()
+                if self.expression_calls_mutating_self_methods(object, registry) {
+                    return true;
+                }
+
                 // Recurse into arguments to find nested mutation patterns
                 for (_, arg) in arguments {
                     if self.expression_calls_mutating_self_methods(arg, registry) {
@@ -186,10 +211,49 @@ impl<'ast> Analyzer<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_calls_mutating_self_methods(s, registry)),
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, arg)| self.expression_calls_mutating_self_methods(arg, registry)),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                // TDD FIX: Check if self.field is passed to a function expecting &mut
+                // e.g. handle_player_input(self.game.player, delta_time) needs &mut self
+                if let Some(reg) = registry {
+                    if let Some(func_name) = self.call_function_name(function) {
+                        if let Some(sig) = reg.get_signature(func_name) {
+                            for (arg_idx, (_, arg)) in arguments.iter().enumerate() {
+                                if self.expression_traces_to_self(arg) {
+                                    // Self-field passed as argument - check if callee expects &mut
+                                    let param_idx = if sig.has_self_receiver {
+                                        arg_idx + 1
+                                    } else {
+                                        arg_idx
+                                    };
+                                    if let Some(&ownership) = sig.param_ownership.get(param_idx) {
+                                        if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Recurse into arguments for nested patterns
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expression_calls_mutating_self_methods(arg, registry))
+            }
             _ => false,
+        }
+    }
+
+    /// Extract function name from a Call's function expression (Identifier or FieldAccess)
+    fn call_function_name<'a>(&self, expr: &'a Expression<'a>) -> Option<&'a str> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            Expression::FieldAccess { field, .. } => Some(field.as_str()),
+            _ => None,
         }
     }
 
@@ -236,7 +300,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if an expression traces back to `self` through a chain of field accesses.
-    /// Returns true for: self.field, self.field.subfield, etc.
+    /// Returns true for: self.field, self.field.subfield, self.field[i], etc.
     fn expression_traces_to_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
@@ -246,6 +310,8 @@ impl<'ast> Analyzer<'ast> {
                     self.expression_traces_to_self(object)
                 }
             }
+            // TDD FIX: self.factions[i].method() - Index on self.field traces to self
+            Expression::Index { object, .. } => self.expression_traces_to_self(object),
             _ => false,
         }
     }

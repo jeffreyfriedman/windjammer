@@ -1,7 +1,23 @@
-//! TDD Test: Borrowed reference fields need .clone() when passed to methods
+//! TDD Test: String concatenation with function/method calls
 //!
-//! When iterating over borrowed items and passing their fields to methods,
-//! the fields need to be cloned since we can't move out of a reference.
+//! FIXED: String + String concatenation now correctly borrows the right side.
+//!
+//! Pattern: `result = result + process_property()` where process_property returns String
+//! Solution: Automatic `&` prefix added to right side: `result = result + &process_property()`
+//!
+//! Implementation:
+//! 1. Enhanced infer_expression_type() to detect String returns from:
+//!    - Function calls (func() -> String)
+//!    - Method calls (self.method() -> String)
+//!    - Macro invocations (format!() -> String)
+//!
+//! 2. Disabled compound assignment (+=) when right side is String
+//!    - Checks right_type only (not target_type) for robustness
+//!    - Works even when target type can't be inferred
+//!
+//! 3. Added automatic borrowing in binary expressions
+//!    - String + String → String + &String
+//!    - Skips string literals (already &str)
 
 use std::fs;
 use std::process::Command;
@@ -70,7 +86,7 @@ pub fn process_property(name: string, value: string) -> string {
 pub fn process_properties(props: &Vec<Property>) -> string {
     let mut result = "".to_string()
     for prop in props {
-        result = result + process_property(prop.name, prop.value).as_str()
+        result = result + process_property(prop.name, prop.value)
     }
     result
 }
@@ -109,7 +125,7 @@ impl Display {
     pub fn render_all(&self) -> string {
         let mut result = "".to_string()
         for item in self.items {
-            result = result + self.render_item(item.label, item.description).as_str()
+            result = result + self.render_item(item.label, item.description)
         }
         result
     }

@@ -122,6 +122,10 @@ enum Commands {
         /// Skip cargo build after transpilation (transpile only)
         #[arg(long)]
         no_cargo: bool,
+
+        /// External crate metadata for cross-crate type inference (NAME=PATH, repeatable)
+        #[arg(long, value_name = "NAME=PATH")]
+        metadata: Vec<String>,
     },
 
     /// Compile and run a Windjammer file
@@ -185,11 +189,15 @@ enum Commands {
         check: bool,
     },
 
-    /// Run linter (clippy)
+    /// Run Rust leakage linter on .wj files (W0001-W0004)
     Lint {
-        /// Automatically fix warnings
+        /// File or directory to lint
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Fail on warnings (for CI)
         #[arg(long)]
-        fix: bool,
+        strict: bool,
     },
 
     /// Type check without building
@@ -270,6 +278,17 @@ enum Commands {
         code: String,
     },
 
+    /// Compile .wjsl shader to WGSL (with type checking)
+    ShaderCompile {
+        /// Path to .wjsl file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output path for .wgsl file (default: stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+    },
+
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
@@ -305,6 +324,7 @@ fn main() -> anyhow::Result<()> {
             library,
             module_file,
             no_cargo,
+            metadata,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -331,6 +351,7 @@ fn main() -> anyhow::Result<()> {
                 library,
                 module_file,
                 !no_cargo, // run_cargo = !no_cargo
+                &metadata,
             )?;
         }
         Commands::Run {
@@ -371,8 +392,8 @@ fn main() -> anyhow::Result<()> {
         Commands::Fmt { check } => {
             windjammer::cli::fmt::execute(check)?;
         }
-        Commands::Lint { fix } => {
-            windjammer::cli::lint::execute(fix)?;
+        Commands::Lint { path, strict } => {
+            windjammer::cli::lint::execute(&path, strict)?;
         }
         Commands::Check => {
             windjammer::cli::check::execute()?;
@@ -477,6 +498,20 @@ fn main() -> anyhow::Result<()> {
                 println!("  wj explain E0425  (Rust error code)");
             }
         }
+        Commands::ShaderCompile { input, output } => {
+            let source = std::fs::read_to_string(&input)
+                .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", input.display(), e))?;
+            let wgsl = windjammer::shader::compile_shader(&source)?;
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &wgsl)?;
+                    println!("Compiled {} -> {}", input.display(), path.display());
+                }
+                None => {
+                    print!("{}", wgsl);
+                }
+            }
+        }
         Commands::Errors { file, output } => {
             use colored::*;
 
@@ -507,6 +542,7 @@ fn main() -> anyhow::Result<()> {
                 false, // library
                 false, // module_file
                 false, // run_cargo - not needed when check=true
+                &[],   // metadata
             )
             .ok(); // Ignore errors, we'll get them from the TUI
 

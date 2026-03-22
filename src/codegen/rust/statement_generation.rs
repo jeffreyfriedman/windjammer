@@ -137,6 +137,17 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
+                        // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return
+                        // Applies to all return types (SaveSlot, Option<String>, etc.), not just String
+                        // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
+                        if expr_str.starts_with("&") && !expr_str.ends_with(".clone()") {
+                            if let Some(inner) = self.infer_expression_type(expr) {
+                                if !self.is_type_copy(&inner) {
+                                    expr_str = format!("({}).clone()", expr_str);
+                                }
+                            }
+                        }
+
                         // FIXED: Auto-cast usize to i64 for implicit returns
                         let returns_int = match &self.current_function_return_type {
                             Some(Type::Int) => true,
@@ -584,10 +595,21 @@ impl<'ast> CodeGenerator<'ast> {
                                             self.in_borrow_context = prev_borrow_ctx;
                                             value_str = format!("&{}", value_str);
                                         } else {
-                                            // Moved/returned → need explicit clone
-                                            // Example: let child = children[idx]; recursive(child);
-                                            // Expression::Index will add .clone() automatically
-                                            // (no need to add it here - already in value_str)
+                                            // Moved/returned → Expression::Index generates & (auto-borrow)
+                                            // For String: &str needs .to_string() when variable will be returned
+                                            // For other non-Copy: &T needs .clone() when variable will be moved
+                                            if value_str.starts_with('&') {
+                                                let is_string =
+                                                    matches!(elem_type, Type::String)
+                                                        || matches!(elem_type, Type::Custom(n) if n == "string");
+                                                if is_string {
+                                                    value_str =
+                                                        format!("({}).to_string()", value_str);
+                                                } else {
+                                                    value_str =
+                                                        format!("({}).clone()", value_str);
+                                                }
+                                            }
                                         }
                                     }
                                 } else {
@@ -851,6 +873,29 @@ impl<'ast> CodeGenerator<'ast> {
                         return_str = format!("{}.cloned()", return_str);
                     }
 
+                    // DOGFOODING FIX: Vec indexing returns &T for non-Copy, but return expects T
+                    // e.g. return self.slots[idx] where slots: Vec<SaveSlot> → need .clone()
+                    // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
+                    if return_str.starts_with("&") && !return_str.ends_with(".clone()") {
+                        let expects_owned = match &self.current_function_return_type {
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_)) => false,
+                            _ => true,
+                        };
+                        if expects_owned {
+                            let inner_type = self.infer_expression_type(e).and_then(|t| {
+                                match &t {
+                                    Type::Reference(inner) => Some(inner.as_ref().clone()),
+                                    _ => Some(t),
+                                }
+                            });
+                            if let Some(inner) = inner_type {
+                                if !self.is_type_copy(&inner) {
+                                    return_str = format!("({}).clone()", return_str);
+                                }
+                            }
+                        }
+                    }
+
                     output.push_str(&return_str);
                 }
                 output.push_str(";\n");
@@ -1056,6 +1101,7 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'ast>,
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> String {
+        eprintln!("TDD DEBUG MATCH START: arms={}, value={:?}", arms.len(), std::mem::discriminant(value));
         use super::arm_string_analysis;
 
         // TDD FIX: Optimize boolean match expressions to matches! macro
@@ -1137,7 +1183,50 @@ impl<'ast> CodeGenerator<'ast> {
             if !needs_borrow_break_check
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
-                let value_str = self.generate_expression(value);
+                // TDD FIX: Skip redundant .as_str() when value is MethodCall with .as_str()
+                // and object is already &str (same logic as in generate_expression_immut)
+                eprintln!("TDD DEBUG IF-LET PATH: value is MethodCall? {}", 
+                    matches!(value, Expression::MethodCall { .. }));
+                let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
+                    eprintln!("TDD DEBUG IF-LET PATH: MethodCall, method={}", method);
+                    if method == "as_str" && arguments.is_empty() {
+                        eprintln!("TDD DEBUG IF-LET PATH: .as_str() with no args");
+                        let is_already_str = match object {
+                            Expression::Identifier { name, .. } => {
+                                let result = self.inferred_borrowed_params.contains(name.as_str());
+                                eprintln!("TDD DEBUG IF-LET PATH: Identifier {}, borrowed={}, params={:?}",
+                                    name, result, self.inferred_borrowed_params);
+                                result
+                            }
+                            Expression::MethodCall { method: inner_method, .. } => {
+                                matches!(
+                                    inner_method.as_str(),
+                                    "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                    "strip_prefix" | "strip_suffix"
+                                )
+                            }
+                            _ => false,
+                        };
+                        if is_already_str {
+                            self.generate_expression(object)
+                        } else {
+                            self.generate_expression(value)
+                        }
+                    } else {
+                        self.generate_expression(value)
+                    }
+                } else {
+                    self.generate_expression(value)
+                };
+                // E0507 fix: if let Some(x) = self.field with &self must use &self.field
+                let value_str = if self.match_scrutinee_is_self_field(value)
+                    && self.inferred_borrowed_params.contains("self")
+                    && matches!(&arms[0].pattern, Pattern::EnumVariant(name, _) if name == "Some")
+                {
+                    format!("&{}", value_str)
+                } else {
+                    value_str
+                };
                 let main_arm = &arms[0];
 
                 let mut bound_vars = std::collections::HashSet::new();
@@ -1225,8 +1314,100 @@ impl<'ast> CodeGenerator<'ast> {
         let is_tuple_match = arms
             .iter()
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
+        
+        eprintln!("TDD DEBUG MATCH CHECK: has_string_literal={}, is_tuple_match={}", 
+            has_string_literal, is_tuple_match);
 
-        let value_str = self.generate_expression(value);
+        // TDD FIX: Skip redundant .as_str() on &str parameters in match expressions
+        eprintln!("TDD DEBUG VALUE_STR: value variant={:?}", std::mem::discriminant(value));
+        if let Expression::FieldAccess { object, field, .. } = value {
+            eprintln!("TDD DEBUG VALUE_STR: FieldAccess, object={:?}, field={}", 
+                std::mem::discriminant(*object), field);
+        }
+        let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
+            eprintln!("TDD DEBUG VALUE_STR: MethodCall, method={}", method);
+            if method == "as_str" && arguments.is_empty() {
+                eprintln!("TDD DEBUG VALUE_STR: .as_str() with no args");
+                let is_already_str = match object {
+                    Expression::Identifier { name, .. } => {
+                        let result = self.inferred_borrowed_params.contains(name.as_str());
+                        eprintln!("TDD DEBUG VALUE_STR: Identifier {}, borrowed={}, params={:?}",
+                            name, result, self.inferred_borrowed_params);
+                        result
+                    }
+                    Expression::MethodCall { method: inner_method, .. } => {
+                        matches!(
+                            inner_method.as_str(),
+                            "as_str" | "trim" | "trim_start" | "trim_end" | 
+                            "strip_prefix" | "strip_suffix"
+                        )
+                    }
+                    _ => false,
+                };
+                eprintln!("TDD DEBUG VALUE_STR: is_already_str={}", is_already_str);
+                if is_already_str {
+                    eprintln!("TDD DEBUG VALUE_STR: Removing redundant .as_str()");
+                    self.generate_expression(object)
+                } else {
+                    self.generate_expression(value)
+                }
+            } else {
+                self.generate_expression(value)
+            }
+        } else if let Expression::Call { function, arguments, .. } = value {
+            eprintln!("TDD DEBUG: Checking Call expression");
+            // Check if this is actually a method call: obj.method()
+            if let Expression::FieldAccess { object, field, .. } = &**function {
+                eprintln!("TDD DEBUG: Field access, field={}", field);
+                if field == "as_str" && arguments.is_empty() {
+                    eprintln!("TDD DEBUG: .as_str() call with no args");
+                    let is_already_str = match &**object {
+                        Expression::Identifier { name, .. } => {
+                            let result = self.inferred_borrowed_params.contains(name.as_str());
+                            eprintln!("TDD DEBUG: Identifier {}, in borrowed_params={}, params={:?}", 
+                                name, result, self.inferred_borrowed_params);
+                            result
+                        }
+                        Expression::Call { function: inner_func, .. } => {
+                            // Nested method call like obj.trim().as_str()
+                            if let Expression::FieldAccess { field: inner_field, .. } = *inner_func {
+                                matches!(
+                                    inner_field.as_str(),
+                                    "as_str" | "trim" | "trim_start" | "trim_end" | 
+                                    "strip_prefix" | "strip_suffix"
+                                )
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    };
+                    if is_already_str {
+                        self.generate_expression(object)
+                    } else {
+                        self.generate_expression(value)
+                    }
+                } else {
+                    self.generate_expression(value)
+                }
+            } else {
+                self.generate_expression(value)
+            }
+        } else {
+            self.generate_expression(value)
+        };
+
+        // E0507 fix: match self.field { Some(x) => ... } with &self must use &self.field
+        let value_str = if self.match_scrutinee_is_self_field(value)
+            && self.inferred_borrowed_params.contains("self")
+            && arms.iter().any(|arm| {
+                matches!(&arm.pattern, Pattern::EnumVariant(name, _) if name == "Some")
+            })
+        {
+            format!("&{}", value_str)
+        } else {
+            value_str
+        };
 
         let match_binds_refs_early = self.match_expression_binds_refs(value);
         let needs_borrow_break = match_binds_refs_early
@@ -1245,9 +1426,29 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
+                // TDD FIX: Don't add .as_str() if value_str already has it OR if it's already &str
+                // value_str may have been simplified (redundant .as_str() removed)
+                eprintln!("TDD DEBUG MATCH ADD: value_str='{}', ends_with_as_str={}", 
+                    value_str, value_str.ends_with(".as_str()"));
+                eprintln!("TDD DEBUG MATCH ADD: borrowed_params={:?}", self.inferred_borrowed_params);
+                
                 if !value_str.ends_with(".as_str()") {
-                    output.push_str(&format!("{}.as_str()", value_str));
+                    // Check if the simplified value_str is an identifier that's already &str
+                    let is_borrowed_param = self.inferred_borrowed_params.contains(&value_str);
+                    eprintln!("TDD DEBUG MATCH ADD: is_borrowed_param={} for value_str='{}'",
+                        is_borrowed_param, value_str);
+                    
+                    if is_borrowed_param {
+                        // Already &str, don't add .as_str()
+                        eprintln!("TDD DEBUG MATCH ADD: Skipping .as_str() for borrowed param '{}'", value_str);
+                        output.push_str(&value_str);
+                    } else {
+                        // Not &str, add .as_str()
+                        eprintln!("TDD DEBUG MATCH ADD: Adding .as_str() to '{}'", value_str);
+                        output.push_str(&format!("{}.as_str()", value_str));
+                    }
                 } else {
+                    // Already has .as_str()
                     output.push_str(&value_str);
                 }
             } else {
@@ -1505,9 +1706,29 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             let mut value_str = self.generate_expression(value);
+            
+            // TDD FIX: String += String doesn't work in Rust (needs String += &str)
+            // If value returns String and op is Add, add & prefix for borrowing
             if matches!(op, CompoundOp::Add) {
+                // Check owned string iterator vars (existing logic)
                 if let Expression::Identifier { name, .. } = value {
                     if self.owned_string_iterator_vars.contains(name) {
+                        value_str = format!("&{}", value_str);
+                    }
+                }
+                
+                // TDD FIX: Check if value expression returns String
+                let value_type = self.infer_expression_type(value);
+                if matches!(value_type, Some(Type::String)) {
+                    // Don't add & for string literals (already &str)
+                    let is_string_literal = matches!(
+                        value,
+                        Expression::Literal { value: Literal::String(_), .. }
+                    );
+                    // Don't double-borrow if already has &
+                    let already_borrowed = value_str.starts_with('&');
+                    
+                    if !is_string_literal && !already_borrowed {
                         value_str = format!("&{}", value_str);
                     }
                 }
@@ -1535,6 +1756,21 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             let target_type = self.infer_expression_type(target);
+            let right_type = self.infer_expression_type(right);
+            
+            // TDD FIX: String += String/&str doesn't work in Rust (needs String += &str with explicit &)
+            // Disable compound assignment if EITHER:
+            // 1. Right side is String/&str (needs borrowing)
+            // 2. Target is String (likely string concatenation)
+            let right_is_string_like = match &right_type {
+                Some(Type::String) => true,
+                Some(Type::Reference(inner)) => matches!(&**inner, Type::String),
+                _ => false,
+            };
+            let target_is_string = matches!(&target_type, Some(Type::String));
+            let is_string_addition = matches!(op, BinaryOp::Add)
+                && (right_is_string_like || target_is_string);
+            
             let is_known_non_assignable = target_type.as_ref().is_some_and(|t| {
                 if let Type::Custom(name) = t {
                     matches!(
@@ -1553,7 +1789,7 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             });
-            let is_compound_safe = !is_known_non_assignable;
+            let is_compound_safe = !is_known_non_assignable && !is_string_addition;
 
             if targets_match && is_compound_safe {
                 let compound_op_str = match op {
@@ -1572,12 +1808,17 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Some(op_str) = compound_op_str {
                     self.generating_assignment_target = true;
-                    output.push_str(&self.generate_expression(target));
+                    let target_str = self.generate_expression(target);
                     self.generating_assignment_target = false;
+                    output.push_str(&target_str);
                     output.push(' ');
                     output.push_str(op_str);
                     output.push(' ');
-                    output.push_str(&self.generate_expression(right));
+                    let right_str = self.generate_expression(right);
+                    if target_str.contains("in_use") || target_str.contains("total_acquired") {
+                        eprintln!("TDD DEBUG compound optimize: target={}, right={}", target_str, right_str);
+                    }
+                    output.push_str(&right_str);
                     output.push_str(";\n");
                     return output;
                 }
@@ -1839,6 +2080,18 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(_) | Type::MutableReference(_) => true,
             Type::Option(inner) => Self::type_contains_reference(inner),
             Type::Result(ok, _err) => Self::type_contains_reference(ok),
+            _ => false,
+        }
+    }
+
+    /// Check if expression is self.field (or self.field.subfield) - traces to self
+    fn match_scrutinee_is_self_field(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    || self.match_scrutinee_is_self_field(object)
+            }
+            Expression::Index { object, .. } => self.match_scrutinee_is_self_field(object),
             _ => false,
         }
     }

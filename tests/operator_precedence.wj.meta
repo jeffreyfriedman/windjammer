@@ -1,0 +1,26 @@
+{
+  "module_path": "operator_precedence",
+  "functions": {
+    "test_negation_with_and": {
+      "params": [],
+      "return_type": "Bool",
+      "is_associated": false,
+      "parent_type": null
+    },
+    "test_negation_with_or": {
+      "params": [],
+      "return_type": "Bool",
+      "is_associated": false,
+      "parent_type": null
+    },
+    "test_negation_complex": {
+      "params": [],
+      "return_type": "Bool",
+      "is_associated": false,
+      "parent_type": null
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "version": "0.46.0"
+}

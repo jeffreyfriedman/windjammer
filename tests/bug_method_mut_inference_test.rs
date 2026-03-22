@@ -101,22 +101,23 @@ fn main() {
         );
     }
 
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `loader: Loader` (owned),
-    // compiler preserves it as `mut loader: Loader` to respect explicit intent!
-    // The linter will warn that `&mut Loader` would be more efficient.
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `loader: Loader` (no & or &mut)
+    // Compiler infers `&mut Loader` because loader.add() mutates
+    // This is "Compiler does the hard work" - 80% of Rust's power, 20% of complexity
     //
-    // OLD BEHAVIOR (pre-v0.45.0): Changed `Loader` → `&mut Loader`
-    // NEW BEHAVIOR (v0.45.0+): Preserves as `mut loader: Loader` + linter warns
+    // PHILOSOPHY: Ownership inference ≠ mutability inference
+    // - Ownership (`&`, `&mut`, owned): INFERRED automatically ✅
+    // - Mutability (`let mut`): EXPLICIT always (safety guardrail) ✅
     assert!(
-        generated.contains("fn process(mut loader: Loader)")
-            || generated.contains("fn process(mut _loader: Loader)"),
-        "process() should preserve owned parameter as `mut T` (respect explicit intent)"
+        generated.contains("fn process(loader: &mut Loader)"),
+        "process() should infer &mut for mutated parameter (automatic ownership inference)"
     );
 
-    // Verify method calls use the parameter directly (not &mut)
+    // Verify call site also adds &mut automatically
     assert!(
-        generated.contains("loader.add("),
-        "Method calls should use parameter directly"
+        generated.contains("process(&mut ldr)"),
+        "Call site should automatically add &mut"
     );
 
     fs::remove_dir_all(&test_dir).ok();
@@ -207,13 +208,18 @@ fn main() {
         );
     }
 
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `config: Config` (owned),
-    // compiler preserves it as `mut config: Config` to respect explicit intent!
-    // The linter will warn that `&mut Config` would be more efficient.
+    // THE WINDJAMMER WAY: Automatic ownership inference!
+    // User writes `config: Config` (no & or &mut)
+    // Compiler infers `&mut Config` because config.set/clear() mutate
     assert!(
-        generated.contains("fn setup(mut config: Config)")
-            || generated.contains("fn setup(mut _config: Config)"),
-        "setup() should preserve owned parameter as `mut T` (respect explicit intent)"
+        generated.contains("fn setup(config: &mut Config)"),
+        "setup() should infer &mut for mutated parameter (automatic ownership inference)"
+    );
+
+    // Verify call site also adds &mut automatically
+    assert!(
+        generated.contains("setup(&mut cfg)"),
+        "Call site should automatically add &mut"
     );
 
     fs::remove_dir_all(&test_dir).ok();

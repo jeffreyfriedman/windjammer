@@ -1,0 +1,14 @@
+{
+  "mappings": [
+    {
+      "rust_file": "./rendering/render_port.rs",
+      "rust_line": 1,
+      "rust_column": 0,
+      "wj_file": "/Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core/src_wj/rendering/render_port.wj",
+      "wj_line": 249,
+      "wj_column": 1
+    }
+  ],
+  "version": 1,
+  "workspace_root": "/Users/jeffreyfriedman/src/wj/windjammer"
+}

@@ -12,6 +12,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) signature_registry: SignatureRegistry,
     pub(crate) in_wasm_bindgen_impl: bool,
     pub(crate) in_trait_impl: bool, // true if currently generating code for a trait implementation
+    /// When in a trait impl, the trait name (for looking up analyzed_trait_methods)
+    pub(crate) current_trait_impl_name: Option<String>,
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
@@ -160,9 +162,25 @@ pub struct CodeGenerator<'ast> {
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
     pub(crate) in_struct_literal_field: bool,
+    // STRUCT LITERAL CONTEXT: Track which struct we're currently constructing
+    // Enables context-sensitive float type inference (f32 vs f64) for struct fields
+    pub(crate) current_struct_literal_name: Option<String>,
+    // STRUCT LITERAL CONTEXT: Track which field we're currently generating
+    // Enables lookup of field type from struct_field_types for literal inference
+    pub(crate) current_struct_field_name: Option<String>,
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
     // Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
+    // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
+    // Maps expression locations to inferred float types (f32 vs f64)
+    // Enables accurate float literal suffix generation without mixing errors
+    pub(crate) float_inference: Option<crate::type_inference::FloatInference>,
+    // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub(crate) int_inference: Option<crate::type_inference::IntInference>,
+    /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
+    library_source_root: Option<std::path::PathBuf>,
+    /// Maps locally defined type names to Rust module path segments from `library_source_root`.
+    type_defining_modules: std::collections::HashMap<String, Vec<String>>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -207,6 +225,7 @@ impl<'ast> CodeGenerator<'ast> {
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
             in_trait_impl: false,
+            current_trait_impl_name: None, // Set when generating trait impl methods
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
@@ -276,7 +295,13 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             copy_types_registry: std::collections::HashSet::new(),
             in_struct_literal_field: false,
+            current_struct_literal_name: None,
+            current_struct_field_name: None,
+            float_inference: None,
+            int_inference: None,
             enum_variant_types: std::collections::HashMap::new(),
+            library_source_root: None,
+            type_defining_modules: std::collections::HashMap::new(),
         }
     }
 
@@ -330,6 +355,29 @@ impl<'ast> CodeGenerator<'ast> {
         bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     ) {
         self.inferred_bounds = bounds;
+    }
+
+    /// Set expression-level float type inference results
+    /// Enables accurate f32/f64 suffix generation based on constraint solving
+    pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
+        self.float_inference = Some(inference);
+    }
+
+    /// Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub fn set_int_inference(&mut self, inference: crate::type_inference::IntInference) {
+        self.int_inference = Some(inference);
+    }
+
+    /// Used with multipass library builds to resolve `use super::...::Type` across sibling `.wj` modules.
+    pub fn set_library_source_root(&mut self, root: std::path::PathBuf) {
+        self.library_source_root = Some(root);
+    }
+
+    pub fn set_type_defining_modules(
+        &mut self,
+        map: std::collections::HashMap<String, Vec<String>>,
+    ) {
+        self.type_defining_modules = map;
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -899,6 +947,25 @@ impl<'ast> CodeGenerator<'ast> {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
+        // Cross-module type references: only when we do NOT inject `use super::*` below.
+        // Injected `use super::*` already pulls in sibling types re-exported from the parent `mod.rs`;
+        // extra `use super::Type` lines are often wrong (Type lives in `super::other_module::Type`)
+        // and duplicate globs (E0252). If the user already wrote `use super::*`, we also skip (see
+        // `auto_super_type_import_paths`).
+        let has_explicit_glob_imports = imports.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed.ends_with("::*;") && !trimmed.starts_with("//")
+        });
+        let will_inject_super_glob = self.is_module && !has_explicit_glob_imports;
+        let auto_super_type_imports = if will_inject_super_glob {
+            String::new()
+        } else {
+            self.format_auto_super_type_imports(program)
+        };
+        if !auto_super_type_imports.is_empty() {
+            implicit_imports.push_str(&auto_super_type_imports);
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -969,14 +1036,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Rust error E0659 ("ambiguous name"). For example, if mod.rs re-exports GizmoMode
         // from scene_view, and the file also has `use crate::gizmos::*` which exports its own
         // GizmoMode, both globs would bring GizmoMode into scope, making it ambiguous.
-        if self.is_module {
-            let has_explicit_glob_imports = imports.lines().any(|line| {
-                let trimmed = line.trim();
-                trimmed.ends_with("::*;") && !trimmed.starts_with("//")
-            });
-            if !has_explicit_glob_imports {
-                implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
-            }
+        if self.is_module && !has_explicit_glob_imports {
+            implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
         }
 
         // TDD FIX: Auto-import test runtime for files with test functions
@@ -1045,16 +1106,101 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
+    /// Generate `use super::...` lines for types referenced in this file but defined elsewhere.
+    pub(crate) fn format_auto_super_type_imports(&self, program: &Program<'ast>) -> String {
+        if !self.is_module {
+            return String::new();
+        }
+        let paths = crate::analyzer::type_collector::auto_super_type_import_paths(program);
+        if paths.is_empty() {
+            return String::new();
+        }
+        let nest_supers = self
+            .get_import_prefix_for_nested_output()
+            .map(|n| "super::".repeat(n))
+            .unwrap_or_default();
+
+        let current_module = self
+            .library_source_root
+            .as_ref()
+            .and_then(|base| {
+                crate::analyzer::type_collector::wj_file_to_module_path(base, &self.current_wj_file)
+            });
+
+        let mut out = String::from("#[allow(unused_imports)]\n");
+        for path in paths {
+            let (_, type_name) = crate::analyzer::type_collector::split_qualified_type_path(&path);
+            let key = if type_name.is_empty() {
+                path.as_str()
+            } else {
+                type_name
+            };
+
+            let resolved = if let Some(ref cur) = current_module {
+                if !self.type_defining_modules.is_empty() {
+                    self.type_defining_modules
+                        .get(key)
+                        .and_then(|def_mod| {
+                            crate::analyzer::type_collector::rust_use_path_from_module_to_type(
+                                cur, def_mod, key,
+                            )
+                        })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let rust_path = if let Some(r) = resolved {
+                format!("{}{}", nest_supers, r)
+            } else {
+                let p = path.replace('.', "::");
+                let chain = self
+                    .get_import_prefix_for_nested_output()
+                    .map(|n| "super::".repeat(n))
+                    .unwrap_or_else(|| "super::".to_string());
+                format!("{}{}", chain, p)
+            };
+            out.push_str(&format!("use {};\n", rust_path));
+        }
+        out
+    }
+
     pub(crate) fn type_to_rust(&self, type_: &Type) -> String {
         crate::codegen::rust::type_to_rust(type_)
     }
 
+    /// Check if a type implements Copy.
+    ///
+    /// Handles:
+    /// 1. Primitives (via type_analysis::is_copy_type)
+    /// 2. Option<T> when T is Copy (Option<f32>, Option<AABB>, etc.)
+    /// 3. User structs with @derive(Copy) (copy_types_registry)
+    /// 4. Structs with all-Copy fields (struct_field_types recursive check)
+    /// 5. Known game engine types from external crates (Vec3, AABB, etc.)
     pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
-        crate::codegen::rust::type_analysis::is_copy_type(ty)
-            || match ty {
-                Type::Custom(name) => self.copy_types_registry.contains(name.as_str()),
-                _ => false,
+        if crate::codegen::rust::type_analysis::is_copy_type(ty) {
+            return true;
+        }
+        match ty {
+            Type::Option(inner) => self.is_type_copy(inner),
+            Type::Custom(name) => {
+                if self.copy_types_registry.contains(name.as_str()) {
+                    return true;
+                }
+                // Recursive check: if we have struct field types and all fields are Copy, struct is Copy
+                if let Some(fields) = self.struct_field_types.get(name.as_str()) {
+                    if fields.values().all(|field_ty| self.is_type_copy(field_ty)) {
+                        return true;
+                    }
+                }
+                // Fallback: known Copy types from external crates (windjammer-app, etc.)
+                // These are common game engine types that are always Copy (primitives-only structs)
+                crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())
             }
+            _ => false,
+        }
     }
 
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"

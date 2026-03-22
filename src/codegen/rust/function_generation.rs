@@ -57,6 +57,35 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
+    /// Impl methods MUST match trait signature exactly.
+    fn get_effective_self_ownership(
+        &self,
+        func_name: &str,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> Option<OwnershipMode> {
+        if self.in_trait_impl {
+            if let Some(trait_name) = &self.current_trait_impl_name {
+                let methods = self
+                    .analyzed_trait_methods
+                    .get(trait_name)
+                    .or_else(|| {
+                        trait_name
+                            .rfind("::")
+                            .map(|i| &trait_name[i + 2..])
+                            .and_then(|key| self.analyzed_trait_methods.get(key))
+                    });
+                if let Some(ownership) = methods
+                    .and_then(|m| m.get(func_name))
+                    .and_then(|m| m.inferred_ownership.get("self").copied())
+                {
+                    return Some(ownership);
+                }
+            }
+        }
+        analyzed.inferred_ownership.get("self").copied()
+    }
+
     fn statement_modifies_self(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Assignment { target, .. } => {
@@ -119,6 +148,10 @@ impl<'ast> CodeGenerator<'ast> {
                         | "resize"
                         | "swap_remove"
                         | "retain"
+                        | "take"
+                        | "replace"
+                        | "get_or_insert"
+                        | "get_or_insert_with"
                 );
 
                 if is_mutating_method {
@@ -155,14 +188,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         output.push('(');
 
-        // Generate parameters
-        // WINDJAMMER FFI: Convert `str` parameters to FFI-compatible (*const u8, usize) pairs
+        // Generate parameters - use FFI-safe types for extern "C"
+        // string/String -> windjammer_runtime::ffi::FfiString (Rust String/&str are not C-compatible)
         let mut params: Vec<String> = Vec::new();
         for param in &func.parameters {
             if matches!(&param.type_, Type::Custom(name) if name == "str") {
-                // FFI: str -> (*const u8, usize)
                 params.push(format!("{}_ptr: *const u8", param.name));
                 params.push(format!("{}_len: usize", param.name));
+            } else if matches!(&param.type_, Type::String)
+                || matches!(&param.type_, Type::Custom(name) if name == "string" || name == "String")
+            {
+                params.push(format!("{}: windjammer_runtime::ffi::FfiString", param.name));
             } else {
                 params.push(format!(
                     "{}: {}",
@@ -175,10 +211,17 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&params.join(", "));
         output.push(')');
 
-        // Add return type if present
+        // Add return type - use FfiString for string returns
         if let Some(ret_type) = &func.return_type {
             output.push_str(" -> ");
-            output.push_str(&self.type_to_rust(ret_type));
+            let rust_ret = if matches!(ret_type, Type::String)
+                || matches!(ret_type, Type::Custom(name) if name == "string" || name == "String")
+            {
+                "windjammer_runtime::ffi::FfiString".to_string()
+            } else {
+                self.type_to_rust(ret_type)
+            };
+            output.push_str(&rust_ret);
         }
 
         output.push_str(";\n");
@@ -236,6 +279,14 @@ impl<'ast> CodeGenerator<'ast> {
             if decorator.name == "export" && self.target != CompilationTarget::Wasm {
                 continue;
             }
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
+                continue;
+            }
             // Skip wrapping decorators - they'll be handled in the body
             if matches!(
                 decorator.name.as_str(),
@@ -274,6 +325,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         output.push_str("fn ");
         output.push_str(&func.name);
+
+        // TDD FIX: Preserve generic type parameters in wrapping path (e.g. @test, @timeout)
+        // Bug: E0425 - "cannot find type 'T' in this scope" when generic fn has decorators
+        if !func.type_params.is_empty() {
+            output.push('<');
+            output.push_str(&self.format_type_params(&func.type_params));
+            output.push('>');
+        }
+
         output.push('(');
 
         // For @property_test, remove parameters (they become generators)
@@ -303,9 +363,15 @@ impl<'ast> CodeGenerator<'ast> {
                     let rust_type = self.type_to_rust(param_type);
 
                     // THE WINDJAMMER WAY: Owned parameters are always mutable
+                    // Borrowed string params use &str (idiomatic Rust), not &String
                     match ownership {
                         crate::analyzer::OwnershipMode::Borrowed => {
-                            format!("{}: &{}", param.name, rust_type)
+                            let ref_type = if rust_type == "String" {
+                                "&str".to_string()
+                            } else {
+                                format!("&{}", rust_type)
+                            };
+                            format!("{}: {}", param.name, ref_type)
                         }
                         crate::analyzer::OwnershipMode::MutBorrowed => {
                             format!("{}: &mut {}", param.name, rust_type)
@@ -1053,6 +1119,15 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
 
+            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
+            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
+            if matches!(
+                decorator.name.as_str(),
+                "vertex" | "fragment" | "compute"
+            ) {
+                continue;
+            }
+
             // Skip game framework decorators - they're handled by the game loop
             if matches!(
                 decorator.name.as_str(),
@@ -1163,8 +1238,39 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         // Priority 1: Use analyzer's inferred self if available
-        if has_inferred_self && !has_explicit_self {
-            if let Some(ownership) = analyzed.inferred_ownership.get("self") {
+        // E0053 FIX: For trait impls, use TRAIT's ownership (impl must match trait exactly)
+        // Trait impl methods MUST have self if trait has it - even when impl body doesn't use self
+        let needs_self_from_trait = self.in_trait_impl
+            && !has_explicit_self
+            && self.current_trait_impl_name.as_ref().is_some_and(|trait_name| {
+                let methods = self
+                    .analyzed_trait_methods
+                    .get(trait_name)
+                    .or_else(|| {
+                        trait_name
+                            .rfind("::")
+                            .map(|i| &trait_name[i + 2..])
+                            .and_then(|key| self.analyzed_trait_methods.get(key))
+                    });
+                methods.is_some_and(|m| {
+                    m.get(&func.name)
+                        .is_some_and(|trait_fn| trait_fn.inferred_ownership.contains_key("self"))
+                })
+            });
+
+        if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
+            let ownership = self
+                .get_effective_self_ownership(&func.name, analyzed)
+                .or_else(|| {
+                    // Trait has method but no self in analyzed - default to &mut self (trait convention)
+                    if needs_self_from_trait {
+                        Some(OwnershipMode::MutBorrowed)
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some(ownership) = ownership {
                 let self_param = match ownership {
                     OwnershipMode::Borrowed => "&self",
                     OwnershipMode::MutBorrowed => "&mut self",
@@ -1250,9 +1356,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership for self
+                            // E0053 FIX: Use trait's ownership when in trait impl
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
@@ -1280,9 +1386,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
-                            // Check if analyzer inferred a different ownership (e.g., &mut self)
+                            // E0053 FIX: Use trait's ownership when in trait impl
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
@@ -1315,6 +1421,22 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Mut => {
                         if param.name == "self" {
+                            // E0053 FIX: Use trait's ownership when in trait impl
+                            if let Some(ownership_mode) =
+                                self.get_effective_self_ownership(&func.name, analyzed)
+                            {
+                                return match ownership_mode {
+                                    OwnershipMode::Borrowed => "&self".to_string(),
+                                    OwnershipMode::MutBorrowed => "&mut self".to_string(),
+                                    OwnershipMode::Owned => {
+                                        if self.function_modifies_self(&analyzed.decl) {
+                                            "mut self".to_string()
+                                        } else {
+                                            "self".to_string()
+                                        }
+                                    }
+                                };
+                            }
                             return "&mut self".to_string();
                         }
                         // Don't add &mut if the type is already a MutableReference
@@ -1330,10 +1452,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // For other types: Apply ownership mode from analyzer
 
                         // Special handling for `self` parameters (trait impl methods)
+                        // E0053 FIX: Use trait's ownership when in trait impl
                         if param.name == "self" {
-                            // Check analyzer for inferred ownership
                             if let Some(ownership_mode) =
-                                analyzed.inferred_ownership.get(&param.name)
+                                self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
