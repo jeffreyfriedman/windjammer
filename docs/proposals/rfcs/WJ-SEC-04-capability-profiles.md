@@ -6177,30 +6177,6 @@ Export: wj compliance mock-audit-report-2026-03-21.pdf
 Share with: Auditor (use as preview)
 ```
 
-#### Compliance Training for Developers
-
-```bash
-wj compliance training
-
-Welcome to Windjammer Compliance Training
-
-This interactive course helps developers understand:
-  - Why compliance matters
-  - What you need to do
-  - How Windjammer makes it automatic
-
-Modules:
-  1. Introduction to SOC 2 (10 min)
-  2. Supply chain security basics (15 min)
-  3. Vulnerability management (10 min)
-  4. Your role in compliance (5 min)
-
-Total time: ~40 minutes
-Certificate: Issued upon completion
-
-Start training? (Y/n) y
-```
-
 #### Compliance API (For Integration)
 
 ```python
