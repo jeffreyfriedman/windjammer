@@ -245,6 +245,54 @@ impl MethodCallAnalyzer {
         }
 
         // BUGFIX: Check method signature FIRST if available!
+        // FALLBACK HEURISTIC for E0308 String→&str when signature not found
+        // Common pattern: Methods with string parameters typically expect &str
+        // If we have an owned String variable (match arm binding, local var), add &
+        if method_signature.is_none() {
+            if let Expression::Identifier { name: arg_name, .. } = arg {
+                // First check local_var_types (match arm bindings, let bindings)
+                if let Some(local_types) = local_var_types {
+                    if let Some(var_type) = local_types.get(arg_name) {
+                        if crate::codegen::rust::types::is_windjammer_text_type(var_type) {
+                            return true; // Add & for owned String → &str conversion
+                        }
+                    }
+                }
+                
+                // SECOND FALLBACK: Check current_function_params for owned String parameters
+                // This catches owned String params that aren't in inferred_borrowed_params
+                let is_owned_string_param = current_function_params.iter().any(|p| {
+                    p.name == *arg_name
+                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        && !inferred_borrowed_params.contains(arg_name)
+                });
+                if is_owned_string_param {
+                    return true;
+                }
+                
+                // THIRD FALLBACK: Heuristic for common string-accepting methods
+                // If the method name suggests it takes a string ID/key/name, add &
+                // This is safe because most methods expect &str, not owned String
+                let method_likely_takes_str = matches!(
+                    method,
+                    "has_item" | "get_item" | "remove_item" | "add_item"
+                    | "get_attribute" | "set_attribute"
+                    | "is_quest_complete" | "get_quest" | "start_quest"
+                    | "get_relationship_level" | "set_relationship_level"
+                    | "get_custom_flag" | "set_custom_flag"
+                    | "contains" | "starts_with" | "ends_with"
+                );
+                let arg_name_suggests_string_id = arg_name.ends_with("_id")
+                    || arg_name.ends_with("_name")
+                    || arg_name.ends_with("_key")
+                    || matches!(arg_name.as_str(), "id" | "name" | "key" | "item_id" | "quest_id" | "char_id" | "attr");
+                
+                if method_likely_takes_str && arg_name_suggests_string_id {
+                    return true;
+                }
+            }
+        }
+        
         // User-defined methods with names like "remove" should use their actual signature,
         // not stdlib HashMap assumptions.
         // Example: ComponentArray<T>.remove(entity: Entity) takes Entity by value, not &Entity
