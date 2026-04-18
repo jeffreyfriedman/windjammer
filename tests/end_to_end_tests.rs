@@ -90,7 +90,8 @@ fn main() {
 }
 "#,
         expected_js_contains: &["if (", "} else {", "return"],
-        expected_rust_contains: &["if x > 0", "else"],
+        // Codegen may cast the condition (e.g. `if (x as i64) > 0_i64`) — match structure, not exact text.
+        expected_rust_contains: &["if (", "> 0", "else"],
     },
     TestCase {
         name: "async_function",

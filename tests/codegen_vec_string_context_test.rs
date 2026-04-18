@@ -83,10 +83,10 @@ fn main() {
 
     let rust = compile_wj_to_rust(source, "extern_borrow");
 
-    // Should auto-borrow String → &str for extern
+    // Extern fn string args go through FFI conversion (string_to_ffi)
     assert!(
-        rust.contains("hash(&data)"),
-        "Extern fn with String arg should get & for &str param\nGenerated:\n{}",
+        rust.contains("hash(") && (rust.contains("string_to_ffi") || rust.contains("hash(&data)")),
+        "Extern fn with String arg should use FFI conversion or auto-borrow\nGenerated:\n{}",
         rust
     );
 }

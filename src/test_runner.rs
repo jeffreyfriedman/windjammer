@@ -267,12 +267,23 @@ pub fn run_tests(
         }
     }
 
-    if !output.status.success() {
-        anyhow::bail!("Tests failed");
-    }
+    let success = output.status.success();
 
     if temp_dir.exists() {
-        fs::remove_dir_all(&temp_dir)?;
+        if !success {
+            eprintln!(
+                "  {} Cleaning up test artifacts at {}",
+                "→".bright_blue().bold(),
+                temp_dir.display()
+            );
+        }
+        if let Err(e) = fs::remove_dir_all(&temp_dir) {
+            eprintln!("  Warning: failed to clean temp dir {}: {}", temp_dir.display(), e);
+        }
+    }
+
+    if !success {
+        anyhow::bail!("Tests failed");
     }
 
     Ok(())

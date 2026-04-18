@@ -34,6 +34,8 @@ edition = "2021"
 [lib]
 name = "my_game_core"
 path = "src/lib.rs"
+
+[workspace]
 "#;
     fs::write(test_dir.join("Cargo.toml"), cargo_toml).unwrap();
 

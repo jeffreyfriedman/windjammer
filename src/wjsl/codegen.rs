@@ -29,9 +29,34 @@ impl WjslCodegen {
             self.emit_binding(&mut out, b);
         }
 
-        // 2b. Private variables
+        // 2b. Constant declarations
+        for cd in &self.module.const_decls {
+            if let Some(ref ty) = cd.ty {
+                out.push_str(&format!(
+                    "const {}: {} = {};\n",
+                    cd.name,
+                    self.type_to_wgsl(ty),
+                    cd.initializer
+                ));
+            } else {
+                out.push_str(&format!(
+                    "const {} = {};\n",
+                    cd.name,
+                    cd.initializer
+                ));
+            }
+        }
+        if !self.module.const_decls.is_empty() {
+            out.push('\n');
+        }
+
+        // 2c. Module-level variables (private and workgroup)
         for pv in &self.module.private_vars {
-            out.push_str("var<private> ");
+            let space = match pv.address_space {
+                crate::wjsl::ast::AddressSpace::Private => "private",
+                crate::wjsl::ast::AddressSpace::Workgroup => "workgroup",
+            };
+            out.push_str(&format!("var<{}> ", space));
             out.push_str(&pv.name);
             out.push_str(": ");
             out.push_str(&self.type_to_wgsl(&pv.ty));
@@ -186,14 +211,20 @@ impl WjslCodegen {
             out.push_str(&self.type_to_wgsl(ret));
         }
         out.push_str(" {\n");
-        if !f.body.is_empty() {
-            for line in f.body.lines() {
-                out.push_str("    ");
-                out.push_str(line);
-                out.push('\n');
-            }
-        }
+        Self::emit_body(out, &f.body);
         out.push_str("}\n\n");
+    }
+
+    fn emit_body(out: &mut String, body: &str) {
+        if body.is_empty() {
+            return;
+        }
+        for line in body.lines() {
+            out.push_str("    ");
+            let transformed = line.replace("let mut ", "var ");
+            out.push_str(&transformed);
+            out.push('\n');
+        }
     }
 
     fn emit_param(&self, out: &mut String, p: &Param) {
@@ -242,13 +273,7 @@ impl WjslCodegen {
             out.push_str(&self.type_to_wgsl(&ret.ty));
         }
         out.push_str(" {\n");
-        if !ep.body.is_empty() {
-            for line in ep.body.lines() {
-                out.push_str("    ");
-                out.push_str(line);
-                out.push('\n');
-            }
-        }
+        Self::emit_body(out, &ep.body);
         out.push_str("}\n\n");
     }
 }

@@ -20,7 +20,63 @@
 /// Type::MutableReference, but inferred &mut params still have their original
 /// type in the AST. Need to also check inferred ownership.
 use std::fs;
+use std::path::Path;
 use std::process::Command;
+use tempfile::TempDir;
+
+/// Parallel-safe wj invocation (unique temp dir; skip nested cargo — rustc checks output).
+fn transpile_wj_to_rust(source: &str) -> (TempDir, String) {
+    let temp_dir = TempDir::new().expect("failed to create temp dir for wj test");
+    let test_dir = temp_dir.path();
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+    let out_dir = test_dir.join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
+        .current_dir(test_dir)
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("rust")
+        .arg("--output")
+        .arg(&out_dir)
+        .arg("--no-cargo")
+        .output()
+        .expect("Failed to run wj compiler");
+
+    assert!(
+        output.status.success(),
+        "wj build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rust_file = out_dir.join("test.rs");
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+    (temp_dir, generated)
+}
+
+fn assert_rustc_ok(test_dir: &Path, rust_file: &Path, generated: &str) {
+    let rustc_output = Command::new("rustc")
+        .arg(rust_file)
+        .arg("--crate-type")
+        .arg("bin")
+        .arg("--edition")
+        .arg("2021")
+        .arg("-o")
+        .arg(test_dir.join("test_bin"))
+        .output()
+        .expect("Failed to run rustc");
+
+    if !rustc_output.status.success() {
+        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
+        );
+    }
+}
 
 #[test]
 fn test_inferred_mut_param_passthrough() {
@@ -59,35 +115,9 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let _output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+    let (tmp, generated) = transpile_wj_to_rust(source);
+    let test_dir = tmp.path();
+    let rust_file = test_dir.join("out").join("test.rs");
 
     println!("Generated code:\n{}", generated);
 
@@ -115,27 +145,7 @@ fn main() {
         generated
     );
 
-    // Compile with rustc to verify correctness
-    let rustc_output = Command::new("rustc")
-        .arg(&rust_file)
-        .arg("--crate-type")
-        .arg("bin")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(test_dir.join("test_bin"))
-        .output()
-        .expect("Failed to run rustc");
-
-    if !rustc_output.status.success() {
-        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
-        panic!(
-            "Compilation failed:\n{}\n\nGenerated code:\n{}",
-            stderr, generated
-        );
-    }
-
-    fs::remove_dir_all(&test_dir).ok();
+    assert_rustc_ok(test_dir, &rust_file, &generated);
 }
 
 #[test]
@@ -175,35 +185,9 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let _output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+    let (tmp, generated) = transpile_wj_to_rust(source);
+    let test_dir = tmp.path();
+    let rust_file = test_dir.join("out").join("test.rs");
 
     println!("Generated code:\n{}", generated);
 
@@ -229,25 +213,5 @@ fn main() {
         generated
     );
 
-    // Compile with rustc
-    let rustc_output = Command::new("rustc")
-        .arg(&rust_file)
-        .arg("--crate-type")
-        .arg("bin")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(test_dir.join("test_bin"))
-        .output()
-        .expect("Failed to run rustc");
-
-    if !rustc_output.status.success() {
-        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
-        panic!(
-            "Compilation failed:\n{}\n\nGenerated code:\n{}",
-            stderr, generated
-        );
-    }
-
-    fs::remove_dir_all(&test_dir).ok();
+    assert_rustc_ok(test_dir, &rust_file, &generated);
 }

@@ -20,42 +20,42 @@ pub fn assert_msg(condition: bool, message: string) {
 /// Assert that two values are equal
 pub fn assert_eq<T>(actual: T, expected: T) {
     if actual != expected {
-        panic("Assertion failed: expected " + expected.to_string() + ", got " + actual.to_string())
+        panic("Assertion failed: expected " + format!("{}", expected) + ", got " + format!("{}", actual))
     }
 }
 
 /// Assert that two values are not equal
 pub fn assert_ne<T>(actual: T, expected: T) {
     if actual == expected {
-        panic("Assertion failed: values should not be equal: " + actual.to_string())
+        panic("Assertion failed: values should not be equal: " + format!("{}", actual))
     }
 }
 
 /// Assert that actual > expected
 pub fn assert_gt<T>(actual: T, expected: T) {
     if actual <= expected {
-        panic("Assertion failed: " + actual.to_string() + " is not greater than " + expected.to_string())
+        panic("Assertion failed: " + format!("{}", actual) + " is not greater than " + format!("{}", expected))
     }
 }
 
 /// Assert that actual < expected
 pub fn assert_lt<T>(actual: T, expected: T) {
     if actual >= expected {
-        panic("Assertion failed: " + actual.to_string() + " is not less than " + expected.to_string())
+        panic("Assertion failed: " + format!("{}", actual) + " is not less than " + format!("{}", expected))
     }
 }
 
 /// Assert that actual >= expected
 pub fn assert_gte<T>(actual: T, expected: T) {
     if actual < expected {
-        panic("Assertion failed: " + actual.to_string() + " is not greater than or equal to " + expected.to_string())
+        panic("Assertion failed: " + format!("{}", actual) + " is not greater than or equal to " + format!("{}", expected))
     }
 }
 
 /// Assert that actual <= expected
 pub fn assert_lte<T>(actual: T, expected: T) {
     if actual > expected {
-        panic("Assertion failed: " + actual.to_string() + " is not less than or equal to " + expected.to_string())
+        panic("Assertion failed: " + format!("{}", actual) + " is not less than or equal to " + format!("{}", expected))
     }
 }
 
@@ -83,7 +83,7 @@ pub fn assert_ends_with(string: string, suffix: string) {
 /// Assert that a collection is empty
 pub fn assert_empty<T>(collection: Vec<T>) {
     if collection.len() > 0 {
-        panic("Assertion failed: collection is not empty (length: " + collection.len().to_string() + ")")
+        panic("Assertion failed: collection is not empty (length: " + format!("{}", collection.len()) + ")")
     }
 }
 
@@ -97,7 +97,7 @@ pub fn assert_not_empty<T>(collection: Vec<T>) {
 /// Assert that a collection has a specific length
 pub fn assert_length<T>(collection: Vec<T>, expected: int) {
     if collection.len() != expected {
-        panic("Assertion failed: expected length " + expected.to_string() + ", got " + collection.len().to_string())
+        panic("Assertion failed: expected length " + format!("{}", expected) + ", got " + format!("{}", collection.len()))
     }
 }
 

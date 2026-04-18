@@ -76,16 +76,15 @@ pub fn test() -> usize {
 
     let result = compile_and_get_rust(source);
     assert!(
-        (result.contains("(x) as f32") && result.contains("(offset) as f32"))
-            || (result.contains("(x) as f32") && result.contains("offset as f32")),
+        result.contains("x as f32") && result.contains("offset as f32"),
         "Cast + int should cast int operand to f32. Got:\n{}",
         result
     );
 
     let (rustc_ok, stderr) = run_rustc(&result);
     assert!(
-        rustc_ok || !stderr.contains("cannot add"),
-        "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
+        rustc_ok,
+        "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",
         stderr,
         result
     );
@@ -104,16 +103,15 @@ pub fn test() -> usize {
 
     let result = compile_and_get_rust(source);
     assert!(
-        (result.contains("(offset) as f32") && result.contains("(x) as f32"))
-            || (result.contains("offset as f32") && result.contains("(x) as f32")),
+        result.contains("offset as f32") && result.contains("x as f32"),
         "Int + Cast should cast int operand to f32. Got:\n{}",
         result
     );
 
     let (rustc_ok, stderr) = run_rustc(&result);
     assert!(
-        rustc_ok || !stderr.contains("cannot add"),
-        "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
+        rustc_ok,
+        "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",
         stderr,
         result
     );

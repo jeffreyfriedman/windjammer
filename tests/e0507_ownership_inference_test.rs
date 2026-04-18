@@ -114,7 +114,8 @@ fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
     assert!(
-        rust.contains("tracks[i].clone().sample") || rust.contains("tracks[i].clone().sample("),
+        rust.contains(".clone().sample")
+            && (rust.contains("tracks[i") || rust.contains("tracks[i as usize]")),
         "Vec index + method(owned self) needs .clone(): {}",
         rust
     );
@@ -543,9 +544,8 @@ fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
     assert!(
-        rust.contains("graph.passes.clone()") || rust.contains("graph.passes.clone()"),
-        "Let binding from borrowed self.graph.passes needs .clone(): {}",
+        rust_compiles(&rust),
+        "Let binding from self.graph.passes must compile (clone when &self, move when owned self): {}",
         rust
     );
-    assert!(rust_compiles(&rust), "Let binding from borrowed field must compile: {}", rust);
 }

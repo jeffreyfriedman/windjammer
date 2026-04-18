@@ -90,6 +90,8 @@ windjammer-runtime = {{ path = "{}" }}
 [lib]
 name = "test_lib"
 path = "lib.rs"
+
+[workspace]
 "#,
         runtime_path_str
     );
@@ -178,6 +180,8 @@ test-lib = {{ path = "{}" }}
 [lib]
 name = "test_tests"
 path = "test.rs"
+
+[workspace]
 "#,
         lib_output_str
     );

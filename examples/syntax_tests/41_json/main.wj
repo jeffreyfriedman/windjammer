@@ -18,8 +18,8 @@ fn main() {
     println!("1. Serialize to JSON:")
     let user = User {
         id: 1,
-        name: "Alice".to_string(),
-        email: "alice@example.com".to_string(),
+        name: "Alice",
+        email: "alice@example.com",
     }
     
     // Use Windjammer's json abstraction - no direct serde_json access!

@@ -223,8 +223,7 @@ impl Parser {
                                 self.advance();
                                 name
                             }
-                            Token::IntLiteral(n) => {
-                                // Tuple field access: tuple.0, tuple.1, etc.
+                            Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => {
                                 let field_name = n.to_string();
                                 self.advance();
                                 field_name
@@ -525,6 +524,58 @@ impl Parser {
         }
     }
 
+    /// Build `format!("…{}…", …)` AST for a lexer-produced interpolated string (`"${expr}"` holes).
+    fn finish_interpolated_string(
+        &mut self,
+        parts: Vec<crate::lexer::StringPart>,
+    ) -> Result<&'static Expression<'static>, String> {
+        let mut format_string = String::new();
+        let mut args = Vec::new();
+
+        for part in parts {
+            match part {
+                crate::lexer::StringPart::Literal(lit) => {
+                    let escaped = lit.replace('{', "{{").replace('}', "}}");
+                    format_string.push_str(&escaped);
+                }
+                crate::lexer::StringPart::Expression(expr_str) => {
+                    format_string.push_str("{}");
+                    let trimmed = expr_str.trim();
+                    let mut expr_lexer = crate::lexer::Lexer::new(trimmed);
+                    let mut expr_tokens = Vec::new();
+                    loop {
+                        let tok_with_loc = expr_lexer.next_token_with_location();
+                        if tok_with_loc.token == crate::lexer::Token::Eof {
+                            break;
+                        }
+                        expr_tokens.push(tok_with_loc);
+                    }
+
+                    let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
+                    let expr = expr_parser.parse_expression().map_err(|e| {
+                        format!("invalid expression in string interpolation `{trimmed}`: {e}")
+                    })?;
+                    args.push(expr);
+                }
+            }
+        }
+
+        let format_lit = self.alloc_expr(Expression::Literal {
+            value: Literal::String(format_string),
+            location: self.current_location(),
+        });
+        let mut macro_args = vec![format_lit];
+        macro_args.extend(args);
+
+        Ok(self.alloc_expr(Expression::MacroInvocation {
+            name: "format".to_string(),
+            args: macro_args,
+            delimiter: MacroDelimiter::Parens,
+            is_repeat: false,
+            location: self.current_location(),
+        }))
+    }
+
     fn parse_primary_expression(&mut self) -> Result<&'static Expression<'static>, String> {
         let mut expr = match self.current_token() {
             Token::Thread => {
@@ -653,10 +704,20 @@ impl Parser {
             }
             Token::IntLiteral(n) => {
                 let n = *n;
-                let loc = self.current_location(); // Capture BEFORE advance
+                let loc = self.current_location();
                 self.advance();
                 self.alloc_expr(Expression::Literal {
                     value: Literal::Int(n),
+                    location: loc,
+                })
+            }
+            Token::IntLiteralSuffixed(n, ref suffix) => {
+                let n = *n;
+                let suffix = suffix.clone();
+                let loc = self.current_location();
+                self.advance();
+                self.alloc_expr(Expression::Literal {
+                    value: Literal::IntSuffixed(n, suffix),
                     location: loc,
                 })
             }
@@ -688,58 +749,9 @@ impl Parser {
                 })
             }
             Token::InterpolatedString(parts) => {
-                // Convert interpolated string to format! macro call
                 let parts = parts.clone();
                 self.advance();
-
-                let mut format_string = String::new();
-                let mut args = Vec::new();
-
-                for part in parts {
-                    match part {
-                        crate::lexer::StringPart::Literal(lit) => {
-                            format_string.push_str(&lit);
-                        }
-                        crate::lexer::StringPart::Expression(expr_str) => {
-                            format_string.push_str("{}");
-
-                            // Parse the expression string
-                            let mut expr_lexer = crate::lexer::Lexer::new(&expr_str);
-                            let mut expr_tokens = Vec::new();
-                            loop {
-                                let tok_with_loc = expr_lexer.next_token_with_location();
-                                if tok_with_loc.token == crate::lexer::Token::Eof {
-                                    break;
-                                }
-                                expr_tokens.push(tok_with_loc);
-                            }
-
-                            // Parse the tokens into an expression
-                            // ARENA FIX: Use Box::leak to keep the parser (and its arena) alive
-                            // This prevents use-after-free when the interpolated expression is used later
-                            let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
-                            if let Ok(expr) = expr_parser.parse_expression() {
-                                args.push(expr);
-                            }
-                        }
-                    }
-                }
-
-                // Create format! macro invocation
-                let format_lit = self.alloc_expr(Expression::Literal {
-                    value: Literal::String(format_string),
-                    location: self.current_location(),
-                });
-                let mut macro_args = vec![format_lit];
-                macro_args.extend(args);
-
-                self.alloc_expr(Expression::MacroInvocation {
-                    name: "format".to_string(),
-                    args: macro_args,
-                    delimiter: MacroDelimiter::Parens,
-                    is_repeat: false,
-                    location: self.current_location(),
-                })
+                self.finish_interpolated_string(parts)?
             }
             Token::BoolLiteral(b) => {
                 let b = *b;
@@ -1534,7 +1546,7 @@ impl Parser {
                             Token::Ident(f) => Some(f.clone()),
                             Token::Thread => Some("thread".to_string()),
                             Token::Async => Some("async".to_string()),
-                            Token::IntLiteral(n) => Some(n.to_string()), // Tuple field access
+                            Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => Some(n.to_string()),
                             _ => None,
                         };
                         if let Some(field) = field_opt {
@@ -1933,6 +1945,20 @@ impl Parser {
                         }
 
                         self.expect(end_token)?;
+
+                        if name == "format" {
+                            let (file, line) = if let Some(loc) = self.current_location() {
+                                (Some(loc.file.display().to_string()), Some(loc.line))
+                            } else {
+                                (None, None)
+                            };
+                            self.emit_warning(
+                                "format!() is Rust syntax. Use string interpolation instead: \"text ${expr}\"".to_string(),
+                                file,
+                                line,
+                                None,
+                            );
+                        }
 
                         self.alloc_expr(Expression::MacroInvocation {
                             name: name.clone(),

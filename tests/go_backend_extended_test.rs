@@ -387,22 +387,23 @@ fn main() {
 }
 "#,
     );
-    // First declaration should use :=
+    // First declaration should use := (may have type wrapper like int64())
     assert!(
-        code.contains("x := 5"),
+        code.contains("x :="),
         "First decl should use :=. Got:\n{}",
         code
     );
     // Second declaration MUST NOT use := (Go error: no new variables)
     // It should use = (assignment) instead
-    let after_first = code.split("x := 5").nth(1).unwrap_or("");
+    let first_decl_pos = code.find("x :=").unwrap();
+    let after_first = &code[first_decl_pos + 4..];
     assert!(
         !after_first.contains("x :="),
         "Second decl should NOT use :=. Got:\n{}",
         code
     );
     assert!(
-        after_first.contains("x = 10"),
+        after_first.contains("x ="),
         "Second decl should use = (assignment). Got:\n{}",
         code
     );

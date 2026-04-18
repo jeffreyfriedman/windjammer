@@ -105,6 +105,36 @@ pub fn op_precedence(op: &BinaryOp) -> i32 {
     }
 }
 
+/// When the parent and right-hand child are binary operators with the **same** Rust precedence,
+/// `op_precedence(child) < op_precedence(parent)` is false, so the naive codegen omits parens.
+/// Rust parses `*`, `/`, `%` and `+`, `-` as **left-associative** at each level, so the RHS
+/// often must stay wrapped: e.g. `x / (2.0 * y)` must not become `x / 2.0 * y`.
+///
+/// Returns true when the RHS subexpression must be wrapped in parentheses.
+pub fn binary_rhs_needs_parens_for_rust_left_assoc(parent: &BinaryOp, right_child: &BinaryOp) -> bool {
+    if op_precedence(parent) != op_precedence(right_child) {
+        return false;
+    }
+    match (parent, right_child) {
+        // `a * b * c` ≡ `(a * b) * c` ≡ `a * (b * c)` for plain multiplication — no parens needed.
+        // Every other same-precedence mix on the RHS changes meaning without parens.
+        (
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod,
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod,
+        ) => !matches!((parent, right_child), (BinaryOp::Mul, BinaryOp::Mul)),
+
+        // Only `a + (b + c)` is redundant; `-` and mixed `+`/`-` need parens on the RHS.
+        (BinaryOp::Add | BinaryOp::Sub, BinaryOp::Add | BinaryOp::Sub) => {
+            !matches!((parent, right_child), (BinaryOp::Add, BinaryOp::Add))
+        }
+
+        // Shifts are left-associative; `a << (b << c)` must not become `a << b << c`.
+        (BinaryOp::Shl | BinaryOp::Shr, BinaryOp::Shl | BinaryOp::Shr) => true,
+
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,5 +185,29 @@ mod tests {
             // Should not panic
             let _ = unary_op_to_rust(&op);
         }
+    }
+
+    #[test]
+    fn test_left_assoc_rhs_parens_div_mul() {
+        assert!(binary_rhs_needs_parens_for_rust_left_assoc(
+            &BinaryOp::Div,
+            &BinaryOp::Mul
+        ));
+        assert!(!binary_rhs_needs_parens_for_rust_left_assoc(
+            &BinaryOp::Mul,
+            &BinaryOp::Mul
+        ));
+    }
+
+    #[test]
+    fn test_left_assoc_rhs_parens_add_sub() {
+        assert!(binary_rhs_needs_parens_for_rust_left_assoc(
+            &BinaryOp::Add,
+            &BinaryOp::Sub
+        ));
+        assert!(!binary_rhs_needs_parens_for_rust_left_assoc(
+            &BinaryOp::Add,
+            &BinaryOp::Add
+        ));
     }
 }

@@ -314,6 +314,16 @@ fn test_type_unit() {
     }
 }
 
+#[test]
+fn test_fn_param_str_type_is_custom_str() {
+    let t = get_fn_param_type("fn f(key: str) { }");
+    assert!(
+        matches!(t, Type::Custom(ref s) if s == "str"),
+        "expected `key: str` → Type::Custom(\"str\"), got {:?}",
+        t
+    );
+}
+
 // ============================================================================
 // FUNCTION POINTER TYPES
 // ============================================================================
@@ -566,5 +576,91 @@ fn test_type_trait_object() {
         assert_eq!(trait_name, "Display");
     } else {
         panic!("Expected TraitObject type, got {:?}", ty);
+    }
+}
+
+// ============================================================================
+// MODULE PATH VS ASSOCIATED TYPE (nested generics / FFI qualification)
+// ============================================================================
+
+#[test]
+fn test_vec_of_lowercase_module_path_is_custom_not_associated() {
+    let ty = get_fn_return_type("pub fn f() -> Vec<ffi::GpuVertex> { }").expect("return type");
+    match ty {
+        Type::Vec(inner) => match *inner {
+            Type::Custom(name) => assert_eq!(name, "ffi::GpuVertex"),
+            other => panic!("expected Vec<Custom(ffi::GpuVertex)>, got Vec<{:?}>", other),
+        },
+        other => panic!("expected Vec, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_result_ok_uses_module_path_under_comma_delimiter() {
+    let ty = get_fn_return_type("pub fn f() -> Result<ffi::GpuVertex, i32> { }").expect("return");
+    match ty {
+        Type::Result(ok, _err) => match *ok {
+            Type::Custom(name) => assert_eq!(name, "ffi::GpuVertex"),
+            other => panic!("expected Custom(ffi::GpuVertex), got {:?}", other),
+        },
+        other => panic!("expected Result, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_associated_type_t_output_still_parsed() {
+    let ty = get_fn_param_type("pub fn g(x: T::Output) { }");
+    match ty {
+        Type::Associated(base, assoc) => {
+            assert_eq!(base, "T");
+            assert_eq!(assoc, "Output");
+        }
+        other => panic!("expected Associated(T, Output), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_associated_type_self_item_still_parsed() {
+    let ty = get_fn_param_type("pub fn g(x: Self::Item) { }");
+    match ty {
+        Type::Associated(base, assoc) => {
+            assert_eq!(base, "Self");
+            assert_eq!(assoc, "Item");
+        }
+        other => panic!("expected Associated(Self, Item), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_impl_method_return_vec_ffi_gpuvertex_is_custom_not_associated() {
+    let code = r#"
+pub struct VoxelRenderer {}
+impl VoxelRenderer {
+    fn convert_vertices(self, vertices: Vec<Vertex>) -> Vec<ffi::GpuVertex> {
+        Vec::new()
+    }
+}
+"#;
+    let program = parse_program(code);
+    let block = program
+        .items
+        .iter()
+        .find_map(|item| match item {
+            Item::Impl { block, .. } => Some(block),
+            _ => None,
+        })
+        .expect("impl block");
+    let func = block
+        .functions
+        .iter()
+        .find(|f| f.name == "convert_vertices")
+        .expect("convert_vertices");
+    let ret = func.return_type.as_ref().expect("return type");
+    match ret {
+        Type::Vec(inner) => match **inner {
+            Type::Custom(ref n) => assert_eq!(n, "ffi::GpuVertex"),
+            ref other => panic!("expected Vec<Custom(ffi::GpuVertex)>, got Vec<{:?}>", other),
+        },
+        ref other => panic!("expected Vec return, got {:?}", other),
     }
 }

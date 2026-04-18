@@ -41,8 +41,8 @@ fn handle_request(req: http::Request) -> http::ServerResponse {
         let mime_type = mime::from_path(path)
         
         let mut response = http::ServerResponse::ok(content)
-        response.headers.insert("Content-Type".to_string(), mime_type)
-        response.headers.insert("Cache-Control".to_string(), "no-cache".to_string())
+        response.headers.insert("Content-Type", mime_type)
+        response.headers.insert("Cache-Control", "no-cache")
         response
     } else {
         http::ServerResponse::not_found()

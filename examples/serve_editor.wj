@@ -14,7 +14,7 @@ fn main() {
     println!("Press Ctrl+C to stop")
     println!("")
     
-    let server = Server::new("127.0.0.1".to_string(), 8080)
+    let server = Server::new("127.0.0.1", 8080)
     
     match server.serve(|request| handle_request(request)) {
         Ok(_) => println!("Server stopped"),
@@ -35,7 +35,7 @@ fn handle_request(request: ServerRequest) -> ServerResponse {
         Ok(content) => {
             let content_type = get_content_type(file_path.clone())
             ServerResponse::new(200, content)
-                .header("Content-Type".to_string(), content_type)
+                .header("Content-Type", content_type)
         },
         Err(e) => {
             ServerResponse::error(404, format!("File not found: {}", request.path))
@@ -45,22 +45,22 @@ fn handle_request(request: ServerRequest) -> ServerResponse {
 
 fn get_content_type(path: string) -> string {
     if path.ends_with(".html") {
-        "text/html".to_string()
+        "text/html"
     } else if path.ends_with(".js") {
-        "application/javascript".to_string()
+        "application/javascript"
     } else if path.ends_with(".wasm") {
-        "application/wasm".to_string()
+        "application/wasm"
     } else if path.ends_with(".css") {
-        "text/css".to_string()
+        "text/css"
     } else if path.ends_with(".json") {
-        "application/json".to_string()
+        "application/json"
     } else if path.ends_with(".png") {
-        "image/png".to_string()
+        "image/png"
     } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
-        "image/jpeg".to_string()
+        "image/jpeg"
     } else if path.ends_with(".svg") {
-        "image/svg+xml".to_string()
+        "image/svg+xml"
     } else {
-        "application/octet-stream".to_string()
+        "application/octet-stream"
     }
 }

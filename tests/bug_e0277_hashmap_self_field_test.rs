@@ -7,6 +7,7 @@
 /// Solution: Extend HashMap fix to work with field access patterns
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_hashmap_field_contains_key() {
@@ -31,32 +32,33 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir for wj test");
+    let test_dir = temp_dir.path();
 
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
     let out_dir = test_dir.join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let _output = Command::new(wj_binary)
+    let wj_out = Command::new(wj_binary)
+        .current_dir(test_dir)
         .arg("build")
         .arg(&wj_file)
         .arg("--target")
         .arg("rust")
         .arg("--output")
         .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run wj compiler");
+
+    assert!(
+        wj_out.status.success(),
+        "wj build failed:\n{}",
+        String::from_utf8_lossy(&wj_out.stderr)
+    );
 
     let rust_file = out_dir.join("test.rs");
     let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
@@ -96,6 +98,4 @@ fn main() {
         "Should pass name directly (already &str, no extra &)\n\nGenerated:\n{}",
         generated
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

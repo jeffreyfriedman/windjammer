@@ -35,7 +35,7 @@ fn time_examples() {
 // === STRING EXAMPLES ===
 
 fn string_examples() {
-    log.info("\n=== String Examples ===")
+    log.info("\n=== string Examples ===")
     
     // Splitting
     let text = "hello,world,rust"
@@ -58,7 +58,7 @@ fn string_examples() {
     
     // Searching
     if strings.contains("hello world", "world") {
-        log.info("String contains 'world'")
+        log.info("string contains 'world'")
     }
     
     // Replacement

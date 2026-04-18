@@ -2,7 +2,7 @@
 // When calling methods with borrowed enum match bindings
 
 struct State {
-    pub name: String,
+    pub name: string,
     pub value: i32,
 }
 
@@ -11,13 +11,13 @@ impl State {
         State { name: "".to_string(), value: 0 }
     }
     
-    pub fn update(self, name: String, value: i32) {
+    pub fn update(self, name: string, value: i32) {
         println!("Updating: {}, {}", name, value);
     }
 }
 
 enum Action {
-    Update(String, i32),
+    Update(string, i32),
 }
 
 impl Action {

@@ -53,6 +53,8 @@ pub struct FunctionDecl<'ast> {
     pub return_decorators: Vec<Decorator<'ast>>, // Decorators on return type (e.g., @location(0))
     pub body: Vec<&'ast Statement<'ast>>, // Empty for extern functions
     pub parent_type: Option<String>,      // The type name if this function is in an impl block
+    /// `None` for inherent `impl Type`; `Some(trait)` for `impl Trait for Type` (disambiguates codegen).
+    pub impl_trait: Option<String>,
     pub doc_comment: Option<String>,      // Documentation comment (/// lines)
 }
 
@@ -407,6 +409,11 @@ impl std::hash::Hash for Literal {
                 0u8.hash(state);
                 i.hash(state);
             }
+            Literal::IntSuffixed(i, suffix) => {
+                5u8.hash(state);
+                i.hash(state);
+                suffix.hash(state);
+            }
             Literal::Float(f) => {
                 1u8.hash(state);
                 // Hash the bit representation of the float
@@ -496,6 +503,7 @@ pub enum Item<'ast> {
     },
     Const {
         name: String,
+        is_pub: bool,
         type_: Type,
         value: &'ast Expression<'ast>,
         location: SourceLocation,

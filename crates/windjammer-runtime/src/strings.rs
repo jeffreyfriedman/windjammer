@@ -3,23 +3,26 @@
 //! Windjammer's `std::strings` module maps to these functions.
 
 /// Convert to uppercase
-pub fn to_upper(s: &str) -> String {
-    s.to_uppercase()
+pub fn to_upper<S: AsRef<str>>(s: S) -> String {
+    s.as_ref().to_uppercase()
 }
 
 /// Convert to lowercase
-pub fn to_lower(s: &str) -> String {
-    s.to_lowercase()
+pub fn to_lower<S: AsRef<str>>(s: S) -> String {
+    s.as_ref().to_lowercase()
 }
 
 /// Trim whitespace
-pub fn trim(s: &str) -> String {
-    s.trim().to_string()
+pub fn trim<S: AsRef<str>>(s: S) -> String {
+    s.as_ref().trim().to_string()
 }
 
 /// Split string by delimiter
-pub fn split(s: &str, delimiter: &str) -> Vec<String> {
-    s.split(delimiter).map(|s| s.to_string()).collect()
+pub fn split<S: AsRef<str>>(s: S, delimiter: &str) -> Vec<String> {
+    s.as_ref()
+        .split(delimiter)
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// Join strings with delimiter
@@ -28,41 +31,42 @@ pub fn join(parts: &[String], delimiter: &str) -> String {
 }
 
 /// Check if string contains substring
-pub fn contains(s: &str, substring: &str) -> bool {
-    s.contains(substring)
+pub fn contains<S: AsRef<str>>(s: S, substring: &str) -> bool {
+    s.as_ref().contains(substring)
 }
 
 /// Check if string starts with prefix
-pub fn starts_with(s: &str, prefix: &str) -> bool {
-    s.starts_with(prefix)
+pub fn starts_with<S: AsRef<str>>(s: S, prefix: &str) -> bool {
+    s.as_ref().starts_with(prefix)
 }
 
 /// Check if string ends with suffix
-pub fn ends_with(s: &str, suffix: &str) -> bool {
-    s.ends_with(suffix)
+pub fn ends_with<S: AsRef<str>>(s: S, suffix: &str) -> bool {
+    s.as_ref().ends_with(suffix)
 }
 
 /// Replace all occurrences
-pub fn replace(s: &str, from: &str, to: &str) -> String {
-    s.replace(from, to)
+pub fn replace<S: AsRef<str>>(s: S, from: &str, to: &str) -> String {
+    s.as_ref().replace(from, to)
 }
 
 /// Get substring from start to end index (exclusive)
-pub fn substring(s: &str, start: usize, end: usize) -> String {
-    s.chars()
+pub fn substring<S: AsRef<str>>(s: S, start: usize, end: usize) -> String {
+    s.as_ref()
+        .chars()
         .skip(start)
         .take(end.saturating_sub(start))
         .collect()
 }
 
 /// Get string length
-pub fn len(s: &str) -> usize {
-    s.len()
+pub fn len<S: AsRef<str>>(s: S) -> usize {
+    s.as_ref().len()
 }
 
 /// Check if string is empty
-pub fn is_empty(s: &str) -> bool {
-    s.is_empty()
+pub fn is_empty<S: AsRef<str>>(s: S) -> bool {
+    s.as_ref().is_empty()
 }
 
 #[cfg(test)]

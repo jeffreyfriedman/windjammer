@@ -3,13 +3,13 @@
 
 // Generic trait
 trait Converter<T> {
-    fn convert(&self, value: T) -> string { "converted".to_string() }
+    fn convert(&self, value: T) -> string { "converted" }
 }
 
 // Supertrait (trait inheritance)
 trait Animal {
     fn make_sound(&self) { println!("...") }
-    fn name(&self) -> string { "unknown".to_string() }
+    fn name(&self) -> string { "unknown" }
 }
 
 trait Pet: Animal {
@@ -64,7 +64,7 @@ fn main() {
     
     // Test 1: Supertrait
     println!("\n1. Supertrait (Pet extends Animal):")
-    let dog = Dog { dog_name: "Buddy".to_string() }
+    let dog = Dog { dog_name: "Buddy" }
     dog.make_sound()  // From Animal
     dog.play()        // From Pet
     
@@ -74,7 +74,7 @@ fn main() {
     
     // Test 3: Return trait object
     println!("\n3. Function returning trait object:")
-    let new_pet = create_pet("Max".to_string())
+    let new_pet = create_pet("Max")
     interact_with_animal(&new_pet)
     
     println!("\n=== Done ===")

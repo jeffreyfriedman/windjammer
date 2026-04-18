@@ -368,7 +368,8 @@ pub fn wj_file_to_module_path(base: &Path, wj: &Path) -> Option<Vec<String>> {
     Some(segs)
 }
 
-fn longest_common_prefix_len(a: &[String], b: &[String]) -> usize {
+/// Shared by import codegen and auto-`use` resolution (pick nearest defining module).
+pub(crate) fn longest_common_prefix_len(a: &[String], b: &[String]) -> usize {
     a.iter()
         .zip(b.iter())
         .take_while(|(x, y)| x == y)

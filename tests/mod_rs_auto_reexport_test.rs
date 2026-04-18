@@ -118,9 +118,13 @@ fn test_mod_rs_reexports_when_mod_wj_has_no_pub_use() {
     );
 
     // CRITICAL: Should also have re-exports so `use crate::mymod::TileId;` works
+    // Note: self:: prefix is correct in Rust 2018+ for child module re-exports
     let has_reexports = mod_rs.contains("pub use tile_id::")
+        || mod_rs.contains("pub use self::tile_id::")
         || mod_rs.contains("pub use edge_type::")
-        || mod_rs.contains("pub use tile_rule::");
+        || mod_rs.contains("pub use self::edge_type::")
+        || mod_rs.contains("pub use tile_rule::")
+        || mod_rs.contains("pub use self::tile_rule::");
 
     assert!(
         has_reexports,
@@ -158,8 +162,9 @@ fn test_mod_rs_respects_explicit_pub_use() {
     println!("Generated mymod/mod.rs:\n{}", mod_rs);
 
     // Should have the explicit pub use from mod.wj
+    // self:: prefix is correct Rust 2018+ for child module re-exports
     assert!(
-        mod_rs.contains("pub use tile_id::TileId;"),
+        mod_rs.contains("pub use tile_id::TileId;") || mod_rs.contains("pub use self::tile_id::TileId;"),
         "Should have explicit pub use from mod.wj.\nGenerated:\n{}",
         mod_rs
     );

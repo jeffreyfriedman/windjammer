@@ -24,6 +24,8 @@ pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
         (U8, U16 | U32 | U64 | Usize | I16 | I32 | I64) => true, // U8 fits in signed types >= I16
         (U16, U32 | U64 | Usize | I32 | I64) => true, // U16 fits in signed types >= I32
         (U32, U64 | I64) => true, // U32 fits in I64
+        // usize → i64: same ergonomics as `return items.len()` for `-> int` (Rust: `as i64`)
+        (Usize, I64) => true,
         
         // Small signed → small unsigned (when contextually safe)
         (I32, U8) => true, // Common: literal 0-255 range in practice
@@ -31,23 +33,23 @@ pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
         
         // CONTEXTUAL: Common Rust patterns that Windjammer should handle ergonomically
         
-        // Array indexing: i32 ↔ usize (most common source of errors)
-        // Rationale: Array indices are almost always small positive numbers
+        // Array indexing: i32 ↔ usize (common source of type errors)
+        // Rationale: Array indices are typically small positive numbers
         (I32, Usize) | (Usize, I32) => true,
         
-        // u32 ↔ usize (very common in graphics code)
-        // Rationale: GPU buffer indices, texture coordinates, etc.
+        // u32 ↔ usize (common for buffer indices, counts, etc.)
+        // Rationale: Both represent non-negative counts/indices
         (U32, Usize) | (Usize, U32) => true,
         
-        // i32 ↔ u32 (common in game development)
-        // Rationale: Coordinates, counts, etc. often need to mix signed/unsigned
+        // i32 ↔ u32 (common for coordinates, counts)
+        // Rationale: Signed/unsigned mixing in arithmetic contexts
         (I32, U32) | (U32, I32) => true,
         
         // For loop ranges: i32 <-> i64
         (I32, I64) | (I64, I32) => true,
         
-        // i64 ↔ u64 (common for entity IDs, handles, etc.)
-        // Rationale: Entity IDs, asset handles rarely exceed I64::MAX in practice
+        // i64 ↔ u64 (common for IDs, handles, large counts)
+        // Rationale: Large integer types mixing signed/unsigned
         (I64, U64) | (U64, I64) => true,
         
         // Unknown defaults to i32
@@ -136,21 +138,26 @@ mod tests {
     
     #[test]
     fn test_i32_usize_bidirectional() {
-        // Most common error in game code!
+        // Common pattern: array indexing with i32
         assert!(is_safe_implicit_cast(I32, Usize));
         assert!(is_safe_implicit_cast(Usize, I32));
+    }
+
+    #[test]
+    fn test_usize_to_i64_for_int_return() {
+        assert!(is_safe_implicit_cast(Usize, I64));
     }
     
     #[test]
     fn test_u32_usize_bidirectional() {
-        // Very common in graphics code
+        // Common pattern: counts and indices
         assert!(is_safe_implicit_cast(U32, Usize));
         assert!(is_safe_implicit_cast(Usize, U32));
     }
     
     #[test]
     fn test_i32_u32_bidirectional() {
-        // Common in game development
+        // Common pattern: signed/unsigned mixing
         assert!(is_safe_implicit_cast(I32, U32));
         assert!(is_safe_implicit_cast(U32, I32));
     }

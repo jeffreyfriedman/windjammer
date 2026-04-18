@@ -51,10 +51,10 @@ impl BlendTree {
 "#;
 
     let rust = compile_and_get_rust(source);
-    // Pattern bindings from match on &BlendNode should be dereferenced: *node_a, *node_b
+    // Peel emits `*(node_a)` so deref applies to the binding, not a longer chain.
     assert!(
-        rust.contains("*node_a") && rust.contains("*node_b"),
-        "Expected *node_a and *node_b when using match-on-index bindings in struct. Got:\n{}",
+        rust.contains("*(node_a)") && rust.contains("*(node_b)"),
+        "Expected *(node_a) and *(node_b) when using match-on-index bindings in struct. Got:\n{}",
         rust
     );
 }

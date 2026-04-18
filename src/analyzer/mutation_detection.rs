@@ -91,10 +91,14 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 Statement::If {
+                    condition,
                     then_block,
                     else_block,
                     ..
                 } => {
+                    if self.has_mutable_method_call(name, condition, registry) {
+                        return true;
+                    }
                     if self.is_mutated(name, then_block, registry) {
                         return true;
                     }
@@ -104,17 +108,63 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                Statement::Loop { body, .. }
-                | Statement::While { body, .. }
-                | Statement::For { body, .. } => {
+                Statement::Loop { body, .. } => {
                     if self.is_mutated(name, body, registry) {
                         return true;
+                    }
+                }
+                Statement::While {
+                    condition, body, ..
+                } => {
+                    if self.has_mutable_method_call(name, condition, registry) {
+                        return true;
+                    }
+                    if self.is_mutated(name, body, registry) {
+                        return true;
+                    }
+                }
+                Statement::For {
+                    iterable, body, ..
+                } => {
+                    if self.has_mutable_method_call(name, iterable, registry) {
+                        return true;
+                    }
+                    if self.is_mutated(name, body, registry) {
+                        return true;
+                    }
+                }
+                Statement::Match { value, arms, .. } => {
+                    if self.has_mutable_method_call(name, value, registry) {
+                        return true;
+                    }
+                    for arm in arms {
+                        if let Some(guard) = arm.guard {
+                            if self.has_mutable_method_call(name, guard, registry) {
+                                return true;
+                            }
+                        }
+                        if self.is_mutated_in_match_arm_body(name, arm.body, registry) {
+                            return true;
+                        }
                     }
                 }
                 _ => {}
             }
         }
         false
+    }
+
+    /// Match arm bodies are expressions; blocks contain real statement lists.
+    fn is_mutated_in_match_arm_body(
+        &self,
+        name: &str,
+        expr: &Expression,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => self.is_mutated(name, statements, registry),
+            _ => self.has_mutable_method_call(name, expr, registry),
+        }
     }
 
     /// Check if a parameter is the DIRECT target of mutation
@@ -144,6 +194,24 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Check if a parameter is in the direct receiver chain of a method call.
+    /// Only follows the object path: param.field.method() -> true
+    /// Does NOT match arguments of nested calls: f.method(param).other() -> false
+    ///
+    /// This prevents false mutation detection for parameters that are merely
+    /// passed as arguments to intermediate methods in a chain.
+    /// Example: f.cross(up).normalize() - up is an argument to cross, NOT
+    /// a receiver of normalize, so normalize's mutability doesn't apply to up.
+    fn is_in_receiver_chain(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } => self.is_in_receiver_chain(name, object),
+            Expression::MethodCall { object, .. } => self.is_in_receiver_chain(name, object),
+            Expression::Index { object, .. } => self.is_in_receiver_chain(name, object),
+            _ => false,
+        }
+    }
+
     fn has_mutable_method_call(
         &self,
         name: &str,
@@ -152,9 +220,10 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                // THE WINDJAMMER WAY: Check if the parameter appears ANYWHERE in the object chain
-                // This catches both direct calls (grid.set()) and field calls (self.camera.move_to())
-                if self.expr_contains_identifier(name, object) {
+                // Check if the parameter is in the DIRECT receiver chain (not just any argument).
+                // This catches: param.set(), param.field.push(), self.camera.move_to()
+                // But NOT: f.cross(param).normalize() (param is an argument, not a receiver)
+                if self.is_in_receiver_chain(name, object) {
                     // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
                     if let Some(sig) = registry.get_signature(method) {
                         if sig.has_self_receiver
@@ -164,17 +233,7 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
 
-                    // FALLBACK HEURISTIC: stdlib methods not yet in registry
-                    let is_mutating_by_name = method.starts_with("push")
-                        || method.starts_with("insert")
-                        || method.starts_with("remove")
-                        || method.starts_with("clear")
-                        || method.starts_with("set")  // VoxelGrid::set()
-                        || method.ends_with("_mut")
-                        || method == "smooth_follow"  // Camera methods
-                        || method == "look_at";
-
-                    return is_mutating_by_name;
+                    return crate::method_registry::mutates_receiver(method);
                 }
                 false
             }
@@ -205,92 +264,36 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
+            Expression::Unary { operand, .. } => {
+                self.has_mutable_method_call(name, operand, registry)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.has_mutable_method_call(name, left, registry)
+                    || self.has_mutable_method_call(name, right, registry)
+            }
+            Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    if self.has_mutable_method_call(name, e, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Index { object, index, .. } => {
+                self.has_mutable_method_call(name, object, registry)
+                    || self.has_mutable_method_call(name, index, registry)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.has_mutable_method_call(name, object, registry)
+            }
             _ => false,
         }
     }
 
     /// Known read-only methods that always take &self (not &mut self).
-    /// If a method call on a parameter is NOT in this list, it could potentially mutate.
-    #[allow(dead_code)]
+    /// Delegates to the centralized method_registry — single source of truth.
     pub(super) fn is_known_readonly_method(method: &str) -> bool {
-        matches!(
-            method,
-            // Collection inspection
-            "len"
-                | "is_empty"
-                | "contains"
-                | "contains_key"
-                | "get"
-                | "first"
-                | "last"
-                | "capacity"
-                | "keys"
-                | "values"
-                // Iterators (take &self)
-                | "iter"
-                | "windows"
-                | "chunks"
-                | "enumerate"
-                // Cloning/conversion (take &self)
-                | "clone"
-                | "to_string"
-                | "to_owned"
-                | "as_str"
-                | "as_ref"
-                | "as_slice"
-                | "as_bytes"
-                | "as_deref"
-                // String inspection
-                | "trim"
-                | "starts_with"
-                | "ends_with"
-                | "chars"
-                | "bytes"
-                | "split"
-                | "lines"
-                | "to_lowercase"
-                | "to_uppercase"
-                | "is_ascii"
-                // Numeric (Copy types, but include for completeness)
-                | "abs"
-                | "ceil"
-                | "floor"
-                | "round"
-                | "sqrt"
-                | "powi"
-                | "powf"
-                | "sin"
-                | "cos"
-                | "tan"
-                | "log"
-                | "exp"
-                | "min"
-                | "max"
-                | "clamp"
-                // Display/formatting
-                | "display"
-                | "fmt"
-                // Comparison
-                | "cmp"
-                | "partial_cmp"
-                | "eq"
-                | "ne"
-                // Type checking
-                | "is_some"
-                | "is_none"
-                | "is_ok"
-                | "is_err"
-                | "unwrap"
-                | "unwrap_or"
-                | "unwrap_or_else"
-                | "unwrap_or_default"
-                | "expect"
-                | "map"
-                | "and_then"
-                | "or_else"
-                | "ok_or"
-                | "ok_or_else"
-        )
+        crate::method_registry::is_known_readonly_method(method)
     }
 
     /// Check if the parameter is the receiver of method calls that could potentially mutate.
@@ -419,13 +422,28 @@ impl<'ast> Analyzer<'ast> {
 
     /// Track which local variables are mutated in a function body
     /// This enables automatic `mut` inference - users don't need to write `let mut x`
-    pub fn track_mutations(&mut self, statements: &[&'ast Statement<'ast>]) {
+    pub fn track_mutations(
+        &mut self,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) {
         self.mutated_variables.clear();
-        self.collect_mutations(statements);
+        self.collect_mutations(statements, registry);
+    }
+
+    /// Root local binding for `a.b.c` / `a[i]` receiver chains (not `self`).
+    fn receiver_root_local_identifier<'e>(expr: &'e Expression<'e>) -> Option<&'e str> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::receiver_root_local_identifier(object)
+            }
+            _ => None,
+        }
     }
 
     /// Recursively collect all variable mutations
-    fn collect_mutations(&mut self, statements: &[&'ast Statement<'ast>]) {
+    fn collect_mutations(&mut self, statements: &[&'ast Statement<'ast>], registry: &SignatureRegistry) {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
@@ -442,16 +460,16 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    self.collect_mutations(then_block);
+                    self.collect_mutations(then_block, registry);
                     if let Some(else_stmts) = else_block {
-                        self.collect_mutations(else_stmts);
+                        self.collect_mutations(else_stmts, registry);
                     }
                 }
                 Statement::Match { arms, .. } => {
                     let _ = arms;
                 }
                 Statement::For { pattern, body, .. } => {
-                    self.collect_mutations(body);
+                    self.collect_mutations(body, registry);
 
                     if let Pattern::Identifier(var_name) = pattern {
                         if self.is_variable_mutated_in_statements(var_name, body) {
@@ -461,14 +479,14 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 Statement::While { body, .. } | Statement::Loop { body, .. } => {
-                    self.collect_mutations(body);
+                    self.collect_mutations(body, registry);
                 }
                 Statement::Expression { expr, .. } => {
-                    self.collect_mutations_in_expression(expr);
+                    self.collect_mutations_in_expression(expr, registry);
                 }
                 // DOGFOODING FIX #2B: Track mutations in let bindings
                 Statement::Let { value, .. } => {
-                    self.collect_mutations_in_expression(value);
+                    self.collect_mutations_in_expression(value, registry);
                 }
                 _ => {}
             }
@@ -476,62 +494,17 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Track mutations in expressions (method calls that mutate)
-    fn collect_mutations_in_expression(&mut self, expr: &Expression) {
-        if let Expression::MethodCall { object, method, .. } = expr {
-            // DOGFOODING FIX #2: Check method signature to see if it takes &mut self
-            let type_name = if let Expression::Identifier { name, .. } = &**object {
-                self.variables.get(name).cloned()
-            } else {
-                None
-            };
-
-            let method_requires_mut = if let Some(_type_name_str) = type_name {
-                if let Some(impl_functions) = &self.current_impl_functions {
-                    if let Some(func) = impl_functions.get(method.as_str()) {
-                        func.parameters
-                            .iter()
-                            .find(|p| p.name == "self")
-                            .map(|p| matches!(p.ownership, OwnershipHint::Mut))
-                            .unwrap_or(false)
-                    } else {
-                        Self::is_heuristic_mutating_method(method)
-                    }
-                } else {
-                    Self::is_heuristic_mutating_method(method)
-                }
-            } else {
-                Self::is_heuristic_mutating_method(method)
-            };
-
-            if method_requires_mut {
-                if let Expression::Identifier { name, .. } = &**object {
-                    self.mutated_variables.insert(name.clone());
+    ///
+    /// Aligns with [`Self::has_mutable_method_call`]: `local.field.mut_method()` marks `local`
+    /// when the method's analyzed signature uses `&mut self`.
+    fn collect_mutations_in_expression(&mut self, expr: &Expression, registry: &SignatureRegistry) {
+        if let Expression::MethodCall { object, .. } = expr {
+            if let Some(root) = Self::receiver_root_local_identifier(object) {
+                if root != "self" && self.has_mutable_method_call(root, expr, registry) {
+                    self.mutated_variables.insert(root.to_string());
                 }
             }
         }
-    }
-
-    /// Heuristic: Common stdlib methods that take &mut self
-    fn is_heuristic_mutating_method(method: &str) -> bool {
-        matches!(
-            method,
-            "push"
-                | "pop"
-                | "insert"
-                | "remove"
-                | "clear"
-                | "append"
-                | "extend"
-                | "truncate"
-                | "resize"
-                | "sort"
-                | "reverse"
-                | "dedup"
-                | "retain"
-                | "drain"
-                | "split_off"
-                | "swap_remove"
-        )
     }
 
     /// Check if a variable is mutated within a specific set of statements

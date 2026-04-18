@@ -10,11 +10,12 @@ use std::process::Command;
 fn run_wj_test(source: &str) -> String {
     let temp_dir = std::env::temp_dir();
     let test_id = format!(
-        "wj_test_{}",
+        "wj_test_{}_{:?}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        std::thread::current().id()
     );
     let test_dir = temp_dir.join(&test_id);
     fs::create_dir_all(&test_dir).unwrap();
