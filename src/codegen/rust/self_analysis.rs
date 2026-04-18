@@ -239,9 +239,20 @@ pub fn statement_modifies_variable(stmt: &Statement, var_name: &str) -> bool {
                         .any(|s| statement_modifies_variable(s, var_name))
                 })
         }
-        Statement::While { body, .. } | Statement::For { body, .. } => body
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
             .iter()
             .any(|s| statement_modifies_variable(s, var_name)),
+        Statement::Match { arms, .. } => arms.iter().any(|arm| {
+            if let Expression::Block { statements, .. } = arm.body {
+                statements
+                    .iter()
+                    .any(|s| statement_modifies_variable(s, var_name))
+            } else {
+                false
+            }
+        }),
         _ => false,
     }
 }
@@ -267,39 +278,7 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
             statements.iter().any(|s| statement_modifies_self(s))
         }
         Expression::MethodCall { object, method, .. } => {
-            // Check if this is a mutating method call on self.field
-            // Common mutating methods: push, pop, remove, insert, clear, etc.
-            // THE WINDJAMMER WAY: Comprehensive mutation detection
-            // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
-            let is_mutating_method = method.ends_with("_mut")
-                || matches!(
-                    method.as_str(),
-                    "push"
-                        | "pop"
-                        | "remove"
-                        | "insert"
-                        | "clear"
-                        | "append"
-                        | "extend"
-                        | "drain"
-                        | "truncate"
-                        | "resize"
-                        | "swap_remove"
-                        | "retain"
-                        | "sort"
-                        | "sort_by"
-                        | "sort_by_key"
-                        | "sort_unstable"
-                        | "sort_unstable_by"
-                        | "dedup"
-                        | "reverse"
-                        | "swap"
-                        | "update"
-                        | "take"
-                        | "replace"
-                        | "get_or_insert"
-                        | "get_or_insert_with"
-                );
+            let is_mutating_method = super::stdlib_method_traits::method_mutates_receiver(method);
 
             if is_mutating_method {
                 // Check if the object is self.field
@@ -429,34 +408,7 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
             if expression_is_field_access(ctx, object)
                 || expression_is_self_field_index_access(ctx, object)
             {
-                // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
-                method.ends_with("_mut")
-                    || matches!(
-                        method.as_str(),
-                        "push"
-                            | "pop"
-                            | "insert"
-                            | "remove"
-                            | "clear"
-                            | "append"
-                            | "extend"
-                            | "push_str"
-                            | "truncate"
-                            | "drain"
-                            | "retain"
-                            | "sort"
-                            | "sort_by"
-                            | "sort_by_key"
-                            | "sort_unstable"
-                            | "sort_unstable_by"
-                            | "reverse"
-                            | "dedup"
-                            | "swap"
-                            | "fill"
-                            | "rotate_left"
-                            | "rotate_right"
-                            | "update"
-                    )
+                super::stdlib_method_traits::method_mutates_receiver(method)
             } else {
                 false
             }

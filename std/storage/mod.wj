@@ -47,7 +47,7 @@ pub fn has(key: string) -> bool {
 /// Store with specific backend
 pub fn set_with_backend(key: string, value: string, backend: StorageBackend) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Get with specific backend
@@ -59,13 +59,13 @@ pub fn get_with_backend(key: string, backend: StorageBackend) -> StorageResult<O
 /// Remove with specific backend
 pub fn remove_with_backend(key: string, backend: StorageBackend) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Clear with specific backend
 pub fn clear_with_backend(backend: StorageBackend) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Keys with specific backend
@@ -79,7 +79,7 @@ pub fn keys_with_backend(backend: StorageBackend) -> StorageResult<Vec<string>> 
 /// Store a JSON-serializable value
 pub fn set_json<T>(key: string, value: T) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Get a JSON-serializable value
@@ -93,7 +93,7 @@ pub fn get_json<T>(key: string) -> StorageResult<Option<T>> {
 /// Store binary data
 pub fn set_bytes(key: string, data: Vec<u8>) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Get binary data
@@ -107,7 +107,7 @@ pub fn get_bytes(key: string) -> StorageResult<Option<Vec<u8>>> {
 /// Set with expiration (seconds)
 pub fn set_with_ttl(key: string, value: string, ttl: int) -> StorageResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Get with automatic expiration check

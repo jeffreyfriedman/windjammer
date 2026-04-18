@@ -9,7 +9,7 @@ fn main() {
     println!("Data length: {}", data.len())  // data still usable!
     
     // Test 2: Multiple uses after move
-    let message = "Hello, Windjammer!".to_string()
+    let message = "Hello, Windjammer!"
     send_message(message)  // Should auto-insert .clone() here
     log_message(message)   // Should auto-insert .clone() here
     println!("Message: {}", message)  // message still usable!

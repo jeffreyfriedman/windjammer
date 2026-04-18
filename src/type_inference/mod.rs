@@ -12,7 +12,13 @@
 pub mod float_inference;
 pub mod int_inference;
 pub mod int_implicit_casts;
+pub(crate) mod struct_field_registry;
 
 pub use float_inference::{FloatInference, FloatType, ExprId};
 pub use int_inference::{IntInference, IntType};
 pub use int_implicit_casts::{is_safe_implicit_cast, get_cast_suffix, promote_types};
+
+/// Final segment of a possibly module-qualified generic name (`std::collections::HashMap` → `HashMap`).
+pub(crate) fn generic_type_base_name(name: &str) -> &str {
+    name.rsplit("::").next().unwrap_or(name)
+}

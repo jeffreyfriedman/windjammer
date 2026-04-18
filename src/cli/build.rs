@@ -62,7 +62,15 @@ pub fn execute(
             };
             return build_javascript(path, &config);
         }
-        "go" | "golang" => crate::CompilationTarget::Go,
+        "go" | "golang" => {
+            use crate::codegen::backend::{CodegenConfig, Target};
+            let config = CodegenConfig {
+                target: Target::Go,
+                output_dir: output_dir.to_path_buf(),
+                ..Default::default()
+            };
+            return build_go(path, &config);
+        }
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         "wgsl" => {
             // Use WGSL backend for GPU shaders
@@ -217,6 +225,43 @@ fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig
         fs::write(&file_path, content)?;
         println!("  {} {:?}", "Generated".green(), file_path);
     }
+
+    Ok(())
+}
+
+fn build_go(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
+    use crate::codegen;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use std::fs;
+
+    let source = fs::read_to_string(path)?;
+
+    let mut lexer = Lexer::new(&source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = Parser::new(tokens);
+    let program = parser
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+
+    fs::create_dir_all(&config.output_dir)?;
+
+    let output_path = config.output_dir.join("main.go");
+    fs::write(&output_path, &output.source)?;
+    println!("  {} {:?}", "Generated".green(), output_path);
+
+    for (filename, content) in &output.additional_files {
+        let file_path = config.output_dir.join(filename);
+        fs::write(&file_path, content)?;
+        println!("  {} {:?}", "Generated".green(), file_path);
+    }
+
+    println!(
+        "\n{} Go compilation complete!",
+        "Success!".green().bold()
+    );
 
     Ok(())
 }

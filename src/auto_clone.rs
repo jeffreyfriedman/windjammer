@@ -491,6 +491,7 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
             body: vec![
                 test_alloc_stmt(Statement::Let {
@@ -577,6 +578,7 @@ mod tests {
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
             body: vec![
                 test_alloc_stmt(Statement::Let {

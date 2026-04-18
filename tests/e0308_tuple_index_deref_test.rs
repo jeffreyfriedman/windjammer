@@ -1,7 +1,4 @@
-//! E0308 Fix: let (nx, ny, move_cost) = neighbors[ni]
-//!
-//! Vec index returns &T. Destructuring &(i32, i32, f32) gives &i32, &i32, &f32.
-//! For Copy tuple, emit * to get owned values so nx, ny are i32 not &i32.
+//! Copy tuple from `Vec<(…)>[i]`: Rust yields the tuple by value; no explicit `*` on the index.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -29,7 +26,7 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 #[test]
-fn test_tuple_from_index_gets_deref_for_copy() {
+fn test_tuple_from_copy_vec_index_no_star() {
     let source = r#"
 use std::collections::HashMap
 
@@ -49,10 +46,9 @@ pub fn pathfind() -> i32 {
 
     let rust = compile_and_get_rust(source);
 
-    // Should generate *neighbors[ni] so nx, ny are i32 (not &i32)
     assert!(
-        rust.contains("*neighbors[ni]") || rust.contains("* neighbors[ni]"),
-        "Expected * for tuple-from-index Copy destructuring, got:\n{}",
+        !rust.contains("*neighbors[ni]") && !rust.contains("* neighbors[ni]"),
+        "must not deref Copy tuple index (E0614). got:\n{}",
         rust
     );
 }

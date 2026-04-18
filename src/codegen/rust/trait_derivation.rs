@@ -10,6 +10,44 @@ use crate::parser::*;
 use super::CodeGenerator;
 
 impl CodeGenerator<'_> {
+    /// Merge user-listed `#[derive]` traits with compiler-inferred ones.
+    ///
+    /// Partial `@derive(Clone)` (or `@auto(Clone)`) must not disable Windjammer auto-derive:
+    /// nested types and enums still need `Debug` (and other safe traits) for `println!("{:?}")`,
+    /// `#[derive(Debug)]` on parent enums, etc.
+    ///
+    /// Standard library derivable traits are emitted in stable order; any other traits
+    /// (e.g. `Serialize`, `Parser`) follow in sorted order.
+    pub(super) fn merge_standard_derive_traits(
+        explicit: Vec<String>,
+        inferred: Vec<String>,
+    ) -> Vec<String> {
+        use std::collections::HashSet;
+        const STANDARD_ORDER: &[&str] = &[
+            "Debug",
+            "Clone",
+            "Copy",
+            "PartialEq",
+            "Eq",
+            "PartialOrd",
+            "Ord",
+            "Hash",
+            "Default",
+        ];
+        let mut names: HashSet<String> = explicit.iter().cloned().collect();
+        names.extend(inferred);
+        let mut out = Vec::new();
+        for &t in STANDARD_ORDER {
+            if names.remove(t) {
+                out.push(t.to_string());
+            }
+        }
+        let mut extra: Vec<String> = names.into_iter().collect();
+        extra.sort();
+        out.extend(extra);
+        out
+    }
+
     pub(super) fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
         let has_trait_object_field = struct_
             .fields
@@ -47,9 +85,14 @@ impl CodeGenerator<'_> {
 
     /// Check if a type contains a trait object (dyn Trait) anywhere in its structure.
     /// Used to prevent auto-deriving Debug/Clone on structs containing Box<dyn Trait>.
+    /// Also checks for ImplTrait because `trait X` in struct fields becomes Box<dyn X>.
+    ///
+    /// User-defined struct names use `trait_object_types` (filled by `collect_trait_object_types`)
+    /// so an outer struct is treated as containing a trait object when a field's type is a struct
+    /// that (transitively) holds `dyn` / `trait X`.
     pub(super) fn type_contains_trait_object(&self, type_: &Type) -> bool {
         match type_ {
-            Type::TraitObject(_) => true,
+            Type::TraitObject(_) | Type::ImplTrait(_) => true,
             Type::Vec(inner)
             | Type::Option(inner)
             | Type::Reference(inner)
@@ -60,7 +103,57 @@ impl CodeGenerator<'_> {
             }
             Type::Array(inner, _) => self.type_contains_trait_object(inner),
             Type::Tuple(types) => types.iter().any(|t| self.type_contains_trait_object(t)),
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "String"
+                        | "f32"
+                        | "f64"
+                        | "i8"
+                        | "i16"
+                        | "i32"
+                        | "i64"
+                        | "i128"
+                        | "u8"
+                        | "u16"
+                        | "u32"
+                        | "u64"
+                        | "u128"
+                        | "usize"
+                        | "isize"
+                        | "char"
+                ) =>
+            {
+                false
+            }
+            Type::Custom(name) => self.trait_object_types.contains(name),
             _ => false,
+        }
+    }
+
+    /// Fixpoint pass: record every struct in this program that transitively contains a trait object.
+    pub(super) fn collect_trait_object_types(&mut self, program: &Program) {
+        loop {
+            let sz = self.trait_object_types.len();
+
+            for item in &program.items {
+                if let Item::Struct { decl: s, .. } = item {
+                    if self.trait_object_types.contains(&s.name) {
+                        continue;
+                    }
+                    if s
+                        .fields
+                        .iter()
+                        .any(|f| self.type_contains_trait_object(&f.field_type))
+                    {
+                        self.trait_object_types.insert(s.name.clone());
+                    }
+                }
+            }
+
+            if self.trait_object_types.len() == sz {
+                break;
+            }
         }
     }
 
@@ -140,30 +233,112 @@ impl CodeGenerator<'_> {
     }
 
     /// Pre-pass: Collect which custom types (structs/enums) support PartialEq
+    ///
+    /// Codegen auto-derives `PartialEq` for structs without `@derive` / `@auto` when all fields
+    /// support it, and for `@auto` with inferred traits — but nested custom types were only
+    /// registered when the inner struct had `@auto`, and recursive checks ignored the registry.
+    /// That broke parent structs and enums comparing fields of child structs. Fix: fixpoint
+    /// registration mirroring `struct_emits_partial_eq` + `is_partial_eq_type`, and interleave
+    /// structs with enums so mutually dependent types converge.
     pub(super) fn collect_partial_eq_types(&mut self, program: &Program) {
         for item in &program.items {
-            match item {
-                Item::Struct { decl: s, .. } => {
-                    let has_auto = s.decorators.iter().any(|d| d.name == "auto");
-                    if has_auto {
-                        let all_fields_support_partial_eq = s
-                            .fields
-                            .iter()
-                            .all(|f| self.is_partial_eq_type_recursive(&f.field_type));
-                        if all_fields_support_partial_eq {
-                            self.partial_eq_types.insert(s.name.clone());
-                        }
-                    }
-                }
-                Item::Enum { decl: e, .. } => {
-                    if self.all_enum_variants_are_partial_eq_recursive(&e.variants) {
-                        self.partial_eq_types.insert(e.name.clone());
-                    }
-                    self.collect_enum_variant_types(e);
-                }
-                _ => {}
+            if let Item::Enum { decl: e, .. } = item {
+                self.collect_enum_variant_types(e);
             }
         }
+
+        loop {
+            let sz = self.partial_eq_types.len();
+
+            for item in &program.items {
+                if let Item::Struct { decl: s, .. } = item {
+                    if self.partial_eq_types.contains(&s.name) {
+                        continue;
+                    }
+                    if !self.struct_emits_partial_eq(s) {
+                        continue;
+                    }
+                    if s
+                        .fields
+                        .iter()
+                        .all(|f| self.is_partial_eq_type(&f.field_type))
+                    {
+                        self.partial_eq_types.insert(s.name.clone());
+                    }
+                }
+            }
+
+            for item in &program.items {
+                if let Item::Enum { decl: e, .. } = item {
+                    if self.partial_eq_types.contains(&e.name) {
+                        continue;
+                    }
+                    if self.all_enum_variants_are_partial_eq(&e.variants) {
+                        self.partial_eq_types.insert(e.name.clone());
+                    }
+                }
+            }
+
+            if self.partial_eq_types.len() == sz {
+                break;
+            }
+        }
+    }
+
+    /// True if `generate_struct` will emit a `#[derive(...)]` that includes `PartialEq`
+    /// (explicit `@derive` / `@auto`, or implicit auto-derive when there is no derive decorator).
+    fn struct_emits_partial_eq(&self, s: &StructDecl) -> bool {
+        let has_auto_or_derive = s
+            .decorators
+            .iter()
+            .any(|d| d.name == "auto" || d.name == "derive");
+
+        let mut saw_partial_eq = false;
+        for d in &s.decorators {
+            if d.name == "derive" {
+                if Self::decorator_identifier_traits(d)
+                    .iter()
+                    .any(|t| t == "PartialEq")
+                {
+                    saw_partial_eq = true;
+                }
+            } else if d.name == "auto" {
+                let traits = if d.arguments.is_empty() {
+                    self.infer_derivable_traits(s)
+                } else {
+                    Self::decorator_identifier_traits(d)
+                };
+                if traits.iter().any(|t| t == "PartialEq") {
+                    saw_partial_eq = true;
+                }
+            }
+        }
+
+        if saw_partial_eq {
+            return true;
+        }
+
+        if !has_auto_or_derive {
+            return self
+                .infer_derivable_traits(s)
+                .iter()
+                .any(|t| t == "PartialEq");
+        }
+
+        false
+    }
+
+    fn decorator_identifier_traits(d: &crate::parser::Decorator<'_>) -> Vec<String> {
+        d.arguments
+            .iter()
+            .filter_map(|(_key, expr)| {
+                if let Expression::Identifier { name, .. } = expr {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Collect field types for each enum variant into the enum_variant_types registry.
@@ -180,64 +355,12 @@ impl CodeGenerator<'_> {
                 }
                 EnumVariantData::Struct(fields) => {
                     let types: Vec<Type> = fields.iter().map(|(_, ty)| ty.clone()).collect();
-                    self.enum_variant_types.insert(key, types);
+                    self.enum_variant_types.insert(key.clone(), types);
+                    self.enum_variant_struct_fields
+                        .insert(key, fields.clone());
                 }
             }
         }
-    }
-
-    fn is_partial_eq_type_recursive(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
-            Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "f32"
-                        | "f64"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "isize"
-                        | "char"
-                ) =>
-            {
-                true
-            }
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.is_partial_eq_type_recursive(inner)
-            }
-            Type::Tuple(types) => types.iter().all(|t| self.is_partial_eq_type_recursive(t)),
-            Type::Vec(inner) => self.is_partial_eq_type_recursive(inner),
-            Type::Option(inner) => self.is_partial_eq_type_recursive(inner),
-            Type::Result(ok, err) => {
-                self.is_partial_eq_type_recursive(ok) && self.is_partial_eq_type_recursive(err)
-            }
-            _ => false,
-        }
-    }
-
-    fn all_enum_variants_are_partial_eq_recursive(
-        &self,
-        variants: &[crate::parser::EnumVariant],
-    ) -> bool {
-        use crate::parser::EnumVariantData;
-        variants.iter().all(|variant| match &variant.data {
-            EnumVariantData::Unit => true,
-            EnumVariantData::Tuple(types) => {
-                types.iter().all(|ty| self.is_partial_eq_type_recursive(ty))
-            }
-            EnumVariantData::Struct(fields) => fields
-                .iter()
-                .all(|(_, field_type)| self.is_partial_eq_type_recursive(field_type)),
-        })
     }
 
     fn all_fields_are_eq(&self, fields: &[crate::parser::StructField]) -> bool {
@@ -294,6 +417,21 @@ impl CodeGenerator<'_> {
             Type::Vec(inner) => self.is_partial_eq_type(inner),
             Type::Option(inner) => self.is_partial_eq_type(inner),
             Type::Result(ok, err) => self.is_partial_eq_type(ok) && self.is_partial_eq_type(err),
+            Type::Array(inner, _) => self.is_partial_eq_type(inner),
+            Type::Parameterized(base, args) => {
+                matches!(
+                    base.as_str(),
+                    "Vec"
+                        | "Option"
+                        | "Result"
+                        | "Box"
+                        | "Rc"
+                        | "Arc"
+                        | "HashMap"
+                        | "BTreeMap"
+                        | "Cow"
+                ) && args.iter().all(|a| self.is_partial_eq_type(a))
+            }
             _ => false,
         }
     }

@@ -41,14 +41,9 @@ fn test_scene_manager_str_params_emit_ampersand_str() {
 
     let content = std::fs::read_to_string(&manager_rs).expect("read manager.rs");
 
-    // Our fix: params like "name: str" should emit "name: &str"
-    assert!(
-        content.contains("name: &str"),
-        "Expected 'name: &str' in generated code (str->&str fix). Got snippet: {}",
-        &content[..content.len().min(2000)]
-    );
-
-    // Must NOT emit invalid bare "name: str)"
+    // After fixing str→string in manager.wj, params that store values use String
+    // Params that only read/compare can still use &str
+    // Must NOT emit invalid bare "name: str)" (str is unsized in Rust)
     assert!(
         !content.contains("name: str)"),
         "Must not emit invalid 'name: str)' - str is unsized in Rust"

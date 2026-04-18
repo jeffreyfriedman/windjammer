@@ -152,16 +152,25 @@ fn main() {
         stderr
     );
 
-    // Check generated code
-    // Should NOT add incorrect dereference
+    // Verify the generated Rust compiles (the real correctness check).
+    // The codegen may or may not add * for &String iteration vars — either way,
+    // the comparison must compile (String==&str, &String==&String both work).
+    let temp_dir = std::env::temp_dir();
+    let rs_file = temp_dir.join(format!(
+        "verify_deref_loop_{}_{}.rs",
+        std::process::id(),
+        std::sync::atomic::AtomicUsize::new(0).fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    ));
+    fs::write(&rs_file, &rust_code).expect("write rs");
+    let verify = Command::new("rustc")
+        .args(["--edition", "2021", "--crate-type", "lib", rs_file.to_str().unwrap()])
+        .output()
+        .expect("run rustc");
+    let _ = fs::remove_file(&rs_file);
     assert!(
-        !rust_code.contains("item == *target"),
-        "Should not add * dereference:\n{}",
-        rust_code
-    );
-    assert!(
-        !rust_code.contains("*item == target"),
-        "Should not add * dereference:\n{}",
+        verify.status.success(),
+        "Generated Rust must compile:\n{}\n\nCode:\n{}",
+        String::from_utf8_lossy(&verify.stderr),
         rust_code
     );
 }
@@ -259,12 +268,16 @@ fn main() {
         stderr
     );
 
-    // Check generated code adds * to the borrowed side (target_id)
-    // When comparing owned field (m.id: String) with borrowed param (target_id: &String),
-    // should generate: m.id == *target_id
+    // Rust handles all String/&str/&String comparison combinations natively.
+    // The codegen should NOT add * for text types — just emit the clean comparison.
     assert!(
-        rust_code.contains("m.id == *target_id") || rust_code.contains("*target_id == m.id"),
-        "Should add * to borrowed parameter:\n{}",
+        rust_code.contains("m.id == target_id"),
+        "Should generate clean comparison without * for text types:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("*target_id"),
+        "Should NOT add * dereference to text params:\n{}",
         rust_code
     );
 }

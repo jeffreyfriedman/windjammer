@@ -691,7 +691,7 @@ impl GoGenerator {
                 // Reason: Windjammer `int` → Go `int64`, but Go's `0` is `int`
                 // This prevents type mismatches: `var sum = 0` with Vec<int> iteration
                 let is_bare_int_literal = matches!(value, 
-                    Expression::Literal { value: Literal::Int(_), .. }
+                    Expression::Literal { value: Literal::Int(_) | Literal::IntSuffixed(_, _), .. }
                 );
                 if is_bare_int_literal {
                     value_str = format!("int64({})", value_str);
@@ -882,7 +882,7 @@ impl GoGenerator {
                     // TDD FIX: Cast range start to int64 for Windjammer int semantics
                     // Go's `for i := 0` makes `i` an `int`, but we need `int64`
                     let is_int_literal = matches!(start, 
-                        Expression::Literal { value: Literal::Int(_), .. }
+                        Expression::Literal { value: Literal::Int(_) | Literal::IntSuffixed(_, _), .. }
                     );
                     if is_int_literal {
                         start_str = format!("int64({})", start_str);
@@ -978,7 +978,7 @@ impl GoGenerator {
                     Pattern::Wildcard => "true".to_string(),
                     Pattern::Literal(lit) => {
                         let lit_str = match lit {
-                            Literal::Int(n) => n.to_string(),
+                            Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                             Literal::Float(f) => f.to_string(),
                             Literal::Bool(b) => b.to_string(),
                             Literal::String(s) => format!("\"{}\"", s),
@@ -1063,7 +1063,7 @@ impl GoGenerator {
             }
             Pattern::Literal(lit) => {
                 let pat_str = match lit {
-                    Literal::Int(n) => n.to_string(),
+                    Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                     Literal::Float(f) => f.to_string(),
                     Literal::Bool(b) => b.to_string(),
                     Literal::String(s) => format!("\"{}\"", s),
@@ -1226,7 +1226,7 @@ impl GoGenerator {
                     Pattern::Wildcard => "true".to_string(),
                     Pattern::Literal(lit) => {
                         let lit_str = match lit {
-                            Literal::Int(n) => n.to_string(),
+                            Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                             Literal::Float(f) => f.to_string(),
                             Literal::Bool(b) => b.to_string(),
                             Literal::String(s) => format!("\"{}\"", s),
@@ -1310,7 +1310,7 @@ impl GoGenerator {
             Pattern::Wildcard => "default".to_string(),
             Pattern::Literal(lit) => {
                 let val = match lit {
-                    Literal::Int(n) => n.to_string(),
+                    Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                     Literal::Float(f) => f.to_string(),
                     Literal::Bool(b) => b.to_string(),
                     Literal::String(s) => format!("\"{}\"", s),
@@ -1394,7 +1394,7 @@ impl GoGenerator {
     fn pattern_to_case_label(&self, pattern: &Pattern) -> String {
         match pattern {
             Pattern::Literal(lit) => match lit {
-                Literal::Int(n) => n.to_string(),
+                Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                 Literal::Float(f) => f.to_string(),
                 Literal::Bool(b) => b.to_string(),
                 Literal::String(s) => format!("\"{}\"", s),
@@ -1412,7 +1412,7 @@ impl GoGenerator {
     fn generate_expression(&mut self, expr: &Expression) -> String {
         match expr {
             Expression::Literal { value, .. } => match value {
-                Literal::Int(n) => n.to_string(),
+                Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
                 Literal::Float(f) => {
                     let s = f.to_string();
                     if s.contains('.') {
@@ -1531,24 +1531,36 @@ impl GoGenerator {
                         _ => {}
                     }
                     
-                    // TDD FIX: Detect enum variant construction (Maybe::Some(42))
-                    // Generate struct literal: MaybeSome{Field0: 42}
-                    // NOT function call: MaybeSome{}(42)
                     if name.contains("::") {
-                        let go_type = self.enum_variant_to_go_type(name);
-                        if !arguments.is_empty() {
-                            // Variant with data: MaybeSome{Field0: value}
-                            let fields: Vec<String> = arguments
-                                .iter()
-                                .enumerate()
-                                .map(|(i, (_, arg))| {
-                                    format!("Field{}: {}", i, self.generate_expression(arg))
-                                })
-                                .collect();
-                            return format!("{}{{{}}}", go_type, fields.join(", "));
-                        } else {
-                            // Unit variant: MaybeNone{}
-                            return format!("{}{{}}", go_type);
+                        if let Some((type_name, method_or_variant)) = name.split_once("::") {
+                            if self.declared_enums.contains_key(type_name) {
+                                let go_type = self.enum_variant_to_go_type(name);
+                                if !arguments.is_empty() {
+                                    let fields: Vec<String> = arguments
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(i, (_, arg))| {
+                                            format!("Field{}: {}", i, self.generate_expression(arg))
+                                        })
+                                        .collect();
+                                    return format!("{}{{{}}}", go_type, fields.join(", "));
+                                } else {
+                                    return format!("{}{{}}", go_type);
+                                }
+                            } else {
+                                let go_func = if method_or_variant == "new" {
+                                    format!("New{}", capitalize_first(type_name))
+                                } else {
+                                    format!("{}{}",
+                                        capitalize_first(type_name),
+                                        capitalize_first(method_or_variant))
+                                };
+                                let args: Vec<String> = arguments
+                                    .iter()
+                                    .map(|(_, arg)| self.generate_expression(arg))
+                                    .collect();
+                                return format!("{}({})", go_func, args.join(", "));
+                            }
                         }
                     }
                 }

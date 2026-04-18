@@ -281,16 +281,16 @@ fn example_test_output() {
     
     // Add some test results
     let result1 = TestResult::new(
-        "test_player_move".to_string(),
+        "test_player_move",
         TestStatus::Passed,
         Duration::from_millis(5)
     );
     
     let result2 = TestResult::new(
-        "test_collision".to_string(),
+        "test_collision",
         TestStatus::Failed,
         Duration::from_millis(10)
-    ).with_error("Expected collision at (10, 20)".to_string());
+    ).with_error("Expected collision at (10, 20)");
     
     summary.add_result(result1);
     summary.add_result(result2);

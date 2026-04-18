@@ -9,6 +9,7 @@ use crate::parser::Literal;
 pub fn generate_literal(lit: &Literal) -> String {
     match lit {
         Literal::Int(i) => i.to_string(),
+        Literal::IntSuffixed(i, suffix) => format!("{}_{}", i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();
             // Ensure float literals have a decimal point AND f64 suffix

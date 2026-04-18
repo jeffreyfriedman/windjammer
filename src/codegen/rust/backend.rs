@@ -144,9 +144,12 @@ impl CodegenBackend for RustBackend {
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
         // TDD FIX: Analyze program first to populate signature registry!
         // This was the root cause of the auto-clone bug - method signatures weren't available
-        let target = match config.target {
+        // Native Rust output uses `CompilationTarget::Rust` (export attrs, int/float inference).
+        // Keep `generate_additional_files` on `CompilationTarget::Wasm` only — using Rust there
+        // breaks module Cargo.toml generation (E0252 / E0432 explosions).
+        let compilation_target = match config.target {
             Target::WebAssembly => CompilationTarget::Wasm,
-            _ => CompilationTarget::Wasm, // Default to Wasm for now
+            _ => CompilationTarget::Rust,
         };
 
         // Run analyzer to get signatures and analyzed functions
@@ -169,8 +172,28 @@ impl CodegenBackend for RustBackend {
             }
         }
 
-        let mut generator = crate::codegen::CodeGenerator::new(signatures, target);
+        let mut float_inference = crate::type_inference::FloatInference::new();
+        float_inference.infer_program(program);
+        let mut int_inference = crate::type_inference::IntInference::new();
+        int_inference.infer_program(program);
+        let inference_ok =
+            float_inference.errors.is_empty() && int_inference.errors.is_empty();
+        if !inference_ok {
+            for e in &float_inference.errors {
+                eprintln!("Float inference error (RustBackend): {}", e);
+            }
+            for e in &int_inference.errors {
+                eprintln!("Int inference error (RustBackend): {}", e);
+            }
+        }
+
+        let mut generator =
+            crate::codegen::CodeGenerator::new(signatures, compilation_target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        if inference_ok {
+            generator.set_float_inference(float_inference);
+            generator.set_int_inference(int_inference);
+        }
 
         // Pass analyzed functions so codegen has ownership info
         let code = generator.generate_program(program, &analyzed);

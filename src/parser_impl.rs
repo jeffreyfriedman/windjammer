@@ -73,12 +73,25 @@ pub use crate::parser::ast::*;
 // SECTION 2: PARSER CORE
 // ============================================================================
 
+/// A structured warning emitted during parsing.
+#[derive(Debug, Clone)]
+pub struct ParseWarning {
+    pub message: String,
+    pub file: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
 pub struct Parser {
     pub(crate) tokens: Vec<crate::lexer::TokenWithLocation>,
     pub(crate) position: usize,
     pub(crate) filename: String,
     #[allow(dead_code)]
     pub(crate) source: String,
+    pub(crate) warnings: Vec<ParseWarning>,
+    /// True when parsing inside an `extern fn` declaration (FFI boundary).
+    /// Suppresses W0010 warnings since FFI signatures must match Rust types exactly.
+    pub(crate) in_extern_fn: bool,
     // Arena allocators for AST nodes (eliminates recursive Drop)
     // When Parser is dropped, these arenas drop all allocated AST nodes at once
     // without recursive calls to Drop, solving the Windows stack overflow issue
@@ -115,6 +128,8 @@ impl Parser {
             position: 0,
             filename: String::new(),
             source: String::new(),
+            warnings: Vec::new(),
+            in_extern_fn: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -131,10 +146,20 @@ impl Parser {
             position: 0,
             filename,
             source,
+            warnings: Vec::new(),
+            in_extern_fn: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
         }
+    }
+
+    pub fn warnings(&self) -> &[ParseWarning] {
+        &self.warnings
+    }
+
+    pub(crate) fn emit_warning(&mut self, message: String, file: Option<String>, line: Option<usize>, column: Option<usize>) {
+        self.warnings.push(ParseWarning { message, file, line, column });
     }
 
     /// Allocate an expression in the arena
@@ -361,11 +386,9 @@ impl Parser {
             Token::Const => {
                 self.advance();
                 let (name, type_, value) = self.parse_const_or_static()?;
-                // For now, we don't store is_pub in the AST (future enhancement)
-                // But at least we parse it correctly
-                let _ = is_pub; // Suppress unused warning
                 Ok(Item::Const {
                     name,
+                    is_pub,
                     type_,
                     value,
                     location: self.current_location(),
@@ -421,7 +444,9 @@ impl Parser {
                     // extern fn - existing code path
                     self.advance(); // Consume the Extern token
                     self.expect(Token::Fn)?; // Expect fn after extern
+                    self.in_extern_fn = true;
                     let mut func = self.parse_function()?;
+                    self.in_extern_fn = false;
                     func.is_extern = true; // Mark as extern function
                     func.is_pub = is_pub;
                     func.decorators = decorators;

@@ -61,16 +61,22 @@ fn main() {
 "#,
     );
 
-    // Should contain fixed-size array syntax [...]
+    // Should use fixed-size array syntax [...] not vec![...]
+    // Float inference correctly adds _f32 suffix for [f32; 3] context
     assert!(
-        code.contains("position: [1.0, 2.0, 3.0]") || code.contains("position: [1.0,2.0,3.0]"),
-        "Struct field should use fixed-size array syntax [...], not vec![...]. Generated:\n{}",
+        code.contains("position: [1.0_f32, 2.0_f32, 3.0_f32]"),
+        "Struct field [f32; 3] should use fixed-size array with correct float suffix. Generated:\n{}",
+        code
+    );
+    assert!(
+        code.contains("color: [1.0_f32, 0.0_f32, 0.0_f32, 1.0_f32]"),
+        "Struct field [f32; 4] should use fixed-size array with correct float suffix. Generated:\n{}",
         code
     );
 
     // Should NOT contain vec![] for struct fields
     assert!(
-        !code.contains("vec![1.0, 2.0, 3.0]"),
+        !code.contains("vec!["),
         "Struct field should NOT use vec![...] for fixed-size arrays. Generated:\n{}",
         code
     );

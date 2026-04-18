@@ -4,7 +4,7 @@
 use std::log
 
 fn process_request(user_id: int, action: string) {
-    log.info_with("Processing request", "user_id", user_id.to_string())
+    log.info_with("Processing request", "user_id", format!("{}", user_id))
     log.debug_with("Action details", "action", action)
     
     // Simulate some processing
@@ -31,7 +31,7 @@ fn connect_to_database() -> Result<(), Error> {
 fn expensive_debug_calculation() -> string {
     // Simulate expensive operation
     log.trace("Running expensive debug calculation")
-    "Debug data: [complex information]".to_string()
+    "Debug data: [complex information]"
 }
 
 fn main() {

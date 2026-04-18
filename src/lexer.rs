@@ -53,7 +53,8 @@ pub enum Token {
     String,
 
     // Literals
-    IntLiteral(i64),
+    IntLiteral(i64),           // No suffix: 42
+    IntLiteralSuffixed(i64, String), // With suffix: 42u32, 0usize
     FloatLiteral(f64),
     StringLiteral(String),
     InterpolatedString(Vec<StringPart>), // For strings with ${expr}
@@ -140,6 +141,7 @@ impl fmt::Display for Token {
         match self {
             Token::Ident(s) => write!(f, "Ident({})", s),
             Token::IntLiteral(n) => write!(f, "Int({})", n),
+            Token::IntLiteralSuffixed(n, ref s) => write!(f, "Int({}{})", n, s),
             Token::StringLiteral(s) => write!(f, "String(\"{}\")", s),
             _ => write!(f, "{:?}", self),
         }
@@ -155,6 +157,7 @@ impl std::hash::Hash for Token {
         std::mem::discriminant(self).hash(state);
         match self {
             Token::IntLiteral(n) => n.hash(state),
+            Token::IntLiteralSuffixed(n, ref s) => { n.hash(state); s.hash(state); }
             Token::FloatLiteral(f) => f.to_bits().hash(state), // Hash bits of f64
             Token::StringLiteral(s) => s.hash(state),
             Token::InterpolatedString(parts) => parts.hash(state),
@@ -329,6 +332,25 @@ impl Lexer {
             }
         }
 
+        // Scientific notation: e.g. 1e10, 2.5e-3, 3E+2
+        if self.current_char == Some('e') || self.current_char == Some('E') {
+            num_str.push(self.current_char.unwrap());
+            self.advance();
+            if self.current_char == Some('-') || self.current_char == Some('+') {
+                num_str.push(self.current_char.unwrap());
+                self.advance();
+            }
+            while let Some(ch) = self.current_char {
+                if ch.is_ascii_digit() {
+                    num_str.push(ch);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            is_float = true;
+        }
+
         // TDD FIX: Handle type suffixes for integer literals (0u64, 0i32, 0u32, etc.)
         // Without this, "0u64" gets tokenized as IntLiteral(0) + Ident("u64"),
         // which causes the "u64" to become a stray expression statement "u64;"
@@ -368,10 +390,11 @@ impl Lexer {
                 None
             };
 
-            // For now, just parse the number and discard the type suffix
-            // The type system will infer the correct type from context
-            // TODO: Store type suffix in Token for better type checking
-            Token::IntLiteral(num_str.parse().unwrap())
+            if let Some(suffix) = _type_suffix {
+                Token::IntLiteralSuffixed(num_str.parse().unwrap(), suffix)
+            } else {
+                Token::IntLiteral(num_str.parse().unwrap())
+            }
         } else {
             Token::FloatLiteral(num_str.parse().unwrap())
         }
@@ -401,6 +424,11 @@ impl Lexer {
                     current_literal.push(unescaped);
                     self.advance();
                 }
+            } else if ch == '$' && self.peek(1) == Some('$') {
+                // Escaped dollar: $$ → literal $
+                current_literal.push('$');
+                self.advance();
+                self.advance();
             } else if ch == '$' && self.peek(1) == Some('{') {
                 // Found interpolation: ${expr}
                 has_interpolation = true;

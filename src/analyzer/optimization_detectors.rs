@@ -680,6 +680,7 @@ impl<'ast> Analyzer<'ast> {
                         &func.body,
                         &func.return_type,
                         registry,
+                        &func.name,
                     )
                     .unwrap_or(OwnershipMode::Owned)
                 }
@@ -718,17 +719,19 @@ impl<'ast> Analyzer<'ast> {
     /// Estimate the size of a type for defer drop optimization
     fn estimate_type_size(&self, ty: &Type) -> EstimatedSize {
         match ty {
-            // Collections are potentially large
-            Type::Custom(name) if name.contains("HashMap") => EstimatedSize::Large,
-            Type::Custom(name) if name.contains("BTreeMap") => EstimatedSize::Large,
-            Type::Custom(name) if name.contains("HashSet") => EstimatedSize::Large,
-            Type::Custom(name) if name.contains("BTreeSet") => EstimatedSize::Large,
-            Type::Parameterized(name, _) if name.contains("HashMap") => EstimatedSize::Large,
-            Type::Parameterized(name, _) if name.contains("BTreeMap") => EstimatedSize::Large,
-            Type::Parameterized(name, _) if name.contains("HashSet") => EstimatedSize::Large,
-            Type::Parameterized(name, _) if name.contains("BTreeSet") => EstimatedSize::Large,
-            Type::Parameterized(name, _) if name.contains("Vec") => EstimatedSize::Medium,
-            Type::Parameterized(name, _) if name.contains("VecDeque") => EstimatedSize::Medium,
+            Type::Parameterized(name, _)
+                if matches!(
+                    name.as_str(),
+                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "IndexMap"
+                ) =>
+            {
+                EstimatedSize::Large
+            }
+            Type::Parameterized(name, _)
+                if matches!(name.as_str(), "Vec" | "VecDeque" | "LinkedList") =>
+            {
+                EstimatedSize::Medium
+            }
             Type::Vec(_) => EstimatedSize::Medium,
             Type::String => EstimatedSize::Medium,
 
@@ -759,28 +762,22 @@ impl<'ast> Analyzer<'ast> {
         match ty {
             Type::Custom(name) | Type::Parameterized(name, _) => {
                 // Types with important Drop implementations - DO NOT defer
-                if name.contains("Mutex")
-                    || name.contains("RwLock")
-                    || name.contains("File")
-                    || name.contains("TcpStream")
-                    || name.contains("UdpSocket")
-                    || name.contains("Channel")
-                    || name.contains("Receiver")
-                    || name.contains("Sender")
-                    || name.contains("JoinHandle")
+                if matches!(
+                    name.as_str(),
+                    "Mutex" | "RwLock" | "File" | "TcpStream" | "UdpSocket"
+                        | "Channel" | "Receiver" | "Sender" | "JoinHandle"
+                        | "MutexGuard" | "RwLockReadGuard" | "RwLockWriteGuard"
+                )
                 {
                     return false;
                 }
 
-                // Standard collections are safe to defer
-                if name.contains("HashMap")
-                    || name.contains("BTreeMap")
-                    || name.contains("HashSet")
-                    || name.contains("BTreeSet")
-                    || name.contains("Vec")
-                    || name.contains("VecDeque")
-                    || name.contains("String")
-                {
+                if matches!(
+                    name.as_str(),
+                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet"
+                        | "Vec" | "VecDeque" | "LinkedList"
+                        | "String" | "IndexMap"
+                ) {
                     return true;
                 }
 
@@ -1106,68 +1103,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    /// Check if a method mutates the object
     pub(super) fn is_mutating_method(&self, method: &str) -> bool {
-        // THE WINDJAMMER WAY: Comprehensive mutation detection
-        // Methods ending in _mut (values_mut, iter_mut, get_mut, etc.) are always mutating
-        if method.ends_with("_mut") {
-            return true;
-        }
-        // Methods starting with set_ are almost always mutating (setters)
-        if method.starts_with("set_") {
-            return true;
-        }
-        // TDD FIX: Add common mutation prefixes
-        // Methods like increment, decrement, add_, sub_, adjust_, etc. are mutating
-        if method.starts_with("increment")
-            || method.starts_with("decrement")
-            || method.starts_with("add_")
-            || method.starts_with("sub_")
-            || method.starts_with("mul_")
-            || method.starts_with("div_")
-            || method.starts_with("adjust_") // adjust_reputation, adjust_loyalty, etc.
-        {
-            return true;
-        }
-        matches!(
-            method,
-            // Vec/String methods
-            "push"
-                | "push_str"
-                | "clear"
-                | "pop"
-                | "remove"
-                | "insert"
-                | "append"
-                | "extend"
-                | "drain"
-                | "truncate"
-                | "resize"
-                | "swap_remove"
-                | "retain"
-                | "sort"
-                | "sort_by"
-                | "sort_by_key"
-                | "sort_unstable"
-                | "sort_unstable_by"
-                | "dedup"
-                | "reverse"
-                | "swap"
-                // Option/Result methods (mutate in place)
-                | "take"
-                | "replace"
-                | "get_or_insert"
-                | "get_or_insert_with"
-                // Other
-                | "allocate"
-                | "free"
-                | "update"
-                | "play"
-                | "reset"
-                | "set"
-                | "fill"
-                | "normalize"
-                | "damage" // Game-specific: Player::damage, etc.
-        )
+        crate::method_registry::mutates_receiver(method)
     }
 }

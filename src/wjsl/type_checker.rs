@@ -94,6 +94,16 @@ impl<'a> TypeChecker<'a> {
         Ok(())
     }
 
+    fn collect_function_signatures(&self) -> Vec<(String, Type)> {
+        self.ast
+            .functions
+            .iter()
+            .filter_map(|f| {
+                f.return_type.as_ref().map(|rt| (f.name.clone(), rt.clone()))
+            })
+            .collect()
+    }
+
     fn check_function_body(
         &self,
         body: &str,
@@ -122,8 +132,14 @@ impl<'a> TypeChecker<'a> {
         for pv in &self.ast.private_vars {
             symbols.insert(pv.name.clone(), pv.ty.clone());
         }
+        for cd in &self.ast.const_decls {
+            if let Some(ref ty) = cd.ty {
+                symbols.insert(cd.name.clone(), ty.clone());
+            }
+        }
 
-        let mut parser = BodyParser::new(body, symbols, self.structs.clone());
+        let fn_sigs = self.collect_function_signatures();
+        let mut parser = BodyParser::new(body, symbols, self.structs.clone(), fn_sigs);
         parser.parse_and_check(return_type)
     }
 }
@@ -132,8 +148,11 @@ impl<'a> TypeChecker<'a> {
 struct BodyParser<'a> {
     lexer: Lexer<'a>,
     current: Token,
+    current_line: usize,
+    current_column: usize,
     symbols: HashMap<String, Type>,
     structs: HashMap<String, &'a StructDecl>,
+    ast_functions: Vec<(String, Type)>,
 }
 
 impl<'a> BodyParser<'a> {
@@ -141,18 +160,30 @@ impl<'a> BodyParser<'a> {
         body: &'a str,
         symbols: HashMap<String, Type>,
         structs: HashMap<String, &'a StructDecl>,
+        ast_functions: Vec<(String, Type)>,
     ) -> Self {
         let mut lexer = Lexer::new(body);
+        let line = lexer.line();
+        let column = lexer.column();
         let current = lexer.next_token();
         Self {
             lexer,
             current,
+            current_line: line,
+            current_column: column,
             symbols,
             structs,
+            ast_functions,
         }
     }
 
+    fn error_at(&self, msg: String) -> anyhow::Error {
+        anyhow!("[line {}:{}] {}", self.current_line, self.current_column, msg)
+    }
+
     fn advance(&mut self) -> Token {
+        self.current_line = self.lexer.line();
+        self.current_column = self.lexer.column();
         std::mem::replace(&mut self.current, self.lexer.next_token())
     }
 
@@ -160,11 +191,32 @@ impl<'a> BodyParser<'a> {
         while !matches!(self.current, Token::Eof) {
             if matches!(self.current, Token::Let) {
                 self.advance();
-                let name = self.expect_ident()?;
-                self.expect(Token::Assign)?;
-                let ty = self.parse_expr()?;
-                self.symbols.insert(name, ty);
-                self.expect_semicolon()?;
+                if matches!(self.current, Token::Mut) {
+                    self.advance();
+                    self.parse_var_decl_body()?;
+                } else {
+                    let name = self.expect_ident()?;
+
+                    let explicit_ty = if matches!(self.current, Token::Colon) {
+                        self.advance();
+                        Some(self.parse_type_annotation()?)
+                    } else {
+                        None
+                    };
+
+                    let inferred_ty = if matches!(self.current, Token::Assign) {
+                        self.advance();
+                        Some(self.parse_expr()?)
+                    } else {
+                        None
+                    };
+
+                    let ty = explicit_ty
+                        .or(inferred_ty)
+                        .unwrap_or(Type::Scalar(ScalarType::F32));
+                    self.symbols.insert(name, ty);
+                    self.expect_semicolon()?;
+                }
             } else if matches!(self.current, Token::Return) {
                 self.advance();
                 if !matches!(self.current, Token::Semicolon) {
@@ -181,7 +233,7 @@ impl<'a> BodyParser<'a> {
                 }
                 self.expect_semicolon()?;
             } else if matches!(self.current, Token::Var) {
-                self.skip_var_decl()?;
+                self.parse_var_decl()?;
             } else if matches!(self.current, Token::If) {
                 self.skip_block()?;
             } else if matches!(self.current, Token::For) {
@@ -205,15 +257,88 @@ impl<'a> BodyParser<'a> {
         Ok(())
     }
 
-    fn skip_var_decl(&mut self) -> Result<()> {
-        self.advance();
-        while !matches!(self.current, Token::Semicolon | Token::Eof) {
+    fn parse_var_decl(&mut self) -> Result<()> {
+        self.advance(); // consume `var`
+        self.parse_var_decl_body()
+    }
+
+    fn parse_var_decl_body(&mut self) -> Result<()> {
+        let name = self.expect_ident()?;
+
+        let explicit_ty = if matches!(self.current, Token::Colon) {
             self.advance();
-        }
-        if matches!(self.current, Token::Semicolon) {
+            Some(self.parse_type_annotation()?)
+        } else {
+            None
+        };
+
+        let inferred_ty = if matches!(self.current, Token::Assign) {
             self.advance();
-        }
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let ty = explicit_ty
+            .or(inferred_ty)
+            .unwrap_or(Type::Scalar(ScalarType::F32));
+        self.symbols.insert(name, ty);
+        self.expect_semicolon()?;
         Ok(())
+    }
+
+    fn parse_type_annotation(&mut self) -> Result<Type> {
+        match &self.current {
+            Token::F32 => { self.advance(); Ok(Type::Scalar(ScalarType::F32)) }
+            Token::F64 => { self.advance(); Ok(Type::Scalar(ScalarType::F64)) }
+            Token::U32 => { self.advance(); Ok(Type::Scalar(ScalarType::U32)) }
+            Token::I32 => { self.advance(); Ok(Type::Scalar(ScalarType::I32)) }
+            Token::Bool => { self.advance(); Ok(Type::Scalar(ScalarType::Bool)) }
+            Token::Vec2 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec2(Some(ScalarType::F32))) }
+            Token::Vec3 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec3(Some(ScalarType::F32))) }
+            Token::Vec4 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec4(Some(ScalarType::F32))) }
+            Token::Mat4x4 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat4x4(Some(ScalarType::F32))) }
+            Token::Mat3x3 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat3x3(Some(ScalarType::F32))) }
+            Token::Mat2x2 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat2x2(Some(ScalarType::F32))) }
+            Token::Array => {
+                self.advance();
+                let mut elem_type = Type::Scalar(ScalarType::F32);
+                if matches!(self.current, Token::LAngle) {
+                    self.advance();
+                    elem_type = self.parse_type_annotation()?;
+                    if matches!(self.current, Token::Comma) {
+                        self.advance();
+                        while !matches!(self.current, Token::RAngle | Token::Shr | Token::Eof) {
+                            self.advance();
+                        }
+                    }
+                    if matches!(self.current, Token::Shr) {
+                        self.current = Token::RAngle;
+                    } else if matches!(self.current, Token::RAngle) {
+                        self.advance();
+                    }
+                }
+                Ok(Type::Array(Box::new(elem_type), None))
+            }
+            _ => {
+                let name = self.expect_ident()?;
+                Ok(Type::Struct(name))
+            }
+        }
+    }
+
+    fn skip_optional_angle_bracket(&mut self) {
+        if matches!(self.current, Token::LAngle) {
+            self.advance();
+            while !matches!(self.current, Token::RAngle | Token::Shr | Token::Eof) {
+                self.advance();
+            }
+            if matches!(self.current, Token::Shr) {
+                self.current = Token::RAngle;
+            } else if matches!(self.current, Token::RAngle) {
+                self.advance();
+            }
+        }
     }
 
     fn skip_block(&mut self) -> Result<()> {
@@ -227,7 +352,7 @@ impl<'a> BodyParser<'a> {
             return Ok(());
         }
         if matches!(self.current, Token::Eof) {
-            return Err(anyhow!("Expected block or statement"));
+            return Err(self.error_at("Expected block or statement".to_string()));
         }
         let mut depth = 0;
         loop {
@@ -272,7 +397,7 @@ impl<'a> BodyParser<'a> {
             self.advance();
             Ok(name)
         } else {
-            Err(anyhow!("Expected identifier, found {:?}", self.current))
+            Err(self.error_at(format!("Expected identifier, found {:?}", self.current)))
         }
     }
 
@@ -281,7 +406,7 @@ impl<'a> BodyParser<'a> {
             self.advance();
             Ok(())
         } else {
-            Err(anyhow!("Expected {:?}, found {:?}", expected, self.current))
+            Err(self.error_at(format!("Expected {:?}, found {:?}", expected, self.current)))
         }
     }
 
@@ -290,12 +415,44 @@ impl<'a> BodyParser<'a> {
             self.advance();
             Ok(())
         } else {
-            Err(anyhow!("Expected semicolon, found {:?}", self.current))
+            Err(self.error_at(format!("Expected semicolon, found {:?}", self.current)))
         }
     }
 
     fn parse_expr(&mut self) -> Result<Type> {
-        self.parse_bitwise_or()
+        self.parse_logical_or()
+    }
+
+    fn parse_logical_or(&mut self) -> Result<Type> {
+        let mut left = self.parse_logical_and()?;
+        while matches!(self.current, Token::Or) {
+            self.advance();
+            let _right = self.parse_logical_and()?;
+            left = Type::Scalar(ScalarType::Bool);
+        }
+        Ok(left)
+    }
+
+    fn parse_logical_and(&mut self) -> Result<Type> {
+        let mut left = self.parse_comparison()?;
+        while matches!(self.current, Token::And) {
+            self.advance();
+            let _right = self.parse_comparison()?;
+            left = Type::Scalar(ScalarType::Bool);
+        }
+        Ok(left)
+    }
+
+    fn parse_comparison(&mut self) -> Result<Type> {
+        let left = self.parse_bitwise_or()?;
+        match &self.current {
+            Token::EqEq | Token::Ne | Token::Le | Token::Ge | Token::LAngle | Token::RAngle => {
+                self.advance();
+                let _right = self.parse_bitwise_or()?;
+                Ok(Type::Scalar(ScalarType::Bool))
+            }
+            _ => Ok(left),
+        }
     }
 
     fn parse_bitwise_or(&mut self) -> Result<Type> {
@@ -466,19 +623,58 @@ impl<'a> BodyParser<'a> {
                 self.advance();
                 self.parse_vec_constructor(4)
             }
+            Token::F32 | Token::F64 | Token::U32 | Token::I32 | Token::Bool => {
+                let scalar = match &self.current {
+                    Token::F32 => ScalarType::F32,
+                    Token::F64 => ScalarType::F64,
+                    Token::U32 => ScalarType::U32,
+                    Token::I32 => ScalarType::I32,
+                    Token::Bool => ScalarType::Bool,
+                    _ => unreachable!(),
+                };
+                self.advance();
+                self.expect(Token::LParen)?;
+                let _arg = self.parse_expr()?;
+                self.expect(Token::RParen)?;
+                let mut ty = Type::Scalar(scalar);
+                loop {
+                    if matches!(self.current, Token::Dot) {
+                        self.advance();
+                        let member = self.expect_ident()?;
+                        ty = self.get_swizzle_or_field_type(&ty, &member)?;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(ty)
+            }
             Token::Mat4x4 | Token::Mat3x3 | Token::Mat2x2 => {
                 let mat = std::mem::replace(&mut self.current, Token::Eof);
                 self.advance();
+                if matches!(self.current, Token::LAngle) {
+                    self.advance();
+                    while !matches!(self.current, Token::RAngle | Token::Eof) {
+                        self.advance();
+                    }
+                    if matches!(self.current, Token::RAngle) {
+                        self.advance();
+                    }
+                }
                 self.expect(Token::LParen)?;
-                let _ = self.parse_expr()?;
+                loop {
+                    let _ = self.parse_expr()?;
+                    if matches!(self.current, Token::RParen) {
+                        break;
+                    }
+                    self.expect(Token::Comma)?;
+                }
                 self.expect(Token::RParen)?;
-                let (n, _) = match mat {
-                    Token::Mat2x2 => (2, Type::Mat2x2(Some(ScalarType::F32))),
-                    Token::Mat3x3 => (3, Type::Mat3x3(Some(ScalarType::F32))),
-                    Token::Mat4x4 => (4, Type::Mat4x4(Some(ScalarType::F32))),
-                    _ => (4, Type::Mat4x4(Some(ScalarType::F32))),
-                };
-                Ok(Type::Mat4x4(Some(ScalarType::F32)))
+                match mat {
+                    Token::Mat2x2 => Ok(Type::Mat2x2(Some(ScalarType::F32))),
+                    Token::Mat3x3 => Ok(Type::Mat3x3(Some(ScalarType::F32))),
+                    Token::Mat4x4 => Ok(Type::Mat4x4(Some(ScalarType::F32))),
+                    _ => Ok(Type::Mat4x4(Some(ScalarType::F32))),
+                }
             }
             Token::Ident(name) => {
                 let name = name.clone();
@@ -510,8 +706,22 @@ impl<'a> BodyParser<'a> {
             }
             Token::LParen => {
                 self.advance();
-                let ty = self.parse_expr()?;
+                let mut ty = self.parse_expr()?;
                 self.expect(Token::RParen)?;
+                loop {
+                    if matches!(self.current, Token::Dot) {
+                        self.advance();
+                        let member = self.expect_ident()?;
+                        ty = self.get_swizzle_or_field_type(&ty, &member)?;
+                    } else if matches!(self.current, Token::LBracket) {
+                        self.advance();
+                        let _index = self.parse_expr()?;
+                        self.expect(Token::RBracket)?;
+                        ty = element_type_for_index(&ty)?;
+                    } else {
+                        break;
+                    }
+                }
                 Ok(ty)
             }
             Token::LBracket => {
@@ -563,6 +773,15 @@ impl<'a> BodyParser<'a> {
     }
 
     fn parse_vec_constructor(&mut self, n: usize) -> Result<Type> {
+        if matches!(self.current, Token::LAngle) {
+            self.advance();
+            while !matches!(self.current, Token::RAngle | Token::Eof) {
+                self.advance();
+            }
+            if matches!(self.current, Token::RAngle) {
+                self.advance();
+            }
+        }
         self.expect(Token::LParen)?;
         let mut args = Vec::new();
         loop {
@@ -582,16 +801,66 @@ impl<'a> BodyParser<'a> {
         })
     }
 
-    fn parse_function_call(&mut self, _name: &str) -> Result<Type> {
+    fn parse_function_call(&mut self, name: &str) -> Result<Type> {
         self.expect(Token::LParen)?;
+        let mut arg_types = Vec::new();
         while !matches!(self.current, Token::RParen | Token::Eof) {
-            let _ = self.parse_expr()?;
+            arg_types.push(self.parse_expr()?);
             if matches!(self.current, Token::Comma) {
                 self.advance();
             }
         }
         self.expect(Token::RParen)?;
-        Ok(Type::Vec4(Some(ScalarType::F32)))
+
+        let first_arg = arg_types.first().cloned().unwrap_or(Type::Scalar(ScalarType::F32));
+
+        let ty = match name {
+            "length" | "dot" | "distance" => Type::Scalar(ScalarType::F32),
+            "any" | "all" => Type::Scalar(ScalarType::Bool),
+            "arrayLength" => Type::Scalar(ScalarType::U32),
+            "abs" | "ceil" | "floor" | "round" | "sign" | "sqrt" | "inverseSqrt"
+            | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
+            | "exp" | "exp2" | "log" | "log2"
+            | "fract" | "saturate" | "normalize"
+            | "clamp" | "mix" | "smoothstep" | "step"
+            | "min" | "max" | "pow"
+            | "select"
+            | "trunc" => first_arg,
+            "cross" => Type::Vec3(Some(ScalarType::F32)),
+            "reflect" | "refract" | "faceForward" => first_arg,
+            "transpose" => first_arg,
+            "determinant" => Type::Scalar(ScalarType::F32),
+            "textureSample" | "textureLoad" => Type::Vec4(Some(ScalarType::F32)),
+            _ => {
+                let mut matched = false;
+                let mut user_fn_type = first_arg.clone();
+                for f in &self.ast_functions {
+                    if f.0 == name {
+                        user_fn_type = f.1.clone();
+                        matched = true;
+                        break;
+                    }
+                }
+                if matched { user_fn_type } else { first_arg }
+            }
+        };
+
+        let mut result = ty;
+        loop {
+            if matches!(self.current, Token::Dot) {
+                self.advance();
+                let member = self.expect_ident()?;
+                result = self.get_swizzle_or_field_type(&result, &member)?;
+            } else if matches!(self.current, Token::LBracket) {
+                self.advance();
+                let _index = self.parse_expr()?;
+                self.expect(Token::RBracket)?;
+                result = element_type_for_index(&result)?;
+            } else {
+                break;
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -629,31 +898,17 @@ fn check_binary_op(left: &Type, op: BinaryOp, right: &Type) -> Result<Type> {
             Ok(left.clone())
         }
         BinaryOp::Add | BinaryOp::Sub => {
-            if vec_scalar_mismatch(left, right) {
-                let op_str = match op {
-                    BinaryOp::Add => "add",
-                    BinaryOp::Sub => "subtract",
-                    _ => "op",
-                };
-                return Err(anyhow!(
-                    "Cannot {} {} to {}. Did you mean {} + vec3({}, {}, {})?",
-                    op_str,
-                    type_to_string(right),
-                    type_to_string(left),
-                    type_to_string(left),
-                    type_to_string(right),
-                    type_to_string(right),
-                    type_to_string(right)
-                ));
+            if is_scalar(left) && is_vector(right) {
+                return Ok(right.clone());
             }
-            if !same_vec_size(left, right) {
+            if is_vector(left) && is_scalar(right) {
+                return Ok(left.clone());
+            }
+            if is_vector(left) && is_vector(right) && !same_vec_size(left, right) {
+                let op_str = if op == BinaryOp::Add { "add" } else { "subtract" };
                 return Err(anyhow!(
                     "Cannot {} {} and {} - vector sizes must match",
-                    match op {
-                        BinaryOp::Add => "add",
-                        BinaryOp::Sub => "subtract",
-                        _ => "op",
-                    },
+                    op_str,
                     type_to_string(left),
                     type_to_string(right)
                 ));
@@ -698,10 +953,6 @@ fn check_binary_op(left: &Type, op: BinaryOp, right: &Type) -> Result<Type> {
             }
         }
     }
-}
-
-fn vec_scalar_mismatch(left: &Type, right: &Type) -> bool {
-    (is_vector(left) && is_scalar(right)) || (is_scalar(left) && is_vector(right))
 }
 
 fn same_vec_size(left: &Type, right: &Type) -> bool {
@@ -775,6 +1026,8 @@ fn types_match(a: &Type, b: &Type) -> bool {
         (Type::Vec2(e1), Type::Vec2(e2)) => e1 == e2,
         (Type::Vec3(e1), Type::Vec3(e2)) => e1 == e2,
         (Type::Vec4(e1), Type::Vec4(e2)) => e1 == e2,
+        (Type::Mat2x2(e1), Type::Mat2x2(e2)) => e1 == e2,
+        (Type::Mat3x3(e1), Type::Mat3x3(e2)) => e1 == e2,
         (Type::Mat4x4(e1), Type::Mat4x4(e2)) => e1 == e2,
         (Type::Struct(n1), Type::Struct(n2)) => n1 == n2,
         _ => false,
@@ -791,6 +1044,8 @@ fn type_to_string(ty: &Type) -> String {
         Type::Vec2(e) => format!("vec2<{}>", scalar_str(e.unwrap_or(ScalarType::F32))),
         Type::Vec3(e) => format!("vec3<{}>", scalar_str(e.unwrap_or(ScalarType::F32))),
         Type::Vec4(e) => format!("vec4<{}>", scalar_str(e.unwrap_or(ScalarType::F32))),
+        Type::Mat2x2(_) => "mat2x2".to_string(),
+        Type::Mat3x3(_) => "mat3x3".to_string(),
         Type::Mat4x4(_) => "mat4x4".to_string(),
         Type::Struct(n) => n.clone(),
         _ => "unknown".to_string(),

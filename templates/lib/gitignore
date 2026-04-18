@@ -2,6 +2,9 @@
 build_output/
 target/
 
+# Compiler metadata cache
+.wj-cache/
+
 # Generated Rust files
 *.rs
 Cargo.toml

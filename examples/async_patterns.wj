@@ -60,7 +60,7 @@ fn worker_pool_example() {
     }
 }
 
-fn process_job(worker_id: int, job: int) -> String {
+fn process_job(worker_id: int, job: int) -> string {
     thread::sleep(Duration::from_millis(100))
     "Worker ${worker_id} processed job ${job}"
 }

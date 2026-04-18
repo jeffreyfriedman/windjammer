@@ -55,6 +55,8 @@ windjammer-runtime = { path = "/some/path", version = "*" }
 [lib]
 name = "windjammer_app"
 path = "lib.rs"
+
+[workspace]
 "#;
 
     fs::write(lib_output.join("Cargo.toml"), initial_cargo_toml).unwrap();
@@ -183,6 +185,8 @@ serde = "1.0"
 
 [lib]
 name = "test_lib"
+
+[workspace]
 "#;
 
     fs::write(lib_output.join("Cargo.toml"), initial_cargo_toml).unwrap();

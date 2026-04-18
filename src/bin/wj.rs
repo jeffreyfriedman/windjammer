@@ -289,6 +289,24 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// Validate WJSL shader files (transpile to WGSL and check for errors)
+    ValidateWjsl {
+        /// Path to directory containing .wjsl files
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+    },
+
+    /// Clean build artifacts and stale temp files
+    Clean {
+        /// Also clean local target/ directories (deep clean)
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
+    #[command(name = "self-install")]
+    SelfInstall,
+
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
@@ -556,6 +574,76 @@ fn main() -> anyhow::Result<()> {
                 "{}",
                 "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed()
             );
+        }
+        Commands::ValidateWjsl { path } => {
+            use std::path::Path;
+            use colored::*;
+
+            println!("{}", "Validating WJSL shaders...".bold());
+
+            let mut errors = 0u32;
+            let mut validated = 0u32;
+
+            fn find_wjsl_files(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_dir() {
+                            find_wjsl_files(&p, files);
+                        } else if p.extension().map_or(false, |e| e == "wjsl") {
+                            files.push(p);
+                        }
+                    }
+                }
+            }
+
+            let mut wjsl_files = Vec::new();
+            find_wjsl_files(&path, &mut wjsl_files);
+            wjsl_files.sort();
+
+            for file in &wjsl_files {
+                let source = match std::fs::read_to_string(file) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("  {} {}: {}", "✗".red(), file.display(), e);
+                        errors += 1;
+                        continue;
+                    }
+                };
+
+                let base_dir = file.parent().unwrap_or(Path::new("."));
+                match windjammer::wjsl::transpile_wjsl_with_includes(&source, base_dir) {
+                    Ok(_) => {
+                        validated += 1;
+                    }
+                    Err(e) => {
+                        eprintln!("  {} {}: {}", "✗".red(), file.display(), e);
+                        errors += 1;
+                    }
+                }
+            }
+
+            if errors > 0 {
+                eprintln!(
+                    "\n{} {} shader(s) validated, {} error(s)",
+                    "WJSL validation failed:".red().bold(),
+                    validated,
+                    errors
+                );
+                std::process::exit(1);
+            } else {
+                println!(
+                    "  {} {} shader(s) validated successfully",
+                    "✓".green(),
+                    validated
+                );
+            }
+        }
+        Commands::Clean { all } => {
+            windjammer::cli::clean::execute(all)?;
+        }
+        Commands::SelfInstall => {
+            windjammer::cli::self_install::execute()?;
         }
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {

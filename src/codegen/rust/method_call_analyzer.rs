@@ -37,6 +37,8 @@ impl MethodCallAnalyzer {
         borrowed_iterator_vars: &HashSet<String>,
         inferred_borrowed_params: &HashSet<String>,
         arg_count: usize,
+        receiver_type_name: Option<&str>,
+        local_var_types: Option<&std::collections::HashMap<String, Type>>,
     ) -> bool {
         // String literals are ALREADY &str - never add &
         let is_string_literal = matches!(
@@ -56,7 +58,7 @@ impl MethodCallAnalyzer {
         let is_integer_literal = matches!(
             arg,
             Expression::Literal {
-                value: Literal::Int(_),
+                value: Literal::Int(_) | Literal::IntSuffixed(_, _),
                 ..
             }
         );
@@ -88,6 +90,15 @@ impl MethodCallAnalyzer {
             return false;
         }
 
+        // Struct literals are always rvalues — don't auto-borrow them.
+        // The callee's generated parameter type determines whether
+        // the struct is passed owned or by reference, and we should
+        // trust the generated signature rather than the analyzer's
+        // potentially stale ownership inference.
+        if matches!(arg, Expression::StructLiteral { .. }) {
+            return false;
+        }
+
         // Already has & - don't add another
         if arg_str.starts_with('&') {
             return false;
@@ -105,10 +116,23 @@ impl MethodCallAnalyzer {
         }
 
         // Method call results (like input.is_key_down()) generally shouldn't be auto-borrowed.
-        // Exception: when we have a user-defined signature that says the parameter is Borrowed
+        // Exception 1: when we have a user-defined signature that says the parameter is Borrowed
         // AND the param type is non-Copy (e.g., `path: &String`), then .to_string() results
         // DO need & added. The signature check downstream handles this.
+        // Exception 2: HashMap/BTreeMap key methods ALWAYS need &key, even for method call results.
+        // e.g., self.animations.contains_key(state.animation_name()) needs &state.animation_name()
         if matches!(arg, Expression::MethodCall { .. }) {
+            let is_map_key_method = matches!(
+                method,
+                "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
+            ) && param_idx == 0;
+            let is_known_map = receiver_type_name.is_some_and(|n| {
+                let base = n.split('<').next().unwrap_or(n);
+                matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
+            });
+            if is_map_key_method && is_known_map {
+                return true;
+            }
             // Allow through ONLY if we have a user-defined method signature that says Borrowed
             if let Some(sig) = method_signature {
                 let sig_param_idx = if sig.has_self_receiver {
@@ -153,16 +177,19 @@ impl MethodCallAnalyzer {
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
                 let is_string_type = |t: &Type| {
-                    matches!(t, Type::String)
-                        || matches!(t, Type::Custom(s) if s == "String" || s == "string")
+                    crate::codegen::rust::types::is_windjammer_text_type(t)
                 };
+                // `key: str` → Rust `key: &str` always; do not emit `&key` (&&str / E0277).
+                let is_wj_str_param = current_function_params.iter().any(|param| {
+                    param.name == *name && matches!(&param.type_, Type::Custom(s) if s == "str")
+                });
                 let is_borrowed_string_param = current_function_params
                     .iter()
                     .any(|param| param.name == *name && is_string_type(&param.type_))
                     && inferred_borrowed_params.contains(name);
 
-                if is_borrowed_string_param {
-                    return false; // Don't add & - pass &String as-is, it auto-derefs to &str
+                if is_wj_str_param || is_borrowed_string_param {
+                    return false; // Rust param is already &str / string ref — no extra &
                 }
             }
         }
@@ -199,12 +226,21 @@ impl MethodCallAnalyzer {
 
         // SPECIAL CASE: Cast expressions to Copy types should NOT get &
         // Example: `index as usize` should stay as-is, not become `&index as usize`
-        // This is because:
-        // 1. The cast result (usize) is a Copy type
-        // 2. Adding & to the operand creates invalid syntax: `&i64 as usize` (can't cast &i64 to usize)
+        // EXCEPTION: HashMap key methods need &(expr as Type) even for Copy casts
+        // Example: `names.get(entity_id as i64)` → `names.get(&(entity_id as i64))`
         if let Expression::Cast { type_, .. } = arg {
             if Self::is_copy_type_annotation(type_) {
-                return false;
+                let is_known_map = receiver_type_name.is_some_and(|n| {
+                    let base = n.split('<').next().unwrap_or(n);
+                    matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
+                });
+                let is_map_key_method = matches!(
+                    method,
+                    "get" | "get_mut" | "remove" | "contains_key" | "get_key_value"
+                ) && param_idx == 0;
+                if !(is_known_map && is_map_key_method) {
+                    return false;
+                }
             }
         }
 
@@ -237,6 +273,70 @@ impl MethodCallAnalyzer {
                             return false; // Copy type — pass by value
                         }
                     }
+                    
+                    // TDD FIX for E0308: Auto-convert String → &str for match arm bindings
+                    // This check applies to ALL expressions, not just identifiers
+                    // When parameter expects &str and argument is owned String, add & to auto-deref
+                    if let Some(param_type) = sig.param_types.get(sig_param_idx) {
+                        let param_is_str_ref = match param_type {
+                            Type::Reference(inner) => matches!(&**inner, Type::Custom(s) if s == "str"),
+                            _ => false,
+                        };
+                        
+                        if param_is_str_ref {
+                            // Parameter expects &str - check if argument is owned String
+                            if let Expression::Identifier { name: arg_name, .. } = arg {
+                                // Check if this identifier is already a &str parameter
+                                let already_rust_str = current_function_params.iter().any(|p| {
+                                    p.name == *arg_name
+                                        && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                                            || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                                && inferred_borrowed_params.contains(arg_name)))
+                                });
+                                if already_rust_str {
+                                    return false; // Already &str, don't add another &
+                                }
+                                
+                                // Check if it's an owned String parameter
+                                let is_owned_string_param = current_function_params.iter().any(|p| {
+                                    p.name == *arg_name
+                                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                        && !inferred_borrowed_params.contains(arg_name)
+                                });
+                                
+                                // Check if it's a local variable with String type (match arm binding, let binding)
+                                let is_owned_string_local = local_var_types
+                                    .as_ref()
+                                    .and_then(|vars| vars.get(arg_name))
+                                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+                                
+                                if is_owned_string_param || is_owned_string_local {
+                                    return true; // Add & to convert String → &str
+                                }
+                            }
+                            // For non-identifier expressions, if param expects &str, likely need &
+                            // (e.g., method calls returning String)
+                            // Let the general Borrowed logic below handle it
+                        }
+                    }
+                    
+                    // WJ `str` / inferred-borrowed `string` params are already `&str` in Rust;
+                    // callee `Borrowed` here means `&str` — passing `&name` would be `&&str` (E0277).
+                    if let Expression::Identifier { name: arg_name, .. } = arg {
+                        let already_rust_str = current_function_params.iter().any(|p| {
+                            p.name == *arg_name
+                                && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                                    || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                        && inferred_borrowed_params.contains(arg_name)))
+                        });
+                        if already_rust_str {
+                            return false;
+                        }
+                        // Note: We intentionally do NOT skip auto-borrow for owned
+                        // caller args here. The callee signature's Borrowed ownership
+                        // accurately reflects the generated Rust parameter type (&T)
+                        // in most cases. Trait impl mismatches are handled upstream.
+                    }
                     return true; // Non-Copy Borrowed type needs &
                 }
                 return false; // Owned or MutBorrowed — don't add &
@@ -263,7 +363,9 @@ impl MethodCallAnalyzer {
                 usize_variables,
                 current_function_params,
                 borrowed_iterator_vars,
+                inferred_borrowed_params,
                 arg_count,
+                receiver_type_name,
             );
         }
 
@@ -478,8 +580,8 @@ impl MethodCallAnalyzer {
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>
     pub fn should_add_cloned(method: &str, _return_type: &Option<Type>) -> bool {
-        // Methods that return Option<&T> from collections
-        matches!(method, "get" | "first" | "last")
+        super::stdlib_method_traits::is_map_key_method(method)
+            || matches!(method, "first" | "last")
     }
 
     /// Check if expression represents a Copy type
@@ -609,7 +711,9 @@ impl MethodCallAnalyzer {
         usize_variables: &HashSet<String>,
         current_function_params: &[Parameter],
         borrowed_iterator_vars: &HashSet<String>,
+        inferred_borrowed_params: &HashSet<String>,
         arg_count: usize,
+        receiver_type_name: Option<&str>,
     ) -> bool {
         // Check if argument is already a reference (parameter or iterator variable)
         let arg_is_already_borrowed = if let Expression::Identifier { name, .. } = arg {
@@ -619,8 +723,16 @@ impl MethodCallAnalyzer {
             });
             // Check if it's from a borrowed iterator (.keys(), .iter(), etc.)
             let is_borrowed_iter_var = borrowed_iterator_vars.contains(name);
+            // `str` and inferred-borrowed `string` parameters are emitted as `&str` — never prefix `&`
+            // again for HashSet::contains / String::contains (would be `&&str`, E0277).
+            let is_rust_str_param = current_function_params.iter().any(|p| {
+                p.name == *name
+                    && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                        || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                            && inferred_borrowed_params.contains(name)))
+            });
 
-            is_ref_param || is_borrowed_iter_var
+            is_ref_param || is_borrowed_iter_var || is_rust_str_param
         } else {
             false
         };
@@ -633,23 +745,48 @@ impl MethodCallAnalyzer {
         // HashMap::get, HashMap::remove, Vec::remove, etc. all take exactly 1 argument.
         // If a method named "get" or "remove" takes 2+ arguments, it's a user-defined method
         // (e.g., Heightmap::get(x, z)) and we should NOT add & based on stdlib assumptions.
-        if arg_count > 1 && matches!(method, "get" | "get_mut" | "remove" | "contains_key") {
+        if arg_count > 1 && super::stdlib_method_traits::is_map_key_method(method) {
             return false;
         }
 
         // TDD FIX: HashMap/BTreeMap methods that expect &K
-        // IMPORTANT: Check HashMap methods BEFORE the general Copy type check!
         // HashMap methods like contains_key(&K), get(&K) ALWAYS need &, even for Copy types.
-        // Example: HashMap<i64, String>.contains_key(&user_id) where user_id: i64
-        // BUT: Vec.remove(index) takes usize by value, not &usize!
-        if matches!(method, "remove" | "get" | "contains_key" | "get_mut") {
-            // Vec vs HashMap disambiguation for methods with the same name:
-            // - Vec<T>.remove(index: usize), Vec<T>.get(index: usize) -> takes by value
-            // - HashMap<K, V>.remove(&key), HashMap<K, V>.get(&key) -> takes by reference
-            //
-            // HEURISTIC: If the argument is a Copy type (numeric), check if it looks
-            // like a Vec index or a HashMap key based on variable name patterns.
-            if matches!(method, "remove" | "get" | "get_mut")
+        // Vec methods like get(usize), remove(usize) take by value.
+        if super::stdlib_method_traits::is_map_key_method(method) {
+            let is_known_map = receiver_type_name.is_some_and(|n| {
+                let base = n.split('<').next().unwrap_or(n);
+                matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
+            });
+            let is_known_vec = receiver_type_name
+                .is_some_and(|n| n.split('<').next().unwrap_or(n) == "Vec");
+
+
+
+
+            // When receiver type is KNOWN, use it definitively
+            if is_known_vec {
+                return false; // Vec methods take index by value
+            }
+            if is_known_map {
+                // HashMap key methods ALWAYS need &, even for Copy types
+                // But check for already-borrowed params first (would create &&)
+                if let Expression::Identifier { name, .. } = arg {
+                    let is_already_ref = current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                                || matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+                                || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                    && inferred_borrowed_params.contains(name)))
+                    });
+                    if is_already_ref {
+                        return false;
+                    }
+                }
+                return true; // HashMap always needs &key
+            }
+
+            // Receiver type UNKNOWN — fall back to heuristics
+            if super::stdlib_method_traits::is_map_key_method(method)
                 && Self::is_copy_type(arg, usize_variables, current_function_params)
             {
                 let arg_name = if let Expression::Identifier { name, .. } = arg {
@@ -666,29 +803,34 @@ impl MethodCallAnalyzer {
                         || name.ends_with("_key")
                 });
 
-                // If it explicitly looks like a HashMap key, add &
                 if looks_like_hashmap_key {
-                    return true; // HashMap.get(&entity_id)
+                    if let Some(name) = arg_name {
+                        let is_already_map_key_ref = current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                                    || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                        && inferred_borrowed_params.contains(name)))
+                        });
+                        if is_already_map_key_ref {
+                            return false;
+                        }
+                    }
+                    return true;
                 }
 
-                // For Copy types that don't look like HashMap keys, assume Vec index.
-                // Vec.get(usize), Vec.get_mut(usize), Vec.remove(usize) all take by value.
-                // This covers: i, j, k, index, idx, loop variables, cast expressions, etc.
-                return false;
+                return false; // Copy type, unknown receiver — assume Vec index
             }
 
-            // Also check for cast expressions like `index as usize` — these are always
-            // numeric indices for Vec, not HashMap keys.
-            if matches!(method, "get" | "get_mut" | "remove") {
+            // Cast expressions with unknown receiver — assume Vec index
+            if super::stdlib_method_traits::is_map_key_method(method) {
                 if let Expression::Cast { type_, .. } = arg {
                     if Self::is_copy_type_annotation(type_) {
-                        return false; // e.g., .get(index as usize) — Vec index, no &
+                        return false;
                     }
                 }
             }
 
-            // For all other cases (non-Copy keys for HashMap methods), add &
-            return true; // Add & for HashMap.get(&key), HashMap.contains_key(&key)
+            return true; // Non-Copy key, assume HashMap
         }
 
         // General Copy type check (for non-HashMap methods)

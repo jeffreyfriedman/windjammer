@@ -231,6 +231,21 @@ impl<'ast> RustLeakageLinter<'ast> {
                     });
                 }
 
+                // W0005: .clone() - Rust leakage, compiler handles cloning automatically
+                if method == "clone" && arguments.is_empty() {
+                    let loc = to_source_location(location.clone(), &self.default_file);
+                    self.collector.add(LintDiagnostic {
+                        lint_name: "W0005".to_string(),
+                        category: LintCategory::Style,
+                        level: LintLevel::Warning,
+                        message: "explicit .clone() call".to_string(),
+                        location: loc,
+                        help: Some("remove .clone() - the compiler infers cloning automatically".to_string()),
+                        note: Some("Windjammer auto-clones values when moved and used again".to_string()),
+                        suggestion: Some("remove .clone() and let the compiler handle it".to_string()),
+                    });
+                }
+
                 self.check_expression(object, file);
                 for (_, arg) in arguments {
                     self.check_expression(arg, file);

@@ -63,6 +63,7 @@ pub fn unary_op_to_rust(op: &UnaryOp) -> &str {
 pub fn literal_to_rust(lit: &Literal) -> String {
     match lit {
         Literal::Int(i) => i.to_string(),
+        Literal::IntSuffixed(i, suffix) => format!("{}_{}", i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();
             if s.contains('.') {

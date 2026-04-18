@@ -23,6 +23,8 @@ This directory contains formal proposals for significant changes to the Windjamm
 ### Language Features
 
 - **[WJ-LANG-01: Shader Language (WJSL)](./WJ-LANG-01-shader-language.md)** - Type-safe shader language that compiles to WGSL
+- **[WJ-LANG-02: Mojo Feature Analysis](./WJ-LANG-02-mojo-feature-analysis.md)** - Analysis of Mojo features for potential adoption: compile-time metaprogramming, SIMD abstractions, const generics, ASAP destruction
+- **[WJ-LANG-03: Map Types](./WJ-LANG-03-map-types.md)** - Backend-agnostic map type hierarchy: Map, SlotMap, OrderedMap, ConcurrentMap (research: slotmap, dashmap, papaya, flashmap, crossbeam)
 - **[WJ-CONC-01: Async/Await & Concurrency](./WJ-CONC-01-async-concurrency.md)** - Caller-controlled execution (v2.0): eliminates function coloring, enables single-version libraries
 
 ### Package Management
@@ -67,6 +69,7 @@ This directory contains formal proposals for significant changes to the Windjamm
 | WJ-SYN-01 | 🟡 Draft | v0.60+ | Low |
 | WJ-SYN-02 | ⚫ Implemented | v0.46.0 | N/A |
 | WJ-LANG-01 | 🟡 Draft | v0.48+ | Medium |
+| WJ-LANG-03 | 🟡 Draft | v0.48+ | High |
 | WJ-CONC-01 | 🟡 Draft | v0.50 | **Critical** |
 | WJ-PKG-01 | 🟡 Draft | v0.50 | High |
 | WJ-PERF-01 | 🟡 Draft | v0.46+ | High |

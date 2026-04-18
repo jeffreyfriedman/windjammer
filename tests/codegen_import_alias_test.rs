@@ -17,12 +17,13 @@ fn test_import_with_as_alias() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Test that imports with "as" aliases are preserved
+    // Test that imports with "as" aliases are preserved.
+    // NOTE: Avoid aliasing to "Map" since Windjammer stdlib maps Map → HashMap.
     let test_content = r#"
-use std::collections::HashMap as Map;
+use std::collections::HashMap as HMap;
 
 fn main() {
-    let _m: Map<i32, i32> = Map::new();
+    let _m: HMap<i32, i32> = HMap::new();
 }
 "#;
 
@@ -48,7 +49,7 @@ fn main() {
 
     // The generated code should preserve the alias
     assert!(
-        rust_code.contains("use std::collections::HashMap as Map;"),
+        rust_code.contains("use std::collections::HashMap as HMap;"),
         "Expected import alias to be preserved.\nGenerated code:\n{}",
         rust_code
     );
@@ -71,4 +72,48 @@ fn main() {
 
     // Clean up
     let _ = fs::remove_dir_all(&test_dir);
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_import_alias_overrides_stdlib_mapping() {
+    // When user writes `use std::collections::HashMap as Map`, the codegen must
+    // preserve `Map` in the body, NOT apply the Windjammer stdlib Map → HashMap mapping.
+    use windjammer::analyzer::Analyzer;
+    use windjammer::codegen::rust::CodeGenerator;
+    use windjammer::lexer::Lexer;
+    use windjammer::parser::Parser;
+    use windjammer::CompilationTarget;
+
+    let source = r#"
+use std::collections::HashMap as Map
+
+fn test() {
+    let m: Map<i32, i32> = Map::new()
+}
+"#;
+    let mut lexer = Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = Parser::new(tokens);
+    let program = parser.parse().unwrap();
+    let mut analyzer = Analyzer::new();
+    let (analyzed_functions, _structs, _trait_methods) =
+        analyzer.analyze_program(&program).unwrap();
+    let registry = windjammer::analyzer::SignatureRegistry::new();
+    let mut generator = CodeGenerator::new_for_module(
+        registry,
+        CompilationTarget::Rust,
+    );
+    let output = generator.generate_program(&program, &analyzed_functions);
+
+    assert!(
+        output.contains("Map<i32, i32>"),
+        "Import alias should override stdlib Map→HashMap mapping in type annotations. Got:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Map::new()"),
+        "Import alias should override stdlib Map→HashMap mapping in path expressions. Got:\n{}",
+        output
+    );
 }

@@ -101,13 +101,13 @@ async fn main() {
     let users = Arc::new(Mutex::new(vec![
         User {
             id: 1,
-            name: "Alice".to_string(),
-            email: "alice@example.com".to_string(),
+            name: "Alice",
+            email: "alice@example.com",
         },
         User {
             id: 2,
-            name: "Bob".to_string(),
-            email: "bob@example.com".to_string(),
+            name: "Bob",
+            email: "bob@example.com",
         },
     ]))
     

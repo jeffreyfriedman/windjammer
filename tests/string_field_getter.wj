@@ -3,13 +3,13 @@
 // Expected: Should either infer &self and return &str, or require explicit return type
 
 struct Quest {
-    title: String,
-    description: String,
+    title: string,
+    description: string,
     completed: bool,
 }
 
 impl Quest {
-    pub fn new(title: String, description: String) -> Quest {
+    pub fn new(title: string, description: string) -> Quest {
         Quest {
             title: title,
             description: description,
@@ -19,13 +19,13 @@ impl Quest {
     
     // Pattern 1: Return String field - requires owned self (moves field out)
     // This SHOULD work but requires self to be owned
-    pub fn take_title(self) -> String {
+    pub fn take_title(self) -> string {
         self.title
     }
     
     // Pattern 2: Return &str - should infer &self automatically
     // This is what most getters should do
-    pub fn title(self) -> &str {
+    pub fn title(self) -> string {
         &self.title
     }
     
@@ -44,7 +44,7 @@ fn use_quest(q: &Quest) {
 }
 
 fn main() {
-    let quest = Quest::new("Save the kingdom".to_string(), "Defeat the dragon".to_string())
+    let quest = Quest::new("Save the kingdom", "Defeat the dragon")
     
     // Call methods on reference
     use_quest(&quest)
@@ -53,5 +53,5 @@ fn main() {
     let title = quest.take_title()
     println("Took title: {}", title)
     
-    println("✅ String field getters work correctly!")
+    println("✅ string field getters work correctly!")
 }

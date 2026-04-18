@@ -32,11 +32,11 @@
 // This test should FAIL before the fix and PASS after.
 
 // Define a newtype wrapper (common pattern)
-type QuestId = String
+type QuestId = string
 
 // Enum using the newtype
 enum DialogueConsequence {
-    SetFlag(String),
+    SetFlag(string),
     CompleteQuest(QuestId),  // Uses newtype
     UnlockQuest(QuestId)
 }
@@ -71,11 +71,11 @@ fn main() {
     // Bug #5 Test Case 1: Enum variant with newtype
     // Currently generates: expected `QuestId`, found `String`
     // Should work because QuestId = String
-    let consequence = DialogueConsequence::CompleteQuest("rescue_silas".to_string());
+    let consequence = DialogueConsequence::CompleteQuest("rescue_silas");
     
     // Bug #5 Test Case 2: Function call with reference
     let state = DialogueState { completed_quests: [] };
-    let quest = "test_quest".to_string();
+    let quest = "test_quest";
     let is_complete = state.check_with_ref(&quest);
     
     println!("Quest complete: {}", is_complete);

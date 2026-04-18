@@ -15,6 +15,7 @@ use crate::codegen::rust::self_analysis;
 use crate::parser::*;
 
 use super::CodeGenerator;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum VariableUsage {
@@ -25,31 +26,102 @@ pub(super) enum VariableUsage {
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-    /// Pre-scan a function body to find local variables that are iterated in for-loops
-    /// and also used after the loop. These need auto-borrow (`&`) in the for-loop.
+    /// Pre-scan a function body (recursively) for `for x in iterable` patterns.
+    ///
+    /// Insert `iterable` into `for_loop_borrow_needed` when:
+    /// - The `for` is nested inside another `for` / `while` / `loop`, so the outer body runs
+    ///   multiple times and must not consume the same collection each time (E0382).
+    /// - The same identifier appears as a `for` iterable two or more times anywhere in the
+    ///   function (sequential loops), so the first loop must not move it (E0382).
+    ///
+    /// Applies to locals **and** parameters (parameters were incorrectly skipped before).
     pub(super) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
         self.for_loop_borrow_needed.clear();
-        for (i, stmt) in body.iter().enumerate() {
-            if let Statement::For {
-                iterable, pattern, ..
-            } = stmt
-            {
-                if let Expression::Identifier { name, .. } = iterable {
-                    let is_param = self.current_function_params.iter().any(|p| &p.name == name);
-                    if is_param {
-                        continue;
-                    }
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        Self::count_for_loop_iterable_identifiers(body, &mut counts);
+        self.precompute_for_loop_borrows_walk(body, 0, &counts);
+    }
 
-                    let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
-                    if pattern_name.as_deref() == Some(name.as_str()) {
-                        continue;
+    fn count_for_loop_iterable_identifiers(stmts: &[&Statement], counts: &mut HashMap<String, usize>) {
+        for stmt in stmts {
+            match stmt {
+                Statement::For { iterable, body, .. } => {
+                    if let Expression::Identifier { name, .. } = iterable {
+                        *counts.entry(name.clone()).or_insert(0) += 1;
                     }
-
-                    let remaining = &body[i + 1..];
-                    if Self::variable_used_in_statements(remaining, name) {
-                        self.for_loop_borrow_needed.insert(name.clone());
+                    Self::count_for_loop_iterable_identifiers(body, counts);
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    Self::count_for_loop_iterable_identifiers(body, counts);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    Self::count_for_loop_iterable_identifiers(then_block, counts);
+                    if let Some(e) = else_block {
+                        Self::count_for_loop_iterable_identifiers(e, counts);
                     }
                 }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            Self::count_for_loop_iterable_identifiers(statements, counts);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn precompute_for_loop_borrows_walk(
+        &mut self,
+        stmts: &[&'ast Statement<'ast>],
+        loop_depth: usize,
+        counts: &HashMap<String, usize>,
+    ) {
+        for stmt in stmts {
+            match stmt {
+                Statement::For {
+                    iterable,
+                    pattern,
+                    body,
+                    ..
+                } => {
+                    if let Expression::Identifier { name, .. } = iterable {
+                        let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
+                        if pattern_name.as_deref() != Some(name.as_str()) {
+                            let n = counts.get(name).copied().unwrap_or(0);
+                            if loop_depth > 0 || n >= 2 {
+                                self.for_loop_borrow_needed.insert(name.clone());
+                            }
+                        }
+                    }
+                    self.precompute_for_loop_borrows_walk(body, loop_depth + 1, counts);
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    self.precompute_for_loop_borrows_walk(body, loop_depth + 1, counts);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.precompute_for_loop_borrows_walk(then_block, loop_depth, counts);
+                    if let Some(e) = else_block {
+                        self.precompute_for_loop_borrows_walk(e, loop_depth, counts);
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.precompute_for_loop_borrows_walk(statements, loop_depth, counts);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -223,35 +295,62 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// TDD FIX (Bug #3): Mark variables as usize if they're compared to .len()
+    /// Mark plain loop counters as `usize` when compared only against `usize` bounds.
+    ///
+    /// - `let mut i = 0` + `while i < vec.len()` → `i` is `usize` (push/swap_remove/index need it).
+    /// - `while start < num_passes` with `num_passes` from `.len()` → `start` is `usize`.
+    /// Does **not** apply to parameters declared as Windjammer `int` (`idx < vec.len()` stays `int`
+    /// and codegen casts `.len()` to `i64`).
     pub(super) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
-        if let Expression::Binary {
-            left, op, right, ..
-        } = condition
-        {
-            let is_comparison = matches!(
-                op,
-                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-            );
-            if !is_comparison {
-                return;
-            }
+        self.walk_condition_mark_usize_loop_counters(condition);
+    }
 
-            // TDD COMPILER FIX: Track variables as usize ONLY when explicitly assigned/declared as usize
-            // 
-            // STRATEGY: Don't track comparison operands as usize - let comparison codegen handle casts.
-            // This allows:
-            // 1. `i < vec.len()` → generates `(i as usize) < vec.len()` (comparison cast)
-            // 2. `vec[i]` → generates `vec[i as usize]` (indexing cast)
-            // 3. `i += 1` → generates `i += 1_i32` (keeps i32 type)
-            //
-            // Only mark as usize for:
-            // - Explicit assignment: `i = expr as usize`
-            // - Explicit declaration: `let i: usize = 0`
-            // - Range iteration: `for i in 0..vec.len()` (i gets type from range)
-            //
-            // The indexing auto-cast logic in expression_generation.rs will handle `vec[i]` correctly.
+    fn walk_condition_mark_usize_loop_counters(&mut self, expr: &Expression) {
+        match expr {
+            Expression::Binary { left, op, right, .. } => {
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    self.walk_condition_mark_usize_loop_counters(left);
+                    self.walk_condition_mark_usize_loop_counters(right);
+                    return;
+                }
+                if matches!(
+                    op,
+                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                ) {
+                    self.mark_identifier_usize_if_bound_is_usize(left, right);
+                    self.mark_identifier_usize_if_bound_is_usize(right, left);
+                }
+            }
+            _ => {}
         }
+    }
+
+    fn mark_identifier_usize_if_bound_is_usize(
+        &mut self,
+        maybe_counter: &Expression,
+        bound: &Expression,
+    ) {
+        let Expression::Identifier { name, .. } = maybe_counter else {
+            return;
+        };
+        if self.current_function_params.iter().any(|p| {
+            p.name == *name && matches!(&p.type_, Type::Int)
+        }) {
+            return;
+        }
+        if self.expression_is_usize_loop_bound(bound) {
+            self.usize_variables.insert(name.clone());
+        }
+    }
+
+    /// Upper/lower bound that is already `usize` in Rust (no need for the counter to stay `i64`).
+    fn expression_is_usize_loop_bound(&self, expr: &Expression) -> bool {
+        self.expression_produces_usize(expr)
+            || self.infer_expression_type_is_usize(expr)
+            || matches!(
+                expr,
+                Expression::Identifier { name, .. } if self.usize_variables.contains(name)
+            )
     }
 
     /// Recursively find unused let bindings and for-loop variables in a block of statements.
@@ -452,11 +551,24 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// TDD FIX for E0507: Check if for-loop should borrow the iterable
+    /// Only borrow if the base object is borrowed (not owned)
     pub(super) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
             Expression::FieldAccess { object, .. } => {
-                if let Expression::Identifier { .. } = &**object {
-                    return true;
+                if let Expression::Identifier { name, .. } = &**object {
+                    // TDD FIX: Only borrow if the object itself is borrowed
+                    // If self is owned, we can consume self.field
+                    if name == "self" {
+                        return self.inferred_borrowed_params.contains("self")
+                            || self.inferred_mut_borrowed_params.contains("self");
+                    }
+                    // For other identifiers, check if they're borrowed
+                    return self.inferred_borrowed_params.contains(name)
+                        || self.inferred_mut_borrowed_params.contains(name);
+                }
+                if let Expression::FieldAccess { .. } = &**object {
+                    return self.should_borrow_for_iteration(object);
                 }
                 false
             }
@@ -473,21 +585,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
+                    // TDD FIX for E0507: Check INFERRED ownership, not original hint
+                    // If self is owned (not in inferred_borrowed_params), fields can be consumed
                     if name == "self" {
-                        return self.current_function_params.iter().any(|p| {
-                            p.name == "self"
-                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                        });
+                        return self.inferred_borrowed_params.contains("self")
+                            || self.inferred_mut_borrowed_params.contains("self");
                     }
-                    return self.current_function_params.iter().any(|p| {
-                        &p.name == name
-                            && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                                || matches!(
-                                    &p.type_,
-                                    crate::parser::Type::Reference(_)
-                                        | crate::parser::Type::MutableReference(_)
-                                ))
-                    });
+                    // For other parameters, check inferred ownership
+                    return self.inferred_borrowed_params.contains(name)
+                        || self.inferred_mut_borrowed_params.contains(name);
                 }
                 false
             }
@@ -501,12 +607,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     | crate::parser::Type::MutableReference(_)
                             ))
                 }) || self.inferred_borrowed_params.contains(name)
+                    || self.borrowed_iterator_vars.contains(name)
+                    || self.local_var_types.get(name).is_some_and(|t| {
+                        matches!(t, crate::parser::Type::Reference(_)
+                            | crate::parser::Type::MutableReference(_))
+                    })
             }
             Expression::MethodCall { method, .. } => {
-                matches!(
-                    method.as_str(),
-                    "keys" | "values" | "iter" | "iter_mut" | "lines" | "chars" | "bytes"
-                )
+                super::stdlib_method_traits::method_returns_iterator(method)
             }
             _ => false,
         }
@@ -524,6 +632,253 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// For `for x in coll` when `coll` is borrowed (`&self.field`): if the body calls a method on
+    /// `x` whose inferred receiver is `&mut self` (e.g. `System::update` on `Box<dyn System>`),
+    /// the iterable must be `&mut coll`, not `&coll`.
+    pub(super) fn loop_body_calls_mut_dispatch_method(
+        &self,
+        iterable: &Expression<'ast>,
+        body: &[&'ast Statement<'ast>],
+        loop_var: &str,
+    ) -> bool {
+        let Some(iter_t) = self.infer_expression_type(iterable) else {
+            return false;
+        };
+        let Some(elem) = Self::extract_iterator_element_type(&iter_t) else {
+            return false;
+        };
+        body
+            .iter()
+            .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem))
+    }
+
+    fn peel_dispatch_element_type(ty: &Type) -> &Type {
+        match ty {
+            Type::Parameterized(name, args) if Self::type_base_is_box(name) && args.len() == 1 => {
+                Self::peel_dispatch_element_type(&args[0])
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::peel_dispatch_element_type(inner.as_ref())
+            }
+            _ => ty,
+        }
+    }
+
+    fn type_base_is_box(name: &str) -> bool {
+        name == "Box" || name.ends_with("::Box")
+    }
+
+    fn trait_method_self_ownership_for_loop(
+        &self,
+        trait_name: &str,
+        method: &str,
+    ) -> Option<crate::analyzer::OwnershipMode> {
+        let from_map = |m: &std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>| {
+            m.get(method)
+                .and_then(|af| af.inferred_ownership.get("self").copied())
+        };
+        if let Some(m) = self.analyzed_trait_methods.get(trait_name) {
+            if let Some(o) = from_map(m) {
+                return Some(o);
+            }
+        }
+        let suffix = format!("::{}", trait_name);
+        for (k, m) in &self.analyzed_trait_methods {
+            if k == trait_name || k.ends_with(&suffix) {
+                if let Some(o) = from_map(m) {
+                    return Some(o);
+                }
+            }
+        }
+        None
+    }
+
+    pub(super) fn method_requires_mut_receiver_for_element_type(
+        &self,
+        elem: &Type,
+        method: &str,
+    ) -> bool {
+        let peeled = Self::peel_dispatch_element_type(elem);
+        match peeled {
+            Type::TraitObject(trait_name) => self
+                .trait_method_self_ownership_for_loop(trait_name, method)
+                .is_some_and(|o| o == crate::analyzer::OwnershipMode::MutBorrowed),
+            Type::Custom(type_name) => self
+                .signature_registry
+                .get_signature(&format!("{}::{}", type_name, method))
+                .filter(|s| s.has_self_receiver)
+                .and_then(|s| s.param_ownership.first().copied())
+                .is_some_and(|o| o == crate::analyzer::OwnershipMode::MutBorrowed),
+            _ => false,
+        }
+    }
+
+    fn stmt_contains_mut_dispatch_on_var(
+        &self,
+        stmt: &Statement<'ast>,
+        loop_var: &str,
+        elem: &Type,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem)
+            }
+            Statement::Let {
+                value,
+                else_block,
+                ..
+            } => {
+                self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
+                    })
+            }
+            Statement::Const { value, .. } | Statement::Static { value, .. } => {
+                self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expr_contains_mut_dispatch_on_var(target, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_contains_mut_dispatch_on_var(condition, loop_var, elem)
+                    || then_block
+                        .iter()
+                        .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
+                    })
+            }
+            Statement::While { condition, body, .. } => {
+                self.expr_contains_mut_dispatch_on_var(condition, loop_var, elem)
+                    || body
+                        .iter()
+                        .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
+            }
+            Statement::For {
+                iterable,
+                body,
+                ..
+            } => {
+                self.expr_contains_mut_dispatch_on_var(iterable, loop_var, elem)
+                    || body
+                        .iter()
+                        .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem)),
+            Statement::Match { value, arms, .. } => {
+                self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+                    || arms.iter().any(|a| {
+                        a.guard.is_some_and(|g| self.expr_contains_mut_dispatch_on_var(g, loop_var, elem))
+                            || self.expr_contains_mut_dispatch_on_var(a.body, loop_var, elem)
+                    })
+            }
+            Statement::Defer { statement, .. } => {
+                self.stmt_contains_mut_dispatch_on_var(statement, loop_var, elem)
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_contains_mut_dispatch_on_var(
+        &self,
+        expr: &Expression<'ast>,
+        loop_var: &str,
+        elem: &Type,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == loop_var
+                        && self.method_requires_mut_receiver_for_element_type(elem, method)
+                    {
+                        return true;
+                    }
+                }
+                if self.expr_contains_mut_dispatch_on_var(object, loop_var, elem) {
+                    return true;
+                }
+                arguments
+                    .iter()
+                    .any(|(_, a)| self.expr_contains_mut_dispatch_on_var(a, loop_var, elem))
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_contains_mut_dispatch_on_var(left, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(right, loop_var, elem)
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expr_contains_mut_dispatch_on_var(function, loop_var, elem)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expr_contains_mut_dispatch_on_var(a, loop_var, elem))
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_contains_mut_dispatch_on_var(operand, loop_var, elem)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                self.expr_contains_mut_dispatch_on_var(k, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(v, loop_var, elem)
+            }),
+            Expression::FieldAccess { object, .. } => {
+                self.expr_contains_mut_dispatch_on_var(object, loop_var, elem)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_contains_mut_dispatch_on_var(object, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(index, loop_var, elem)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expr_contains_mut_dispatch_on_var(v, loop_var, elem)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expr_contains_mut_dispatch_on_var(e, loop_var, elem)),
+            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+                self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem)
+            }
+            Expression::Closure { body, .. } => {
+                self.expr_contains_mut_dispatch_on_var(body, loop_var, elem)
+            }
+            Expression::Cast { expr, .. } => self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem),
+            Expression::Range { start, end, .. } => {
+                self.expr_contains_mut_dispatch_on_var(start, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(end, loop_var, elem)
+            }
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|a| self.expr_contains_mut_dispatch_on_var(a, loop_var, elem)),
+            Expression::ChannelSend { channel, value, .. } => {
+                self.expr_contains_mut_dispatch_on_var(channel, loop_var, elem)
+                    || self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
+            }
+            Expression::ChannelRecv { channel, .. } => {
+                self.expr_contains_mut_dispatch_on_var(channel, loop_var, elem)
+            }
+            _ => false,
+        }
     }
 
     fn statement_modifies_variable(&self, stmt: &Statement, var_name: &str) -> bool {
@@ -545,9 +900,20 @@ impl<'ast> CodeGenerator<'ast> {
                             .any(|s| self.statement_modifies_variable(s, var_name))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } => body
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
                 .iter()
                 .any(|s| self.statement_modifies_variable(s, var_name)),
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements
+                        .iter()
+                        .any(|s| self.statement_modifies_variable(s, var_name))
+                } else {
+                    false
+                }
+            }),
             _ => false,
         }
     }
@@ -557,16 +923,61 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// Scan function body for `let var_name = Constructor::new(...)` and extract the type.
+    fn infer_local_var_type_from_body(&self, var_name: &str) -> Option<String> {
+        for stmt in self.current_function_body.iter() {
+            if let Statement::Let { pattern, value, .. } = stmt {
+                if let Pattern::Identifier(name) = pattern {
+                    if name == var_name {
+                        return self.infer_type_from_initializer(value);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn infer_type_from_initializer(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Call { function, .. } => {
+                // Case 1: Parser produces FieldAccess for `Type.method()` style
+                if let Expression::FieldAccess { object, .. } = &**function {
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            return Some(name.clone());
+                        }
+                    }
+                }
+                // Case 2: Parser produces Identifier("Type::method") for `Type::method()` style
+                if let Expression::Identifier { name, .. } = &**function {
+                    if let Some(type_name) = name.split("::").next() {
+                        if type_name
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_uppercase())
+                            && name.contains("::")
+                        {
+                            return Some(type_name.to_string());
+                        }
+                    }
+                }
+                None
+            }
+            Expression::StructLiteral { name, .. } => {
+                name.split('<').next().map(|s| s.to_string())
+            }
+            _ => None,
+        }
+    }
+
     /// TDD: Auto-mutability inference
     pub(super) fn variable_needs_mut(&self, var_name: &str) -> bool {
         let statements = &self.current_function_body;
-
         for stmt in statements.iter() {
             if self.statement_mutates_variable_field(stmt, var_name) {
                 return true;
             }
         }
-
         false
     }
 
@@ -574,6 +985,7 @@ impl<'ast> CodeGenerator<'ast> {
         match stmt {
             Statement::Assignment {
                 target,
+                value,
                 compound_op,
                 ..
             } => {
@@ -582,10 +994,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if compound_op.is_some() {
                     if let Expression::Identifier { name, .. } = target {
-                        return name == var_name;
+                        if name == var_name {
+                            return true;
+                        }
                     }
                 }
-                false
+                self.expression_mutates_variable_field(value, var_name)
             }
             Statement::Expression { expr, .. } => {
                 self.expression_mutates_variable_field(expr, var_name)
@@ -646,7 +1060,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 crate::parser::Type::Custom(name) => Some(name.clone()),
                                 crate::parser::Type::Parameterized(name, _) => Some(name.clone()),
                                 _ => None,
-                            });
+                            })
+                            .or_else(|| {
+                                self.local_var_types.get(var_name).and_then(|t| {
+                                    Self::type_to_name(t)
+                                })
+                            })
+                            .or_else(|| self.infer_local_var_type_from_body(var_name));
 
                         if let Some(type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
@@ -654,10 +1074,43 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.signature_registry.get_signature(&qualified_name)
                             {
                                 if sig.has_self_receiver {
-                                    if let Some(&crate::analyzer::OwnershipMode::MutBorrowed) =
-                                        sig.param_ownership.first()
-                                    {
-                                        return true;
+                                    if let Some(ownership) = sig.param_ownership.first() {
+                                        if matches!(
+                                            ownership,
+                                            crate::analyzer::OwnershipMode::MutBorrowed
+                                                | crate::analyzer::OwnershipMode::Owned
+                                        ) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Generic type param: resolve trait bounds and
+                            // check if any bound trait declares &mut self
+                            for (tp_name, bounds) in &self.current_function_type_bounds {
+                                if tp_name == &type_name {
+                                    for bound_trait in bounds {
+                                        let trait_qualified =
+                                            format!("{}::{}", bound_trait, method);
+                                        if let Some(sig) = self
+                                            .signature_registry
+                                            .get_signature(&trait_qualified)
+                                        {
+                                            if sig.has_self_receiver {
+                                                if let Some(ownership) =
+                                                    sig.param_ownership.first()
+                                                {
+                                                    if matches!(
+                                                        ownership,
+                                                        crate::analyzer::OwnershipMode::MutBorrowed
+                                                            | crate::analyzer::OwnershipMode::Owned
+                                                    ) {
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -687,69 +1140,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(super) fn is_mutating_method(&self, method: &str) -> bool {
-        if matches!(
-            method,
-            "push"
-                | "pop"
-                | "insert"
-                | "remove"
-                | "clear"
-                | "append"
-                | "extend"
-                | "push_front"
-                | "push_back"
-                | "pop_front"
-                | "pop_back"
-                | "retain"
-                | "dedup"
-                | "sort"
-                | "reverse"
-                | "swap"
-                | "drain"
-                | "truncate"
-                | "resize"
-                | "reserve"
-                | "shrink_to_fit"
-                // Option/Result methods
-                | "take"
-                | "replace"
-                | "get_or_insert"
-                | "get_or_insert_with"
-        ) {
-            return true;
-        }
-
-        if method.starts_with("add_")
-            || method.starts_with("remove_")
-            || method.starts_with("delete_")
-            || method.starts_with("set_")
-            || method.starts_with("update_")
-            || method.starts_with("reset_")
-            || method.starts_with("clear_")
-            || method.starts_with("insert_")
-            || method.starts_with("append_")
-        {
-            return true;
-        }
-
-        matches!(
-            method,
-            "increment"
-                | "decrement"
-                | "add"
-                | "subtract"
-                | "multiply"
-                | "divide"
-                | "apply"
-                | "modify"
-                | "mutate"
-                | "change"
-                | "toggle"
-                | "enable"
-                | "disable"
-                | "activate"
-                | "deactivate"
-        )
+        crate::method_registry::mutates_receiver(method)
     }
 
     pub(super) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
@@ -786,6 +1177,23 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Let { value, .. } => {
                 self.analyze_variable_usage_in_expression(var_name, value)
             }
+            Statement::Assignment { target, value, .. } => {
+                let target_usage = self.analyze_variable_usage_in_expression(var_name, target);
+                if matches!(target_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                let value_usage = self.analyze_variable_usage_in_expression(var_name, value);
+                if matches!(value_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                if matches!(target_usage, VariableUsage::FieldAccessOnly)
+                    || matches!(value_usage, VariableUsage::FieldAccessOnly)
+                {
+                    VariableUsage::FieldAccessOnly
+                } else {
+                    VariableUsage::NotUsed
+                }
+            }
             Statement::If {
                 condition,
                 then_block,
@@ -812,6 +1220,62 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 cond_usage
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                let cond_usage =
+                    self.analyze_variable_usage_in_expression(var_name, condition);
+                if matches!(cond_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                for s in body {
+                    let usage = self.analyze_variable_usage_in_statement(var_name, s);
+                    if matches!(usage, VariableUsage::Moved) {
+                        return VariableUsage::Moved;
+                    }
+                }
+                cond_usage
+            }
+            Statement::Loop { body, .. } => {
+                for s in body {
+                    let usage = self.analyze_variable_usage_in_statement(var_name, s);
+                    if matches!(usage, VariableUsage::Moved) {
+                        return VariableUsage::Moved;
+                    }
+                }
+                VariableUsage::NotUsed
+            }
+            Statement::For {
+                body, iterable, ..
+            } => {
+                let iter_usage =
+                    self.analyze_variable_usage_in_expression(var_name, iterable);
+                if matches!(iter_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                for s in body {
+                    let usage = self.analyze_variable_usage_in_statement(var_name, s);
+                    if matches!(usage, VariableUsage::Moved) {
+                        return VariableUsage::Moved;
+                    }
+                }
+                iter_usage
+            }
+            Statement::Match { value, arms, .. } => {
+                let value_usage =
+                    self.analyze_variable_usage_in_expression(var_name, value);
+                if matches!(value_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                for arm in arms {
+                    let usage =
+                        self.analyze_variable_usage_in_expression(var_name, arm.body);
+                    if matches!(usage, VariableUsage::Moved) {
+                        return VariableUsage::Moved;
+                    }
+                }
+                value_usage
             }
             _ => VariableUsage::NotUsed,
         }
@@ -898,21 +1362,65 @@ impl<'ast> CodeGenerator<'ast> {
                 VariableUsage::NotUsed
             }
             Expression::Call { arguments, .. } => {
+                let mut best = VariableUsage::NotUsed;
                 for (_, arg) in arguments {
-                    if let Expression::Identifier { name, .. } = arg {
-                        if name == var_name {
-                            return VariableUsage::Moved;
-                        }
-                    }
-                    if let Expression::FieldAccess { object, .. } = arg {
-                        if let Expression::Identifier { name, .. } = &**object {
-                            if name == var_name {
-                                return VariableUsage::FieldAccessOnly;
-                            }
-                        }
+                    let usage = self.analyze_variable_usage_in_expression(var_name, arg);
+                    match usage {
+                        VariableUsage::Moved => return VariableUsage::Moved,
+                        VariableUsage::FieldAccessOnly => best = VariableUsage::FieldAccessOnly,
+                        VariableUsage::NotUsed => {}
                     }
                 }
-                VariableUsage::NotUsed
+                best
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                let obj_usage = self.analyze_variable_usage_in_expression(var_name, object);
+                if matches!(obj_usage, VariableUsage::Moved) {
+                    return VariableUsage::Moved;
+                }
+                let mut best = match obj_usage {
+                    VariableUsage::FieldAccessOnly => VariableUsage::FieldAccessOnly,
+                    _ => VariableUsage::NotUsed,
+                };
+                for (_, arg) in arguments {
+                    let usage = self.analyze_variable_usage_in_expression(var_name, arg);
+                    match usage {
+                        VariableUsage::Moved => return VariableUsage::Moved,
+                        VariableUsage::FieldAccessOnly => best = VariableUsage::FieldAccessOnly,
+                        VariableUsage::NotUsed => {}
+                    }
+                }
+                best
+            }
+            Expression::StructLiteral { fields, .. } => {
+                let mut best = VariableUsage::NotUsed;
+                for (_, field_value) in fields {
+                    let usage = self.analyze_variable_usage_in_expression(var_name, field_value);
+                    match usage {
+                        VariableUsage::Moved => return VariableUsage::Moved,
+                        VariableUsage::FieldAccessOnly => best = VariableUsage::FieldAccessOnly,
+                        VariableUsage::NotUsed => {}
+                    }
+                }
+                best
+            }
+            Expression::Index { object, index, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == var_name {
+                        return VariableUsage::FieldAccessOnly;
+                    }
+                }
+                let obj_usage = self.analyze_variable_usage_in_expression(var_name, object);
+                let idx_usage = self.analyze_variable_usage_in_expression(var_name, index);
+                match (obj_usage, idx_usage) {
+                    (VariableUsage::Moved, _) | (_, VariableUsage::Moved) => VariableUsage::Moved,
+                    (VariableUsage::FieldAccessOnly, _) | (_, VariableUsage::FieldAccessOnly) => {
+                        VariableUsage::FieldAccessOnly
+                    }
+                    _ => VariableUsage::NotUsed,
+                }
             }
             Expression::Binary { left, right, .. } => {
                 let left_usage = self.analyze_variable_usage_in_expression(var_name, left);

@@ -1,12 +1,6 @@
-/// TDD: E0308 Type Coercion - Vec.push with Index expressions
+/// TDD: Vec.push with Index expressions — Copy elements use plain `vec[idx]` (no `&`, no `*`).
 ///
-/// Rust's Index trait returns &T. Vec::push expects T.
-/// For Copy types (i32, (i32,i32), f32), we must dereference: *vec[idx]
-///
-/// Bug: rev.push(path[k]) generates rev.push(&path[k]) → E0308 (expected (i32,i32), found &(i32,i32))
-/// Fix: Generate rev.push(*path[k]) when element type is Copy
-///
-/// Key Principle: Automatic coercion between &T and T based on context (Rust's Deref coercion)
+/// Non-Copy elements still use `&vec[idx]` or `.clone()` per ownership analysis.
 
 use std::fs;
 use std::process::Command;
@@ -82,13 +76,10 @@ fn main() {
         rust
     );
 
-    // Should generate *path[0] or path[0].clone() - Rust Index returns &T, push needs T
-    // Prefer *(path[0]) for Copy (no alloc); path[0].clone() also works
-    let has_deref = rust.contains("*(path[") || rust.contains("* (path[");
-    let has_clone = rust.contains("path[0].clone()") || rust.contains("path[0usize].clone()");
+    // Copy tuple: `path[0]` is already `(i32, i32)` in value position; explicit `*` is E0614.
     assert!(
-        has_deref || (has_clone && compiles),
-        "Need *(path[0]) or path[0].clone() for Copy type. Got:\n{}",
+        !rust.contains("*(path[") && !rust.contains("* (path["),
+        "must not emit *(path[0]) for Copy tuple element. Got:\n{}",
         rust
     );
     assert!(compiles, "Generated Rust must compile:\n{}", rust);
@@ -137,7 +128,7 @@ pub fn collect_floats(vals: Vec<f32>) -> Vec<f32> {
 }
 
 fn main() {
-    let v = vec![1.0, 2.0, 3.0]
+    let v: Vec<f32> = vec![1.0, 2.0, 3.0]
     let _ = collect_floats(v)
 }
 "#;

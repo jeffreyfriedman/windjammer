@@ -5,12 +5,12 @@ fn main() {
     println!("Testing UI components...")
     
     // Test Button
-    let button = Button::new("Test Button".to_string())
+    let button = Button::new("Test Button")
         .variant(ButtonVariant::Primary)
     println!("✓ Button created")
     
     // Test Text
-    let text = Text::new("Hello World".to_string())
+    let text = Text::new("Hello World")
         .size(TextSize::Large)
         .bold()
     println!("✓ Text created")
@@ -21,11 +21,11 @@ fn main() {
     println!("✓ Container created")
     
     // Test Panel
-    let panel = Panel::new("Test Panel".to_string())
+    let panel = Panel::new("Test Panel")
     println!("✓ Panel created")
     
     // Test CodeEditor - skip for now (needs Signal support)
-    // let editor = CodeEditor::new("fn main() {}".to_string())
+    // let editor = CodeEditor::new("fn main() {}")
     //     .language("windjammer")
     println!("✓ CodeEditor (skipped - needs Signal)")
     
