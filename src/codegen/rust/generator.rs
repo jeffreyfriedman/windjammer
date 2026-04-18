@@ -7,6 +7,45 @@ use crate::codegen::rust::expression_helpers;
 use crate::parser::*;
 use crate::CompilationTarget;
 
+/// Method signature for type-based parameter resolution
+/// Stores the full signature of a method including parameter types and ownership
+#[derive(Debug, Clone)]
+pub struct MethodSignature {
+    /// Name of the receiver type (e.g., "Vec", "String", "Inventory")
+    pub receiver_type: String,
+    /// Method name (e.g., "push", "contains", "has_item")
+    pub method_name: String,
+    /// Parameter types (in order, excluding self)
+    pub param_types: Vec<Type>,
+    /// Parameter ownership modes (Borrowed, MutBorrowed, Owned)
+    pub param_ownership: Vec<OwnershipMode>,
+    /// Return type (if any)
+    pub return_type: Option<Type>,
+    /// Whether method has a self receiver (vs. static method)
+    pub has_self_receiver: bool,
+}
+
+impl MethodSignature {
+    /// Create a new method signature
+    pub fn new(
+        receiver_type: impl Into<String>,
+        method_name: impl Into<String>,
+        param_types: Vec<Type>,
+        param_ownership: Vec<OwnershipMode>,
+        return_type: Option<Type>,
+        has_self_receiver: bool,
+    ) -> Self {
+        Self {
+            receiver_type: receiver_type.into(),
+            method_name: method_name.into(),
+            param_types,
+            param_ownership,
+            return_type,
+            has_self_receiver,
+        }
+    }
+}
+
 pub struct CodeGenerator<'ast> {
     pub(crate) indent_level: usize,
     pub(crate) signature_registry: SignatureRegistry,
@@ -183,6 +222,16 @@ pub struct CodeGenerator<'ast> {
     // Key: method_name, Value: vec of (param_name, OwnershipMode).
     pub(crate) method_param_ownership:
         std::collections::HashMap<String, Vec<(String, OwnershipMode)>>,
+    // METHOD SIGNATURES BY TYPE: Enhanced type-based method resolution
+    // Maps ReceiverType → MethodName → Full Signature (params, return type, ownership)
+    // Enables proper type-based decisions without hard-coded method name heuristics
+    // Example: "Inventory" → "has_item" → MethodSignature { params: [("item_id", &str), ("qty", i32)], ... }
+    pub(crate) method_signatures_by_type:
+        std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
+    // STDLIB METHOD SIGNATURES: Preloaded signatures for Vec, String, HashMap, etc.
+    // Enables correct parameter type checking for stdlib methods without hard-coding method names
+    pub(crate) stdlib_method_signatures:
+        std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
     // Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
@@ -350,6 +399,8 @@ impl<'ast> CodeGenerator<'ast> {
             float_inference: None,
             int_inference: None,
             method_param_ownership: std::collections::HashMap::new(),
+            method_signatures_by_type: std::collections::HashMap::new(),
+            stdlib_method_signatures: Self::init_stdlib_signatures(),
             enum_variant_types: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
@@ -362,6 +413,152 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Initialize stdlib method signatures (Vec, String, HashMap, etc.)
+    /// This replaces ALL hard-coded method name heuristics with proper type-based lookup
+    fn init_stdlib_signatures() -> std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, MethodSignature>,
+    > {
+        let mut map = std::collections::HashMap::new();
+        
+        // Vec<T> methods
+        let mut vec_methods = std::collections::HashMap::new();
+        vec_methods.insert(
+            "push".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "push",
+                vec![Type::Custom("T".to_string())], // Owned T
+                vec![OwnershipMode::Owned],
+                None,
+                true,
+            ),
+        );
+        vec_methods.insert(
+            "contains".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "contains",
+                vec![Type::Reference(Box::new(Type::Custom("T".to_string())))], // &T
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        vec_methods.insert(
+            "insert".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "insert",
+                vec![Type::Uint, Type::Custom("T".to_string())], // index: usize, element: T
+                vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                None,
+                true,
+            ),
+        );
+        map.insert("Vec".to_string(), vec_methods);
+        
+        // String methods
+        let mut string_methods = std::collections::HashMap::new();
+        string_methods.insert(
+            "contains".to_string(),
+            MethodSignature::new(
+                "String",
+                "contains",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        string_methods.insert(
+            "push_str".to_string(),
+            MethodSignature::new(
+                "String",
+                "push_str",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                None,
+                true,
+            ),
+        );
+        string_methods.insert(
+            "starts_with".to_string(),
+            MethodSignature::new(
+                "String",
+                "starts_with",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        string_methods.insert(
+            "ends_with".to_string(),
+            MethodSignature::new(
+                "String",
+                "ends_with",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        map.insert("String".to_string(), string_methods);
+        
+        // HashMap<K, V> methods
+        let mut hashmap_methods = std::collections::HashMap::new();
+        hashmap_methods.insert(
+            "get".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "get",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Option(Box::new(Type::Reference(Box::new(Type::Custom("V".to_string())))))),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "insert".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "insert",
+                vec![Type::Custom("K".to_string()), Type::Custom("V".to_string())], // K, V (both owned)
+                vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                Some(Type::Option(Box::new(Type::Custom("V".to_string())))),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "contains_key".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "contains_key",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "remove".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "remove",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Option(Box::new(Type::Custom("V".to_string())))),
+                true,
+            ),
+        );
+        map.insert("HashMap".to_string(), hashmap_methods);
+        
+        // TODO: Add more stdlib types (BTreeMap, HashSet, VecDeque, etc.)
+        
+        map
+    }
+    
     /// Pre-populate struct field types from cross-module definitions.
     /// This enables type inference for fields on imported structs,
     /// preventing unnecessary .clone() on Copy-type fields.
