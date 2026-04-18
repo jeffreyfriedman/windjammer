@@ -8,7 +8,8 @@ use crate::parser::ast::operators::BinaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
 use crate::type_inference::ExprId;
-use crate::type_inference::int_implicit_casts::{is_safe_implicit_cast, promote_types};
+use crate::type_inference::int_implicit_casts::is_safe_implicit_cast;
+use crate::type_inference::struct_field_registry;
 use std::collections::HashMap;
 
 /// Integer type (i32, i64, u32, u64, usize, etc.)
@@ -64,6 +65,14 @@ pub struct IntInference {
     var_types: HashMap<String, Type>,
     next_seq_id: usize,
     struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Library multipass: module path for the current `.wj` file (`dialogue/examples` → `["dialogue","examples"]`).
+    current_file_module_path: Vec<String>,
+    /// For each bare struct name, all module prefixes where that name is defined (disambiguate duplicates).
+    struct_defining_module_paths: HashMap<String, Vec<Vec<String>>>,
+    /// `use` resolution: bare imported type → fully qualified registry key.
+    imported_type_registry_keys: HashMap<String, String>,
+    /// `pub use` from each module (`module_path` as `a::b` or `""` for crate root) → exported name → qualified struct key.
+    module_re_exports: HashMap<String, HashMap<String, String>>,
     expr_id_cache: HashMap<(usize, usize, usize), ExprId>,
     current_file_id: usize,
     file_name_to_id: HashMap<String, usize>,
@@ -84,6 +93,10 @@ impl IntInference {
             var_types: HashMap::new(),
             next_seq_id: 1,
             struct_field_types: HashMap::new(),
+            current_file_module_path: Vec::new(),
+            struct_defining_module_paths: HashMap::new(),
+            imported_type_registry_keys: HashMap::new(),
+            module_re_exports: HashMap::new(),
             expr_id_cache: HashMap::new(),
             current_file_id: 0,
             file_name_to_id: HashMap::new(),
@@ -161,25 +174,45 @@ impl IntInference {
     ) {
         for (struct_name, fields) in field_types {
             self.struct_field_types
-                .entry(struct_name.clone())
-                .or_default()
-                .extend(fields.clone());
+                .insert(struct_name.clone(), fields.clone());
         }
+    }
+
+    /// Multipass library: module path segments for the source file being analyzed.
+    pub fn set_current_file_module_path(&mut self, path: Vec<String>) {
+        self.current_file_module_path = path;
+    }
+
+    /// All defining module prefixes per bare struct name (for duplicate names across modules).
+    pub fn set_struct_defining_module_paths(
+        &mut self,
+        paths: HashMap<String, Vec<Vec<String>>>,
+    ) {
+        self.struct_defining_module_paths = paths;
+    }
+
+    /// Multipass: `pub use` re-exports per module (from a full-crate pre-pass). Required for `use super::*` glob resolution.
+    pub fn set_module_re_exports(&mut self, re_exports: HashMap<String, HashMap<String, String>>) {
+        self.module_re_exports = re_exports;
     }
 
     /// Main entry point: Infer integer types for a program
     pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.imported_type_registry_keys.clear();
         if let Some(first_item) = program.items.first() {
             if let Some(loc) = first_item.location() {
                 self.set_current_file(loc.file.to_string_lossy().to_string());
             }
         }
 
+        let file_prefix = self.current_file_module_path.clone();
         for item in &program.items {
-            self.register_struct_fields(item);
+            self.register_struct_fields_for_module(item, &file_prefix);
             self.register_function_signature(item);
             self.register_const_and_static(item);
         }
+
+        self.register_use_imports_from_items(&program.items);
 
         for item in &program.items {
             self.collect_item_constraints(item);
@@ -188,13 +221,102 @@ impl IntInference {
         self.solve_constraints();
     }
 
-    fn register_struct_fields<'ast>(&mut self, item: &Item<'ast>) {
-        if let Item::Struct { decl, .. } = item {
-            let mut field_map = HashMap::new();
-            for field in &decl.fields {
-                field_map.insert(field.name.clone(), field.field_type.clone());
+    fn lookup_struct_fields(&self, type_name: &str) -> Option<&HashMap<String, Type>> {
+        struct_field_registry::lookup_struct_field_map(
+            &self.struct_field_types,
+            type_name,
+            &self.imported_type_registry_keys,
+            &self.struct_defining_module_paths,
+        )
+    }
+
+    /// See `float_inference::FloatInference::lookup_struct_fields_for_impl_type`.
+    fn lookup_struct_fields_for_impl_type(&self, impl_type_basename: &str) -> Option<&HashMap<String, Type>> {
+        let base = if let Some(idx) = impl_type_basename.find('<') {
+            &impl_type_basename[..idx]
+        } else {
+            impl_type_basename
+        };
+        if !self.current_file_module_path.is_empty() {
+            let k = struct_field_registry::qualify_struct_key(&self.current_file_module_path, base);
+            if let Some(m) = self.struct_field_types.get(&k) {
+                return Some(m);
             }
-            self.struct_field_types.insert(decl.name.clone(), field_map);
+        }
+        self.lookup_struct_fields(base)
+    }
+
+    fn register_struct_fields_for_module<'ast>(&mut self, item: &Item<'ast>, module_prefix: &[String]) {
+        match item {
+            Item::Struct { decl, .. } => {
+                let key = struct_field_registry::qualify_struct_key(module_prefix, &decl.name);
+                let mut field_map = HashMap::new();
+                for field in &decl.fields {
+                    field_map.insert(field.name.clone(), field.field_type.clone());
+                }
+                self.struct_field_types.insert(key, field_map);
+            }
+            Item::Mod { name, items, .. } => {
+                let mut next = module_prefix.to_vec();
+                next.push(name.clone());
+                for sub_item in items {
+                    self.register_struct_fields_for_module(sub_item, &next);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn register_use_imports_from_items<'ast>(&mut self, items: &[Item<'ast>]) {
+        for item in items {
+            match item {
+                Item::Use { path, alias, .. } => {
+                    if path.len() == 1 && path[0].contains("::{") {
+                        struct_field_registry::register_braced_use_imports(
+                            &path[0],
+                            &self.current_file_module_path,
+                            &self.struct_field_types,
+                            &self.struct_defining_module_paths,
+                            &mut self.imported_type_registry_keys,
+                        );
+                        continue;
+                    }
+                    if path.last().map(|s| s.as_str()) == Some("*") {
+                        if struct_field_registry::debug_struct_import_trace() {
+                            eprintln!(
+                                "=== int_inference: glob import path={:?} file_module={:?}",
+                                path, self.current_file_module_path
+                            );
+                        }
+                        struct_field_registry::expand_glob_import(
+                            path,
+                            &self.current_file_module_path,
+                            &self.struct_field_types,
+                            &self.struct_defining_module_paths,
+                            &self.module_re_exports,
+                            &mut self.imported_type_registry_keys,
+                        );
+                        continue;
+                    }
+                    if path.len() < 2 {
+                        continue;
+                    }
+                    if let Some(key) = struct_field_registry::resolve_use_path_to_qualified_key(
+                        path,
+                        &self.current_file_module_path,
+                        &self.struct_field_types,
+                        &self.struct_defining_module_paths,
+                    ) {
+                        let imported_name = alias
+                            .clone()
+                            .unwrap_or_else(|| path.last().cloned().unwrap_or_default());
+                        self.imported_type_registry_keys
+                            .insert(imported_name, key);
+                    }
+                }
+                Item::Mod { items, .. } => self.register_use_imports_from_items(items),
+                _ => {}
+            }
         }
     }
 
@@ -330,10 +452,12 @@ impl IntInference {
                     ));
                 }
             }
-            Item::Mod { items, .. } => {
+            Item::Mod { name, items, .. } => {
+                self.current_file_module_path.push(name.clone());
                 for sub_item in items {
                     self.collect_item_constraints(sub_item);
                 }
+                self.current_file_module_path.pop();
             }
             _ => {}
         }
@@ -447,17 +571,17 @@ impl IntInference {
                     "assignment".to_string(),
                 ));
                 
-                // TDD FIX: Simple assignment to usize field/variable - constrain value to usize
-                // e.g., self.current_frame_index = 0 where current_frame_index: usize
+                // Simple assignment: constrain RHS literals to the target's integer type (i64, usize, u32, …).
+                // MustMatch alone can leave the literal as default i32 when the LHS is a field access.
                 if compound_op.is_none() {
                     let target_type = self.infer_type_from_expression(target);
                     if let Some(ref tt) = target_type {
                         if let Some(int_ty) = self.extract_int_type(tt) {
-                            if int_ty == IntType::Usize {
+                            if int_ty != IntType::Unknown {
                                 self.constraints.push(IntConstraint::MustBe(
                                     value_id,
-                                    IntType::Usize,
-                                    "assignment to usize field/variable".to_string(),
+                                    int_ty,
+                                    format!("assignment to {:?} field/variable", int_ty),
                                 ));
                             }
                         }
@@ -559,7 +683,31 @@ impl IntInference {
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.clone()),
                     Expression::FieldAccess { object, field, .. } => {
-                        if let Expression::Identifier { name: type_name, .. } = object {
+                        // Resolve the object's type name for qualified method lookup.
+                        // Handles: identifier.method(), self.field.method(), expr.method()
+                        let resolved_type_name = if let Expression::Identifier { name: obj_name, .. } = object {
+                            if obj_name.chars().next().map_or(false, |c| c.is_lowercase()) {
+                                if obj_name == "self" {
+                                    self.current_impl_type.clone()
+                                } else {
+                                    self.var_types.get(obj_name).and_then(|ty| match ty {
+                                        Type::Custom(n) => Some(n.clone()),
+                                        _ => None,
+                                    })
+                                }
+                            } else {
+                                Some(obj_name.clone())
+                            }
+                        } else {
+                            // Nested expression (e.g., self.entries.remove) - resolve via type inference
+                            self.infer_type_from_expression(object).and_then(|ty| match &ty {
+                                Type::Custom(n) => Some(n.clone()),
+                                Type::Parameterized(n, _) => Some(n.clone()),
+                                Type::Vec(_) => Some("Vec".to_string()),
+                                _ => None,
+                            })
+                        };
+                        if let Some(ref type_name) = resolved_type_name {
                             Some(format!("{}::{}", type_name, field))
                         } else {
                             None
@@ -567,6 +715,25 @@ impl IntInference {
                     }
                     _ => None,
                 };
+
+                // Vec index-based methods via Call(FieldAccess) need usize constraint
+                if let Expression::FieldAccess { object: call_obj, field: call_method, .. } = function {
+                    let is_vec_index_method = matches!(call_method.as_str(), "remove" | "swap" | "swap_remove" | "split_off" | "drain");
+                    if is_vec_index_method && !arguments.is_empty() {
+                        let receiver_is_vec = self.infer_type_from_expression(call_obj)
+                            .map_or(false, |t| matches!(t, Type::Vec(_)));
+                        if receiver_is_vec {
+                            if let Some((_label, arg)) = arguments.first() {
+                                let arg_id = self.get_expr_id(arg);
+                                self.constraints.push(IntConstraint::MustBe(
+                                    arg_id,
+                                    IntType::Usize,
+                                    format!(".{}() index parameter must be usize (via Call)", call_method),
+                                ));
+                            }
+                        }
+                    }
+                }
 
                 // TDD FIX: assert_eq/assert_ne - both args must have same int type
                 if (func_name.as_deref() == Some("assert_eq") || func_name.as_deref() == Some("assert_ne"))
@@ -656,17 +823,34 @@ impl IntInference {
             Expression::MethodCall { object, method, arguments, .. } => {
                 self.collect_expression_constraints(object, return_type);
 
-                let method_sig = self
-                    .function_signatures
-                    .iter()
-                    .filter(|(func_name, (params, _))| {
-                        let name_match = func_name.split("::").last() == Some(method.as_str());
-                        let param_match =
-                            params.len() == arguments.len() + 1 || params.len() == arguments.len();
-                        name_match && param_match
-                    })
-                    .map(|(_, (params, _))| params.clone())
-                    .next();
+                // Prefer qualified lookup (Type::method) to avoid ambiguous matches.
+                // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
+                let qualified_sig = self.infer_type_from_expression(object)
+                    .and_then(|ty| match &ty {
+                        Type::Custom(n) => {
+                            let base = n.split('<').next().unwrap_or(n);
+                            let qualified = format!("{}::{}", base, method);
+                            self.function_signatures.get(&qualified).cloned()
+                        }
+                        Type::Vec(_) => {
+                            let qualified = format!("Vec::{}", method);
+                            self.function_signatures.get(&qualified).cloned()
+                        }
+                        _ => None,
+                    });
+
+                let method_sig = qualified_sig.map(|(params, _)| params).or_else(|| {
+                    self.function_signatures
+                        .iter()
+                        .filter(|(func_name, (params, _))| {
+                            let name_match = func_name.split("::").last() == Some(method.as_str());
+                            let param_match =
+                                params.len() == arguments.len() + 1 || params.len() == arguments.len();
+                            name_match && param_match
+                        })
+                        .map(|(_, (params, _))| params.clone())
+                        .next()
+                });
 
                 if let Some(param_types) = method_sig {
                     let param_offset = if param_types.len() == arguments.len() + 1 {
@@ -693,14 +877,37 @@ impl IntInference {
                     }
                 }
 
-                // TDD FIX: Vec::with_capacity, HashMap::with_capacity - first arg must be usize
-                if (method == "with_capacity" || method == "reserve" || method == "truncate") && !arguments.is_empty() {
+                // TDD FIX: Vec index-based methods - first arg must be usize
+                let is_always_usize_method = method == "with_capacity" || method == "reserve" || method == "truncate";
+                let is_vec_index_method = method == "remove" || method == "swap" || method == "swap_remove"
+                    || method == "split_off" || method == "drain";
+                let receiver_is_vec = self.infer_type_from_expression(object)
+                    .map_or(false, |t| matches!(t, Type::Vec(_)))
+                    || {
+                        if let Expression::FieldAccess { object: inner_obj, field: field_name, .. } = object {
+                            if let Expression::Identifier { name, .. } = &**inner_obj {
+                                if name == "self" {
+                                    self.current_impl_type.as_deref()
+                                        .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
+                                        .and_then(|fields| fields.get(field_name))
+                                        .is_some_and(|t| matches!(t, Type::Vec(_)))
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+                if (is_always_usize_method || (is_vec_index_method && receiver_is_vec)) && !arguments.is_empty() {
                     if let Some((_label, arg)) = arguments.first() {
                         let arg_id = self.get_expr_id(arg);
                         self.constraints.push(IntConstraint::MustBe(
                             arg_id,
                             IntType::Usize,
-                            format!(".{}() capacity parameter must be usize", method),
+                            format!(".{}() index parameter must be usize", method),
                         ));
                     }
                 }
@@ -743,7 +950,7 @@ impl IntInference {
             Expression::StructLiteral { name, fields, .. } => {
                 // Two-phase to avoid borrow checker: collect field types first, then iterate
                 let field_data: Vec<(&'ast Expression<'ast>, IntType, String, Option<Type>)> =
-                    self.struct_field_types.get(name).map_or_else(Vec::new, |struct_fields| {
+                    self.lookup_struct_fields(name).map_or_else(Vec::new, |struct_fields| {
                         fields
                             .iter()
                             .map(|(field_name, field_expr)| {
@@ -789,6 +996,30 @@ impl IntInference {
                             right_id,
                             format!("binary op {:?}", op),
                         ));
+
+                        // TDD: items.len() - 1 / items.len() + k → literal must be usize (Rust len is usize)
+                        if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
+                            let left_is_len =
+                                matches!(left, Expression::MethodCall { method, .. } if method == "len");
+                            let right_is_len =
+                                matches!(right, Expression::MethodCall { method, .. } if method == "len");
+                            let left_is_literal = matches!(left, Expression::Literal { .. });
+                            let right_is_literal = matches!(right, Expression::Literal { .. });
+                            if left_is_len && right_is_literal {
+                                self.constraints.push(IntConstraint::MustBe(
+                                    right_id,
+                                    IntType::Usize,
+                                    "arithmetic with .len() (usize)".to_string(),
+                                ));
+                            }
+                            if right_is_len && left_is_literal {
+                                self.constraints.push(IntConstraint::MustBe(
+                                    left_id,
+                                    IntType::Usize,
+                                    "arithmetic with .len() (usize)".to_string(),
+                                ));
+                            }
+                        }
                         
                         // TDD FIX: Propagate type from left side (identifier or field access)
                         let left_int_ty = match left {
@@ -815,7 +1046,7 @@ impl IntInference {
                                     };
                                     
                                     struct_name.and_then(|sname| {
-                                        self.struct_field_types.get(sname.as_str())
+                                        self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
                                             .and_then(|field_ty| self.extract_int_type(field_ty))
                                     })
@@ -861,7 +1092,7 @@ impl IntInference {
                                     };
                                     
                                     struct_name.and_then(|sname| {
-                                        self.struct_field_types.get(sname.as_str())
+                                        self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
                                             .and_then(|field_ty| self.extract_int_type(field_ty))
                                     })
@@ -938,7 +1169,7 @@ impl IntInference {
                                     };
                                     
                                     struct_name.and_then(|sname| {
-                                        self.struct_field_types.get(sname.as_str())
+                                        self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
                                             .and_then(|field_ty| self.extract_int_type(field_ty))
                                     })
@@ -985,7 +1216,7 @@ impl IntInference {
                                     };
                                     
                                     struct_name.and_then(|sname| {
-                                        self.struct_field_types.get(sname.as_str())
+                                        self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
                                             .and_then(|field_ty| self.extract_int_type(field_ty))
                                     })
@@ -1296,9 +1527,18 @@ impl IntInference {
                 } else {
                     &struct_name
                 };
-                self.struct_field_types
-                    .get(base_name)
-                    .and_then(|fields| fields.get(field))
+                let fields = if matches!(
+                    *object,
+                    Expression::Identifier { ref name, .. } if name == "self"
+                ) {
+                    self.current_impl_type
+                        .as_deref()
+                        .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
+                } else {
+                    self.lookup_struct_fields(base_name)
+                };
+                fields
+                    .and_then(|m| m.get(field))
                     .cloned()
             }
             Expression::Index { object, .. } => {
@@ -1337,10 +1577,13 @@ impl IntInference {
     /// Extract value type V from HashMap<K,V> or BTreeMap<K,V>
     fn extract_map_value_type(&self, ty: &Type) -> Option<Type> {
         match ty {
-            Type::Parameterized(name, args)
-                if (name == "HashMap" || name == "BTreeMap") && args.len() >= 2 =>
-            {
-                Some(args[1].clone())
+            Type::Parameterized(name, args) => {
+                let base = crate::type_inference::generic_type_base_name(name);
+                if matches!(base, "HashMap" | "BTreeMap" | "Map") && args.len() >= 2 {
+                    Some(args[1].clone())
+                } else {
+                    None
+                }
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.extract_map_value_type(inner)
@@ -1486,24 +1729,31 @@ impl IntInference {
         }
     }
 
-    /// Get inferred integer type for expression (O(1) cache lookup via ExprId)
+    /// Get inferred integer type for expression (cache-first, same keying as constraint collection).
     pub fn get_int_type<'ast>(&self, expr: &Expression<'ast>) -> IntType {
-        let (file, line, col) = expr
-            .location()
-            .map(|loc| {
-                (
-                    self.file_name_to_id
-                        .get(&loc.file.to_string_lossy().to_string())
-                        .copied()
-                        .unwrap_or(0),
-                    loc.line,
-                    loc.column,
-                )
-            })
-            .unwrap_or((0, 0, 0));
+        let location = expr.location();
+        let (file_id, line, col) = if let Some(loc) = location {
+            (
+                self.file_name_to_id
+                    .get(&loc.file.to_string_lossy().to_string())
+                    .copied()
+                    .unwrap_or(0),
+                loc.line,
+                loc.column,
+            )
+        } else {
+            (0, 0, 0)
+        };
+
+        let cache_key = (file_id, line, col);
+        if let Some(&expr_id) = self.expr_id_cache.get(&cache_key) {
+            if let Some(&int_ty) = self.inferred_types.get(&expr_id) {
+                return int_ty;
+            }
+        }
 
         for (expr_id, int_ty) in &self.inferred_types {
-            if expr_id.file_id == file && expr_id.line == line && expr_id.col == col {
+            if expr_id.file_id == file_id && expr_id.line == line && expr_id.col == col {
                 return *int_ty;
             }
         }

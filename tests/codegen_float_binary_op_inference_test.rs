@@ -54,7 +54,6 @@ fn main() {
         rust_code
     );
 
-    // Verify Rust compilation succeeds (no type mismatch errors)
     let cargo_toml = r#"
 [package]
 name = "test"
@@ -64,6 +63,8 @@ edition = "2021"
 [[bin]]
 name = "test"
 path = "test.rs"
+
+[workspace]
 "#;
     fs::write(format!("{}/Cargo.toml", output_dir), cargo_toml).unwrap();
 

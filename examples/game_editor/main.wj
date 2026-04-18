@@ -17,10 +17,10 @@ struct EditorState {
 impl EditorState {
     fn new() -> EditorState {
         EditorState {
-            current_file: "".to_string(),
-            code_content: "// Start coding your game here!\n".to_string(),
+            current_file: "",
+            code_content: "// Start coding your game here!\n",
             project_files: Vec::new(),
-            console_output: "Welcome to Windjammer Game Editor!\n".to_string(),
+            console_output: "Welcome to Windjammer Game Editor!\n",
             is_running: false,
         }
     }

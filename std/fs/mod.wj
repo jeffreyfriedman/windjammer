@@ -3,7 +3,7 @@
 // NO coupling to any specific platform (Tauri, native, etc.)
 
 // File system result type
-pub type FsResult<T> = Result<T, String>
+pub type FsResult<T> = Result<T, string>
 
 // Read a file from the filesystem
 pub fn read_file(path: string) -> FsResult<string> {

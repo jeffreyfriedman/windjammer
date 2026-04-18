@@ -1,9 +1,6 @@
-/// TDD: E0308 Fix - Index expressions produce &T in Rust.
-/// When passing vec[i] or arr[i] to function/method expecting Copy type (f32, u32),
-/// add * to dereference.
+/// Regression guard: struct field `Vec<Copy>` indices must not use explicit `*` (E0614).
 ///
-/// Bug: sdf_sphere(x, y, z, node.params[0], ...) - params[0] gives &f32, expects f32
-/// Fix: Generate *(node.params[0])
+/// Rust already yields `f32` / `i32` for `Copy` elements; `*(node.params[0])` is invalid.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -30,7 +27,7 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 #[test]
-fn test_index_deref_for_f32_param() {
+fn test_struct_field_vec_f32_index_no_spurious_star() {
     let source = r#"
 pub struct Node {
     pub params: Vec<f32>,
@@ -47,10 +44,9 @@ pub fn eval(node: Node, x: f32, y: f32, z: f32) -> f32 {
 
     let output = compile_and_get_rust(source);
 
-    // Should generate *(node.params[0]) etc. for Copy params
     assert!(
-        output.contains("*(node.params[0])") || output.contains("* (node.params[0])"),
-        "Expected deref for Index when param expects f32, got:\n{}",
+        !output.contains("*(node.params[0])") && !output.contains("* (node.params[0])"),
+        "must NOT deref Vec<Copy> index (E0614), got:\n{}",
         output
     );
 }

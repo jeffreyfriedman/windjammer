@@ -695,6 +695,7 @@ fn replace_strings_in_item<'ast>(
                     type_params: decl.type_params.clone(),
                     where_clause: decl.where_clause.clone(),
                     parent_type: decl.parent_type.clone(),
+                    impl_trait: decl.impl_trait.clone(),
                     doc_comment: decl.doc_comment.clone(),
                 },
                 location: location.clone(),
@@ -723,6 +724,7 @@ fn replace_strings_in_item<'ast>(
                         type_params: func.type_params.clone(),
                         where_clause: func.where_clause.clone(),
                         parent_type: func.parent_type.clone(),
+                        impl_trait: func.impl_trait.clone(),
                         doc_comment: func.doc_comment.clone(),
                     }
                 })
@@ -758,11 +760,13 @@ fn replace_strings_in_item<'ast>(
             name,
             type_,
             value,
+            is_pub,
             location,
         } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
+            is_pub: *is_pub,
             location: location.clone(),
         },
         _ => item.clone(),
@@ -854,6 +858,7 @@ mod tests {
                 return_decorators: vec![],
                 body: body_stmts,
                 parent_type: None,
+                impl_trait: None,
                 doc_comment: None,
             },
             location: None,

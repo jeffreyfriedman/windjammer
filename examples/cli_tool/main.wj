@@ -43,7 +43,7 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, string> {
     
     // Read the file
     let content = fs.read_to_string(&path)?
-    let mut lines: Vec<string> = content.lines().map(|l| l.to_string()).collect()
+    let mut lines: Vec<string> = content.lines().map(|l| l).collect()
     
     // Apply transformations
     if args.uppercase {

@@ -14,6 +14,25 @@ use std::fs;
 /// Fix: Skip ownership inference for extern function call arguments.
 use std::process::Command;
 
+fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    if !dir.exists() {
+        return None;
+    }
+    for entry in fs::read_dir(dir).ok()? {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if path.is_file() && path.extension().map_or(false, |e| e == "rs") {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_rs_file(&path) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 fn transpile_wj(source: &str) -> String {
     let temp_dir = std::env::temp_dir();
     let test_id = format!(
@@ -53,7 +72,27 @@ fn transpile_wj(source: &str) -> String {
         );
     }
 
-    let rust_file = out_dir.join("test.rs");
+    let rust_file = find_rs_file(&out_dir).unwrap_or_else(|| {
+        let mut all_files = Vec::new();
+        fn collect_files(dir: &std::path::Path, files: &mut Vec<String>) {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        collect_files(&p, files);
+                    } else {
+                        files.push(p.display().to_string());
+                    }
+                }
+            }
+        }
+        collect_files(&out_dir, &mut all_files);
+        panic!(
+            "No .rs file found in output directory: {}\nFiles present: {:?}",
+            out_dir.display(),
+            all_files
+        );
+    });
     let content = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
     let _ = fs::remove_dir_all(&test_dir);

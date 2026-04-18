@@ -38,52 +38,9 @@ fi
 echo -e "${GREEN}✓${NC} Build successful"
 echo ""
 
-# Determine installation directory
-INSTALL_DIR="/usr/local/bin"
-STDLIB_DIR="/usr/local/lib/windjammer/std"
-
-# Check if we need sudo
-if [ -w "$INSTALL_DIR" ]; then
-    SUDO=""
-else
-    SUDO="sudo"
-    echo -e "${YELLOW}Note: Installation requires sudo access${NC}"
-fi
-
-# Install binary
-echo "Installing windjammer to $INSTALL_DIR..."
-$SUDO cp target/release/windjammer "$INSTALL_DIR/windjammer"
-$SUDO chmod +x "$INSTALL_DIR/windjammer"
-
-# Install standard library
-echo "Installing standard library to $STDLIB_DIR..."
-$SUDO mkdir -p "$STDLIB_DIR"
-$SUDO cp -r std/* "$STDLIB_DIR/"
-
-# Set environment variable hint
-echo ""
-echo -e "${GREEN}✓ Installation complete!${NC}"
-echo ""
-echo "Windjammer has been installed to: $INSTALL_DIR/windjammer"
-echo "Standard library installed to: $STDLIB_DIR"
-echo ""
-echo -e "${YELLOW}Optional:${NC} Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-echo "  export WINDJAMMER_STDLIB=$STDLIB_DIR"
-echo ""
-
-# Verify installation
-if command -v windjammer &> /dev/null; then
-    echo -e "${GREEN}✓${NC} Verification successful"
-    wj --version
-    echo ""
-    echo "Try it out:"
-    echo "  wj --help"
-    echo "  wj build --path examples/01_basics"
-else
-    echo -e "${RED}✗ Installation verification failed${NC}"
-    echo "Please ensure $INSTALL_DIR is in your PATH"
-    exit 1
-fi
+# Use wj self-install for the actual installation
+echo -e "${YELLOW}Installing via wj self-install...${NC}"
+./target/release/wj self-install
 
 echo ""
-echo -e "${GREEN}Happy coding! 🚀${NC}"
+echo -e "${GREEN}Happy coding!${NC}"

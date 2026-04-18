@@ -29,9 +29,9 @@ struct TodoState {
 impl TodoState {
     fn new() -> TodoState {
         let initial_todos = vec![
-            Todo::new(1, "Learn Windjammer".to_string()),
-            Todo::new(2, "Build amazing UIs".to_string()),
-            Todo::new(3, "Deploy to production".to_string()),
+            Todo::new(1, "Learn Windjammer"),
+            Todo::new(2, "Build amazing UIs"),
+            Todo::new(3, "Deploy to production"),
         ]
         
         TodoState {
@@ -87,7 +87,7 @@ fn render_todo_app(state: TodoState) -> Container {
         let item = Flex::new()
             .direction(FlexDirection::Row)
             .gap("10px")
-            .child(Button::new(checkbox.to_string())
+            .child(Button::new(checkbox)
                 .variant(if todo.completed { ButtonVariant::Primary } else { ButtonVariant::Ghost })
                 .on_click(move || {
                     state_toggle.toggle_todo(todo_id)
@@ -101,12 +101,12 @@ fn render_todo_app(state: TodoState) -> Container {
     // Build full UI
     Container::new()
         .max_width("600px")
-        .child(Panel::new("📝 Simple Todo App".to_string())
+        .child(Panel::new("📝 Simple Todo App")
             .child(
                 Flex::new()
                     .direction(FlexDirection::Column)
                     .gap("20px")
-                    .child(Text::new("Click checkboxes to toggle completion!".to_string()))
+                    .child(Text::new("Click checkboxes to toggle completion!"))
                     .child(list)
                     .child(Text::new(format!("{} items left", active_count))
                         .size(TextSize::Small))
@@ -124,7 +124,7 @@ fn start() {
         render_todo_app(state.clone()).to_vnode()
     }
     
-    ReactiveApp::new("Simple Todo".to_string(), render).run()
+    ReactiveApp::new("Simple Todo", render).run()
 }
 
 fn main() {

@@ -17,17 +17,17 @@ fn to_lower(s: &string) -> string {
 
 // Trim whitespace from both ends
 fn trim(s: &string) -> string {
-    s.trim().to_string()
+    s.trim()
 }
 
 // Trim whitespace from start
 fn trim_start(s: &string) -> string {
-    s.trim_start().to_string()
+    s.trim_start()
 }
 
 // Trim whitespace from end
 fn trim_end(s: &string) -> string {
-    s.trim_end().to_string()
+    s.trim_end()
 }
 
 // === CHECKING ===

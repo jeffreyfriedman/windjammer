@@ -125,3 +125,39 @@ fn test() {
         output
     );
 }
+
+/// Match on `HashMap::get` + non-float fn return: default float literal must be `f32` (library codegen).
+#[test]
+fn test_hashmap_get_match_default_arm_f32_non_float_return() {
+    let source = r#"
+use std::collections::HashMap
+
+fn demo() -> i32 {
+    let m: HashMap<(i32, i32), f32> = HashMap::new()
+    let g = match m.get(&(0, 0)) {
+        Some(v) => *v,
+        None => 999999.0,
+    }
+    if g > 0.0 {
+        1
+    } else {
+        0
+    }
+}
+
+fn main() {
+    let _ = demo()
+}
+"#;
+    let output = compile_and_get_rust(source);
+    assert!(
+        output.contains("999999.0_f32"),
+        "expected f32 default arm, got:\n{}",
+        output
+    );
+    assert!(
+        !output.contains("999999.0_f64"),
+        "should not use f64 for f32 map value match, got:\n{}",
+        output
+    );
+}

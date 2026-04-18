@@ -7,6 +7,35 @@ use crate::lexer::Token;
 use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
+/// Whether a type structurally mentions `Self` (the trait receiver type).
+/// Used for abstract trait methods with only `self`: those that return `Self` (or `Option<Self>`, etc.)
+/// need a by-value receiver in Rust; getter-style methods like `fn flags(self) -> bool` must stay
+/// `Inferred` so the analyzer can emit `&self` and trait objects (`dyn Trait`) remain object-safe.
+fn type_structurally_contains_self(ty: &Type) -> bool {
+    match ty {
+        Type::Custom(name) if name == "Self" => true,
+        Type::Associated(base, _) if base == "Self" => true,
+        Type::Option(inner)
+        | Type::Vec(inner)
+        | Type::Reference(inner)
+        | Type::MutableReference(inner) => type_structurally_contains_self(inner),
+        Type::Result(ok, err) => {
+            type_structurally_contains_self(ok) || type_structurally_contains_self(err)
+        }
+        Type::Tuple(types) => types.iter().any(type_structurally_contains_self),
+        Type::Parameterized(_, args) => args.iter().any(type_structurally_contains_self),
+        Type::Array(inner, _) => type_structurally_contains_self(inner),
+        Type::FunctionPointer { params, return_type } => {
+            params.iter().any(type_structurally_contains_self)
+                || return_type
+                    .as_ref()
+                    .is_some_and(|t| type_structurally_contains_self(t))
+        }
+        Type::RawPointer { pointee, .. } => type_structurally_contains_self(pointee),
+        _ => false,
+    }
+}
+
 impl Parser {
     /// Collect all consecutive doc comments into a single string
     fn collect_doc_comments(&mut self) -> Option<String> {
@@ -212,6 +241,7 @@ impl Parser {
             func.decorators = decorators;
             func.doc_comment = doc_comment; // Doc comment from before the method
             func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
+            func.impl_trait = trait_name.clone();
             functions.push(func);
         }
 
@@ -366,14 +396,18 @@ impl Parser {
                 None
             };
 
-            // Abstract trait methods: bare `self` as the only parameter means by-value receiver
-            // (`fn consume(self) -> T`). If there are other parameters, keep `Inferred` so the
-            // analyzer defaults to &self for read-only signatures (`fn process(self, data: T)`).
+            // Abstract trait methods: only force by-value `self` when the return type mentions
+            // `Self` (e.g. `fn into_inner(self) -> Self`). A bare `self` with a non-Self return
+            // (e.g. `fn is_enabled(self) -> bool`) must stay `Inferred` so the analyzer emits
+            // `&self` and `dyn Trait` / `Box<dyn Trait>` method calls compile.
             let mut parameters = parameters;
             if body.is_none()
                 && parameters.len() == 1
                 && parameters[0].name == "self"
                 && parameters[0].ownership == OwnershipHint::Inferred
+                && return_type
+                    .as_ref()
+                    .is_some_and(|t| type_structurally_contains_self(t))
             {
                 parameters[0].ownership = OwnershipHint::Owned;
             }
@@ -731,6 +765,7 @@ impl Parser {
             return_decorators,      // Decorators on return type
             body,
             parent_type: None, // Set by parse_impl for methods
+            impl_trait: None,
             doc_comment: None, // Set by parse_item if doc comments present
         })
     }

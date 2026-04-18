@@ -1078,7 +1078,7 @@ impl<'a> Interpreter<'a> {
 
     fn literal_to_value(&self, lit: &Literal) -> Value {
         match lit {
-            Literal::Int(n) => Value::Int(*n),
+            Literal::Int(n) | Literal::IntSuffixed(n, _) => Value::Int(*n),
             Literal::Float(f) => Value::Float(*f),
             Literal::Bool(b) => Value::Bool(*b),
             Literal::String(s) => Value::String(s.clone()),

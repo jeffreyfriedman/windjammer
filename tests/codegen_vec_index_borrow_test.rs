@@ -16,7 +16,7 @@ fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_millis()
+            .as_nanos()
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -146,4 +146,42 @@ fn main() {}
         rust
     );
     assert!(compiles, "Generated Rust must compile:\n{}", rust);
+}
+
+#[test]
+fn test_vec_index_nonopy_field_access_compiles() {
+    // Bug: `let text = items[i].name` where name is String generates a move out of Vec
+    // The compiler suppresses borrow/clone on vec[i] when inside a FieldAccess,
+    // but doesn't handle the case where the *field itself* is non-Copy (String).
+    // Result: `items[i].name` tries to move String out of Vec element → E0507
+    //
+    // Fix: When accessing a non-Copy field through Vec indexing, the codegen must
+    // add .clone() to the field access result (e.g., items[i].name.clone())
+    let source = r#"
+pub struct Choice {
+    pub text: string,
+    pub value: i32,
+}
+
+pub fn get_choice_text(choices: Vec<Choice>, idx: i32) -> string {
+    let choice_text = choices[idx].text
+    return choice_text
+}
+
+fn main() {
+    let mut choices = Vec::new()
+    choices.push(Choice { text: "Hello".to_string(), value: 1 })
+    let t = get_choice_text(choices, 0)
+}
+"#;
+
+    let (rust, compiles) = compile_wj_to_rust_and_check(source);
+
+    // The generated Rust MUST compile. The exact mechanism (clone or borrow) is
+    // an implementation detail — what matters is no E0507 move-out-of-Vec error.
+    assert!(
+        compiles,
+        "Vec[i].string_field must compile (no E0507 move). Generated Rust:\n{}",
+        rust
+    );
 }

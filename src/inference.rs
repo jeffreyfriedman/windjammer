@@ -507,6 +507,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 
@@ -556,6 +557,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 
@@ -617,6 +619,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 

@@ -1,4 +1,6 @@
 use std::fs;
+use tempfile::TempDir;
+
 /// TDD test: Parameters passed to enum variant constructors should stay Owned
 ///
 /// Bug: `ObjectiveType::Kill(enemy_type, count)` - the `enemy_type` parameter
@@ -14,26 +16,22 @@ use std::fs;
 use std::process::Command;
 
 fn transpile_wj(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    // tempfile::TempDir: unique path per call (parallel-safe). The old
+    // nanos+pid scheme can collide across threads in the same process (same PID),
+    // and one test's remove_dir_all can delete another test's directory → ENOENT.
+    let temp_dir = TempDir::new().expect("failed to create temp dir for wj test");
+    let test_dir = temp_dir.path();
 
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
     let out_dir = test_dir.join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
     // Use CARGO_BIN_EXE_wj for cross-platform compatibility (Windows CI fix)
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
+        .current_dir(test_dir)
         .arg("build")
         .arg(&wj_file)
         .arg("--target")
@@ -56,9 +54,6 @@ fn transpile_wj(source: &str) -> String {
 
     let rust_file = out_dir.join("test.rs");
     let content = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    // Clean up temp directory
-    let _ = fs::remove_dir_all(&test_dir);
 
     content
 }

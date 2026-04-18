@@ -10,7 +10,9 @@ pub enum Token {
     Fn,
     Struct,
     Let,
+    Mut,
     Var,
+    Const,
     Return,
     If,
     Else,
@@ -37,6 +39,7 @@ pub enum Token {
     Array,
     Atomic,
     Private,
+    Workgroup,
     Type,
 
     // Builtin types
@@ -161,6 +164,14 @@ impl<'a> Lexer<'a> {
         self.position
     }
 
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn column(&self) -> usize {
+        self.column
+    }
+
     /// The source string being lexed
     pub fn source(&self) -> &'a str {
         self.input
@@ -217,6 +228,23 @@ impl<'a> Lexer<'a> {
     fn read_number(&mut self, first: char) -> Token {
         let mut s = String::from(first);
         let mut is_float = first == '.';
+
+        if first == '0' && (self.peek() == Some('x') || self.peek() == Some('X')) {
+            s.push(self.next().unwrap());
+            while let Some(c) = self.peek() {
+                if c.is_ascii_hexdigit() {
+                    s.push(c);
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+            if self.peek() == Some('u') || self.peek() == Some('i') {
+                self.next();
+            }
+            let hex_str = &s[2..];
+            return Token::IntLiteral(u64::from_str_radix(hex_str, 16).unwrap_or(0));
+        }
 
         while let Some(c) = self.peek() {
             if c.is_ascii_digit() {
@@ -298,7 +326,9 @@ impl<'a> Lexer<'a> {
             "fn" => Token::Fn,
             "struct" => Token::Struct,
             "let" => Token::Let,
+            "mut" => Token::Mut,
             "var" => Token::Var,
+            "const" => Token::Const,
             "return" => Token::Return,
             "if" => Token::If,
             "else" => Token::Else,
@@ -324,6 +354,7 @@ impl<'a> Lexer<'a> {
             "atomic" => Token::Atomic,
             "type" => Token::Type,
             "private" => Token::Private,
+            "workgroup" => Token::Workgroup,
             "f32" => Token::F32,
             "f64" => Token::F64,
             "u32" => Token::U32,

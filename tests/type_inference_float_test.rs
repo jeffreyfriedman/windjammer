@@ -339,3 +339,68 @@ fn main() {
         String::from_utf8_lossy(&rust_build.stderr)
     );
 }
+
+/// Match on `HashMap::get` must unify default-arm literals as `f32` even when the function returns
+/// a non-float type (no `-> f32` shortcut). Covers qualified map types and infer/codegen location sync.
+#[test]
+fn test_hashmap_get_match_default_arm_infers_f32_from_qualified_map_type() {
+    let wj_source = r#"
+use std::collections::HashMap
+
+fn demo() -> i32 {
+    let m: HashMap<(i32, i32), f32> = HashMap::new()
+    let g = match m.get(&(0, 0)) {
+        Some(v) => *v,
+        None => 999999.0,
+    }
+    if g > 0.0 {
+        1
+    } else {
+        0
+    }
+}
+
+fn main() {
+    let x = demo()
+    println!("{}", x)
+}
+"#;
+
+    let output_dir = "/tmp/wj_test_hashmap_match_f32";
+    fs::create_dir_all(output_dir).unwrap();
+    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            "--target",
+            "rust",
+            "--no-cargo",
+            &format!("{}/test.wj", output_dir),
+            "--output",
+            output_dir,
+        ])
+        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
+        .output()
+        .expect("Failed to run wj");
+
+    assert!(
+        output.status.success(),
+        "Compilation should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
+        .expect("Generated Rust file not found");
+
+    assert!(
+        rust_code.contains("999999.0_f32"),
+        "default match arm literal should be f32 (from HashMap value type), got:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("999999.0_f64"),
+        "should not emit f64 for arm that must match f32:\n{}",
+        rust_code
+    );
+}

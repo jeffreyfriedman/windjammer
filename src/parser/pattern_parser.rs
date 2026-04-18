@@ -102,6 +102,12 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Literal(Literal::Int(n)))
             }
+            Token::IntLiteralSuffixed(n, ref suffix) => {
+                let n = *n;
+                let suffix = suffix.clone();
+                self.advance();
+                Ok(Pattern::Literal(Literal::IntSuffixed(n, suffix)))
+            }
             Token::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();

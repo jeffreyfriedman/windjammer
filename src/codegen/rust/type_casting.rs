@@ -10,7 +10,19 @@ pub fn expression_produces_usize(expr: &Expression) -> bool {
         Expression::MethodCall {
             method,
             ..
-        } if method == "len"
+        } if method == "len" || method == "count" || method == "capacity"
+    ) || matches!(
+        expr,
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } if arguments.is_empty()
+            && matches!(
+                function,
+                Expression::FieldAccess { field, .. }
+                    if field == "len" || field == "count" || field == "capacity"
+            )
     )
 }
 
@@ -60,7 +72,20 @@ pub fn cast_for_usize_binary_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::ast::builders::{expr_call, expr_field, expr_var};
     use crate::test_utils::test_alloc_expr;
+
+    #[test]
+    fn test_call_form_len_produces_usize() {
+        // Parser represents `items.len()` as Call(FieldAccess(items, "len"), []).
+        let items = test_alloc_expr(expr_var("items"));
+        let len_sel = test_alloc_expr(expr_field(items, "len"));
+        let call = test_alloc_expr(expr_call(len_sel, vec![]));
+        assert!(
+            expression_produces_usize(call),
+            "Call/FieldAccess len() should count as usize-producing"
+        );
+    }
 
     #[test]
     fn test_expression_produces_usize() {

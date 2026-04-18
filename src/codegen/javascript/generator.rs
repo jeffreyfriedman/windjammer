@@ -928,9 +928,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     _ => {}
                 }
 
-                // Handle Type.new(...) → Type.create(...) since 'new' is reserved
                 let func_expr = if func_expr.ends_with(".new") {
                     format!("{}.create", &func_expr[..func_expr.len() - 4])
+                } else if func_expr.ends_with(".new_") {
+                    format!("{}.create", &func_expr[..func_expr.len() - 5])
                 } else {
                     func_expr
                 };
@@ -1172,7 +1173,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     fn generate_literal(&self, lit: &Literal) -> String {
         match lit {
-            Literal::Int(n) => n.to_string(),
+            Literal::Int(n) | Literal::IntSuffixed(n, _) => n.to_string(),
             Literal::Float(f) => f.to_string(),
             Literal::String(s) => {
                 // Check for string interpolation markers (${ or just $ with identifier)
@@ -1479,6 +1480,7 @@ mod tests {
                     type_params: vec![],
                     where_clause: vec![],
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                 },
                 location: None,

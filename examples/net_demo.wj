@@ -14,7 +14,7 @@ async fn main() {
     println!("Example 1: GET Request")
     println!("----------------------")
     
-    match get("https://api.github.com/zen".to_string(), None).await {
+    match get("https://api.github.com/zen", None).await {
         Ok(response) => {
             println!("Status: {}", response.status)
             println!("Body: {}", response.body)
@@ -30,14 +30,14 @@ async fn main() {
     println!("---------------------------")
     
     let mut headers = Map::new()
-    headers.insert("User-Agent".to_string(), "Windjammer/1.0".to_string())
-    headers.insert("Accept".to_string(), "application/json".to_string())
+    headers.insert("User-Agent", "Windjammer/1.0")
+    headers.insert("Accept", "application/json")
     
-    match get("https://api.github.com/users/github".to_string(), Some(headers)).await {
+    match get("https://api.github.com/users/github", Some(headers)).await {
         Ok(response) => {
             println!("Status: {}", response.status)
-            println!("Content-Type: {}", response.headers.get("content-type").unwrap_or(&"unknown".to_string()))
-            println!("Body (first 200 chars): {}...", response.body.chars().take(200).collect::<String>())
+            println!("Content-Type: {}", response.headers.get("content-type").unwrap_or("unknown"))
+            println!("Body (first 200 chars): {}...", response.body.chars().take(200).collect::<string>())
         },
         Err(e) => {
             println!("Error: {}", e)
@@ -50,11 +50,10 @@ async fn main() {
     println!("-----------------------")
     
     let mut post_headers = Map::new()
-    post_headers.insert("Content-Type".to_string(), "application/json".to_string())
+    post_headers.insert("Content-Type", "application/json")
     
-    let json_body = r#"{"title": "Test Post", "body": "This is a test", "userId": 1}"#.to_string()
-    
-    match post("https://jsonplaceholder.typicode.com/posts".to_string(), Some(post_headers), json_body).await {
+    let json_body = r#"{"title": "Test Post", "body": "This is a test", "userId": 1}"#    
+    match post("https://jsonplaceholder.typicode.com/posts", Some(post_headers), json_body).await {
         Ok(response) => {
             println!("Status: {}", response.status)
             println!("Response: {}", response.body)
@@ -70,11 +69,10 @@ async fn main() {
     println!("----------------------")
     
     let mut put_headers = Map::new()
-    put_headers.insert("Content-Type".to_string(), "application/json".to_string())
+    put_headers.insert("Content-Type", "application/json")
     
-    let update_body = r#"{"title": "Updated Title", "body": "Updated content", "userId": 1}"#.to_string()
-    
-    match put("https://jsonplaceholder.typicode.com/posts/1".to_string(), Some(put_headers), update_body).await {
+    let update_body = r#"{"title": "Updated Title", "body": "Updated content", "userId": 1}"#    
+    match put("https://jsonplaceholder.typicode.com/posts/1", Some(put_headers), update_body).await {
         Ok(response) => {
             println!("Status: {}", response.status)
             println!("Response: {}", response.body)
@@ -89,7 +87,7 @@ async fn main() {
     println!("Example 5: DELETE Request")
     println!("-------------------------")
     
-    match delete("https://jsonplaceholder.typicode.com/posts/1".to_string(), None).await {
+    match delete("https://jsonplaceholder.typicode.com/posts/1", None).await {
         Ok(response) => {
             println!("Status: {}", response.status)
             println!("Deleted successfully!")
@@ -105,17 +103,17 @@ async fn main() {
     println!("-------------------------")
     
     let mut custom_headers = Map::new()
-    custom_headers.insert("Accept".to_string(), "application/json".to_string())
+    custom_headers.insert("Accept", "application/json")
     
     match send_request(
-        "GET".to_string(),
-        "https://httpbin.org/get".to_string(),
+        "GET",
+        "https://httpbin.org/get",
         Some(custom_headers),
         None
     ).await {
         Ok(response) => {
             println!("Status: {}", response.status)
-            println!("Body (first 300 chars): {}...", response.body.chars().take(300).collect::<String>())
+            println!("Body (first 300 chars): {}...", response.body.chars().take(300).collect::<string>())
         },
         Err(e) => {
             println!("Error: {}", e)
@@ -127,7 +125,7 @@ async fn main() {
     println!("Example 7: Error Handling")
     println!("-------------------------")
     
-    match get("https://this-domain-does-not-exist-12345.com".to_string(), None).await {
+    match get("https://this-domain-does-not-exist-12345.com", None).await {
         Ok(response) => {
             println!("Unexpected success: {}", response.status)
         },

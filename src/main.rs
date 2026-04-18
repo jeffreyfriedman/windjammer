@@ -10,6 +10,7 @@ pub mod cli;
 pub mod codegen;
 pub mod compiler;
 pub mod component_analyzer;
+pub mod decorator_registry;
 pub mod error;
 pub mod errors;
 pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
@@ -30,6 +31,7 @@ pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iter
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod metadata; // Cross-module type inference metadata
+pub mod method_registry;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -366,6 +368,10 @@ fn is_type_copy_quick(
         }
         Type::Array(inner, _) => is_type_copy_quick(inner, copy_structs, copy_enums),
         Type::Vec(_) | Type::String => false,
+        Type::RawPointer { pointee, .. } => {
+            is_type_copy_quick(pointee.as_ref(), copy_structs, copy_enums)
+        }
+        Type::FunctionPointer { .. } => true,
         Type::Custom(name) => {
             copy_structs.contains(name)
                 || copy_enums.contains(name)
@@ -593,13 +599,13 @@ pub fn build_project(
             if global_copy_structs.contains(&s.name) {
                 continue; // Already known Copy
             }
-            if s.field_types.is_empty() {
-                continue; // Skip unit structs (no fields = nothing to copy from)
-            }
-            let all_copy = s
-                .field_types
-                .iter()
-                .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums));
+            // Empty structs are Copy in Rust (and codegen derives Copy); include them here
+            // so analyzer/registry match codegen and avoid E0382 from wrong `self` inference.
+            let all_copy = s.field_types.is_empty()
+                || s
+                    .field_types
+                    .iter()
+                    .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums));
             if all_copy {
                 global_copy_structs.insert(s.name.clone());
                 changed = true;
@@ -840,9 +846,10 @@ pub fn build_project(
             }
 
             // Merge filtered_external_crates with rust_code_deps
+            let builtin_skip = ["crate", "super", "windjammer", "windjammer_runtime"];
             let mut combined_external_crates = filtered_external_crates;
             for dep in rust_code_deps {
-                if !combined_external_crates.contains(&dep) && dep != "crate" && dep != "super" {
+                if !combined_external_crates.contains(&dep) && !builtin_skip.contains(&dep.as_str()) {
                     combined_external_crates.push(dep);
                 }
             }
@@ -958,15 +965,6 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
-            // TDD FIX: Skip "shaders" directory - contains WGSL files, not Rust
-            // Shader files use WGSL types (vec3<float>, mat4x4<float>) which don't exist in Rust
-            // They should be compiled separately to WGSL, not to Rust
-            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if dir_name == "shaders" {
-                continue; // Skip shaders directory
-            }
-            
-            // Recurse into subdirectories
             find_wj_files_recursive(&path, files)?;
         }
     }
@@ -1209,7 +1207,9 @@ impl ModuleCompiler {
                     location: parser::SourceLocation::default(),
                 }],
             };
-            self.analyzer.register_traits_from_program(&dummy_program);
+            self.analyzer
+                .register_traits_from_program(&dummy_program)
+                .map_err(|e| anyhow::anyhow!("register_traits_from_program: {}", e))?;
         }
 
         // THE WINDJAMMER WAY: Store this program for cross-file trait inference
@@ -1670,6 +1670,27 @@ fn compile_file_impl(
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
+    // Emit parser warnings (W0010: non-canonical string types, etc.)
+    for w in parser.warnings() {
+        eprintln!(
+            "warning: {} [{}:{}:{}]",
+            w.message,
+            w.file.as_deref().unwrap_or("<unknown>"),
+            w.line.unwrap_or(0),
+            w.column.unwrap_or(0),
+        );
+    }
+
+    // Content-based shader detection: skip files with @vertex/@fragment/@compute
+    // from the Rust pipeline. These should be compiled via the WJSL→WGSL path.
+    if crate::compiler::is_shader_file(&program) {
+        eprintln!(
+            "  Skipping shader file {:?} from Rust pipeline (use WJSL target for GPU shaders)",
+            input_path.file_name()
+        );
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
     // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
     // This must happen immediately after parsing, before any other processing
     {
@@ -1679,6 +1700,10 @@ fn compile_file_impl(
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
     }
+
+    // Cross-file ownership: load peer `*.wj.meta` (from prior `wj build` runs) into the registry
+    // before analysis so call sites get `&` / `&mut` for callees defined in other files.
+    crate::metadata::merge_wj_meta_signatures_from_dir(source_root, &mut module_compiler.global_signatures);
 
     // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
     if module_compiler.enable_lint {
@@ -1852,7 +1877,8 @@ fn compile_file_impl(
         };
         module_compiler
             .analyzer
-            .register_traits_from_program(&dummy_program);
+            .register_traits_from_program(&dummy_program)
+            .map_err(|e| anyhow::anyhow!("register_traits_from_program: {}", e))?;
     }
 
     let (analyzed, signatures, analyzed_trait_methods) = module_compiler
@@ -2291,7 +2317,7 @@ fn compile_file_impl(
 
     // TDD FIX: Emit metadata file for cross-module type inference
     if target == CompilationTarget::Rust {
-        use crate::metadata::{ModuleMetadata, FunctionSignature};
+        use crate::metadata::{metadata_function_sig_from_analyzer, ModuleMetadata};
         
         let module_path = input_path
             .file_stem()
@@ -2300,33 +2326,31 @@ fn compile_file_impl(
         
         let mut meta = ModuleMetadata::new(module_path.to_string());
         
-        // Extract function signatures from program
+        // Function signatures: use analyzer registry (includes inferred param ownership)
         for item in &program.items {
             match item {
                 parser::Item::Function { decl, .. } => {
-                    meta.functions.insert(
-                        decl.name.clone(),
-                        FunctionSignature {
-                            params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                            return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
-                            is_associated: false,
-                            parent_type: None,
-                        },
-                    );
+                    if let Some(sig) = signatures.get_signature(&decl.name) {
+                        meta.functions.insert(
+                            decl.name.clone(),
+                            metadata_function_sig_from_analyzer(sig, false, None),
+                        );
+                    }
                 }
                 parser::Item::Impl { block, .. } => {
                     let type_name = &block.type_name;
                     for func_decl in &block.functions {
                         let full_name = format!("{}::{}", type_name, func_decl.name);
-                        meta.functions.insert(
-                            full_name,
-                            FunctionSignature {
-                                params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                                return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
-                                is_associated: true,
-                                parent_type: Some(type_name.clone()),
-                            },
-                        );
+                        if let Some(sig) = signatures.get_signature(&full_name) {
+                            meta.functions.insert(
+                                full_name,
+                                metadata_function_sig_from_analyzer(
+                                    sig,
+                                    true,
+                                    Some(type_name.clone()),
+                                ),
+                            );
+                        }
                     }
                 }
                 parser::Item::Struct { decl, .. } => {
@@ -2340,10 +2364,12 @@ fn compile_file_impl(
             }
         }
         
-        // Write metadata file: file.wj → file.wj.meta (JSON)
-        let meta_path = input_path.with_extension("wj.meta");
+        let meta_path = crate::metadata::meta_cache_path(input_path);
+        if let Some(parent) = meta_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let meta_json = serde_json::to_string_pretty(&meta)?;
-        std::fs::write(&meta_path, meta_json)?;
+        std::fs::write(&meta_path, &meta_json)?;
         
         eprintln!("📋 METADATA: {} ({} functions, {} structs)", meta_path.display(), meta.functions.len(), meta.structs.len());
     }
@@ -2492,7 +2518,11 @@ fn create_cargo_toml_with_deps(
                         trimmed.to_string()
                     };
 
-                    source_cargo_deps.push(processed_line);
+                    let dep_name = processed_line.split(['=', ' ']).next().unwrap_or("").trim();
+                    let skip = matches!(dep_name, "windjammer" | "windjammer-runtime" | "windjammer_runtime");
+                    if !skip {
+                        source_cargo_deps.push(processed_line);
+                    }
                 }
             }
         }

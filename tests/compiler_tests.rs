@@ -98,10 +98,10 @@ fn test_pipe_operator() {
     let generated = compile_fixture("pipe_operator").expect("Compilation failed");
 
     // Check that pipe operator is transformed to nested calls
-    // 5 |> double |> add_ten becomes add_ten(double(5))
+    // 5 |> double |> add_ten becomes add_ten(double(5_i64)) (int literals get i64 suffix in Rust)
     // No & needed because int/i64 is a Copy type
     assert!(
-        generated.contains("add_ten(double(5))"),
+        generated.contains("add_ten(double(5_i64))"),
         "Pipe operator should transform to nested calls (no & for Copy types)"
     );
 
@@ -162,9 +162,9 @@ fn main() {
     let generated = compile_fixture("temp_combined").expect("Compilation failed");
 
     // Check that both features work together
-    // int/i64 is a Copy type, so no & is inserted
+    // int/i64 is a Copy type, so no & is inserted (literal emitted as 5_i64)
     assert!(
-        generated.contains("double(5)"),
+        generated.contains("double(5_i64)"),
         "Pipe operator should work correctly (no & for Copy types)"
     );
     assert!(
@@ -207,7 +207,7 @@ fn main() {
         "Copy types should be passed by value without mut if read-only"
     );
     assert!(
-        generated.contains("print_twice(42)"),
+        generated.contains("print_twice(42_i64)"),
         "Copy types should be passed by value at call site"
     );
 
@@ -274,12 +274,14 @@ fn test_smart_auto_derive() {
         "Container with Vec should derive Debug, Clone, PartialEq, Eq, Default (no Hash, no Copy)"
     );
 
-    // Check Config: explicit traits specified
-    // Should derive exactly: Debug, Clone, Serialize, Deserialize
+    // Check Config: explicit @auto traits are merged with inferred standard traits
+    // (see merge_standard_derive_traits — partial lists must not drop Debug/Clone/Eq/etc.)
+    // Serde traits sort after the standard block.
     assert!(
-        generated.contains("#[derive(Debug, Clone, Serialize, Deserialize)]")
-            && generated.contains("struct Config"),
-        "Config with explicit traits should derive only those traits"
+        generated.contains(
+            "#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize, Serialize)]"
+        ) && generated.contains("struct Config"),
+        "Config should list explicit Serde derives plus inferred standard derives"
     );
 
     println!("✓ Smart @auto derive works");

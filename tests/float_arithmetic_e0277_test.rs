@@ -63,6 +63,33 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
     (output.status.success(), stderr)
 }
 
+/// Pattern: f32 method/let * float literal — must NOT mis-label literal as f64 and cast the f32 side
+/// to f64 (perception.wj: `dot.acos() * (180.0 / PI)` style). Regression: E0308/E0277.
+#[test]
+fn test_f32_value_mul_float_literal_no_bogus_left_f64_cast() {
+    let source = r#"
+pub fn degrees_from_sin(x: f32) -> f32 {
+    let s = x.sin()
+    s * 57.2957795
+}
+"#;
+
+    let output = compile_and_get_rust(source);
+    assert!(
+        !output.contains("sin() as f64") && !output.contains("sin() as f64 "),
+        "must not promote f32 sin() to f64 when multiplying by a float literal; got:\n{}",
+        output
+    );
+
+    let (rustc_ok, stderr) = run_rustc(&output);
+    assert!(
+        rustc_ok,
+        "rustc failed (E0308/E0277):\nstderr: {}\n\nGenerated:\n{}",
+        stderr,
+        output
+    );
+}
+
 /// Pattern: const PI: f64, f32_var * PI - codegen must cast to avoid f32*f64
 #[test]
 fn test_const_pi_f32_context() {

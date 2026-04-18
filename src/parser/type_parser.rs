@@ -6,6 +6,18 @@ use crate::lexer::Token;
 use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
+/// When parsing `lhs::rhs` and the lookahead delimiter is `>`, `,`, `)`, etc., distinguish:
+/// - **Module path** (`ffi::GpuVertex`, `std::fs::File`) → extend into a single [`Type::Custom`] path
+///   so Rust codegen can run `qualify_parent_child_external_path` (e.g. `ffi::api::GpuVertex`).
+/// - **Associated type** (`Self::Item`, `T::Output`, `MyTrait::Assoc`) → [`Type::Associated`].
+fn type_path_lhs_is_module_prefix(lhs: &str) -> bool {
+    matches!(lhs, "crate" | "super" | "self")
+        || lhs
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+}
+
 impl Parser {
     /// Convert a Type to a string representation (for error messages and debugging)
     #[allow(clippy::only_used_in_recursion)]
@@ -271,7 +283,7 @@ impl Parser {
 
                     // Parse the size - must be a literal integer
                     let size = match self.current_token() {
-                        Token::IntLiteral(n) => {
+                        Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => {
                             let size = *n as usize;
                             self.advance();
                             size
@@ -400,7 +412,14 @@ impl Parser {
                                         | Token::FatArrow
                                         | Token::LBrace
                                         | Token::Where => {
-                                            // This looks like an associated type (final segment)
+                                            if type_path_lhs_is_module_prefix(&type_name) {
+                                                type_name.push_str("::");
+                                                type_name.push_str(&next_segment_str);
+                                                self.advance(); // consume ::
+                                                self.advance(); // consume identifier
+                                                break;
+                                            }
+                                            // Associated type (final segment): Self::Item, T::Output, …
                                             self.advance(); // consume ::
                                             self.advance(); // consume identifier
                                             return Ok(Type::Associated(
@@ -417,7 +436,13 @@ impl Parser {
                                             continue;
                                         }
                                         _ => {
-                                            // Assume associated type
+                                            if type_path_lhs_is_module_prefix(&type_name) {
+                                                type_name.push_str("::");
+                                                type_name.push_str(&next_segment_str);
+                                                self.advance(); // consume ::
+                                                self.advance(); // consume identifier
+                                                break;
+                                            }
                                             self.advance(); // consume ::
                                             self.advance(); // consume identifier
                                             return Ok(Type::Associated(
@@ -427,9 +452,13 @@ impl Parser {
                                         }
                                     }
                                 } else {
-                                    // End of tokens, treat as associated type
                                     self.advance(); // consume ::
                                     self.advance(); // consume identifier
+                                    if type_path_lhs_is_module_prefix(&type_name) {
+                                        type_name.push_str("::");
+                                        type_name.push_str(&next_segment_str);
+                                        return Ok(Type::Custom(type_name));
+                                    }
                                     return Ok(Type::Associated(type_name, next_segment_str));
                                 }
                             } else {
@@ -471,7 +500,24 @@ impl Parser {
                         | "()"
                 );
 
-                if !is_primitive_type && self.current_token() == &Token::Lt {
+                // Normalize Rust string types to canonical Type::String
+                if (type_name == "str" || type_name == "String") && !self.in_extern_fn {
+                    let loc = self.current_location();
+                    let (line, col) = loc
+                        .as_ref()
+                        .map(|l| (l.line, l.column))
+                        .unwrap_or((1, 1));
+                    self.emit_warning(
+                        format!(
+                            "W0010: use `string` instead of `{}` -- Windjammer has one string type",
+                            type_name
+                        ),
+                        Some(self.filename.clone()),
+                        Some(line),
+                        Some(col),
+                    );
+                    Type::String
+                } else if !is_primitive_type && self.current_token() == &Token::Lt {
                     self.advance();
 
                     // Handle Vec<T>, Option<T>, Result<T, E>

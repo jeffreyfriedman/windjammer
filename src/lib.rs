@@ -23,12 +23,19 @@ pub mod metadata;
 pub mod parser;
 pub mod parser_impl;
 pub mod source_map;
+pub mod method_registry;
 pub mod stdlib_scanner;
+#[cfg(feature = "highlighting")]
 pub mod syntax_highlighter;
+#[cfg(not(feature = "highlighting"))]
+pub mod syntax_highlighter_stub;
+#[cfg(not(feature = "highlighting"))]
+pub use syntax_highlighter_stub as syntax_highlighter;
 pub mod test_utils;
 pub mod type_inference;
 pub mod type_registry;
 pub mod compiler;
+pub mod decorator_registry;
 pub mod lib_rs_generator;
 pub mod ejector;
 pub mod error_mapper;

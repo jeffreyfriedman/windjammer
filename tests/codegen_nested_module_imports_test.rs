@@ -131,6 +131,8 @@ edition = "2021"
 
 [lib]
 path = "src/lib.rs"
+
+[workspace]
 "#;
     fs::write(temp_dir.path().join("Cargo.toml"), cargo_toml).unwrap();
 

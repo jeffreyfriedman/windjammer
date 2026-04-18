@@ -74,8 +74,12 @@ pub fn assert_lte<T: PartialOrd + std::fmt::Debug>(left: T, right: T) {
     }
 }
 
-/// Assert that two floating point values are approximately equal
-pub fn assert_approx(actual: f64, expected: f64, epsilon: f64) {
+/// Assert that two floating point values are approximately equal.
+/// Accepts both f32 and f64 via Into<f64> so callers don't need manual casts.
+pub fn assert_approx(actual: impl Into<f64>, expected: impl Into<f64>, epsilon: impl Into<f64>) {
+    let actual = actual.into();
+    let expected = expected.into();
+    let epsilon = epsilon.into();
     let diff = (actual - expected).abs();
     if diff > epsilon {
         panic!(
@@ -162,8 +166,11 @@ pub fn assert_not_empty<T>(collection: &[T]) {
     }
 }
 
-/// Assert that a string contains a substring
-pub fn assert_str_contains(string: &str, substring: &str) {
+/// Assert that a string contains a substring.
+/// Accepts both String and &str via AsRef<str>.
+pub fn assert_str_contains(string: impl AsRef<str>, substring: impl AsRef<str>) {
+    let string = string.as_ref();
+    let substring = substring.as_ref();
     if !string.contains(substring) {
         panic!(
             "assertion failed: string doesn't contain substring\n  string: \"{}\"\n  substring: \"{}\"",
@@ -172,8 +179,11 @@ pub fn assert_str_contains(string: &str, substring: &str) {
     }
 }
 
-/// Assert that a string starts with a prefix
-pub fn assert_starts_with(string: &str, prefix: &str) {
+/// Assert that a string starts with a prefix.
+/// Accepts both String and &str via AsRef<str>.
+pub fn assert_starts_with(string: impl AsRef<str>, prefix: impl AsRef<str>) {
+    let string = string.as_ref();
+    let prefix = prefix.as_ref();
     if !string.starts_with(prefix) {
         panic!(
             "assertion failed: string doesn't start with prefix\n  string: \"{}\"\n  prefix: \"{}\"",
@@ -182,8 +192,11 @@ pub fn assert_starts_with(string: &str, prefix: &str) {
     }
 }
 
-/// Assert that a string ends with a suffix
-pub fn assert_ends_with(string: &str, suffix: &str) {
+/// Assert that a string ends with a suffix.
+/// Accepts both String and &str via AsRef<str>.
+pub fn assert_ends_with(string: impl AsRef<str>, suffix: impl AsRef<str>) {
+    let string = string.as_ref();
+    let suffix = suffix.as_ref();
     if !string.ends_with(suffix) {
         panic!(
             "assertion failed: string doesn't end with suffix\n  string: \"{}\"\n  suffix: \"{}\"",

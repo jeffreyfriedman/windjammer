@@ -7,10 +7,10 @@ trait From<T> {
 }
 
 // Implement From<int> for String
-impl From<int> for String {
+impl From<int> for string {
     fn from(value: int) -> Self {
         // Convert int to string
-        value.to_string()
+        format!("{}", value)
     }
 }
 
@@ -44,7 +44,7 @@ struct MyNumber {
 // Implement Into<string> for MyNumber
 impl Into<string> for MyNumber {
     fn into(self) -> string {
-        self.value.to_string()
+        format!("{}", self.value)
     }
 }
 

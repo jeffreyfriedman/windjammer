@@ -207,11 +207,13 @@ pub fn main() {}
 fn test_method_call_copy_receiver() {
     let src = r#"
 @derive(Copy, Clone)
-pub struct Id(i32)
+pub struct Id {
+    pub val: i32
+}
 
 impl Id {
     pub fn value(self) -> i32 {
-        self.0
+        self.val
     }
 }
 
@@ -480,6 +482,57 @@ pub fn main() {}
     assert!(
         result.contains("a > b") && result.contains("a") && result.contains("b"),
         "Should use a and b in branches. Got:\n{}",
+        result
+    );
+}
+
+// 21. For-loop over Vec<i32> — loop variable is Copy, no & in compound assignment
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_for_loop_copy_compound_assign_no_borrow() {
+    let src = r#"
+pub fn sum(items: Vec<i32>) -> i32 {
+    let mut total = 0
+    for item in items {
+        total += item
+    }
+    total
+}
+pub fn main() {}
+"#;
+
+    let result = compile_to_rust(src).expect("compile");
+    assert!(
+        !result.contains("&item"),
+        "Copy type i32 in for-loop should NOT be borrowed in compound assignment. Got:\n{}",
+        result
+    );
+    assert!(
+        result.contains("total += item"),
+        "Should generate `total += item` (no &). Got:\n{}",
+        result
+    );
+}
+
+// 22. For-loop over Vec<String> — owned String DOES need & in +=
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_for_loop_string_compound_assign_needs_borrow() {
+    let src = r#"
+pub fn concat(parts: Vec<String>) -> String {
+    let mut result = String::new()
+    for part in parts {
+        result += part
+    }
+    result
+}
+pub fn main() {}
+"#;
+
+    let result = compile_to_rust(src).expect("compile");
+    assert!(
+        result.contains("&part") || result.contains("&(part)"),
+        "Owned String in for-loop += SHOULD be borrowed. Got:\n{}",
         result
     );
 }

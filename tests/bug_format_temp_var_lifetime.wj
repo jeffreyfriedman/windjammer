@@ -3,11 +3,11 @@
 // the compiler incorrectly generates `&_temp0` instead of `_temp0`, creating a lifetime issue.
 
 enum AssetError {
-    InvalidFormat(String),
-    TooLarge(String),
+    InvalidFormat(string),
+    TooLarge(string),
 }
 
-fn validate_extension(ext: String) -> Result<(), AssetError> {
+fn validate_extension(ext: string) -> Result<(), AssetError> {
     if ext == "png" || ext == "jpg" {
         Ok(())
     } else {
@@ -27,7 +27,7 @@ fn validate_size(size: i32, max: i32) -> Result<(), AssetError> {
 
 pub fn test_format_in_error_enum() {
     // Test 1: Invalid extension
-    let result = validate_extension("txt".to_string())
+    let result = validate_extension("txt")
     assert(result.is_err(), "Should reject invalid extension")
     
     match result {
@@ -52,7 +52,7 @@ pub fn test_format_in_error_enum() {
 }
 
 // Test case 2: format! in function argument
-fn log_error(message: String) {
+fn log_error(message: string) {
     println("ERROR: {}", message)
 }
 
@@ -68,7 +68,7 @@ pub fn test_format_in_function_arg() {
 
 // Test case 3: format! in struct field
 struct ErrorReport {
-    message: String,
+    message: string,
     code: i32,
 }
 

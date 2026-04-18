@@ -7,8 +7,47 @@ use std::path::Path;
 
 /// Generate mod.rs file with pub mod declarations and re-exports.
 /// Recursively generates mod.rs for nested subdirectories (e.g., ui/mod.rs, components/mod.rs).
+/// For the root directory, generates `lib.rs` if no `lib.rs` exists (to serve as crate root
+/// without invalid `use super::*`).
 pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
-    generate_mod_file_recursive(output_dir)
+    generate_mod_file_recursive(output_dir)?;
+
+    let mod_rs = output_dir.join("mod.rs");
+    let lib_rs = output_dir.join("lib.rs");
+
+    // Always regenerate lib.rs from mod.rs when mod.rs exists.
+    // lib.rs is derived from mod.rs (with `use super::*` stripped),
+    // so it must stay in sync.
+    if mod_rs.exists() {
+        let content = std::fs::read_to_string(&mod_rs)?;
+        let cleaned: String = content
+            .lines()
+            .filter(|line| {
+                let t = line.trim();
+                t != "use super::*;" && t != "#[allow(unused_imports)]"
+            })
+            .collect::<Vec<&str>>()
+            .join("\n");
+        std::fs::write(&lib_rs, cleaned + "\n")?;
+    }
+
+    // If lib.rs now exists, patch Cargo.toml to point to it instead of mod.rs
+    if lib_rs.exists() {
+        let cargo_toml_path = output_dir.join("Cargo.toml");
+        if cargo_toml_path.exists() {
+            if let Ok(toml_content) = std::fs::read_to_string(&cargo_toml_path) {
+                if toml_content.contains("path = \"mod.rs\"") {
+                    let updated = toml_content.replace(
+                        "path = \"mod.rs\"",
+                        "path = \"lib.rs\"",
+                    );
+                    std::fs::write(&cargo_toml_path, updated)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Recursively generate mod.rs for a directory and all its subdirectories.
@@ -21,7 +60,13 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
     let subdirs: Vec<_> = fs::read_dir(output_dir)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.is_dir())
+        .filter(|p| {
+            p.is_dir()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n != "target" && n != ".git")
+                    .unwrap_or(true)
+        })
         .collect();
 
     for subdir in &subdirs {
@@ -51,7 +96,19 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
         }
     }
 
-    // Step 2: Generate mod.rs for this directory
+    // Step 2: If a compiler-generated mod.rs exists (from compiling mod.wj),
+    // preserve it - it contains type definitions that we must not overwrite.
+    let existing_mod_rs = output_dir.join("mod.rs");
+    if existing_mod_rs.exists() {
+        if let Ok(content) = fs::read_to_string(&existing_mod_rs) {
+            let is_auto_generated = content.starts_with("// Auto-generated mod.rs");
+            if !is_auto_generated {
+                return Ok(());
+            }
+        }
+    }
+
+    // Step 3: Generate mod.rs for this directory
     let mut modules = Vec::new();
     let mut type_exports: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
@@ -127,11 +184,19 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
         }
     }
 
-    let has_conflicts = symbol_conflicts
-        .values()
-        .any(|modules_list| modules_list.len() > 1);
+    let conflicting_symbols: std::collections::HashSet<String> = symbol_conflicts
+        .iter()
+        .filter(|(_, modules_list)| modules_list.len() > 1)
+        .map(|(symbol, _)| symbol.clone())
+        .collect();
 
-    if has_conflicts {
+    let modules_with_conflicts: std::collections::HashSet<String> = symbol_conflicts
+        .iter()
+        .filter(|(_, modules_list)| modules_list.len() > 1)
+        .flat_map(|(_, modules_list)| modules_list.clone())
+        .collect();
+
+    if !conflicting_symbols.is_empty() {
         println!("{} Detected conflicting symbol exports:", "⚠".yellow());
         for (symbol, modules_list) in &symbol_conflicts {
             if modules_list.len() > 1 {
@@ -143,7 +208,7 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
             }
         }
         println!(
-            "{} Skipping glob re-exports to prevent ambiguity",
+            "{} Using selective re-exports for conflicting modules",
             "→".yellow()
         );
     }
@@ -161,20 +226,28 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
         content.push_str(&format!("pub mod {};\n", module));
     }
 
-    if !has_conflicts {
-        content.push_str("\n// Re-export all public items\n");
-        for module in &modules {
-            let needs_desktop_gate = module.starts_with("desktop_")
-                || (module.starts_with("app_") && module != "app_reactive");
+    content.push_str("\n// Re-export public items\n");
+    for module in &modules {
+        let needs_desktop_gate = module.starts_with("desktop_")
+            || (module.starts_with("app_") && module != "app_reactive");
 
+        if modules_with_conflicts.contains(module) {
+            if let Some(exports) = type_exports.get(module) {
+                for symbol in exports {
+                    if !conflicting_symbols.contains(symbol) {
+                        if needs_desktop_gate {
+                            content.push_str("#[cfg(feature = \"desktop\")]\n");
+                        }
+                        content.push_str(&format!("pub use {}::{};\n", module, symbol));
+                    }
+                }
+            }
+        } else {
             if needs_desktop_gate {
                 content.push_str("#[cfg(feature = \"desktop\")]\n");
             }
             content.push_str(&format!("pub use {}::*;\n", module));
         }
-    } else {
-        content.push_str("\n// Note: Glob re-exports skipped due to symbol conflicts\n");
-        content.push_str("// Use explicit imports: use your_crate::module_name::SymbolName;\n");
     }
 
     let mod_file_path = output_dir.join("mod.rs");

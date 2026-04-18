@@ -32,20 +32,36 @@ struct Parser<'a> {
     lexer: Lexer<'a>,
     current: Token,
     peeked: Option<Token>,
+    current_line: usize,
+    current_column: usize,
+    filename: Option<String>,
 }
 
 impl<'a> Parser<'a> {
     fn new(source: &'a str) -> Self {
         let mut lexer = Lexer::new(source);
+        let line = lexer.line();
+        let column = lexer.column();
         let current = lexer.next_token();
         Self {
             lexer,
-            current: current,
+            current,
             peeked: None,
+            current_line: line,
+            current_column: column,
+            filename: None,
         }
     }
 
+    fn new_with_filename(source: &'a str, filename: String) -> Self {
+        let mut parser = Self::new(source);
+        parser.filename = Some(filename);
+        parser
+    }
+
     fn advance(&mut self) -> Token {
+        self.current_line = self.lexer.line();
+        self.current_column = self.lexer.column();
         let prev = std::mem::replace(
             &mut self.current,
             self.peeked.take().unwrap_or_else(|| self.lexer.next_token()),
@@ -60,12 +76,23 @@ impl<'a> Parser<'a> {
         self.peeked.as_ref().unwrap()
     }
 
+    fn error_with_location(&self, msg: String) -> anyhow::Error {
+        if let Some(ref fname) = self.filename {
+            anyhow!("[{}:{}:{}] {}", fname, self.current_line, self.current_column, msg)
+        } else {
+            anyhow!("[line {}:{}] {}", self.current_line, self.current_column, msg)
+        }
+    }
+
     fn expect(&mut self, expected: Token) -> Result<()> {
         if std::mem::discriminant(&self.current) == std::mem::discriminant(&expected) {
             self.advance();
             Ok(())
+        } else if matches!(expected, Token::RAngle) && matches!(self.current, Token::Shr) {
+            self.current = Token::RAngle;
+            Ok(())
         } else {
-            Err(anyhow!("Expected {:?}, found {:?}", expected, self.current))
+            Err(self.error_with_location(format!("Expected {:?}, found {:?}", expected, self.current)))
         }
     }
 
@@ -75,7 +102,7 @@ impl<'a> Parser<'a> {
             self.advance();
             Ok(name)
         } else {
-            Err(anyhow!("Expected identifier, found {:?}", self.current))
+            Err(self.error_with_location(format!("Expected identifier, found {:?}", self.current)))
         }
     }
 
@@ -637,24 +664,110 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_private_var(&mut self) -> Result<PrivateVar> {
+        use crate::wjsl::ast::AddressSpace;
         self.expect(Token::Var)?;
         self.expect(Token::LAngle)?;
-        if !matches!(self.current, Token::Private) {
-            return Err(anyhow!("Expected 'private' in var<private>"));
-        }
+        let address_space = match &self.current {
+            Token::Private => AddressSpace::Private,
+            Token::Workgroup => AddressSpace::Workgroup,
+            _ => return Err(anyhow!("Expected 'private' or 'workgroup' in var<...>")),
+        };
         self.advance();
         self.expect(Token::RAngle)?;
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let ty = self.parse_type()?;
         self.expect(Token::Semicolon)?;
-        Ok(PrivateVar { name, ty })
+        Ok(PrivateVar { name, ty, address_space })
+    }
+
+    fn parse_const_decl(&mut self) -> Result<ConstDecl> {
+        self.advance(); // consume 'const'
+        let name = self.expect_ident()?;
+        let ty = if matches!(self.current, Token::Colon) {
+            self.advance(); // consume ':'
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        self.expect(Token::Assign)?;
+
+        // Capture raw initializer text up to the semicolon
+        let start_pos = self.lexer.position();
+        let source = self.lexer.source();
+        // Find the semicolon position in the source
+        let mut init_parts = Vec::new();
+        while !matches!(self.current, Token::Semicolon | Token::Eof) {
+            match &self.current {
+                Token::IntLiteral(n) => {
+                    let raw = self.reconstruct_int_literal(*n, source, start_pos);
+                    init_parts.push(raw);
+                }
+                Token::FloatLiteral(f) => init_parts.push(format!("{}", f)),
+                Token::Ident(s) => init_parts.push(s.clone()),
+                Token::Plus => init_parts.push("+".to_string()),
+                Token::Minus => init_parts.push("-".to_string()),
+                Token::Star => init_parts.push("*".to_string()),
+                Token::Slash => init_parts.push("/".to_string()),
+                Token::LParen => init_parts.push("(".to_string()),
+                Token::RParen => init_parts.push(")".to_string()),
+                Token::Comma => init_parts.push(", ".to_string()),
+                Token::LAngle => init_parts.push("<".to_string()),
+                Token::RAngle => init_parts.push(">".to_string()),
+                Token::LBracket => init_parts.push("[".to_string()),
+                Token::RBracket => init_parts.push("]".to_string()),
+                Token::Dot => init_parts.push(".".to_string()),
+                Token::BitAnd => init_parts.push("&".to_string()),
+                Token::BitOr => init_parts.push("|".to_string()),
+                Token::BitXor => init_parts.push("^".to_string()),
+                Token::Percent => init_parts.push("%".to_string()),
+                Token::Not => init_parts.push("!".to_string()),
+                Token::BitNot => init_parts.push("~".to_string()),
+                Token::Colon => init_parts.push(":".to_string()),
+                Token::Array => init_parts.push("array".to_string()),
+                Token::F32 => init_parts.push("f32".to_string()),
+                Token::U32 => init_parts.push("u32".to_string()),
+                Token::I32 => init_parts.push("i32".to_string()),
+                Token::Bool => init_parts.push("bool".to_string()),
+                Token::Vec2 => init_parts.push("vec2".to_string()),
+                Token::Vec3 => init_parts.push("vec3".to_string()),
+                Token::Vec4 => init_parts.push("vec4".to_string()),
+                Token::Mat3x3 => init_parts.push("mat3x3".to_string()),
+                Token::Mat4x4 => init_parts.push("mat4x4".to_string()),
+                Token::True => init_parts.push("true".to_string()),
+                Token::False => init_parts.push("false".to_string()),
+                _ => init_parts.push(format!("{:?}", self.current)),
+            }
+            self.advance();
+        }
+        self.expect(Token::Semicolon)?;
+
+        let initializer = init_parts.join("");
+        Ok(ConstDecl { name, ty, initializer })
+    }
+
+    fn reconstruct_int_literal(&self, value: u64, source: &str, _hint_pos: usize) -> String {
+        // Search backwards from the current lexer position to find the raw literal text
+        let pos = self.lexer.position();
+        let bytes = source.as_bytes();
+        let mut end = pos;
+        // Walk backwards to find the start of the literal
+        while end > 0 && (bytes[end - 1].is_ascii_alphanumeric() || bytes[end - 1] == b'_') {
+            end -= 1;
+        }
+        let raw = &source[end..pos];
+        if raw.ends_with('u') || raw.ends_with('i') {
+            raw.to_string()
+        } else {
+            format!("{}", value)
+        }
     }
 
     fn parse_module(&mut self) -> Result<ShaderModule> {
         let mut structs = Vec::new();
         let mut bindings = Vec::new();
         let mut private_vars = Vec::new();
+        let mut const_decls = Vec::new();
         let mut functions = Vec::new();
         let mut entry_points = Vec::new();
 
@@ -735,6 +848,13 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            // const NAME: TYPE = EXPR;
+            if matches!(self.current, Token::Const) {
+                let cd = self.parse_const_decl()?;
+                const_decls.push(cd);
+                continue;
+            }
+
             // var<private> name: Type;
             if matches!(self.current, Token::Var) {
                 if let Ok(pv) = self.parse_private_var() {
@@ -750,6 +870,7 @@ impl<'a> Parser<'a> {
             structs,
             bindings,
             private_vars,
+            const_decls,
             functions,
             entry_points,
         })
@@ -759,5 +880,11 @@ impl<'a> Parser<'a> {
 /// Parse WJSL source into AST
 pub fn parse_wjsl(source: &str) -> Result<ShaderModule> {
     let mut parser = Parser::new(source);
+    parser.parse_module()
+}
+
+/// Parse WJSL source with filename for better error messages
+pub fn parse_wjsl_with_filename(source: &str, filename: String) -> Result<ShaderModule> {
+    let mut parser = Parser::new_with_filename(source, filename);
     parser.parse_module()
 }

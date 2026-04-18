@@ -1,0 +1,251 @@
+/// TDD Test: Recursive trait object detection in trait derivation.
+///
+/// Verifies that the fixpoint loop in `collect_trait_object_types` correctly
+/// propagates trait object containment through multiple levels of struct nesting.
+///
+/// Chain: StructA { field: trait MyTrait } → StructB { inner: StructA } → StructC { nested: StructB }
+///
+/// Expected: None of StructA, StructB, StructC should get #[derive(Debug, Clone)]
+/// because they all transitively contain a trait object.
+use std::fs;
+use std::process::Command;
+
+fn wj_path() -> std::path::PathBuf {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("release")
+        .join("wj");
+    if !p.exists() {
+        panic!(
+            "wj binary not found at {:?}. Run: cargo build --release --features cli",
+            p
+        );
+    }
+    p
+}
+
+fn compile_wj(source: &str, test_name: &str) -> String {
+    let test_dir = std::env::temp_dir().join(format!(
+        "wj_test_{}_{}",
+        test_name,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = fs::remove_dir_all(&test_dir);
+    fs::create_dir_all(&test_dir).unwrap();
+
+    let source_file = test_dir.join(format!("{}.wj", test_name));
+    fs::write(&source_file, source).unwrap();
+
+    let output_dir = test_dir.join("build");
+    fs::create_dir_all(&output_dir).unwrap();
+
+    let output = Command::new(wj_path())
+        .arg("build")
+        .arg("--no-cargo")
+        .arg("--output")
+        .arg(output_dir.to_str().unwrap())
+        .arg(source_file.to_str().unwrap())
+        .output()
+        .expect("failed to run wj");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "wj build failed:\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+
+    let generated = fs::read_to_string(output_dir.join(format!("{}.rs", test_name)))
+        .expect("Generated .rs file not found");
+
+    let _ = fs::remove_dir_all(&test_dir);
+    generated
+}
+
+#[test]
+fn test_direct_trait_object_field_no_derive() {
+    let source = r#"
+trait Renderable {
+    fn draw(self)
+}
+
+struct Widget {
+    renderer: trait Renderable
+}
+"#;
+
+    let generated = compile_wj(source, "direct_trait");
+
+    let widget_derive = extract_derive_for_struct(&generated, "Widget");
+    assert!(
+        !widget_derive.contains("Debug"),
+        "Widget should NOT have #[derive(Debug, Clone)] because it has a trait object field.\n\
+         Generated:\n{}",
+        generated
+    );
+
+    let widget_section = extract_derive_for_struct(&generated, "Widget");
+    assert!(
+        !widget_section.contains("Debug"),
+        "Widget should NOT derive Debug (has trait object field).\nWidget section:\n{}",
+        widget_section
+    );
+}
+
+#[test]
+fn test_one_level_nested_trait_object_no_derive() {
+    let source = r#"
+trait EventHandler {
+    fn handle(self)
+}
+
+struct Inner {
+    handler: trait EventHandler
+}
+
+struct Outer {
+    inner: Inner
+}
+"#;
+
+    let generated = compile_wj(source, "one_level_nested");
+
+    let inner_section = extract_derive_for_struct(&generated, "Inner");
+    assert!(
+        !inner_section.contains("Debug"),
+        "Inner should NOT derive Debug (has trait object field).\nSection:\n{}",
+        inner_section
+    );
+
+    let outer_section = extract_derive_for_struct(&generated, "Outer");
+    assert!(
+        !outer_section.contains("Debug"),
+        "Outer should NOT derive Debug (transitively contains trait object via Inner).\nSection:\n{}",
+        outer_section
+    );
+}
+
+#[test]
+fn test_two_level_nested_trait_object_no_derive() {
+    let source = r#"
+trait System {
+    fn update(self, dt: f32)
+}
+
+struct SystemHolder {
+    system: trait System
+}
+
+struct Manager {
+    holder: SystemHolder
+}
+
+struct App {
+    manager: Manager,
+    name: String
+}
+"#;
+
+    let generated = compile_wj(source, "two_level_nested");
+
+    let holder_section = extract_derive_for_struct(&generated, "SystemHolder");
+    assert!(
+        !holder_section.contains("Debug"),
+        "SystemHolder should NOT derive Debug.\nSection:\n{}",
+        holder_section
+    );
+
+    let manager_section = extract_derive_for_struct(&generated, "Manager");
+    assert!(
+        !manager_section.contains("Debug"),
+        "Manager should NOT derive Debug (transitively contains trait object).\nSection:\n{}",
+        manager_section
+    );
+
+    let app_section = extract_derive_for_struct(&generated, "App");
+    assert!(
+        !app_section.contains("Debug"),
+        "App should NOT derive Debug (2-level transitive trait object).\nSection:\n{}",
+        app_section
+    );
+}
+
+#[test]
+fn test_vec_of_trait_object_struct_no_derive() {
+    let source = r#"
+trait Plugin {
+    fn init(self)
+}
+
+struct PluginEntry {
+    plugin: trait Plugin
+}
+
+struct PluginRegistry {
+    plugins: Vec<PluginEntry>
+}
+"#;
+
+    let generated = compile_wj(source, "vec_trait_object");
+
+    let registry_section = extract_derive_for_struct(&generated, "PluginRegistry");
+    assert!(
+        !registry_section.contains("Debug"),
+        "PluginRegistry should NOT derive Debug (Vec<PluginEntry> where PluginEntry has trait object).\nSection:\n{}",
+        registry_section
+    );
+}
+
+#[test]
+fn test_normal_struct_still_gets_derive() {
+    let source = r#"
+struct Point {
+    x: f32,
+    y: f32
+}
+
+struct Line {
+    start: Point,
+    end: Point
+}
+"#;
+
+    let generated = compile_wj(source, "normal_struct");
+
+    let point_section = extract_derive_for_struct(&generated, "Point");
+    assert!(
+        point_section.contains("Debug") && point_section.contains("Clone"),
+        "Point should derive Debug, Clone (no trait objects).\nSection:\n{}",
+        point_section
+    );
+
+    let line_section = extract_derive_for_struct(&generated, "Line");
+    assert!(
+        line_section.contains("Debug") && line_section.contains("Clone"),
+        "Line should derive Debug, Clone (all fields are normal structs).\nSection:\n{}",
+        line_section
+    );
+}
+
+fn extract_derive_for_struct(generated: &str, struct_name: &str) -> String {
+    let lines: Vec<&str> = generated.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if line.contains(&format!("struct {}", struct_name)) {
+            let start = if i > 0 && lines[i - 1].starts_with("#[derive") {
+                i - 1
+            } else if i > 1 && lines[i - 2].starts_with("#[derive") {
+                i - 2
+            } else {
+                i
+            };
+            let end = (i + 3).min(lines.len());
+            return lines[start..end].join("\n");
+        }
+    }
+    format!("(struct {} not found in output)", struct_name)
+}

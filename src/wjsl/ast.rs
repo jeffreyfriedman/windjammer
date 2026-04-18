@@ -11,17 +11,36 @@ pub struct ShaderModule {
     pub bindings: Vec<Binding>,
     /// Module-level private variables (var<private>)
     pub private_vars: Vec<PrivateVar>,
+    /// Module-level constant declarations
+    pub const_decls: Vec<ConstDecl>,
     /// Helper functions (non-entry-point)
     pub functions: Vec<Function>,
     /// Entry point functions (@vertex, @fragment, @compute)
     pub entry_points: Vec<EntryPoint>,
 }
 
-/// Private module-level variable (var<private>)
+/// Module-level constant declaration (const NAME: TYPE = EXPR; or const NAME = EXPR;)
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstDecl {
+    pub name: String,
+    pub ty: Option<Type>,
+    /// Raw initializer expression text (passed through to WGSL)
+    pub initializer: String,
+}
+
+/// Address space for module-level variables
+#[derive(Debug, Clone, PartialEq)]
+pub enum AddressSpace {
+    Private,
+    Workgroup,
+}
+
+/// Module-level variable (var<private> or var<workgroup>)
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrivateVar {
     pub name: String,
     pub ty: Type,
+    pub address_space: AddressSpace,
 }
 
 /// Struct declaration with fields

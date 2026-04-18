@@ -4,8 +4,8 @@
 
 // NOTE: No imports! HashMap and Animation are undefined
 pub struct AnimationController {
-    animations: HashMap<String, Animation>,
-    current_animation: Option<String>,
+    animations: HashMap<string, Animation>,
+    current_animation: Option<string>,
 }
 
 impl AnimationController {

@@ -100,7 +100,7 @@ impl CodeGenerator<'_> {
     }
 
     /// True when the Rust file being generated is a directory module root (`mod.rs`).
-    fn is_output_mod_rs(&self) -> bool {
+    pub(crate) fn is_output_mod_rs(&self) -> bool {
         self.current_output_file
             .file_name()
             .and_then(|n| n.to_str())
@@ -108,7 +108,13 @@ impl CodeGenerator<'_> {
     }
 
     /// True if `first_segment` names a submodule living in the same directory as this `mod.rs`
-    /// (matches sibling `.wj` file, submodule directory, or `name/mod.wj`).
+    /// (matches sibling `.wj` / `.rs` next to `mod.wj` / `mod.rs`, submodule directory, or
+    /// `name/mod.wj` under the output dir).
+    ///
+    /// Multipass emits only `.rs` next to `mod.rs`; checking the **source** directory
+    /// (`current_wj_file.parent()`) ensures we still classify children when `mod.wj` is
+    /// compiled before sibling `.rs` exists, and avoids false `is_directory_prefix` when a
+    /// **top-level** directory shares the submodule name (E0432).
     fn is_child_module_of_mod_rs_dir(&self, first_segment: &str) -> bool {
         if !self.is_output_mod_rs() {
             return false;
@@ -117,7 +123,217 @@ impl CodeGenerator<'_> {
             return false;
         };
         let child = mod_dir.join(first_segment);
-        child.is_dir() || mod_dir.join(format!("{}.wj", first_segment)).exists()
+        if child.is_dir() {
+            return true;
+        }
+        let out_wj = mod_dir.join(format!("{}.wj", first_segment));
+        if out_wj.exists() {
+            return true;
+        }
+        let out_rs = mod_dir.join(format!("{}.rs", first_segment));
+        if out_rs.exists() {
+            return true;
+        }
+        if let Some(wj_parent) = self.current_wj_file.parent() {
+            if wj_parent.join(format!("{}.wj", first_segment)).exists() {
+                return true;
+            }
+            if wj_parent.join(format!("{}.rs", first_segment)).exists() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// When the same type name exists in multiple modules, pick the defining path that extends
+    /// the import's parent prefix (`crate::autotile::TileId` → parent `[autotile]`).
+    fn select_def_mod_for_import_prefix<'a>(
+        candidates: &'a [Vec<String>],
+        logical_parent: &[String],
+    ) -> Option<&'a Vec<String>> {
+        let matches: Vec<&Vec<String>> = candidates
+            .iter()
+            .filter(|c| {
+                c.len() > logical_parent.len() && c[..logical_parent.len()] == logical_parent[..]
+            })
+            .collect();
+        if matches.is_empty() {
+            return None;
+        }
+        if matches.len() == 1 {
+            return Some(matches[0]);
+        }
+        // Prefer the shortest suffix after `logical_parent` so duplicate type names resolve to the
+        // canonical submodule (e.g. `input::input::Input` over `input::input_interface::Input`).
+        Some(
+            *matches
+                .iter()
+                .min_by_key(|c| {
+                    let tail = &c[logical_parent.len()..];
+                    (tail.len(), tail.iter().map(|s| s.len()).sum::<usize>())
+                })
+                .expect("matches non-empty"),
+        )
+    }
+
+    fn split_leading_output_root(&self, segs: &[String]) -> (Option<String>, Vec<String>) {
+        if let Some(root) = self.get_module_root_name() {
+            if segs.first().map(|s| s.as_str()) == Some(root.as_str()) {
+                return (Some(root), segs[1..].to_vec());
+            }
+        }
+        (None, segs.to_vec())
+    }
+
+    /// Segments after `crate::` (and after optional output-root), ending with a type name.
+    fn expand_type_path_after_crate_root(&self, body: &[String]) -> Vec<String> {
+        if body.len() < 2 || self.type_defining_modules.is_empty() {
+            return body.to_vec();
+        }
+        let type_name = &body[body.len() - 1];
+        if !type_name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            return body.to_vec();
+        }
+        let logical_parent = &body[..body.len() - 1];
+        let candidates = match self.type_defining_modules.get(type_name) {
+            Some(c) if !c.is_empty() => c.as_slice(),
+            _ => return body.to_vec(),
+        };
+        let Some(def_mod) = Self::select_def_mod_for_import_prefix(candidates, logical_parent)
+        else {
+            return body.to_vec();
+        };
+        if *def_mod == *logical_parent {
+            return body.to_vec();
+        }
+        if def_mod.len() > logical_parent.len()
+            && def_mod[..logical_parent.len()] == logical_parent[..]
+        {
+            let mut out = def_mod.clone();
+            out.push(type_name.clone());
+            return out;
+        }
+        body.to_vec()
+    }
+
+    /// Expand `math::Vec3`-style paths (no `crate::` prefix) for nested output / internal imports.
+    fn expand_bare_module_path_for_type(&self, rust_path: &str) -> String {
+        if self.type_defining_modules.is_empty() {
+            return rust_path.to_string();
+        }
+        let segs: Vec<String> = rust_path.split("::").map(String::from).collect();
+        self.expand_type_path_after_crate_root(&segs).join("::")
+    }
+
+    /// Rewrite `crate::parent::Type` → `crate::parent::submodule::Type` using multipass `type_defining_modules`.
+    pub(crate) fn expand_crate_path_string(&self, rust_path: &str) -> String {
+        if self.type_defining_modules.is_empty() {
+            return rust_path.to_string();
+        }
+        let trimmed = rust_path.trim();
+        if !trimmed.starts_with("crate::") {
+            return rust_path.to_string();
+        }
+        let rest = trimmed.strip_prefix("crate::").unwrap();
+        let segs: Vec<String> = rest
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
+        if segs.is_empty() {
+            return rust_path.to_string();
+        }
+        let (root_opt, body) = self.split_leading_output_root(&segs);
+        let expanded_body = self.expand_type_path_after_crate_root(&body);
+        if expanded_body == body {
+            return rust_path.to_string();
+        }
+        let mut out = String::from("crate::");
+        if let Some(root) = root_opt {
+            out.push_str(&root);
+            out.push_str("::");
+        }
+        out.push_str(&expanded_body.join("::"));
+        out
+    }
+
+    fn expand_braced_crate_import(&self, normalized: &str, alias: Option<&str>) -> String {
+        let module_root = if self.is_module {
+            self.get_module_root_name()
+        } else {
+            None
+        };
+        let with_root = if let Some(ref root_name) = module_root {
+            if normalized.starts_with("crate::") {
+                let w = normalized.strip_prefix("crate::").unwrap();
+                format!("crate::{}::{}", root_name, w)
+            } else {
+                normalized.to_string()
+            }
+        } else {
+            normalized.to_string()
+        };
+
+        let Some((base, rest)) = with_root.split_once("::{") else {
+            return if let Some(a) = alias {
+                format!("use {} as {};\n", with_root, a)
+            } else {
+                format!("use {};\n", with_root)
+            };
+        };
+        let Some(inner) = rest.strip_suffix('}') else {
+            return if let Some(a) = alias {
+                format!("use {} as {};\n", with_root, a)
+            } else {
+                format!("use {};\n", with_root)
+            };
+        };
+        let types: Vec<&str> = inner
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if types.is_empty() {
+            return if let Some(a) = alias {
+                format!("use {} as {};\n", with_root, a)
+            } else {
+                format!("use {};\n", with_root)
+            };
+        }
+
+        let all_pascal = types
+            .iter()
+            .all(|t| t.chars().next().is_some_and(|c| c.is_ascii_uppercase()));
+        if !all_pascal {
+            return if let Some(a) = alias {
+                format!("use {} as {};\n", with_root, a)
+            } else {
+                format!("use {};\n", with_root)
+            };
+        }
+
+        if types.len() == 1 {
+            let single = format!("{}::{}", base, types[0]);
+            let exp = self.expand_crate_path_string(&single);
+            return if let Some(a) = alias {
+                format!("use {} as {};\n", exp, a)
+            } else {
+                format!("use {};\n", exp)
+            };
+        }
+
+        // Multiple types may live in different submodules — emit one `use` per type.
+        let mut lines = String::new();
+        for typ in types {
+            let single = format!("{}::{}", base, typ);
+            let exp = self.expand_crate_path_string(&single);
+            lines.push_str(&format!("use {};\n", exp));
+        }
+        lines
     }
 
     pub(super) fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
@@ -165,6 +381,16 @@ impl CodeGenerator<'_> {
         // - use crate::scene::Scene -> use crate::generated::scene::Scene
         // This applies to both braced and non-braced imports
         if full_path.starts_with("crate::") || full_path.starts_with("crate.") {
+            let normalized = full_path.replace('.', "::");
+
+            // Braced crate imports: expand each type to its defining submodule (fixes E0432).
+            if normalized.contains("::{") && normalized.contains('}') {
+                let braced = self.expand_braced_crate_import(&normalized, alias);
+                if !braced.is_empty() {
+                    return braced;
+                }
+            }
+
             // Find the module root (e.g., "generated", "build", "out")
             let module_root = if self.is_module {
                 self.get_module_root_name()
@@ -173,22 +399,20 @@ impl CodeGenerator<'_> {
             };
 
             let rewritten = if let Some(root_name) = module_root {
-                // Normalize to use :: separator
-                let normalized = full_path.replace('.', "::");
                 // Rewrite: crate::scene::X -> crate::generated::scene::X
                 let path_without_crate = normalized.strip_prefix("crate::").unwrap();
                 format!("crate::{}::{}", root_name, path_without_crate)
             } else {
-                // No module root detected, keep as-is
-                full_path.replace('.', "::")
+                normalized
             };
+
+            let expanded = self.expand_crate_path_string(&rewritten);
 
             // TDD FIX: Preserve alias for crate:: imports
             if let Some(alias_name) = alias {
-                return format!("use {} as {};\n", rewritten, alias_name);
-            } else {
-                return format!("use {};\n", rewritten);
+                return format!("use {} as {};\n", expanded, alias_name);
             }
+            return format!("use {};\n", expanded);
         }
 
         // Handle stdlib imports FIRST (before glob handling)
@@ -237,15 +461,20 @@ impl CodeGenerator<'_> {
                 return String::new();
             }
 
-            // Handle platform APIs - skip explicit import (handled by implicit imports)
+            // Rust std modules: pass through as `use std::fs`, `use std::env`, etc.
             if module_base == "fs"
                 || module_base.starts_with("fs::")
                 || module_base == "process"
                 || module_base.starts_with("process::")
-                || module_base == "dialog"
-                || module_base.starts_with("dialog::")
                 || module_base == "env"
                 || module_base.starts_with("env::")
+            {
+                return format!("use std::{};\n", module_name);
+            }
+
+            // Platform APIs with no Rust std equivalent - skip
+            if module_base == "dialog"
+                || module_base.starts_with("dialog::")
                 || module_base == "encoding"
                 || module_base.starts_with("encoding::")
                 || module_base == "compute"
@@ -257,8 +486,6 @@ impl CodeGenerator<'_> {
                 || module_base == "storage"
                 || module_base.starts_with("storage::")
             {
-                // Platform APIs are handled by implicit imports (platform-specific)
-                // Don't generate an explicit import here
                 return String::new();
             }
 
@@ -402,6 +629,19 @@ impl CodeGenerator<'_> {
         // Rust requires super at path start: "use super::enemy::Enemy" not "use crate::super::enemy::Enemy"
         if rust_path.starts_with("super::") {
             return format!("use {};\n", rust_path);
+        }
+
+        // TDD FIX: Bare paths referencing inline modules need self:: prefix.
+        // In Rust, `pub use inner_module::MyType;` is E0432 when `inner_module`
+        // is declared as `mod inner_module { ... }` in the same file.
+        // Must be `pub use self::inner_module::MyType;` instead.
+        if let Some(first_seg) = rust_path.split("::").next() {
+            if self.inline_module_names.contains(first_seg) {
+                if let Some(alias_name) = alias {
+                    return format!("use self::{} as {};\n", rust_path, alias_name);
+                }
+                return format!("use self::{};\n", rust_path);
+            }
         }
 
         // TDD FIX: Handle imports from sibling modules (Part 2 - Nested Import Bug)
@@ -552,7 +792,8 @@ impl CodeGenerator<'_> {
                 // THE WINDJAMMER WAY: Use calculated prefix for cross-directory imports
                 // math::Vec2 as V -> use super::super::math::Vec2 as V; (in nested output)
                 // or use crate::math::Vec2 as V; (in flat output)
-                format!("use {}{} as {};\n", import_prefix, rust_path, alias_name)
+                let rp = self.expand_bare_module_path_for_type(&rust_path);
+                format!("use {}{} as {};\n", import_prefix, rp, alias_name)
             } else if is_actual_module_file {
                 if self.is_output_mod_rs() {
                     format!("use self::{} as {};\n", rust_path, alias_name)
@@ -571,7 +812,8 @@ impl CodeGenerator<'_> {
                 // THE WINDJAMMER WAY: Use calculated prefix for cross-directory imports
                 // math::Vec2 -> use super::super::math::Vec2; (in nested output)
                 // or use crate::math::Vec2; (in flat output)
-                format!("use {}{};\n", import_prefix, rust_path)
+                let rp = self.expand_bare_module_path_for_type(&rust_path);
+                format!("use {}{};\n", import_prefix, rp)
             } else if is_actual_module_file {
                 // TDD COMPILER FIX: If the first segment matches a submodule declared in the SAME file,
                 // don't add ANY prefix (not super::, not crate::).
@@ -586,7 +828,9 @@ impl CodeGenerator<'_> {
                 if self.is_output_mod_rs() {
                     format!("use self::{};\n", rust_path)
                 } else {
-                    format!("use {};\n", rust_path)
+                    // Match the aliased branch above: sibling module paths need `super::`
+                    // so Rust resolves them from the parent module (bare `foo::` is E0432).
+                    format!("use super::{};\n", rust_path)
                 }
             } else {
                 // Check for crate:: prefix FIRST (before checking if it's a type)
@@ -596,7 +840,8 @@ impl CodeGenerator<'_> {
                     // In nested output (e.g., src/generated/core/commands/),
                     // crate::scene::Vec3 should become super::super::scene::Vec3
                     let path_without_crate = rust_path.strip_prefix("crate::").unwrap();
-                    format!("use {}{};\n", import_prefix, path_without_crate)
+                    let pwc = self.expand_bare_module_path_for_type(path_without_crate);
+                    format!("use {}{};\n", import_prefix, pwc)
                 } else if rust_path.chars().next().is_some_and(|c| c.is_uppercase()) {
                     // Path starts with uppercase (e.g., Vec3, String) - likely a re-exported type
                     // Don't add ::*
@@ -636,70 +881,68 @@ impl CodeGenerator<'_> {
                             // Heuristic: Check if first segment matches common internal module names
                             if rust_path.contains("::") {
                                 let common_internal_modules = [
-                                "math",
-                                "physics",
-                                "rendering",
-                                "world",
-                                "game",
-                                "audio",
-                                "input",
-                                "rpg",
-                                "ui",
-                                "editor",
-                                "scene",
-                                "collision2d",
-                                "networking",
-                                "effects",
-                                "animation",
-                                "ai",
-                                "dialogue",
-                                "inventory",
-                                "quest",
-                                "combat",
-                                "lighting",
-                                "camera",
-                                "particles",
-                                "terrain",
-                                "weather",
-                                "save",
-                                "config",
-                                "debug",
-                                "utils",
-                                "helpers",
-                                "core",
-                                "common",
-                                "types",
-                                "components",
-                                "systems",
-                                "resources",
-                                "entities",
-                                "events",
-                                "state",
-                                "assets",
-                                "data",
-                                "models",
-                                "controllers",
-                                "views",
-                                "managers",
-                                "services",
-                                "handlers",
-                                "processors",
-                            ];
+                                    "math",
+                                    "physics",
+                                    "rendering",
+                                    "world",
+                                    "game",
+                                    "audio",
+                                    "input",
+                                    "rpg",
+                                    "ui",
+                                    "editor",
+                                    "scene",
+                                    "collision2d",
+                                    "networking",
+                                    "effects",
+                                    "animation",
+                                    "ai",
+                                    "dialogue",
+                                    "inventory",
+                                    "quest",
+                                    "combat",
+                                    "lighting",
+                                    "camera",
+                                    "particles",
+                                    "terrain",
+                                    "weather",
+                                    "save",
+                                    "config",
+                                    "debug",
+                                    "utils",
+                                    "helpers",
+                                    "core",
+                                    "common",
+                                    "types",
+                                    "components",
+                                    "systems",
+                                    "resources",
+                                    "entities",
+                                    "events",
+                                    "state",
+                                    "assets",
+                                    "data",
+                                    "models",
+                                    "controllers",
+                                    "views",
+                                    "managers",
+                                    "services",
+                                    "handlers",
+                                    "processors",
+                                ];
 
-                            let is_likely_internal =
-                                common_internal_modules.contains(&first_segment);
+                                let is_likely_internal =
+                                    common_internal_modules.contains(&first_segment);
 
-                            if is_likely_internal {
-                                // Internal module - add crate:: prefix
-                                format!("use crate::{};\n", rust_path)
-                            } else {
-                                // TDD FIX: For external crates and crate-level re-exports, use crate:: prefix
-                                // This handles imports like "windjammer_game_core::math::Vec3" where
-                                // windjammer_game_core is re-exported at crate root with:
-                                //   pub use windjammer_app as windjammer_game_core;
-                                // Submodules access it via crate::windjammer_game_core, not self::
-                                format!("use crate::{};\n", rust_path)
-                            }
+                                let rp = self.expand_bare_module_path_for_type(&rust_path);
+                                if is_likely_internal {
+                                    format!("use crate::{};\n", rp)
+                                } else {
+                                    // External crate or unknown module — do NOT prepend crate::
+                                    // External crate imports (e.g. windjammer_game_core::math::Vec3)
+                                    // must remain as-is so Cargo resolves them from [dependencies].
+                                    format!("use {};\n", rp)
+                                }
                             } else {
                                 // Single identifier (Vec3) - likely a type, keep as-is
                                 format!("use {};\n", rust_path)

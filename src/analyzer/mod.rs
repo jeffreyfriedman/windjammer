@@ -217,7 +217,8 @@ pub struct FunctionSignature {
 
 #[derive(Debug, Clone)]
 pub struct SignatureRegistry {
-    signatures: HashMap<String, FunctionSignature>,
+    pub signatures: HashMap<String, FunctionSignature>,
+    collision_keys: HashSet<String>,
 }
 
 impl Default for SignatureRegistry {
@@ -230,6 +231,7 @@ impl SignatureRegistry {
     pub fn new() -> Self {
         let mut registry = SignatureRegistry {
             signatures: HashMap::new(),
+            collision_keys: HashSet::new(),
         };
 
         // Populate with stdlib signatures by scanning windjammer-runtime source
@@ -242,6 +244,13 @@ impl SignatureRegistry {
     }
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {
+        if let Some(existing) = self.signatures.get(&name) {
+            if existing.param_types != sig.param_types
+                || existing.param_ownership != sig.param_ownership
+            {
+                self.collision_keys.insert(name.clone());
+            }
+        }
         self.signatures.insert(name, sig);
     }
 
@@ -249,12 +258,59 @@ impl SignatureRegistry {
         self.signatures.get(name)
     }
 
-    /// BUG #8 FIX: Merge signatures from another registry
-    /// This enables cross-file signature sharing
+    /// Check if a signature key has been registered with conflicting param types
+    /// from different modules (namespace collision).
+    pub fn has_collision(&self, name: &str) -> bool {
+        self.collision_keys.contains(name)
+    }
+
+    /// Fallback lookup: find a signature whose key ends with `::name`.
+    /// Used when a method call is recorded as bare "method" but registered as "Type::method".
+    pub fn find_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
+        let pattern = format!("::{}", suffix);
+        self.signatures
+            .iter()
+            .find(|(key, _)| key.ends_with(&pattern))
+            .map(|(_, sig)| sig)
+    }
+
+    /// BUG #8 FIX: Merge signatures from another registry.
+    /// Detects collisions when different registries provide different
+    /// param types for the same key (namespace collision from different modules).
     pub fn merge(&mut self, other: &SignatureRegistry) {
         for (name, sig) in &other.signatures {
+            if let Some(existing) = self.signatures.get(name) {
+                if existing.param_types != sig.param_types
+                    || existing.param_ownership != sig.param_ownership
+                {
+                    self.collision_keys.insert(name.clone());
+                }
+            }
             self.signatures.insert(name.clone(), sig.clone());
         }
+        self.collision_keys.extend(other.collision_keys.iter().cloned());
+    }
+}
+
+/// During `impl Type` method analysis: resolve `self.field.method()` via `FieldType::method` in the signature registry.
+/// `program` is a raw pointer so we do not require `&'ast Program<'ast>` on every analyzer entry point; it is only
+/// dereferenced while the surrounding compile pass holds the program alive.
+pub(crate) struct ImplSelfFieldContext<'ast> {
+    pub impl_type_base: String,
+    program: *const Program<'ast>,
+}
+
+impl<'ast> ImplSelfFieldContext<'ast> {
+    pub(crate) fn new(impl_type_base: String, program: &Program<'ast>) -> Self {
+        Self {
+            impl_type_base,
+            program: std::ptr::from_ref(program),
+        }
+    }
+
+    pub(crate) fn program(&self) -> &'ast Program<'ast> {
+        // SAFETY: `program` points to the AST being analyzed; context is cleared before the borrow ends.
+        unsafe { &*self.program }
     }
 }
 
@@ -275,6 +331,8 @@ pub struct Analyzer<'ast> {
     mutated_variables: HashSet<String>,
     // Track functions in the current impl block (for cross-method analysis)
     current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
+    /// Set while analyzing methods inside an `impl` block (inherent or trait impl body).
+    self_impl_context: Option<ImplSelfFieldContext<'ast>>,
 }
 
 use std::collections::HashSet;
@@ -301,10 +359,14 @@ impl<'ast> Analyzer<'ast> {
             analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
+            self_impl_context: None,
         };
 
         // Pre-register standard library traits so the analyzer knows their signatures
         analyzer.register_stdlib_traits();
+        analyzer
+            .hydrate_prelude_trait_method_signatures()
+            .expect("prelude trait method analysis (Drop, etc.)");
 
         analyzer
     }
@@ -313,6 +375,16 @@ impl<'ast> Analyzer<'ast> {
     /// This allows newly discovered Copy structs to be available for subsequent file analysis
     pub fn update_copy_structs(&mut self, global_copy_structs: HashSet<String>) {
         self.copy_structs = global_copy_structs;
+    }
+
+    /// Register a single struct as Copy (for cross-crate metadata or testing)
+    pub fn register_copy_struct(&mut self, name: &str) {
+        self.copy_structs.insert(name.to_string());
+    }
+
+    /// Get all detected Copy struct names (for metadata emission)
+    pub fn get_copy_structs(&self) -> Vec<String> {
+        self.copy_structs.iter().cloned().collect()
     }
 
     /// Pre-register standard library traits (Add, Sub, Mul, Div, etc.)
@@ -404,18 +476,167 @@ impl<'ast> Analyzer<'ast> {
                 doc_comment: None,
             },
         );
+
+        // Rust std `Drop::drop(&mut self)` — Windjammer users write `fn drop(self)`; generated Rust
+        // must match or rustc reports E0186/E0053. Not parsed from .wj, so register like operator traits.
+        self.trait_definitions.insert(
+            "Drop".to_string(),
+            TraitDecl {
+                name: "Drop".to_string(),
+                generics: vec![],
+                supertraits: vec![],
+                methods: vec![TraitMethod {
+                    name: "drop".to_string(),
+                    parameters: vec![Parameter {
+                        name: "self".to_string(),
+                        pattern: None,
+                        type_: Type::Custom("Self".to_string()),
+                        ownership: OwnershipHint::Mut,
+                        is_mutable: false,
+                        decorators: Vec::new(),
+                    }],
+                    return_type: None,
+                    is_async: false,
+                    body: None,
+                    doc_comment: None,
+                }],
+                associated_types: vec![],
+                doc_comment: None,
+            },
+        );
+    }
+
+    /// Analyze prelude traits that exist only in `trait_definitions` (no `trait Drop` in user source).
+    fn hydrate_prelude_trait_method_signatures(&mut self) -> Result<(), String> {
+        const PRELUDE_TRAIT_KEYS: &[&str] = &["Drop"];
+        let empty_registry = SignatureRegistry::new();
+        for &trait_key in PRELUDE_TRAIT_KEYS {
+            let Some(decl) = self.trait_definitions.get(trait_key).cloned() else {
+                continue;
+            };
+            let mut to_add: Vec<(String, AnalyzedFunction<'ast>)> = Vec::new();
+            for method in &decl.methods {
+                let already = self
+                    .analyzed_trait_methods
+                    .get(&decl.name)
+                    .map(|m| m.contains_key(&method.name))
+                    .unwrap_or(false);
+                if already {
+                    continue;
+                }
+                let func = FunctionDecl {
+                    name: method.name.clone(),
+                    is_pub: true,
+                    is_extern: false,
+                    type_params: vec![],
+                    where_clause: vec![],
+                    decorators: vec![],
+                    is_async: method.is_async,
+                    parameters: method.parameters.clone(),
+                    return_type: method.return_type.clone(),
+                    return_decorators: Vec::new(),
+                    body: vec![],
+                    parent_type: None,
+                    impl_trait: None,
+                    doc_comment: method.doc_comment.clone(),
+                };
+                let analyzed_func = self.analyze_trait_method(&func, &empty_registry)?;
+                to_add.push((method.name.clone(), analyzed_func));
+            }
+            let entry = self
+                .analyzed_trait_methods
+                .entry(decl.name.clone())
+                .or_default();
+            for (name, analyzed_func) in to_add {
+                entry.insert(name, analyzed_func);
+            }
+        }
+        Ok(())
     }
 
     /// Register trait definitions from an external program (e.g., imported module)
     /// This allows the analyzer to use trait signatures when analyzing impl blocks
     /// in files that import traits from other modules.
-    pub fn register_traits_from_program(&mut self, program: &Program<'ast>) {
+    ///
+    /// Also analyzes each trait method into `analyzed_trait_methods` when missing, so
+    /// impl-only files compiled **before** the trait's source file still see the contract
+    /// (receiver + parameter ownership/types). Without this, `trait_method_receiver_ownership`
+    /// returns nothing and Rust emits E0053/E0186.
+    pub fn register_traits_from_program(&mut self, program: &Program<'ast>) -> Result<(), String> {
+        let empty_registry = SignatureRegistry::new();
         for item in &program.items {
             if let Item::Trait { decl, .. } = item {
                 self.trait_definitions
                     .insert(decl.name.clone(), decl.clone());
+
+                let mut to_add: Vec<(String, AnalyzedFunction<'ast>)> = Vec::new();
+                for method in &decl.methods {
+                    let already = self
+                        .analyzed_trait_methods
+                        .get(&decl.name)
+                        .map(|m| m.contains_key(&method.name))
+                        .unwrap_or(false);
+                    if already {
+                        continue;
+                    }
+                    
+                    // Skip body analysis for abstract trait methods (body = None)
+                    // Only analyze trait methods with default implementations
+                    if method.body.is_none() {
+                        // For abstract trait methods, create a minimal FunctionDecl with empty body
+                        // This avoids dereferencing invalid &'ast Statement references
+                        let func = FunctionDecl {
+                            name: method.name.clone(),
+                            is_pub: true,
+                            is_extern: false,
+                            type_params: vec![],
+                            where_clause: vec![],
+                            decorators: vec![],
+                            is_async: method.is_async,
+                            parameters: method.parameters.clone(),
+                            return_type: method.return_type.clone(),
+                            return_decorators: Vec::new(),
+                            body: vec![], // Empty body - no statements to dereference
+                            parent_type: None,
+                            impl_trait: None,
+                            doc_comment: method.doc_comment.clone(),
+                        };
+                        
+                        // Analyze as trait method - this will infer ownership without walking body
+                        let analyzed_func = self.analyze_trait_method(&func, &empty_registry)?;
+                        to_add.push((method.name.clone(), analyzed_func));
+                    } else {
+                        // Trait method with default implementation - analyze fully
+                        let func = FunctionDecl {
+                            name: method.name.clone(),
+                            is_pub: true,
+                            is_extern: false,
+                            type_params: vec![],
+                            where_clause: vec![],
+                            decorators: vec![],
+                            is_async: method.is_async,
+                            parameters: method.parameters.clone(),
+                            return_type: method.return_type.clone(),
+                            return_decorators: Vec::new(),
+                            body: method.body.clone().unwrap_or_default(),
+                            parent_type: None,
+                            impl_trait: None,
+                            doc_comment: method.doc_comment.clone(),
+                        };
+                        let analyzed_func = self.analyze_trait_method(&func, &empty_registry)?;
+                        to_add.push((method.name.clone(), analyzed_func));
+                    }
+                }
+                let entry = self
+                    .analyzed_trait_methods
+                    .entry(decl.name.clone())
+                    .or_default();
+                for (name, analyzed_func) in to_add {
+                    entry.insert(name, analyzed_func);
+                }
             }
         }
+        Ok(())
     }
 
     pub fn analyze_program(
@@ -702,38 +923,56 @@ impl<'ast> Analyzer<'ast> {
                         self.copy_enums.insert(decl.name.clone());
                     }
                 }
-                Item::Struct { decl, .. } => {
-                    // Check if struct has @derive(Copy) decorator
-                    // This will work when all files are compiled together in one pass
-                    let has_copy_derive = decl.decorators.iter().any(|decorator| {
-                        decorator.name == "derive"
-                            && decorator.arguments.iter().any(|(_, arg)| {
-                                if let crate::parser::ast::Expression::Identifier { name, .. } = arg
-                                {
-                                    name == "Copy"
-                                } else {
-                                    false
-                                }
-                            })
-                    });
-
-                    // WINDJAMMER PHILOSOPHY: Auto-detect Copy structs when all fields are Copy
-                    // This matches what codegen does (auto-derive Copy for simple structs).
-                    // Without this, the analyzer doesn't know a return type is Copy,
-                    // causing it to infer owned `self` instead of `&self` for getter methods.
-                    let all_fields_copy = !decl.fields.is_empty()
-                        && decl.fields.iter().all(|f| self.is_copy_type(&f.field_type));
-
-                    if has_copy_derive || all_fields_copy {
-                        self.copy_structs.insert(decl.name.clone());
-                    }
-                }
                 Item::Trait { decl, .. } => {
                     // Store trait definition for later lookup
                     self.trait_definitions
                         .insert(decl.name.clone(), decl.clone());
                 }
                 _ => {}
+            }
+        }
+
+        // PHASE 0b: Struct Copy registry — fixed-point to match codegen and main.rs PASS 0.
+        // Single forward pass fails when struct A references Copy struct B but B is declared
+        // later in the file; empty structs must be Copy (same as Rust / trait_derivation).
+        let mut struct_infos: Vec<(String, Vec<Type>)> = Vec::new();
+        for item in &program.items {
+            if let Item::Struct { decl, .. } = item {
+                let has_copy_derive = decl.decorators.iter().any(|decorator| {
+                    decorator.name == "derive"
+                        && decorator.arguments.iter().any(|(_, arg)| {
+                            if let crate::parser::ast::Expression::Identifier { name, .. } = arg {
+                                name == "Copy"
+                            } else {
+                                false
+                            }
+                        })
+                });
+                if has_copy_derive {
+                    self.copy_structs.insert(decl.name.clone());
+                }
+                struct_infos.push((
+                    decl.name.clone(),
+                    decl.fields.iter().map(|f| f.field_type.clone()).collect(),
+                ));
+            }
+        }
+        const MAX_COPY_STRUCT_PASSES: usize = 64;
+        for _ in 0..MAX_COPY_STRUCT_PASSES {
+            let mut changed = false;
+            for (name, field_types) in &struct_infos {
+                if self.copy_structs.contains(name) {
+                    continue;
+                }
+                let all_copy = field_types.is_empty()
+                    || field_types.iter().all(|ft| self.is_copy_type(ft));
+                if all_copy {
+                    self.copy_structs.insert(name.clone());
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
             }
         }
 
@@ -932,6 +1171,7 @@ impl<'ast> Analyzer<'ast> {
                     }
 
                     // Process all analyzed functions (after fixed-point convergence)
+                    let is_trait_impl = impl_block.trait_name.is_some();
                     for func in &impl_block.functions {
                         let mut analyzed_func = analyzed_funcs
                             .remove(&func.name)
@@ -950,21 +1190,36 @@ impl<'ast> Analyzer<'ast> {
 
                         let signature = self.build_signature(&analyzed_func);
 
-                        // BUG #8 FIX: Store method signatures with BOTH qualified and simple names
-                        // Qualified (Type::method) enables precise cross-module resolution
-                        // Simple (method) provides fallback when type inference fails
                         let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
-                        registry.add_function(qualified_name.clone(), signature.clone());
-                        // TDD FIX: For generic types like ComponentArray<T>, also register
-                        // with the base name (ComponentArray::method) so that type inference
-                        // from field types (which strips type params) can find the signature.
+                        if is_trait_impl {
+                            // Trait impl methods: don't overwrite a direct impl's entry.
+                            // Callers like `obj.method()` resolve to the direct impl in Rust,
+                            // so the registry's Type::method entry must reflect the direct impl's
+                            // signature (parameter types and ownership).
+                            if registry.get_signature(&qualified_name).is_none() {
+                                registry.add_function(qualified_name.clone(), signature.clone());
+                            }
+                            // Also register under Trait::method for trait-based lookups.
+                            if let Some(trait_name) = &impl_block.trait_name {
+                                let trait_qualified = format!("{}::{}", trait_name, func.name);
+                                registry.add_function(trait_qualified, signature.clone());
+                            }
+                        } else {
+                            // Direct impl methods always take priority in the registry.
+                            registry.add_function(qualified_name.clone(), signature.clone());
+                        }
+                        // Generic type base name registration
                         if let Some(base_name) = impl_block.type_name.split('<').next() {
                             if base_name != impl_block.type_name {
                                 let base_qualified = format!("{}::{}", base_name, func.name);
-                                registry.add_function(base_qualified, signature.clone());
+                                if !is_trait_impl || registry.get_signature(&base_qualified).is_none() {
+                                    registry.add_function(base_qualified, signature.clone());
+                                }
                             }
                         }
-                        registry.add_function(func.name.clone(), signature);
+                        if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                            registry.add_function(func.name.clone(), signature);
+                        }
 
                         analyzed.push(analyzed_func);
                     }
@@ -989,6 +1244,7 @@ impl<'ast> Analyzer<'ast> {
                             return_decorators: Vec::new(),
                             body: method.body.clone().unwrap_or_default(),
                             parent_type: None,
+                            impl_trait: None,
                             doc_comment: method.doc_comment.clone(),
                         };
 
@@ -1143,6 +1399,7 @@ impl<'ast> Analyzer<'ast> {
                                 }
 
                                 // Process converged results
+                                let is_trait_impl = impl_block.trait_name.is_some();
                                 for func in &impl_block.functions {
                                     let mut analyzed_func = analyzed_funcs
                                         .remove(&func.name)
@@ -1156,7 +1413,21 @@ impl<'ast> Analyzer<'ast> {
                                         self.detect_cow_opportunities(func);
 
                                     let signature = self.build_signature(&analyzed_func);
-                                    registry.add_function(func.name.clone(), signature);
+                                    let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
+                                    if is_trait_impl {
+                                        if registry.get_signature(&qualified_name).is_none() {
+                                            registry.add_function(qualified_name, signature.clone());
+                                        }
+                                        if let Some(trait_name) = &impl_block.trait_name {
+                                            let trait_qualified = format!("{}::{}", trait_name, func.name);
+                                            registry.add_function(trait_qualified, signature.clone());
+                                        }
+                                    } else {
+                                        registry.add_function(qualified_name, signature.clone());
+                                    }
+                                    if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                                        registry.add_function(func.name.clone(), signature);
+                                    }
                                     analyzed.push(analyzed_func);
                                 }
                             }
@@ -1226,7 +1497,18 @@ impl<'ast> Analyzer<'ast> {
 
         // Step 2: For each trait, analyze ALL implementations and determine most permissive signature
         for (trait_name, impl_blocks) in trait_impls {
-            if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_name).cloned() {
+            let trait_methods_opt = self
+                .analyzed_trait_methods
+                .get(&trait_name)
+                .cloned()
+                .or_else(|| {
+                    trait_name
+                        .rfind("::")
+                        .map(|i| trait_name[i + 2..].to_string())
+                        .and_then(|short| self.analyzed_trait_methods.get(&short).cloned())
+                });
+
+            if let Some(trait_methods) = trait_methods_opt {
                 let mut updated_methods = HashMap::new();
 
                 for (method_name, mut trait_method_analysis) in trait_methods {
@@ -1249,6 +1531,24 @@ impl<'ast> Analyzer<'ast> {
                         Some(OwnershipMode::Owned)
                     ) {
                         // Consuming `self` on the trait is authoritative; do not refine from impls.
+                        updated_methods.insert(method_name, trait_method_analysis);
+                        continue;
+                    }
+
+                    let trait_lookup_key = trait_name
+                        .rfind("::")
+                        .map(|i| &trait_name[i + 2..])
+                        .unwrap_or(trait_name.as_str());
+                    let explicit_mut_self_contract = self
+                        .trait_definitions
+                        .get(trait_lookup_key)
+                        .and_then(|decl| decl.methods.iter().find(|m| m.name == method_name))
+                        .and_then(|m| m.parameters.iter().find(|p| p.name == "self"))
+                        .is_some_and(|p| matches!(p.ownership, OwnershipHint::Mut));
+                    if explicit_mut_self_contract {
+                        // Rust std / user wrote `&mut self` on the trait — never refine from impls.
+                        // Otherwise `infer_trait_signatures_from_impls` can replace `&mut self` with `&self`
+                        // (e.g. `Drop::drop` vs Windjammer `fn drop(self)`), causing E0186/E0053.
                         updated_methods.insert(method_name, trait_method_analysis);
                         continue;
                     }
@@ -1293,9 +1593,16 @@ impl<'ast> Analyzer<'ast> {
                     updated_methods.insert(method_name, trait_method_analysis);
                 }
 
-                // Replace the trait's analyzed methods with updated versions
+                // Store under the impl's trait name and, when qualified, also under the final segment
+                // so `analyzed_trait_methods.get("GameLoop")` and `.get("crate::GameLoop")` stay in sync.
                 self.analyzed_trait_methods
-                    .insert(trait_name, updated_methods);
+                    .insert(trait_name.clone(), updated_methods.clone());
+                if let Some(pos) = trait_name.rfind("::") {
+                    let short = trait_name[pos + 2..].to_string();
+                    if short != trait_name {
+                        self.analyzed_trait_methods.insert(short, updated_methods);
+                    }
+                }
             }
         }
 
@@ -1459,13 +1766,32 @@ impl<'ast> Analyzer<'ast> {
             program,
             &impl_block.type_name,
         ));
+        let impl_base = impl_block
+            .type_name
+            .split('<')
+            .next()
+            .unwrap_or(impl_block.type_name.as_str())
+            .to_string();
+        self.self_impl_context = Some(ImplSelfFieldContext::new(impl_base, program));
+        let mut analyzed = self.analyze_function(func, registry)?;
 
-        let result = self.analyze_function(func, registry);
+        // Inherent impls: `for x in self.field` + `x.foo()` where `foo` is `&mut self` on a trait object
+        // requires `&mut self` on the outer method (codegen emits `&mut self.field`).
+        if impl_block.trait_name.is_none() {
+            self.maybe_upgrade_self_for_dispatch_for_loops(
+                &mut analyzed,
+                func,
+                impl_block.type_name.as_str(),
+                program,
+                registry,
+            );
+        }
 
         // Clear impl block after analysis
+        self.self_impl_context = None;
         self.current_impl_functions = None;
 
-        result
+        Ok(analyzed)
     }
 
     fn analyze_function(
@@ -1496,12 +1822,23 @@ impl<'ast> Analyzer<'ast> {
                 self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
             let returns_non_copy_field = self.function_returns_non_copy_self_field(func);
+            let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
 
             let self_ownership = if returns_self {
                 // Builder pattern: mut self (owned)
                 OwnershipMode::Owned
             } else if returns_non_copy_field {
                 // Returns non-Copy field (e.g., self.content: String) → must own self to move field
+                OwnershipMode::Owned
+            } else if body_moves_fields {
+                // Body moves non-Copy self fields (e.g., Foo { f: self.bindings }) → must own
+                OwnershipMode::Owned
+            } else if self.function_matches_on_self(func) {
+                // TDD FIX for E0606: match self { ... } consumes self
+                OwnershipMode::Owned
+            } else if self.function_consumes_self_field_elements(func, Some(registry)) {
+                // TDD FIX for E0507: for item in self.items { item.consume() }
+                // Iterating over self.field and calling consuming methods requires owned self
                 OwnershipMode::Owned
             } else if modifies_fields {
                 // Mutating method: &mut self
@@ -1549,22 +1886,30 @@ impl<'ast> Analyzer<'ast> {
                         // Special case: @render3d functions take &mut for camera parameter (3rd param)
                         OwnershipMode::MutBorrowed
                     } else if param.name == "self" {
-                        // Infer ownership for self based on field access and return type
                         let modifies_fields =
                             self.function_modifies_self_fields_with_registry(func, Some(registry));
                         let returns_self = self.function_returns_self(func);
                         let returns_non_copy_field =
                             self.function_returns_non_copy_self_field(func);
+                        let body_moves_fields =
+                            self.function_body_moves_non_copy_self_fields(func);
 
-                        // CRITICAL FIX: Check returns_self FIRST!
-                        // If a function returns Self, it's a builder pattern and should always consume self (Owned)
-                        // This is true even if it doesn't directly modify fields (it creates a new struct literal)
                         if returns_self {
-                            // Builder pattern: consumes self, returns Self (either `self` or a new struct literal)
-                            // Use `mut self` (Owned), not `&self` (Borrowed)
                             OwnershipMode::Owned
                         } else if returns_non_copy_field {
-                            // Returns non-Copy field (e.g., self.content: String) → must own self to move field
+                            OwnershipMode::Owned
+                        } else if body_moves_fields {
+                            // Body moves non-Copy self fields (e.g., Foo { f: self.bindings })
+                            OwnershipMode::Owned
+                        } else if self.function_moves_self_into_return(func) {
+                            // self is moved into a struct literal or returned directly
+                            OwnershipMode::Owned
+                        } else if self.function_matches_on_self(func) {
+                            // TDD FIX for E0606: match self { ... } consumes self
+                            // Match expressions move the scrutinee value, requiring owned self
+                            OwnershipMode::Owned
+                        } else if self.function_consumes_self_field_elements(func, Some(registry)) {
+                            // TDD FIX for E0507: for item in self.items { item.consume() }
                             OwnershipMode::Owned
                         } else if modifies_fields {
                             // Mutating method that doesn't return self: use `&mut self`
@@ -1605,6 +1950,7 @@ impl<'ast> Analyzer<'ast> {
                                 &func.body,
                                 &func.return_type,
                                 registry,
+                                &func.name,
                             )?;
 
                             // DEBUG: Log ownership inference for non-Copy parameters
@@ -1641,7 +1987,7 @@ impl<'ast> Analyzer<'ast> {
         let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
 
         // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
-        self.track_mutations(&func.body);
+        self.track_mutations(&func.body, registry);
         let mutated_variables = self.mutated_variables.clone();
 
         // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
@@ -1698,7 +2044,15 @@ impl<'ast> Analyzer<'ast> {
             program,
             &impl_block.type_name,
         ));
+        let impl_base = impl_block
+            .type_name
+            .split('<')
+            .next()
+            .unwrap_or(impl_block.type_name.as_str())
+            .to_string();
+        self.self_impl_context = Some(ImplSelfFieldContext::new(impl_base, program));
         let analyzed_base = self.analyze_function(func, registry);
+        self.self_impl_context = None;
         self.current_impl_functions = None;
         let mut analyzed = analyzed_base?;
 
@@ -1815,6 +2169,55 @@ impl<'ast> Analyzer<'ast> {
                 .insert("self".to_string(), self_mode);
         }
 
+        // E0053: Parameter types in generated Rust must match the trait declaration (impls may
+        // rename parameters or use incompatible aliases). Ownership already matches the trait above.
+        if !is_std_operator_trait {
+            if let Some(analyzed_trait_fn) = self
+                .analyzed_trait_methods
+                .get(trait_key)
+                .and_then(|m| m.get(&func.name))
+                .or_else(|| {
+                    self.analyzed_trait_methods
+                        .get(trait_name)
+                        .and_then(|m| m.get(&func.name))
+                })
+            {
+                for (i, _) in func.parameters.iter().enumerate() {
+                    if let Some(trait_ty) = analyzed_trait_fn.inferred_param_types.get(i) {
+                        if i < analyzed.inferred_param_types.len() {
+                            analyzed.inferred_param_types[i] = trait_ty.clone();
+                        }
+                    }
+                }
+            }
+            // If multipass never stored analyzed trait fn types, still copy AST parameter types so
+            // generated Rust matches the trait item (E0053).
+            if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
+                if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
+                    let tf = self
+                        .analyzed_trait_methods
+                        .get(trait_key)
+                        .and_then(|m| m.get(&func.name))
+                        .or_else(|| {
+                            self.analyzed_trait_methods
+                                .get(trait_name)
+                                .and_then(|m| m.get(&func.name))
+                        });
+                    for (i, trait_param) in trait_method.parameters.iter().enumerate() {
+                        if i >= analyzed.inferred_param_types.len() {
+                            break;
+                        }
+                        let use_ast = tf
+                            .and_then(|t| t.inferred_param_types.get(i))
+                            .is_none();
+                        if use_ast {
+                            analyzed.inferred_param_types[i] = trait_param.type_.clone();
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(analyzed)
     }
 
@@ -1843,6 +2246,7 @@ impl<'ast> Analyzer<'ast> {
         body: &[&'ast Statement<'ast>],
         _return_type: &Option<Type>,
         registry: &SignatureRegistry,
+        current_func_name: &str,
     ) -> Result<OwnershipMode, String> {
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
@@ -1871,7 +2275,19 @@ impl<'ast> Analyzer<'ast> {
         if !self.is_only_used_as_borrow(param_name, body) {
             if let Some(return_type) = _return_type {
                 if self.param_type_matches_return(param_type, return_type) {
-                    return Ok(OwnershipMode::Owned);
+                    // Windjammer `string` / `str` parameters: return type also being string-like
+                    // does NOT mean the parameter is consumed into the return value.
+                    // Example: find_translation(lang, key: string) -> string only compares `key`;
+                    // inferring Owned for `key` breaks callers that pass the same String twice (E0382).
+                    // Non-string types keep the broader rule (transform/migrate still get Owned).
+                    let string_like = matches!(param_type, Type::String);
+                    if string_like {
+                        if self.is_returned(param_name, body) {
+                            return Ok(OwnershipMode::Owned);
+                        }
+                    } else {
+                        return Ok(OwnershipMode::Owned);
+                    }
                 }
             }
         }
@@ -1889,27 +2305,7 @@ impl<'ast> Analyzer<'ast> {
         // Multi-pass registry-aware inference
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
-        // TDD FIX: For non-Copy types, mutated parameters MUST be &mut, not owned!
-        //
-        // CORRECTNESS: When a function mutates a parameter (e.g., grid.set(...)),
-        // the parameter MUST be a mutable borrow (&mut) so the caller can pass
-        // the same object to multiple functions (e.g., generate_ground(&mut grid), 
-        // generate_buildings(&mut grid)).
-        //
-        // If we use Owned (mut grid: VoxelGrid), the caller would need to pass
-        // by value, which MOVES the object and prevents reuse. This breaks
-        // common patterns like:
-        //   let mut grid = VoxelGrid::new();
-        //   env.generate_ground(&mut grid);   // ERROR: expects VoxelGrid, not &mut
-        //   env.generate_buildings(&mut grid); // ERROR: grid was moved
-        //
-        // EXCEPTION: Copy types (i32, f32, etc.) can use owned when mutated,
-        // because they're cheap to copy. But this is handled earlier (lines 1095-1102).
-        //
-        // For non-Copy types being mutated, ALWAYS infer &mut regardless of hint.
         if self.is_mutated(param_name, body, registry) {
-            // Always use MutBorrowed for mutated non-Copy parameters
-            // (Copy types are handled earlier and don't reach here)
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -1933,6 +2329,14 @@ impl<'ast> Analyzer<'ast> {
         // Smart inference is OFF for explicit type annotations.
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
+        // THE WINDJAMMER WAY: Removed aggressive string optimization
+        // When a user writes `text: string`, they mean `String` (owned), period.
+        // Do NOT auto-convert to `&str` just because it's "only passed to read-only functions".
+        // That breaks API contracts and causes confusing type errors.
+        //
+        // Smart inference is OFF for explicit type annotations.
+        // (Future: Could add #[optimize] annotation for user-requested optimization)
+
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
             return Ok(OwnershipMode::Owned);
@@ -1941,25 +2345,16 @@ impl<'ast> Analyzer<'ast> {
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
         // TDD FIX (Bug #5): Comparison operators (==, !=, <, >, <=, >=) work with borrowed
         // values, so we should only force Owned for arithmetic operations (Add, Sub, Mul, Div).
-        // Copy types used in arithmetic operators (a - b, a + b, etc.) should remain owned
-        // because operator traits are typically implemented for owned values, not references.
-        //
-        // For comparisons, borrowed parameters work fine:
-        // `if str1 == str2` works whether str1/str2 are &String or String
         if self.is_used_in_arithmetic_op(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
 
         // 5. Check if parameter is pattern matched with field extraction
-        // Borrowing an enum and pattern matching extracts references to fields
-        // which breaks calls expecting owned values. Keep such parameters owned.
         if self.is_pattern_matched_with_fields(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
 
         // 6. TDD: Check if parameter is iterated over in a for loop
-        // When `for item in vec` is used (not `for item in &vec`), the vec is consumed
-        // and elements are moved out. The parameter must be owned, not borrowed.
         if self.is_iterated_over(param_name, body) {
             return Ok(OwnershipMode::Owned);
         }
@@ -1980,18 +2375,12 @@ impl<'ast> Analyzer<'ast> {
         //
         // IMPORTANT: Only use registry if callees expect stricter ownership than local usage
         if let Some(pass_through_mode) =
-            self.infer_passthrough_ownership(param_name, body, registry)
+            self.infer_passthrough_ownership(param_name, param_type, body, registry, current_func_name)
         {
-            // Registry says callees need this ownership
-            // But if parameter is ONLY used for reading locally, prefer Borrowed
-            // unless callees explicitly need Owned/MutBorrowed
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
                 OwnershipMode::MutBorrowed => return Ok(OwnershipMode::MutBorrowed),
                 OwnershipMode::Owned => {
-                    // Callees want Owned - check if this is just propagation from Pass 1
-                    // If parameter has NO local mutations/returns/stores, default to Borrowed
-                    // This breaks the "Owned begets Owned" cycle
                     return Ok(OwnershipMode::Owned);
                 }
             }
@@ -2337,10 +2726,9 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    // Option/Result constructors
                     let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
-                    // Enum variant constructors: Type::Variant(...) stores its arguments
-                    let is_enum_constructor = fn_name.contains("::");
+                    let is_enum_constructor =
+                        Self::looks_like_enum_variant_constructor(fn_name);
 
                     if is_known_wrapper || is_enum_constructor {
                         for (_label, arg) in arguments {
@@ -2628,12 +3016,11 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                // Check if this is an enum variant constructor
                 let is_enum_variant = if let Expression::Identifier { name: fn_name, .. } = function
                 {
-                    fn_name.contains("::")
+                    Self::looks_like_enum_variant_constructor(fn_name)
                 } else if let Expression::FieldAccess { field, .. } = function {
-                    field.contains("::")
+                    Self::looks_like_enum_variant_constructor(field)
                 } else {
                     false
                 };
@@ -2675,6 +3062,22 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
             _ => false,
+        }
+    }
+
+    /// Check if a qualified name like "Type::Variant" looks like an enum variant constructor
+    /// rather than a static method call. Enum variants use PascalCase after "::"
+    /// (e.g., Option::Some, Color::Custom), while methods use snake_case
+    /// (e.g., FpsCamera::collides_aabb, Vec3::new).
+    fn looks_like_enum_variant_constructor(qualified_name: &str) -> bool {
+        if let Some(pos) = qualified_name.rfind("::") {
+            let after_colons = &qualified_name[pos + 2..];
+            after_colons
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase())
+        } else {
+            false
         }
     }
 
@@ -3202,14 +3605,6 @@ impl<'ast> Analyzer<'ast> {
             })
             .collect();
 
-        // Check if first parameter is self
-        let has_self_receiver = func
-            .decl
-            .parameters
-            .first()
-            .map(|p| p.name == "self" || p.name == "mut self")
-            .unwrap_or(false);
-
         // THE WINDJAMMER WAY: Respect explicit type annotations
         // When a user writes `text: string`, they mean `String` (owned).
         // Do NOT auto-convert to `&str` - that's too aggressive and breaks API contracts.
@@ -3219,7 +3614,7 @@ impl<'ast> Analyzer<'ast> {
         // - Return types (when optimizing)
         //
         // For parameters, the user's explicit type annotation is the contract.
-        let param_types: Vec<Type> = func
+        let mut param_types: Vec<Type> = func
             .decl
             .parameters
             .iter()
@@ -3228,6 +3623,37 @@ impl<'ast> Analyzer<'ast> {
                 param.type_.clone()
             })
             .collect();
+
+        let explicit_self = func
+            .decl
+            .parameters
+            .first()
+            .is_some_and(|p| p.name == "self" || p.name == "mut self");
+
+        // Omitted `self` in source (`fn touch() { self... }`): analyzer stores ownership under
+        // "self" but decl.parameters has no receiver. SignatureRegistry must still expose
+        // `has_self_receiver` + `param_ownership[0]` so cross-type calls (e.g. `.touch()`) resolve.
+        let synthetic_self_receiver =
+            func.inferred_ownership.contains_key("self") && !explicit_self;
+
+        let mut param_ownership = param_ownership;
+        if synthetic_self_receiver {
+            let self_mode = func
+                .inferred_ownership
+                .get("self")
+                .copied()
+                .unwrap_or(OwnershipMode::Borrowed);
+            param_ownership.insert(0, self_mode);
+            let self_ty = func
+                .decl
+                .parent_type
+                .as_ref()
+                .map(|n| Type::Custom(n.clone()))
+                .unwrap_or(Type::Custom("Self".to_string()));
+            param_types.insert(0, self_ty);
+        }
+
+        let has_self_receiver = explicit_self || synthetic_self_receiver;
 
         // Extract return type for smart string inference
         let return_type = func.decl.return_type.clone();
@@ -3252,10 +3678,20 @@ impl<'ast> Analyzer<'ast> {
     fn is_generic_type_param(ty: &Type) -> bool {
         match ty {
             Type::Custom(name) => {
-                // Generic type parameters are uppercase letters, possibly followed by numbers
-                // Examples: T, G, S, T1, T2, KEY, VALUE
-                name.chars().next().is_some_and(|c| c.is_uppercase())
-                    && (name.len() == 1 || name.chars().all(|c| c.is_uppercase() || c.is_numeric()))
+                // Generic type parameters are single uppercase letters, optionally followed by a digit.
+                // Examples: T, U, K, V, S, G, T1, T2
+                // NOT: BVH, GPU, API, SVO, AABB, AABB3 (these are concrete type names)
+                let len = name.len();
+                if len == 1 {
+                    name.chars().next().is_some_and(|c| c.is_uppercase())
+                } else if len == 2 {
+                    let mut chars = name.chars();
+                    let first = chars.next().unwrap();
+                    let second = chars.next().unwrap();
+                    first.is_uppercase() && second.is_ascii_digit()
+                } else {
+                    false
+                }
             }
             // impl Trait parameters (e.g., `item: impl Describable`) should always be Owned.
             // Borrowing would change from `impl Trait` to `&impl Trait`, breaking trait dispatch.
@@ -3279,6 +3715,18 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Compare two types for equality (custom types, primitives).
+    /// Callee parameter type from `SignatureRegistry` must match the caller's declared type
+    /// before passthrough ownership is applied. Prevents short names like `contains` / `len`
+    /// from unrelated impls forcing Owned on `str` / `string` parameters (E0382).
+    pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
+        if self.types_equal(sig_ty, decl_ty) {
+            return true;
+        }
+        let decl_str = matches!(decl_ty, Type::String);
+        let sig_str = matches!(sig_ty, Type::String);
+        decl_str && sig_str
+    }
+
     fn types_equal(&self, a: &Type, b: &Type) -> bool {
         match (a, b) {
             (Type::Custom(name_a), Type::Custom(name_b)) => name_a == name_b,
@@ -3288,6 +3736,35 @@ impl<'ast> Analyzer<'ast> {
             (Type::Uint, Type::Uint) => true,
             (Type::Float, Type::Float) => true,
             (Type::Bool, Type::Bool) => true,
+            (Type::Vec(inner_a), Type::Vec(inner_b)) => self.types_equal(inner_a, inner_b),
+            (Type::Option(inner_a), Type::Option(inner_b)) => self.types_equal(inner_a, inner_b),
+            (Type::Array(inner_a, _), Type::Array(inner_b, _)) => {
+                self.types_equal(inner_a, inner_b)
+            }
+            (Type::Result(ok_a, err_a), Type::Result(ok_b, err_b)) => {
+                self.types_equal(ok_a, ok_b) && self.types_equal(err_a, err_b)
+            }
+            (Type::Tuple(elems_a), Type::Tuple(elems_b)) => {
+                elems_a.len() == elems_b.len()
+                    && elems_a
+                        .iter()
+                        .zip(elems_b.iter())
+                        .all(|(a, b)| self.types_equal(a, b))
+            }
+            (Type::Reference(inner_a), Type::Reference(inner_b)) => {
+                self.types_equal(inner_a, inner_b)
+            }
+            (Type::MutableReference(inner_a), Type::MutableReference(inner_b)) => {
+                self.types_equal(inner_a, inner_b)
+            }
+            (Type::Parameterized(name_a, args_a), Type::Parameterized(name_b, args_b)) => {
+                name_a == name_b
+                    && args_a.len() == args_b.len()
+                    && args_a
+                        .iter()
+                        .zip(args_b.iter())
+                        .all(|(a, b)| self.types_equal(a, b))
+            }
             _ => false,
         }
     }
@@ -3314,6 +3791,7 @@ impl<'ast> Analyzer<'ast> {
             // Example: fn(string, i32) -> bool is Copy
             // This ensures function pointer parameters are inferred as Owned, not Borrowed
             Type::FunctionPointer { .. } => true,
+            Type::RawPointer { .. } => true,
             Type::Custom(name) => {
                 // Check if it's a known Copy enum
                 if self.copy_enums.contains(name) {
@@ -3325,10 +3803,8 @@ impl<'ast> Analyzer<'ast> {
                 if self.copy_structs.contains(name) {
                     return true;
                 }
-                // Recognize Rust primitive types by name
                 matches!(
                     name.as_str(),
-                    // Primitives (the only truly hardcoded types)
                     "i8" | "i16"
                         | "i32"
                         | "i64"
@@ -3344,17 +3820,6 @@ impl<'ast> Analyzer<'ast> {
                         | "f64"
                         | "bool"
                         | "char"
-                        // Common game math types that are always Copy
-                        | "Vec2"
-                        | "Vec3"
-                        | "Vec4"
-                        | "Color"
-                        | "Rect"
-                        | "Point"
-                        | "Size"
-                        | "Transform2D"
-                        | "Matrix4"
-                        | "Quaternion"
                 )
             }
             _ => false,

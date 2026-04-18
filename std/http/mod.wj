@@ -30,7 +30,7 @@ impl Request {
     pub fn get(url: string) -> Request {
         Request {
             url: url,
-            method: "GET".to_string(),
+            method: "GET",
             headers: vec![],
             body: None,
             timeout: None,
@@ -41,7 +41,7 @@ impl Request {
     pub fn post(url: string, body: string) -> Request {
         Request {
             url: url,
-            method: "POST".to_string(),
+            method: "POST",
             headers: vec![],
             body: Some(body),
             timeout: None,
@@ -63,7 +63,7 @@ impl Request {
     /// Send the request
     pub fn send(self) -> HttpResult<Response> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
 }
 
@@ -79,7 +79,7 @@ pub fn post(url: string, body: string) -> HttpResult<Response> {
 pub fn put(url: string, body: string) -> HttpResult<Response> {
     Request {
         url: url,
-        method: "PUT".to_string(),
+        method: "PUT",
         headers: vec![],
         body: Some(body),
         timeout: None,
@@ -89,7 +89,7 @@ pub fn put(url: string, body: string) -> HttpResult<Response> {
 pub fn delete(url: string) -> HttpResult<Response> {
     Request {
         url: url,
-        method: "DELETE".to_string(),
+        method: "DELETE",
         headers: vec![],
         body: None,
         timeout: None,
@@ -132,7 +132,7 @@ impl ServerResponse {
         ServerResponse {
             status: status,
             headers: vec![],
-            body: String::new(),
+            body: "",
             binary_body: Some(data),
         }
     }
@@ -141,7 +141,7 @@ impl ServerResponse {
     pub fn html(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type".to_string(), "text/html".to_string())],
+            headers: vec![("Content-Type", "text/html")],
             body: body,
             binary_body: None,
         }
@@ -151,7 +151,7 @@ impl ServerResponse {
     pub fn json(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type".to_string(), "application/json".to_string())],
+            headers: vec![("Content-Type", "application/json")],
             body: body,
             binary_body: None,
         }
@@ -161,7 +161,7 @@ impl ServerResponse {
     pub fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
             status: status,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: vec![("Content-Type", "text/plain")],
             body: message,
             binary_body: None,
         }
@@ -210,6 +210,6 @@ where
     F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static
 {
     // This will be replaced by the compiler with actual implementation
-    Err("HTTP server not available in this build".to_string())
+    Err("HTTP server not available in this build")
 }
 

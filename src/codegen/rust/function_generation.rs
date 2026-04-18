@@ -15,6 +15,28 @@ use crate::CompilationTarget;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// True when the method returns the same struct type as the current `impl` block,
+    /// AND is NOT a clone/copy factory method.
+    ///
+    /// Builder pattern: `fn with_size(self, s: u32) -> MyStruct { self.size = s; self }`
+    /// NOT a builder: `fn clone(self) -> MyStruct { let new = MyStruct::new(); ... new }`
+    fn method_returns_impl_struct(&self, func: &FunctionDecl) -> bool {
+        use crate::parser::Type;
+        let returns_self_type = match &func.return_type {
+            Some(Type::Custom(name)) => self
+                .current_struct_name
+                .as_ref()
+                .is_some_and(|s| s == name),
+            _ => false,
+        };
+        if !returns_self_type {
+            return false;
+        }
+        // Exclude clone/copy factory methods that create a new instance rather than
+        // flowing `self` through. These need `&self` to avoid E0507.
+        !matches!(func.name.as_str(), "clone" | "copy" | "duplicate" | "deep_clone" | "clone_from")
+    }
+
     fn function_returns_self_type(&self, func: &FunctionDecl) -> bool {
         // Check if the function returns Self (for builder pattern detection)
         use crate::parser::{Expression, Statement, Type};
@@ -59,6 +81,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
     /// Impl methods MUST match trait signature exactly.
+    ///
+    /// The trait codegen defaults to `&mut self` for most methods (unless analysis
+    /// explicitly found `Borrowed`). The impl must match what the TRAIT generated.
+    /// When we can't determine the trait's choice, default to `&mut self` (most permissive).
     fn get_effective_self_ownership(
         &self,
         func_name: &str,
@@ -75,12 +101,70 @@ impl<'ast> CodeGenerator<'ast> {
                             .map(|i| &trait_name[i + 2..])
                             .and_then(|key| self.analyzed_trait_methods.get(key))
                     });
-                if let Some(ownership) = methods
-                    .and_then(|m| m.get(func_name))
-                    .and_then(|m| m.inferred_ownership.get("self").copied())
-                {
-                    return Some(ownership);
+                if let Some(trait_method) = methods.and_then(|m| m.get(func_name)) {
+                    let ownership = trait_method.inferred_ownership.get("self").copied();
+                    match ownership {
+                        Some(OwnershipMode::Borrowed) | Some(OwnershipMode::MutBorrowed) => {
+                            return ownership;
+                        }
+                        Some(OwnershipMode::Owned) => {
+                            // Trait method analysis says `Owned` → the trait codegen 
+                            // defaults to `&self` for trait methods (OwnershipHint::Inferred 
+                            // maps to "&self" in item_generation.rs). The impl MUST match.
+                            return Some(OwnershipMode::Borrowed);
+                        }
+                        None => {
+                            // No self ownership inferred (method doesn't use self).
+                            // Trait codegen defaults None → &self, so impl must match.
+                            return Some(OwnershipMode::Borrowed);
+                        }
+                    }
                 }
+                // Trait exists but this specific method wasn't in the analysis map.
+                // Trait codegen defaults to &self for unanalyzed methods, so match that.
+                if methods.is_some() {
+                    return Some(OwnershipMode::Borrowed);
+                }
+                // Cross-file trait impl: trait not in registry at all (single-file compilation).
+                // Choose self ownership based on known trait conventions:
+                // - Operator traits (Add, Sub, etc.) require consuming self
+                // - Derive traits (Display, Debug, etc.) require &self
+                // - Custom traits: use body analysis (matches trait declaration heuristic)
+                let base_trait = trait_name
+                    .rfind("::")
+                    .map(|i| &trait_name[i + 2..])
+                    .unwrap_or(trait_name);
+                return Some(if matches!(
+                    base_trait,
+                    "Add" | "Sub" | "Mul" | "Div" | "Rem" | "Neg" | "Not"
+                        | "BitAnd" | "BitOr" | "BitXor" | "Shl" | "Shr"
+                        | "Into" | "From" | "TryInto" | "TryFrom"
+                ) {
+                    OwnershipMode::Owned
+                } else if matches!(
+                    base_trait,
+                    "Display" | "Debug" | "Hash" | "PartialEq" | "Eq"
+                        | "PartialOrd" | "Ord" | "Clone" | "Copy" | "Default"
+                        | "Iterator" | "IntoIterator" | "AsRef" | "Deref"
+                ) {
+                    OwnershipMode::Borrowed
+                } else {
+                    // For custom cross-file traits, use body analysis first.
+                    // If body analysis found explicit ownership (mutation detected
+                    // or read-only access confirmed), use that.
+                    if let Some(body_ownership) = analyzed.inferred_ownership.get("self").copied() {
+                        body_ownership
+                    } else {
+                        // No body analysis result - match the trait declaration heuristic:
+                        // methods WITH a return type default to &self,
+                        // methods WITHOUT default to &mut self.
+                        if analyzed.decl.return_type.is_some() {
+                            OwnershipMode::Borrowed
+                        } else {
+                            OwnershipMode::MutBorrowed
+                        }
+                    }
+                });
             }
         }
         analyzed.inferred_ownership.get("self").copied()
@@ -132,27 +216,7 @@ impl<'ast> CodeGenerator<'ast> {
                 statements.iter().any(|s| self.statement_modifies_self(s))
             }
             Expression::MethodCall { object, method, .. } => {
-                // Check if this is a mutating method call on self.field
-                // Common mutating methods: push, pop, remove, insert, clear, etc.
-                let is_mutating_method = matches!(
-                    method.as_str(),
-                    "push"
-                        | "pop"
-                        | "remove"
-                        | "insert"
-                        | "clear"
-                        | "append"
-                        | "extend"
-                        | "drain"
-                        | "truncate"
-                        | "resize"
-                        | "swap_remove"
-                        | "retain"
-                        | "take"
-                        | "replace"
-                        | "get_or_insert"
-                        | "get_or_insert_with"
-                );
+                let is_mutating_method = super::stdlib_method_traits::method_mutates_receiver(method);
 
                 if is_mutating_method {
                     // Check if the object is self.field
@@ -272,26 +336,12 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Generate non-wrapping decorators (like @test, @ignore)
+        let decorator_reg = crate::decorator_registry::DecoratorRegistry::new();
         for decorator in &func.decorators {
-            if decorator.name == "async" {
+            if decorator_reg.should_skip_for_backend(&decorator.name, self.target) {
                 continue;
             }
-            if decorator.name == "export" && self.target != CompilationTarget::Wasm {
-                continue;
-            }
-            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
-            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
-            if matches!(
-                decorator.name.as_str(),
-                "vertex" | "fragment" | "compute"
-            ) {
-                continue;
-            }
-            // Skip wrapping decorators - they'll be handled in the body
-            if matches!(
-                decorator.name.as_str(),
-                "timeout" | "bench" | "requires" | "ensures" | "property_test" | "invariant"
-            ) {
+            if decorator_reg.is_wrapping_decorator(&decorator.name) {
                 continue;
             }
             // Skip @test with arguments (setup/teardown) - handled in body
@@ -974,11 +1024,26 @@ impl<'ast> CodeGenerator<'ast> {
             self.clone_optimizations.insert(opt.variable.clone());
         }
 
-        // Track function parameters for compound assignment optimization
         self.current_function_params = func.parameters.clone();
+        // Combine inline bounds (<T: Foo>) and where clause for trait resolution
+        let mut all_bounds: Vec<(String, Vec<String>)> = func
+            .type_params
+            .iter()
+            .filter(|tp| !tp.bounds.is_empty())
+            .map(|tp| (tp.name.clone(), tp.bounds.clone()))
+            .collect();
+        for (name, bounds) in &func.where_clause {
+            if let Some(existing) = all_bounds.iter_mut().find(|(n, _)| n == name) {
+                existing.1.extend(bounds.iter().cloned());
+            } else {
+                all_bounds.push((name.clone(), bounds.clone()));
+            }
+        }
+        self.current_function_type_bounds = all_bounds;
 
         // Clear local variable types for new function scope
         self.local_var_types.clear();
+        self.borrowed_iterator_vars.clear();
 
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
@@ -1013,6 +1078,21 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.insert(param_name.clone());
                 }
                 _ => {}
+            }
+        }
+
+        // METHOD PARAM OWNERSHIP: Register this method's parameter ownership modes
+        // for use at call sites (auto-borrow arguments).
+        {
+            let ownership_vec: Vec<(String, crate::analyzer::OwnershipMode)> = analyzed
+                .inferred_ownership
+                .iter()
+                .filter(|(name, _)| name.as_str() != "self")
+                .map(|(name, mode)| (name.clone(), *mode))
+                .collect();
+            if !ownership_vec.is_empty() {
+                self.method_param_ownership
+                    .insert(func.name.to_string(), ownership_vec);
             }
         }
 
@@ -1108,31 +1188,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Generate decorators (map Windjammer decorators to Rust attributes)
+        let decorator_reg2 = crate::decorator_registry::DecoratorRegistry::new();
         for decorator in &func.decorators {
-            // Skip @async, it's handled specially
-            if decorator.name == "async" {
-                continue;
-            }
-
-            // Skip @export - it's used to determine visibility but doesn't map to a Rust attribute for native targets
-            if decorator.name == "export" && self.target != CompilationTarget::Wasm {
-                continue;
-            }
-
-            // TDD FIX: Skip WGSL-specific decorators when targeting Rust
-            // WGSL decorators (@vertex, @fragment, @compute) are GPU-only and invalid in Rust
-            if matches!(
-                decorator.name.as_str(),
-                "vertex" | "fragment" | "compute"
-            ) {
-                continue;
-            }
-
-            // Skip game framework decorators - they're handled by the game loop
-            if matches!(
-                decorator.name.as_str(),
-                "game" | "init" | "update" | "render" | "render3d" | "input" | "cleanup"
-            ) {
+            if decorator_reg2.should_skip_for_backend(&decorator.name, self.target) {
                 continue;
             }
 
@@ -1239,7 +1297,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Priority 1: Use analyzer's inferred self if available
         // E0053 FIX: For trait impls, use TRAIT's ownership (impl must match trait exactly)
-        // Trait impl methods MUST have self if trait has it - even when impl body doesn't use self
+        // Trait impl methods MUST have self if trait has it - even when impl body doesn't use self.
+        // The trait codegen adds &mut self by default for ALL trait methods (unless they're
+        // associated functions returning Self). So the impl must also have self to match.
         let needs_self_from_trait = self.in_trait_impl
             && !has_explicit_self
             && self.current_trait_impl_name.as_ref().is_some_and(|trait_name| {
@@ -1252,10 +1312,13 @@ impl<'ast> CodeGenerator<'ast> {
                             .map(|i| &trait_name[i + 2..])
                             .and_then(|key| self.analyzed_trait_methods.get(key))
                     });
-                methods.is_some_and(|m| {
-                    m.get(&func.name)
-                        .is_some_and(|trait_fn| trait_fn.inferred_ownership.contains_key("self"))
-                })
+                let found = methods.is_some_and(|m| m.contains_key(&func.name));
+                if !found && !has_inferred_self && !is_constructor {
+                    // Cross-file trait impl: trait definition not available in single-file compilation.
+                    // Default to requiring self since trait impl methods almost always need it.
+                    return true;
+                }
+                found
             });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
@@ -1295,7 +1358,9 @@ impl<'ast> CodeGenerator<'ast> {
             // Check if function body mutates any struct fields
             let ctx =
                 self_analysis::AnalysisContext::new(&func.parameters, &self.current_struct_fields);
-            if self_analysis::function_mutates_fields(&ctx, func) {
+            let mutates = self_analysis::function_mutates_fields(&ctx, func);
+            let accesses = self_analysis::function_accesses_fields(&ctx, func);
+            if mutates {
                 // Check if this is a builder pattern (modifies fields AND returns Self)
                 let returns_self = self.function_returns_self_type(func);
                 if returns_self {
@@ -1305,7 +1370,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // Regular mutating method: use `&mut self` (borrowing)
                     params.push("&mut self".to_string());
                 }
-            } else if self_analysis::function_accesses_fields(&ctx, func) {
+            } else if accesses {
                 // Only read access needed
                 params.push("&self".to_string());
             }
@@ -1357,15 +1422,19 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             // E0053 FIX: Use trait's ownership when in trait impl
-                            if let Some(ownership_mode) =
-                                self.get_effective_self_ownership(&func.name, analyzed)
+                            let eff_ownership = self.get_effective_self_ownership(&func.name, analyzed);
+                            if let Some(ownership_mode) = eff_ownership
                             {
                                 match ownership_mode {
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                        if !self.in_trait_impl
+                                            && self.method_returns_impl_struct(func) =>
+                                    {
+                                        return "mut self".to_string();
+                                    }
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
                                     OwnershipMode::Borrowed => return "&self".to_string(),
                                     OwnershipMode::Owned => {
-                                        // Check if function actually modifies self
-                                        // Only add 'mut' if it does
                                         if self.function_modifies_self(&analyzed.decl) {
                                             return "mut self".to_string();
                                         } else {
@@ -1374,7 +1443,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
-                            // Default: check if function modifies self
                             if self.function_modifies_self(&analyzed.decl) {
                                 return "mut self".to_string();
                             } else {
@@ -1409,8 +1477,8 @@ impl<'ast> CodeGenerator<'ast> {
                             self.type_to_rust(inferred_type)
                         } else {
                             // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
-                            let is_string = matches!(inferred_type, Type::String)
-                                || matches!(inferred_type, Type::Custom(name) if name == "string");
+                            let is_string =
+                                crate::codegen::rust::types::is_windjammer_text_type(inferred_type);
 
                             if is_string {
                                 "&str".to_string()
@@ -1458,6 +1526,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
+                                    // Same as explicit Owned self: builder `let mut r = self` + return `r`
+                                    // needs a by-value mutable receiver when return type is the impl struct.
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                        if !self.in_trait_impl
+                                            && self.method_returns_impl_struct(func) =>
+                                    {
+                                        return "mut self".to_string();
+                                    }
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
                                     OwnershipMode::Borrowed => return "&self".to_string(),
                                     OwnershipMode::Owned => {
@@ -1470,7 +1546,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
-                            // Default: check if function modifies self
+                            // Default: no effective ownership found
                             if self.function_modifies_self(&analyzed.decl) {
                                 return "mut self".to_string();
                             } else {
@@ -1495,6 +1571,38 @@ impl<'ast> CodeGenerator<'ast> {
                                 .get(&param.name)
                                 .unwrap_or(&OwnershipMode::Owned);
 
+                            // E0053 FIX: Trait impl parameters MUST match the trait
+                            // definition's parameter types exactly. Look up the trait's
+                            // method signature and use its ownership for each parameter.
+                            let ownership_mode = if self.in_trait_impl {
+                                let trait_param_ownership = self
+                                    .current_trait_impl_name
+                                    .as_ref()
+                                    .and_then(|trait_name| {
+                                        let methods = self
+                                            .analyzed_trait_methods
+                                            .get(trait_name.as_str())
+                                            .or_else(|| {
+                                                trait_name
+                                                    .rfind("::")
+                                                    .map(|i| &trait_name[i + 2..])
+                                                    .and_then(|key| {
+                                                        self.analyzed_trait_methods.get(key)
+                                                    })
+                                            });
+                                        methods.and_then(|m| {
+                                            m.get(func.name.as_str()).and_then(|trait_fn| {
+                                                // Find matching param by name in the trait
+                                                // method's inferred ownership
+                                                trait_fn.inferred_ownership.get(&param.name)
+                                            })
+                                        })
+                                    });
+                                trait_param_ownership.unwrap_or(&OwnershipMode::Owned)
+                            } else {
+                                ownership_mode
+                            };
+
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(inferred_type),
                                 OwnershipMode::Borrowed => {
@@ -1504,8 +1612,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
                                         // Check if this is a String type (either Type::String or Type::Custom("string"))
-                                        let is_string = matches!(inferred_type, Type::String)
-                                            || matches!(inferred_type, Type::Custom(name) if name == "string");
+                                        let is_string = crate::codegen::rust::types::is_windjammer_text_type(
+                                            inferred_type,
+                                        );
 
                                         if is_string {
                                             // &str is idiomatic Rust: accepts both String and &str via deref coercion

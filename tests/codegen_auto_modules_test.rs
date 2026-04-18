@@ -83,7 +83,7 @@ fn test_auto_gen_creates_proper_path_declarations() {
 fn test_auto_gen_creates_namespace_reexports() {
     // GIVEN: Nested .wj files
     let test_dir =
-        setup_test_project_with_files(&["src_wj/voxel/grid.wj", "src_wj/voxel/svo_convert.wj"]);
+        setup_test_project_with_files(&["src_wj/voxel/grid.wj", "src_wj/voxel/svo64_convert.wj"]);
 
     // WHEN: Compiler runs
     compile_project(&test_dir);
@@ -104,8 +104,8 @@ fn test_auto_gen_creates_namespace_reexports() {
         "Should re-export grid"
     );
     assert!(
-        content.contains("pub use crate::wj_voxel_svo_convert::*"),
-        "Should re-export svo_convert"
+        content.contains("pub use crate::wj_voxel_svo64_convert::*"),
+        "Should re-export svo64_convert"
     );
 
     cleanup_test_project(&test_dir);

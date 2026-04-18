@@ -21,16 +21,16 @@ fn start() {
         
         Container::new()
             .max_width("600px")
-            .child(Panel::new("Button Click Test".to_string())
+            .child(Panel::new("Button Click Test")
                 .child(
                     Flex::new()
                         .direction(FlexDirection::Column)
                         .gap("20px")
-                        .child(Text::new("Click the button below and check the browser console!".to_string()))
+                        .child(Text::new("Click the button below and check the browser console!"))
                         .child(Text::new(format!("Clicks so far: {}", count_display.get()))
                             .size(TextSize::Large))
                         .child(
-                            Button::new("Click Me!".to_string())
+                            Button::new("Click Me!")
                                 .variant(ButtonVariant::Primary)
                                 .size(ButtonSize::Large)
                                 .on_click(move || {
@@ -40,14 +40,14 @@ fn start() {
                                     println!("🎉 Button clicked! Count: {}", new_count)
                                 })
                         )
-                        .child(Alert::info("Check the console AND watch the count update!".to_string()))
+                        .child(Alert::info("Check the console AND watch the count update!"))
                 )
             )
             .to_vnode()
     }
     
     println!("✅ UI created, mounting...")
-    ReactiveApp::new("Button Test".to_string(), render).run()
+    ReactiveApp::new("Button Test", render).run()
     println!("✅ UI mounted! Click the button to test.")
 }
 

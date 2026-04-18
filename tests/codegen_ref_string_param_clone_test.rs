@@ -65,12 +65,13 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should auto-clone iterator variables for owned parameters
-    // for name in names → name is &String, Member::new expects String
-    // Should become: Member::new(name.clone())
+    // The generated code should auto-convert iterator variables for owned parameters.
+    // for name in names → name is &String, Member::new expects String.
+    // Windjammer text types use .to_string() (not .clone()) because when the
+    // param is lowered to &str, .clone() keeps &str (Copy), not String.
     assert!(
-        rust_code.contains("Member::new(name.clone())"),
-        "Expected auto-clone for iterator variable (&String -> String).\nGenerated code:\n{}",
+        rust_code.contains("Member::new(name.to_string())") || rust_code.contains("Member::new(name.clone())"),
+        "Expected auto-conversion for iterator variable (&String -> String).\nGenerated code:\n{}",
         rust_code
     );
 

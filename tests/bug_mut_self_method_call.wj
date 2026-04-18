@@ -10,13 +10,13 @@ impl State {
         State { value: 0 }
     }
     
-    pub fn change_value(self, name: String, delta: i32) {
+    pub fn change_value(self, name: string, delta: i32) {
         println!("Changing: {}, delta: {}", name, delta);
     }
 }
 
 enum Action {
-    Change(String, i32),
+    Change(string, i32),
 }
 
 impl Action {
@@ -34,7 +34,7 @@ impl Action {
 }
 
 fn main() {
-    let action = Action::Change("test".to_string(), 10);
+    let action = Action::Change("test", 10);
     let mut state = State::new();
     action.execute(state);
 }

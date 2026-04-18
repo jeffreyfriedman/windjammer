@@ -4,7 +4,7 @@
 
 pub enum Speaker {
     Player,
-    NPC(String),  // Expects owned String
+    NPC(string),  // Expects owned String
 }
 
 pub fn test_enum_string_literal() {
@@ -20,8 +20,8 @@ pub fn test_enum_string_literal() {
 }
 
 pub enum Message {
-    Text(String),
-    Error(String),
+    Text(string),
+    Error(string),
 }
 
 pub fn test_enum_variants_multiple() {

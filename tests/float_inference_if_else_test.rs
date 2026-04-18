@@ -118,6 +118,27 @@ pub fn choose(cond: bool) -> f32 {
     compile_and_assert(source, &["1.0", "2.0"], true);
 }
 
+/// `let x = if c { 0.0 } else { if c2 { 1.0 } else { v } }` (else branch ends with nested if).
+/// Without tail unification, the outer `0.0` could stay f64 while `factor < 0.0` is f32 (E0308).
+#[test]
+fn test_let_value_nested_if_else_unifies_outer_literal_f32() {
+    let source = r#"
+pub fn clamp_factor(factor: f32) -> f32 {
+    let clamped = if factor < 0.0 {
+        0.0
+    } else {
+        if factor > 1.0 {
+            1.0
+        } else {
+            factor
+        }
+    }
+    clamped
+}
+"#;
+    compile_and_assert(source, &["0.0", "1.0"], true);
+}
+
 #[test]
 fn test_if_else_both_literals_return_f32() {
     // Function returns f32, both branches are literals

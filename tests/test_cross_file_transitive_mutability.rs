@@ -268,6 +268,7 @@ pub mod app
     let app_code = std::fs::read_to_string(build.join("app.rs")).unwrap();
     assert!(
         app_code.contains("pub fn run(&mut self)"),
-        "App::run should be &mut self (cross-file level 2)"
+        "App::run should be &mut self (cross-file level 2)\nGenerated:\n{}",
+        app_code
     );
 }
