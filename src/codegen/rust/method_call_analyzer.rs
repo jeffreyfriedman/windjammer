@@ -249,6 +249,15 @@ impl MethodCallAnalyzer {
         // Common pattern: Methods with string parameters typically expect &str
         // If we have an owned String variable (match arm binding, local var), add &
         if method_signature.is_none() {
+            // TDD FIX: Don't add & for collection methods that want owned values
+            // Vec<String>::push, Vec<String>::insert, etc. take owned String, not &String
+            let collection_append_methods = matches!(method,
+                "push" | "insert" | "append" | "extend" | "push_front" | "push_back"
+            );
+            if collection_append_methods {
+                return false; // These methods want owned values, not references
+            }
+            
             if let Expression::Identifier { name: arg_name, .. } = arg {
                 // First check local_var_types (match arm bindings, let bindings)
                 if let Some(local_types) = local_var_types {
