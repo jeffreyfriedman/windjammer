@@ -1227,6 +1227,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                     arguments.len(),
                                                     type_name.as_deref(),
                                                     Some(&self.local_var_types),
+                                                    Some(&self.stdlib_method_signatures),
+                                                    Some(&self.method_signatures_by_type),
                                                 );
                                                 if should_ref {
                                                     arg_str = format!("&{}", arg_str);
@@ -1404,6 +1406,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         arguments.len(),
                                         type_name.as_deref(),
                                         Some(&self.local_var_types),
+                                        Some(&self.stdlib_method_signatures),
+                                        Some(&self.method_signatures_by_type),
                                     );
                                 if should_ref {
                                     arg_str = format!("&{}", arg_str);
@@ -2800,6 +2804,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 arguments.len(),
                                 type_name.as_deref(),
                                 Some(&self.local_var_types),
+                                Some(&self.stdlib_method_signatures),
+                                Some(&self.method_signatures_by_type),
                             );
                             if should_ref {
                                 if let Expression::Cast { .. } = arg_to_generate {
