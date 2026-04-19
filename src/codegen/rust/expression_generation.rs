@@ -513,6 +513,25 @@ impl<'ast> CodeGenerator<'ast> {
                         | BinaryOp::Gt
                         | BinaryOp::Ge
                 );
+                // TDD FIX: Set context flag for string comparisons to enable * deref removal
+                // This allows the Unary::Deref generator to skip * for &String operands
+                let is_string_comparison = is_comparison && matches!(op, BinaryOp::Eq | BinaryOp::Ne);
+                if is_string_comparison {
+                    // Check if either operand type is a string
+                    let left_type = self.infer_expression_type(left);
+                    let right_type = self.infer_expression_type(right);
+                    let has_string = [left_type.as_ref(), right_type.as_ref()].iter().any(|t| {
+                        t.is_some_and(|ty| {
+                            crate::codegen::rust::types::is_windjammer_text_type(ty)
+                                || matches!(ty, Type::Reference(inner) 
+                                    if crate::codegen::rust::types::is_windjammer_text_type(inner))
+                        })
+                    });
+                    if has_string {
+                        self.in_string_comparison = true;
+                    }
+                }
+                
                 let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
                         let child_is_cmp = matches!(
@@ -558,6 +577,11 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => self.generate_expression(right),
                 };
+                
+                // TDD FIX: Reset string comparison context flag after generating operands
+                if is_string_comparison {
+                    self.in_string_comparison = false;
+                }
 
                 // Restore previous suppress state
                 self.suppress_borrowed_clone = prev_suppress;
@@ -892,6 +916,38 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // TDD FIX: Skip explicit * deref of &String in string comparisons
+                // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
+                // Solution: Just use the identifier without *, making it &String == &String
+                // TDD FIX: Skip explicit * deref of &String in string comparisons
+                // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
+                // Solution: Just use the identifier without *, making it &String == &String
+                if matches!(op, crate::parser::UnaryOp::Deref) && self.in_string_comparison {
+                    // Check if operand is a borrowed string (from borrowed param or iterator var)
+                    let is_borrowed_string = if let Expression::Identifier { name, .. } = &**operand {
+                        // Check if it's a borrowed parameter
+                        let is_borrowed_param = self.inferred_borrowed_params.contains(name.as_str())
+                            && self.current_function_params.iter().any(|p| {
+                                p.name == *name 
+                                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                            });
+                        
+                        // Check if it's a borrowed iterator variable (for loop binding)
+                        let is_borrowed_iter = self.borrowed_iterator_vars.contains(name)
+                            && self.local_var_types.get(name.as_str())
+                                .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+                        
+                        is_borrowed_param || is_borrowed_iter
+                    } else {
+                        false
+                    };
+                    
+                    if is_borrowed_string {
+                        // Skip the *, just generate the operand (keeping it as &String)
+                        return self.generate_expression(operand);
+                    }
+                }
+                
                 let op_str = operators::unary_op_to_rust(op);
 
                 // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index

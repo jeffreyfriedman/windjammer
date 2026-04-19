@@ -6,7 +6,7 @@ fn test_explicit_deref_with_borrowed_param() {
     let wj_code = r#"
 pub fn check_flag(flag_id: string) -> bool {
     let flags: Vec<(string, bool)> = Vec::new()
-    for (id, value) in flags {
+    for (id, value) in &flags {
         if *id == flag_id {
             return *value
         }
@@ -15,7 +15,8 @@ pub fn check_flag(flag_id: string) -> bool {
 }
 
 pub fn main() {
-    let result = check_flag("test")
+    let test_flag = "test".to_string()
+    let result = check_flag(test_flag)
 }
 "#;
 
