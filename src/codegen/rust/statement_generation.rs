@@ -1848,10 +1848,23 @@ impl<'ast> CodeGenerator<'ast> {
 
         let pattern_str = self.pattern_to_rust(pattern);
         let loop_var = pattern_analysis::extract_pattern_identifier(pattern);
-        let needs_mut = loop_var.as_ref().is_some_and(|var| {
+        
+        // TDD FIX: Check if ANY binding in the pattern is mutated (not just simple identifier)
+        // For tuple patterns like (id, val), extract ALL bindings and check each one
+        let mut all_pattern_bindings = std::collections::HashSet::new();
+        self.extract_pattern_bindings(pattern, &mut all_pattern_bindings);
+        
+        let needs_mut = if let Some(var) = loop_var.as_ref() {
+            // Simple identifier pattern: check if it's mutated
             self.loop_body_modifies_variable(body, var)
                 || self.loop_body_calls_mut_dispatch_method(iterable, body, var)
-        });
+        } else {
+            // Tuple or complex pattern: check if ANY binding is mutated
+            all_pattern_bindings.iter().any(|var| {
+                self.loop_body_modifies_variable(body, var)
+                    || self.loop_body_calls_mut_dispatch_method(iterable, body, var)
+            })
+        };
 
         let needs_borrow = self.should_borrow_for_iteration(iterable);
         let needs_mut_borrow = needs_mut && needs_borrow;
