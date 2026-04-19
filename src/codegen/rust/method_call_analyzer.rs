@@ -170,8 +170,18 @@ impl MethodCallAnalyzer {
                             }
                             
                             // Use the signature's ownership mode
+                            // BUT: Don't add & if the argument is already borrowed (e.g., &str param)
                             if let Some(&ownership) = sig.param_ownership.get(param_idx) {
-                                return matches!(ownership, crate::analyzer::OwnershipMode::Borrowed);
+                                if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
+                                    // Check if argument is already a borrowed parameter
+                                    if let Expression::Identifier { name, .. } = arg {
+                                        // If it's in inferred_borrowed_params, it's already &T
+                                        if inferred_borrowed_params.contains(name.as_str()) {
+                                            return false; // Already &T, don't add another &
+                                        }
+                                    }
+                                    return true; // Needs &
+                                }
                             }
                         }
                     }
@@ -211,7 +221,15 @@ impl MethodCallAnalyzer {
                             }
                             
                             if let Some(&ownership) = sig.param_ownership.get(param_idx) {
-                                return matches!(ownership, crate::analyzer::OwnershipMode::Borrowed);
+                                if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
+                                    // Check if argument is already a borrowed parameter
+                                    if let Expression::Identifier { name, .. } = arg {
+                                        if inferred_borrowed_params.contains(name.as_str()) {
+                                            return false; // Already &T, don't add another &
+                                        }
+                                    }
+                                    return true; // Needs &
+                                }
                             }
                         }
                     }
