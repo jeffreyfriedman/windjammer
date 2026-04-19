@@ -429,6 +429,11 @@ pub fn expression_references_variable_or_field(expr: &Expression, var_name: &str
                 expression_references_variable_or_field(object, var_name)
             }
         }
+        // TDD FIX: Dereference expressions (*val = ...) also reference the variable
+        // For: *val = value, need to detect that 'val' is being mutated
+        Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } => {
+            expression_references_variable_or_field(operand, var_name)
+        }
         _ => false,
     }
 }

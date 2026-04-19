@@ -442,16 +442,33 @@ impl<'ast> Analyzer<'ast> {
         iterable: &Expression<'ast>,
         body: &[&Statement<'ast>],
     ) -> bool {
-        let Pattern::Identifier(loop_var) = pattern else {
-            return false;
+        // TDD FIX: Handle tuple patterns (id, val) not just simple identifiers
+        // Extract ALL bindings from the pattern and check if ANY are mutated
+        let loop_vars = match pattern {
+            Pattern::Identifier(var) => vec![var.clone()],
+            Pattern::Tuple(patterns) => {
+                let mut vars = Vec::new();
+                for pat in patterns {
+                    if let Pattern::Identifier(var) = pat {
+                        vars.push(var.clone());
+                    }
+                }
+                vars
+            }
+            _ => return false,
         };
+        
         let peeled = Self::peel_ref_expr(iterable);
         if !self.expression_traces_to_self(peeled) {
             return false;
         }
-        body
-            .iter()
-            .any(|s| self.statement_tree_mutates_binding(s, loop_var.as_str()))
+        
+        // Check if ANY binding is mutated
+        loop_vars.iter().any(|loop_var| {
+            body
+                .iter()
+                .any(|s| self.statement_tree_mutates_binding(s, loop_var.as_str()))
+        })
     }
 
     fn assignment_target_starts_with_var(expr: &Expression, var: &str) -> bool {
@@ -459,6 +476,11 @@ impl<'ast> Analyzer<'ast> {
             Expression::Identifier { name, .. } => name == var,
             Expression::FieldAccess { object, .. } => Self::assignment_target_starts_with_var(object, var),
             Expression::Index { object, .. } => Self::assignment_target_starts_with_var(object, var),
+            // TDD FIX: Handle dereference assignments (*val = ..., *var.field = ...)
+            // For: *val = value, need to detect that 'val' is the target variable
+            Expression::Unary { op: UnaryOp::Deref, operand, .. } => {
+                Self::assignment_target_starts_with_var(operand, var)
+            }
             _ => false,
         }
     }
