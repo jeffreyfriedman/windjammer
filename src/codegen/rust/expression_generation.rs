@@ -840,10 +840,17 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => false,
                 };
+                
+                // Check if one side is an explicit deref of a borrowed value
+                // Example: *id == flag_id where id is &String
+                let left_is_explicit_deref = matches!(left, Expression::Unary { op: UnaryOp::Deref, .. });
+                let right_is_explicit_deref = matches!(right, Expression::Unary { op: UnaryOp::Deref, .. });
 
                 // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
                 // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
-                if left_is_tracked && right_is_tracked && left_is_borrowed != right_is_borrowed {
+                // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
+                if left_is_tracked && right_is_tracked && left_is_borrowed != right_is_borrowed 
+                    && !left_is_explicit_deref && !right_is_explicit_deref {
                     if left_is_borrowed {
                         left_str = format!("*{}", left_str);
                     } else {
@@ -5224,6 +5231,54 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => false,
                 }
             };
+            
+            // Check if expression is an explicit deref (*x) that produces owned String
+            let is_explicit_deref_string = |expr: &Expression| -> bool {
+                if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = expr {
+                    // *operand produces String if operand is &String
+                    if let Some(operand_type) = self.infer_expression_type(operand) {
+                        return matches!(operand_type, Type::Reference(inner) 
+                            if crate::codegen::rust::types::is_windjammer_text_type(&inner));
+                    }
+                }
+                false
+            };
+            
+            // Check if expression is a borrowed string parameter
+            let is_borrowed_string_identifier = |expr: &Expression| -> bool {
+                if let Expression::Identifier { name, .. } = expr {
+                    return self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                            && self.inferred_borrowed_params.contains(name.as_str())
+                    });
+                }
+                false
+            };
+            
+            // Check if type is &String reference
+            let is_ref_type = |t: Option<&Type>| -> bool {
+                matches!(t, Some(Type::Reference(inner)) 
+                    if crate::codegen::rust::types::is_windjammer_text_type(inner))
+            };
+            
+            // TDD FIX: Handle explicit deref comparisons (*id == flag_id)
+            // If one side is owned String (from explicit deref or otherwise) and other is &String, balance them
+            let left_is_owned_string = is_owned_string(lt.as_ref());
+            let right_is_owned_string = is_owned_string(rt.as_ref());
+            let left_is_ref_string = is_ref_type(lt.as_ref()) || is_borrowed_string_identifier(left);
+            let right_is_ref_string = is_ref_type(rt.as_ref()) || is_borrowed_string_identifier(right);
+            
+            // String == &String → String == *&String
+            if left_is_owned_string && right_is_ref_string {
+                *right_str = Self::star_for_deref_compare(right, right_str);
+                return;
+            }
+            // &String == String → *&String == String
+            if left_is_ref_string && right_is_owned_string {
+                *left_str = Self::star_for_deref_compare(left, left_str);
+                return;
+            }
             // Check if type is &String (not String, not &str)
             let is_ref_string = |t: Option<&Type>| -> bool {
                 match t {
