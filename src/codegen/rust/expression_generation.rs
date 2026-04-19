@@ -916,37 +916,8 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // TDD FIX: Skip explicit * deref of &String in string comparisons
-                // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
-                // Solution: Just use the identifier without *, making it &String == &String
-                // TDD FIX: Skip explicit * deref of &String in string comparisons
-                // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
-                // Solution: Just use the identifier without *, making it &String == &String
-                if matches!(op, crate::parser::UnaryOp::Deref) && self.in_string_comparison {
-                    // Check if operand is a borrowed string (from borrowed param or iterator var)
-                    let is_borrowed_string = if let Expression::Identifier { name, .. } = &**operand {
-                        // Check if it's a borrowed parameter
-                        let is_borrowed_param = self.inferred_borrowed_params.contains(name.as_str())
-                            && self.current_function_params.iter().any(|p| {
-                                p.name == *name 
-                                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                            });
-                        
-                        // Check if it's a borrowed iterator variable (for loop binding)
-                        let is_borrowed_iter = self.borrowed_iterator_vars.contains(name)
-                            && self.local_var_types.get(name.as_str())
-                                .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
-                        
-                        is_borrowed_param || is_borrowed_iter
-                    } else {
-                        false
-                    };
-                    
-                    if is_borrowed_string {
-                        // Skip the *, just generate the operand (keeping it as &String)
-                        return self.generate_expression(operand);
-                    }
-                }
+                // TDD FIX: Explicit deref handling is now in balance_eq_operands_for_rust
+                // where we have access to BOTH operands to make the right decision
                 
                 let op_str = operators::unary_op_to_rust(op);
 
@@ -5277,40 +5248,130 @@ impl<'ast> CodeGenerator<'ast> {
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
 
-        // TDD FIX FIRST: Handle explicit * deref of &String in comparisons BEFORE other checks
-        // Problem: *id where id: &String generates *id which Rust sees as &str
-        // Solution: Remove the * entirely, making it id == flag_id (both &String)
+        // TDD FIX: Handle explicit * deref of &String in comparisons
+        // Problem: User writes *id == flag_id where both could be &String or mixed
+        // Case 1: id: &String, flag_id: &String → Remove * → id == flag_id (both &String) ✓
+        // Case 2: id: &String, flag_id: String → Keep * or add to other → *id == flag_id (String == String) ✓
+        // Solution: Check if BOTH operands are borrowed strings, only then remove *
+        
         let left_is_explicit_deref = matches!(left, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
         let right_is_explicit_deref = matches!(right, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
         
-        if left_is_explicit_deref {
-            if let Expression::Unary { operand, .. } = left {
-                if let Some(operand_type) = self.infer_expression_type(operand) {
-                    if matches!(operand_type, Type::Reference(inner) 
-                        if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
-                        // Remove the leading * (handles both (*...) and *... formats)
-                        if left_str.starts_with("(*") && left_str.ends_with(')') {
-                            *left_str = left_str[2..left_str.len()-1].to_string();
-                        } else if left_str.starts_with('*') {
-                            *left_str = left_str[1..].to_string();
-                        }
-                    }
-                }
+        // Helper: Check if an identifier is a borrowed string
+        let is_borrowed_string_identifier = |expr: &Expression| -> bool {
+            if let Expression::Identifier { name, .. } = expr {
+                // Check if it's a borrowed parameter
+                let is_borrowed_param = self.inferred_borrowed_params.contains(name.as_str())
+                    && self.current_function_params.iter().any(|p| {
+                        p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    });
+                
+                // Check if it's a borrowed iterator variable
+                let is_borrowed_iter = self.borrowed_iterator_vars.contains(name)
+                    && self.local_var_types.get(name.as_str())
+                        .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+                
+                is_borrowed_param || is_borrowed_iter
+            } else {
+                false
+            }
+        };
+        
+        // Helper: Check if an identifier is an owned string (from local vars, not borrowed)
+        let is_owned_string_identifier = |expr: &Expression| -> bool {
+            if let Expression::Identifier { name, .. } = expr {
+                // Check if it's a local variable (not borrowed param/iter)
+                let is_local_var = self.local_var_types.get(name.as_str())
+                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+                    && !self.inferred_borrowed_params.contains(name.as_str())
+                    && !self.borrowed_iterator_vars.contains(name);
+                is_local_var
+            } else {
+                false
+            }
+        };
+        
+        // Check the operands of explicit deref expressions
+        let left_deref_operand_borrowed = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = left {
+            is_borrowed_string_identifier(operand)
+        } else {
+            false
+        };
+        
+        let left_deref_operand_owned = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = left {
+            is_owned_string_identifier(operand)
+        } else {
+            false
+        };
+        
+        let right_deref_operand_borrowed = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = right {
+            is_borrowed_string_identifier(operand)
+        } else {
+            false
+        };
+        
+        let right_deref_operand_owned = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = right {
+            is_owned_string_identifier(operand)
+        } else {
+            false
+        };
+        
+        // Check if non-deref side is borrowed
+        let left_is_borrowed = if !left_is_explicit_deref {
+            is_borrowed_string_identifier(left)
+        } else {
+            false
+        };
+        
+        let right_is_borrowed = if !right_is_explicit_deref {
+            is_borrowed_string_identifier(right)
+        } else {
+            false
+        };
+        
+        // Remove * ONLY when comparing two borrowed strings
+        // If left has *id (borrowed) and right is borrowed param/iter → Remove *
+        if left_is_explicit_deref && left_deref_operand_borrowed && right_is_borrowed {
+            // Both sides are borrowed strings, remove the *
+            if left_str.starts_with("(*") && left_str.ends_with(')') {
+                *left_str = left_str[2..left_str.len()-1].to_string();
+            } else if left_str.starts_with('*') {
+                *left_str = left_str[1..].to_string();
             }
         }
-        if right_is_explicit_deref {
-            if let Expression::Unary { operand, .. } = right {
-                if let Some(operand_type) = self.infer_expression_type(operand) {
-                    if matches!(operand_type, Type::Reference(inner) 
-                        if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
-                        // Remove the leading * (handles both (*...) and *... formats)
-                        if right_str.starts_with("(*") && right_str.ends_with(')') {
-                            *right_str = right_str[2..right_str.len()-1].to_string();
-                        } else if right_str.starts_with('*') {
-                            *right_str = right_str[1..].to_string();
-                        }
-                    }
-                }
+        
+        if right_is_explicit_deref && right_deref_operand_borrowed && left_is_borrowed {
+            // Both sides are borrowed strings, remove the *
+            if right_str.starts_with("(*") && right_str.ends_with(')') {
+                *right_str = right_str[2..right_str.len()-1].to_string();
+            } else if right_str.starts_with('*') {
+                *right_str = right_str[1..].to_string();
+            }
+        }
+        
+        // Handle mixed cases: one side has explicit deref, other doesn't
+        // Case A: *borrowed == borrowed → Remove * (both &String)
+        // Case B: *borrowed == owned → Add * to owned (*borrowed → &str, need owned → String for deref)
+        // Case C: *owned == borrowed → Add * to borrowed (*owned → String, need borrowed → String for deref)
+        
+        // Case B: left is *borrowed (&str after deref), right is borrowed (&String) → Add * to right
+        if left_is_explicit_deref && left_deref_operand_borrowed && right_is_borrowed && !right_is_explicit_deref {
+            // This contradicts Case A, so skip (already handled above by removing *)
+        }
+        
+        // Case C: left is *owned (String after deref), right is borrowed (&String) → Add * to right
+        if left_is_explicit_deref && left_deref_operand_owned && right_is_borrowed && !right_is_explicit_deref {
+            // left: *id (String), right: borrowed_param (&String) → Add * to right
+            if !right_str.starts_with('*') {
+                *right_str = format!("*{}", right_str);
+            }
+        }
+        
+        // Mirror cases for right side
+        if right_is_explicit_deref && right_deref_operand_owned && left_is_borrowed && !left_is_explicit_deref {
+            // right: *id (String), left: borrowed_param (&String) → Add * to left
+            if !left_str.starts_with('*') {
+                *left_str = format!("*{}", left_str);
             }
         }
         
