@@ -883,12 +883,26 @@ impl<'ast> CodeGenerator<'ast> {
                 // Example: *id == flag_id where id is &String
                 let left_is_explicit_deref = matches!(left, Expression::Unary { op: UnaryOp::Deref, .. });
                 let right_is_explicit_deref = matches!(right, Expression::Unary { op: UnaryOp::Deref, .. });
+                
+                // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
+                let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
+                    self.match_arm_bindings.contains(name.as_str())
+                } else {
+                    false
+                };
+                let right_is_match_binding = if let Expression::Identifier { name, .. } = right {
+                    self.match_arm_bindings.contains(name.as_str())
+                } else {
+                    false
+                };
 
                 // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
                 // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
                 // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
+                // ALSO skip when one side is match arm binding - these are OWNED Copy values, never refs
                 if left_is_tracked && right_is_tracked && left_is_borrowed != right_is_borrowed 
-                    && !left_is_explicit_deref && !right_is_explicit_deref {
+                    && !left_is_explicit_deref && !right_is_explicit_deref
+                    && !left_is_match_binding && !right_is_match_binding {
                     if left_is_borrowed {
                         left_str = format!("*{}", left_str);
                     } else {
@@ -897,7 +911,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 } // end is_comparison guard
 
-                if is_comparison && matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+                // TDD FIX for E0614: Call balance_eq for ALL comparisons, not just == and !=
+                // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too
+                if is_comparison {
                     self.balance_eq_operands_for_rust(left, right, &mut left_str, &mut right_str);
                 }
 
@@ -5247,7 +5263,7 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::Literal;
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
-
+        
         // TDD FIX: Handle explicit * deref of &String in comparisons
         // Problem: User writes *id == flag_id where both could be &String or mixed
         // Case 1: id: &String, flag_id: &String → Remove * → id == flag_id (both &String) ✓
@@ -5534,13 +5550,29 @@ impl<'ast> CodeGenerator<'ast> {
         let left_is_ref = matches!(lt.as_ref(), Some(Type::Reference(_)));
         let right_is_ref = matches!(rt.as_ref(), Some(Type::Reference(_)));
 
+        // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
+        // Match arm bindings extract OWNED values from enums, never references
+        // So we should NEVER add * to them, even if type inference suggests they're refs
+        let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
+            self.match_arm_bindings.contains(name.as_str())
+        } else {
+            false
+        };
+        let right_is_match_binding = if let Expression::Identifier { name, .. } = right {
+            self.match_arm_bindings.contains(name.as_str())
+        } else {
+            false
+        };
+        
         if let (Some(lb), Some(rb)) = (lhs_base, rhs_base) {
             if lb == rb && self.is_type_copy(lb) {
-                if left_is_ref && !right_is_ref {
+                // Don't add * if right side is a match arm binding (owned, not ref)
+                if left_is_ref && !right_is_ref && !right_is_match_binding {
                     *left_str = Self::star_for_deref_compare(left, left_str);
                     return;
                 }
-                if right_is_ref && !left_is_ref {
+                // Don't add * if left side is a match arm binding (owned, not ref)
+                if right_is_ref && !left_is_ref && !left_is_match_binding {
                     *right_str = Self::star_for_deref_compare(right, right_str);
                     return;
                 }
