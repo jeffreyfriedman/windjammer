@@ -2612,12 +2612,12 @@ impl<'ast> CodeGenerator<'ast> {
                         // Windjammer philosophy: "sword" should work whether parameter wants String or &String
                         // CRITICAL: Do NOT convert for explicit &str parameters! Only for inferred &String.
                         let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                        let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
+                        let param_ownership = method_signature
+                            .as_ref()
+                            .and_then(|sig| sig.param_ownership.get(sig_param_idx));
                         let string_literal_converted = if is_string_literal {
                             // Check what the parameter wants
-                            let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
-                            let param_ownership = method_signature
-                                .as_ref()
-                                .and_then(|sig| sig.param_ownership.get(sig_param_idx));
 
                             // CRITICAL: Check if parameter is explicitly &str (not inferred &String)
                             // Explicit &str parameters should NOT get .to_string() conversion
@@ -2636,15 +2636,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 false
                             } else {
                                 match param_ownership {
-                                    Some(&OwnershipMode::Owned) => {
-                                        // Parameter wants owned String → add .to_string()
+                                    Some(&OwnershipMode::Owned) | Some(&OwnershipMode::Borrowed) => {
+                                        // TDD FIX: Both Owned and Borrowed string params need .to_string()
+                                        // Owned → String needs .to_string()
+                                        // Borrowed → &String needs .to_string() (then & is added later)
+                                        // String literals are &str, must allocate to get String/&String
                                         arg_str = format!("{}.to_string()", arg_str);
                                         true // Mark that we converted
-                                    }
-                                    Some(&OwnershipMode::Borrowed) => {
-                                        // NEW DESIGN: Borrowed string parameters → &str (not &String!)
-                                        // String literals are already &str, so pass directly (no conversion)
-                                        false // No conversion needed
                                     }
                                     _ => {
                                         // No signature info - use heuristic (fallback to old logic)
@@ -2660,6 +2658,16 @@ impl<'ast> CodeGenerator<'ast> {
                         } else {
                             false
                         };
+
+                        // TDD FIX: If we converted string literal for Borrowed parameter,
+                        // we need to add & since .to_string() produces String but param wants &String
+                        if string_literal_converted {
+                            if let Some(&OwnershipMode::Borrowed) = param_ownership {
+                                // .to_string() produces String, but Borrowed param wants &String
+                                // So we need to add &
+                                arg_str = format!("&{}", arg_str);
+                            }
+                        }
 
                         // TDD FIX: AUTO-CONVERT &str/&String → String for method calls
                         // When passing a &str parameter to a method expecting owned String, convert it

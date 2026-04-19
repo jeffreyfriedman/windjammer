@@ -413,15 +413,12 @@ impl<'ast> CodeGenerator<'ast> {
                     let rust_type = self.type_to_rust(param_type);
 
                     // THE WINDJAMMER WAY: Owned parameters are always mutable
-                    // Borrowed string params use &str (idiomatic Rust), not &String
+                    // TDD FIX: Borrowed string params use &String (not &str) for correctness
+                    // While &str is more idiomatic, &String is CORRECT when interfacing with
+                    // generic stdlib code like Vec<String>::contains which expects &String
                     match ownership {
                         crate::analyzer::OwnershipMode::Borrowed => {
-                            let ref_type = if rust_type == "String" {
-                                "&str".to_string()
-                            } else {
-                                format!("&{}", rust_type)
-                            };
-                            format!("{}: {}", param.name, ref_type)
+                            format!("{}: &{}", param.name, rust_type)
                         }
                         crate::analyzer::OwnershipMode::MutBorrowed => {
                             format!("{}: &mut {}", param.name, rust_type)
@@ -933,7 +930,8 @@ impl<'ast> CodeGenerator<'ast> {
         let params = &analyzed.decl.parameters;
         let param = params.get(param_idx);
 
-        // Check if this is a string literal and the parameter expects OWNED String (not &str)
+        // TDD FIX: Check if string literal needs .to_string() for String/&String parameters
+        // Since we now generate Borrowed string as &String (not &str), string literals need conversion
         let needs_to_string = if let Expression::Literal {
             value: Literal::String(_),
             ..
@@ -945,11 +943,11 @@ impl<'ast> CodeGenerator<'ast> {
                     || matches!(param.type_, Type::Custom(ref name) if name == "string");
 
                 if is_string_type {
-                    // Check if this parameter was inferred as OWNED (not borrowed)
-                    // If inferred as borrowed → generates &str → string literal passes directly
-                    // If inferred as owned → generates String → string literal needs .to_string()
-                    let inferred_ownership = analyzed.inferred_ownership.get(&param.name);
-                    !matches!(inferred_ownership, Some(OwnershipMode::Borrowed))
+                    // TDD FIX: Always need .to_string() for string parameters (Owned OR Borrowed)
+                    // Owned → String needs .to_string()
+                    // Borrowed → &String needs .to_string() (then & is added by method_call_analyzer)
+                    // The ONLY case we don't need it is if we generated &str (but we don't anymore)
+                    true
                 } else {
                     false
                 }
@@ -1513,15 +1511,9 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             self.type_to_rust(inferred_type)
                         } else {
-                            // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
-                            let is_string =
-                                crate::codegen::rust::types::is_windjammer_text_type(inferred_type);
-
-                            if is_string {
-                                "&str".to_string()
-                            } else {
-                                format!("&{}", self.type_to_rust(inferred_type))
-                            }
+                            // TDD FIX: Borrowed → &T (including &String for strings)
+                            // Correctness > idioms: &String works with Vec<String> methods
+                            format!("&{}", self.type_to_rust(inferred_type))
                         }
                     }
                     OwnershipHint::Mut => {
@@ -1647,19 +1639,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
-                                        // WINDJAMMER DESIGN: Borrowed String → &str (not &String!)
-                                        // Check if this is a String type (either Type::String or Type::Custom("string"))
-                                        let is_string = crate::codegen::rust::types::is_windjammer_text_type(
-                                            inferred_type,
-                                        );
-
-                                        if is_string {
-                                            // &str is idiomatic Rust: accepts both String and &str via deref coercion
-                                            // &String is an anti-pattern (Clippy warning)
-                                            "&str".to_string()
-                                        } else {
-                                            format!("&{}", self.type_to_rust(inferred_type))
-                                        }
+                                        // TDD FIX: Borrowed String → &String (not &str!) for CORRECTNESS
+                                        // While &str is more idiomatic, &String is CORRECT when the method body
+                                        // calls Vec<String>::contains or other generic stdlib methods expecting &String
+                                        // TODO: Add lint to suggest &str when safe (not calling Vec<String> methods)
+                                        format!("&{}", self.type_to_rust(inferred_type))
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
