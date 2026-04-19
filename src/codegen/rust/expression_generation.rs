@@ -5164,8 +5164,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Fix E0277 `PartialEq` mismatches: `&T` vs `T` (Copy), `&u8` vs int literal.
-    /// Skips text types entirely — Rust natively handles all String/&str/&String combinations
-    /// via PartialEq impls (String==&str, &str==String, &String==&str, etc.).
+    /// TDD FIX: Added handling for String == &String comparisons after changing
+    /// borrowed parameters from &str to &String. String == &String doesn't work
+    /// in Rust (no PartialEq impl), so we need to deref: String == *&String
     fn balance_eq_operands_for_rust(
         &self,
         left: &Expression<'ast>,
@@ -5188,7 +5189,76 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
 
+        // TDD FIX: Handle String == &String comparisons (after &str → &String change)
+        // Rust has: String==&str, &str==String, &String==&str
+        // Rust LACKS: String==&String, &String==String
+        // So we need to deref the &String side
         if is_text(lt.as_ref()) && is_text(rt.as_ref()) {
+            // Check if type is owned String (not &String, not &str)
+            let is_owned_string = |t: Option<&Type>| -> bool {
+                match t {
+                    Some(Type::String) => true,
+                    Some(Type::Custom(s)) => s == "String" || s == "string",
+                    _ => false,
+                }
+            };
+            // Check if type is &String (not String, not &str)
+            let is_ref_string = |t: Option<&Type>| -> bool {
+                match t {
+                    Some(Type::Reference(inner)) => match &**inner {
+                        Type::String => true,
+                        Type::Custom(s) => s == "String" || s == "string",
+                        _ => false,
+                    },
+                    _ => false,
+                }
+            };
+            
+            // TDD FIX: Also check expressions directly for borrowed parameters or match arm bindings
+            // When type inference fails for field access, check if right/left is a borrowed string parameter
+            let is_borrowed_string_param = |expr: &Expression| -> bool {
+                if let Expression::Identifier { name, .. } = expr {
+                    // Check current function params for &String parameters (Borrowed ownership)
+                    self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                            && self.inferred_borrowed_params.contains(name.as_str())
+                    })
+                } else {
+                    false
+                }
+            };
+            
+            // Check if identifier is an owned String variable (match arm binding, local var)
+            let is_owned_string_var = |expr: &Expression| -> bool {
+                if let Expression::Identifier { name, .. } = expr {
+                    // Check local_var_types for owned String
+                    if let Some(var_type) = self.local_var_types.get(name.as_str()) {
+                        return crate::codegen::rust::types::is_windjammer_text_type(var_type);
+                    }
+                }
+                false
+            };
+            
+            let left_is_owned = is_owned_string(lt.as_ref()) || is_owned_string_var(left);
+            let right_is_owned = is_owned_string(rt.as_ref()) || is_owned_string_var(right);
+            let left_is_ref = is_ref_string(lt.as_ref());
+            let right_is_ref = is_ref_string(rt.as_ref());
+            let right_is_borrowed_param = is_borrowed_string_param(right);
+            let left_is_borrowed_param = is_borrowed_string_param(left);
+            
+            // String == &String → String == *&String
+            if (left_is_owned || lt.is_none()) && (right_is_ref || right_is_borrowed_param) {
+                *right_str = Self::star_for_deref_compare(right, right_str);
+                return;
+            }
+            // &String == String → *&String == String
+            if (left_is_ref || left_is_borrowed_param) && (right_is_owned || rt.is_none()) {
+                *left_str = Self::star_for_deref_compare(left, left_str);
+                return;
+            }
+            
+            // All other string combinations work natively (&str, etc.)
             return;
         }
 
