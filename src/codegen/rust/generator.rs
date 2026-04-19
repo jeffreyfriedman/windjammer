@@ -150,6 +150,10 @@ pub struct CodeGenerator<'ast> {
     // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
     // These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
+    // MATCH ARM BINDINGS: Track variables bound in match arm patterns (EnumVariant bindings)
+    // These are OWNED values extracted from enums, NOT references (even with .clone())
+    // TDD FIX for E0614: prevent adding * to Copy type match bindings in comparisons
+    pub(crate) match_arm_bindings: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     pub(crate) usize_variables: std::collections::HashSet<String>,
     // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
@@ -366,6 +370,7 @@ impl<'ast> CodeGenerator<'ast> {
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
+            match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
             unused_let_bindings: std::collections::HashSet::new(),
