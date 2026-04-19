@@ -1916,9 +1916,13 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level += 1;
 
+        // TDD FIX: Track ALL bound variables in tuple patterns for explicit deref fix
+        // For `for (id, value) in items`, both `id` and `value` need to be tracked
         if is_borrowed_iterator {
-            if let Some(var) = &loop_var {
-                self.borrowed_iterator_vars.insert(var.clone());
+            let mut all_bindings = std::collections::HashSet::new();
+            self.extract_pattern_bindings(pattern, &mut all_bindings);
+            for var in all_bindings {
+                self.borrowed_iterator_vars.insert(var);
             }
         }
 
@@ -1937,10 +1941,29 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(var) = &loop_var {
-            if let Some(iterable_type) = self.infer_expression_type(iterable) {
-                if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
-                    self.local_var_types.insert(var.clone(), elem_type);
+        // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
+        if let Some(iterable_type) = self.infer_expression_type(iterable) {
+            if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
+                match pattern {
+                    Pattern::Identifier(var) => {
+                        self.local_var_types.insert(var.clone(), elem_type);
+                    }
+                    Pattern::Tuple(patterns) => {
+                        // elem_type should be Tuple with matching arity
+                        if let Type::Tuple(tuple_types) = &elem_type {
+                            for (pat, ty) in patterns.iter().zip(tuple_types.iter()) {
+                                if let Pattern::Identifier(var) = pat {
+                                    self.local_var_types.insert(var.clone(), ty.clone());
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // For other patterns, use the old loop_var approach
+                        if let Some(var) = &loop_var {
+                            self.local_var_types.insert(var.clone(), elem_type);
+                        }
+                    }
                 }
             }
         }
