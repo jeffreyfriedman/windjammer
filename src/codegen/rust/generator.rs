@@ -189,6 +189,10 @@ pub struct CodeGenerator<'ast> {
     // auto-clone since we want a reference to the original, not a reference to a clone.
     // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
     pub(crate) in_borrow_context: bool,
+    // STRING COMPARISON CONTEXT: Track when generating operands of string comparisons
+    // Used to skip explicit * deref of &String (which becomes &str, breaking comparisons)
+    // e.g., *id == flag_id → id == flag_id (both &String)
+    pub(crate) in_string_comparison: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     pub(crate) generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -377,6 +381,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_field_access_object: false,
             in_call_argument_generation: false,
             in_borrow_context: false,
+            in_string_comparison: false,
             partial_eq_types: std::collections::HashSet::new(),
             trait_object_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,

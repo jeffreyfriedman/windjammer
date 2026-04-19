@@ -43,6 +43,20 @@ impl<'ast> CodeGenerator<'ast> {
                         return format!("-{}", s);
                     }
                 }
+                
+                // TDD FIX: Skip explicit * deref of &String in string comparisons
+                // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
+                // Solution: Just use the identifier without *, making it &String == &String
+                if matches!(op, UnaryOp::Deref) && self.in_string_comparison {
+                    if let Some(operand_type) = self.infer_expression_type(operand) {
+                        if matches!(operand_type, Type::Reference(inner) 
+                            if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
+                            // Skip the *, just generate the operand (keeping it as &String)
+                            return self.generate_expression_immut(operand);
+                        }
+                    }
+                }
+                
                 let op_str = match op {
                     UnaryOp::Not => "!",
                     UnaryOp::Neg => "-",
@@ -5207,6 +5221,43 @@ impl<'ast> CodeGenerator<'ast> {
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
 
+        // TDD FIX FIRST: Handle explicit * deref of &String in comparisons BEFORE other checks
+        // Problem: *id where id: &String generates *id which Rust sees as &str
+        // Solution: Remove the * entirely, making it id == flag_id (both &String)
+        let left_is_explicit_deref = matches!(left, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
+        let right_is_explicit_deref = matches!(right, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
+        
+        if left_is_explicit_deref {
+            if let Expression::Unary { operand, .. } = left {
+                if let Some(operand_type) = self.infer_expression_type(operand) {
+                    if matches!(operand_type, Type::Reference(inner) 
+                        if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
+                        // Remove the leading * (handles both (*...) and *... formats)
+                        if left_str.starts_with("(*") && left_str.ends_with(')') {
+                            *left_str = left_str[2..left_str.len()-1].to_string();
+                        } else if left_str.starts_with('*') {
+                            *left_str = left_str[1..].to_string();
+                        }
+                    }
+                }
+            }
+        }
+        if right_is_explicit_deref {
+            if let Expression::Unary { operand, .. } = right {
+                if let Some(operand_type) = self.infer_expression_type(operand) {
+                    if matches!(operand_type, Type::Reference(inner) 
+                        if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
+                        // Remove the leading * (handles both (*...) and *... formats)
+                        if right_str.starts_with("(*") && right_str.ends_with(')') {
+                            *right_str = right_str[2..right_str.len()-1].to_string();
+                        } else if right_str.starts_with('*') {
+                            *right_str = right_str[1..].to_string();
+                        }
+                    }
+                }
+            }
+        }
+        
         let is_text = |t: Option<&Type>| {
             t.is_some_and(|t| {
                 crate::codegen::rust::types::is_windjammer_text_type(t)
@@ -5262,23 +5313,6 @@ impl<'ast> CodeGenerator<'ast> {
                     if crate::codegen::rust::types::is_windjammer_text_type(inner))
             };
             
-            // TDD FIX: Handle explicit deref comparisons (*id == flag_id)
-            // If one side is owned String (from explicit deref or otherwise) and other is &String, balance them
-            let left_is_owned_string = is_owned_string(lt.as_ref());
-            let right_is_owned_string = is_owned_string(rt.as_ref());
-            let left_is_ref_string = is_ref_type(lt.as_ref()) || is_borrowed_string_identifier(left);
-            let right_is_ref_string = is_ref_type(rt.as_ref()) || is_borrowed_string_identifier(right);
-            
-            // String == &String → String == *&String
-            if left_is_owned_string && right_is_ref_string {
-                *right_str = Self::star_for_deref_compare(right, right_str);
-                return;
-            }
-            // &String == String → *&String == String
-            if left_is_ref_string && right_is_owned_string {
-                *left_str = Self::star_for_deref_compare(left, left_str);
-                return;
-            }
             // Check if type is &String (not String, not &str)
             let is_ref_string = |t: Option<&Type>| -> bool {
                 match t {
