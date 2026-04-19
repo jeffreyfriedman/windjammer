@@ -1693,6 +1693,13 @@ impl<'ast> CodeGenerator<'ast> {
 
             let mut bound_vars = std::collections::HashSet::new();
             self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
+            
+            // TDD FIX for E0614: Track match arm bindings as OWNED values
+            // Match arm bindings extract owned values from enums, NOT references
+            // This prevents incorrectly adding * to Copy types like i32 in comparisons
+            for var in &bound_vars {
+                self.match_arm_bindings.insert(var.clone());
+            }
 
             let added_borrowed: Vec<String> = if match_binds_refs || scrutinee_type_has_ref {
                 bound_vars.iter().cloned().collect()
@@ -1702,6 +1709,9 @@ impl<'ast> CodeGenerator<'ast> {
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.insert(var.clone());
             }
+            
+            // Clone bound_vars before moving it, so we can clean up match_arm_bindings later
+            let bound_vars_for_cleanup = bound_vars.clone();
 
             self.local_variable_scopes.push(bound_vars);
 
@@ -1807,6 +1817,11 @@ impl<'ast> CodeGenerator<'ast> {
 
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.remove(var);
+            }
+            
+            // TDD FIX: Clean up match arm bindings after each arm
+            for var in &bound_vars_for_cleanup {
+                self.match_arm_bindings.remove(var);
             }
             let is_string_literal = matches!(
                 &arm.body,
