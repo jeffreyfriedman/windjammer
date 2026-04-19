@@ -1056,6 +1056,43 @@ impl<'ast> CodeGenerator<'ast> {
                 self.method_return_types
                     .insert(func.name.to_string(), ret_type.clone());
             }
+            
+            // NEW ARCHITECTURE: Register method signature for type-based parameter resolution
+            // This replaces ALL hard-coded method name heuristics
+            if let Some(impl_type) = &self.current_struct_name {
+                // Build parameter types and ownership from ANALYZED function
+                // Use the actual inferred ownership from the analyzer, not defaults!
+                let mut param_types = Vec::new();
+                let mut param_ownership = Vec::new();
+                
+                for param in &func.parameters {
+                    if param.name != "self" {
+                        param_types.push(param.type_.clone());
+                        
+                        // Use ACTUAL analyzed ownership from inferred_ownership
+                        let ownership = analyzed
+                            .inferred_ownership
+                            .get(&param.name)
+                            .copied()
+                            .unwrap_or(crate::analyzer::OwnershipMode::Borrowed);
+                        param_ownership.push(ownership);
+                    }
+                }
+                
+                // Check if method has self receiver
+                let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+                
+                let signature = crate::codegen::rust::generator::MethodSignature::new(
+                    impl_type.clone(),
+                    func.name.clone(),
+                    param_types,
+                    param_ownership,
+                    func.return_type.clone(),
+                    has_self_receiver,
+                );
+                
+                self.register_method_signature(signature);
+            }
         }
 
         // Track function body for data flow analysis
