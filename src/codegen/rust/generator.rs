@@ -627,6 +627,100 @@ impl<'ast> CodeGenerator<'ast> {
         self.copy_types_registry = registry;
     }
 
+    /// Look up a method signature by receiver type and method name
+    /// This is the PROPER way to determine parameter types/ownership
+    /// REPLACES all hard-coded method name heuristics ("push", "has_item", etc.)
+    pub fn lookup_method_signature(
+        &self,
+        receiver_type: &str,
+        method_name: &str,
+    ) -> Option<&MethodSignature> {
+        // First check user-defined methods (populated during function generation)
+        if let Some(methods) = self.method_signatures_by_type.get(receiver_type) {
+            if let Some(sig) = methods.get(method_name) {
+                return Some(sig);
+            }
+        }
+        
+        // Then check stdlib methods (Vec, String, HashMap, etc.)
+        if let Some(methods) = self.stdlib_method_signatures.get(receiver_type) {
+            if let Some(sig) = methods.get(method_name) {
+                return Some(sig);
+            }
+        }
+        
+        // Check with generic type parameters stripped (Vec<T> → Vec)
+        if let Some(base) = receiver_type.split('<').next() {
+            if base != receiver_type {
+                // Try again with just the base type
+                if let Some(methods) = self.stdlib_method_signatures.get(base) {
+                    if let Some(sig) = methods.get(method_name) {
+                        return Some(sig);
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Register a user-defined method signature
+    /// Called during function generation to build the method registry
+    pub fn register_method_signature(&mut self, sig: MethodSignature) {
+        self.method_signatures_by_type
+            .entry(sig.receiver_type.clone())
+            .or_insert_with(std::collections::HashMap::new)
+            .insert(sig.method_name.clone(), sig);
+    }
+    
+    /// Resolve the type of a receiver expression for method calls
+    /// Example: `self.inventory.has_item(...)` → resolve type of `self.inventory`
+    /// This enables looking up the correct method signature
+    pub(crate) fn resolve_receiver_type(&self, receiver: &Expression) -> Option<String> {
+        match receiver {
+            Expression::Identifier { name, .. } => {
+                // Check local variables
+                if let Some(ty) = self.local_var_types.get(name.as_str()) {
+                    return Some(self.type_to_simple_name(ty));
+                }
+                
+                // Check function parameters
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Some(self.type_to_simple_name(&param.type_));
+                    }
+                }
+                
+                None
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                // Recursively resolve object type, then look up field type
+                let object_type = self.resolve_receiver_type(object)?;
+                
+                // Look up field type in struct_field_types
+                let field_types = self.struct_field_types.get(&object_type)?;
+                let field_type = field_types.get(field.as_str())?;
+                
+                Some(self.type_to_simple_name(field_type))
+            }
+            _ => None,
+        }
+    }
+    
+    /// Convert a Type to a simple name for signature lookup
+    /// Example: Type::Custom("Vec") → "Vec", Type::Reference(Box(Custom("String"))) → "String"
+    fn type_to_simple_name(&self, ty: &Type) -> String {
+        match ty {
+            Type::Custom(name) => name.clone(),
+            Type::Reference(inner) | Type::MutableReference(inner) => self.type_to_simple_name(inner),
+            Type::Vec(_) => "Vec".to_string(),
+            Type::Option(_) => "Option".to_string(),
+            Type::Result(_, _) => "Result".to_string(),
+            Type::Parameterized(base, _) => base.clone(),
+            _ => "Unknown".to_string(),
+        }
+    }
+
     /// Set analyzed trait methods (used for trait signature inference from impls)
     pub fn set_analyzed_trait_methods(
         &mut self,
