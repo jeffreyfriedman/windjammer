@@ -796,6 +796,27 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 };
 
+                // Check if identifier is tracked (function param, match binding, local var)
+                let left_is_tracked = match left {
+                    Expression::Identifier { name, .. } => {
+                        self.inferred_borrowed_params.contains(name.as_str())
+                            || self.borrowed_iterator_vars.contains(name)
+                            || self.local_var_types.contains_key(name.as_str())
+                            || self.current_function_params.iter().any(|p| p.name == *name)
+                    }
+                    _ => true, // Non-identifier expressions are "tracked" (we know their type)
+                };
+
+                let right_is_tracked = match right {
+                    Expression::Identifier { name, .. } => {
+                        self.inferred_borrowed_params.contains(name.as_str())
+                            || self.borrowed_iterator_vars.contains(name)
+                            || self.local_var_types.contains_key(name.as_str())
+                            || self.current_function_params.iter().any(|p| p.name == *name)
+                    }
+                    _ => true, // Non-identifier expressions are "tracked" (we know their type)
+                };
+
                 let left_is_borrowed = match left {
                     Expression::Identifier { name, .. } => {
                         !is_str_param(name)
@@ -820,8 +841,9 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => false,
                 };
 
-                // XOR: Add deref only if exactly ONE side is borrowed
-                if left_is_borrowed != right_is_borrowed {
+                // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
+                // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
+                if left_is_tracked && right_is_tracked && left_is_borrowed != right_is_borrowed {
                     if left_is_borrowed {
                         left_str = format!("*{}", left_str);
                     } else {
@@ -5240,21 +5262,54 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             };
             
+            // Determine ownership explicitly, being careful about match arm bindings
             let left_is_owned = is_owned_string(lt.as_ref()) || is_owned_string_var(left);
             let right_is_owned = is_owned_string(rt.as_ref()) || is_owned_string_var(right);
             let left_is_ref = is_ref_string(lt.as_ref());
             let right_is_ref = is_ref_string(rt.as_ref());
             let right_is_borrowed_param = is_borrowed_string_param(right);
             let left_is_borrowed_param = is_borrowed_string_param(left);
+            let left_type_unknown = lt.is_none();
+            let right_type_unknown = rt.is_none();
             
-            // String == &String → String == *&String
-            if (left_is_owned || lt.is_none()) && (right_is_ref || right_is_borrowed_param) {
+            // TDD FIX: ONLY deref when we're CERTAIN about type mismatch
+            // Rules (from most specific to most general):
+            
+            // Rule 0: One unknown + one &String (likely closure param + match arm binding)
+            // Both are probably &String, so NO deref
+            if left_type_unknown && right_is_ref && !right_is_owned {
+                return; // &String == &String works natively
+            }
+            if right_type_unknown && left_is_ref && !left_is_owned {
+                return; // &String == &String works natively
+            }
+            
+            // Rule 1: Both types KNOWN and mismatch
+            // String (owned, known) == &String (ref, known) → deref right
+            if left_is_owned && !left_type_unknown && (right_is_ref || right_is_borrowed_param) && !right_type_unknown {
                 *right_str = Self::star_for_deref_compare(right, right_str);
                 return;
             }
-            // &String == String → *&String == String
-            if (left_is_ref || left_is_borrowed_param) && (right_is_owned || rt.is_none()) {
+            // &String (ref, known) == String (owned, known) → deref left
+            if (left_is_ref || left_is_borrowed_param) && !left_type_unknown && right_is_owned && !right_type_unknown {
                 *left_str = Self::star_for_deref_compare(left, left_str);
+                return;
+            }
+            
+            // Rule 2: One borrowed param (known), one unknown
+            // Unknown closure params default to &T, so deref the borrowed param side
+            if left_is_borrowed_param && !left_type_unknown && right_type_unknown {
+                *left_str = Self::star_for_deref_compare(left, left_str);
+                return;
+            }
+            if right_is_borrowed_param && !right_type_unknown && left_type_unknown {
+                *right_str = Self::star_for_deref_compare(right, right_str);
+                return;
+            }
+            
+            // Rule 3: Both types unknown (closure params, etc.)
+            // Trust Rust's PartialEq - no deref needed
+            if left_type_unknown && right_type_unknown {
                 return;
             }
             
