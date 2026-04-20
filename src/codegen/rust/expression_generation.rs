@@ -822,11 +822,15 @@ impl<'ast> CodeGenerator<'ast> {
                     let is_str_param = |name: &str| {
                         self.current_function_params.iter().any(|p| {
                         p.name == name
-                            && (matches!(p.type_, crate::parser::Type::String)
-                                || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "string")
-                                || matches!(&p.type_, crate::parser::Type::Reference(inner)
-                                    if crate::codegen::rust::types::is_windjammer_text_type(inner)))
-                            && self.inferred_borrowed_params.contains(name)
+                            && (
+                                // Explicit &str type (Type::Reference(Custom("str")))
+                                matches!(&p.type_, Type::Reference(inner)
+                                    if matches!(&**inner, Type::Custom(s) if s == "str"))
+                                // Inferred borrowed string (Type::String with inferred borrow)
+                                || ((matches!(p.type_, Type::String)
+                                    || matches!(p.type_, Type::Custom(ref n) if n == "string"))
+                                    && self.inferred_borrowed_params.contains(name))
+                            )
                     })
                     };
 
@@ -901,10 +905,42 @@ impl<'ast> CodeGenerator<'ast> {
                         false
                     };
 
+                    // TDD FIX: Check if either side is an explicit &str parameter (has explicit & in source)
+                    // These should NEVER get * derefs - Rust handles &str == &String natively
+                    let left_is_explicit_str_ref = if let Expression::Identifier { name, .. } = left {
+                        self.current_function_params.iter().any(|p| {
+                            let matches_name = p.name == *name;
+                            let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                            // Check if the inner type (after removing Reference) is a text type
+                            let is_text = match &p.type_ {
+                                Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                                _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
+                            };
+                            matches_name && is_ref_ownership && is_text
+                        })
+                    } else {
+                        false
+                    };
+                    let right_is_explicit_str_ref = if let Expression::Identifier { name, .. } = right {
+                        self.current_function_params.iter().any(|p| {
+                            let matches_name = p.name == *name;
+                            let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                            // Check if the inner type (after removing Reference) is a text type
+                            let is_text = match &p.type_ {
+                                Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                                _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
+                            };
+                            matches_name && is_ref_ownership && is_text
+                        })
+                    } else {
+                        false
+                    };
+
                     // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
                     // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
                     // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
                     // ALSO skip when one side is match arm binding - these are OWNED Copy values, never refs
+                    // ALSO skip when one side is explicit &str parameter - Rust handles &str comparisons natively
                     if left_is_tracked
                         && right_is_tracked
                         && left_is_borrowed != right_is_borrowed
@@ -912,6 +948,8 @@ impl<'ast> CodeGenerator<'ast> {
                         && !right_is_explicit_deref
                         && !left_is_match_binding
                         && !right_is_match_binding
+                        && !left_is_explicit_str_ref
+                        && !right_is_explicit_str_ref
                     {
                         if left_is_borrowed {
                             left_str = format!("*{}", left_str);
@@ -5542,6 +5580,43 @@ impl<'ast> CodeGenerator<'ast> {
         // Rust LACKS: String==&String, &String==String
         // So we need to deref the &String side
         if is_text(lt.as_ref()) && is_text(rt.as_ref()) {
+            // TDD FIX: Check for explicit &str parameters FIRST (before any other logic)
+            // Remove any * derefs that were added - Rust's PartialEq handles &str naturally
+            let left_is_explicit_str = if let Expression::Identifier { name, .. } = left {
+                self.current_function_params.iter().any(|p| {
+                    let matches_name = p.name == *name;
+                    let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                    // Check if the inner type (after removing Reference) is a text type
+                    let is_text = match &p.type_ {
+                        Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                        _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
+                    };
+                    matches_name && is_ref_ownership && is_text
+                })
+            } else {
+                false
+            };
+
+            let right_is_explicit_str = if let Expression::Identifier { name, .. } = right {
+                self.current_function_params.iter().any(|p| {
+                    let matches_name = p.name == *name;
+                    let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                    // Check if the inner type (after removing Reference) is a text type
+                    let is_text = match &p.type_ {
+                        Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                        _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
+                    };
+                    matches_name && is_ref_ownership && is_text
+                })
+            } else {
+                false
+            };
+
+            if left_is_explicit_str || right_is_explicit_str {
+                // Explicit &str parameters compare naturally with everything - no deref logic needed
+                return;
+            }
+
             // Check if type is owned String (not &String, not &str)
             let is_owned_string = |t: Option<&Type>| -> bool {
                 match t {
@@ -5575,6 +5650,24 @@ impl<'ast> CodeGenerator<'ast> {
                         p.name == *name
                             && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                             && self.inferred_borrowed_params.contains(name.as_str())
+                    });
+                }
+                false
+            };
+
+            // TDD FIX: Check if expression is an explicit &str parameter (has explicit & in source)
+            // These should NEVER get * derefs - Rust handles &str == &String natively
+            let is_explicit_str_ref_param = |expr: &Expression| -> bool {
+                if let Expression::Identifier { name, .. } = expr {
+                    return self.current_function_params.iter().any(|p| {
+                        let matches_name = p.name == *name;
+                        let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                        // Check if the inner type (after removing Reference) is a text type
+                        let is_text = match &p.type_ {
+                            Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                            _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
+                        };
+                        matches_name && is_ref_ownership && is_text
                     });
                 }
                 false
@@ -5636,6 +5729,14 @@ impl<'ast> CodeGenerator<'ast> {
 
             // TDD FIX: ONLY deref when we're CERTAIN about type mismatch
             // Rules (from most specific to most general):
+
+            // Rule -1: Explicit &str parameters NEVER need deref
+            // Rust's PartialEq handles: &str == &String, &str == &str, &str == String
+            let left_is_explicit_str = is_explicit_str_ref_param(left);
+            let right_is_explicit_str = is_explicit_str_ref_param(right);
+            if left_is_explicit_str || right_is_explicit_str {
+                return; // &str compares natively with everything
+            }
 
             // Rule 0: One unknown + one &String (likely closure param + match arm binding)
             // Both are probably &String, so NO deref
@@ -5740,6 +5841,43 @@ impl<'ast> CodeGenerator<'ast> {
                 *left_str = Self::star_for_deref_compare(left, left_str);
             }
         }
+
+        // TDD FIX: Remove any * derefs that were added to explicit &str parameters
+        // These should NEVER have * - Rust's PartialEq handles &str naturally
+        let left_is_explicit_str = if let Expression::Identifier { name, .. } = left {
+            self.current_function_params.iter().any(|p| {
+                if p.name != *name {
+                    return false;
+                }
+                if let Type::Reference(inner) = &p.type_ {
+                    if let Type::Custom(s) = inner.as_ref() {
+                        return s == "str";
+                    }
+                }
+                false
+            })
+        } else {
+            false
+        };
+
+        let right_is_explicit_str = if let Expression::Identifier { name, .. } = right {
+            self.current_function_params.iter().any(|p| {
+                if p.name != *name {
+                    return false;
+                }
+                if let Type::Reference(inner) = &p.type_ {
+                    if let Type::Custom(s) = inner.as_ref() {
+                        return s == "str";
+                    }
+                }
+                false
+            })
+        } else {
+            false
+        };
+
+        // Note: Explicit &str parameters are handled by the early return in the string comparison block above
+        // No cleanup needed here since they never get * derefs in the first place
     }
 
     /// Check if expression traces to self (self.field, self.field.subfield, etc.)
