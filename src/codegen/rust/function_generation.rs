@@ -1690,9 +1690,17 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
-                                        // PHASE 1: Generate &String for correctness (works with Vec<String>)
-                                        // PHASE 2: Will optimize to &str when safe
-                                        format!("&{}", self.type_to_rust(inferred_type))
+                                        // PHASE 2: Check if this string parameter can use &str optimization
+                                        let is_string = matches!(inferred_type, Type::String)
+                                            || matches!(inferred_type, Type::Custom(ref name) if name == "string");
+
+                                        if is_string && analyzed.str_ref_optimizable_params.contains(&param.name) {
+                                            // PHASE 2 OPTIMIZATION: Use &str (zero allocations for literals)
+                                            "&str".to_string()
+                                        } else {
+                                            // PHASE 1 BASELINE: Use &String (correct for Vec<String> methods)
+                                            format!("&{}", self.type_to_rust(inferred_type))
+                                        }
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
