@@ -2,7 +2,6 @@
 ///
 /// Errors from WJSL parsing and type checking should include location
 /// information to help developers find and fix shader bugs quickly.
-
 use windjammer::wjsl::transpile_wjsl;
 
 #[test]
@@ -73,9 +72,6 @@ fn test(a: u32, b: u32) -> u32 {
     let result = transpile_wjsl(source);
     if result.is_err() {
         let msg = result.err().unwrap().to_string();
-        assert!(
-            !msg.is_empty(),
-            "Error message should be non-empty"
-        );
+        assert!(!msg.is_empty(), "Error message should be non-empty");
     }
 }

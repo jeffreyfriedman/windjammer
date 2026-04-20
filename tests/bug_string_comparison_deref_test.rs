@@ -25,7 +25,8 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let output_dir = temp_dir.join(format!("output_{}", unique_id));
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--output",
             output_dir.to_str().unwrap(),
@@ -163,7 +164,13 @@ fn main() {
     ));
     fs::write(&rs_file, &rust_code).expect("write rs");
     let verify = Command::new("rustc")
-        .args(["--edition", "2021", "--crate-type", "lib", rs_file.to_str().unwrap()])
+        .args([
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            rs_file.to_str().unwrap(),
+        ])
         .output()
         .expect("run rustc");
     let _ = fs::remove_file(&rs_file);

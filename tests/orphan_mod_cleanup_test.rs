@@ -27,7 +27,11 @@ fn mod_item(name: &str) -> Item<'static> {
 
 #[test]
 fn test_strip_removes_filtered_mod_items() {
-    let items = vec![mod_item("rendering"), mod_item("shaders"), mod_item("physics")];
+    let items = vec![
+        mod_item("rendering"),
+        mod_item("shaders"),
+        mod_item("physics"),
+    ];
 
     let mut filtered = HashSet::new();
     filtered.insert("shaders".to_string());
@@ -104,10 +108,8 @@ fn test_codegen_does_not_emit_filtered_mod_declarations() {
     program.items = strip_filtered_mod_items(program.items, &filtered);
 
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, registry, _) =
-        analyzer.analyze_program(&program).unwrap();
-    let mut generator =
-        CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+    let (analyzed_functions, registry, _) = analyzer.analyze_program(&program).unwrap();
+    let mut generator = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
     let output = generator.generate_program(&program, &analyzed_functions);
 
     assert!(

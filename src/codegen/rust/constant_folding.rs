@@ -38,7 +38,11 @@ use crate::parser::{BinaryOp, Expression, Literal, UnaryOp};
 pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'ast>> {
     match expr {
         Expression::Binary {
-            left, op, right, location, ..
+            left,
+            op,
+            right,
+            location,
+            ..
         } => {
             // Try to fold both sides first (recursive)
             let left_folded = try_fold_constant(left).unwrap_or_else(|| (**left).clone());
@@ -90,7 +94,12 @@ pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'as
             }
             None
         }
-        Expression::Unary { op, operand, location, .. } => {
+        Expression::Unary {
+            op,
+            operand,
+            location,
+            ..
+        } => {
             // Try to fold operand first (recursive)
             let operand_folded = try_fold_constant(operand).unwrap_or_else(|| (**operand).clone());
 

@@ -40,12 +40,12 @@
 //! - Bounded loops only
 
 mod codegen;
+pub mod shader_metadata;
+mod structs;
 mod types;
 mod validation;
-mod structs;
-pub mod shader_metadata;
 
 pub use codegen::WgslBackend;
-pub use types::{WgslType, map_type_to_wgsl};
+pub use structs::{LayoutField, StructLayout};
+pub use types::{map_type_to_wgsl, WgslType};
 pub use validation::validate_for_gpu;
-pub use structs::{StructLayout, LayoutField};

@@ -23,12 +23,14 @@ impl FfiString {
 
     /// Create from &str (copies). Caller must call `ffi_free_string` on the result.
     #[inline]
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         Self::from_string(s.to_string())
     }
 
     /// Convert to Rust String. Consumes the FfiString (memory is freed).
     #[inline]
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(self) -> String {
         ffi_to_string(self)
     }

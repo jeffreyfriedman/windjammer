@@ -65,8 +65,8 @@ impl RustCoercionRules {
             (Owned, MutBorrowed, _) => Coercion::BorrowMut,
 
             // Borrow ↔ MutBorrow (generally invalid, but handle gracefully)
-            (Borrowed, MutBorrowed, _) => Coercion::None,  // Can't upgrade &T to &mut T
-            (MutBorrowed, Borrowed, _) => Coercion::None,  // Can downgrade &mut T to &T implicitly
+            (Borrowed, MutBorrowed, _) => Coercion::None, // Can't upgrade &T to &mut T
+            (MutBorrowed, Borrowed, _) => Coercion::None, // Can downgrade &mut T to &T implicitly
         }
     }
 }

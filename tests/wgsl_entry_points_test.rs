@@ -69,10 +69,11 @@ pub fn raymarch(id: vec3<uint>) {
         "Should have @compute attribute. Got:\n{}",
         generated
     );
-    
+
     // Check for workgroup size
     assert!(
-        generated.contains("@workgroup_size(8, 8, 1)") || generated.contains("@workgroup_size(8,8,1)"),
+        generated.contains("@workgroup_size(8, 8, 1)")
+            || generated.contains("@workgroup_size(8,8,1)"),
         "Should have workgroup_size(8, 8, 1). Got:\n{}",
         generated
     );
@@ -92,7 +93,8 @@ pub fn simple() {
 
     assert!(generated.contains("@compute"));
     assert!(
-        generated.contains("@workgroup_size(1, 1, 1)") || generated.contains("@workgroup_size(1,1,1)")
+        generated.contains("@workgroup_size(1, 1, 1)")
+            || generated.contains("@workgroup_size(1,1,1)")
     );
 }
 
@@ -110,7 +112,8 @@ pub fn large_workgroup() {
 
     assert!(generated.contains("@compute"));
     assert!(
-        generated.contains("@workgroup_size(16, 16, 1)") || generated.contains("@workgroup_size(16,16,1)")
+        generated.contains("@workgroup_size(16, 16, 1)")
+            || generated.contains("@workgroup_size(16,16,1)")
     );
 }
 
@@ -189,8 +192,14 @@ pub fn shader2() {
     // Should have both shaders
     assert!(generated.contains("fn shader1"));
     assert!(generated.contains("fn shader2"));
-    assert!(generated.contains("@workgroup_size(8, 8, 1)") || generated.contains("@workgroup_size(8,8,1)"));
-    assert!(generated.contains("@workgroup_size(16, 16, 1)") || generated.contains("@workgroup_size(16,16,1)"));
+    assert!(
+        generated.contains("@workgroup_size(8, 8, 1)")
+            || generated.contains("@workgroup_size(8,8,1)")
+    );
+    assert!(
+        generated.contains("@workgroup_size(16, 16, 1)")
+            || generated.contains("@workgroup_size(16,16,1)")
+    );
 }
 
 #[test]

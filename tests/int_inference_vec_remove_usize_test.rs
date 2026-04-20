@@ -3,7 +3,6 @@
 /// Bug: `self.entries.remove(0)` generates `0_i32` instead of `0_usize`.
 /// The int inference engine needs to detect that `remove()` on a Vec field
 /// requires a `usize` index parameter.
-
 use assert_cmd::Command;
 use std::fs;
 use tempfile::TempDir;
@@ -13,7 +12,9 @@ fn test_vec_remove_on_self_field_infers_usize() {
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
 
-    fs::write(&test_file, r#"
+    fs::write(
+        &test_file,
+        r#"
 struct Entry {
     message: String,
 }
@@ -35,7 +36,9 @@ pub fn main() {
     let mut console = Console { entries: Vec::new(), max_entries: 500 }
     console.trim()
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
@@ -68,7 +71,9 @@ fn test_vec_remove_on_nested_self_field_infers_usize() {
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
 
-    fs::write(&test_file, r#"
+    fs::write(
+        &test_file,
+        r#"
 struct Action {
     name: String,
 }
@@ -89,7 +94,9 @@ pub fn main() {
     let mut mgr = UndoManager { undo_stack: Vec::new() }
     mgr.limit_history()
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd

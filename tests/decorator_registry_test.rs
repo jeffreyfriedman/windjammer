@@ -108,8 +108,14 @@ fn test_vertex_decorator_not_emitted_in_rust() {
     }
     "#;
     let output = parse_and_generate(source);
-    assert!(!output.contains("#[vertex]"), "GPU @vertex decorator should not appear in Rust output");
-    assert!(!output.contains("@vertex"), "GPU @vertex decorator should not appear in Rust output");
+    assert!(
+        !output.contains("#[vertex]"),
+        "GPU @vertex decorator should not appear in Rust output"
+    );
+    assert!(
+        !output.contains("@vertex"),
+        "GPU @vertex decorator should not appear in Rust output"
+    );
 }
 
 #[test]
@@ -121,7 +127,10 @@ fn test_fragment_decorator_not_emitted_in_rust() {
     }
     "#;
     let output = parse_and_generate(source);
-    assert!(!output.contains("#[fragment]"), "GPU @fragment decorator should not appear in Rust output");
+    assert!(
+        !output.contains("#[fragment]"),
+        "GPU @fragment decorator should not appear in Rust output"
+    );
 }
 
 #[test]
@@ -133,7 +142,10 @@ fn test_compute_decorator_not_emitted_in_rust() {
     }
     "#;
     let output = parse_and_generate(source);
-    assert!(!output.contains("#[compute]"), "GPU @compute decorator should not appear in Rust output");
+    assert!(
+        !output.contains("#[compute]"),
+        "GPU @compute decorator should not appear in Rust output"
+    );
 }
 
 // =============================================================================
@@ -149,7 +161,10 @@ fn test_framework_decorators_not_emitted_in_rust() {
     }
     "#;
     let output = parse_and_generate(source);
-    assert!(!output.contains("#[component]"), "Framework @component decorator should not appear in Rust output");
+    assert!(
+        !output.contains("#[component]"),
+        "Framework @component decorator should not appear in Rust output"
+    );
 }
 
 // =============================================================================
@@ -165,5 +180,9 @@ fn test_unknown_decorator_still_emitted() {
     }
     "#;
     let output = parse_and_generate(source);
-    assert!(output.contains("#[custom_attr]"), "Unknown decorators should pass through as Rust attributes: {}", output);
+    assert!(
+        output.contains("#[custom_attr]"),
+        "Unknown decorators should pass through as Rust attributes: {}",
+        output
+    );
 }

@@ -55,7 +55,10 @@ pub fn process(data: Data) -> int {
 }
 "#;
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("data.value"), "Should use data.value directly");
+    assert!(
+        result.contains("data.value"),
+        "Should use data.value directly"
+    );
 }
 
 #[test]

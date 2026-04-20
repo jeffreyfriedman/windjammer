@@ -16,7 +16,8 @@ fn compile_and_check(code: &str) -> (bool, String) {
 
     fs::write(&test_file, code).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             test_file.to_str().unwrap(),
             "--output",

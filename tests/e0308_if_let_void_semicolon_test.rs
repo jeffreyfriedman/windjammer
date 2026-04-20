@@ -31,7 +31,7 @@ fn compile_wj_to_rust(input: &str) -> String {
             }
         }
     }
-    
+
     format!("No .rs file found in temp dir {:?}", temp_dir.path())
 }
 

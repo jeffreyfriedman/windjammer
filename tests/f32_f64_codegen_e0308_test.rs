@@ -7,7 +7,6 @@
 ///
 /// Tests reproduce the exact patterns that cause E0308 in game code.
 /// Uses internal API (like float_inference_struct_fields_test) - no wj binary needed.
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {

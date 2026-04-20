@@ -18,7 +18,7 @@ pub fn is_ready(current_wait: f32) -> bool {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -41,7 +41,7 @@ pub fn is_ready(current_wait: f32) -> bool {
         "Comparison literal should match parameter type (f32).\nGenerated:\n{}",
         rust_code
     );
-    
+
     assert!(
         !rust_code.contains("0.0_f64"),
         "Should not generate f64 when comparing with f32.\nGenerated:\n{}",
@@ -64,7 +64,7 @@ pub fn scale(value: f32, factor: f32) -> f32 {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -104,7 +104,7 @@ pub fn compute(x: f64) -> f64 {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }

@@ -27,13 +27,7 @@ fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String>
 
     // Compile with Windjammer (use pre-built binary for fast test execution)
     let output = Command::new(wj_binary())
-        .args([
-            "build",
-            &input_file,
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
+        .args(["build", &input_file, "--output", &test_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 

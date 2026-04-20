@@ -23,7 +23,8 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
         fs::write(&full_path, content).unwrap();
     }
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             src_dir.to_str().unwrap(),
             "-o",
@@ -122,14 +123,8 @@ fn test_wildcard_reexport_preserved() {
             "mymod/mod.wj",
             "pub mod utils\npub mod types\npub use utils::*\n",
         ),
-        (
-            "mymod/utils.wj",
-            "pub fn helper() -> i32 { 42 }\n",
-        ),
-        (
-            "mymod/types.wj",
-            "pub struct MyType { pub x: i32 }\n",
-        ),
+        ("mymod/utils.wj", "pub fn helper() -> i32 { 42 }\n"),
+        ("mymod/types.wj", "pub struct MyType { pub x: i32 }\n"),
     ];
 
     let output = compile_project(files);

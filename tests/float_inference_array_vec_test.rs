@@ -8,7 +8,6 @@
 /// - Default for vec![1.0] (no type annotation) remains f64
 /// - Type annotations on left side: let v: Vec<f32> = vec![1.0, 2.0, 3.0]
 /// - Only infer when element type is explicitly specified or constrained
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -110,7 +109,10 @@ fn test() {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32") && output.contains("4.0_f32"),
+        output.contains("1.0_f32")
+            && output.contains("2.0_f32")
+            && output.contains("3.0_f32")
+            && output.contains("4.0_f32"),
         "Vec<Vec<f32>> nested vec! should generate _f32 for all literals, got:\n{}",
         output
     );

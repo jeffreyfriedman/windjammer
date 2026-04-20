@@ -71,21 +71,21 @@ pub fn add(x: uint, y: uint) -> uint {
         "Generated WGSL should contain 'fn add'. Got:\n{}",
         generated
     );
-    
+
     // Check parameters
     assert!(
         generated.contains("x: u32"),
         "Should have u32 parameter. Got:\n{}",
         generated
     );
-    
+
     // Check return type
     assert!(
         generated.contains("-> u32"),
         "Should have u32 return type. Got:\n{}",
         generated
     );
-    
+
     // Check function body
     assert!(
         generated.contains("return"),
@@ -133,7 +133,7 @@ pub fn test_ops(x: uint, y: uint) -> uint {
     assert!(generated.contains("-"));
     assert!(generated.contains("*"));
     assert!(generated.contains("/"));
-    
+
     // Check let statements
     assert!(generated.contains("let sum"));
     assert!(generated.contains("let diff"));

@@ -457,13 +457,30 @@ pub fn is_copy_type(ty: &Type) -> bool {
 pub fn is_known_copy_type(name: &str) -> bool {
     matches!(
         name,
-        "Vec2" | "Vec3" | "Vec4" | "Mat2" | "Mat3" | "Mat4" | "Quat"
-            | "AABB" | "Rect" | "Point" | "Color" | "Colour"
-            | "Vec2i" | "Vec3i" | "Vec4i"
-            | "Vec2f" | "Vec3f" | "Vec4f"
-            | "Vec3Save" | "Vec2Save"
+        "Vec2"
+            | "Vec3"
+            | "Vec4"
+            | "Mat2"
+            | "Mat3"
+            | "Mat4"
+            | "Quat"
+            | "AABB"
+            | "Rect"
+            | "Point"
+            | "Color"
+            | "Colour"
+            | "Vec2i"
+            | "Vec3i"
+            | "Vec4i"
+            | "Vec2f"
+            | "Vec3f"
+            | "Vec4f"
+            | "Vec3Save"
+            | "Vec2Save"
             | "Transform2D"
-            | "Bounds" | "Size" | "Extent"
+            | "Bounds"
+            | "Size"
+            | "Extent"
     )
 }
 
@@ -576,17 +593,26 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Index { object, .. } => {
                 // For collection[i], resolve the element type rather than the collection type.
                 // e.g. self.enemies[i] where enemies: Vec<Enemy> → "Enemy"
-                if let Expression::FieldAccess { object: field_obj, field, .. } = &**object {
+                if let Expression::FieldAccess {
+                    object: field_obj,
+                    field,
+                    ..
+                } = &**object
+                {
                     let owner_type = self.infer_type_name(field_obj);
                     if let Some(ref owner) = owner_type {
                         if let Some(field_types) =
                             self.struct_field_types.get(owner.as_str()).or_else(|| {
-                                owner.split('<').next()
+                                owner
+                                    .split('<')
+                                    .next()
                                     .and_then(|base| self.struct_field_types.get(base))
                             })
                         {
                             if let Some(field_type) = field_types.get(field.as_str()) {
-                                if let Some(elem_type) = Self::extract_iterator_element_type(field_type) {
+                                if let Some(elem_type) =
+                                    Self::extract_iterator_element_type(field_type)
+                                {
                                     if let Some(name) = Self::type_to_name(&elem_type) {
                                         return Some(name);
                                     }
@@ -596,10 +622,16 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if let Expression::Identifier { name, .. } = &**object {
-                    let var_type = self.local_var_types.get(name.as_str()).cloned()
-                        .or_else(|| self.current_function_params.iter()
-                            .find(|p| p.name == *name)
-                            .map(|p| p.type_.clone()));
+                    let var_type = self
+                        .local_var_types
+                        .get(name.as_str())
+                        .cloned()
+                        .or_else(|| {
+                            self.current_function_params
+                                .iter()
+                                .find(|p| p.name == *name)
+                                .map(|p| p.type_.clone())
+                        });
                     if let Some(vt) = var_type {
                         if let Some(elem_type) = Self::extract_iterator_element_type(&vt) {
                             if let Some(name) = Self::type_to_name(&elem_type) {
@@ -644,10 +676,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `match` / `if let` on `&vec[i]` (non-Copy element) or explicit `&expr` — Rust binds fields as `&T`.
-    pub(super) fn match_scrutinee_yields_ref_enum_bindings(
-        &self,
-        scrutinee: &Expression,
-    ) -> bool {
+    pub(super) fn match_scrutinee_yields_ref_enum_bindings(&self, scrutinee: &Expression) -> bool {
         match scrutinee {
             Expression::Unary {
                 op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
@@ -666,7 +695,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn enum_pattern_registry_key(&self, variant_name: &str, enum_container: &Type) -> Option<String> {
+    fn enum_pattern_registry_key(
+        &self,
+        variant_name: &str,
+        enum_container: &Type,
+    ) -> Option<String> {
         if variant_name.contains("::") {
             Some(variant_name.to_string())
         } else {
@@ -720,10 +753,7 @@ impl<'ast> CodeGenerator<'ast> {
                 for (fname, pat) in fields.iter() {
                     if let Pattern::Identifier(binding_name) = pat {
                         if let Some(ft) = map.get(fname) {
-                            out.push((
-                                binding_name.clone(),
-                                Type::Reference(Box::new(ft.clone())),
-                            ));
+                            out.push((binding_name.clone(), Type::Reference(Box::new(ft.clone()))));
                         }
                     }
                 }
@@ -737,9 +767,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let Some(types) = self.enum_variant_types.get(&key) else {
                     return out;
                 };
-                
+
                 let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
-                
+
                 for (pat, ty) in pats.iter().zip(types.iter()) {
                     if let Pattern::Identifier(name) = pat {
                         if yields_refs {
@@ -759,7 +789,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Map parser [`Type`] to [`crate::type_inference::IntType`] for mixed-integer `as T` codegen.
-    pub(super) fn parser_type_to_promotion_int_type(ty: &Type) -> Option<crate::type_inference::IntType> {
+    pub(super) fn parser_type_to_promotion_int_type(
+        ty: &Type,
+    ) -> Option<crate::type_inference::IntType> {
         use crate::type_inference::IntType;
         match ty {
             Type::Int => Some(IntType::I32),
@@ -832,10 +864,45 @@ impl<'ast> CodeGenerator<'ast> {
         method: &str,
     ) -> Option<Type> {
         const SAME_FLOAT_RETURN: &[&str] = &[
-            "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh", "asinh",
-            "acosh", "atanh", "exp", "exp2", "exp_m1", "ln", "log", "log2", "log10", "ln_1p",
-            "sqrt", "cbrt", "hypot", "powf", "powi", "floor", "ceil", "round", "trunc", "fract",
-            "abs", "signum", "copysign", "max", "min", "clamp", "recip", "to_degrees",
+            "sin",
+            "cos",
+            "tan",
+            "asin",
+            "acos",
+            "atan",
+            "atan2",
+            "sinh",
+            "cosh",
+            "tanh",
+            "asinh",
+            "acosh",
+            "atanh",
+            "exp",
+            "exp2",
+            "exp_m1",
+            "ln",
+            "log",
+            "log2",
+            "log10",
+            "ln_1p",
+            "sqrt",
+            "cbrt",
+            "hypot",
+            "powf",
+            "powi",
+            "floor",
+            "ceil",
+            "round",
+            "trunc",
+            "fract",
+            "abs",
+            "signum",
+            "copysign",
+            "max",
+            "min",
+            "clamp",
+            "recip",
+            "to_degrees",
             "to_radians",
         ];
         if !SAME_FLOAT_RETURN.contains(&method) {
@@ -891,7 +958,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // TDD FIX: Also try base name for generic types
                         // e.g., "ComponentArray<T>" → try "ComponentArray"
                         if let Some(struct_name) = &self.current_struct_name {
-                            let base = struct_name.split('<').next().unwrap_or(struct_name.as_str());
+                            let base = struct_name
+                                .split('<')
+                                .next()
+                                .unwrap_or(struct_name.as_str());
                             let mut resolve = || {
                                 self.struct_field_types
                                     .get(struct_name.as_str())
@@ -972,8 +1042,10 @@ impl<'ast> CodeGenerator<'ast> {
                                                 &module_path,
                                                 type_name,
                                             );
-                                            if let Some(fields) = self.struct_field_types.get(&key) {
-                                                if let Some(field_type) = fields.get(field.as_str()) {
+                                            if let Some(fields) = self.struct_field_types.get(&key)
+                                            {
+                                                if let Some(field_type) = fields.get(field.as_str())
+                                                {
                                                     return Some(field_type.clone());
                                                 }
                                             }
@@ -1066,7 +1138,9 @@ impl<'ast> CodeGenerator<'ast> {
                         return Some(ret);
                     }
                 }
-                if let Some(t) = Self::rust_primitive_float_method_return_type(obj_ty.as_ref(), method.as_str()) {
+                if let Some(t) =
+                    Self::rust_primitive_float_method_return_type(obj_ty.as_ref(), method.as_str())
+                {
                     return Some(t);
                 }
                 // Look up from the method return type registry (populated during impl generation)
@@ -1163,9 +1237,10 @@ impl<'ast> CodeGenerator<'ast> {
                     // Instance call: Call(FieldAccess(receiver, method), args) — same return type
                     // rules as MethodCall so we do not fall through to unqualified `acos` → f64.
                     let recv_ty = self.infer_expression_type(object);
-                    if let Some(t) =
-                        Self::rust_primitive_float_method_return_type(recv_ty.as_ref(), field.as_str())
-                    {
+                    if let Some(t) = Self::rust_primitive_float_method_return_type(
+                        recv_ty.as_ref(),
+                        field.as_str(),
+                    ) {
                         return Some(t);
                     }
                 }
@@ -1201,9 +1276,7 @@ impl<'ast> CodeGenerator<'ast> {
                     "vec" => {
                         // `let v = vec![1.0, 2.0]` must register `Vec<Float>` so `v[i]` knows the
                         // element is Copy and we do not emit `&v[i]` (E0308) or `*&v[i]` (E0614).
-                        let elem_ty = args
-                            .first()
-                            .and_then(|e| self.infer_expression_type(e));
+                        let elem_ty = args.first().and_then(|e| self.infer_expression_type(e));
                         elem_ty.map(|t| Type::Vec(Box::new(t)))
                     }
                     _ => None,
@@ -1230,26 +1303,24 @@ impl<'ast> CodeGenerator<'ast> {
     /// Return types for String/&str methods.
     fn string_method_return_type(method: &str) -> Option<Type> {
         match method {
-            "as_str" | "trim" | "trim_start" | "trim_end"
-            | "trim_start_matches" | "trim_end_matches"
-            | "trim_matches" => {
-                Some(Type::Reference(Box::new(Type::String)))
-            }
-            "strip_prefix" | "strip_suffix" => {
-                Some(Type::Option(Box::new(Type::Reference(Box::new(Type::String)))))
-            }
-            "to_lowercase" | "to_uppercase" | "to_ascii_lowercase"
-            | "to_ascii_uppercase" | "repeat" | "replace" | "replacen" => {
-                Some(Type::String)
-            }
+            "as_str" | "trim" | "trim_start" | "trim_end" | "trim_start_matches"
+            | "trim_end_matches" | "trim_matches" => Some(Type::Reference(Box::new(Type::String))),
+            "strip_prefix" | "strip_suffix" => Some(Type::Option(Box::new(Type::Reference(
+                Box::new(Type::String),
+            )))),
+            "to_lowercase" | "to_uppercase" | "to_ascii_lowercase" | "to_ascii_uppercase"
+            | "repeat" | "replace" | "replacen" => Some(Type::String),
             "len" | "capacity" => Some(Type::Custom("usize".to_string())),
-            "is_empty" | "contains" | "starts_with" | "ends_with"
-            | "is_ascii" | "eq_ignore_ascii_case" => Some(Type::Bool),
-            "find" | "rfind" => {
-                Some(Type::Option(Box::new(Type::Custom("usize".to_string()))))
-            }
-            "chars" | "bytes" | "lines" | "split_whitespace"
-            | "split" | "splitn" | "rsplitn" => None, // iterator types
+            "is_empty"
+            | "contains"
+            | "starts_with"
+            | "ends_with"
+            | "is_ascii"
+            | "eq_ignore_ascii_case" => Some(Type::Bool),
+            "find" | "rfind" => Some(Type::Option(Box::new(Type::Custom("usize".to_string())))),
+            "chars" | "bytes" | "lines" | "split_whitespace" | "split" | "splitn" | "rsplitn" => {
+                None
+            } // iterator types
             _ => None,
         }
     }
@@ -1280,9 +1351,9 @@ impl<'ast> CodeGenerator<'ast> {
                         _ => None,
                     },
                     "VecDeque" | "LinkedList" if !params.is_empty() => match method {
-                        "get" | "front" | "back" => Some(Type::Option(Box::new(
-                            Type::Reference(Box::new(params[0].clone())),
-                        ))),
+                        "get" | "front" | "back" => Some(Type::Option(Box::new(Type::Reference(
+                            Box::new(params[0].clone()),
+                        )))),
                         "get_mut" | "front_mut" | "back_mut" => Some(Type::Option(Box::new(
                             Type::MutableReference(Box::new(params[0].clone())),
                         ))),
@@ -1342,7 +1413,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Expression::Identifier { name, .. } = expr {
             if self.inferred_borrowed_params.contains(name.as_str()) {
-                if let Some(param) = self.current_function_params.iter().find(|p| p.name == *name) {
+                if let Some(param) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                {
                     if matches!(&param.type_, Type::String) {
                         return true;
                     }

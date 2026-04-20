@@ -65,7 +65,13 @@ fn test_hud_params_struct() {
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(wgsl.contains("HudParams"), "Should have HudParams struct");
-    assert!(wgsl.contains("health"), "HudParams should have health field");
+    assert!(
+        wgsl.contains("health"),
+        "HudParams should have health field"
+    );
     assert!(wgsl.contains("ammo"), "HudParams should have ammo field");
-    assert!(wgsl.contains("damage_flash"), "HudParams should have damage_flash field");
+    assert!(
+        wgsl.contains("damage_flash"),
+        "HudParams should have damage_flash field"
+    );
 }

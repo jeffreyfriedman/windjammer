@@ -77,8 +77,14 @@ pub fn make(x: &i32, y: &i32) -> Point {
         "Expected Point {{ x: x, y: y }} or shorthand. Got:\n{}",
         result
     );
-    assert!(!result.contains("*x"), "Copy types should not need explicit deref");
-    assert!(!result.contains(".clone()"), "Copy types should not need clone");
+    assert!(
+        !result.contains("*x"),
+        "Copy types should not need explicit deref"
+    );
+    assert!(
+        !result.contains(".clone()"),
+        "Copy types should not need clone"
+    );
 }
 
 #[test]
@@ -263,7 +269,9 @@ pub fn use_counter(c: &Counter) -> i32 {
     // c is &Counter. get() takes owned self. Need .clone() or pass by ref.
     // Counter may need Clone. Check for clone or ref.
     assert!(
-        result.contains("c.get()") || result.contains("c.clone().get()") || result.contains("(*c).get()"),
+        result.contains("c.get()")
+            || result.contains("c.clone().get()")
+            || result.contains("(*c).get()"),
         "Method call on borrowed. Got:\n{}",
         result
     );

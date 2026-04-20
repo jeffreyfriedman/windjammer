@@ -100,10 +100,7 @@ fn test() {
     let (analyzed_functions, _structs, _trait_methods) =
         analyzer.analyze_program(&program).unwrap();
     let registry = windjammer::analyzer::SignatureRegistry::new();
-    let mut generator = CodeGenerator::new_for_module(
-        registry,
-        CompilationTarget::Rust,
-    );
+    let mut generator = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
     let output = generator.generate_program(&program, &analyzed_functions);
 
     assert!(

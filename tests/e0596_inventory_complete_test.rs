@@ -129,11 +129,7 @@ pub fn main() {}
 "#;
 
     let (rs, compiles) = compile_wj_to_rust(source);
-    assert!(
-        compiles,
-        "Should compile without E0596. Generated:\n{}",
-        rs
-    );
+    assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
     assert!(
         rs.contains("Some(ref mut stack)"),
         "Should generate ref mut for mutated Option binding. Generated:\n{}",
@@ -196,11 +192,7 @@ pub fn main() {}
 "#;
 
     let (rs, compiles) = compile_wj_to_rust(source);
-    assert!(
-        compiles,
-        "Should compile without E0596. Generated:\n{}",
-        rs
-    );
+    assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
     assert!(
         rs.contains("Some(ref mut stack)"),
         "Should generate ref mut. Generated:\n{}",
@@ -318,11 +310,7 @@ pub fn main() {}
 "#;
 
     let (rs, compiles) = compile_wj_to_rust(source);
-    assert!(
-        compiles,
-        "Should compile. Generated:\n{}",
-        rs
-    );
+    assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         rs.contains("Some(ref stack)") && !rs.contains("Some(ref mut stack)"),
         "Read-only should use ref not ref mut. Generated:\n{}",
@@ -355,9 +343,5 @@ pub fn main() {}
 "#;
 
     let (rs, compiles) = compile_wj_to_rust(source);
-    assert!(
-        compiles,
-        "Should compile. Generated:\n{}",
-        rs
-    );
+    assert!(compiles, "Should compile. Generated:\n{}", rs);
 }

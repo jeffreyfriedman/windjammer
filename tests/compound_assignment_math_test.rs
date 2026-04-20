@@ -13,7 +13,6 @@
 /// - >>= (right shift)
 ///
 /// Expected: All operators should work naturally with numeric types
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -32,11 +31,14 @@ pub fn add_values() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
-    assert!(output.contains("x += 5"), "Should generate compound assignment for integers");
+    assert!(
+        output.contains("x += 5"),
+        "Should generate compound assignment for integers"
+    );
 }
 
 #[test]
@@ -51,11 +53,14 @@ pub fn add_floats() -> f32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
-    assert!(output.contains("x += "), "Should generate compound assignment for floats");
+    assert!(
+        output.contains("x += "),
+        "Should generate compound assignment for floats"
+    );
 }
 
 #[test]
@@ -70,9 +75,9 @@ pub fn subtract_values() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("health -= "), "Should generate -= operator");
 }
@@ -89,9 +94,9 @@ pub fn multiply_values() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("score *= "), "Should generate *= operator");
 }
@@ -108,9 +113,9 @@ pub fn divide_values() -> f32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("x /= "), "Should generate /= operator");
 }
@@ -126,9 +131,9 @@ pub fn modulo_value() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("x %= "), "Should generate %= operator");
 }
@@ -144,9 +149,9 @@ pub fn bitwise_and() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("flags &= "), "Should generate &= operator");
 }
@@ -163,9 +168,9 @@ pub fn bitwise_or() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("flags |= "), "Should generate |= operator");
 }
@@ -181,9 +186,9 @@ pub fn bitwise_xor() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("value ^= "), "Should generate ^= operator");
 }
@@ -199,9 +204,9 @@ pub fn left_shift() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("bits <<= "), "Should generate <<= operator");
 }
@@ -217,9 +222,9 @@ pub fn right_shift() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("bits >>= "), "Should generate >>= operator");
 }
@@ -238,9 +243,9 @@ pub fn mixed_ops() -> f32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
     assert!(output.contains("x += 50"), "Should generate +=");
     assert!(output.contains("x -= 20"), "Should generate -=");
@@ -261,11 +266,14 @@ pub fn compound_with_expr() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
-    assert!(output.contains("sum += "), "Should generate compound assignment with expressions");
+    assert!(
+        output.contains("sum += "),
+        "Should generate compound assignment with expressions"
+    );
 }
 
 #[test]
@@ -284,46 +292,51 @@ pub fn compute() -> i32 {
 "#;
 
     let (success, output) = compile_and_verify_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(success, "Generated Rust should compile: {}", output);
-    
+
     // Verify the function can be called (syntax is correct)
-    assert!(output.contains("pub fn compute() -> i32"), "Should generate public function");
+    assert!(
+        output.contains("pub fn compute() -> i32"),
+        "Should generate public function"
+    );
 }
 
 // Helper function
 fn compile_and_verify_rust(source: &str) -> (bool, String) {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let test_dir = format!("/tmp/math_compound_test_{}_{}", std::process::id(), counter);
-    
+
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let source_file = PathBuf::from(&test_dir).join("test.wj");
     std::fs::write(&source_file, source).unwrap();
-    
+
     // Compile Windjammer -> Rust
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
             "build",
             source_file.to_str().unwrap(),
-            "--target", "rust",
-            "--output", &test_dir,
+            "--target",
+            "rust",
+            "--output",
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return (false, format!("Compilation failed: {}", stderr));
     }
-    
+
     let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    let rust_code = std::fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file");
-    
+    let rust_code =
+        std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
+
     // Verify Rust compiles
     let rustc = Command::new("rustc")
         .arg("--crate-type=lib")
@@ -332,6 +345,6 @@ fn compile_and_verify_rust(source: &str) -> (bool, String) {
         .arg(PathBuf::from(&test_dir).join("test.rlib"))
         .output()
         .expect("Failed to run rustc");
-    
+
     (rustc.status.success(), rust_code)
 }

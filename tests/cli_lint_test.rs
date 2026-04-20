@@ -57,7 +57,10 @@ pub fn process(data: &Vec<i32>) {
 "#;
 
     let warnings = parse_and_lint(source, "leaky.wj");
-    assert!(!warnings.is_empty(), "Should have warnings for strict mode test");
+    assert!(
+        !warnings.is_empty(),
+        "Should have warnings for strict mode test"
+    );
     // In strict mode, lint_file would bail - we're testing the linter logic
     assert!(warnings.len() >= 2, "Should detect &Vec and .iter()");
 }

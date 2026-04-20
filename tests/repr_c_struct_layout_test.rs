@@ -23,8 +23,7 @@ fn parse_and_generate(source: &str) -> String {
     let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().unwrap();
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs, _) =
-        analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _) = analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     generator.generate_program(&program, &analyzed_functions)
 }

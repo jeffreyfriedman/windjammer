@@ -50,10 +50,7 @@ fn test_hashmap_str_str_emits_string_string() {
 /// HashMap<string, i32> -> HashMap<String, i64> (string keyword)
 #[test]
 fn test_hashmap_string_i32_emits_string_i64() {
-    let ty = Type::Parameterized(
-        "HashMap".to_string(),
-        vec![Type::String, Type::Int],
-    );
+    let ty = Type::Parameterized("HashMap".to_string(), vec![Type::String, Type::Int]);
     let rust = type_to_rust(&ty);
     assert_eq!(
         rust, "HashMap<String, i64>",

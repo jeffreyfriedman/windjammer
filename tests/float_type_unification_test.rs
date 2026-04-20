@@ -8,7 +8,6 @@
 ///
 /// Uses the in-process codegen path (same as f32_f64_codegen_e0308_test) so `cargo test` always matches
 /// the library under test — not a stale `target/release/wj` binary.
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
@@ -65,7 +64,11 @@ pub fn almost_one(n: i32) -> bool {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("1.0_f32"), "expected 1.0_f32, got:\n{}", output);
+    assert!(
+        output.contains("1.0_f32"),
+        "expected 1.0_f32, got:\n{}",
+        output
+    );
     assert!(
         !output.contains("1.0_f64"),
         "must not use 1.0_f64, got:\n{}",
@@ -82,5 +85,9 @@ pub fn big(n: i32) -> bool {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("0.5_f64"), "expected 0.5_f64, got:\n{}", output);
+    assert!(
+        output.contains("0.5_f64"),
+        "expected 0.5_f64, got:\n{}",
+        output
+    );
 }

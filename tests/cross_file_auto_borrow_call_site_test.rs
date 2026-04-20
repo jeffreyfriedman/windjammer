@@ -82,14 +82,7 @@ impl Game {
     )
     .unwrap();
 
-    let result = build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        false,
-        &[],
-    );
+    let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, false, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
     // Check that the call site in game.rs adds & to palette
@@ -101,8 +94,7 @@ impl Game {
     );
 
     // Verify that renderer.rs generates &Palette for the parameter
-    let renderer_rs =
-        std::fs::read_to_string(build.join("rendering/renderer.rs")).unwrap();
+    let renderer_rs = std::fs::read_to_string(build.join("rendering/renderer.rs")).unwrap();
     assert!(
         renderer_rs.contains("&Palette"),
         "Renderer::upload should take &Palette. Generated:\n{}",

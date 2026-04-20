@@ -76,7 +76,10 @@ pub fn main() {}
 "#;
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
-    assert!(result.contains("x: x") || result.contains("x: 5"), "Owned x, no *");
+    assert!(
+        result.contains("x: x") || result.contains("x: 5"),
+        "Owned x, no *"
+    );
     assert!(!result.contains("x: *x"), "Should NOT add * for owned");
 }
 
@@ -120,7 +123,10 @@ pub fn main() {}
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("d.value.clone()"));
-    assert!(!result.contains("*d.value.clone()"), "clone() returns owned");
+    assert!(
+        !result.contains("*d.value.clone()"),
+        "clone() returns owned"
+    );
 }
 
 // === For-Loop Ownership Tests ===
@@ -157,7 +163,10 @@ pub fn main() {}
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     // x from &Vec<i32> is &i32, need * for process(i32)
-    assert!(result.contains("process(") && (result.contains("*x") || result.contains("process(x)")), "Borrowed Copy");
+    assert!(
+        result.contains("process(") && (result.contains("*x") || result.contains("process(x)")),
+        "Borrowed Copy"
+    );
 }
 
 // === Binary Operation Tests ===
@@ -188,7 +197,10 @@ pub fn main() {}
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     // &i32 + i32 needs *r
-    assert!(!result.contains("r + y") || result.contains("*r"), "Deref borrowed");
+    assert!(
+        !result.contains("r + y") || result.contains("*r"),
+        "Deref borrowed"
+    );
 }
 
 // === Function Argument Tests ===
@@ -340,7 +352,10 @@ pub fn main() {}
 "#;
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
-    assert!(result.contains(".clone()") || result.contains("d.name"), "Need clone or move");
+    assert!(
+        result.contains(".clone()") || result.contains("d.name"),
+        "Need clone or move"
+    );
 }
 
 // === E0614 Regression Tests ===
@@ -437,7 +452,10 @@ pub fn main() {}
 "#;
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
-    assert!(result.contains(".clone()") || result.contains(".to_string()"), "Borrowed to owned");
+    assert!(
+        result.contains(".clone()") || result.contains(".to_string()"),
+        "Borrowed to owned"
+    );
 }
 
 #[test]

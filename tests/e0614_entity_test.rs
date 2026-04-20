@@ -159,7 +159,11 @@ pub fn collect_all(entities: Vec<Entity>) -> Vec<Entity> {
 pub fn main() {}
 "#;
     let (rs, compiles) = compile_wj_to_rust(source);
-    assert!(compiles, "Should compile. *entity should be stripped when Entity is Copy. Generated:\n{}", rs);
+    assert!(
+        compiles,
+        "Should compile. *entity should be stripped when Entity is Copy. Generated:\n{}",
+        rs
+    );
     assert!(
         !rs.contains("push(*entity)"),
         "Should NOT generate push(*entity) for owned Copy - causes E0614. Generated:\n{}",

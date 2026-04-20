@@ -70,30 +70,35 @@ pub fn main() {
     let build_dir = format!("{}/build", test_dir);
     let rs_file = format!("{}/test.rs", build_dir);
     let generated_code = fs::read_to_string(&rs_file).unwrap();
-    
+
     // Should NOT add * for Copy type match arm bindings (critical!)
     assert!(
         !generated_code.contains("*amount"),
         "Expected 'amount' without deref for Copy type, but found '*amount'. Generated code:\n{}",
         generated_code
     );
-    
+
     // Should compare directly in if condition
     assert!(
         generated_code.contains("if player.gold >= amount"),
         "Expected 'if player.gold >= amount', got:\n{}",
         generated_code
     );
-    
+
     // Should subtract directly (no deref) - either as compound assignment or regular subtraction
     assert!(
-        generated_code.contains("player.gold - amount") || generated_code.contains("player.gold -= amount"),
+        generated_code.contains("player.gold - amount")
+            || generated_code.contains("player.gold -= amount"),
         "Expected 'player.gold - amount' or 'player.gold -= amount', got:\n{}",
         generated_code
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 
@@ -153,14 +158,14 @@ pub fn main() {
     let build_dir = format!("{}/build", test_dir);
     let rs_file = format!("{}/test.rs", build_dir);
     let generated_code = fs::read_to_string(&rs_file).unwrap();
-    
+
     // Should NOT add * for Copy type match arm bindings
     assert!(
         !generated_code.contains("*amount"),
         "Expected 'amount' without deref for Copy type, got:\n{}",
         generated_code
     );
-    
+
     // Should compare directly
     assert!(
         generated_code.contains("player.gold >= amount"),
@@ -169,7 +174,11 @@ pub fn main() {
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 
@@ -239,7 +248,11 @@ pub fn main() {
 
     let build_dir = format!("{}/build", test_dir);
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 

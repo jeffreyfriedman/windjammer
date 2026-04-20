@@ -123,9 +123,7 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                 }
-                Statement::For {
-                    iterable, body, ..
-                } => {
+                Statement::For { iterable, body, .. } => {
                     if self.has_mutable_method_call(name, iterable, registry) {
                         return true;
                     }
@@ -443,7 +441,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Recursively collect all variable mutations
-    fn collect_mutations(&mut self, statements: &[&'ast Statement<'ast>], registry: &SignatureRegistry) {
+    fn collect_mutations(
+        &mut self,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {

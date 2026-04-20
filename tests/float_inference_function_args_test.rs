@@ -4,7 +4,6 @@
 /// Goal: Infer float literal type from function parameter signature.
 ///
 /// Constraint: Only infer when parameter type is KNOWN at analysis time.
-
 use windjammer::*;
 
 fn compile_and_assert(source: &str, assertions: impl Fn(&str)) {
@@ -145,7 +144,9 @@ fn main() {
 "#;
     compile_and_assert(source, |rust_code| {
         assert!(
-            rust_code.contains("1.0_f32") && rust_code.contains("2.0_f32") && rust_code.contains("3.0_f32"),
+            rust_code.contains("1.0_f32")
+                && rust_code.contains("2.0_f32")
+                && rust_code.contains("3.0_f32"),
             "Vec3::new(1.0, 2.0, 3.0) should generate _f32 for all args, got:\n{}",
             rust_code
         );

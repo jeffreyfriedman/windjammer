@@ -53,7 +53,7 @@ pub enum Token {
     String,
 
     // Literals
-    IntLiteral(i64),           // No suffix: 42
+    IntLiteral(i64),                 // No suffix: 42
     IntLiteralSuffixed(i64, String), // With suffix: 42u32, 0usize
     FloatLiteral(f64),
     StringLiteral(String),
@@ -157,7 +157,10 @@ impl std::hash::Hash for Token {
         std::mem::discriminant(self).hash(state);
         match self {
             Token::IntLiteral(n) => n.hash(state),
-            Token::IntLiteralSuffixed(n, ref s) => { n.hash(state); s.hash(state); }
+            Token::IntLiteralSuffixed(n, ref s) => {
+                n.hash(state);
+                s.hash(state);
+            }
             Token::FloatLiteral(f) => f.to_bits().hash(state), // Hash bits of f64
             Token::StringLiteral(s) => s.hash(state),
             Token::InterpolatedString(parts) => parts.hash(state),

@@ -4,11 +4,11 @@ use std::path::Path;
 use tempfile::TempDir;
 
 /// TDD Test: Ownership inference for Copy types from external crates
-/// 
+///
 /// Bug: When calling methods from external crates where a parameter
 /// is a Copy type passed by value (owned), the compiler incorrectly
 /// infers & (reference) instead of owned.
-/// 
+///
 /// Example from breach-protocol:
 /// - External crate: windjammer_game_core::physics::collision::AABB
 /// - Method: pub fn intersects_aabb(&self, other: AABB) -> bool
@@ -19,14 +19,16 @@ use tempfile::TempDir;
 #[test]
 fn test_external_crate_copy_type_owned_param() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Step 1: Create a library crate with Copy type and method
     let lib_dir = temp_dir.path().join("my_physics");
     fs::create_dir(&lib_dir).unwrap();
     fs::create_dir(lib_dir.join("src")).unwrap();
-    
+
     // Library: defines AABB (Copy) with intersects_aabb method
-    fs::write(lib_dir.join("src/collision.wj"), r#"
+    fs::write(
+        lib_dir.join("src/collision.wj"),
+        r#"
 pub struct AABB {
     pub min_x: f32,
     pub min_y: f32,
@@ -47,12 +49,18 @@ impl AABB {
         self.min_y <= other.max_y
     }
 }
-"#).unwrap();
-    
-    fs::write(lib_dir.join("src/mod.wj"), r#"
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        lib_dir.join("src/mod.wj"),
+        r#"
 pub mod collision
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     // Step 2: Build the library crate
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
@@ -62,20 +70,22 @@ pub mod collision
         .arg("src/mod.wj")
         .output()
         .unwrap();
-    
+
     assert!(
         output.status.success(),
         "Library crate should build! Stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    
+
     // Step 3: Create binary crate that imports from library
     let bin_dir = temp_dir.path().join("my_game");
     fs::create_dir(&bin_dir).unwrap();
     fs::create_dir(bin_dir.join("src")).unwrap();
-    
+
     // Binary: imports AABB and calls intersects_aabb
-    fs::write(bin_dir.join("src/player.wj"), r#"
+    fs::write(
+        bin_dir.join("src/player.wj"),
+        r#"
 use my_physics::collision::AABB
 
 pub struct Player {
@@ -99,8 +109,10 @@ impl Player {
         future_box.intersects_aabb(wall)
     }
 }
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     // Step 4: Build the binary (expect it to work once fix is in)
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
@@ -110,20 +122,20 @@ impl Player {
         .arg("src/player.wj")
         .output()
         .unwrap();
-    
+
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should compile without errors
     assert!(
         output.status.success(),
         "Binary should build when calling external crate Copy type method!\n\nStderr:\n{}",
         stderr
     );
-    
+
     // Verify generated code doesn't have unnecessary &
     let build_dir = bin_dir.join("build");
     let generated = fs::read_to_string(build_dir.join("player.rs")).unwrap();
-    
+
     // Should NOT generate: future_box.intersects_aabb(&wall)
     // Should generate: future_box.intersects_aabb(wall)
     assert!(
@@ -141,13 +153,15 @@ impl Player {
 #[test]
 fn test_external_crate_copy_vs_noncopy() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     // Create library with both Copy and non-Copy types
     let lib_dir = temp_dir.path().join("test_lib");
     fs::create_dir(&lib_dir).unwrap();
     fs::create_dir(lib_dir.join("src")).unwrap();
-    
-    fs::write(lib_dir.join("src/types.wj"), r#"
+
+    fs::write(
+        lib_dir.join("src/types.wj"),
+        r#"
 // Copy type (all fields are Copy)
 pub struct Point {
     pub x: f32,
@@ -172,8 +186,10 @@ impl Shape {
         self.vertices.len() > 0
     }
 }
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
         .current_dir(&lib_dir)
@@ -182,15 +198,17 @@ impl Shape {
         .arg("src/types.wj")
         .output()
         .unwrap();
-    
+
     assert!(output.status.success(), "Library should build");
-    
+
     // Create binary using both types
     let bin_dir = temp_dir.path().join("test_bin");
     fs::create_dir(&bin_dir).unwrap();
     fs::create_dir(bin_dir.join("src")).unwrap();
-    
-    fs::write(bin_dir.join("src/main.wj"), r#"
+
+    fs::write(
+        bin_dir.join("src/main.wj"),
+        r#"
 use test_lib::types::Point
 use test_lib::types::Shape
 
@@ -209,8 +227,10 @@ pub fn main() {
     println("{}", dist)
     println("{}", contains)
 }
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
         .current_dir(&bin_dir)
@@ -219,22 +239,21 @@ pub fn main() {
         .arg("src/main.wj")
         .output()
         .unwrap();
-    
+
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     assert!(
         output.status.success(),
         "Should handle both Copy and non-Copy types from external crates!\n\nStderr:\n{}",
         stderr
     );
-    
+
     let build_dir = bin_dir.join("build");
     let generated = fs::read_to_string(build_dir.join("main.rs")).unwrap();
-    
+
     // Verify Copy types are passed by value
     assert!(
-        !generated.contains("distance_to(&p2)") && 
-        !generated.contains("contains_point(&p1)"),
+        !generated.contains("distance_to(&p2)") && !generated.contains("contains_point(&p1)"),
         "Copy types should be passed by value, not reference!\nGenerated:\n{}",
         generated
             .lines()

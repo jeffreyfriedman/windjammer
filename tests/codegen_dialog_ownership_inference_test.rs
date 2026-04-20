@@ -1,16 +1,16 @@
 /// TDD Test: Dialog ownership inference bug
-/// 
+///
 /// When a method parameter is inferred as borrowed (&GameState), and match arm bindings
 /// are owned (String), the auto-borrow logic should still add & to convert String → &str
 /// when calling methods that expect &str.
-/// 
+///
 /// Current bug: The & is NOT added, causing E0308 errors.
 
 #[test]
 fn test_dialog_borrowed_game_state_pattern() {
     use std::fs;
     use std::process::Command;
-    
+
     // This replicates the exact pattern from dialog.wj where game_state is inferred as &GameState
     let test_code = r#"
 enum DialogCondition {
@@ -106,7 +106,7 @@ impl DialogCondition {
 fn test_dialog_multiple_string_params() {
     use std::fs;
     use std::process::Command;
-    
+
     let test_code = r#"
 enum DialogCondition {
     AttributeCheck(string, i32),

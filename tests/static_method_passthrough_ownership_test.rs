@@ -96,7 +96,10 @@ impl FpsCamera {
         .join("release")
         .join("wj");
     if !wj_path.exists() {
-        panic!("wj binary not found at {:?}. Run: cargo build --release --features cli", wj_path);
+        panic!(
+            "wj binary not found at {:?}. Run: cargo build --release --features cli",
+            wj_path
+        );
     }
 
     let output = Command::new(&wj_path)
@@ -183,7 +186,10 @@ impl Palette {
         .join("release")
         .join("wj");
     if !wj_path.exists() {
-        panic!("wj binary not found at {:?}. Run: cargo build --release --features cli", wj_path);
+        panic!(
+            "wj binary not found at {:?}. Run: cargo build --release --features cli",
+            wj_path
+        );
     }
 
     let output = Command::new(&wj_path)
@@ -269,7 +275,10 @@ impl Player {
         .join("release")
         .join("wj");
     if !wj_path.exists() {
-        panic!("wj binary not found at {:?}. Run: cargo build --release --features cli", wj_path);
+        panic!(
+            "wj binary not found at {:?}. Run: cargo build --release --features cli",
+            wj_path
+        );
     }
 
     let output = Command::new(&wj_path)

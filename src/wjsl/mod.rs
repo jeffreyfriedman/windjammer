@@ -30,7 +30,10 @@ pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
 }
 
 /// Transpile WJSL source to WGSL, resolving `#include` directives relative to `base_dir`.
-pub fn transpile_wjsl_with_includes(source: &str, base_dir: &Path) -> Result<String, anyhow::Error> {
+pub fn transpile_wjsl_with_includes(
+    source: &str,
+    base_dir: &Path,
+) -> Result<String, anyhow::Error> {
     let resolved = resolve_includes(source, base_dir, &mut Vec::new())?;
     transpile_wjsl(&resolved)
 }
@@ -60,7 +63,9 @@ fn resolve_includes_inner(
         let trimmed = line.trim();
         if let Some(path_str) = parse_include_directive(trimmed) {
             let include_path = base_dir.join(path_str);
-            let canonical = include_path.canonicalize().unwrap_or_else(|_| include_path.clone());
+            let canonical = include_path
+                .canonicalize()
+                .unwrap_or_else(|_| include_path.clone());
 
             // Circular dependency detection
             if include_stack.contains(&canonical) {
@@ -70,7 +75,10 @@ fn resolve_includes_inner(
                     .collect();
                 return Err(anyhow::anyhow!(
                     "Circular #include detected: {} -> {} (chain: {})",
-                    include_stack.last().map(|p| p.display().to_string()).unwrap_or_default(),
+                    include_stack
+                        .last()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
                     canonical.display(),
                     chain.join(" -> ")
                 ));

@@ -5,7 +5,6 @@
 /// Fix: When one operand is Cast to f32/f64, cast the other (int) operand to match.
 ///
 /// Philosophy: "Compiler does the hard work" - auto-cast should work everywhere.
-
 use std::process::Command;
 use windjammer::*;
 
@@ -85,8 +84,7 @@ pub fn test() -> usize {
     assert!(
         rustc_ok,
         "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -112,7 +110,6 @@ pub fn test() -> usize {
     assert!(
         rustc_ok,
         "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }

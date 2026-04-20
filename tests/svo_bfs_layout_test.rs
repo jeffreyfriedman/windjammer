@@ -387,9 +387,7 @@ fn test_bfs_svo_windjammer_compiles_and_layout_holds() {
     write_verify_cargo_toml_with_test(build_dir).expect("write Cargo.toml");
     write_generated_layout_test(build_dir).expect("write generated layout test");
 
-    let _guard = CARGO_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
+    let _guard = CARGO_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
     // Reuse a single target dir under the windjammer crate so windjammer-runtime + serde deps are
     // not rebuilt from scratch for every temp project (fresh tempdir would otherwise cost minutes).
@@ -400,12 +398,7 @@ fn test_bfs_svo_windjammer_compiles_and_layout_holds() {
     let test_run = Command::new("cargo")
         .current_dir(build_dir)
         .env("CARGO_TARGET_DIR", &shared_target)
-        .args([
-            "test",
-            "--test",
-            "svo_bfs_layout_generated",
-            "--quiet",
-        ])
+        .args(["test", "--test", "svo_bfs_layout_generated", "--quiet"])
         .output()
         .expect("spawn cargo test");
 

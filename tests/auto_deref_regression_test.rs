@@ -11,7 +11,6 @@
 /// - Literals: never refs
 /// - Index with Copy element: Rust auto-derefs arr[0] → f32, NOT &f32
 /// - Index with non-Copy element: vec[i] yields &T → deref
-
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -44,7 +43,7 @@ fn compile_wj_to_rust(source: &str) -> (String, bool) {
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !wj_output.status.success() {
         eprintln!("wj compilation failed!");
         eprintln!("stdout: {}", String::from_utf8_lossy(&wj_output.stdout));
@@ -114,7 +113,10 @@ pub fn test() -> f32 {
 "#;
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
-    assert!(!rs.contains("*(1.0") && !rs.contains("*(1.0_f32)"), "Should NOT add * to float literal");
+    assert!(
+        !rs.contains("*(1.0") && !rs.contains("*(1.0_f32)"),
+        "Should NOT add * to float literal"
+    );
 }
 
 #[test]
@@ -145,8 +147,8 @@ impl Vec2 {
         rs
     );
     assert!(
-        (rs.contains("arr[0]") || rs.contains("arr[0_usize]")) 
-        && (rs.contains("arr[1]") || rs.contains("arr[1_usize]")),
+        (rs.contains("arr[0]") || rs.contains("arr[0_usize]"))
+            && (rs.contains("arr[1]") || rs.contains("arr[1_usize]")),
         "Should use arr[0] or arr[0_usize], arr[1] or arr[1_usize] directly. Generated:\n{}",
         rs
     );

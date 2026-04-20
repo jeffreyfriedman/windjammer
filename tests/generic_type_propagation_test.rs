@@ -59,7 +59,11 @@ fn test_generic_function_preserves_type_parameter() {
     let rs_file = output_dir.join("generic_type_propagation.rs");
 
     let rustc_output = Command::new("rustc")
-        .args([rs_file.to_str().unwrap(), "--crate-type=lib", "--edition=2021"])
+        .args([
+            rs_file.to_str().unwrap(),
+            "--crate-type=lib",
+            "--edition=2021",
+        ])
         .output()
         .expect("rustc failed");
 

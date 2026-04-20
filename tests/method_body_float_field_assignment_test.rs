@@ -28,15 +28,8 @@ impl Timer {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Should compile");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Should compile");
 
     let timer_code = std::fs::read_to_string(build.join("timer.rs")).unwrap();
 
@@ -82,15 +75,8 @@ impl StateMachine {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Should compile");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Should compile");
 
     let machine_code = std::fs::read_to_string(build.join("machine.rs")).unwrap();
 
@@ -132,15 +118,8 @@ impl StateMachine {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Should compile");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Should compile");
 
     let path = build.join("ai/state_machine.rs");
     assert!(path.exists(), "expected output at {:?}", path);

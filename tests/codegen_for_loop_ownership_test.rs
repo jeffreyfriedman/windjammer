@@ -1,17 +1,16 @@
 /// TDD test for for-loop ownership inference
-/// 
+///
 /// Bug: For-loops always borrow elements (&T) even when methods need owned (T).
-/// 
+///
 /// Example that should work:
 /// ```windjammer
 /// for item in items {
 ///     item.consume_self()  // Method needs `self` (owned)
 /// }
 /// ```
-/// 
+///
 /// Current behavior: Compiler infers `&item`, method call fails with E0507
 /// Expected behavior: Compiler should infer owned `item` when method requires it
-
 use std::fs;
 use std::process::Command;
 

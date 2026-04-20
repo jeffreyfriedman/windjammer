@@ -50,10 +50,7 @@ fn install_compiler_binary(bin: &Path) -> Result<usize> {
     let repo_root = find_repo_root(&current_exe);
 
     let candidates: Vec<PathBuf> = if let Some(root) = &repo_root {
-        vec![
-            root.join("target/release/wj"),
-            root.join("target/debug/wj"),
-        ]
+        vec![root.join("target/release/wj"), root.join("target/debug/wj")]
     } else {
         vec![current_exe.clone()]
     };
@@ -73,11 +70,7 @@ fn install_compiler_binary(bin: &Path) -> Result<usize> {
         std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))?;
     }
 
-    println!(
-        "  {} wj -> {}",
-        "installed".green(),
-        dest.display()
-    );
+    println!("  {} wj -> {}", "installed".green(), dest.display());
 
     Ok(1)
 }
@@ -117,12 +110,7 @@ fn install_plugins(bin: &Path) -> Result<usize> {
                     std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))?;
                 }
 
-                println!(
-                    "  {} {} -> {}",
-                    "installed".green(),
-                    name,
-                    dest.display()
-                );
+                println!("  {} {} -> {}", "installed".green(), name, dest.display());
                 count += 1;
                 break;
             }
@@ -142,11 +130,7 @@ fn install_stdlib() -> Result<()> {
         if std_src.exists() {
             let std_dest = wj_home().join("std");
             copy_dir_recursive(&std_src, &std_dest)?;
-            println!(
-                "  {} stdlib -> {}",
-                "installed".green(),
-                std_dest.display()
-            );
+            println!("  {} stdlib -> {}", "installed".green(), std_dest.display());
         }
     }
 
@@ -184,11 +168,7 @@ fn check_path(bin: &Path) {
     let bin_str = bin.to_string_lossy();
 
     if path_var.split(':').any(|p| p == bin_str.as_ref()) {
-        println!(
-            "  {} {} is already in PATH",
-            "ok".green(),
-            bin.display()
-        );
+        println!("  {} {} is already in PATH", "ok".green(), bin.display());
     } else {
         println!(
             "  {} {} is not in your PATH",

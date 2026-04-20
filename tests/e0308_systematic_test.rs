@@ -42,8 +42,16 @@ pub fn make() -> Keyframe {
 }
 "#;
     let rust = compile_and_get_rust(source);
-    assert!(!rust.contains("_f64"), "Tuple fields should be f32. Got:\n{}", rust);
-    assert!(rust.contains("0.0_f32") || rust.contains("0.0f32"), "Expected f32. Got:\n{}", rust);
+    assert!(
+        !rust.contains("_f64"),
+        "Tuple fields should be f32. Got:\n{}",
+        rust
+    );
+    assert!(
+        rust.contains("0.0_f32") || rust.contains("0.0f32"),
+        "Expected f32. Got:\n{}",
+        rust
+    );
 }
 
 /// Pattern B: Function argument f32 - process(0.5) where fn process(value: f32)
@@ -56,7 +64,11 @@ pub fn call_it() -> f32 {
 }
 "#;
     let rust = compile_and_get_rust(source);
-    assert!(rust.contains("0.5_f32") || rust.contains("0.5f32"), "Arg should be f32. Got:\n{}", rust);
+    assert!(
+        rust.contains("0.5_f32") || rust.contains("0.5f32"),
+        "Arg should be f32. Got:\n{}",
+        rust
+    );
 }
 
 /// Pattern C: Return literal f32 - fn get_value() -> f32 { 0.0 }
@@ -68,7 +80,11 @@ pub fn get_value() -> f32 {
 }
 "#;
     let rust = compile_and_get_rust(source);
-    assert!(rust.contains("0.0_f32") || rust.contains("0.0f32"), "Return should be f32. Got:\n{}", rust);
+    assert!(
+        rust.contains("0.0_f32") || rust.contains("0.0f32"),
+        "Return should be f32. Got:\n{}",
+        rust
+    );
 }
 
 /// Pattern D: Match arm None => 999999.0 with Some(v) => *v (f32)
@@ -85,8 +101,11 @@ pub fn get_score(scores: HashMap<i32, f32>, key: i32) -> f32 {
 }
 "#;
     let rust = compile_and_get_rust(source);
-    assert!(rust.contains("999999.0_f32") || rust.contains("999999.0f32"),
-        "None arm should be f32 to match Some arm. Got:\n{}", rust);
+    assert!(
+        rust.contains("999999.0_f32") || rust.contains("999999.0f32"),
+        "None arm should be f32 to match Some arm. Got:\n{}",
+        rust
+    );
 }
 
 /// Pattern E: Vec push with f32 - items.push(0.0) where Vec<f32>
@@ -101,6 +120,14 @@ pub fn make_floats() -> Vec<f32> {
 }
 "#;
     let rust = compile_and_get_rust(source);
-    assert!(rust.contains("0.0_f32") || rust.contains("0.0f32"), "push(0.0) should be f32. Got:\n{}", rust);
-    assert!(rust.contains("1.5_f32") || rust.contains("1.5f32"), "push(1.5) should be f32. Got:\n{}", rust);
+    assert!(
+        rust.contains("0.0_f32") || rust.contains("0.0f32"),
+        "push(0.0) should be f32. Got:\n{}",
+        rust
+    );
+    assert!(
+        rust.contains("1.5_f32") || rust.contains("1.5f32"),
+        "push(1.5) should be f32. Got:\n{}",
+        rust
+    );
 }

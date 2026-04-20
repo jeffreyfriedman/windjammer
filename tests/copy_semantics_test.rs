@@ -98,12 +98,8 @@ fn test_reference_to_copy_is_copy() {
     // &i32, &mut i32: check pointee for Copy (used in binary ops, comparisons)
     let semantics = CopySemantics::new();
     assert!(semantics.is_type_copy(&Type::Reference(Box::new(Type::Int32))));
-    assert!(semantics.is_type_copy(&Type::Reference(Box::new(Type::Custom(
-        "i32".to_string()
-    )))));
-    assert!(semantics.is_type_copy(&Type::MutableReference(Box::new(
-        Type::Float
-    ))));
+    assert!(semantics.is_type_copy(&Type::Reference(Box::new(Type::Custom("i32".to_string())))));
+    assert!(semantics.is_type_copy(&Type::MutableReference(Box::new(Type::Float))));
 }
 
 #[test]
@@ -180,10 +176,8 @@ fn test_borrowed_tuple_copy_becomes_owned() {
 fn test_borrowed_custom_registry_copy_becomes_owned() {
     let mut semantics = CopySemantics::new();
     semantics.register_copy_type("Vec3");
-    let result = semantics.effective_ownership(
-        OwnershipMode::Borrowed,
-        &Type::Custom("Vec3".to_string()),
-    );
+    let result =
+        semantics.effective_ownership(OwnershipMode::Borrowed, &Type::Custom("Vec3".to_string()));
     assert_eq!(result, OwnershipMode::Owned);
 }
 

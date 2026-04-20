@@ -126,15 +126,8 @@ impl Inventory {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Library build failed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Library build failed");
 
     // Check the rpg/inventory.rs output (may be flat or nested structure)
     let inventory_rs = std::fs::read_to_string(build.join("rpg").join("inventory.rs"))

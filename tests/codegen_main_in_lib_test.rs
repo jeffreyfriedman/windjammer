@@ -1,14 +1,13 @@
 /// TDD Test: main.wj should not be included in lib.rs
-/// 
+///
 /// Problem: When compiling a project with main.wj + other modules,
 /// the generated lib.rs includes "pub mod main;" which is incorrect.
-/// 
+///
 /// Binary projects should have:
 /// - main.rs (contains fn main())
 /// - lib.rs (contains pub mod for other modules, NOT main)
-/// 
+///
 /// This test verifies the fix.
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -30,7 +29,7 @@ fn compile_project(sources: &[(&str, &str)]) -> (String, String) {
     // Compile with wj
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output_dir = project_dir.join("out");
-    
+
     let _output = Command::new(wj_binary)
         .current_dir(project_dir)
         .arg("build")
@@ -42,10 +41,8 @@ fn compile_project(sources: &[(&str, &str)]) -> (String, String) {
         .expect("Failed to run wj compiler");
 
     // Read generated files
-    let lib_rs = fs::read_to_string(output_dir.join("lib.rs"))
-        .unwrap_or_else(|_| String::new());
-    let main_rs = fs::read_to_string(output_dir.join("main.rs"))
-        .unwrap_or_else(|_| String::new());
+    let lib_rs = fs::read_to_string(output_dir.join("lib.rs")).unwrap_or_else(|_| String::new());
+    let main_rs = fs::read_to_string(output_dir.join("main.rs")).unwrap_or_else(|_| String::new());
 
     (lib_rs, main_rs)
 }
@@ -54,19 +51,25 @@ fn compile_project(sources: &[(&str, &str)]) -> (String, String) {
 fn test_main_not_in_lib_rs() {
     // TDD: Binary project with main.wj + helper module
     let sources = &[
-        ("main.wj", r#"
+        (
+            "main.wj",
+            r#"
 use helper
 
 fn main() {
     let result = helper::process()
     println!("Result: {}", result)
 }
-"#),
-        ("helper.wj", r#"
+"#,
+        ),
+        (
+            "helper.wj",
+            r#"
 pub fn process() -> int {
     42
 }
-"#),
+"#,
+        ),
     ];
 
     let (lib_rs, main_rs) = compile_project(sources);
@@ -105,13 +108,14 @@ fn test_library_project_no_main() {
     // TDD: Library project (no main, just regular modules)
     // The key test: even if a file is named "main.wj" but has no main() function,
     // it shouldn't be treated as the entry point
-    let sources = &[
-        ("helper.wj", r#"
+    let sources = &[(
+        "helper.wj",
+        r#"
 pub fn library_function() -> int {
     100
 }
-"#),
-    ];
+"#,
+    )];
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_dir = temp_dir.path();
@@ -124,7 +128,7 @@ pub fn library_function() -> int {
     // Compile with wj
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output_dir = project_dir.join("out");
-    
+
     let _output = Command::new(wj_binary)
         .current_dir(project_dir)
         .arg("build")
@@ -136,8 +140,8 @@ pub fn library_function() -> int {
         .expect("Failed to run wj compiler");
 
     // For a single module file without main(), it should generate a single .rs file
-    let helper_rs = fs::read_to_string(output_dir.join("helper.rs"))
-        .unwrap_or_else(|_| String::new());
+    let helper_rs =
+        fs::read_to_string(output_dir.join("helper.rs")).unwrap_or_else(|_| String::new());
 
     println!("Generated helper.rs:\n{}", helper_rs);
 
@@ -164,7 +168,9 @@ pub fn library_function() -> int {
 fn test_main_with_submodules() {
     // TDD: Binary with nested module structure
     let sources = &[
-        ("main.wj", r#"
+        (
+            "main.wj",
+            r#"
 use game::player
 use game::enemy
 
@@ -172,21 +178,31 @@ fn main() {
     player::spawn()
     enemy::spawn()
 }
-"#),
-        ("game/player.wj", r#"
+"#,
+        ),
+        (
+            "game/player.wj",
+            r#"
 pub fn spawn() {
     println!("Player spawned")
 }
-"#),
-        ("game/enemy.wj", r#"
+"#,
+        ),
+        (
+            "game/enemy.wj",
+            r#"
 pub fn spawn() {
     println!("Enemy spawned")
 }
-"#),
-        ("game/mod.wj", r#"
+"#,
+        ),
+        (
+            "game/mod.wj",
+            r#"
 pub mod player
 pub mod enemy
-"#),
+"#,
+        ),
     ];
 
     let (lib_rs, main_rs) = compile_project(sources);

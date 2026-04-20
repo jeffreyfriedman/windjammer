@@ -176,8 +176,7 @@ impl CodegenBackend for RustBackend {
         float_inference.infer_program(program);
         let mut int_inference = crate::type_inference::IntInference::new();
         int_inference.infer_program(program);
-        let inference_ok =
-            float_inference.errors.is_empty() && int_inference.errors.is_empty();
+        let inference_ok = float_inference.errors.is_empty() && int_inference.errors.is_empty();
         if !inference_ok {
             for e in &float_inference.errors {
                 eprintln!("Float inference error (RustBackend): {}", e);
@@ -187,8 +186,7 @@ impl CodegenBackend for RustBackend {
             }
         }
 
-        let mut generator =
-            crate::codegen::CodeGenerator::new(signatures, compilation_target);
+        let mut generator = crate::codegen::CodeGenerator::new(signatures, compilation_target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         if inference_ok {
             generator.set_float_inference(float_inference);

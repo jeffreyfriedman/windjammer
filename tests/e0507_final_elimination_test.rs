@@ -20,8 +20,7 @@ fn parse_and_generate(source: &str) -> String {
     let parser = Box::leak(Box::new(Parser::new(tokens)));
     let program = parser.parse().unwrap();
     let mut analyzer = Analyzer::new();
-    let (analyzed_functions, analyzed_structs, _) =
-        analyzer.analyze_program(&program).unwrap();
+    let (analyzed_functions, analyzed_structs, _) = analyzer.analyze_program(&program).unwrap();
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     generator.generate_program(&program, &analyzed_functions)
 }
@@ -143,7 +142,8 @@ impl Manager {
 "#;
     let rust = parse_and_generate(source);
     // Either clone is added, or we emit code that would need it - verify we generate valid pattern
-    let has_clone = rust.contains("q.clone().into_title()") || rust.contains(".clone().into_title()");
+    let has_clone =
+        rust.contains("q.clone().into_title()") || rust.contains(".clone().into_title()");
     let has_into_title = rust.contains("into_title()");
     assert!(has_into_title, "Should generate into_title call: {}", rust);
     // When signature is found, we add clone. When not, fallback may add it.

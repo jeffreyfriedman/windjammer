@@ -179,7 +179,11 @@ pub fn main() {}
 "#;
 
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("42"), "Should have literal. Got:\n{}", result);
+    assert!(
+        result.contains("42"),
+        "Should have literal. Got:\n{}",
+        result
+    );
 }
 
 // 7. Binary op with two Copy operands

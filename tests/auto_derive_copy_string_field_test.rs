@@ -1,11 +1,10 @@
+use std::fs;
 /// TDD: Verify that structs containing String fields do NOT auto-derive Copy.
 ///
 /// Bug: InputAction has a `name: string` field, yet InputBinding (which contains
 /// InputAction) was getting `#[derive(Debug, Clone, Copy)]`. String is not Copy,
 /// so any struct transitively containing String must not derive Copy.
-
 use std::process::Command;
-use std::fs;
 use tempfile::TempDir;
 
 fn find_rs_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -126,10 +125,7 @@ pub struct InputBinding {
 
     // Neither struct should derive Copy
     // InputAction has String, InputBinding has InputAction (which has String)
-    let binding_section = rust
-        .split("pub struct InputBinding")
-        .nth(1)
-        .unwrap_or("");
+    let binding_section = rust.split("pub struct InputBinding").nth(1).unwrap_or("");
 
     // The InputBinding derive should not contain Copy
     let action_derive_line = rust
@@ -350,14 +346,8 @@ impl InputBinding {
 #[test]
 fn test_name_collision_struct_and_enum_same_name() {
     let files = vec![
-        (
-            "mod.wj",
-            "pub mod input\npub mod input_rebinding\n",
-        ),
-        (
-            "input/mod.wj",
-            "pub mod input_port\n",
-        ),
+        ("mod.wj", "pub mod input\npub mod input_rebinding\n"),
+        ("input/mod.wj", "pub mod input_port\n"),
         (
             "input/input_port.wj",
             r#"

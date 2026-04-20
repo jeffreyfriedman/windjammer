@@ -576,8 +576,8 @@ fn main() -> anyhow::Result<()> {
             );
         }
         Commands::ValidateWjsl { path } => {
-            use std::path::Path;
             use colored::*;
+            use std::path::Path;
 
             println!("{}", "Validating WJSL shaders...".bold());
 

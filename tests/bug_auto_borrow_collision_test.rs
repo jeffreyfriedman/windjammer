@@ -1,3 +1,5 @@
+use windjammer::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+use windjammer::parser::ast::Type;
 /// TDD: Auto-borrow must be skipped when a signature collision is detected.
 ///
 /// Bug: When two modules define `draw_text(text: string, ...)`, the analyzer
@@ -11,10 +13,7 @@
 ///
 /// Fix: Guard auto-borrow with `!has_collision` check, mirroring the
 /// existing guard on int→float auto-cast.
-
 use windjammer::*;
-use windjammer::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
-use windjammer::parser::ast::Type;
 
 fn compile_to_rust_with_global_sigs(source: &str, global_sigs: &SignatureRegistry) -> String {
     let mut lexer = lexer::Lexer::new(source);

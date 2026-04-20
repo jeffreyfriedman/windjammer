@@ -17,7 +17,7 @@ fn test_float_literal_infers_from_field_type() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("test.wj");
     let build = temp.path().join("build");
-    
+
     std::fs::write(
         &src,
         r#"
@@ -41,27 +41,35 @@ pub fn create_companion() -> Companion {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src, &build, CompilationTarget::Rust, false).expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("test.rs")).unwrap();
-    
+
     // ASSERT: Should generate f32 suffixes, NOT f64
     assert!(
         !rust_code.contains("40.0_f64"),
         "Should NOT generate f64 suffix for f32 field. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("attack_damage") && l.contains("40")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("attack_damage") && l.contains("40"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     assert!(
         !rust_code.contains("3.5_f64"),
         "Should NOT generate f64 suffix for f32 field. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("move_speed") && l.contains("3.5")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("move_speed") && l.contains("3.5"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // Should have f32 suffixes
     assert!(
-        rust_code.contains("40.0_f32") || rust_code.contains("40.0f32") || !rust_code.contains("_f64"),
+        rust_code.contains("40.0_f32")
+            || rust_code.contains("40.0f32")
+            || !rust_code.contains("_f64"),
         "Should use f32 for field assignment"
     );
 }
@@ -72,7 +80,7 @@ fn test_float_literal_in_arithmetic_with_field() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("test.wj");
     let build = temp.path().join("build");
-    
+
     std::fs::write(
         &src,
         r#"
@@ -93,18 +101,21 @@ pub fn update_position(pos: Position, wave: i32) -> Position {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src, &build, CompilationTarget::Rust, false).expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("test.rs")).unwrap();
-    
+
     // ASSERT: 10.0 and 5.0 should be f32, not f64
     assert!(
         !rust_code.contains("10.0_f64"),
         "Should NOT generate f64 in arithmetic with f32 field. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("10.0")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("10.0"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     assert!(
         !rust_code.contains("5.0_f64"),
         "Should NOT generate f64 in arithmetic with f32 field"
@@ -117,7 +128,7 @@ fn test_float_literal_struct_constructor() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("test.wj");
     let build = temp.path().join("build");
-    
+
     std::fs::write(
         &src,
         r#"
@@ -135,17 +146,17 @@ pub fn create_stats() -> Stats {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src, &build, CompilationTarget::Rust, false).expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("test.rs")).unwrap();
-    
+
     // ASSERT: Constructor literals should infer from field types
     assert!(
         !rust_code.contains("100.0_f64"),
         "Constructor literal should infer f32 from field type"
     );
-    
+
     assert!(
         !rust_code.contains("25.5_f64"),
         "Constructor literal should infer f32 from field type"
@@ -158,7 +169,7 @@ fn test_float_literal_method_return() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("test.wj");
     let build = temp.path().join("build");
-    
+
     std::fs::write(
         &src,
         r#"
@@ -172,17 +183,17 @@ pub fn get_damage() -> f32 {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src, &build, CompilationTarget::Rust, false).expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("test.rs")).unwrap();
-    
+
     // ASSERT: Return values should infer from signature
     assert!(
         !rust_code.contains("3.5_f64"),
         "Return value should infer f32 from function signature"
     );
-    
+
     assert!(
         !rust_code.contains("40.0_f64"),
         "Return value should infer f32 from function signature"

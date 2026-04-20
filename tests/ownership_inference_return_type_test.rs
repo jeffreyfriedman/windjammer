@@ -95,7 +95,8 @@ struct Data {
 
     // Can be borrowed since we're only reading (Data is not Copy - struct with i32)
     assert!(
-        rust.contains("pub fn get_value(data: &Data)") || rust.contains("pub fn get_value(data: Data)"),
+        rust.contains("pub fn get_value(data: &Data)")
+            || rust.contains("pub fn get_value(data: Data)"),
         "Should infer borrowed or owned when not returning param type.\n\nGenerated:\n{}",
         rust
     );
@@ -188,7 +189,8 @@ struct Data {
 
     // Can be borrowed since we're cloning
     assert!(
-        rust.contains("pub fn duplicate(data: &Data)") || rust.contains("pub fn duplicate(data: Data)"),
+        rust.contains("pub fn duplicate(data: &Data)")
+            || rust.contains("pub fn duplicate(data: Data)"),
         "Should infer borrowed or owned when cloning.\n\nGenerated:\n{}",
         rust
     );

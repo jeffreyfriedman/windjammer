@@ -83,7 +83,10 @@ impl TypeChecker {
         }
 
         // WGSL doesn't support f64
-        if matches!(host_type, Type::Vec2(ScalarType::F64) | Type::Vec3(ScalarType::F64) | Type::Vec4(ScalarType::F64)) {
+        if matches!(
+            host_type,
+            Type::Vec2(ScalarType::F64) | Type::Vec3(ScalarType::F64) | Type::Vec4(ScalarType::F64)
+        ) {
             return Err(TypeError::F64NotSupported(format!("uniform {}", host_var)));
         }
 
@@ -133,8 +136,7 @@ mod tests {
         let checker = TypeChecker::new();
 
         // Should fail: Vec2<f64> != Vec2<f32>
-        let result =
-            checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F64));
+        let result = checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F64));
         assert!(result.is_err());
     }
 
@@ -144,8 +146,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F32));
+        let result = checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F32));
         assert!(result.is_ok());
     }
 
@@ -155,8 +156,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "y", &Type::Vec2(ScalarType::F32));
+        let result = checker.check_uniform_match(&shader, "y", &Type::Vec2(ScalarType::F32));
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), TypeError::UniformNotFound(_)));
     }
@@ -167,8 +167,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "pos", &Type::Vec3(ScalarType::U32));
+        let result = checker.check_uniform_match(&shader, "pos", &Type::Vec3(ScalarType::U32));
         assert!(result.is_err());
     }
 
@@ -178,8 +177,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "color", &Type::Vec2(ScalarType::F32));
+        let result = checker.check_uniform_match(&shader, "color", &Type::Vec2(ScalarType::F32));
         assert!(result.is_err());
     }
 
@@ -199,8 +197,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F64));
+        let result = checker.check_uniform_match(&shader, "x", &Type::Vec2(ScalarType::F64));
         assert!(result.is_err());
     }
 
@@ -253,8 +250,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "count", &Type::Vec2(ScalarType::U32));
+        let result = checker.check_uniform_match(&shader, "count", &Type::Vec2(ScalarType::U32));
         assert!(result.is_ok());
     }
 
@@ -264,8 +260,7 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result =
-            checker.check_uniform_match(&shader, "x", &Type::Scalar(ScalarType::F32));
+        let result = checker.check_uniform_match(&shader, "x", &Type::Scalar(ScalarType::F32));
         assert!(result.is_err());
     }
 
@@ -309,11 +304,8 @@ mod tests {
         let shader = parse_shader(source).unwrap();
         let checker = TypeChecker::new();
 
-        let result = checker.check_uniform_match(
-            &shader,
-            "cam",
-            &Type::Struct("CameraData".to_string()),
-        );
+        let result =
+            checker.check_uniform_match(&shader, "cam", &Type::Struct("CameraData".to_string()));
         assert!(result.is_ok());
     }
 }

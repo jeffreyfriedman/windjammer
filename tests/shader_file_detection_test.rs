@@ -28,11 +28,7 @@ fn test_shader_files_excluded_from_rust_pipeline_by_content() {
     fs::create_dir_all(&src).unwrap();
 
     // mod.wj declares both a regular module and a shader module
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod game\npub mod my_shader\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod game\npub mod my_shader\n").unwrap();
 
     // Regular game code
     fs::write(
@@ -109,11 +105,7 @@ fn test_shader_in_any_directory_detected_by_content() {
     let build = dir.path().join("build");
     fs::create_dir_all(&effects_dir).unwrap();
 
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod effects\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod effects\n").unwrap();
 
     fs::write(
         effects_dir.join("mod.wj"),
@@ -179,18 +171,10 @@ fn test_no_hardcoded_directory_names_in_file_discovery() {
     let build = dir.path().join("build");
     fs::create_dir_all(&shaders_dir).unwrap();
 
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod shaders\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod shaders\n").unwrap();
 
     // Regular (non-shader) code in a directory called "shaders"
-    fs::write(
-        shaders_dir.join("mod.wj"),
-        "pub mod config\n",
-    )
-    .unwrap();
+    fs::write(shaders_dir.join("mod.wj"), "pub mod config\n").unwrap();
 
     fs::write(
         shaders_dir.join("config.wj"),

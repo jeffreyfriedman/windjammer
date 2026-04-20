@@ -140,7 +140,10 @@ impl FloatInference {
     fn call_signature_lookup_keys<'ast>(function: &Expression<'ast>) -> Vec<String> {
         match function {
             Expression::FieldAccess { object, field, .. } => {
-                if let Expression::Identifier { name: type_name, .. } = *object {
+                if let Expression::Identifier {
+                    name: type_name, ..
+                } = *object
+                {
                     vec![format!("{}::{}", type_name, field)]
                 } else {
                     Vec::new()
@@ -186,10 +189,7 @@ impl FloatInference {
         self.current_file_module_path = path;
     }
 
-    pub fn set_struct_defining_module_paths(
-        &mut self,
-        paths: HashMap<String, Vec<Vec<String>>>,
-    ) {
+    pub fn set_struct_defining_module_paths(&mut self, paths: HashMap<String, Vec<Vec<String>>>) {
         self.struct_defining_module_paths = paths;
     }
 
@@ -253,7 +253,10 @@ impl FloatInference {
     /// modules), unqualified `lookup_struct_fields` returns `None` (ambiguous). The defining
     /// module for this file + nested `mod` path matches how structs are registered, so we try
     /// `qualify_struct_key(current_file_module_path, TypeName)` first.
-    fn lookup_struct_fields_for_impl_type(&self, impl_type_basename: &str) -> Option<&HashMap<String, Type>> {
+    fn lookup_struct_fields_for_impl_type(
+        &self,
+        impl_type_basename: &str,
+    ) -> Option<&HashMap<String, Type>> {
         let base = if let Some(idx) = impl_type_basename.find('<') {
             &impl_type_basename[..idx]
         } else {
@@ -268,7 +271,11 @@ impl FloatInference {
         self.lookup_struct_fields(base)
     }
 
-    fn register_struct_fields_for_module<'ast>(&mut self, item: &Item<'ast>, module_prefix: &[String]) {
+    fn register_struct_fields_for_module<'ast>(
+        &mut self,
+        item: &Item<'ast>,
+        module_prefix: &[String],
+    ) {
         match item {
             Item::Struct { decl, .. } => {
                 let key = struct_field_registry::qualify_struct_key(module_prefix, &decl.name);
@@ -326,8 +333,7 @@ impl FloatInference {
                         let imported_name = alias
                             .clone()
                             .unwrap_or_else(|| path.last().cloned().unwrap_or_default());
-                        self.imported_type_registry_keys
-                            .insert(imported_name, key);
+                        self.imported_type_registry_keys.insert(imported_name, key);
                     }
                 }
                 Item::Mod { items, .. } => self.register_use_imports_from_items(items),
@@ -733,10 +739,7 @@ impl FloatInference {
     /// ExprIds for the "value-producing" tail of a statement list, for if/else float unification.
     /// When the last statement is a nested `if`, collects tails from both of its branches so an outer
     /// `if a { 0.0 } else { if b { 1.0 } else { x } }` still ties `0.0` to `1.0` and `x`.
-    fn branch_tail_expression_ids<'ast>(
-        &mut self,
-        stmts: &[&'ast Statement<'ast>],
-    ) -> Vec<ExprId> {
+    fn branch_tail_expression_ids<'ast>(&mut self, stmts: &[&'ast Statement<'ast>]) -> Vec<ExprId> {
         let Some(last) = stmts.last().copied() else {
             return Vec::new();
         };
@@ -987,9 +990,9 @@ impl FloatInference {
                 };
                 // Never fall back to non-float return types (e.g. `-> i32`): that would pass a bogus
                 // context into arm bodies and block scrutinee-only float inference for `match map.get(..)`.
-                let arm_ctx_ref: Option<&Type> = arm_context.as_ref().or_else(|| {
-                    return_type.filter(|rt| self.extract_float_type(rt).is_some())
-                });
+                let arm_ctx_ref: Option<&Type> = arm_context
+                    .as_ref()
+                    .or_else(|| return_type.filter(|rt| self.extract_float_type(rt).is_some()));
 
                 // Traverse all arms to collect constraints
                 for (i, arm) in arms.iter().enumerate() {
@@ -1502,7 +1505,8 @@ impl FloatInference {
                 // `recv.method(args)` may parse as Call(FieldAccess(recv, method), args).
                 // Apply the same float return constraints as MethodCall.
                 if let Expression::FieldAccess { object, field, .. } = function {
-                    if let Some(float_ty) = self.determine_method_return_type(object, field.as_str())
+                    if let Some(float_ty) =
+                        self.determine_method_return_type(object, field.as_str())
                     {
                         let call_id = self.get_expr_id(expr);
                         match float_ty {
@@ -1693,14 +1697,12 @@ impl FloatInference {
                 if let Some(float_ty) = self.extract_float_type(type_) {
                     let cast_id = self.get_expr_id(expr);
                     let cast_constraint = match float_ty {
-                        FloatType::F32 => Constraint::MustBeF32(
-                            cast_id,
-                            "cast expression result f32".to_string(),
-                        ),
-                        FloatType::F64 => Constraint::MustBeF64(
-                            cast_id,
-                            "cast expression result f64".to_string(),
-                        ),
+                        FloatType::F32 => {
+                            Constraint::MustBeF32(cast_id, "cast expression result f32".to_string())
+                        }
+                        FloatType::F64 => {
+                            Constraint::MustBeF64(cast_id, "cast expression result f64".to_string())
+                        }
                         FloatType::Unknown => return,
                     };
                     self.constraints.push(cast_constraint);
@@ -2078,9 +2080,7 @@ impl FloatInference {
                 } else {
                     self.lookup_struct_fields(base_name)
                 };
-                fields
-                    .and_then(|m| m.get(field))
-                    .cloned()
+                fields.and_then(|m| m.get(field)).cloned()
             }
             Expression::Index { object, .. } => {
                 let object_type = self.infer_type_from_expression(object)?;
@@ -2317,8 +2317,8 @@ impl FloatInference {
         // order could pick `f64::acos` while the receiver is f32, forcing spurious f64 promotion.
         if let Expression::FieldAccess { .. } = object {
             if let Some(ty) = self.infer_type_from_expression(object) {
-                let is_f32 = matches!(&ty, Type::Float)
-                    || matches!(&ty, Type::Custom(s) if s == "f32");
+                let is_f32 =
+                    matches!(&ty, Type::Float) || matches!(&ty, Type::Custom(s) if s == "f32");
                 let is_f64 = matches!(&ty, Type::Custom(s) if s == "f64");
                 if is_f32 && F32_METHODS.contains(&method) {
                     return Some(FloatType::F32);
@@ -2670,7 +2670,9 @@ impl FloatInference {
                         if base == "Vec" && parameters.len() == 1 {
                             self.var_element_types
                                 .insert(name.clone(), parameters[0].clone());
-                        } else if matches!(base, "HashMap" | "Map" | "BTreeMap") && parameters.len() == 2 {
+                        } else if matches!(base, "HashMap" | "Map" | "BTreeMap")
+                            && parameters.len() == 2
+                        {
                             // Store the value type (second parameter)
                             self.var_element_types
                                 .insert(name.clone(), parameters[1].clone());

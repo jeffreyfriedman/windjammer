@@ -51,11 +51,11 @@ pub struct FunctionDecl<'ast> {
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
     pub return_decorators: Vec<Decorator<'ast>>, // Decorators on return type (e.g., @location(0))
-    pub body: Vec<&'ast Statement<'ast>>, // Empty for extern functions
-    pub parent_type: Option<String>,      // The type name if this function is in an impl block
+    pub body: Vec<&'ast Statement<'ast>>,        // Empty for extern functions
+    pub parent_type: Option<String>, // The type name if this function is in an impl block
     /// `None` for inherent `impl Type`; `Some(trait)` for `impl Trait for Type` (disambiguates codegen).
     pub impl_trait: Option<String>,
-    pub doc_comment: Option<String>,      // Documentation comment (/// lines)
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 // ============================================================================

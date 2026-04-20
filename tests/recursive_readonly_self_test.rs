@@ -36,7 +36,9 @@ fn compile_to_rust(wj_source: &str) -> Result<String, String> {
     Ok(std::fs::read_to_string(test_rs).expect("read"))
 }
 
-fn compile_project_to_rust(files: &[(&str, &str)]) -> Result<std::collections::HashMap<String, String>, String> {
+fn compile_project_to_rust(
+    files: &[(&str, &str)],
+) -> Result<std::collections::HashMap<String, String>, String> {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let src_dir = temp_dir.path().join("src");
     let out_dir = temp_dir.path().join("out");
@@ -105,11 +107,16 @@ impl Tree {
 "#;
 
     let result = compile_to_rust(src);
-    assert!(result.is_ok(), "Should compile: {:?}", result.as_ref().err());
+    assert!(
+        result.is_ok(),
+        "Should compile: {:?}",
+        result.as_ref().err()
+    );
     let rust = result.unwrap();
     assert!(
         rust.contains("pub fn sum(&self)"),
-        "Read-only method should get &self, got:\n{}", rust
+        "Read-only method should get &self, got:\n{}",
+        rust
     );
 }
 
@@ -137,15 +144,21 @@ impl Evaluator {
 "#;
 
     let result = compile_to_rust(src);
-    assert!(result.is_ok(), "Should compile: {:?}", result.as_ref().err());
+    assert!(
+        result.is_ok(),
+        "Should compile: {:?}",
+        result.as_ref().err()
+    );
     let rust = result.unwrap();
     assert!(
         rust.contains("fn evaluate_node(&self,"),
-        "Read-only recursive method should get &self, not &mut self.\nGenerated:\n{}", rust
+        "Read-only recursive method should get &self, not &mut self.\nGenerated:\n{}",
+        rust
     );
     assert!(
         rust.contains("fn evaluate(&self,"),
-        "Caller of read-only recursive method should also get &self.\nGenerated:\n{}", rust
+        "Caller of read-only recursive method should also get &self.\nGenerated:\n{}",
+        rust
     );
 }
 
@@ -168,18 +181,25 @@ impl Counter {
 "#;
 
     let result = compile_to_rust(src);
-    assert!(result.is_ok(), "Should compile: {:?}", result.as_ref().err());
+    assert!(
+        result.is_ok(),
+        "Should compile: {:?}",
+        result.as_ref().err()
+    );
     let rust = result.unwrap();
     assert!(
         rust.contains("fn count_down(&mut self,"),
-        "Mutating recursive method must still get &mut self.\nGenerated:\n{}", rust
+        "Mutating recursive method must still get &mut self.\nGenerated:\n{}",
+        rust
     );
 }
 
 #[test]
 fn test_cross_file_recursive_readonly_cascade() {
     let files = &[
-        ("evaluator.wj", r#"
+        (
+            "evaluator.wj",
+            r#"
 pub struct CsgEvaluator {
     root_id: i32,
 }
@@ -207,8 +227,11 @@ impl CsgEvaluator {
         if dist < 0.0 { 1 } else { 0 }
     }
 }
-"#),
-        ("voxelizer.wj", r#"
+"#,
+        ),
+        (
+            "voxelizer.wj",
+            r#"
 use crate::evaluator::CsgEvaluator
 
 pub struct Voxelizer {
@@ -229,26 +252,38 @@ impl Voxelizer {
         total
     }
 }
-"#),
+"#,
+        ),
     ];
 
     let result = compile_project_to_rust(files);
-    assert!(result.is_ok(), "Should compile: {:?}", result.as_ref().err());
+    assert!(
+        result.is_ok(),
+        "Should compile: {:?}",
+        result.as_ref().err()
+    );
     let outputs = result.unwrap();
 
-    let evaluator_rs = outputs.get("evaluator.rs").expect("evaluator.rs should exist");
+    let evaluator_rs = outputs
+        .get("evaluator.rs")
+        .expect("evaluator.rs should exist");
     assert!(
         evaluator_rs.contains("fn evaluate_node(&self,"),
-        "Read-only recursive evaluate_node should get &self.\nGenerated:\n{}", evaluator_rs
+        "Read-only recursive evaluate_node should get &self.\nGenerated:\n{}",
+        evaluator_rs
     );
     assert!(
         evaluator_rs.contains("fn material_at(&self,"),
-        "material_at (calls read-only recursive) should get &self.\nGenerated:\n{}", evaluator_rs
+        "material_at (calls read-only recursive) should get &self.\nGenerated:\n{}",
+        evaluator_rs
     );
 
-    let voxelizer_rs = outputs.get("voxelizer.rs").expect("voxelizer.rs should exist");
+    let voxelizer_rs = outputs
+        .get("voxelizer.rs")
+        .expect("voxelizer.rs should exist");
     assert!(
         voxelizer_rs.contains("fn voxelize(&self,"),
-        "voxelize (calls self.evaluator.material_at) should get &self.\nGenerated:\n{}", voxelizer_rs
+        "voxelize (calls self.evaluator.material_at) should get &self.\nGenerated:\n{}",
+        voxelizer_rs
     );
 }

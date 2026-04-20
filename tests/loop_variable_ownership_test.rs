@@ -10,7 +10,6 @@
 /// Related errors:
 /// - E0606: casting &i32 as usize is invalid
 /// - E0277: binary operation on &i32
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -61,7 +60,9 @@ pub fn sum_ten() -> i32 {
     // Loop variable i should be used directly (no *i)
     // Accept any form: total + i, total = total + i, or total += i
     assert!(
-        result.contains("total + i") || result.contains("total = total + i") || result.contains("total += i"),
+        result.contains("total + i")
+            || result.contains("total = total + i")
+            || result.contains("total += i"),
         "Should use i directly in arithmetic, got: {}",
         result
     );
@@ -88,7 +89,9 @@ pub fn iterate_range(min: i32, max: i32) -> i32 {
 
     let result = compile_to_rust(src).expect("compile");
     assert!(
-        result.contains("sum + x") || result.contains("sum = sum + x") || result.contains("sum += x"),
+        result.contains("sum + x")
+            || result.contains("sum = sum + x")
+            || result.contains("sum += x"),
         "Should use x directly, got: {}",
         result
     );
@@ -115,7 +118,9 @@ pub fn sum_vec(items: Vec<i32>) -> i32 {
 
     let result = compile_to_rust(src).expect("compile");
     assert!(
-        result.contains("total + item") || result.contains("total = total + item") || result.contains("total += item"),
+        result.contains("total + item")
+            || result.contains("total = total + item")
+            || result.contains("total += item"),
         "Should use item directly, got: {}",
         result
     );

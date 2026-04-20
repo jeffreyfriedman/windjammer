@@ -19,20 +19,19 @@ fn test_lib_rs_regenerated_when_mod_wj_adds_module() {
     fs::create_dir_all(&out).unwrap();
 
     // Initial mod.wj with one module
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod alpha\n",
-    )
-    .unwrap();
-    fs::write(
-        src.join("alpha.wj"),
-        "pub fn hello() -> i32 {\n    42\n}\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod alpha\n").unwrap();
+    fs::write(src.join("alpha.wj"), "pub fn hello() -> i32 {\n    42\n}\n").unwrap();
 
     // First build
     let status = Command::new(get_wj_binary())
-        .args(["build", src.to_str().unwrap(), "--output", out.to_str().unwrap(), "--library", "--no-cargo"])
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+        ])
         .status()
         .expect("wj build should succeed");
     assert!(status.success(), "first build failed");
@@ -40,24 +39,29 @@ fn test_lib_rs_regenerated_when_mod_wj_adds_module() {
     let lib_rs = out.join("lib.rs");
     assert!(lib_rs.exists(), "lib.rs should be created on first build");
     let content1 = fs::read_to_string(&lib_rs).unwrap();
-    assert!(content1.contains("pub mod alpha"), "lib.rs should contain alpha module");
-    assert!(!content1.contains("pub mod beta"), "lib.rs should NOT contain beta module yet");
+    assert!(
+        content1.contains("pub mod alpha"),
+        "lib.rs should contain alpha module"
+    );
+    assert!(
+        !content1.contains("pub mod beta"),
+        "lib.rs should NOT contain beta module yet"
+    );
 
     // Add a new module to mod.wj
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod alpha\npub mod beta\n",
-    )
-    .unwrap();
-    fs::write(
-        src.join("beta.wj"),
-        "pub fn world() -> i32 {\n    99\n}\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod alpha\npub mod beta\n").unwrap();
+    fs::write(src.join("beta.wj"), "pub fn world() -> i32 {\n    99\n}\n").unwrap();
 
     // Rebuild (lib.rs already exists)
     let status = Command::new(get_wj_binary())
-        .args(["build", src.to_str().unwrap(), "--output", out.to_str().unwrap(), "--library", "--no-cargo"])
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+        ])
         .status()
         .expect("wj rebuild should succeed");
     assert!(status.success(), "rebuild failed");
@@ -83,19 +87,18 @@ fn test_lib_rs_strips_use_super() {
     fs::create_dir_all(&src).unwrap();
     fs::create_dir_all(&out).unwrap();
 
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod alpha\n",
-    )
-    .unwrap();
-    fs::write(
-        src.join("alpha.wj"),
-        "pub fn hello() -> i32 {\n    42\n}\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod alpha\n").unwrap();
+    fs::write(src.join("alpha.wj"), "pub fn hello() -> i32 {\n    42\n}\n").unwrap();
 
     let status = Command::new(get_wj_binary())
-        .args(["build", src.to_str().unwrap(), "--output", out.to_str().unwrap(), "--library", "--no-cargo"])
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+        ])
         .status()
         .expect("wj build should succeed");
     assert!(status.success(), "build failed");
@@ -117,16 +120,19 @@ fn test_lib_rs_updated_when_module_removed() {
     fs::create_dir_all(&out).unwrap();
 
     // Initial build with two modules
-    fs::write(
-        src.join("mod.wj"),
-        "pub mod alpha\npub mod beta\n",
-    )
-    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod alpha\npub mod beta\n").unwrap();
     fs::write(src.join("alpha.wj"), "pub fn a() -> i32 { 1 }\n").unwrap();
     fs::write(src.join("beta.wj"), "pub fn b() -> i32 { 2 }\n").unwrap();
 
     let status = Command::new(get_wj_binary())
-        .args(["build", src.to_str().unwrap(), "--output", out.to_str().unwrap(), "--library", "--no-cargo"])
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+        ])
         .status()
         .expect("wj build should succeed");
     assert!(status.success());
@@ -140,13 +146,23 @@ fn test_lib_rs_updated_when_module_removed() {
     fs::write(src.join("mod.wj"), "pub mod alpha\n").unwrap();
 
     let status = Command::new(get_wj_binary())
-        .args(["build", src.to_str().unwrap(), "--output", out.to_str().unwrap(), "--library", "--no-cargo"])
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+        ])
         .status()
         .expect("wj rebuild should succeed");
     assert!(status.success());
 
     let c2 = fs::read_to_string(&lib_rs).unwrap();
-    assert!(c2.contains("pub mod alpha"), "alpha should still be in lib.rs");
+    assert!(
+        c2.contains("pub mod alpha"),
+        "alpha should still be in lib.rs"
+    );
     assert!(
         !c2.contains("pub mod beta"),
         "beta should be REMOVED from lib.rs after mod.wj no longer declares it"

@@ -30,7 +30,7 @@ pub fn func3() -> f64 {
     // Run float inference
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -48,22 +48,40 @@ pub fn func3() -> f64 {
     eprintln!("Generated code:\n{}", rust_code);
 
     // func1 and func2 should generate f32 (return type is f32)
-    let func1_has_f32 = rust_code.contains("pub fn func1() -> f32") 
+    let func1_has_f32 = rust_code.contains("pub fn func1() -> f32")
         && (rust_code.contains("1.0_f32") || rust_code.contains("1.0f32"));
-    let func2_has_f32 = rust_code.contains("pub fn func2() -> f32") 
+    let func2_has_f32 = rust_code.contains("pub fn func2() -> f32")
         && (rust_code.contains("2.0_f32") || rust_code.contains("2.0f32"));
-    
+
     // func3 should generate f64 (return type is f64)
-    let func3_has_f64 = rust_code.contains("pub fn func3() -> f64") 
+    let func3_has_f64 = rust_code.contains("pub fn func3() -> f64")
         && (rust_code.contains("3.0_f64") || rust_code.contains("3.0f64"));
 
-    assert!(func1_has_f32, "func1 should use f32 literals.\nGenerated:\n{}", rust_code);
-    assert!(func2_has_f32, "func2 should use f32 literals.\nGenerated:\n{}", rust_code);
-    assert!(func3_has_f64, "func3 should use f64 literals.\nGenerated:\n{}", rust_code);
-    
+    assert!(
+        func1_has_f32,
+        "func1 should use f32 literals.\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        func2_has_f32,
+        "func2 should use f32 literals.\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        func3_has_f64,
+        "func3 should use f64 literals.\nGenerated:\n{}",
+        rust_code
+    );
+
     // Should NOT mix types
-    assert!(!rust_code.contains("1.0_f64"), "func1 should not generate f64");
-    assert!(!rust_code.contains("2.0_f64"), "func2 should not generate f64");
+    assert!(
+        !rust_code.contains("1.0_f64"),
+        "func1 should not generate f64"
+    );
+    assert!(
+        !rust_code.contains("2.0_f64"),
+        "func2 should not generate f64"
+    );
 }
 
 #[test]
@@ -94,7 +112,7 @@ pub fn get_other(flag: bool) -> f64 {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -112,14 +130,26 @@ pub fn get_other(flag: bool) -> f64 {
     eprintln!("Generated if-else code:\n{}", rust_code);
 
     // get_value should use f32 in both branches
-    assert!(rust_code.contains("1.5_f32") || rust_code.contains("1.5f32"), 
-        "get_value if branch should use f32.\nGenerated:\n{}", rust_code);
-    assert!(rust_code.contains("2.5_f32") || rust_code.contains("2.5f32"), 
-        "get_value else branch should use f32.\nGenerated:\n{}", rust_code);
-    
+    assert!(
+        rust_code.contains("1.5_f32") || rust_code.contains("1.5f32"),
+        "get_value if branch should use f32.\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("2.5_f32") || rust_code.contains("2.5f32"),
+        "get_value else branch should use f32.\nGenerated:\n{}",
+        rust_code
+    );
+
     // get_other should use f64 in both branches
-    assert!(rust_code.contains("3.5_f64") || rust_code.contains("3.5f64"), 
-        "get_other if branch should use f64.\nGenerated:\n{}", rust_code);
-    assert!(rust_code.contains("4.5_f64") || rust_code.contains("4.5f64"), 
-        "get_other else branch should use f64.\nGenerated:\n{}", rust_code);
+    assert!(
+        rust_code.contains("3.5_f64") || rust_code.contains("3.5f64"),
+        "get_other if branch should use f64.\nGenerated:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("4.5_f64") || rust_code.contains("4.5f64"),
+        "get_other else branch should use f64.\nGenerated:\n{}",
+        rust_code
+    );
 }

@@ -1,6 +1,6 @@
 // TDD: Test module path generation in hierarchical structures
 //
-// Bug: Generated Rust code uses `use self::windjammer_game_core::...` 
+// Bug: Generated Rust code uses `use self::windjammer_game_core::...`
 // but `windjammer_game_core` is a crate-level alias, not in `self`
 //
 // Fix: Use `crate::windjammer_game_core::...` or just `windjammer_game_core::...`
@@ -14,9 +14,9 @@ fn test_external_crate_import_in_submodule() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(src.join("test")).unwrap();
-    
+
     // lib.rs would have: pub use windjammer_app as windjammer_game_core;
-    
+
     // Submodule file that imports from external crate
     std::fs::write(
         src.join("test/mod.wj"),
@@ -30,7 +30,7 @@ pub fn test_create_vector() {
 "#,
     )
     .unwrap();
-    
+
     std::fs::write(
         src.join("mod.wj"),
         r#"
@@ -38,7 +38,7 @@ pub mod test
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("mod.wj"),
         &build,
@@ -48,16 +48,16 @@ pub mod test
         &[],
     )
     .expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("test/mod.rs")).unwrap();
-    
+
     // ASSERT: Should NOT use `self::windjammer_game_core`
     assert!(
         !rust_code.contains("use self::windjammer_game_core"),
         "Should not use 'use self::windjammer_game_core' (windjammer_game_core is crate-level). Found in:\n{}",
         rust_code.lines().take(20).collect::<Vec<_>>().join("\n")
     );
-    
+
     // ASSERT: Should use either `crate::` or direct path
     assert!(
         rust_code.contains("use crate::windjammer_game_core")

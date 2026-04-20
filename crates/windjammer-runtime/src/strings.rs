@@ -19,10 +19,7 @@ pub fn trim<S: AsRef<str>>(s: S) -> String {
 
 /// Split string by delimiter
 pub fn split<S: AsRef<str>>(s: S, delimiter: &str) -> Vec<String> {
-    s.as_ref()
-        .split(delimiter)
-        .map(|s| s.to_string())
-        .collect()
+    s.as_ref().split(delimiter).map(|s| s.to_string()).collect()
 }
 
 /// Join strings with delimiter

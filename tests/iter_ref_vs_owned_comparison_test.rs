@@ -55,16 +55,29 @@ fn compile_wj_and_verify(source: &str) -> String {
     let (success, rust_code, stderr) = compile_wj_test(source);
 
     if !success {
-        panic!("WJ compilation failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+        panic!(
+            "WJ compilation failed:\n{}\n\nGenerated:\n{}",
+            stderr, rust_code
+        );
     }
 
     let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
     let temp_dir = std::env::temp_dir();
-    let rs_file = temp_dir.join(format!("verify_iter_ref_{}_{}.rs", std::process::id(), verify_id));
+    let rs_file = temp_dir.join(format!(
+        "verify_iter_ref_{}_{}.rs",
+        std::process::id(),
+        verify_id
+    ));
     fs::write(&rs_file, &rust_code).expect("Failed to write rs file");
 
     let verify = Command::new("rustc")
-        .args(["--edition", "2021", "--crate-type", "lib", rs_file.to_str().unwrap()])
+        .args([
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            rs_file.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to run rustc");
 

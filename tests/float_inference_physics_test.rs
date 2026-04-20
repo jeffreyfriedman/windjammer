@@ -8,7 +8,6 @@
 ///
 /// Solution: Add infer_type_from_expression for Binary (arithmetic) and fallback for
 /// primitive methods (sqrt, etc.) to return object type when not in function_signatures.
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -94,4 +93,3 @@ pub fn check_positive(value: f32) -> bool {
         rust_code
     );
 }
-

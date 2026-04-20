@@ -32,7 +32,8 @@ fn compile_and_assert(source: &str, expect_f32: &[&str], expect_no_f64: bool) ->
 
     for pattern in expect_f32 {
         assert!(
-            rust_code.contains(&format!("{}_f32", pattern)) || rust_code.contains(&format!("{}f32", pattern)),
+            rust_code.contains(&format!("{}_f32", pattern))
+                || rust_code.contains(&format!("{}f32", pattern)),
             "Expected '{}_f32' in output.\nGenerated:\n{}",
             pattern,
             rust_code
@@ -63,8 +64,11 @@ pub fn choose(cond: bool, f32_var: f32) -> f32 {
 }
 "#;
     let rust = compile_and_assert(source, &["1.0"], true);
-    assert!(rust.contains("1.0_f32") || rust.contains("1.0f32"),
-        "Literal in if branch should be f32 to match else branch.\n{}", rust);
+    assert!(
+        rust.contains("1.0_f32") || rust.contains("1.0f32"),
+        "Literal in if branch should be f32 to match else branch.\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -80,8 +84,11 @@ pub fn choose(cond: bool, f32_var: f32) -> f32 {
 }
 "#;
     let rust = compile_and_assert(source, &["2.0"], true);
-    assert!(rust.contains("2.0_f32") || rust.contains("2.0f32"),
-        "Literal in else branch should be f32 to match if branch.\n{}", rust);
+    assert!(
+        rust.contains("2.0_f32") || rust.contains("2.0f32"),
+        "Literal in else branch should be f32 to match if branch.\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -98,8 +105,11 @@ pub fn choose(cond: bool, f64_var: f64) -> f64 {
 "#;
     // Don't use expect_f32 - we want f64 for this case
     let rust = compile_and_assert(source, &[], false);
-    assert!(rust.contains("2.0_f64") || rust.contains("2.0f64"),
-        "Literal in else branch should be f64 to match if branch.\n{}", rust);
+    assert!(
+        rust.contains("2.0_f64") || rust.contains("2.0f64"),
+        "Literal in else branch should be f64 to match if branch.\n{}",
+        rust
+    );
 }
 
 #[test]

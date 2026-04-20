@@ -109,11 +109,8 @@ pub fn infer_impl_header_type_params_from_type_name(type_name: &str) -> Option<V
 
 fn is_simple_rust_type_parameter_name(p: &str) -> bool {
     !p.is_empty()
-        && p.chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_uppercase())
-        && p.chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && p.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Type parameters declared on an `impl` block (explicit `impl<T>` or inferred `impl ComponentArray<T>`).
@@ -180,7 +177,11 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             expr_may_need_generic_clone_bound(left) || expr_may_need_generic_clone_bound(right)
         }
         Expression::Unary { operand, .. } => expr_may_need_generic_clone_bound(operand),
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             if expr_may_need_generic_clone_bound(function) {
                 return true;
             }
@@ -198,8 +199,12 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
         Expression::StructLiteral { fields, .. } => fields
             .iter()
             .any(|(_, e)| expr_may_need_generic_clone_bound(e)),
-        Expression::Tuple { elements, .. } => elements.iter().any(|e| expr_may_need_generic_clone_bound(e)),
-        Expression::Array { elements, .. } => elements.iter().any(|e| expr_may_need_generic_clone_bound(e)),
+        Expression::Tuple { elements, .. } => elements
+            .iter()
+            .any(|e| expr_may_need_generic_clone_bound(e)),
+        Expression::Array { elements, .. } => elements
+            .iter()
+            .any(|e| expr_may_need_generic_clone_bound(e)),
         Expression::Block { statements, .. } => statements
             .iter()
             .any(|s| stmt_may_need_generic_clone_bound(s)),
@@ -207,7 +212,9 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
         Expression::TryOp { expr, .. } => expr_may_need_generic_clone_bound(expr),
         Expression::Await { expr, .. } => expr_may_need_generic_clone_bound(expr),
         Expression::Closure { body, .. } => expr_may_need_generic_clone_bound(body),
-        Expression::MacroInvocation { args, .. } => args.iter().any(|e| expr_may_need_generic_clone_bound(e)),
+        Expression::MacroInvocation { args, .. } => {
+            args.iter().any(|e| expr_may_need_generic_clone_bound(e))
+        }
         Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
             expr_may_need_generic_clone_bound(k) || expr_may_need_generic_clone_bound(v)
         }),
@@ -225,9 +232,7 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
 fn stmt_may_need_generic_clone_bound(stmt: &Statement<'_>) -> bool {
     match stmt {
         Statement::Let {
-            value,
-            else_block,
-            ..
+            value, else_block, ..
         } => {
             if expr_may_need_generic_clone_bound(value) {
                 return true;
@@ -256,7 +261,9 @@ fn stmt_may_need_generic_clone_bound(stmt: &Statement<'_>) -> bool {
             ..
         } => {
             expr_may_need_generic_clone_bound(condition)
-                || then_block.iter().any(|s| stmt_may_need_generic_clone_bound(s))
+                || then_block
+                    .iter()
+                    .any(|s| stmt_may_need_generic_clone_bound(s))
                 || else_block
                     .as_ref()
                     .map(|b| b.iter().any(|s| stmt_may_need_generic_clone_bound(s)))
@@ -275,13 +282,17 @@ fn stmt_may_need_generic_clone_bound(stmt: &Statement<'_>) -> bool {
             expr_may_need_generic_clone_bound(iterable)
                 || body.iter().any(|s| stmt_may_need_generic_clone_bound(s))
         }
-        Statement::While { condition, body, .. } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             expr_may_need_generic_clone_bound(condition)
                 || body.iter().any(|s| stmt_may_need_generic_clone_bound(s))
         }
         Statement::Loop { body, .. }
         | Statement::Thread { body, .. }
-        | Statement::Async { body, .. } => body.iter().any(|s| stmt_may_need_generic_clone_bound(s)),
+        | Statement::Async { body, .. } => {
+            body.iter().any(|s| stmt_may_need_generic_clone_bound(s))
+        }
         Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => false,
         Statement::Defer { statement, .. } => stmt_may_need_generic_clone_bound(statement),
     }

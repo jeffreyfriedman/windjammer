@@ -7,7 +7,6 @@
 /// This is critical for compound assignment optimization:
 /// - If right side is String, can't use += (needs =)
 /// - If right side is &str, can use += (efficient)
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,9 +29,9 @@ pub fn concatenate_greetings() -> string {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // TDD VERIFICATION: Should NOT use += because greet() returns String
     // String += String doesn't work in Rust
     assert!(
@@ -40,7 +39,7 @@ pub fn concatenate_greetings() -> string {
         "Should use = not += when function returns String: {}",
         output
     );
-    
+
     // Should use regular assignment with & prefix for borrowing
     assert!(
         output.contains("result = result + &greet") || output.contains("result.push_str"),
@@ -71,9 +70,9 @@ pub fn build_output(fmt: Formatter) -> string {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Should NOT use += because format() returns String
     // Should use = with & prefix for borrowing
     assert!(
@@ -100,9 +99,9 @@ pub fn build_message(name: string, age: i32) -> string {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Should NOT use += because format! returns String
     // Should use = with & prefix for borrowing
     assert!(
@@ -121,30 +120,31 @@ pub fn build_message(name: string, age: i32) -> string {
 fn compile_and_get_rust(source: &str) -> String {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let test_dir = format!("/tmp/func_return_test_{}_{}", std::process::id(), counter);
-    
+
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let source_file = PathBuf::from(&test_dir).join("test.wj");
     std::fs::write(&source_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
             "build",
             source_file.to_str().unwrap(),
-            "--target", "rust",
-            "--output", &test_dir,
+            "--target",
+            "rust",
+            "--output",
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     assert!(
         output.status.success(),
         "Compilation failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    
+
     let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    std::fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

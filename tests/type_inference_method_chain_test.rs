@@ -3,7 +3,6 @@
 /// Bug: (value + amount).min(100.0) generates 100.0_f64 instead of _f32
 /// Root Cause: Method return type not propagating to chained method arguments
 /// Expected: .min() and .max() arguments should match receiver type
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,9 +24,9 @@ impl Detection {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // The .min(100.0) argument should be f32
     assert!(
         output.contains("100.0_f32") || output.contains("100_f32"),
@@ -56,9 +55,9 @@ impl Detection {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // The .max(0.0) argument should be f32
     assert!(
         output.contains("0.0_f32"),
@@ -76,9 +75,9 @@ pub fn clamp(value: f32, min_val: f32, max_val: f32) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // All parameters are f32, so method chain should use f32
     // (This test verifies the chain works, though params already constrain it)
     assert!(
@@ -97,9 +96,9 @@ pub fn get_clamped(x: f32) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Both literals should be f32 (param x is f32)
     assert!(
         output.contains("1.0_f32") && output.contains("0.0_f32"),
@@ -118,9 +117,9 @@ pub fn example() -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Return type f32 should propagate backwards through chain
     assert!(
         output.contains("5.0_f32") && output.contains("10.0_f32") && output.contains("0.0_f32"),
@@ -133,30 +132,31 @@ pub fn example() -> f32 {
 fn compile_and_get_rust(source: &str) -> String {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let test_dir = format!("/tmp/method_chain_test_{}_{}", std::process::id(), counter);
-    
+
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let source_file = PathBuf::from(&test_dir).join("test.wj");
     std::fs::write(&source_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
             "build",
             source_file.to_str().unwrap(),
-            "--target", "rust",
-            "--output", &test_dir,
+            "--target",
+            "rust",
+            "--output",
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     assert!(
         output.status.success(),
         "Compilation failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    
+
     let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    std::fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

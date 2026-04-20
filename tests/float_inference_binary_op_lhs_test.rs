@@ -4,7 +4,6 @@
 /// FIX: When LHS type is known, infer RHS float literal from LHS (LHS → RHS propagation).
 ///
 /// Complements existing RHS → LHS inference. Adds bidirectional constraint flow.
-
 use std::path::PathBuf;
 use std::process::Command;
 

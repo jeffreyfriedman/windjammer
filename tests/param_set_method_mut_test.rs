@@ -3,7 +3,6 @@
 /// Bug: grid.set(x, y, z, material) calls VoxelGrid::set(&mut self, ...)
 /// but the compiler doesn't recognize "set" as a mutating method name.
 /// Result: grid parameter inferred as & instead of &mut.
-
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
 use windjammer::lexer::Lexer;
@@ -167,4 +166,3 @@ impl Renderer {
         compiled
     );
 }
-

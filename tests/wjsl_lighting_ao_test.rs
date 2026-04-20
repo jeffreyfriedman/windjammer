@@ -31,7 +31,9 @@ fn test_lighting_has_ao_sampling() {
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
         .expect("transpilation should succeed");
     assert!(
-        wgsl.contains("compute_ao") || wgsl.contains("ambient_occlusion") || wgsl.contains("ao_factor"),
+        wgsl.contains("compute_ao")
+            || wgsl.contains("ambient_occlusion")
+            || wgsl.contains("ao_factor"),
         "Lighting shader should contain AO computation. Generated:\n{}",
         &wgsl[..wgsl.len().min(2000)]
     );

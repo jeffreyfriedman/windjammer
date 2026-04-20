@@ -91,7 +91,10 @@ pub fn process(opt: Option<String>) -> usize {
     let result = compile_to_rust(src).expect("compile");
     // opt is Option<String> (Owned) - s is owned, no ref mut
     assert!(result.contains("Some(s)") || result.contains("Some(ref s)"));
-    assert!(!result.contains("Some(ref mut s)"), "Read-only: never ref mut");
+    assert!(
+        !result.contains("Some(ref mut s)"),
+        "Read-only: never ref mut"
+    );
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -139,8 +142,15 @@ pub fn unwrap_default(opt: Option<String>) -> usize {
 }
 "#;
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("Some(s)"), "Owned scrutinee: no ref. Got: {}", result);
-    assert!(!result.contains("Some(ref mut s)"), "Never ref mut for read-only");
+    assert!(
+        result.contains("Some(s)"),
+        "Owned scrutinee: no ref. Got: {}",
+        result
+    );
+    assert!(
+        !result.contains("Some(ref mut s)"),
+        "Never ref mut for read-only"
+    );
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 

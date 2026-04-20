@@ -23,7 +23,8 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
         fs::write(&full_path, content).unwrap();
     }
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             src_dir.to_str().unwrap(),
             "-o",
@@ -37,10 +38,7 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compiler failed. stderr:\n{}\nstdout:\n{}",
-            stderr, stdout
-        );
+        panic!("Compiler failed. stderr:\n{}\nstdout:\n{}", stderr, stdout);
     }
 
     let mut result = std::collections::HashMap::new();
@@ -119,7 +117,10 @@ fn test_pub_use_crate_current_module_rewritten_to_self() {
             "animation/mod.wj",
             "pub mod animation\npub use crate::animation::Animation\n",
         ),
-        ("animation/animation.wj", "pub struct Animation { pub frames: i32 }"),
+        (
+            "animation/animation.wj",
+            "pub struct Animation { pub frames: i32 }",
+        ),
     ];
 
     let output = compile_project(files);
@@ -151,7 +152,10 @@ fn test_nested_module_sibling_re_exports() {
             "pub mod vec2\npub mod vec3\npub use vec2::Vec2\npub use vec3::Vec3\n",
         ),
         ("math/vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
-        ("math/vec3.wj", "pub struct Vec3 { pub x: f64, pub y: f64, pub z: f64 }"),
+        (
+            "math/vec3.wj",
+            "pub struct Vec3 { pub x: f64, pub y: f64, pub z: f64 }",
+        ),
     ];
 
     let output = compile_project(files);

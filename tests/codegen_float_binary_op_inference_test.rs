@@ -1,7 +1,6 @@
 /// TDD: Float literal inference in binary operations
 /// BUG: `f32_value * 1.414` generates `f32_value * 1.414_f64` (type mismatch)
 /// FIX: Infer float literals from operand types in binary operations
-
 use std::fs;
 use std::process::Command;
 
@@ -25,7 +24,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",

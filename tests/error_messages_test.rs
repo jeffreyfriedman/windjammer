@@ -137,12 +137,16 @@ fn test_ownership_error_shows_move_and_borrow() {
 
     let diag = map_first_diagnostic(&json).expect("Should parse diagnostic");
     assert!(
-        diag.message.contains("data") || diag.message.contains("move") || diag.message.contains("borrow"),
+        diag.message.contains("data")
+            || diag.message.contains("move")
+            || diag.message.contains("borrow"),
         "Should mention the value or move/borrow. Got: {}",
         diag.message
     );
     assert!(
-        diag.message.contains("Ownership") || diag.message.contains("moved") || diag.message.contains("borrow"),
+        diag.message.contains("Ownership")
+            || diag.message.contains("moved")
+            || diag.message.contains("borrow"),
         "Should explain ownership. Got: {}",
         diag.message
     );
@@ -200,7 +204,10 @@ fn test_missing_field_lists_available_fields() {
         diag.message
     );
     // Notes from rustc children should be preserved
-    let has_field_info = diag.notes.iter().any(|n| n.contains("username") || n.contains("User"));
+    let has_field_info = diag
+        .notes
+        .iter()
+        .any(|n| n.contains("username") || n.contains("User"));
     assert!(
         has_field_info || diag.message.contains("User"),
         "Should list available fields or struct name. Notes: {:?}",
@@ -220,7 +227,10 @@ fn test_missing_field_fuzzy_matches() {
         10,
         None,
         Some("E0609"),
-        &[("note", "struct `User` has fields `username`, `name`, `email`")],
+        &[(
+            "note",
+            "struct `User` has fields `username`, `name`, `email`",
+        )],
     );
 
     let diag = map_first_diagnostic(&json).expect("Should parse diagnostic");
@@ -285,10 +295,22 @@ fn test_parse_error_shows_context() {
         .suggest("Add `)` to close the function call");
 
     let output = format!("{}", err);
-    assert!(output.contains("expected"), "Should show expected. Got: {}", output);
+    assert!(
+        output.contains("expected"),
+        "Should show expected. Got: {}",
+        output
+    );
     assert!(output.contains(")"), "Should mention ). Got: {}", output);
-    assert!(output.contains("file.wj:30:15"), "Should show location. Got: {}", output);
-    assert!(output.contains("help:") || output.contains("suggestion"), "Should have suggestion. Got: {}", output);
+    assert!(
+        output.contains("file.wj:30:15"),
+        "Should show location. Got: {}",
+        output
+    );
+    assert!(
+        output.contains("help:") || output.contains("suggestion"),
+        "Should have suggestion. Got: {}",
+        output
+    );
 }
 
 #[test]
@@ -349,7 +371,8 @@ fn test_multiple_errors_dont_cascade() {
 
     assert_eq!(diagnostics.len(), 2, "Should have 2 distinct diagnostics");
     assert!(
-        diagnostics[0].message.contains("Type mismatch") || diagnostics[0].message.contains("mismatched"),
+        diagnostics[0].message.contains("Type mismatch")
+            || diagnostics[0].message.contains("mismatched"),
         "First should be type error"
     );
     assert!(

@@ -31,13 +31,13 @@ pub fn angle_deg(dot: f32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     println!("Generated:\n{}", output);
-    
+
     assert!(
         !output.contains(".acos() as f64") && !output.contains("acos() as f64"),
         "must not cast acos() to f64; got:\n{}",
         output
     );
-    
+
     assert!(
         !output.contains(" as f64"),
         "must not insert `as f64` in f32 arithmetic with constant folding; got:\n{}",

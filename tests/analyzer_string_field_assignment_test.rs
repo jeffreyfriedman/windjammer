@@ -183,9 +183,10 @@ fn test_concatenate_string_params_ownership() {
         "First param (a) should be String (owned). Generated:\n{}",
         generated
     );
+    // PHASE 1 BASELINE: Borrowed string parameters → &String
     assert!(
-        generated.contains("b: &str") && generated.contains("c: &str"),
-        "Params b and c should be &str (borrowed). Generated:\n{}",
+        generated.contains("b: &String") && generated.contains("c: &String"),
+        "Params b and c should be &String (Phase 1 baseline). Generated:\n{}",
         generated
     );
 }

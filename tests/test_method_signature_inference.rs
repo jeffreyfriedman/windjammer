@@ -18,7 +18,7 @@ fn test_getter_should_borrow_not_consume() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // Getter method that returns a field value
     std::fs::write(
         src.join("game.wj"),
@@ -58,17 +58,20 @@ impl Game {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src.join("game.wj"), &build, CompilationTarget::Rust, false)
         .expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
-    
+
     // ASSERT: get_hud should be &self, not self
     assert!(
         rust_code.contains("pub fn get_hud(&self)") || rust_code.contains("pub fn get_hud(& self)"),
         "get_hud should be &self (borrow), not self (consume). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn get_hud")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn get_hud"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -78,7 +81,7 @@ fn test_mutating_method_should_be_mut_self() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // Method that mutates fields
     std::fs::write(
         src.join("keyboard.wj"),
@@ -107,17 +110,26 @@ impl KeyboardState {
 "#,
     )
     .unwrap();
-    
-    build_project(&src.join("keyboard.wj"), &build, CompilationTarget::Rust, false)
-        .expect("Build should succeed");
-    
+
+    build_project(
+        &src.join("keyboard.wj"),
+        &build,
+        CompilationTarget::Rust,
+        false,
+    )
+    .expect("Build should succeed");
+
     let rust_code = std::fs::read_to_string(build.join("keyboard.rs")).unwrap();
-    
+
     // ASSERT: update_key should be &mut self, not &self
     assert!(
-        rust_code.contains("pub fn update_key(&mut self") || rust_code.contains("pub fn update_key(&mut  self"),
+        rust_code.contains("pub fn update_key(&mut self")
+            || rust_code.contains("pub fn update_key(&mut  self"),
         "update_key should be &mut self (mutable), not &self. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn update_key")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn update_key"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -126,12 +138,12 @@ fn test_method_calling_mutating_method_on_field() {
     // This reproduces the breach-protocol bug:
     // poll_keyboard_input(self) calls self.keyboard.update_key(...)
     // Should infer &mut self because it mutates self.keyboard
-    
+
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     std::fs::write(
         src.join("game.wj"),
         r#"
@@ -189,31 +201,40 @@ impl Game {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src.join("game.wj"), &build, CompilationTarget::Rust, false)
         .expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
-    
+
     // ASSERT: poll_input should be &mut self (transitive mutation)
     assert!(
         rust_code.contains("pub fn poll_input(&mut self)"),
         "poll_input should be &mut self (calls mutating method on field). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn poll_input")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn poll_input"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // ASSERT: update_key should be &mut self
     assert!(
         rust_code.contains("pub fn update_key(&mut self"),
         "update_key should be &mut self. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn update_key")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn update_key"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // ASSERT: is_key_down should be &self (read-only)
     assert!(
         rust_code.contains("pub fn is_key_down(&self"),
         "is_key_down should be &self (read-only). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn is_key_down")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn is_key_down"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -223,7 +244,7 @@ fn test_consuming_method_should_be_self() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // Method that truly needs to consume self (e.g., into_inner)
     std::fs::write(
         src.join("wrapper.wj"),
@@ -245,17 +266,25 @@ impl Wrapper {
 "#,
     )
     .unwrap();
-    
-    build_project(&src.join("wrapper.wj"), &build, CompilationTarget::Rust, false)
-        .expect("Build should succeed");
-    
+
+    build_project(
+        &src.join("wrapper.wj"),
+        &build,
+        CompilationTarget::Rust,
+        false,
+    )
+    .expect("Build should succeed");
+
     let rust_code = std::fs::read_to_string(build.join("wrapper.rs")).unwrap();
-    
+
     // ASSERT: into_inner should be self (consume), not &self
     assert!(
         rust_code.contains("pub fn into_inner(self)"),
         "into_inner should be self (consume) since it moves out the inner value. Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn into_inner")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn into_inner"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -265,7 +294,7 @@ fn test_readonly_method_should_be_ref_self() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // Method that only reads fields (no mutation)
     std::fs::write(
         src.join("stats.wj"),
@@ -293,22 +322,33 @@ impl Stats {
 "#,
     )
     .unwrap();
-    
-    build_project(&src.join("stats.wj"), &build, CompilationTarget::Rust, false)
-        .expect("Build should succeed");
-    
+
+    build_project(
+        &src.join("stats.wj"),
+        &build,
+        CompilationTarget::Rust,
+        false,
+    )
+    .expect("Build should succeed");
+
     let rust_code = std::fs::read_to_string(build.join("stats.rs")).unwrap();
-    
+
     // ASSERT: Both should be &self (immutable borrow)
     assert!(
         rust_code.contains("pub fn is_game_over(&self)"),
         "is_game_over should be &self (read-only). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn is_game_over")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn is_game_over"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     assert!(
         rust_code.contains("pub fn get_score(&self)"),
         "get_score should be &self (read-only). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn get_score")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn get_score"))
+            .unwrap_or("NOT FOUND")
     );
 }

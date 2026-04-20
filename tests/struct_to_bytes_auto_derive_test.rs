@@ -9,7 +9,6 @@
 /// via `to_ne_bytes()`, preserving correct bit patterns for all types.
 ///
 /// This enables type-safe GPU uniform upload without manual byte management.
-
 use windjammer::*;
 
 fn compile_to_rust(source: &str) -> String {
@@ -265,10 +264,7 @@ fn test_generated_to_bytes_compiles_with_rustc() {
     "#;
     let output = compile_to_rust(source);
 
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_to_bytes_rustc_{}",
-        std::process::id()
-    ));
+    let test_dir = std::env::temp_dir().join(format!("wj_to_bytes_rustc_{}", std::process::id()));
     std::fs::create_dir_all(&test_dir).unwrap();
     std::fs::write(test_dir.join("main.rs"), &output).unwrap();
 
@@ -322,10 +318,7 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
     "#;
     let output = compile_to_rust(source);
 
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_to_bytes_bits_{}",
-        std::process::id()
-    ));
+    let test_dir = std::env::temp_dir().join(format!("wj_to_bytes_bits_{}", std::process::id()));
     std::fs::create_dir_all(&test_dir).unwrap();
     std::fs::write(test_dir.join("main.rs"), &output).unwrap();
 
@@ -335,7 +328,8 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
         .arg(test_dir.join("main"))
         .output()
         .expect("Failed to run rustc");
-    assert!(rustc.status.success(),
+    assert!(
+        rustc.status.success(),
         "Bit correctness test should compile. Errors:\n{}",
         String::from_utf8_lossy(&rustc.stderr)
     );

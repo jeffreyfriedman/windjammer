@@ -67,10 +67,26 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>) {
 }
 "#;
     let result = transpile(source).unwrap();
-    assert!(result.contains("const TILE_W"), "TILE_W missing: {}", result);
-    assert!(result.contains("const TILE_H"), "TILE_H missing: {}", result);
-    assert!(result.contains("const TILE_AREA"), "TILE_AREA missing: {}", result);
-    assert!(result.contains("var<workgroup>"), "workgroup var missing: {}", result);
+    assert!(
+        result.contains("const TILE_W"),
+        "TILE_W missing: {}",
+        result
+    );
+    assert!(
+        result.contains("const TILE_H"),
+        "TILE_H missing: {}",
+        result
+    );
+    assert!(
+        result.contains("const TILE_AREA"),
+        "TILE_AREA missing: {}",
+        result
+    );
+    assert!(
+        result.contains("var<workgroup>"),
+        "workgroup var missing: {}",
+        result
+    );
 }
 
 #[test]
@@ -104,7 +120,19 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let result = transpile(source).unwrap();
-    assert!(result.contains("const TILE_W: u32 = 8u;"), "output: {}", result);
-    assert!(result.contains("const TILE_H: u32 = 8u;"), "output: {}", result);
-    assert!(result.contains("const TILE_AREA: u32 = 64u;"), "output: {}", result);
+    assert!(
+        result.contains("const TILE_W: u32 = 8u;"),
+        "output: {}",
+        result
+    );
+    assert!(
+        result.contains("const TILE_H: u32 = 8u;"),
+        "output: {}",
+        result
+    );
+    assert!(
+        result.contains("const TILE_AREA: u32 = 64u;"),
+        "output: {}",
+        result
+    );
 }

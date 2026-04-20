@@ -351,8 +351,7 @@ pub fn calc(a: i32, b: i32) -> i32 {
     let (success, result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
-        result.contains("(a + b) / 2")
-            || (result.contains("a + b") && result.contains("/ 2")),
+        result.contains("(a + b) / 2") || (result.contains("a + b") && result.contains("/ 2")),
         "Integer arithmetic. Got:\n{}",
         result
     );

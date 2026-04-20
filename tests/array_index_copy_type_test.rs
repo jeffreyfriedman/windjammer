@@ -11,13 +11,7 @@ fn compile_code(code: &str, test_name: &str) -> Result<String, String> {
     fs::write(&input_file, code).expect("Failed to write source file");
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            &input_file,
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
+        .args(["build", &input_file, "--output", &test_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 

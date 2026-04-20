@@ -34,10 +34,7 @@ pub fn do_stuff(items: Vec<Foo>) -> Vec<Foo> {
 "#;
 
     let diagnostics = lint_source(source);
-    let clone_warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.contains("W0005"))
-        .collect();
+    let clone_warnings: Vec<_> = diagnostics.iter().filter(|d| d.contains("W0005")).collect();
 
     assert!(
         !clone_warnings.is_empty(),
@@ -56,10 +53,7 @@ pub fn get_value(foo: Foo) -> i32 {
 "#;
 
     let diagnostics = lint_source(source);
-    let clone_warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.contains("W0005"))
-        .collect();
+    let clone_warnings: Vec<_> = diagnostics.iter().filter(|d| d.contains("W0005")).collect();
 
     assert!(
         clone_warnings.is_empty(),
@@ -80,10 +74,7 @@ impl Data {
 "#;
 
     let diagnostics = lint_source(source);
-    let clone_warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.contains("W0005"))
-        .collect();
+    let clone_warnings: Vec<_> = diagnostics.iter().filter(|d| d.contains("W0005")).collect();
 
     assert!(
         !clone_warnings.is_empty(),

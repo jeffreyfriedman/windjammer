@@ -11,14 +11,14 @@ fn transpile(source: &str) -> Result<String, String> {
 }
 
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
-    let base_dir = std::path::PathBuf::from(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../windjammer-game/windjammer-game-core/shaders")
-    );
+    let base_dir = std::path::PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../windjammer-game/windjammer-game-core/shaders"
+    ));
     let path = base_dir.join(filename);
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir)
-        .map_err(|e| e.to_string())
+    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir).map_err(|e| e.to_string())
 }
 
 #[test]
@@ -66,8 +66,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let result = transpile(source).unwrap();
-    assert!(result.contains("yi * 4u"), "Child index must use yi * 4u for 64-tree layout");
-    assert!(result.contains("zi * 16u"), "Child index must use zi * 16u for 64-tree layout");
+    assert!(
+        result.contains("yi * 4u"),
+        "Child index must use yi * 4u for 64-tree layout"
+    );
+    assert!(
+        result.contains("zi * 16u"),
+        "Child index must use zi * 16u for 64-tree layout"
+    );
 }
 
 #[test]
