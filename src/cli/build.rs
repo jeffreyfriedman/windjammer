@@ -258,10 +258,7 @@ fn build_go(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Res
         println!("  {} {:?}", "Generated".green(), file_path);
     }
 
-    println!(
-        "\n{} Go compilation complete!",
-        "Success!".green().bold()
-    );
+    println!("\n{} Go compilation complete!", "Success!".green().bold());
 
     Ok(())
 }
@@ -274,33 +271,37 @@ fn build_wgsl(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> R
 
     // Detect .wjsl files - use WJSL transpiler (RFC syntax: @vertex, @fragment, etc.)
     // Note: .wjsl uses array<T, N> syntax; main Windjammer parser expects .wj syntax
-    let (wgsl_source, additional_files) = if path.extension().and_then(|e| e.to_str()) == Some("wjsl") {
-        let wgsl = crate::wjsl::transpile_wjsl(&source)?;
-        (wgsl, Vec::new())
-    } else {
-        // Use Windjammer parser for .wj files
-        use crate::codegen;
-        use crate::lexer::Lexer;
-        use crate::parser::Parser;
+    let (wgsl_source, additional_files) =
+        if path.extension().and_then(|e| e.to_str()) == Some("wjsl") {
+            let wgsl = crate::wjsl::transpile_wjsl(&source)?;
+            (wgsl, Vec::new())
+        } else {
+            // Use Windjammer parser for .wj files
+            use crate::codegen;
+            use crate::lexer::Lexer;
+            use crate::parser::Parser;
 
-        let mut lexer = Lexer::new(&source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new(tokens);
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+            let mut lexer = Lexer::new(&source);
+            let tokens = lexer.tokenize_with_locations();
+            let mut parser = Parser::new(tokens);
+            let program = parser
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
-        let output = codegen::generate(&program, config.target, Some(config.clone()))?;
-        (output.source, output.additional_files)
-    };
+            let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+            (output.source, output.additional_files)
+        };
 
     // Create output directory
     fs::create_dir_all(&config.output_dir)?;
 
     // Determine output filename from input
-    let input_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("shader");
+    let input_stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("shader");
     let output_path = config.output_dir.join(format!("{}.wgsl", input_stem));
-    
+
     // Write WGSL output
     fs::write(&output_path, &wgsl_source)?;
     println!("  {} {:?}", "Generated".green(), output_path);

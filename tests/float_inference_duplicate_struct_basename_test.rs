@@ -49,7 +49,8 @@ mod beta {
     );
 
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, trait_methods) = analyzer.analyze_program(&program).expect("analyze");
+    let (analyzed, signatures, trait_methods) =
+        analyzer.analyze_program(&program).expect("analyze");
 
     let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
     generator.set_float_inference(float_inference);
@@ -89,10 +90,7 @@ impl DupName {
 
     let mut float_inference = type_inference::FloatInference::new();
     // Same layout as library compile: file `foo/bar.wj` → ["foo", "bar"]
-    float_inference.set_current_file_module_path(vec![
-        "foo".to_string(),
-        "bar".to_string(),
-    ]);
+    float_inference.set_current_file_module_path(vec!["foo".to_string(), "bar".to_string()]);
 
     // Another `DupName` elsewhere makes basename lookup ambiguous (dogfood pattern).
     let mut other_fields = std::collections::HashMap::new();
@@ -110,7 +108,8 @@ impl DupName {
     );
 
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, trait_methods) = analyzer.analyze_program(&program).expect("analyze");
+    let (analyzed, signatures, trait_methods) =
+        analyzer.analyze_program(&program).expect("analyze");
 
     let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
     generator.set_float_inference(float_inference);

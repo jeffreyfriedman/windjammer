@@ -6,7 +6,6 @@
 /// Fix: CircleCollider uses f32 throughout for consistency with AABB.
 ///
 /// Verifies: Code with CircleCollider + AABB compiles without f32/f64 mismatch.
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -64,7 +63,10 @@ fn verify_rust_compiles(rust_code: &str) {
             "2021",
             rust_file.to_str().unwrap(),
             "-o",
-            temp_dir.join(format!("{}.rlib", test_name)).to_str().unwrap(),
+            temp_dir
+                .join(format!("{}.rlib", test_name))
+                .to_str()
+                .unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");

@@ -26,14 +26,66 @@ use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
 use crate::linter::rust_leakage::RustLeakageLinter;
-use crate::metadata::{CrateMetadata, FunctionSignature, ModuleMetadata, meta_cache_path, metadata_function_sig_from_analyzer};
-use crate::parser::Parser;
+use crate::metadata::{
+    meta_cache_path, metadata_function_sig_from_analyzer, CrateMetadata, FunctionSignature,
+    ModuleMetadata,
+};
 use crate::parser::ast::core::Item;
+use crate::parser::ast::types::Type;
+use crate::parser::Parser;
 use crate::type_inference::{FloatInference, IntInference};
 use crate::CompilationTarget;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+/// TDD FIX helper: Check if a Type is Copy in single-file context
+/// Used to override metadata Copy status when the current file's definition differs
+fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::String => false, // String is never Copy
+        Type::Vec(_) => false, // Vec is never Copy
+        Type::Array(inner, _) => is_type_copy_for_single_file_build(inner, analyzer),
+        Type::Custom(name) | Type::Generic(name) => {
+            // Check if it's a primitive or a Copy struct
+            matches!(
+                name.as_str(),
+                "i8" | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "isize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "char"
+            ) || analyzer.is_copy_struct(name)
+        }
+        Type::Option(inner) => is_type_copy_for_single_file_build(inner, analyzer),
+        Type::Result(ok, err) => {
+            is_type_copy_for_single_file_build(ok, analyzer)
+                && is_type_copy_for_single_file_build(err, analyzer)
+        }
+        Type::Parameterized(name, _) => {
+            // Vec, HashMap, etc. are not Copy
+            name != "Vec" && name != "HashMap"
+        }
+        Type::Tuple(types) => types
+            .iter()
+            .all(|t| is_type_copy_for_single_file_build(t, analyzer)),
+        Type::FunctionPointer { .. } => false, // Function pointers are not Copy
+        Type::Reference(_) | Type::MutableReference(_) => true, // References are Copy
+        Type::RawPointer { .. } => true,       // Raw pointers are Copy
+        _ => false,
+    }
+}
 
 /// Write file only if content has changed, preserving mtime for Cargo's
 /// incremental compilation when the generated Rust is identical.
@@ -121,11 +173,8 @@ pub fn build_project_ext(
         let source = std::fs::read_to_string(file)?;
         let mut lexer = Lexer::new(&source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
         let program = parser
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
@@ -144,7 +193,10 @@ pub fn build_project_ext(
         // Collect metadata for library emission
         if library {
             let mut module_meta = ModuleMetadata::new(
-                file.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+                file.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string(),
             );
             for item in &program.items {
                 match item {
@@ -162,8 +214,15 @@ pub fn build_project_ext(
                         module_meta.functions.insert(
                             decl.name.clone(),
                             FunctionSignature {
-                                params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                                return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                params: decl
+                                    .parameters
+                                    .iter()
+                                    .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                    .collect(),
+                                return_type: decl
+                                    .return_type
+                                    .as_ref()
+                                    .map(|t| ModuleMetadata::serialize_type(t)),
                                 is_associated: false,
                                 parent_type: None,
                                 param_ownership: vec![],
@@ -178,8 +237,15 @@ pub fn build_project_ext(
                             module_meta.functions.insert(
                                 full_name,
                                 FunctionSignature {
-                                    params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                                    return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                    params: func_decl
+                                        .parameters
+                                        .iter()
+                                        .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                        .collect(),
+                                    return_type: func_decl
+                                        .return_type
+                                        .as_ref()
+                                        .map(|t| ModuleMetadata::serialize_type(t)),
                                     is_associated: true,
                                     parent_type: Some(block.type_name.clone()),
                                     param_ownership: vec![],
@@ -223,7 +289,30 @@ pub fn build_project_ext(
             &mut global_signatures,
             &mut analyzer,
         );
-        
+
+        // TDD FIX for E0382: Override metadata Copy status if current file defines struct differently
+        // If the file defines a struct that metadata says is Copy, but the local definition has
+        // non-Copy fields (e.g., Vec), remove it from the Copy set for THIS compilation.
+        // This prevents one Copy-able GameState in file A from poisoning non-Copy GameState in file B.
+        for item in &program.items {
+            if let Item::Struct { decl, .. } = item {
+                let struct_name = &decl.name;
+
+                if analyzer.is_copy_struct(struct_name) {
+                    // Check if THIS definition is actually Copy
+                    let is_local_copy = decl.fields.is_empty()
+                        || decl
+                            .fields
+                            .iter()
+                            .all(|f| is_type_copy_for_single_file_build(&f.field_type, &analyzer));
+
+                    if !is_local_copy {
+                        analyzer.unregister_copy_struct(struct_name);
+                    }
+                }
+            }
+        }
+
         // TDD FIX for E0308: Two-pass analysis for signature pre-collection
         // Pass 1: Analyze current file to collect all method signatures BEFORE main analysis
         // This ensures methods defined later in the file are available when analyzing earlier code
@@ -232,14 +321,14 @@ pub fn build_project_ext(
         let (_, first_pass_registry, _) = analyzer
             .analyze_program_with_global_signatures(&program, &global_signatures)
             .map_err(|e| anyhow::anyhow!("First-pass analysis error: {}", e))?;
-        
+
         // Merge first-pass signatures into global registry for second pass
         global_signatures.merge(&first_pass_registry);
-        
+
         // Get copy structs from first pass
         let copy_structs_list = analyzer.get_copy_structs();
         let copy_structs_set: HashSet<String> = copy_structs_list.into_iter().collect();
-        
+
         // Pass 2: Re-analyze with complete signature registry (including current file's signatures)
         let mut analyzer_pass2 = Analyzer::new_with_copy_structs(copy_structs_set);
         analyzer_pass2
@@ -248,7 +337,7 @@ pub fn build_project_ext(
         let (analyzed_functions, registry, _) = analyzer_pass2
             .analyze_program_with_global_signatures(&program, &global_signatures)
             .map_err(|e| anyhow::anyhow!("Second-pass analysis error: {}", e))?;
-        
+
         // Use second-pass analyzer for subsequent operations
         let mut analyzer = analyzer_pass2;
 
@@ -313,14 +402,20 @@ pub fn build_project_ext(
             }
             output_with_structure
         } else {
-            let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+            let stem = file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
             output.join(format!("{}.rs", stem))
         };
         write_if_changed(&output_file, &rust_code)?;
 
         // Write .wj.meta with inferred ownership for cross-file calls
         if target == CompilationTarget::Rust {
-            let module_name = file.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let module_name = file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
             let mut meta = ModuleMetadata::new(module_name.to_string());
             for item in &program.items {
                 match item {
@@ -338,7 +433,11 @@ pub fn build_project_ext(
                             if let Some(sig) = registry_snapshot.get_signature(&full_name) {
                                 meta.functions.insert(
                                     full_name,
-                                    metadata_function_sig_from_analyzer(sig, true, Some(block.type_name.clone())),
+                                    metadata_function_sig_from_analyzer(
+                                        sig,
+                                        true,
+                                        Some(block.type_name.clone()),
+                                    ),
                                 );
                             }
                         }
@@ -346,7 +445,10 @@ pub fn build_project_ext(
                     Item::Struct { decl, .. } => {
                         let mut fields = std::collections::HashMap::new();
                         for field in &decl.fields {
-                            fields.insert(field.name.clone(), ModuleMetadata::serialize_type(&field.field_type));
+                            fields.insert(
+                                field.name.clone(),
+                                ModuleMetadata::serialize_type(&field.field_type),
+                            );
                         }
                         meta.structs.insert(decl.name.clone(), fields);
                     }
@@ -513,7 +615,13 @@ fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> Has
                     }
                 }
                 Item::Mod { items: inner, .. } => {
-                    walk_items(inner, all_structs, global_copy_structs, copy_enums, struct_names);
+                    walk_items(
+                        inner,
+                        all_structs,
+                        global_copy_structs,
+                        copy_enums,
+                        struct_names,
+                    );
                 }
                 _ => {}
             }
@@ -528,11 +636,8 @@ fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> Has
     for (file, source) in sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
         let Ok(program) = parser.parse() else {
             eprintln!(
                 "Warning: Skipping file for Copy registry (parse error): {}",
@@ -557,18 +662,35 @@ fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> Has
     // struct that references it by name.
     copy_enums.retain(|name| !struct_names.contains(name));
 
+    // TDD FIX: When multiple structs share the same name (different modules/files),
+    // be CONSERVATIVE: only mark as Copy if ALL definitions are Copy.
+    // Otherwise one Copy-able GameState in file A poisons non-Copy GameState in file B,
+    // causing E0382 errors when passing game_state to multiple functions.
+    //
+    // Strategy: Group structs by name, check if ALL variants are Copy, only then add to registry.
+    use std::collections::HashMap;
+    let mut structs_by_name: HashMap<String, Vec<&StructInfo>> = HashMap::new();
+    for s in &all_structs {
+        structs_by_name.entry(s.name.clone()).or_default().push(s);
+    }
+
     loop {
         let mut changed = false;
-        for s in &all_structs {
-            if global_copy_structs.contains(&s.name) {
+        for (name, variants) in &structs_by_name {
+            if global_copy_structs.contains(name) {
                 continue;
             }
-            let all_copy = s.field_types.is_empty()
-                || s.field_types.iter().all(|ty| {
-                    is_type_copy_quick_for_library(ty, &global_copy_structs, &copy_enums)
-                });
-            if all_copy {
-                global_copy_structs.insert(s.name.clone());
+
+            // Check if ALL variants of this struct name are Copy
+            let all_variants_copy = variants.iter().all(|s| {
+                s.field_types.is_empty()
+                    || s.field_types.iter().all(|ty| {
+                        is_type_copy_quick_for_library(ty, &global_copy_structs, &copy_enums)
+                    })
+            });
+
+            if all_variants_copy {
+                global_copy_structs.insert(name.clone());
                 changed = true;
             }
         }
@@ -596,7 +718,7 @@ fn build_library_multipass(
 ) -> Result<()> {
     // Step 1: Read all source files (keep sources alive for lifetime safety)
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
-    
+
     for file in wj_files {
         let canon = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
         let source = std::fs::read_to_string(&canon)?;
@@ -622,11 +744,8 @@ fn build_library_multipass(
     sources.retain(|(file, source)| {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
         if let Ok(program) = parser.parse() {
             if is_shader_file(&program) {
                 removed_stems.insert(file.clone());
@@ -664,18 +783,16 @@ fn build_library_multipass(
             };
             let mut lexer = Lexer::new(source);
             let tokens = lexer.tokenize_with_locations();
-            let mut parser = Parser::new_with_source(
-                tokens,
-                file.to_string_lossy().to_string(),
-                source.clone(),
-            );
+            let mut parser =
+                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
             let program = match parser.parse() {
                 Ok(p) => p,
                 Err(_) => return true,
             };
-            let has_non_mod_items = program.items.iter().any(|item| {
-                !matches!(item, Item::Mod { .. })
-            });
+            let has_non_mod_items = program
+                .items
+                .iter()
+                .any(|item| !matches!(item, Item::Mod { .. }));
             if has_non_mod_items {
                 return true;
             }
@@ -683,8 +800,7 @@ fn build_library_multipass(
                 if let Item::Mod { name, .. } = item {
                     let sub_file = parent.join(format!("{}.wj", name));
                     let sub_dir_mod = parent.join(name.as_str()).join("mod.wj");
-                    removed_stems.contains(&sub_file)
-                        || removed_stems.contains(&sub_dir_mod)
+                    removed_stems.contains(&sub_file) || removed_stems.contains(&sub_dir_mod)
                 } else {
                     true
                 }
@@ -736,7 +852,7 @@ fn build_library_multipass(
     let mut dep_registry = SignatureRegistry::new();
     {
         let mut dep_copy_structs = Vec::new();
-        let mut dep_struct_fields = HashMap::new();
+        let mut dep_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
         for root in &dep_roots {
             crate::metadata::merge_wj_meta_signatures_from_dir_inner_pub(
                 root,
@@ -745,7 +861,10 @@ fn build_library_multipass(
                 &mut dep_struct_fields,
             );
         }
-        crate::metadata::infer_copy_from_metadata_structs_pub(&dep_struct_fields, &mut dep_copy_structs);
+        crate::metadata::infer_copy_from_metadata_structs_pub(
+            &dep_struct_fields,
+            &mut dep_copy_structs,
+        );
         for name in dep_copy_structs {
             global_copy_structs.insert(name);
         }
@@ -761,24 +880,35 @@ fn build_library_multipass(
     // available from the very first analysis pass.
     let mut global_registry = dep_registry;
     crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &mut global_registry);
-    let mut global_float_signatures: HashMap<String, (Vec<crate::parser::ast::types::Type>, Option<crate::parser::ast::types::Type>)> = HashMap::new();
-    let mut global_struct_fields: HashMap<String, HashMap<String, crate::parser::ast::types::Type>> = HashMap::new();
+    let mut global_float_signatures: HashMap<
+        String,
+        (
+            Vec<crate::parser::ast::types::Type>,
+            Option<crate::parser::ast::types::Type>,
+        ),
+    > = HashMap::new();
+    let mut global_struct_fields: HashMap<
+        String,
+        HashMap<String, crate::parser::ast::types::Type>,
+    > = HashMap::new();
     let mut struct_defining_module_paths: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-    
+
     for (file, source) in &sources {
         // Parse with proper lifetime (program borrows source)
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
-        let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
 
         // Collect metadata for library emission
         let mut module_meta = ModuleMetadata::new(
-            file.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+            file.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string(),
         );
         for item in &program.items {
             match item {
@@ -796,8 +926,15 @@ fn build_library_multipass(
                     module_meta.functions.insert(
                         decl.name.clone(),
                         FunctionSignature {
-                            params: decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                            return_type: decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                            params: decl
+                                .parameters
+                                .iter()
+                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                .collect(),
+                            return_type: decl
+                                .return_type
+                                .as_ref()
+                                .map(|t| ModuleMetadata::serialize_type(t)),
                             is_associated: false,
                             parent_type: None,
                             param_ownership: vec![],
@@ -812,8 +949,15 @@ fn build_library_multipass(
                         module_meta.functions.insert(
                             full_name,
                             FunctionSignature {
-                                params: func_decl.parameters.iter().map(|p| ModuleMetadata::serialize_type(&p.type_)).collect(),
-                                return_type: func_decl.return_type.as_ref().map(|t| ModuleMetadata::serialize_type(t)),
+                                params: func_decl
+                                    .parameters
+                                    .iter()
+                                    .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                    .collect(),
+                                return_type: func_decl
+                                    .return_type
+                                    .as_ref()
+                                    .map(|t| ModuleMetadata::serialize_type(t)),
                                 is_associated: true,
                                 parent_type: Some(block.type_name.clone()),
                                 param_ownership: vec![],
@@ -827,33 +971,32 @@ fn build_library_multipass(
             }
         }
         crate_metadata.merge_module(&module_meta);
-        
+
         // Collect function signatures for float inference
         for item in &program.items {
             match item {
                 Item::Function { decl, .. } => {
-                    let param_types: Vec<crate::parser::ast::types::Type> = 
+                    let param_types: Vec<crate::parser::ast::types::Type> =
                         decl.parameters.iter().map(|p| p.type_.clone()).collect();
-                    global_float_signatures.insert(
-                        decl.name.clone(),
-                        (param_types, decl.return_type.clone()),
-                    );
+                    global_float_signatures
+                        .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
                 }
                 Item::Impl { block, .. } => {
                     for func_decl in &block.functions {
-                        let param_types: Vec<crate::parser::ast::types::Type> = 
-                            func_decl.parameters.iter().map(|p| p.type_.clone()).collect();
+                        let param_types: Vec<crate::parser::ast::types::Type> = func_decl
+                            .parameters
+                            .iter()
+                            .map(|p| p.type_.clone())
+                            .collect();
                         let full_name = format!("{}::{}", block.type_name, func_decl.name);
-                        global_float_signatures.insert(
-                            full_name,
-                            (param_types, func_decl.return_type.clone()),
-                        );
+                        global_float_signatures
+                            .insert(full_name, (param_types, func_decl.return_type.clone()));
                     }
                 }
                 _ => {}
             }
         }
-        
+
         // Collect struct field types for float/int inference (module-qualified keys).
         fn merge_struct_fields_from_items(
             items: &[crate::parser::ast::core::Item<'_>],
@@ -903,12 +1046,13 @@ fn build_library_multipass(
             &mut global_struct_fields,
             &mut struct_defining_module_paths,
         );
-        
+
         // First-pass analysis
         let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
-        let (_, registry, _) = analyzer.analyze_program(&program)
+        let (_, registry, _) = analyzer
+            .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error in {}: {}", file.display(), e))?;
-        
+
         // Merge into global registry using public API
         global_registry.merge(&registry);
 
@@ -926,32 +1070,30 @@ fn build_library_multipass(
             }
         }
     }
-    
+
     // Step 3: Global multi-pass iteration until convergence
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
-    
+
     loop {
         let mut new_registry = global_registry.clone();
-        
+
         // Re-analyze ALL files with current global registry
         for (file, source) in &sources {
             // Re-parse (lifetime scoped to this iteration)
             let mut lexer = Lexer::new(source);
             let tokens = lexer.tokenize_with_locations();
-            let mut parser = Parser::new_with_source(
-                tokens,
-                file.to_string_lossy().to_string(),
-                source.clone(),
-            );
-            let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-            
+            let mut parser =
+                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+            let program = parser
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
             let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
-            let (_, file_registry, _) = analyzer.analyze_program_with_global_signatures(
-                &program,
-                &global_registry,
-            ).map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
-            
+            let (_, file_registry, _) = analyzer
+                .analyze_program_with_global_signatures(&program, &global_registry)
+                .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
+
             // FIX: Only merge entries that CHANGED from global_registry.
             // analyze_program_with_global_signatures returns a FULL registry (global clone +
             // file-specific entries). Merging all entries would let passthrough global entries
@@ -981,12 +1123,15 @@ fn build_library_multipass(
                 }
             }
         }
-        
+
         // Convergence check: did any signatures change in this pass?
         let mut changed = false;
         for (name, sig) in &new_registry.signatures {
             match global_registry.signatures.get(name) {
-                None => { changed = true; break; }
+                None => {
+                    changed = true;
+                    break;
+                }
                 Some(old_sig) => {
                     if sig.param_ownership != old_sig.param_ownership
                         || sig.return_ownership != old_sig.return_ownership
@@ -1003,7 +1148,7 @@ fn build_library_multipass(
             global_registry = new_registry;
             break;
         }
-        
+
         global_registry = new_registry;
         pass_number += 1;
     }
@@ -1014,14 +1159,11 @@ fn build_library_multipass(
     for (file, source) in &sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
-        let program = parser.parse().map_err(|e| {
-            anyhow::anyhow!("Parse error in {}: {}", file.display(), e)
-        })?;
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         crate::type_inference::struct_field_registry::merge_module_reexports_from_items(
@@ -1059,7 +1201,7 @@ fn build_library_multipass(
             }
         }
     }
-    
+
     // Step 4A: Global float inference pass (collect constraints from ALL files first)
     let mut global_float_inference = FloatInference::new();
     if !external_paths.is_empty() {
@@ -1069,23 +1211,22 @@ fn build_library_multipass(
     global_float_inference.set_global_struct_field_types(&global_struct_fields);
     global_float_inference.set_struct_defining_module_paths(struct_defining_module_paths.clone());
     global_float_inference.set_module_re_exports(module_re_exports.clone());
-    
+
     // Collect constraints from ALL files into one FloatInference instance
     for (file, source) in &sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
-        let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         global_float_inference.set_current_file_module_path(file_module);
         global_float_inference.infer_program(&program);
     }
-    
+
     // Check for float inference errors
     if !global_float_inference.errors.is_empty() {
         for error in &global_float_inference.errors {
@@ -1107,12 +1248,11 @@ fn build_library_multipass(
     for (file, source) in &sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
-        let program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         global_int_inference.set_current_file_module_path(file_module);
@@ -1129,11 +1269,9 @@ fn build_library_multipass(
         ));
     }
 
-    let type_defining_modules =
-        build_type_defining_modules_for_library(&sources, &src_base)?;
-    let extern_submodule_qualifiers =
-        build_extern_submodule_qualifier_map(&sources, &src_base)?;
-    
+    let type_defining_modules = build_type_defining_modules_for_library(&sources, &src_base)?;
+    let extern_submodule_qualifiers = build_extern_submodule_qualifier_map(&sources, &src_base)?;
+
     // Step 4B-pre: Build GLOBAL analyzed_trait_methods across ALL files.
     // Each file's Analyzer is fresh, so cross-file trait info (e.g. RenderPort defined
     // in render_port.wj but implemented in voxel_gpu_renderer.wj) would be missing
@@ -1143,7 +1281,8 @@ fn build_library_multipass(
     // can produce deep recursive analysis.
     let global_analyzed_trait_methods = {
         let global_copy_structs_clone = global_copy_structs.clone();
-        let sources_for_thread: Vec<(std::path::PathBuf, String)> = sources.iter()
+        let sources_for_thread: Vec<(std::path::PathBuf, String)> = sources
+            .iter()
             .map(|(p, s)| (p.clone(), s.clone()))
             .collect();
 
@@ -1206,18 +1345,17 @@ fn build_library_multipass(
             }
         }
     };
-    
+
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
     for (_file_idx, (file, source)) in sources.iter().enumerate() {
         // Final parse
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
-        let mut program = parser.parse().map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let mut program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
         // Strip Item::Mod entries for modules that were filtered out (e.g., shaders).
         // This prevents generating invalid `pub mod X;` declarations in the first
@@ -1239,20 +1377,21 @@ fn build_library_multipass(
                 eprintln!("{}", diag);
             }
         }
-        
+
         // Register traits so per-file analysis can resolve trait contracts
-        analyzer.register_traits_from_program(&program)
+        analyzer
+            .register_traits_from_program(&program)
             .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
-        
+
         // Final analysis with converged registry
-        let (analyzed_functions, registry, _) = analyzer.analyze_program_with_global_signatures(
-            &program,
-            &global_registry,
-        ).map_err(|e| anyhow::anyhow!("Final analysis error: {}", e))?;
-        
-        analyzer.infer_trait_signatures_from_impls(&program)
+        let (analyzed_functions, registry, _) = analyzer
+            .analyze_program_with_global_signatures(&program, &global_registry)
+            .map_err(|e| anyhow::anyhow!("Final analysis error: {}", e))?;
+
+        analyzer
+            .infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
-        
+
         // Merge per-file trait analysis with global cross-file trait methods.
         // Global takes priority (it has the merged view from ALL implementations).
         let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
@@ -1262,7 +1401,7 @@ fn build_library_multipass(
                 entry.insert(method_name.clone(), method_analysis.clone());
             }
         }
-        
+
         // Preserve directory structure
         let relative_path = file.strip_prefix(&src_base)?;
         let output_file = output.join(relative_path).with_extension("rs");
@@ -1292,7 +1431,10 @@ fn build_library_multipass(
 
         // Write .wj.meta with inferred ownership for cross-file calls
         if target == CompilationTarget::Rust {
-            let module_name = file.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+            let module_name = file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
             let mut meta = ModuleMetadata::new(module_name.to_string());
             for item in &program.items {
                 match item {
@@ -1310,7 +1452,11 @@ fn build_library_multipass(
                             if let Some(sig) = registry_snapshot.get_signature(&full_name) {
                                 meta.functions.insert(
                                     full_name,
-                                    metadata_function_sig_from_analyzer(sig, true, Some(block.type_name.clone())),
+                                    metadata_function_sig_from_analyzer(
+                                        sig,
+                                        true,
+                                        Some(block.type_name.clone()),
+                                    ),
                                 );
                             }
                         }
@@ -1318,7 +1464,10 @@ fn build_library_multipass(
                     Item::Struct { decl, .. } => {
                         let mut fields = std::collections::HashMap::new();
                         for field in &decl.fields {
-                            fields.insert(field.name.clone(), ModuleMetadata::serialize_type(&field.field_type));
+                            fields.insert(
+                                field.name.clone(),
+                                ModuleMetadata::serialize_type(&field.field_type),
+                            );
                         }
                         meta.structs.insert(decl.name.clone(), fields);
                     }
@@ -1335,7 +1484,7 @@ fn build_library_multipass(
             }
         }
     }
-    
+
     // Emit metadata.json
     if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {
         let metadata_path = output.join("metadata.json");
@@ -1410,7 +1559,11 @@ fn build_extern_submodule_qualifier_map(
                 Item::Enum { decl, .. } => {
                     insert_extern_submodule_entry(map, conflicts, module_prefix, &decl.name);
                 }
-                Item::Mod { name, items: nested, .. } => {
+                Item::Mod {
+                    name,
+                    items: nested,
+                    ..
+                } => {
                     let mut next = module_prefix.to_vec();
                     next.push(name.clone());
                     merge_extern_submodule_symbols_from_items(nested, &next, map, conflicts);
@@ -1450,11 +1603,8 @@ fn build_extern_submodule_qualifier_map(
     for (file, source) in sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
         let program = parser
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
@@ -1462,7 +1612,12 @@ fn build_extern_submodule_qualifier_map(
         else {
             continue;
         };
-        merge_extern_submodule_symbols_from_items(&program.items, &module_path, &mut map, &mut conflicts);
+        merge_extern_submodule_symbols_from_items(
+            &program.items,
+            &module_path,
+            &mut map,
+            &mut conflicts,
+        );
     }
 
     for k in conflicts {
@@ -1484,11 +1639,8 @@ fn build_type_defining_modules_for_library(
     for (file, source) in sources {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = Parser::new_with_source(
-            tokens,
-            file.to_string_lossy().to_string(),
-            source.clone(),
-        );
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
         let program = parser
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
@@ -1518,7 +1670,8 @@ fn find_dependency_metadata_roots(
     }
 
     // 2. Walk up from file_parent to find workspace root, then search for src_wj/ directories
-    let canonical = std::fs::canonicalize(file_parent).unwrap_or_else(|_| file_parent.to_path_buf());
+    let canonical =
+        std::fs::canonicalize(file_parent).unwrap_or_else(|_| file_parent.to_path_buf());
     let mut current = canonical.as_path();
     // Walk up at most 6 levels to find sibling project directories
     for _ in 0..6 {

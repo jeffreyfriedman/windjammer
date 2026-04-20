@@ -55,7 +55,10 @@ fn compile_and_verify_rust(source: &str) -> (String, bool) {
 
     if !rustc_ok {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-        return (format!("Generated Rust:\n{}\n\nrustc errors:\n{}", content, stderr), false);
+        return (
+            format!("Generated Rust:\n{}\n\nrustc errors:\n{}", content, stderr),
+            false,
+        );
     }
 
     (content, true)

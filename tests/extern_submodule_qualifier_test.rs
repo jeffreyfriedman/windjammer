@@ -12,11 +12,7 @@ fn test_ffi_parent_child_extern_fn_qualifies_to_api_submodule() {
     let build = temp.path().join("build");
     fs::create_dir_all(src.join("ffi")).unwrap();
 
-    fs::write(
-        src.join("ffi").join("mod.wj"),
-        "pub mod api\n",
-    )
-    .unwrap();
+    fs::write(src.join("ffi").join("mod.wj"), "pub mod api\n").unwrap();
 
     fs::write(
         src.join("ffi").join("api.wj"),
@@ -56,11 +52,7 @@ fn test_ffi_qualifier_works_when_project_root_is_relative_path() {
     let build = temp.path().join("build_rel");
     fs::create_dir_all(src.join("ffi")).unwrap();
 
-    fs::write(
-        src.join("ffi").join("mod.wj"),
-        "pub mod api\n",
-    )
-    .unwrap();
+    fs::write(src.join("ffi").join("mod.wj"), "pub mod api\n").unwrap();
 
     fs::write(
         src.join("ffi").join("api.wj"),
@@ -84,7 +76,14 @@ pub fn check() -> bool {
 
     let old = std::env::current_dir().expect("cwd");
     std::env::set_current_dir(temp.path()).expect("chdir temp");
-    let outcome = build_project_ext(Path::new("src"), &build, CompilationTarget::Rust, false, true, &[]);
+    let outcome = build_project_ext(
+        Path::new("src"),
+        &build,
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    );
     std::env::set_current_dir(old).expect("restore cwd");
     outcome.expect("multipass build with relative src/");
 
@@ -210,8 +209,7 @@ impl Uniform<T> {
     )
     .unwrap();
 
-    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
-        .expect("build");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[]).expect("build");
 
     let out = fs::read_to_string(build.join("gpu_types.rs")).expect("read");
     assert!(

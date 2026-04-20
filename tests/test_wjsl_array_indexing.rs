@@ -18,7 +18,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let wgsl = transpile_wjsl(source).unwrap();
-    assert!(wgsl.contains("clusters[cluster_id]"), "WGSL should preserve array indexing");
+    assert!(
+        wgsl.contains("clusters[cluster_id]"),
+        "WGSL should preserve array indexing"
+    );
     assert!(wgsl.contains("instances[cluster_id]"));
 }
 

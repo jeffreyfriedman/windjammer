@@ -5,7 +5,6 @@
 ///
 /// This is defense-in-depth: param_float_type() + expected_float_type ensures
 /// foo(0.5) where fn foo(x: f32) generates 0.5_f32 even if inference fails.
-
 use windjammer::*;
 
 fn compile_and_assert(source: &str, assertions: impl Fn(&str)) {

@@ -370,10 +370,7 @@ pub fn wj_file_to_module_path(base: &Path, wj: &Path) -> Option<Vec<String>> {
 
 /// Shared by import codegen and auto-`use` resolution (pick nearest defining module).
 pub(crate) fn longest_common_prefix_len(a: &[String], b: &[String]) -> usize {
-    a.iter()
-        .zip(b.iter())
-        .take_while(|(x, y)| x == y)
-        .count()
+    a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count()
 }
 
 /// Build a `use ...::TypeName;` path (including leading `super::` segments) from the current
@@ -592,10 +589,7 @@ pub struct Manager {
         let p = std::path::Path::new("/proj/src_wj/achievement/manager.wj");
         assert_eq!(
             wj_file_to_module_path(base, p),
-            Some(vec![
-                "achievement".to_string(),
-                "manager".to_string()
-            ])
+            Some(vec!["achievement".to_string(), "manager".to_string()])
         );
         let m = std::path::Path::new("/proj/src_wj/achievement/mod.wj");
         assert_eq!(

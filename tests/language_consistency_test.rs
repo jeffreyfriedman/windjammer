@@ -80,12 +80,11 @@ fn foo() {
 "#;
 
     let (failed, stderr) = compile_expect_error(code);
+    assert!(failed, "Should error on assignment to immutable variable");
     assert!(
-        failed,
-        "Should error on assignment to immutable variable"
-    );
-    assert!(
-        stderr.contains("cannot assign") || stderr.contains("immutable") || stderr.contains("mutable"),
+        stderr.contains("cannot assign")
+            || stderr.contains("immutable")
+            || stderr.contains("mutable"),
         "Error should mention immutability, got:\n{}",
         stderr
     );
@@ -123,7 +122,8 @@ fn update(item: Item) {
 
     let generated = compile_windjammer_code(code).expect("Should compile");
     assert!(
-        generated.contains("fn update(item: &mut Item)") || generated.contains("fn update(item: &mut Item )"),
+        generated.contains("fn update(item: &mut Item)")
+            || generated.contains("fn update(item: &mut Item )"),
         "Should infer &mut Item for field mutation, got:\n{}",
         generated
     );
@@ -218,10 +218,7 @@ impl Item {
 "#;
 
     let (failed, stderr) = compile_expect_error(code);
-    assert!(
-        failed,
-        "Should reject mut self"
-    );
+    assert!(failed, "Should reject mut self");
     assert!(
         stderr.contains("mut") && (stderr.contains("not needed") || stderr.contains("inferred")),
         "Error should explain mut is not needed for parameters, got:\n{}",

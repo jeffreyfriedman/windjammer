@@ -267,7 +267,10 @@ mod tests {
             Some("to close function call or grouping")
         );
         assert_eq!(delimiter_context("["), Some("to close array or index"));
-        assert_eq!(delimiter_context("{"), Some("to close block or struct literal"));
+        assert_eq!(
+            delimiter_context("{"),
+            Some("to close block or struct literal")
+        );
         assert_eq!(delimiter_context("x"), None);
     }
 

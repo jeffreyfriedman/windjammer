@@ -71,7 +71,9 @@ const PRIVATE_CONST: i32 = 99
         "PRIVATE_CONST should NOT have pub but got:\n{}",
         generated
     );
-    let has_private = generated.lines().any(|l| l.contains("const PRIVATE_CONST") && !l.contains("pub const"));
+    let has_private = generated
+        .lines()
+        .any(|l| l.contains("const PRIVATE_CONST") && !l.contains("pub const"));
     assert!(
         has_private,
         "Expected 'const PRIVATE_CONST' (without pub) but got:\n{}",

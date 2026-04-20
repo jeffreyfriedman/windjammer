@@ -1,5 +1,5 @@
 // TDD Test: Cross-module struct field literal typing
-// 
+//
 // This test captures the REAL-WORLD failure pattern:
 // - Struct defined in module A with u32/usize fields
 // - Usage in module B imports via `use super::*`
@@ -14,8 +14,8 @@
 //
 // This test SHOULD FAIL right now - that's the bug we're investigating!
 
-use windjammer::{build_project_ext, CompilationTarget};
 use tempfile::TempDir;
+use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_cross_module_struct_u32_literal_via_types_module() {
@@ -25,7 +25,7 @@ fn test_cross_module_struct_u32_literal_via_types_module() {
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
     std::fs::create_dir_all(&src.join("types")).unwrap();
-    
+
     // types/mod.wj - Module declaration
     std::fs::write(
         src.join("types").join("mod.wj"),
@@ -34,7 +34,8 @@ pub mod entity
 
 pub use entity::Entity
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // types/entity.wj - Struct with u32 fields
     std::fs::write(
@@ -56,7 +57,8 @@ impl Entity {
     }
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // usage.wj - Imports and uses Entity
     std::fs::write(
@@ -76,7 +78,8 @@ pub fn create_via_constructor() -> Entity {
     Entity::new(42, 300, 20)
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Build as library (multi-file mode)
     build_project_ext(
@@ -84,16 +87,16 @@ pub fn create_via_constructor() -> Entity {
         &build,
         CompilationTarget::Rust,
         false,
-        true,  // library mode
+        true, // library mode
         &[],
     )
     .expect("Build should succeed");
 
     let usage_code = std::fs::read_to_string(build.join("usage.rs")).unwrap();
-    
+
     // CRITICAL: These should be u32, NOT i32!
     // This is the bug: cross-module struct fields don't type literals correctly
-    
+
     // Check struct literal initializers
     assert!(
         usage_code.contains("id: 1_u32"),
@@ -110,17 +113,19 @@ pub fn create_via_constructor() -> Entity {
         "Expected 'level: 5_u32' but generated code has i32. Generated:\n{}",
         usage_code
     );
-    
+
     // Check constructor calls (function parameters)
     assert!(
         usage_code.contains("Entity::new(42_u32, 300_u32, 20_u32)"),
         "Expected constructor args to be u32. Generated:\n{}",
         usage_code
     );
-    
+
     // Verify NO i32 suffixes appear (common bug)
     assert!(
-        !usage_code.contains("1_i32") && !usage_code.contains("100_i32") && !usage_code.contains("5_i32"),
+        !usage_code.contains("1_i32")
+            && !usage_code.contains("100_i32")
+            && !usage_code.contains("5_i32"),
         "Found i32 suffixes where u32 expected! Generated:\n{}",
         usage_code
     );
@@ -133,7 +138,7 @@ fn test_cross_module_struct_usize_literal() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // container.wj - Struct with usize fields
     std::fs::write(
         src.join("container.wj"),
@@ -152,7 +157,8 @@ impl Container {
     }
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // usage.wj - Uses Container
     std::fs::write(
@@ -172,20 +178,14 @@ pub fn create_default() -> Container {
     Container::new(256)
 }
 "#,
-    ).unwrap();
-
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
     )
-    .expect("Build should succeed");
+    .unwrap();
+
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let usage_code = std::fs::read_to_string(build.join("usage.rs")).unwrap();
-    
+
     // CRITICAL: These should be usize, NOT i32!
     assert!(
         usage_code.contains("capacity: 10_usize"),
@@ -207,10 +207,12 @@ pub fn create_default() -> Container {
         "Expected constructor arg to be usize. Generated:\n{}",
         usage_code
     );
-    
+
     // Verify NO i32 suffixes
     assert!(
-        !usage_code.contains("10_i32") && !usage_code.contains("0_i32") && !usage_code.contains("256_i32"),
+        !usage_code.contains("10_i32")
+            && !usage_code.contains("0_i32")
+            && !usage_code.contains("256_i32"),
         "Found i32 suffixes where usize expected! Generated:\n{}",
         usage_code
     );
@@ -223,7 +225,7 @@ fn test_cross_module_via_glob_import() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src.join("parent")).unwrap();
-    
+
     // parent/mod.wj - Re-exports types
     std::fs::write(
         src.join("parent").join("mod.wj"),
@@ -233,7 +235,8 @@ pub mod child
 
 pub use types::*
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // parent/types.wj - Struct definition
     std::fs::write(
@@ -244,7 +247,8 @@ pub struct Item {
     pub count: usize
 }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
 
     // parent/child.wj - Uses glob import
     std::fs::write(
@@ -260,20 +264,14 @@ pub fn create_items() -> Vec<Item> {
     ]
 }
 "#,
-    ).unwrap();
-
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
     )
-    .expect("Build should succeed");
+    .unwrap();
+
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let child_code = std::fs::read_to_string(build.join("parent/child.rs")).unwrap();
-    
+
     // Via `use super::*`, Item should still type literals correctly
     assert!(
         child_code.contains("id: 1_u32"),
@@ -295,7 +293,7 @@ pub fn create_items() -> Vec<Item> {
         "Expected 'count: 20_usize' via glob import. Generated:\n{}",
         child_code
     );
-    
+
     // No i32
     assert!(
         !child_code.contains("1_i32") && !child_code.contains("10_i32"),

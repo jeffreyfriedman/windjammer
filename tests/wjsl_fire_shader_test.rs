@@ -1,5 +1,4 @@
 /// TDD: Fire shader transpilation and validation tests
-
 use std::fs;
 use std::path::Path;
 
@@ -14,8 +13,7 @@ fn read_shader_source(filename: &str) -> (String, std::path::PathBuf) {
 
 fn transpile_shader(filename: &str) -> Result<String, String> {
     let (source, shader_dir) = read_shader_source(filename);
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
-        .map_err(|e| e.to_string())
+    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir).map_err(|e| e.to_string())
 }
 
 #[test]

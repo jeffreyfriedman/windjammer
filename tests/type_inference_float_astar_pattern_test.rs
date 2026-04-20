@@ -33,7 +33,8 @@ impl Grid {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -62,10 +63,7 @@ impl Grid {
 
     // Check debug output
     if stderr.contains("TDD DEBUG") {
-        let debug_lines: Vec<_> = stderr
-            .lines()
-            .filter(|l| l.contains("TDD DEBUG"))
-            .collect();
+        let debug_lines: Vec<_> = stderr.lines().filter(|l| l.contains("TDD DEBUG")).collect();
         eprintln!("All debug output:\n{}", debug_lines.join("\n"));
     }
 

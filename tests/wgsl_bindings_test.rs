@@ -9,9 +9,9 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
     let tmp = TempDir::new().unwrap();
     let input_file = tmp.path().join("test.wj");
     let output_dir = tmp.path().join("out");
-    
+
     fs::write(&input_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -23,7 +23,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
         ])
         .output()
         .expect("Failed to compile");
-    
+
     if !output.status.success() {
         panic!(
             "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
@@ -31,7 +31,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
             String::from_utf8_lossy(&output.stdout)
         );
     }
-    
+
     let wgsl_file = output_dir.join("test.wgsl");
     fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
 }
@@ -48,9 +48,9 @@ pub struct CameraUniforms {
     view_proj: mat4x4<float>,
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     // WGSL uses @group, @binding on the variable declaration, not the struct field
     // But we can verify the struct is generated correctly
     assert!(generated.contains("struct CameraUniforms"));
@@ -70,9 +70,9 @@ pub struct Particle {
     velocity: vec3<float>,
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("struct ParticleBuffer"));
     assert!(generated.contains("struct Particle"));
     assert!(generated.contains("particles: array<Particle>"));
@@ -86,9 +86,9 @@ pub struct MeshData {
     vertices: array<vec3<float>>,
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("struct MeshData"));
     assert!(generated.contains("vertices: array<vec3<f32>>"));
 }
@@ -117,9 +117,9 @@ pub struct LightData {
     color: vec3<float>,
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("struct Bindings"));
     assert!(generated.contains("camera: CameraUniforms"));
     assert!(generated.contains("lighting: LightData"));
@@ -151,9 +151,9 @@ pub struct ObjectData {
     transform: mat4x4<float>,
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("struct Resources"));
     assert!(generated.contains("per_frame: FrameData"));
     assert!(generated.contains("per_material: MaterialData"));
@@ -179,14 +179,22 @@ pub fn main_cs(id: vec3<uint>) {
     let vp = camera.view_proj
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     println!("Generated WGSL:\n{}", generated);
-    
+
     assert!(generated.contains("@group(0)"), "Generated:\n{}", generated);
-    assert!(generated.contains("@binding(0)"), "Generated:\n{}", generated);
-    assert!(generated.contains("camera: CameraUniforms"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("@binding(0)"),
+        "Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("camera: CameraUniforms"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -204,13 +212,25 @@ pub fn update_particles(@builtin(global_invocation_id) id: vec3<uint>) {
     particles[id.x].position = vec3(0.0, 0.0, 0.0)
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("@group(0)"), "Generated:\n{}", generated);
-    assert!(generated.contains("@binding(1)"), "Generated:\n{}", generated);
-    assert!(generated.contains("particles: array<Particle>"), "Generated:\n{}", generated);
-    assert!(generated.contains("storage, read_write"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("@binding(1)"),
+        "Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("particles: array<Particle>"),
+        "Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("storage, read_write"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 // ============================================================================
@@ -231,12 +251,24 @@ pub fn main_fs() -> vec4<float> {
     vec4(1.0, 1.0, 1.0, 1.0)
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("albedo_texture: texture_2d<f32>"), "Generated:\n{}", generated);
-    assert!(generated.contains("albedo_sampler: sampler"), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("albedo_texture: texture_2d<f32>"),
+        "Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("albedo_sampler: sampler"),
+        "Generated:\n{}",
+        generated
+    );
     assert!(generated.contains("@fragment"), "Generated:\n{}", generated);
     assert!(generated.contains("@group(0)"), "Generated:\n{}", generated);
-    assert!(generated.contains("@binding(0)"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("@binding(0)"),
+        "Generated:\n{}",
+        generated
+    );
 }

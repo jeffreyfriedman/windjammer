@@ -14,11 +14,11 @@ fn test_library_preserves_directory_structure() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    
+
     // Create hierarchical source structure
     std::fs::create_dir_all(src.join("player")).unwrap();
     std::fs::create_dir_all(src.join("combat")).unwrap();
-    
+
     // src/player/controller.wj
     std::fs::write(
         src.join("player/controller.wj"),
@@ -35,7 +35,7 @@ impl PlayerController {
 "#,
     )
     .unwrap();
-    
+
     // src/combat/enemy.wj
     std::fs::write(
         src.join("combat/enemy.wj"),
@@ -46,7 +46,7 @@ pub struct Enemy {
 "#,
     )
     .unwrap();
-    
+
     // src/mod.wj - uses hierarchical imports
     std::fs::write(
         src.join("mod.wj"),
@@ -61,7 +61,7 @@ pub struct Game {
 "#,
     )
     .unwrap();
-    
+
     // Build as library
     build_project_ext(
         &src.join("mod.wj"),
@@ -72,7 +72,7 @@ pub struct Game {
         &[],
     )
     .expect("Build should succeed");
-    
+
     // ASSERT: Output preserves directory structure
     assert!(
         build.join("player").join("controller.rs").exists(),
@@ -82,11 +82,8 @@ pub struct Game {
         build.join("combat").join("enemy.rs").exists(),
         "build/combat/enemy.rs should exist"
     );
-    assert!(
-        build.join("mod.rs").exists(),
-        "build/mod.rs should exist"
-    );
-    
+    assert!(build.join("mod.rs").exists(), "build/mod.rs should exist");
+
     // ASSERT: Generated code compiles with Rust (hierarchical imports still work)
     let rust_code = std::fs::read_to_string(build.join("mod.rs")).unwrap();
     assert!(
@@ -101,7 +98,7 @@ fn test_flat_input_still_works() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // Flat source (no subdirectories)
     std::fs::write(
         src.join("game.wj"),
@@ -112,7 +109,7 @@ pub struct Game {
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("game.wj"),
         &build,
@@ -122,7 +119,7 @@ pub struct Game {
         &[],
     )
     .expect("Build should succeed");
-    
+
     // ASSERT: Flat input produces flat output
     assert!(
         build.join("game.rs").exists(),

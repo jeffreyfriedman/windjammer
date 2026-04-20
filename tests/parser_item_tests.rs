@@ -191,7 +191,10 @@ pub struct Prefab {
     if let Item::Struct { decl, .. } = item {
         assert_eq!(decl.name, "Prefab");
         assert!(!decl.decorators.is_empty());
-        assert_eq!(decl.doc_comment.as_deref(), Some("A reusable entity template"));
+        assert_eq!(
+            decl.doc_comment.as_deref(),
+            Some("A reusable entity template")
+        );
     } else {
         panic!("Expected Struct, got {:?}", item);
     }

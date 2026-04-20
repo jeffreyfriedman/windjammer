@@ -25,7 +25,7 @@ pub struct MethodCallAnalyzer;
 
 impl MethodCallAnalyzer {
     /// Determine if we should add & to this argument
-    /// 
+    ///
     /// NEW ARCHITECTURE: Uses type-based signature lookup to make decisions
     /// Replaces all hard-coded method name heuristics with proper type analysis
     #[allow(clippy::too_many_arguments)]
@@ -43,14 +43,20 @@ impl MethodCallAnalyzer {
         receiver_type_name: Option<&str>,
         local_var_types: Option<&std::collections::HashMap<String, Type>>,
         // NEW: Signature registries for type-based method resolution
-        stdlib_signatures: Option<&std::collections::HashMap<
-            String,
-            std::collections::HashMap<String, crate::codegen::rust::generator::MethodSignature>,
-        >>,
-        user_signatures: Option<&std::collections::HashMap<
-            String,
-            std::collections::HashMap<String, crate::codegen::rust::generator::MethodSignature>,
-        >>,
+        stdlib_signatures: Option<
+            &std::collections::HashMap<
+                String,
+                std::collections::HashMap<String, crate::codegen::rust::generator::MethodSignature>,
+            >,
+        >,
+        user_signatures: Option<
+            &std::collections::HashMap<
+                String,
+                std::collections::HashMap<String, crate::codegen::rust::generator::MethodSignature>,
+            >,
+        >,
+        // TDD FIX for E0308: Track match arm bindings (owned values that may need &)
+        match_arm_bindings: &HashSet<String>,
     ) -> bool {
         // String literals are ALREADY &str - never add &
         let is_string_literal = matches!(
@@ -127,6 +133,75 @@ impl MethodCallAnalyzer {
             return false;
         }
 
+        // TDD FIX for E0308: Match arm bindings (owned String from enum) need & for Borrowed params
+        // Example: match cond { HasItem(item_id, qty) => inventory.has_item(item_id, qty) }
+        // where has_item expects &String but item_id is owned String from enum variant
+        if let Expression::Identifier { name, .. } = arg {
+            if match_arm_bindings.contains(name.as_str()) {
+                // This is a match arm binding (owned value)
+                // Check if method expects Borrowed for this parameter
+                if let Some(sig) = method_signature {
+                    let sig_param_idx = if sig.has_self_receiver {
+                        param_idx + 1
+                    } else {
+                        param_idx
+                    };
+                    if let Some(&OwnershipMode::Borrowed) = sig.param_ownership.get(sig_param_idx) {
+                        // Method expects &String and we have owned String from match arm
+                        return true;
+                    }
+                    // If signature says Owned or MutBorrowed, respect that
+                    if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                        if matches!(ownership, OwnershipMode::Owned | OwnershipMode::MutBorrowed) {
+                            return false;
+                        }
+                    }
+                }
+
+                // NO SIGNATURE: Use fallback heuristic
+                // Check if this is a String type (common for match arm bindings in dialog systems)
+                if let Some(var_types) = local_var_types {
+                    if let Some(ty) = var_types.get(name.as_str()) {
+                        // String types need &
+                        let is_string = matches!(ty, Type::String)
+                            || matches!(ty, Type::Custom(s) if s == "String" || s == "string");
+                        if is_string {
+                            return true;
+                        }
+                        // Copy types don't need &
+                        let is_copy = match ty {
+                            Type::Int | Type::Float | Type::Bool => true,
+                            Type::Custom(s) => matches!(
+                                s.as_str(),
+                                "i8" | "i16"
+                                    | "i32"
+                                    | "i64"
+                                    | "i128"
+                                    | "u8"
+                                    | "u16"
+                                    | "u32"
+                                    | "u64"
+                                    | "u128"
+                                    | "f32"
+                                    | "f64"
+                                    | "bool"
+                                    | "char"
+                                    | "usize"
+                                    | "isize"
+                            ),
+                            _ => false,
+                        };
+                        if is_copy {
+                            return false;
+                        }
+                    } else {
+                        // No type info - assume String for match arm bindings (common pattern)
+                        return true;
+                    }
+                }
+            }
+        }
+
         // NEW ARCHITECTURE: Try signature-based lookup FIRST
         // This replaces ALL hard-coded heuristics with proper type-based decisions
         if let Some(receiver_type) = receiver_type_name {
@@ -134,7 +209,7 @@ impl MethodCallAnalyzer {
             if let Some(stdlib_sigs) = stdlib_signatures {
                 // Strip generic params (Vec<String> → Vec)
                 let base_type = receiver_type.split('<').next().unwrap_or(receiver_type);
-                
+
                 if let Some(methods) = stdlib_sigs.get(base_type) {
                     if let Some(sig) = methods.get(method) {
                         // Found signature! Use it to make decision
@@ -144,23 +219,27 @@ impl MethodCallAnalyzer {
                                 param_type,
                                 Type::Reference(inner) if matches!(&**inner, Type::Custom(s) if s == "str")
                             );
-                            
+
                             if param_is_str_ref {
                                 // Parameter wants &str - check if argument is owned String
                                 if let Expression::Identifier { name, .. } = arg {
                                     // Check local_var_types
                                     if let Some(local_types) = local_var_types {
                                         if let Some(var_type) = local_types.get(name.as_str()) {
-                                            if crate::codegen::rust::types::is_windjammer_text_type(var_type) {
+                                            if crate::codegen::rust::types::is_windjammer_text_type(
+                                                var_type,
+                                            ) {
                                                 return true; // String → &str
                                             }
                                         }
                                     }
-                                    
+
                                     // Check function parameters
                                     let is_owned_string = current_function_params.iter().any(|p| {
                                         p.name == *name
-                                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                            && crate::codegen::rust::types::is_windjammer_text_type(
+                                                &p.type_,
+                                            )
                                             && !inferred_borrowed_params.contains(name.as_str())
                                     });
                                     if is_owned_string {
@@ -168,7 +247,7 @@ impl MethodCallAnalyzer {
                                     }
                                 }
                             }
-                            
+
                             // Use the signature's ownership mode
                             // BUT: Don't add & if the argument is already borrowed (e.g., &str param)
                             if let Some(&ownership) = sig.param_ownership.get(param_idx) {
@@ -187,7 +266,7 @@ impl MethodCallAnalyzer {
                     }
                 }
             }
-            
+
             // Try user-defined signatures
             if let Some(user_sigs) = user_signatures {
                 if let Some(methods) = user_sigs.get(receiver_type) {
@@ -198,20 +277,24 @@ impl MethodCallAnalyzer {
                                 param_type,
                                 Type::Reference(inner) if matches!(&**inner, Type::Custom(s) if s == "str")
                             );
-                            
+
                             if param_is_str_ref {
                                 if let Expression::Identifier { name, .. } = arg {
                                     if let Some(local_types) = local_var_types {
                                         if let Some(var_type) = local_types.get(name.as_str()) {
-                                            if crate::codegen::rust::types::is_windjammer_text_type(var_type) {
+                                            if crate::codegen::rust::types::is_windjammer_text_type(
+                                                var_type,
+                                            ) {
                                                 return true;
                                             }
                                         }
                                     }
-                                    
+
                                     let is_owned_string = current_function_params.iter().any(|p| {
                                         p.name == *name
-                                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                            && crate::codegen::rust::types::is_windjammer_text_type(
+                                                &p.type_,
+                                            )
                                             && !inferred_borrowed_params.contains(name.as_str())
                                     });
                                     if is_owned_string {
@@ -219,7 +302,7 @@ impl MethodCallAnalyzer {
                                     }
                                 }
                             }
-                            
+
                             if let Some(&ownership) = sig.param_ownership.get(param_idx) {
                                 if matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
                                     // Check if argument is already a borrowed parameter
@@ -298,9 +381,8 @@ impl MethodCallAnalyzer {
 
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
-                let is_string_type = |t: &Type| {
-                    crate::codegen::rust::types::is_windjammer_text_type(t)
-                };
+                let is_string_type =
+                    |t: &Type| crate::codegen::rust::types::is_windjammer_text_type(t);
                 // `key: str` → Rust `key: &str` always; do not emit `&key` (&&str / E0277).
                 let is_wj_str_param = current_function_params.iter().any(|param| {
                     param.name == *name && matches!(&param.type_, Type::Custom(s) if s == "str")
@@ -367,7 +449,7 @@ impl MethodCallAnalyzer {
         }
 
         // REMOVED: Hard-coded heuristics replaced with type-based signature lookup above
-        
+
         // User-defined methods with names like "remove" should use their actual signature,
         // not stdlib HashMap assumptions.
         // Example: ComponentArray<T>.remove(entity: Entity) takes Entity by value, not &Entity
@@ -396,16 +478,18 @@ impl MethodCallAnalyzer {
                             return false; // Copy type — pass by value
                         }
                     }
-                    
+
                     // TDD FIX for E0308: Auto-convert String → &str for match arm bindings
                     // This check applies to ALL expressions, not just identifiers
                     // When parameter expects &str and argument is owned String, add & to auto-deref
                     if let Some(param_type) = sig.param_types.get(sig_param_idx) {
                         let param_is_str_ref = match param_type {
-                            Type::Reference(inner) => matches!(&**inner, Type::Custom(s) if s == "str"),
+                            Type::Reference(inner) => {
+                                matches!(&**inner, Type::Custom(s) if s == "str")
+                            }
                             _ => false,
                         };
-                        
+
                         if param_is_str_ref {
                             // Parameter expects &str - check if argument is owned String
                             if let Expression::Identifier { name: arg_name, .. } = arg {
@@ -419,20 +503,25 @@ impl MethodCallAnalyzer {
                                 if already_rust_str {
                                     return false; // Already &str, don't add another &
                                 }
-                                
+
                                 // Check if it's an owned String parameter
-                                let is_owned_string_param = current_function_params.iter().any(|p| {
-                                    p.name == *arg_name
-                                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                        && !inferred_borrowed_params.contains(arg_name)
-                                });
-                                
+                                let is_owned_string_param =
+                                    current_function_params.iter().any(|p| {
+                                        p.name == *arg_name
+                                            && crate::codegen::rust::types::is_windjammer_text_type(
+                                                &p.type_,
+                                            )
+                                            && !inferred_borrowed_params.contains(arg_name)
+                                    });
+
                                 // Check if it's a local variable with String type (match arm binding, let binding)
                                 let is_owned_string_local = local_var_types
                                     .as_ref()
                                     .and_then(|vars| vars.get(arg_name))
-                                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
-                                
+                                    .is_some_and(|t| {
+                                        crate::codegen::rust::types::is_windjammer_text_type(t)
+                                    });
+
                                 if is_owned_string_param || is_owned_string_local {
                                     return true; // Add & to convert String → &str
                                 }
@@ -442,15 +531,16 @@ impl MethodCallAnalyzer {
                             // Let the general Borrowed logic below handle it
                         }
                     }
-                    
+
                     // WJ `str` / inferred-borrowed `string` params are already `&str` in Rust;
                     // callee `Borrowed` here means `&str` — passing `&name` would be `&&str` (E0277).
                     if let Expression::Identifier { name: arg_name, .. } = arg {
                         let already_rust_str = current_function_params.iter().any(|p| {
                             p.name == *arg_name
                                 && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                    || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                        && inferred_borrowed_params.contains(arg_name)))
+                                    || (crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    ) && inferred_borrowed_params.contains(arg_name)))
                         });
                         if already_rust_str {
                             return false;
@@ -703,8 +793,7 @@ impl MethodCallAnalyzer {
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>
     pub fn should_add_cloned(method: &str, _return_type: &Option<Type>) -> bool {
-        super::stdlib_method_traits::is_map_key_method(method)
-            || matches!(method, "first" | "last")
+        super::stdlib_method_traits::is_map_key_method(method) || matches!(method, "first" | "last")
     }
 
     /// Check if expression represents a Copy type
@@ -880,11 +969,8 @@ impl MethodCallAnalyzer {
                 let base = n.split('<').next().unwrap_or(n);
                 matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
             });
-            let is_known_vec = receiver_type_name
-                .is_some_and(|n| n.split('<').next().unwrap_or(n) == "Vec");
-
-
-
+            let is_known_vec =
+                receiver_type_name.is_some_and(|n| n.split('<').next().unwrap_or(n) == "Vec");
 
             // When receiver type is KNOWN, use it definitively
             if is_known_vec {
@@ -897,7 +983,10 @@ impl MethodCallAnalyzer {
                     let is_already_ref = current_function_params.iter().any(|p| {
                         p.name == *name
                             && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                || matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+                                || matches!(
+                                    &p.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
                                 || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                                     && inferred_borrowed_params.contains(name)))
                     });
@@ -931,8 +1020,9 @@ impl MethodCallAnalyzer {
                         let is_already_map_key_ref = current_function_params.iter().any(|p| {
                             p.name == *name
                                 && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                    || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                        && inferred_borrowed_params.contains(name)))
+                                    || (crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    ) && inferred_borrowed_params.contains(name)))
                         });
                         if is_already_map_key_ref {
                             return false;

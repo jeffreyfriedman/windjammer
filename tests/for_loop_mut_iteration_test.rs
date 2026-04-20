@@ -46,11 +46,11 @@ pub fn main() {
     );
 
     let build_dir = format!("{}/build", test_dir);
-    
+
     // Check that generated code uses &mut
     let rs_file = format!("{}/test.rs", build_dir);
     let generated_code = fs::read_to_string(&rs_file).unwrap();
-    
+
     // Should generate &mut for mutable iteration
     assert!(
         generated_code.contains("for (id, val) in &mut self.flags"),
@@ -59,7 +59,11 @@ pub fn main() {
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 
@@ -115,7 +119,7 @@ pub fn main() {
     let build_dir = format!("{}/build", test_dir);
     let rs_file = format!("{}/test.rs", build_dir);
     let generated_code = fs::read_to_string(&rs_file).unwrap();
-    
+
     // Should generate & for readonly iteration
     assert!(
         generated_code.contains("for (id, val) in &self.flags"),
@@ -124,7 +128,11 @@ pub fn main() {
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 

@@ -2,7 +2,6 @@
 ///
 /// Enables type inference across file boundaries by emitting and loading
 /// function signatures, struct fields, and trait implementations.
-
 use crate::analyzer::{FunctionSignature as AnalyzerFunctionSignature, OwnershipMode};
 use crate::parser::ast::types::Type;
 use serde::{Deserialize, Serialize};
@@ -66,20 +65,20 @@ pub fn meta_cache_root(source_root: &Path) -> PathBuf {
 pub struct ModuleMetadata {
     /// Module path (e.g., "math::vec3")
     pub module_path: String,
-    
+
     /// Function signatures: name → (param_types, return_type)
     pub functions: HashMap<String, FunctionSignature>,
-    
+
     /// Struct field types: struct_name → field_name → Type
     pub structs: HashMap<String, HashMap<String, String>>, // String = serialized Type
-    
+
     /// Trait implementations: trait_name → methods
     pub trait_impls: HashMap<String, Vec<String>>,
 
     /// Structs that implement Copy (enables cross-file Copy detection)
     #[serde(default)]
     pub copy_structs: Vec<String>,
-    
+
     /// Version for compatibility checking
     pub version: String,
 }
@@ -89,13 +88,13 @@ pub struct ModuleMetadata {
 pub struct FunctionSignature {
     /// Parameter types
     pub params: Vec<String>, // Serialized Type (JSON is easier than bincode for now)
-    
+
     /// Return type (None for unit)
     pub return_type: Option<String>,
-    
+
     /// Is this an associated function (Type::method)?
     pub is_associated: bool,
-    
+
     /// Parent type for associated functions (e.g., "Vec3" for Vec3::new)
     pub parent_type: Option<String>,
 
@@ -203,14 +202,27 @@ fn merge_module_metadata_signatures(
 /// Recursively load `*.wj.meta` under `root` and merge function signatures into the registry.
 /// Also collects Copy struct names from metadata for cross-file Copy detection.
 /// Searches both `root` (legacy colocated meta) and the `.wj-cache/` sibling directory.
-pub fn merge_wj_meta_signatures_from_dir(root: &Path, registry: &mut crate::analyzer::SignatureRegistry) {
+pub fn merge_wj_meta_signatures_from_dir(
+    root: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+) {
     let mut copy_structs = Vec::new();
     let mut all_struct_fields = HashMap::new();
     let cache_root = meta_cache_root(root);
     if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(&cache_root, registry, &mut copy_structs, &mut all_struct_fields);
+        merge_wj_meta_signatures_from_dir_inner(
+            &cache_root,
+            registry,
+            &mut copy_structs,
+            &mut all_struct_fields,
+        );
     }
-    merge_wj_meta_signatures_from_dir_inner(root, registry, &mut copy_structs, &mut all_struct_fields);
+    merge_wj_meta_signatures_from_dir_inner(
+        root,
+        registry,
+        &mut copy_structs,
+        &mut all_struct_fields,
+    );
     infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
 }
 
@@ -221,12 +233,22 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
     analyzer: &mut crate::analyzer::Analyzer,
 ) {
     let mut copy_structs = Vec::new();
-    let mut all_struct_fields = HashMap::new();
+    let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     let cache_root = meta_cache_root(root);
     if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(&cache_root, registry, &mut copy_structs, &mut all_struct_fields);
+        merge_wj_meta_signatures_from_dir_inner(
+            &cache_root,
+            registry,
+            &mut copy_structs,
+            &mut all_struct_fields,
+        );
     }
-    merge_wj_meta_signatures_from_dir_inner(root, registry, &mut copy_structs, &mut all_struct_fields);
+    merge_wj_meta_signatures_from_dir_inner(
+        root,
+        registry,
+        &mut copy_structs,
+        &mut all_struct_fields,
+    );
     infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
     for name in &copy_structs {
         analyzer.register_copy_struct(name);
@@ -241,13 +263,23 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
     analyzer: &mut crate::analyzer::Analyzer,
 ) {
     let mut copy_structs = Vec::new();
-    let mut all_struct_fields = HashMap::new();
+    let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for root in roots {
         let cache_root = meta_cache_root(root);
         if cache_root.exists() {
-            merge_wj_meta_signatures_from_dir_inner(&cache_root, registry, &mut copy_structs, &mut all_struct_fields);
+            merge_wj_meta_signatures_from_dir_inner(
+                &cache_root,
+                registry,
+                &mut copy_structs,
+                &mut all_struct_fields,
+            );
         }
-        merge_wj_meta_signatures_from_dir_inner(root, registry, &mut copy_structs, &mut all_struct_fields);
+        merge_wj_meta_signatures_from_dir_inner(
+            root,
+            registry,
+            &mut copy_structs,
+            &mut all_struct_fields,
+        );
     }
     infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
     for name in &copy_structs {
@@ -261,18 +293,23 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
-    all_struct_fields: &mut HashMap<String, Vec<String>>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
     let cache_root = meta_cache_root(root);
     if cache_root.exists() {
-        merge_wj_meta_signatures_from_dir_inner(&cache_root, registry, copy_structs, all_struct_fields);
+        merge_wj_meta_signatures_from_dir_inner(
+            &cache_root,
+            registry,
+            copy_structs,
+            all_struct_fields,
+        );
     }
     merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
 }
 
 /// Public accessor for `infer_copy_from_metadata_structs` (used by compiler multipass).
 pub fn infer_copy_from_metadata_structs_pub(
-    all_struct_fields: &HashMap<String, Vec<String>>,
+    all_struct_fields: &HashMap<String, Vec<Vec<String>>>,
     existing_copy: &mut Vec<String>,
 ) {
     infer_copy_from_metadata_structs(all_struct_fields, existing_copy);
@@ -282,7 +319,7 @@ fn merge_wj_meta_signatures_from_dir_inner(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
-    all_struct_fields: &mut HashMap<String, Vec<String>>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -290,11 +327,13 @@ fn merge_wj_meta_signatures_from_dir_inner(
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            merge_wj_meta_signatures_from_dir_inner(&path, registry, copy_structs, all_struct_fields);
-        } else if path
-            .to_string_lossy()
-            .ends_with(".wj.meta")
-        {
+            merge_wj_meta_signatures_from_dir_inner(
+                &path,
+                registry,
+                copy_structs,
+                all_struct_fields,
+            );
+        } else if path.to_string_lossy().ends_with(".wj.meta") {
             let Ok(text) = std::fs::read_to_string(&path) else {
                 continue;
             };
@@ -305,7 +344,11 @@ fn merge_wj_meta_signatures_from_dir_inner(
             copy_structs.extend(mod_meta.copy_structs.iter().cloned());
             for (struct_name, fields) in &mod_meta.structs {
                 let field_types: Vec<String> = fields.values().cloned().collect();
-                all_struct_fields.insert(struct_name.clone(), field_types);
+                // TDD FIX: Track ALL variants of each struct name (don't overwrite!)
+                all_struct_fields
+                    .entry(struct_name.clone())
+                    .or_default()
+                    .push(field_types);
             }
         }
     }
@@ -314,8 +357,13 @@ fn merge_wj_meta_signatures_from_dir_inner(
 /// Infer Copy types from struct field definitions loaded from metadata.
 /// A struct is Copy if all its fields are known Copy types.
 /// Uses fixpoint iteration to handle transitive Copy (e.g., struct A { b: B } where B is Copy).
+///
+/// TDD FIX: Conservative handling of duplicate struct names across modules.
+/// If multiple metadata files define structs with the same name, only mark as Copy
+/// if ALL variants are Copy. This prevents one Copy-able GameState from poisoning
+/// a non-Copy GameState in a different module.
 fn infer_copy_from_metadata_structs(
-    all_struct_fields: &HashMap<String, Vec<String>>,
+    all_struct_fields: &HashMap<String, Vec<Vec<String>>>,
     existing_copy: &mut Vec<String>,
 ) {
     use std::collections::HashSet;
@@ -324,12 +372,19 @@ fn infer_copy_from_metadata_structs(
     const MAX_PASSES: usize = 32;
     for _ in 0..MAX_PASSES {
         let mut changed = false;
-        for (struct_name, field_types) in all_struct_fields {
+        for (struct_name, variants) in all_struct_fields {
             if copy_set.contains(struct_name) {
                 continue;
             }
-            let all_copy = field_types.iter().all(|ft| is_copy_type_string(ft, &copy_set));
-            if all_copy {
+
+            // TDD FIX: Check if ALL variants are Copy (conservative)
+            let all_variants_copy = variants.iter().all(|field_types| {
+                field_types
+                    .iter()
+                    .all(|ft| is_copy_type_string(ft, &copy_set))
+            });
+
+            if all_variants_copy {
                 copy_set.insert(struct_name.clone());
                 changed = true;
             }
@@ -354,9 +409,22 @@ fn is_copy_type_string(s: &str, copy_set: &std::collections::HashSet<String>) ->
             let name = &s[8..s.len() - 2];
             matches!(
                 name,
-                "f32" | "f64" | "i8" | "i16" | "i32" | "i64" | "i128"
-                    | "u8" | "u16" | "u32" | "u64" | "u128"
-                    | "usize" | "isize" | "bool" | "char"
+                "f32"
+                    | "f64"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "isize"
+                    | "bool"
+                    | "char"
             ) || copy_set.contains(name)
         }
         s if s.starts_with("Array(") => {
@@ -426,14 +494,14 @@ impl ModuleMetadata {
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
-    
+
     /// Serialize Type to JSON string (for metadata storage)
     pub fn serialize_type(ty: &Type) -> String {
         // For MVP: Use Debug format (simple but works)
         // TODO: Proper serde for Type enum
         format!("{:?}", ty)
     }
-    
+
     /// Deserialize Type from JSON string (Debug format from serialize_type)
     pub fn deserialize_type(s: &str) -> Option<Type> {
         // For MVP: Parse simple types manually
@@ -473,7 +541,9 @@ impl ModuleMetadata {
             }
             s if s.starts_with("Custom(") => {
                 // Custom("TypeName") - extract the inner string
-                let rest = s.strip_prefix("Custom(\"").and_then(|r| r.strip_suffix("\")"));
+                let rest = s
+                    .strip_prefix("Custom(\"")
+                    .and_then(|r| r.strip_suffix("\")"));
                 rest.map(|name| Type::Custom(name.to_string()))
             }
             _ => None,
@@ -488,7 +558,7 @@ mod tests {
     #[test]
     fn test_metadata_round_trip() {
         let mut meta = ModuleMetadata::new("math::vec3".to_string());
-        
+
         meta.functions.insert(
             "Vec3::new".to_string(),
             FunctionSignature {
@@ -505,10 +575,10 @@ mod tests {
                 is_extern: false,
             },
         );
-        
+
         let json = serde_json::to_string_pretty(&meta).unwrap();
         eprintln!("Metadata JSON:\n{}", json);
-        
+
         let loaded: ModuleMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.functions.len(), 1);
         assert!(loaded.functions.contains_key("Vec3::new"));
@@ -518,14 +588,20 @@ mod tests {
     fn test_meta_cache_path_with_src_wj() {
         let source = PathBuf::from("/project/src_wj/math/vec3.wj");
         let result = meta_cache_path(&source);
-        assert_eq!(result, PathBuf::from("/project/.wj-cache/math/vec3.wj.meta"));
+        assert_eq!(
+            result,
+            PathBuf::from("/project/.wj-cache/math/vec3.wj.meta")
+        );
     }
 
     #[test]
     fn test_meta_cache_path_nested() {
         let source = PathBuf::from("/project/src_wj/rendering/shaders/mesh.wj");
         let result = meta_cache_path(&source);
-        assert_eq!(result, PathBuf::from("/project/.wj-cache/rendering/shaders/mesh.wj.meta"));
+        assert_eq!(
+            result,
+            PathBuf::from("/project/.wj-cache/rendering/shaders/mesh.wj.meta")
+        );
     }
 
     #[test]

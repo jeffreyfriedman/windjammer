@@ -363,8 +363,8 @@ pub fn main() -> i32 {
     // compute expects (&Vec<i32>, usize). We pass (Vec<i32>, &usize).
     // Need: compute(&v, *ri)
     assert!(
-        (generated.contains("compute(&v") || generated.contains("compute(v")) &&
-        (generated.contains(", *ri)") || generated.contains(", ri)")),
+        (generated.contains("compute(&v") || generated.contains("compute(v"))
+            && (generated.contains(", *ri)") || generated.contains(", ri)")),
         "Should coerce both args. Got:\n{}",
         generated
     );
@@ -392,7 +392,11 @@ pub fn main() -> i32 {
 
     let (success, _, err) = compile_and_verify(code);
 
-    assert!(success, "d.get() with owned self should compile. Error:\n{}", err);
+    assert!(
+        success,
+        "d.get() with owned self should compile. Error:\n{}",
+        err
+    );
 }
 
 /// Vec::contains with owned value - needs &
@@ -481,5 +485,9 @@ pub fn get_value(opt: &Option<i32>) -> i32 {
 
     // Option::unwrap takes self. &Option<T> has .unwrap() that consumes - actually
     // Option impl has unwrap(&self) that returns T when T: Copy. So this might work.
-    assert!(success, "Option::unwrap with &Option should compile. Error:\n{}", err);
+    assert!(
+        success,
+        "Option::unwrap with &Option should compile. Error:\n{}",
+        err
+    );
 }

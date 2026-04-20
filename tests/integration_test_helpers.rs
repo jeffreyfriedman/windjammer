@@ -113,9 +113,7 @@ impl MultiFileTest {
 
     /// Compile and assert failure; `err_substr` must appear in the error string (case-sensitive).
     pub fn assert_compile_error(&self, err_substr: &str) {
-        let err = self
-            .compile()
-            .expect_err("expected compile() to fail");
+        let err = self.compile().expect_err("expected compile() to fail");
         assert!(
             err.contains(err_substr),
             "expected error to contain {:?}, got:\n{}",
@@ -137,9 +135,7 @@ impl MultiFileTest {
         write_flat_lib_rs(&self.build_dir).expect("write lib.rs");
         write_verify_cargo_toml(&self.build_dir).expect("write Cargo.toml for cargo check");
 
-        let _guard = CARGO_CHECK_LOCK
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _guard = CARGO_CHECK_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
         let status = Command::new("cargo")
             .current_dir(&self.build_dir)
@@ -156,11 +152,7 @@ impl MultiFileTest {
     }
 }
 
-fn collect_rs_files(
-    root: &Path,
-    dir: &Path,
-    out: &mut HashMap<String, String>,
-) -> io::Result<()> {
+fn collect_rs_files(root: &Path, dir: &Path, out: &mut HashMap<String, String>) -> io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();

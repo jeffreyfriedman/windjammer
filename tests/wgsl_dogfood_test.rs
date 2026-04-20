@@ -74,7 +74,7 @@ pub struct CameraUniforms {
     assert!(generated.contains("struct CameraUniforms"));
     assert!(generated.contains("view_matrix: mat4x4<f32>"));
     assert!(generated.contains("position: vec3<f32>"));
-    
+
     // Should have padding after position (vec3)
     assert!(generated.contains("_pad"));
 }
@@ -106,7 +106,7 @@ pub fn ray_aabb(
     assert!(generated.contains("fn ray_aabb"));
     assert!(generated.contains("vec3<f32>"));
     assert!(generated.contains("-> vec2<f32>"));
-    
+
     // Verify return statement
     assert!(generated.contains("return"));
 }
@@ -148,10 +148,10 @@ pub fn sphere_intersect(ray: Ray, center: vec3<float>, radius: float) -> float {
     // Verify structs
     assert!(generated.contains("struct Ray"));
     assert!(generated.contains("struct Hit"));
-    
+
     // Verify function
     assert!(generated.contains("fn sphere_intersect"));
-    
+
     // Verify control flow
     assert!(generated.contains("if"));
     assert!(generated.contains("return"));
@@ -174,7 +174,7 @@ pub struct GBufferPixel {
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct GBufferPixel"));
-    
+
     // Should have padding between vec3 fields
     assert!(generated.contains("_pad"));
 }
@@ -218,7 +218,7 @@ pub fn get_octant(p: vec3<float>, center: vec3<float>) -> uint {
     assert!(generated.contains("fn svo_is_leaf"));
     assert!(generated.contains("fn svo_child_ptr"));
     assert!(generated.contains("fn get_octant"));
-    
+
     // Verify bitwise operations
     assert!(generated.contains("&"));
     assert!(generated.contains("|"));

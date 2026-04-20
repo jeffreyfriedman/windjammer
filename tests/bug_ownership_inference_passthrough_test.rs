@@ -113,12 +113,12 @@ fn main() {}
         );
     }
 
-    // WINDJAMMER DESIGN: Read-only String params infer to &str (not &String!)
-    // has_item only passes to Inventory::has (read-only) → should be &str
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
+    // has_item only passes to Inventory::has (read-only) → &String (Phase 1)
     assert!(
-        generated.contains("fn has_item(&self, item_id: &str)")
-            || generated.contains("fn has_item(&self, _item_id: &str)"),
-        "Expected has_item to have &str parameter (idiomatic Rust). Generated:\n{}",
+        generated.contains("fn has_item(&self, item_id: &String)")
+            || generated.contains("fn has_item(&self, _item_id: &String)"),
+        "Expected has_item to have &String parameter (Phase 1 baseline). Generated:\n{}",
         generated
     );
 

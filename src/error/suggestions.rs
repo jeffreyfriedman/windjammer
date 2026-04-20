@@ -114,7 +114,9 @@ mod tests {
     fn test_suggest_fix_wj0001() {
         let s = suggest_fix("WJ0001", "");
         assert!(s.is_some());
-        assert!(suggest_fix("WJ0001", "").unwrap().contains("Variable not found"));
+        assert!(suggest_fix("WJ0001", "")
+            .unwrap()
+            .contains("Variable not found"));
     }
 
     #[test]

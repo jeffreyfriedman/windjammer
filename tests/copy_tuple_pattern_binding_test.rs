@@ -221,7 +221,11 @@ pub fn process(items: Vec<(i32, bool)>) -> i32 {
 
     let (result, compiles) = compile_wj_to_rust(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
-    assert!(result.contains("if active"), "Expected if active. Got:\n{}", result);
+    assert!(
+        result.contains("if active"),
+        "Expected if active. Got:\n{}",
+        result
+    );
     assert!(
         !result.contains("*active"),
         "Should NOT add * to bool. Got:\n{}",

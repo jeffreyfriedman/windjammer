@@ -177,7 +177,8 @@ pub mod user
 
     let generated = fs::read_to_string(out.join("demo/user.rs")).unwrap();
     assert!(
-        generated.contains("crate::demo::a_ty::ATy") && generated.contains("crate::demo::b_ty::BTy"),
+        generated.contains("crate::demo::a_ty::ATy")
+            && generated.contains("crate::demo::b_ty::BTy"),
         "expected separate expanded uses for braced import; got:\n{}",
         generated
     );

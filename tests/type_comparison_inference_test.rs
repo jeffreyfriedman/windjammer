@@ -3,7 +3,6 @@
 /// Windjammer allows safe implicit mixing in the analyzer; codegen must emit `as <T>` so rustc accepts it.
 ///
 /// Uses the same in-process pipeline as other inference tests (no subprocess `wj` binary).
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
@@ -29,9 +28,7 @@ fn compile_and_get_rust(source: &str) -> String {
     );
 
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, registry, trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("analyze");
+    let (analyzed, registry, trait_methods) = analyzer.analyze_program(&program).expect("analyze");
 
     let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
     generator.set_analyzed_trait_methods(trait_methods);

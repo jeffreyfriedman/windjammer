@@ -40,7 +40,10 @@ fn alloc_method(
     test_alloc_expr(expr_method(obj, method, args))
 }
 
-fn alloc_unary(op: windjammer::parser::UnaryOp, operand: &'static Expression<'static>) -> &'static Expression<'static> {
+fn alloc_unary(
+    op: windjammer::parser::UnaryOp,
+    operand: &'static Expression<'static>,
+) -> &'static Expression<'static> {
     test_alloc_expr(expr_unary(op, operand))
 }
 
@@ -142,10 +145,7 @@ fn test_nested_field_access() {
     let mut tracker = OwnershipTracker::new();
     tracker.register_parameter("self", OwnershipMode::Borrowed);
 
-    let expr = alloc_field(
-        alloc_field(alloc_var("self"), "camera"),
-        "position",
-    );
+    let expr = alloc_field(alloc_field(alloc_var("self"), "camera"), "position");
     assert_eq!(
         tracker.get_expression_ownership(expr),
         OwnershipMode::Borrowed
@@ -257,10 +257,7 @@ fn test_deref_removes_borrow() {
     let mut tracker = OwnershipTracker::new();
     tracker.register_parameter("ptr", OwnershipMode::Borrowed);
 
-    let expr = alloc_unary(
-        windjammer::parser::UnaryOp::Deref,
-        alloc_var("ptr"),
-    );
+    let expr = alloc_unary(windjammer::parser::UnaryOp::Deref, alloc_var("ptr"));
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 
@@ -268,20 +265,14 @@ fn test_deref_removes_borrow() {
 fn test_deref_mut_borrow_removes_borrow() {
     let mut tracker = OwnershipTracker::new();
     tracker.register_parameter("ptr", OwnershipMode::MutBorrowed);
-    let expr = alloc_unary(
-        windjammer::parser::UnaryOp::Deref,
-        alloc_var("ptr"),
-    );
+    let expr = alloc_unary(windjammer::parser::UnaryOp::Deref, alloc_var("ptr"));
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 
 #[test]
 fn test_borrow_adds_shared_borrow() {
     let tracker = OwnershipTracker::new();
-    let expr = alloc_unary(
-        windjammer::parser::UnaryOp::Ref,
-        alloc_var("x"),
-    );
+    let expr = alloc_unary(windjammer::parser::UnaryOp::Ref, alloc_var("x"));
     assert_eq!(
         tracker.get_expression_ownership(expr),
         OwnershipMode::Borrowed
@@ -291,10 +282,7 @@ fn test_borrow_adds_shared_borrow() {
 #[test]
 fn test_borrow_mut_adds_mutable_borrow() {
     let tracker = OwnershipTracker::new();
-    let expr = alloc_unary(
-        windjammer::parser::UnaryOp::MutRef,
-        alloc_var("x"),
-    );
+    let expr = alloc_unary(windjammer::parser::UnaryOp::MutRef, alloc_var("x"));
     assert_eq!(
         tracker.get_expression_ownership(expr),
         OwnershipMode::MutBorrowed
@@ -304,10 +292,7 @@ fn test_borrow_mut_adds_mutable_borrow() {
 #[test]
 fn test_neg_produces_owned() {
     let tracker = OwnershipTracker::new();
-    let expr = alloc_unary(
-        windjammer::parser::UnaryOp::Neg,
-        alloc_int(5),
-    );
+    let expr = alloc_unary(windjammer::parser::UnaryOp::Neg, alloc_int(5));
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 
@@ -405,10 +390,7 @@ fn test_function_call_is_owned() {
 #[test]
 fn test_function_call_with_args_is_owned() {
     let tracker = OwnershipTracker::new();
-    let expr = alloc_call(
-        alloc_var("create"),
-        vec![(None, alloc_int(42))],
-    );
+    let expr = alloc_call(alloc_var("create"), vec![(None, alloc_int(42))]);
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 
@@ -419,7 +401,13 @@ fn test_function_call_with_args_is_owned() {
 #[test]
 fn test_struct_literal_is_owned() {
     let tracker = OwnershipTracker::new();
-    let expr = alloc_struct("Point", vec![("x".to_string(), alloc_int(0)), ("y".to_string(), alloc_int(0))]);
+    let expr = alloc_struct(
+        "Point",
+        vec![
+            ("x".to_string(), alloc_int(0)),
+            ("y".to_string(), alloc_int(0)),
+        ],
+    );
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 

@@ -180,18 +180,16 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
                 )
             }
         }
-        Type::Array(inner, size) => format!("[{}; {}]", type_to_rust_mapped(inner, map_custom), size),
+        Type::Array(inner, size) => {
+            format!("[{}; {}]", type_to_rust_mapped(inner, map_custom), size)
+        }
         Type::Reference(inner) => {
             // Special case: &[T] (slice) vs &Vec<T>
             if let Type::Vec(elem) = &**inner {
                 format!("&[{}]", type_to_rust_mapped(elem, map_custom))
             // Special case: &[T; N] stays as &[T; N]
             } else if let Type::Array(elem, size) = &**inner {
-                format!(
-                    "&[{}; {}]",
-                    type_to_rust_mapped(elem, map_custom),
-                    size
-                )
+                format!("&[{}; {}]", type_to_rust_mapped(elem, map_custom), size)
             // Special case: &str instead of &String (more idiomatic Rust)
             } else if is_windjammer_text_type(inner) {
                 "&str".to_string()

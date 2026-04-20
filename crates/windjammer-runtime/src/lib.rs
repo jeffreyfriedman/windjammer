@@ -30,6 +30,7 @@ pub mod db;
 pub mod doc_test;
 pub mod encoding;
 pub mod env;
+pub mod ffi;
 pub mod fixtures;
 pub mod io;
 pub mod log_mod;
@@ -44,7 +45,6 @@ pub mod property;
 pub mod random;
 pub mod regex_mod;
 pub mod setup_teardown;
-pub mod ffi;
 pub mod strings;
 pub mod sync;
 pub mod test;
@@ -60,6 +60,6 @@ pub use http::{Request, Response, Router, ServerResponse};
 
 // Prelude for common imports
 pub mod prelude {
-    pub use crate::testing::*;
     pub use crate::marker::PhantomData;
+    pub use crate::testing::*;
 }

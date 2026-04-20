@@ -71,17 +71,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&key` → we generate `contains_key(key)` (already &str, strip redundant &)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
+    // - Borrowed string param → &String (works with Vec<String>, HashMap, etc.)
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &String works
     assert!(
-        generated.contains("key: &str"),
-        "Should generate &str parameter. Generated:\n{}",
+        generated.contains("key: &String"),
+        "Should generate &String parameter (Phase 1 baseline). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(key)"),
-        "Should pass key directly (already &str, strip &). Generated:\n{}",
+        "Should pass key directly (already &String, strip &). Generated:\n{}",
         generated
     );
 }
@@ -106,17 +106,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&key` → we generate `map.get(key)` (already &str, strip redundant &)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
+    // - Borrowed string param → &String (works with Vec<String>, HashMap, etc.)
+    // - HashMap::get takes &Q where Q: Borrow<K>, so &String works
     assert!(
-        generated.contains("key: &str"),
-        "Should generate &str parameter. Generated:\n{}",
+        generated.contains("key: &String"),
+        "Should generate &String parameter (Phase 1 baseline). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("map.get(key)"),
-        "Should pass key directly (already &str, strip &). Generated:\n{}",
+        "Should pass key directly (already &String, strip &). Generated:\n{}",
         generated
     );
 }

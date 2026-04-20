@@ -34,8 +34,7 @@ fn compile_and_get_rust(wj_source: &str, test_name: &str) -> String {
         stderr
     );
 
-    fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found")
+    fs::read_to_string(format!("{}/test.rs", output_dir)).expect("Generated Rust file not found")
 }
 
 #[test]

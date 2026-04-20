@@ -1,7 +1,7 @@
 //! TDD: Duplicate struct names in different modules must not overwrite the struct field registry.
 
-use windjammer::{build_project_ext, CompilationTarget};
 use tempfile::TempDir;
+use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_duplicate_struct_names_different_modules() {
@@ -49,15 +49,8 @@ pub fn create() -> DialogueChoice {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Build should succeed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let examples_code = std::fs::read_to_string(build.join("dialogue/examples.rs")).unwrap();
 
@@ -106,15 +99,8 @@ pub fn create() -> Entity {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Build should succeed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let main_code = std::fs::read_to_string(build.join("main.rs")).unwrap();
 

@@ -13,13 +13,8 @@ fn compile_and_check_casts(code: &str) -> Result<String, String> {
     let input_file = format!("{}/test.wj", test_dir);
     fs::write(&input_file, code).expect("Failed to write source file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            test_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", test_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 

@@ -99,7 +99,9 @@ impl<'a> TypeChecker<'a> {
             .functions
             .iter()
             .filter_map(|f| {
-                f.return_type.as_ref().map(|rt| (f.name.clone(), rt.clone()))
+                f.return_type
+                    .as_ref()
+                    .map(|rt| (f.name.clone(), rt.clone()))
             })
             .collect()
     }
@@ -178,7 +180,12 @@ impl<'a> BodyParser<'a> {
     }
 
     fn error_at(&self, msg: String) -> anyhow::Error {
-        anyhow!("[line {}:{}] {}", self.current_line, self.current_column, msg)
+        anyhow!(
+            "[line {}:{}] {}",
+            self.current_line,
+            self.current_column,
+            msg
+        )
     }
 
     fn advance(&mut self) -> Token {
@@ -289,17 +296,56 @@ impl<'a> BodyParser<'a> {
 
     fn parse_type_annotation(&mut self) -> Result<Type> {
         match &self.current {
-            Token::F32 => { self.advance(); Ok(Type::Scalar(ScalarType::F32)) }
-            Token::F64 => { self.advance(); Ok(Type::Scalar(ScalarType::F64)) }
-            Token::U32 => { self.advance(); Ok(Type::Scalar(ScalarType::U32)) }
-            Token::I32 => { self.advance(); Ok(Type::Scalar(ScalarType::I32)) }
-            Token::Bool => { self.advance(); Ok(Type::Scalar(ScalarType::Bool)) }
-            Token::Vec2 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec2(Some(ScalarType::F32))) }
-            Token::Vec3 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec3(Some(ScalarType::F32))) }
-            Token::Vec4 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Vec4(Some(ScalarType::F32))) }
-            Token::Mat4x4 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat4x4(Some(ScalarType::F32))) }
-            Token::Mat3x3 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat3x3(Some(ScalarType::F32))) }
-            Token::Mat2x2 => { self.advance(); self.skip_optional_angle_bracket(); Ok(Type::Mat2x2(Some(ScalarType::F32))) }
+            Token::F32 => {
+                self.advance();
+                Ok(Type::Scalar(ScalarType::F32))
+            }
+            Token::F64 => {
+                self.advance();
+                Ok(Type::Scalar(ScalarType::F64))
+            }
+            Token::U32 => {
+                self.advance();
+                Ok(Type::Scalar(ScalarType::U32))
+            }
+            Token::I32 => {
+                self.advance();
+                Ok(Type::Scalar(ScalarType::I32))
+            }
+            Token::Bool => {
+                self.advance();
+                Ok(Type::Scalar(ScalarType::Bool))
+            }
+            Token::Vec2 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Vec2(Some(ScalarType::F32)))
+            }
+            Token::Vec3 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Vec3(Some(ScalarType::F32)))
+            }
+            Token::Vec4 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Vec4(Some(ScalarType::F32)))
+            }
+            Token::Mat4x4 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Mat4x4(Some(ScalarType::F32)))
+            }
+            Token::Mat3x3 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Mat3x3(Some(ScalarType::F32)))
+            }
+            Token::Mat2x2 => {
+                self.advance();
+                self.skip_optional_angle_bracket();
+                Ok(Type::Mat2x2(Some(ScalarType::F32)))
+            }
             Token::Array => {
                 self.advance();
                 let mut elem_type = Type::Scalar(ScalarType::F32);
@@ -342,7 +388,8 @@ impl<'a> BodyParser<'a> {
     }
 
     fn skip_block(&mut self) -> Result<()> {
-        while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Semicolon)
+        while !matches!(self.current, Token::LBrace)
+            && !matches!(self.current, Token::Semicolon)
             && !matches!(self.current, Token::Eof)
         {
             self.advance();
@@ -570,7 +617,10 @@ impl<'a> BodyParser<'a> {
             self.advance();
             let ty = self.parse_unary()?;
             if !is_numeric(&ty) {
-                return Err(anyhow!("Cannot negate non-numeric type {}", type_to_string(&ty)));
+                return Err(anyhow!(
+                    "Cannot negate non-numeric type {}",
+                    type_to_string(&ty)
+                ));
             }
             Ok(ty)
         } else if matches!(self.current, Token::Not) {
@@ -589,7 +639,10 @@ impl<'a> BodyParser<'a> {
             self.advance();
             let ty = self.parse_unary()?;
             if !is_integer_scalar(&ty) {
-                return Err(anyhow!("Bitwise NOT (~) requires integer type, got {}", type_to_string(&ty)));
+                return Err(anyhow!(
+                    "Bitwise NOT (~) requires integer type, got {}",
+                    type_to_string(&ty)
+                ));
             }
             Ok(ty)
         } else {
@@ -734,7 +787,10 @@ impl<'a> BodyParser<'a> {
                     Ok(Type::Scalar(ScalarType::F32))
                 }
             }
-            _ => Err(anyhow!("Unexpected token in expression: {:?}", self.current)),
+            _ => Err(anyhow!(
+                "Unexpected token in expression: {:?}",
+                self.current
+            )),
         }
     }
 
@@ -812,20 +868,19 @@ impl<'a> BodyParser<'a> {
         }
         self.expect(Token::RParen)?;
 
-        let first_arg = arg_types.first().cloned().unwrap_or(Type::Scalar(ScalarType::F32));
+        let first_arg = arg_types
+            .first()
+            .cloned()
+            .unwrap_or(Type::Scalar(ScalarType::F32));
 
         let ty = match name {
             "length" | "dot" | "distance" => Type::Scalar(ScalarType::F32),
             "any" | "all" => Type::Scalar(ScalarType::Bool),
             "arrayLength" => Type::Scalar(ScalarType::U32),
-            "abs" | "ceil" | "floor" | "round" | "sign" | "sqrt" | "inverseSqrt"
-            | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2"
-            | "exp" | "exp2" | "log" | "log2"
-            | "fract" | "saturate" | "normalize"
-            | "clamp" | "mix" | "smoothstep" | "step"
-            | "min" | "max" | "pow"
-            | "select"
-            | "trunc" => first_arg,
+            "abs" | "ceil" | "floor" | "round" | "sign" | "sqrt" | "inverseSqrt" | "sin"
+            | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" | "exp" | "exp2" | "log"
+            | "log2" | "fract" | "saturate" | "normalize" | "clamp" | "mix" | "smoothstep"
+            | "step" | "min" | "max" | "pow" | "select" | "trunc" => first_arg,
             "cross" => Type::Vec3(Some(ScalarType::F32)),
             "reflect" | "refract" | "faceForward" => first_arg,
             "transpose" => first_arg,
@@ -841,7 +896,11 @@ impl<'a> BodyParser<'a> {
                         break;
                     }
                 }
-                if matched { user_fn_type } else { first_arg }
+                if matched {
+                    user_fn_type
+                } else {
+                    first_arg
+                }
             }
         };
 
@@ -905,7 +964,11 @@ fn check_binary_op(left: &Type, op: BinaryOp, right: &Type) -> Result<Type> {
                 return Ok(left.clone());
             }
             if is_vector(left) && is_vector(right) && !same_vec_size(left, right) {
-                let op_str = if op == BinaryOp::Add { "add" } else { "subtract" };
+                let op_str = if op == BinaryOp::Add {
+                    "add"
+                } else {
+                    "subtract"
+                };
                 return Err(anyhow!(
                     "Cannot {} {} and {} - vector sizes must match",
                     op_str,
@@ -992,7 +1055,10 @@ fn is_numeric(ty: &Type) -> bool {
 }
 
 fn is_integer_scalar(ty: &Type) -> bool {
-    matches!(ty, Type::Scalar(ScalarType::U32) | Type::Scalar(ScalarType::I32))
+    matches!(
+        ty,
+        Type::Scalar(ScalarType::U32) | Type::Scalar(ScalarType::I32)
+    )
 }
 
 /// Element type when indexing: array[i] -> element, vec4[i] -> f32, mat4x4[i] -> vec4
@@ -1005,10 +1071,7 @@ fn element_type_for_index(ty: &Type) -> Result<Type> {
         Type::Mat2x2(e) => Ok(Type::Vec2(*e)),
         Type::Mat3x3(e) => Ok(Type::Vec3(*e)),
         Type::Mat4x4(e) => Ok(Type::Vec4(*e)),
-        _ => Err(anyhow!(
-            "Cannot index type {}",
-            type_to_string(ty)
-        )),
+        _ => Err(anyhow!("Cannot index type {}", type_to_string(ty))),
     }
 }
 

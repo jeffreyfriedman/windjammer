@@ -3,7 +3,6 @@
 /// In a module file (mod.wj), `pub use sub_module_a::TypeA` references a child
 /// module declared in the same file.  The generated Rust should use `self::` to
 /// keep the path relative, not rewrite to `crate::`.
-
 use std::fs;
 use std::process::Command;
 

@@ -90,7 +90,9 @@ impl Port for Gpu {
 "#;
 
     let output = compile_and_get_rust(source);
-    let port_impl = output.find("impl Port for Gpu").expect("trait impl present");
+    let port_impl = output
+        .find("impl Port for Gpu")
+        .expect("trait impl present");
     let tail = &output[port_impl..];
 
     assert!(

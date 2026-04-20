@@ -5,7 +5,6 @@
 ///
 /// Fix: Automatically insert borrows/derefs to satisfy trait bounds, like Rust does.
 /// Philosophy: "Safety Without Ceremony" - trait operations should "just work".
-
 use std::fs;
 use std::process::Command;
 
@@ -103,7 +102,11 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     // Must NOT have * before .npc_id - that produces str which can't compare with &str
     assert!(
@@ -116,8 +119,7 @@ pub fn main() {
     assert!(
         rustc_ok,
         "rustc failed (E0277 trait):\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
     assert!(
         !rustc_stderr.contains("can't compare") && !rustc_stderr.contains("PartialEq"),
@@ -148,14 +150,17 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
     assert!(
         rustc_ok,
         "rustc failed:\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
     assert!(
         !rustc_stderr.contains("can't compare"),
@@ -178,22 +183,21 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     // Should have cast for mixed types
     let has_cast = rust_code.contains("as f32") || rust_code.contains("_f32");
-    assert!(
-        has_cast,
-        "f32 * i32 should have cast. Got:\n{}",
-        rust_code
-    );
+    assert!(has_cast, "f32 * i32 should have cast. Got:\n{}", rust_code);
 
     let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
     assert!(
         rustc_ok,
         "rustc failed (E0277 Mul):\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
 }
 
@@ -211,14 +215,17 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
     assert!(
         rustc_ok,
         "rustc failed (E0277 Sub):\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
 }
 
@@ -242,7 +249,11 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     // Must NOT have t == *tag - that produces &String == str (E0277)
     assert!(
@@ -255,8 +266,7 @@ pub fn main() {
     assert!(
         rustc_ok,
         "rustc failed (E0277 PartialEq):\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
 }
 
@@ -274,13 +284,16 @@ pub fn main() {
 "#;
 
     let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
-    assert!(compile_ok, "Windjammer compile failed:\n{}\n\nGenerated:\n{}", stderr, rust_code);
+    assert!(
+        compile_ok,
+        "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
+        stderr, rust_code
+    );
 
     let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
     assert!(
         rustc_ok,
         "rustc failed (E0277 Add):\n{}\n\nGenerated:\n{}",
-        rustc_stderr,
-        rust_code
+        rustc_stderr, rust_code
     );
 }

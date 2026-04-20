@@ -73,10 +73,7 @@ pub fn generate_wgsl(shader: &ShaderModule) -> String {
     // Generate compute shader entry point
     output.push_str("@compute @workgroup_size(8, 8)\n");
     output.push_str("fn main(@builtin(global_invocation_id) id: vec3<u32>) {\n");
-    let has_screen_size = shader
-        .uniforms
-        .iter()
-        .any(|u| u.name == "screen_size");
+    let has_screen_size = shader.uniforms.iter().any(|u| u.name == "screen_size");
     if has_screen_size {
         output.push_str("    let width = u32(uniforms.screen_size.x);\n");
         output.push_str("    let height = u32(uniforms.screen_size.y);\n");
@@ -195,9 +192,6 @@ mod tests {
 
     #[test]
     fn test_type_to_wgsl_vectors() {
-        assert_eq!(
-            type_to_wgsl(&Type::Vec4(ScalarType::F32)),
-            "vec4<f32>"
-        );
+        assert_eq!(type_to_wgsl(&Type::Vec4(ScalarType::F32)), "vec4<f32>");
     }
 }

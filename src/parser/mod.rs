@@ -31,8 +31,8 @@ pub mod item_parser;
 pub use ast::*;
 
 // Re-export everything else from parser_impl for now to maintain backward compatibility
-pub use crate::parser_impl::Parser;
 pub use crate::parser_impl::ParseWarning;
+pub use crate::parser_impl::Parser;
 
 // TODO: Uncomment these as we create the modules
 // pub mod core;

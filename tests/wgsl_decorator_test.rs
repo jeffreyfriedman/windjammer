@@ -35,7 +35,7 @@ pub fn vs_main(position: vec3<float>) -> vec4<float> {
         !rust_code.contains("#[vertex]"),
         "WGSL @vertex decorator should not appear in Rust code"
     );
-    
+
     // But the function itself should still be generated
     assert!(
         rust_code.contains("pub fn vs_main"),

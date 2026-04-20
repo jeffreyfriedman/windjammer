@@ -10,7 +10,6 @@
 /// - copy_types_registry (@derive(Copy))
 /// - struct_field_types (recursive: all fields Copy)
 /// - is_known_copy_type (Vec3, AABB from external crates)
-
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 

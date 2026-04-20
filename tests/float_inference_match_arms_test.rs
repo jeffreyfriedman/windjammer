@@ -23,7 +23,7 @@ pub fn get_score_or_default(scores: HashMap<i32, f32>, key: i32) -> f32 {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -46,7 +46,7 @@ pub fn get_score_or_default(scores: HashMap<i32, f32>, key: i32) -> f32 {
         "Match None arm should be f32 to match Some arm.\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT mix types
     assert!(
         !rust_code.contains("999999.0_f64"),
@@ -70,7 +70,7 @@ pub fn is_ready(current_wait: f32) -> bool {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -93,7 +93,7 @@ pub fn is_ready(current_wait: f32) -> bool {
         "Comparison operand should be f32 to match left side.\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT compare f32 > f64
     assert!(
         !rust_code.contains("0.0_f64"),
@@ -120,7 +120,7 @@ pub fn get_neighbors() -> Vec<(i32, i32, f32)> {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }

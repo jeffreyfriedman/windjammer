@@ -55,8 +55,12 @@ pub fn get_window_width() -> i64 {
     fs::write(project_root.join("ffi.rs"), ffi_rs).unwrap();
 
     // Compile the Windjammer project
-    let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust, true);
+    let result = windjammer::build_project(
+        &src_dir,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     // Check that lib.rs was generated and declares ffi module
@@ -142,8 +146,12 @@ pub fn initialize() {
     fs::write(ffi_dir.join("mod.rs"), ffi_mod_rs).unwrap();
 
     // Compile
-    let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust, true);
+    let result = windjammer::build_project(
+        &src_dir,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     // Check lib.rs declares ffi module

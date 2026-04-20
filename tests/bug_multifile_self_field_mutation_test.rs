@@ -14,7 +14,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
-fn compile_windjammer_directory(files: &[(&str, &str)]) -> Result<std::collections::HashMap<String, String>, String> {
+fn compile_windjammer_directory(
+    files: &[(&str, &str)],
+) -> Result<std::collections::HashMap<String, String>, String> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let src_dir = temp_dir.path().join("src_wj");
     std::fs::create_dir_all(&src_dir).expect("Failed to create src_wj dir");
@@ -129,7 +131,9 @@ fn main() {}
 #[test]
 fn test_multifile_self_field_stdlib_remove_infers_mut() {
     let files = vec![
-        ("world.wj", r#"
+        (
+            "world.wj",
+            r#"
 use std::collections::HashMap
 
 pub struct Transform {
@@ -150,8 +154,11 @@ impl World {
         return self.transforms.get(entity)
     }
 }
-"#),
-        ("other.wj", r#"
+"#,
+        ),
+        (
+            "other.wj",
+            r#"
 pub struct OtherSystem {
     pub name: String,
 }
@@ -161,7 +168,8 @@ impl OtherSystem {
         return self.name.clone()
     }
 }
-"#),
+"#,
+        ),
     ];
 
     let results = compile_windjammer_directory(&files).expect("Compilation should succeed");
@@ -176,7 +184,9 @@ impl OtherSystem {
 #[test]
 fn test_multifile_self_field_user_method_infers_mut() {
     let files = vec![
-        ("allocator.wj", r#"
+        (
+            "allocator.wj",
+            r#"
 pub struct IdAllocator {
     pub next_id: i32,
 }
@@ -188,8 +198,11 @@ impl IdAllocator {
         return id
     }
 }
-"#),
-        ("world.wj", r#"
+"#,
+        ),
+        (
+            "world.wj",
+            r#"
 use crate::allocator::IdAllocator
 
 pub struct World {
@@ -201,7 +214,8 @@ impl World {
         self.allocator.allocate()
     }
 }
-"#),
+"#,
+        ),
     ];
 
     let results = compile_windjammer_directory(&files).expect("Compilation should succeed");
@@ -216,7 +230,9 @@ impl World {
 #[test]
 fn test_multifile_self_field_get_mut_infers_mut() {
     let files = vec![
-        ("world.wj", r#"
+        (
+            "world.wj",
+            r#"
 use std::collections::HashMap
 
 pub struct Transform {
@@ -232,12 +248,16 @@ impl World {
         self.transforms.get_mut(entity)
     }
 }
-"#),
-        ("helper.wj", r#"
+"#,
+        ),
+        (
+            "helper.wj",
+            r#"
 pub fn helper() -> i32 {
     return 42
 }
-"#),
+"#,
+        ),
     ];
 
     let results = compile_windjammer_directory(&files).expect("Compilation should succeed");
@@ -375,7 +395,9 @@ impl FinalWorld {
     files.push(("final_world.wj", FINAL_FILE));
 
     let results = compile_windjammer_directory(&files).expect("Compilation should succeed");
-    let final_rs = results.get("final_world.rs").expect("final_world.rs should exist");
+    let final_rs = results
+        .get("final_world.rs")
+        .expect("final_world.rs should exist");
 
     assert!(
         final_rs.contains("fn remove_transform(&mut self"),

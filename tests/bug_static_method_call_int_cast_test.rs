@@ -1,3 +1,5 @@
+use windjammer::analyzer::{FunctionSignature, OwnershipMode};
+use windjammer::parser::ast::Type;
 /// TDD: Static method call integer argument incorrectly cast to f32
 ///
 /// Bug: When calling `TypeA::new(pos, 30)` where second param is `i32`,
@@ -8,10 +10,7 @@
 /// register under the same key ("TypeName::new") in the signature registry.
 /// When a consumer file doesn't define the type locally, the global registry
 /// may return the WRONG type's signature due to namespace collision.
-
 use windjammer::*;
-use windjammer::analyzer::{FunctionSignature, OwnershipMode};
-use windjammer::parser::ast::Type;
 
 fn compile_to_rust(source: &str) -> String {
     let mut lexer = lexer::Lexer::new(source);
@@ -32,7 +31,10 @@ fn compile_to_rust(source: &str) -> String {
     generator.generate_program(&program, &analyzed)
 }
 
-fn compile_to_rust_with_global_sigs(source: &str, global_sigs: &analyzer::SignatureRegistry) -> String {
+fn compile_to_rust_with_global_sigs(
+    source: &str,
+    global_sigs: &analyzer::SignatureRegistry,
+) -> String {
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = parser::Parser::new(tokens);
@@ -116,7 +118,9 @@ fn make_config() -> Config {
     let rust_code = compile_to_rust(source);
 
     assert!(
-        rust_code.contains("42 as f32") || rust_code.contains("42_f32") || rust_code.contains("42.0"),
+        rust_code.contains("42 as f32")
+            || rust_code.contains("42_f32")
+            || rust_code.contains("42.0"),
         "Integer 42 passed to f32 param SHOULD be cast to f32.\nGenerated:\n{}",
         rust_code
     );
@@ -212,15 +216,21 @@ fn create(pos: Vec3) -> Emitter {
     // would be registered first, then overwritten by effects/particle_emitter.wj's
     // Emitter::new(Vec3, i32). But compilation order may not guarantee this.
     let mut global_sigs = analyzer::SignatureRegistry::new();
-    global_sigs.add_function("Emitter::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("f32".to_string()), Type::Custom("f32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Emitter".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    global_sigs.add_function(
+        "Emitter::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![
+                Type::Custom("f32".to_string()),
+                Type::Custom("f32".to_string()),
+            ],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Emitter".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
 
@@ -248,27 +258,39 @@ fn create() {
     let mut global_sigs = analyzer::SignatureRegistry::new();
 
     // First registration: correct signature from effects/particle_emitter.wj
-    global_sigs.add_function("Emitter::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("Vec3".to_string()), Type::Custom("i32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Emitter".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    global_sigs.add_function(
+        "Emitter::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![
+                Type::Custom("Vec3".to_string()),
+                Type::Custom("i32".to_string()),
+            ],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Emitter".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     // Second registration: WRONG signature from particles/emitter.wj (this one WINS)
     // This OVERWRITES the first. The collision should be detected.
-    global_sigs.add_function("Emitter::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("f32".to_string()), Type::Custom("f32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Emitter".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    global_sigs.add_function(
+        "Emitter::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![
+                Type::Custom("f32".to_string()),
+                Type::Custom("f32".to_string()),
+            ],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Emitter".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
 
@@ -288,71 +310,98 @@ fn test_signature_registry_collision_detection() {
     let mut registry = analyzer::SignatureRegistry::new();
 
     // First registration
-    registry.add_function("Foo::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("f32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Foo".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    registry.add_function(
+        "Foo::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![Type::Custom("f32".to_string())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Foo".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
-    assert!(!registry.has_collision("Foo::new"), "No collision after first registration");
+    assert!(
+        !registry.has_collision("Foo::new"),
+        "No collision after first registration"
+    );
 
     // Second registration with SAME param types → not a collision
-    registry.add_function("Foo::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("f32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Foo".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    registry.add_function(
+        "Foo::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![Type::Custom("f32".to_string())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Foo".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
-    assert!(!registry.has_collision("Foo::new"), "Same signature should not be a collision");
+    assert!(
+        !registry.has_collision("Foo::new"),
+        "Same signature should not be a collision"
+    );
 
     // Third registration with DIFFERENT param types → collision!
-    registry.add_function("Foo::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("i32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned],
-        return_type: Some(Type::Custom("Foo".to_string())),
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    registry.add_function(
+        "Foo::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![Type::Custom("i32".to_string())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Foo".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
-    assert!(registry.has_collision("Foo::new"), "Different param types should be a collision");
+    assert!(
+        registry.has_collision("Foo::new"),
+        "Different param types should be a collision"
+    );
 }
 
 /// TDD: Collision flag should survive merge operations.
 #[test]
 fn test_collision_survives_merge() {
     let mut reg1 = analyzer::SignatureRegistry::new();
-    reg1.add_function("Bar::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("f32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned],
-        return_type: None,
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    reg1.add_function(
+        "Bar::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![Type::Custom("f32".to_string())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     let mut reg2 = analyzer::SignatureRegistry::new();
-    reg2.add_function("Bar::new".to_string(), FunctionSignature {
-        name: "new".to_string(),
-        param_types: vec![Type::Custom("i32".to_string())],
-        param_ownership: vec![OwnershipMode::Owned],
-        return_type: None,
-        return_ownership: OwnershipMode::Owned,
-        has_self_receiver: false,
-        is_extern: false,
-    });
+    reg2.add_function(
+        "Bar::new".to_string(),
+        FunctionSignature {
+            name: "new".to_string(),
+            param_types: vec![Type::Custom("i32".to_string())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        },
+    );
 
     reg1.merge(&reg2);
 
-    assert!(reg1.has_collision("Bar::new"), "Collision should be detected during merge");
+    assert!(
+        reg1.has_collision("Bar::new"),
+        "Collision should be detected during merge"
+    );
 }

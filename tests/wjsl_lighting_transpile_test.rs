@@ -35,7 +35,7 @@ fn test_lighting_shader_transpile_output() {
         }
     }
     eprintln!("=== END ===");
-    
+
     // Print GBufferPixel struct
     eprintln!("=== GBufferPixel struct ===");
     let mut in_struct = false;
@@ -99,7 +99,13 @@ fn test_raymarch_shader_transpile_output() {
 
     eprintln!("=== RAYMARCH TRANSPILED WGSL (GBufferPixel section) ===");
     for line in wgsl.lines() {
-        if line.contains("GBufferPixel") || line.contains("position") || line.contains("normal") || line.contains("depth") || line.contains("geometry") || line.contains("_pad") {
+        if line.contains("GBufferPixel")
+            || line.contains("position")
+            || line.contains("normal")
+            || line.contains("depth")
+            || line.contains("geometry")
+            || line.contains("_pad")
+        {
             eprintln!("{}", line);
         }
     }

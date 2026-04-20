@@ -7,7 +7,6 @@
 ///
 /// Uses wj CLI (integration) rather than compile_and_get_rust (unit) to ensure
 /// full pipeline correctness.
-
 use std::fs;
 use std::process::Command;
 

@@ -8,10 +8,10 @@ fn compile_source(name: &str, source: &str) -> Result<String, String> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let temp_dir = manifest_dir.join("test_output").join(name);
     fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
-    
+
     let wj_file = temp_dir.join(format!("{}.wj", name));
     fs::write(&wj_file, source).map_err(|e| e.to_string())?;
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -22,14 +22,14 @@ fn compile_source(name: &str, source: &str) -> Result<String, String> {
         ])
         .output()
         .map_err(|e| format!("Failed to run compiler: {}", e))?;
-    
+
     if !output.status.success() {
         return Err(format!(
             "Compiler failed: {}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    
+
     let rs_file = temp_dir.join(format!("{}.rs", name));
     fs::read_to_string(rs_file).map_err(|e| format!("Failed to read generated code: {}", e))
 }
@@ -52,14 +52,15 @@ fn modify_grid(self, grid: Grid) {
 }
     "#;
 
-    let rust_code = compile_source("mut_param_test", source)
-        .expect("Compilation should succeed");
-    
-    // Should generate `&mut grid` parameter
-    assert!(rust_code.contains("grid: &mut Grid"), 
-        "Should infer &mut for parameter when method mutates it. Got:\n{}", rust_code);
-}
+    let rust_code = compile_source("mut_param_test", source).expect("Compilation should succeed");
 
+    // Should generate `&mut grid` parameter
+    assert!(
+        rust_code.contains("grid: &mut Grid"),
+        "Should infer &mut for parameter when method mutates it. Got:\n{}",
+        rust_code
+    );
+}
 
 #[test]
 fn test_string_param_comparison_no_deref() {
@@ -72,14 +73,19 @@ pub fn check_topic(topic: string) -> bool {
 }
     "#;
 
-    let rust_code = compile_source("string_cmp_test", source)
-        .expect("Compilation should succeed");
-    
+    let rust_code = compile_source("string_cmp_test", source).expect("Compilation should succeed");
+
     // Should NOT generate *topic (topic is already &str)
-    assert!(!rust_code.contains("*topic =="), 
-        "Should not dereference &str parameter. Got:\n{}", rust_code);
-    assert!(rust_code.contains("topic ==") || rust_code.contains("topic.as_str()"),
-        "Should generate valid string comparison. Got:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("*topic =="),
+        "Should not dereference &str parameter. Got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("topic ==") || rust_code.contains("topic.as_str()"),
+        "Should generate valid string comparison. Got:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -99,14 +105,20 @@ impl Companion {
 }
     "#;
 
-    let rust_code = compile_source("string_method_cmp_test", source)
-        .expect("Compilation should succeed");
-    
+    let rust_code =
+        compile_source("string_method_cmp_test", source).expect("Compilation should succeed");
+
     // Should NOT generate *topic (topic is already &str, even in method context)
-    assert!(!rust_code.contains("*topic =="), 
-        "Should not dereference &str parameter in method. Got:\n{}", rust_code);
-    assert!(rust_code.contains("topic ==") || rust_code.contains("topic.as_str()"),
-        "Should generate valid string comparison in method. Got:\n{}", rust_code);
+    assert!(
+        !rust_code.contains("*topic =="),
+        "Should not dereference &str parameter in method. Got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("topic ==") || rust_code.contains("topic.as_str()"),
+        "Should generate valid string comparison in method. Got:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -141,10 +153,12 @@ impl Environment {
 }
     "#;
 
-    let rust_code = compile_source("voxel_mut_test", source)
-        .expect("Compilation should succeed");
-    
+    let rust_code = compile_source("voxel_mut_test", source).expect("Compilation should succeed");
+
     // Should infer &mut for grid parameters (used in mutating method calls)
-    assert!(rust_code.contains("grid: &mut VoxelGrid"), 
-        "Should infer &mut VoxelGrid for parameter when method mutates it. Got:\n{}", rust_code);
+    assert!(
+        rust_code.contains("grid: &mut VoxelGrid"),
+        "Should infer &mut VoxelGrid for parameter when method mutates it. Got:\n{}",
+        rust_code
+    );
 }

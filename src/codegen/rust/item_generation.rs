@@ -286,7 +286,11 @@ impl<'ast> CodeGenerator<'ast> {
         // GPU-serializable fields (f32, u32, i32, bool, fixed-size arrays of those).
         // This eliminates manual byte management for GPU uniform uploads and ensures
         // correct bit patterns for all types. The compiler does the hard work.
-        if !s.fields.is_empty() && s.fields.iter().all(|f| Self::is_gpu_serializable_type(&f.field_type)) {
+        if !s.fields.is_empty()
+            && s.fields
+                .iter()
+                .all(|f| Self::is_gpu_serializable_type(&f.field_type))
+        {
             output.push_str(&Self::generate_to_bytes_impl(s));
         }
 
@@ -301,9 +305,9 @@ impl<'ast> CodeGenerator<'ast> {
             | Type::Bool
             | Type::Int    // i64
             | Type::Int32  // i32
-            | Type::Uint   // u64
+            | Type::Uint // u64
         ) || matches!(ty, Type::Custom(name) if matches!(name.as_str(), "f32" | "u32" | "i32" | "f64" | "u64" | "i64" | "u8" | "i8" | "u16" | "i16" | "usize" | "isize"))
-          || matches!(ty, Type::Array(inner, _) if Self::is_gpu_serializable_type(inner))
+            || matches!(ty, Type::Array(inner, _) if Self::is_gpu_serializable_type(inner))
     }
 
     /// Generates an impl block with `to_bytes(&self) -> Vec<u8>` for GPU-serializable structs.
@@ -313,11 +317,22 @@ impl<'ast> CodeGenerator<'ast> {
         out.push_str("    pub fn to_bytes(&self) -> Vec<u8> {\n");
 
         // Calculate total byte size for capacity hint
-        let cap = s.fields.iter().map(|f| Self::byte_size_of_type(&f.field_type)).sum::<usize>();
-        out.push_str(&format!("        let mut __bytes = Vec::with_capacity({});\n", cap));
+        let cap = s
+            .fields
+            .iter()
+            .map(|f| Self::byte_size_of_type(&f.field_type))
+            .sum::<usize>();
+        out.push_str(&format!(
+            "        let mut __bytes = Vec::with_capacity({});\n",
+            cap
+        ));
 
         for field in &s.fields {
-            Self::emit_field_serialization(&mut out, &format!("self.{}", field.name), &field.field_type);
+            Self::emit_field_serialization(
+                &mut out,
+                &format!("self.{}", field.name),
+                &field.field_type,
+            );
         }
 
         out.push_str("        __bytes\n");
@@ -328,11 +343,11 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn byte_size_of_type(ty: &Type) -> usize {
         match ty {
-            Type::Float => 8,   // f64
-            Type::Int => 8,     // i64
-            Type::Uint => 8,    // u64
-            Type::Int32 => 4,   // i32
-            Type::Bool => 4,    // GPU bools are u32
+            Type::Float => 8, // f64
+            Type::Int => 8,   // i64
+            Type::Uint => 8,  // u64
+            Type::Int32 => 4, // i32
+            Type::Bool => 4,  // GPU bools are u32
             Type::Custom(name) => match name.as_str() {
                 "f32" | "u32" | "i32" => 4,
                 "f64" | "u64" | "i64" => 8,
@@ -555,12 +570,19 @@ impl<'ast> CodeGenerator<'ast> {
             let has_self_param = method.parameters.iter().any(|p| p.name == "self");
             let is_constructor = matches!(
                 method.name.as_str(),
-                "new" | "default" | "from" | "from_str" | "from_bytes" 
-                | "with_capacity" | "empty" | "zero" | "one"
+                "new"
+                    | "default"
+                    | "from"
+                    | "from_str"
+                    | "from_bytes"
+                    | "with_capacity"
+                    | "empty"
+                    | "zero"
+                    | "one"
             );
-            
+
             let mut params: Vec<String> = Vec::new();
-            
+
             // Add self parameter if missing and not a constructor
             if !has_self_param && !is_constructor {
                 let returns_bare_self = matches!(
@@ -570,8 +592,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // Check if we have analyzed ownership for this method
                 let self_ownership = if let Some(analyzed) = analyzed_method {
                     analyzed.inferred_ownership.get("self").copied()
-                } else if let Some(trait_methods) = self.analyzed_trait_methods.get(&trait_decl.name) {
-                    trait_methods.get(&method.name)
+                } else if let Some(trait_methods) =
+                    self.analyzed_trait_methods.get(&trait_decl.name)
+                {
+                    trait_methods
+                        .get(&method.name)
                         .and_then(|m| m.inferred_ownership.get("self").copied())
                 } else {
                     None
@@ -684,7 +709,7 @@ impl<'ast> CodeGenerator<'ast> {
                     format!("{}: {}", param.name, type_str)
                 })
                 .collect();
-            
+
             // Append method parameters to params (which may already have self)
             params.extend(method_params);
 
@@ -778,7 +803,9 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&self.format_type_params(&impl_block.type_params));
             output.push('>');
         } else if let Some(inferred) =
-            super::codegen_helpers::infer_impl_header_type_params_from_type_name(&impl_block.type_name)
+            super::codegen_helpers::infer_impl_header_type_params_from_type_name(
+                &impl_block.type_name,
+            )
         {
             // Rust requires `impl<T> Foo<T>` when the user wrote `impl Foo<T>` (no `impl<T>`).
             output.push('<');
@@ -850,9 +877,7 @@ impl<'ast> CodeGenerator<'ast> {
             let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
             let has_inferred_self = analyzed
                 .iter()
-                .find(|af| {
-                    Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name)
-                })
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
                 .map(|af| af.inferred_ownership.contains_key("self"))
                 .unwrap_or(false);
             let accesses_fields = if !self.current_struct_fields.is_empty() {
@@ -872,9 +897,10 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_instance_methods = instance_methods;
 
         for func in &impl_block.functions {
-            if let Some(analyzed_func) = analyzed.iter().find(|af| {
-                Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name)
-            }) {
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
+            {
                 output.push_str(&self.generate_function(analyzed_func));
                 output.push('\n');
             }

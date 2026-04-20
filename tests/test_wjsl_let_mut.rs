@@ -5,7 +5,6 @@
 /// but `let mut` should be the preferred idiom.
 ///
 /// In WGSL output, `let mut` transpiles to `var` (WGSL's mutable variable syntax).
-
 use windjammer::wjsl::transpile_wjsl;
 
 #[test]

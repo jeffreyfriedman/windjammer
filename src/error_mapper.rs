@@ -204,10 +204,8 @@ impl ErrorMapper {
             });
 
         // Translate error message (use span labels for richer context, e.g. type mismatch)
-        let message = self.translate_message_with_context(
-            &rustc_diag.message,
-            primary_span.label.as_deref(),
-        );
+        let message =
+            self.translate_message_with_context(&rustc_diag.message, primary_span.label.as_deref());
 
         // Map additional spans
         let spans = rustc_diag
@@ -234,9 +232,7 @@ impl ErrorMapper {
                 for note in &notes {
                     if note.contains("has fields") {
                         let fields = Self::parse_struct_fields_from_note(note);
-                        if let Some(suggestion) =
-                            Self::fuzzy_match_field(&field_name, &fields)
-                        {
+                        if let Some(suggestion) = Self::fuzzy_match_field(&field_name, &fields) {
                             help.push(format!("did you mean `{}`?", suggestion));
                             break;
                         }
@@ -302,11 +298,7 @@ impl ErrorMapper {
     }
 
     /// Translate with optional span label context (for richer type/field info)
-    fn translate_message_with_context(
-        &self,
-        rust_msg: &str,
-        span_label: Option<&str>,
-    ) -> String {
+    fn translate_message_with_context(&self, rust_msg: &str, span_label: Option<&str>) -> String {
         // Pattern matching for common Rust error patterns
         // Translate to Windjammer-friendly terminology
 
@@ -760,8 +752,7 @@ impl WindjammerDiagnostic {
             }
             if msg.contains("expected int") && msg.contains("found float") {
                 return Some(
-                    "Convert to integer: use `value as int` or `value.round() as int`"
-                        .to_string(),
+                    "Convert to integer: use `value as int` or `value.round() as int`".to_string(),
                 );
             }
             if msg.contains("expected float") && msg.contains("found int") {
@@ -796,8 +787,7 @@ impl WindjammerDiagnostic {
             || msg.contains("already moved")
         {
             return Some(
-                "Consider cloning: use value.clone() to create a copy before moving"
-                    .to_string(),
+                "Consider cloning: use value.clone() to create a copy before moving".to_string(),
             );
         }
 

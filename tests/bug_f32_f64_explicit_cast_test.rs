@@ -10,7 +10,6 @@
 /// e.g., `x * 6.28318` where x is f32 → `x * (6.28318_f64 as f32)` or `x * 6.28318_f32`
 ///
 /// Uses library API (like f32_f64_codegen_e0308_test) - no wj binary needed.
-
 use std::process::Command;
 use windjammer::*;
 
@@ -108,8 +107,16 @@ fn main() {
 
     // Verify rustc compiles (generated code may need preamble - check for E0277 specifically)
     let (rustc_ok, stderr) = run_rustc(&generated);
-    if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot add") || stderr.contains("cannot subtract") || stderr.contains("cannot divide")) {
-        panic!("E0277 f32/f64 error in generated code:\nstderr: {}\n\nGenerated:\n{}", stderr, generated);
+    if !rustc_ok
+        && (stderr.contains("cannot multiply")
+            || stderr.contains("cannot add")
+            || stderr.contains("cannot subtract")
+            || stderr.contains("cannot divide"))
+    {
+        panic!(
+            "E0277 f32/f64 error in generated code:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, generated
+        );
     }
 }
 

@@ -55,7 +55,8 @@ impl PassBuilder {
     // bind_auto_uniforms must also take owned self because it calls self.input_uniform()
     // which consumes self. If it were &self, you'd get E0507.
     assert!(
-        code.contains("fn bind_auto_uniforms(self") || code.contains("fn bind_auto_uniforms(mut self"),
+        code.contains("fn bind_auto_uniforms(self")
+            || code.contains("fn bind_auto_uniforms(mut self"),
         "bind_auto_uniforms should take owned self (calls consuming method), got:\n{}",
         code
     );

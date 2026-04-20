@@ -141,8 +141,7 @@ impl CodeGenerator<'_> {
                     if self.trait_object_types.contains(&s.name) {
                         continue;
                     }
-                    if s
-                        .fields
+                    if s.fields
                         .iter()
                         .any(|f| self.type_contains_trait_object(&f.field_type))
                     {
@@ -258,8 +257,7 @@ impl CodeGenerator<'_> {
                     if !self.struct_emits_partial_eq(s) {
                         continue;
                     }
-                    if s
-                        .fields
+                    if s.fields
                         .iter()
                         .all(|f| self.is_partial_eq_type(&f.field_type))
                     {
@@ -356,8 +354,7 @@ impl CodeGenerator<'_> {
                 EnumVariantData::Struct(fields) => {
                     let types: Vec<Type> = fields.iter().map(|(_, ty)| ty.clone()).collect();
                     self.enum_variant_types.insert(key.clone(), types);
-                    self.enum_variant_struct_fields
-                        .insert(key, fields.clone());
+                    self.enum_variant_struct_fields.insert(key, fields.clone());
                 }
             }
         }

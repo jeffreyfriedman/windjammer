@@ -116,7 +116,8 @@ impl PerformanceStats {
     }
 }
 "#;
-    fs::write(settings_dir.join("performance.wj"), perf_content).expect("Failed to write performance.wj");
+    fs::write(settings_dir.join("performance.wj"), perf_content)
+        .expect("Failed to write performance.wj");
 
     let output_dir = test_dir.join("build");
     fs::create_dir_all(&output_dir).expect("Failed to create output dir");
@@ -131,7 +132,8 @@ impl PerformanceStats {
                 fs::read_to_string(&perf_rs).unwrap_or_default()
             } else {
                 // Try settings/performance.rs
-                fs::read_to_string(output_dir.join("settings").join("performance.rs")).unwrap_or_default()
+                fs::read_to_string(output_dir.join("settings").join("performance.rs"))
+                    .unwrap_or_default()
             }
         }
         Err(e) => panic!("Build failed: {}", e),

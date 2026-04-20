@@ -33,7 +33,11 @@ fn lint_file(path: &Path, strict: bool) -> Result<(), Box<dyn std::error::Error>
     for warning in &warnings {
         println!("{}", warning);
     }
-    println!("\n⚠  {} warning(s) found in {}", warnings.len(), path.display());
+    println!(
+        "\n⚠  {} warning(s) found in {}",
+        warnings.len(),
+        path.display()
+    );
 
     if strict {
         return Err(format!("Linter failed: {} warning(s) found", warnings.len()).into());
@@ -41,7 +45,10 @@ fn lint_file(path: &Path, strict: bool) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn collect_wj_files(path: &Path, files: &mut Vec<std::path::PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+fn collect_wj_files(
+    path: &Path,
+    files: &mut Vec<std::path::PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if !path.exists() {
         return Err(format!("Path does not exist: {}", path.display()).into());
     }

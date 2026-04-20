@@ -11,22 +11,22 @@ fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();
     let wj_file = temp_dir.path().join("test.wj");
     std::fs::write(&wj_file, wj_code).unwrap();
-    
+
     let compiler_dir = std::env::current_dir().unwrap();
     let compiler = compiler_dir.join("target/release/wj");
-    
+
     let output = std::process::Command::new(&compiler)
         .arg("build")
         .arg(&wj_file)
         .current_dir(temp_dir.path())
         .output()
         .expect("Failed to run wj");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("wj build failed:\n{}", stderr);
     }
-    
+
     let rs_file = temp_dir.path().join("build/test.rs");
     std::fs::read_to_string(rs_file).expect("Failed to read generated Rust")
 }
@@ -72,16 +72,20 @@ pub fn main() {
 "#;
 
     let rust_code = compile_to_rust(code);
-    
+
     // Should add & for String → &str conversion
-    assert!(rust_code.contains("checker.check(&quest_id)") || rust_code.contains("checker.check(quest_id)"), 
-        "Should auto-convert String to &str:\n{}", rust_code);
-    
+    assert!(
+        rust_code.contains("checker.check(&quest_id)")
+            || rust_code.contains("checker.check(quest_id)"),
+        "Should auto-convert String to &str:\n{}",
+        rust_code
+    );
+
     // Verify no compilation errors by checking rustc
     let temp_dir = tempfile::tempdir().unwrap();
     let rs_file = temp_dir.path().join("test.rs");
     std::fs::write(&rs_file, &rust_code).unwrap();
-    
+
     let rustc_output = std::process::Command::new("rustc")
         .arg("--crate-type=lib")
         .arg(&rs_file)
@@ -89,10 +93,13 @@ pub fn main() {
         .arg(temp_dir.path())
         .output()
         .unwrap();
-    
+
     let rustc_stderr = String::from_utf8_lossy(&rustc_output.stderr);
-    assert!(!rustc_stderr.contains("error[E"), 
-        "Generated Rust should compile:\n{}", rustc_stderr);
+    assert!(
+        !rustc_stderr.contains("error[E"),
+        "Generated Rust should compile:\n{}",
+        rustc_stderr
+    );
 }
 
 #[test]
@@ -135,10 +142,13 @@ pub fn main() {
 "#;
 
     let rust_code = compile_to_rust(code);
-    
+
     // Should add & for String → &str conversion
-    assert!(rust_code.contains("&char_id") || rust_code.contains("char_id"), 
-        "Should handle multi-element tuple:\n{}", rust_code);
+    assert!(
+        rust_code.contains("&char_id") || rust_code.contains("char_id"),
+        "Should handle multi-element tuple:\n{}",
+        rust_code
+    );
 }
 
 #[test]
@@ -191,8 +201,13 @@ pub fn main() {
 "#;
 
     let rust_code = compile_to_rust(code);
-    
+
     // All should auto-convert String → &str
-    assert!(rust_code.contains("&quest_id") || rust_code.contains("&item_id") || rust_code.contains("&char_id"), 
-        "Should auto-convert String → &str for all variants:\n{}", rust_code);
+    assert!(
+        rust_code.contains("&quest_id")
+            || rust_code.contains("&item_id")
+            || rust_code.contains("&char_id"),
+        "Should auto-convert String → &str for all variants:\n{}",
+        rust_code
+    );
 }

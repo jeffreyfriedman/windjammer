@@ -1,32 +1,37 @@
+use std::fs;
 /// TDD Test: Comprehensive dialog.wj pattern reproduction
-/// 
+///
 /// This test reproduces ALL the compilation errors found in dialog.wj:
 /// 1. E0308: String vs &str in match arm bindings (4 instances)
 /// 2. E0614: Cannot dereference primitive in match pattern
 /// 3. E0507: Ownership inference for methods returning Option
 /// 4. E0594: Mutability inference for mutable references in loops
-
 use std::path::PathBuf;
-use std::fs;
 
 fn get_compiler_path() -> PathBuf {
     // First try to find wj in the same directory as this test binary
     let exe = std::env::current_exe().unwrap();
     let test_dir = exe.parent().unwrap();
-    
+
     // Try release binary
     let wj_path = test_dir.parent().unwrap().parent().unwrap().join("wj");
     if wj_path.exists() {
         return wj_path;
     }
-    
-    // Try debug binary  
-    let wj_debug = test_dir.parent().unwrap().parent().unwrap().parent().unwrap()
+
+    // Try debug binary
+    let wj_debug = test_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
         .join("debug/wj");
     if wj_debug.exists() {
         return wj_debug;
     }
-    
+
     // Fallback to PATH
     PathBuf::from("wj")
 }
@@ -35,7 +40,7 @@ fn compile_and_check(wj_code: &str, should_succeed: bool) -> (String, String) {
     let temp_dir = tempfile::tempdir().unwrap();
     let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
-    
+
     let compiler = get_compiler_path();
     let output = std::process::Command::new(compiler)
         .arg("build")
@@ -43,10 +48,10 @@ fn compile_and_check(wj_code: &str, should_succeed: bool) -> (String, String) {
         .current_dir(temp_dir.path())
         .output()
         .unwrap();
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    
+
     // Try to compile the generated Rust
     let build_dir = temp_dir.path().join("build");
     if build_dir.exists() {
@@ -55,19 +60,22 @@ fn compile_and_check(wj_code: &str, should_succeed: bool) -> (String, String) {
             .current_dir(&build_dir)
             .output()
             .unwrap();
-        
+
         let cargo_stderr = String::from_utf8_lossy(&cargo_output.stderr).to_string();
-        
+
         if should_succeed {
             if !cargo_output.status.success() {
-                panic!("Expected successful Rust compilation but got errors:\n{}", cargo_stderr);
+                panic!(
+                    "Expected successful Rust compilation but got errors:\n{}",
+                    cargo_stderr
+                );
             }
         } else {
             if cargo_output.status.success() {
                 panic!("Expected Rust compilation errors but it succeeded!");
             }
         }
-        
+
         (stdout + &stderr, cargo_stderr)
     } else {
         panic!("Build directory not created");
@@ -115,10 +123,13 @@ pub fn main() {
 "#;
 
     let (_, cargo_stderr) = compile_and_check(code, true);
-    
+
     // Verify no E0308 errors
-    assert!(!cargo_stderr.contains("error[E0308]"), 
-        "Should not have E0308 String vs &str error:\n{}", cargo_stderr);
+    assert!(
+        !cargo_stderr.contains("error[E0308]"),
+        "Should not have E0308 String vs &str error:\n{}",
+        cargo_stderr
+    );
 }
 
 #[test]
@@ -151,10 +162,13 @@ pub fn main() {
 "#;
 
     let (_, cargo_stderr) = compile_and_check(code, true);
-    
+
     // Verify no E0614 errors
-    assert!(!cargo_stderr.contains("error[E0614]"), 
-        "Should not have E0614 cannot dereference error:\n{}", cargo_stderr);
+    assert!(
+        !cargo_stderr.contains("error[E0614]"),
+        "Should not have E0614 cannot dereference error:\n{}",
+        cargo_stderr
+    );
 }
 
 #[test]
@@ -197,10 +211,13 @@ pub fn main() {
 "#;
 
     let (_, cargo_stderr) = compile_and_check(code, true);
-    
+
     // Verify no E0507 errors
-    assert!(!cargo_stderr.contains("error[E0507]"), 
-        "Should not have E0507 cannot move error:\n{}", cargo_stderr);
+    assert!(
+        !cargo_stderr.contains("error[E0507]"),
+        "Should not have E0507 cannot move error:\n{}",
+        cargo_stderr
+    );
 }
 
 #[test]
@@ -230,10 +247,13 @@ pub fn main() {
 "#;
 
     let (_, cargo_stderr) = compile_and_check(code, true);
-    
+
     // Verify no E0594 errors
-    assert!(!cargo_stderr.contains("error[E0594]"), 
-        "Should not have E0594 cannot assign error:\n{}", cargo_stderr);
+    assert!(
+        !cargo_stderr.contains("error[E0594]"),
+        "Should not have E0594 cannot assign error:\n{}",
+        cargo_stderr
+    );
 }
 
 #[test]
@@ -300,8 +320,11 @@ pub fn main() {
 "#;
 
     let (_, cargo_stderr) = compile_and_check(code, true);
-    
+
     // Verify no compilation errors
-    assert!(!cargo_stderr.contains("error[E"), 
-        "Should have no compilation errors:\n{}", cargo_stderr);
+    assert!(
+        !cargo_stderr.contains("error[E"),
+        "Should have no compilation errors:\n{}",
+        cargo_stderr
+    );
 }

@@ -1,16 +1,26 @@
+use std::path::Path;
 use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
-use std::path::Path;
 
 fn compile_to_rust(code: &str) -> String {
     let dir = std::env::temp_dir().join(format!(
-        "wj_extern_unsafe_{}_{}", std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        "wj_extern_unsafe_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("test.wj"), code).unwrap();
     let out = dir.join("build");
-    build_project(Path::new(&dir.join("test.wj")), &out, CompilationTarget::Rust, false).unwrap();
+    build_project(
+        Path::new(&dir.join("test.wj")),
+        &out,
+        CompilationTarget::Rust,
+        false,
+    )
+    .unwrap();
     std::fs::read_to_string(out.join("test.rs")).unwrap()
 }
 

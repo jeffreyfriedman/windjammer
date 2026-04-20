@@ -1,13 +1,12 @@
+use std::fs;
 /// TDD Test: .clone() on borrowed strings should generate .to_string() when needed
-/// 
+///
 /// Bug: When a string parameter is inferred as &str and .clone() is called on it,
 /// and the result is passed to a function expecting String, the codegen generates
 /// .clone() which returns &str, not String, causing E0308 type mismatch.
 ///
 /// Fix: Detect when .clone() result needs to be String and generate .to_string() instead.
-
 use std::process::Command;
-use std::fs;
 
 #[test]
 fn test_string_clone_generates_to_string() {
@@ -39,11 +38,11 @@ pub fn create_dialog(id: string) -> DialogTree {
         .expect("Failed to run wj");
 
     let generated = fs::read_to_string("/tmp/test_string_clone.rs").unwrap();
-    
+
     // The generated code should use .to_string() or .to_owned(), not .clone()
     // when passing &str to a function expecting String
     println!("Generated Rust:\n{}", generated);
-    
+
     // Check that Rust compilation succeeds
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -51,7 +50,7 @@ pub fn create_dialog(id: string) -> DialogTree {
         "Should not have type mismatch error. Stderr:\n{}",
         stderr
     );
-    
+
     // Verify the generated code has proper string conversion
     // When id is &str and needs to be String, should use .to_string() not .clone()
     if generated.contains("id: &str") {

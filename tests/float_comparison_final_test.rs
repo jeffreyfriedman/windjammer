@@ -4,7 +4,6 @@
 /// - physics_body: self.velocity.x = 0.0, self.velocity.x != 0.0 (assignment + comparison)
 /// - quick_start/game: self.camera.position.x != 0.0 (3-level nested)
 /// - post_processing: self.settings.gamma != 1.0 (2-level nested)
-
 use std::path::PathBuf;
 use std::process::Command;
 

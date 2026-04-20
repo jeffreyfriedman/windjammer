@@ -5,7 +5,7 @@
 //
 // Example:
 //   update_key(self) mutates self.keys          → Infers &mut self ✅
-//   poll_keyboard(self) calls update_key        → Infers &mut self ✅  
+//   poll_keyboard(self) calls update_key        → Infers &mut self ✅
 //   update(self) calls poll_keyboard(&mut self) → Infers &self ❌ (should be &mut self)
 //
 // Root Cause: Ownership inference only does ONE pass for method calls.
@@ -20,7 +20,7 @@ fn test_two_level_transitive_mutation() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     std::fs::write(
         src.join("game.wj"),
         r#"
@@ -63,31 +63,40 @@ impl Game {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src.join("game.wj"), &build, CompilationTarget::Rust, false)
         .expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
-    
+
     // ASSERT: update_key should be &mut self (direct mutation)
     assert!(
         rust_code.contains("pub fn update_key(&mut self"),
         "update_key should be &mut self (level 0). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn update_key")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn update_key"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // ASSERT: poll_keyboard should be &mut self (level 1 transitive)
     assert!(
         rust_code.contains("fn poll_keyboard(&mut self)"),
         "poll_keyboard should be &mut self (level 1). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn poll_keyboard")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn poll_keyboard"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // ASSERT: update should be &mut self (level 2 transitive) - THIS CURRENTLY FAILS
     assert!(
         rust_code.contains("pub fn update(&mut self)"),
         "update should be &mut self (level 2 - calls mutating method). Found:\n{}",
-        rust_code.lines().find(|l| l.contains("fn update")).unwrap_or("NOT FOUND")
+        rust_code
+            .lines()
+            .find(|l| l.contains("fn update"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -97,7 +106,7 @@ fn test_three_level_transitive_mutation() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     std::fs::write(
         src.join("game.wj"),
         r#"
@@ -141,12 +150,12 @@ impl Game {
 "#,
     )
     .unwrap();
-    
+
     build_project(&src.join("game.wj"), &build, CompilationTarget::Rust, false)
         .expect("Build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
-    
+
     // ALL should be &mut self due to transitive mutation chain
     assert!(
         rust_code.contains("pub fn increment(&mut self)"),

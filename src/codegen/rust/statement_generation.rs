@@ -87,8 +87,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // BUT: Don't convert if:
                         // 1. The expression explicitly uses .as_str() (user wants &str)
                         // 2. A sibling branch in an if-else uses .as_str() (type consistency)
-                        let returns_string =
-                            Self::return_type_expects_owned_string(&self.current_function_return_type);
+                        let returns_string = Self::return_type_expects_owned_string(
+                            &self.current_function_return_type,
+                        );
 
                         // Also check if we're in a match arm that needs string conversion
                         let in_match_needing_string = self.in_match_arm_needing_string;
@@ -190,7 +191,8 @@ impl<'ast> CodeGenerator<'ast> {
                             && !expr_str.ends_with(".cloned()")
                             && !expr_str.ends_with(".clone()")
                         {
-                            if self.infer_expression_type(expr)
+                            if self
+                                .infer_expression_type(expr)
                                 .as_ref()
                                 .is_some_and(|t| Self::type_contains_mut_reference_static(t))
                             {
@@ -344,7 +346,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !expr_str.ends_with(".cloned()")
                                 && !expr_str.ends_with(".clone()")
                             {
-                                if self.infer_expression_type(expr)
+                                if self
+                                    .infer_expression_type(expr)
                                     .as_ref()
                                     .is_some_and(|t| Self::type_contains_mut_reference_static(t))
                                 {
@@ -411,10 +414,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Last value-producing expression in an if/else branch suggests owned `String` (e.g. `.clone()` on `String`).
-    fn branch_tail_suggests_owned_string_coercion(
-        &self,
-        block: &[&'ast Statement<'ast>],
-    ) -> bool {
+    fn branch_tail_suggests_owned_string_coercion(&self, block: &[&'ast Statement<'ast>]) -> bool {
         let Some(last) = block.last().copied() else {
             return false;
         };
@@ -611,17 +611,23 @@ impl<'ast> CodeGenerator<'ast> {
                         let mut value_str = self.generate_expression(value);
                         self.in_expression_context = old_ctx;
                         self.coerce_string_literals_to_owned = old_coerce_lit;
-                        self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                        self.apply_vec_index_let_rhs_fixup(
+                            var_name,
+                            value,
+                            Some(t),
+                            &mut value_str,
+                        );
 
                         // Convert string literals OR identifiers to String when target is String
                         if is_string_type && value_str != "String::new()" {
-                            let should_convert = matches!(
-                                value,
-                                Expression::Literal {
-                                    value: Literal::String(s),
-                                    ..
-                                } if !s.is_empty()
-                            ) || matches!(value, Expression::Identifier { .. });
+                            let should_convert =
+                                matches!(
+                                    value,
+                                    Expression::Literal {
+                                        value: Literal::String(s),
+                                        ..
+                                    } if !s.is_empty()
+                                ) || matches!(value, Expression::Identifier { .. });
                             if should_convert && !value_str.ends_with(".to_string()") {
                                 value_str = format!("{}.to_string()", value_str);
                             }
@@ -709,7 +715,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
-                        self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                        self.apply_vec_index_let_rhs_fixup(
+                            var_name,
+                            value,
+                            Some(t),
+                            &mut value_str,
+                        );
                         let is_string_type = matches!(t, Type::String)
                             || matches!(t, Type::Custom(name) if name == "String");
 
@@ -962,7 +973,8 @@ impl<'ast> CodeGenerator<'ast> {
                         && !return_str.ends_with(".cloned()")
                         && !return_str.ends_with(".clone()")
                     {
-                        if self.infer_expression_type(e)
+                        if self
+                            .infer_expression_type(e)
                             .as_ref()
                             .is_some_and(|t| Self::type_contains_mut_reference_static(t))
                         {
@@ -981,11 +993,9 @@ impl<'ast> CodeGenerator<'ast> {
                             _ => true,
                         };
                         if expects_owned {
-                            let inner_type = self.infer_expression_type(e).and_then(|t| {
-                                match &t {
-                                    Type::Reference(inner) => Some(inner.as_ref().clone()),
-                                    _ => Some(t),
-                                }
+                            let inner_type = self.infer_expression_type(e).and_then(|t| match &t {
+                                Type::Reference(inner) => Some(inner.as_ref().clone()),
+                                _ => Some(t),
                             });
                             if let Some(inner) = inner_type {
                                 if !self.is_type_copy(&inner) {
@@ -1004,7 +1014,8 @@ impl<'ast> CodeGenerator<'ast> {
                         };
                         if expects_owned_ref {
                             if let Some(Type::Reference(inner)) = self.infer_expression_type(e) {
-                                if self.is_type_copy(inner.as_ref()) && !return_str.starts_with('*') {
+                                if self.is_type_copy(inner.as_ref()) && !return_str.starts_with('*')
+                                {
                                     return_str = format!("*{}", return_str);
                                 }
                             }
@@ -1071,11 +1082,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let old_coerce_lit = self.coerce_string_literals_to_owned;
-                let any_branch_suggests_owned_coercion =
-                    self.branch_tail_suggests_owned_string_coercion(then_block)
-                        || else_block.as_ref().is_some_and(|eb| {
-                            self.branch_tail_suggests_owned_string_coercion(eb)
-                        });
+                let any_branch_suggests_owned_coercion = self
+                    .branch_tail_suggests_owned_string_coercion(then_block)
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|eb| self.branch_tail_suggests_owned_string_coercion(eb));
                 // Coerce string literals in branches when:
                 // - The enclosing function returns owned String (even if this `if` is not the last
                 //   statement — otherwise `in_function_body` is cleared and inner blocks skip coercion), or
@@ -1326,8 +1337,17 @@ impl<'ast> CodeGenerator<'ast> {
             if !needs_borrow_break_check
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
-                let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
-                    if method == "as_str" && arguments.is_empty() && self.expression_produces_str_ref(object) {
+                let value_str = if let Expression::MethodCall {
+                    object,
+                    method,
+                    arguments,
+                    ..
+                } = value
+                {
+                    if method == "as_str"
+                        && arguments.is_empty()
+                        && self.expression_produces_str_ref(object)
+                    {
                         self.generate_expression(object)
                     } else {
                         self.generate_expression(value)
@@ -1355,7 +1375,10 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 let value_str = if scrutinee_ref_prefix.is_empty() {
                     value_str
-                } else if scrutinee_ref_prefix == "&mut " && value_str.starts_with('&') && !value_str.starts_with("&mut") {
+                } else if scrutinee_ref_prefix == "&mut "
+                    && value_str.starts_with('&')
+                    && !value_str.starts_with("&mut")
+                {
                     format!("&mut {}", &value_str[1..])
                 } else {
                     format!("{}{}", scrutinee_ref_prefix, value_str)
@@ -1433,7 +1456,8 @@ impl<'ast> CodeGenerator<'ast> {
                                             .iter()
                                             .find(|(n, _)| n == name)
                                             .map(|(_, t)| t);
-                                        let is_copy = binding_type.is_some_and(|t| self.is_type_copy(t));
+                                        let is_copy =
+                                            binding_type.is_some_and(|t| self.is_type_copy(t));
                                         // Generate all but last, then the derefed last
                                         let all_but_last = &statements[..statements.len() - 1];
                                         output.push_str(&self.generate_block(all_but_last));
@@ -1535,15 +1559,32 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
-        let value_str = if let Expression::MethodCall { object, method, arguments, .. } = value {
-            if method == "as_str" && arguments.is_empty() && self.expression_produces_str_ref(object) {
+        let value_str = if let Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } = value
+        {
+            if method == "as_str"
+                && arguments.is_empty()
+                && self.expression_produces_str_ref(object)
+            {
                 self.generate_expression(object)
             } else {
                 self.generate_expression(value)
             }
-        } else if let Expression::Call { function, arguments, .. } = value {
+        } else if let Expression::Call {
+            function,
+            arguments,
+            ..
+        } = value
+        {
             if let Expression::FieldAccess { object, field, .. } = &**function {
-                if field == "as_str" && arguments.is_empty() && self.expression_produces_str_ref(object) {
+                if field == "as_str"
+                    && arguments.is_empty()
+                    && self.expression_produces_str_ref(object)
+                {
                     self.generate_expression(object)
                 } else {
                     self.generate_expression(value)
@@ -1674,9 +1715,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // If any arm has an empty body (returns ()), treat all arms as void
         // to prevent type mismatches between () and non-() return values.
-        let has_void_arm = arms.iter().any(|arm| {
-            matches!(arm.body, Expression::Block { statements, .. } if statements.is_empty())
-        });
+        let has_void_arm = arms.iter().any(
+            |arm| matches!(arm.body, Expression::Block { statements, .. } if statements.is_empty()),
+        );
 
         let scrutinee_type_has_ref = self.expression_type_contains_reference(value);
 
@@ -1693,7 +1734,7 @@ impl<'ast> CodeGenerator<'ast> {
 
             let mut bound_vars = std::collections::HashSet::new();
             self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
-            
+
             // TDD FIX for E0614: Track match arm bindings as OWNED values
             // Match arm bindings extract owned values from enums, NOT references
             // This prevents incorrectly adding * to Copy types like i32 in comparisons
@@ -1709,7 +1750,7 @@ impl<'ast> CodeGenerator<'ast> {
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.insert(var.clone());
             }
-            
+
             // Clone bound_vars before moving it, so we can clean up match_arm_bindings later
             let bound_vars_for_cleanup = bound_vars.clone();
 
@@ -1754,20 +1795,24 @@ impl<'ast> CodeGenerator<'ast> {
             if (match_binds_refs || scrutinee_type_has_ref) && !arm_str.ends_with(".clone()") {
                 // Extract the binding name from either a direct identifier
                 // or a block whose only/last statement is an expression identifier
-                let binding_name: Option<&str> = if let Expression::Identifier { name, .. } = arm.body
-                {
-                    Some(name)
-                } else if let Expression::Block { statements, .. } = arm.body {
-                    if let Some(Statement::Expression { expr, .. }) = statements.last() {
-                        if let Expression::Identifier { name, .. } = expr {
-                            Some(name)
-                        } else { None }
-                    } else { None }
-                } else {
-                    None
-                };
-                let is_simple_binding_return = binding_name
-                    .is_some_and(|n| added_borrowed.contains(&n.to_string()));
+                let binding_name: Option<&str> =
+                    if let Expression::Identifier { name, .. } = arm.body {
+                        Some(name)
+                    } else if let Expression::Block { statements, .. } = arm.body {
+                        if let Some(Statement::Expression { expr, .. }) = statements.last() {
+                            if let Expression::Identifier { name, .. } = expr {
+                                Some(name)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                let is_simple_binding_return =
+                    binding_name.is_some_and(|n| added_borrowed.contains(&n.to_string()));
                 if is_simple_binding_return {
                     let bname = binding_name.unwrap();
                     let binding_type = match_bound_type_entries
@@ -1818,7 +1863,7 @@ impl<'ast> CodeGenerator<'ast> {
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.remove(var);
             }
-            
+
             // TDD FIX: Clean up match arm bindings after each arm
             for var in &bound_vars_for_cleanup {
                 self.match_arm_bindings.remove(var);
@@ -1831,10 +1876,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             );
 
-            if needs_string_conversion
-                && is_string_literal
-                && !arm_str.ends_with(".to_string()")
-            {
+            if needs_string_conversion && is_string_literal && !arm_str.ends_with(".to_string()") {
                 arm_str = format!("{}.to_string()", arm_str);
             }
 
@@ -1863,12 +1905,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         let pattern_str = self.pattern_to_rust(pattern);
         let loop_var = pattern_analysis::extract_pattern_identifier(pattern);
-        
+
         // TDD FIX: Check if ANY binding in the pattern is mutated (not just simple identifier)
         // For tuple patterns like (id, val), extract ALL bindings and check each one
         let mut all_pattern_bindings = std::collections::HashSet::new();
         self.extract_pattern_bindings(pattern, &mut all_pattern_bindings);
-        
+
         let needs_mut = if let Some(var) = loop_var.as_ref() {
             // Simple identifier pattern: check if it's mutated
             self.loop_body_modifies_variable(body, var)
@@ -2063,7 +2105,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let mut value_str = self.generate_expression(value);
             self.assignment_float_target_type = prev_assign_ty;
-            
+
             // String += String doesn't work in Rust (needs String += &str).
             // Only add & when the RHS is NOT a Copy type — Copy types (i32, f32, etc.)
             // work directly in compound assignments without borrowing.
@@ -2084,7 +2126,10 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(value_type, Some(Type::String)) {
                         let is_string_literal = matches!(
                             value,
-                            Expression::Literal { value: Literal::String(_), .. }
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
                         );
                         let already_borrowed = value_str.starts_with('&');
 
@@ -2118,7 +2163,7 @@ impl<'ast> CodeGenerator<'ast> {
 
             let target_type = self.infer_expression_type(target);
             let right_type = self.infer_expression_type(right);
-            
+
             // TDD FIX: String += String/&str doesn't work in Rust (needs String += &str with explicit &)
             // Disable compound assignment if EITHER:
             // 1. Right side is String/&str (needs borrowing)
@@ -2129,9 +2174,9 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => false,
             };
             let target_is_string = matches!(&target_type, Some(Type::String));
-            let is_string_addition = matches!(op, BinaryOp::Add)
-                && (right_is_string_like || target_is_string);
-            
+            let is_string_addition =
+                matches!(op, BinaryOp::Add) && (right_is_string_like || target_is_string);
+
             let target_supports_compound_assign = target_type.as_ref().is_some_and(|t| {
                 matches!(
                     t,
@@ -2536,7 +2581,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn tuple_let_rhs_yields_ref_bindings(&self, value: &Expression<'ast>, element_type: &Type) -> bool {
+    fn tuple_let_rhs_yields_ref_bindings(
+        &self,
+        value: &Expression<'ast>,
+        element_type: &Type,
+    ) -> bool {
         matches!(value, Expression::Index { .. }) && !self.is_type_copy(element_type)
     }
 
@@ -2564,9 +2613,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => true,
 
-            Expression::Identifier { name, .. } => {
-                self.identifier_is_borrowed_or_self(name)
-            }
+            Expression::Identifier { name, .. } => self.identifier_is_borrowed_or_self(name),
 
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 if let Some(root) = self.root_identifier_of_field_or_index_chain(expr) {
@@ -2718,7 +2765,9 @@ impl<'ast> CodeGenerator<'ast> {
                             .any(|s| self.statement_binding_mut_method_scan(s, binding))
                     })
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expr_binding_receives_mutating_method_call(condition, binding)
                     || body
                         .iter()
@@ -2752,14 +2801,10 @@ impl<'ast> CodeGenerator<'ast> {
         binding: &str,
     ) -> bool {
         match expr {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_binding_mut_method_scan(s, binding)
-            }),
-            Expression::MethodCall {
-                object,
-                method,
-                ..
-            } => {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
+            Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == binding && self.codegen_method_likely_mutates_receiver(method) {
                         return true;
@@ -2774,7 +2819,11 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expr_binding_receives_mutating_method_call(operand, binding)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if let Expression::FieldAccess { object, field, .. } = &**function {
                     if let Expression::Identifier { name, .. } = &**object {
                         if name == binding && self.codegen_method_likely_mutates_receiver(field) {
@@ -2783,9 +2832,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 self.expr_binding_receives_mutating_method_call(function, binding)
-                    || arguments.iter().any(|(_, a)| {
-                        self.expr_binding_receives_mutating_method_call(a, binding)
-                    })
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expr_binding_receives_mutating_method_call(a, binding))
             }
             _ => false,
         }
@@ -2871,5 +2920,4 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         }
     }
-
 }

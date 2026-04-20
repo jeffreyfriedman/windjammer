@@ -35,13 +35,8 @@ pub struct Camera3D {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 
@@ -99,13 +94,8 @@ pub struct Camera3D {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 
@@ -154,13 +144,8 @@ pub struct Foo {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 

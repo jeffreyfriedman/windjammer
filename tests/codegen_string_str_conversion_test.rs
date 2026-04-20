@@ -1,26 +1,25 @@
 /// TDD test for automatic String → &str conversion at call sites
-/// 
+///
 /// Bug: When owned String values (from match arms, returns, etc.) are passed
 /// to functions expecting &str, the compiler generates type mismatch errors.
-/// 
+///
 /// Example that should work:
 /// ```windjammer
 /// enum Condition {
 ///     HasItem(string),
 /// }
-/// 
+///
 /// fn check_item(item_id: string) -> bool {
 ///     has_item(item_id)  // item_id is owned String, has_item expects &str
 /// }
-/// 
+///
 /// fn has_item(id: string) -> bool {
 ///     id == "sword"
 /// }
 /// ```
-/// 
+///
 /// Current behavior: E0308 type mismatch (String vs &str)
 /// Expected behavior: Compiler automatically converts String → &str at call site
-
 use std::fs;
 use std::process::Command;
 

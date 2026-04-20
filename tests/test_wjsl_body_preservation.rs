@@ -17,9 +17,22 @@ fn helper() -> vec3 {
     let ast = parse_wjsl(source).unwrap();
     assert_eq!(ast.functions.len(), 1);
     let body = &ast.functions[0].body;
-    assert!(body.contains("let x"), "parser body should contain 'let x', got: {:?} (len={})", body, body.len());
-    assert!(body.contains("let y"), "parser body should contain 'let y', got: {:?}", body);
-    assert!(body.contains("return"), "parser body should contain 'return', got: {:?}", body);
+    assert!(
+        body.contains("let x"),
+        "parser body should contain 'let x', got: {:?} (len={})",
+        body,
+        body.len()
+    );
+    assert!(
+        body.contains("let y"),
+        "parser body should contain 'let y', got: {:?}",
+        body
+    );
+    assert!(
+        body.contains("return"),
+        "parser body should contain 'return', got: {:?}",
+        body
+    );
 
     let wgsl = transpile_wjsl(source).unwrap();
     assert!(wgsl.contains("let x"), "wgsl should preserve 'let x'");
@@ -55,6 +68,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let wgsl = transpile_wjsl(source).unwrap();
-    assert!(wgsl.contains("let cluster_id"), "entry point body should preserve 'let'");
-    assert!(wgsl.contains("return"), "entry point body should preserve 'return'");
+    assert!(
+        wgsl.contains("let cluster_id"),
+        "entry point body should preserve 'let'"
+    );
+    assert!(
+        wgsl.contains("return"),
+        "entry point body should preserve 'return'"
+    );
 }

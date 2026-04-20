@@ -42,10 +42,7 @@ pub struct App {
 "#;
     let output = compile_wj_to_rust(source);
 
-    assert!(
-        !output.is_empty(),
-        "Compilation should produce output"
-    );
+    assert!(!output.is_empty(), "Compilation should produce output");
     assert!(
         !output.contains("#[derive(Debug, Clone"),
         "App should NOT derive Debug/Clone because it contains Vec<trait Plugin> \
@@ -68,10 +65,7 @@ pub struct Scene {
 "#;
     let output = compile_wj_to_rust(source);
 
-    assert!(
-        !output.is_empty(),
-        "Compilation should produce output"
-    );
+    assert!(!output.is_empty(), "Compilation should produce output");
     assert!(
         !output.contains("#[derive(Debug, Clone"),
         "Scene should NOT derive Debug/Clone because it contains `trait Renderer` field.\n\

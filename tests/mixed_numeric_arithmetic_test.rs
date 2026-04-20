@@ -4,7 +4,6 @@
 /// Solution: Compiler auto-casts integer operands to float when other operand is float.
 ///
 /// Philosophy: "Compiler does the hard work" - users shouldn't manually cast in obvious cases.
-
 use std::process::Command;
 use windjammer::*;
 

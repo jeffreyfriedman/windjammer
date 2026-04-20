@@ -43,20 +43,21 @@ impl<'ast> CodeGenerator<'ast> {
                         return format!("-{}", s);
                     }
                 }
-                
+
                 // TDD FIX: Skip explicit * deref of &String in string comparisons
                 // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
                 // Solution: Just use the identifier without *, making it &String == &String
                 if matches!(op, UnaryOp::Deref) && self.in_string_comparison {
                     if let Some(operand_type) = self.infer_expression_type(operand) {
-                        if matches!(operand_type, Type::Reference(inner) 
-                            if crate::codegen::rust::types::is_windjammer_text_type(&inner)) {
+                        if matches!(operand_type, Type::Reference(inner)
+                            if crate::codegen::rust::types::is_windjammer_text_type(&inner))
+                        {
                             // Skip the *, just generate the operand (keeping it as &String)
                             return self.generate_expression_immut(operand);
                         }
                     }
                 }
-                
+
                 let op_str = match op {
                     UnaryOp::Not => "!",
                     UnaryOp::Neg => "-",
@@ -107,7 +108,10 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
-                if method == "as_str" && arguments.is_empty() && self.expression_produces_str_ref(object) {
+                if method == "as_str"
+                    && arguments.is_empty()
+                    && self.expression_produces_str_ref(object)
+                {
                     return self.generate_expression_immut(object);
                 }
 
@@ -515,7 +519,8 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 // TDD FIX: Set context flag for string comparisons to enable * deref removal
                 // This allows the Unary::Deref generator to skip * for &String operands
-                let is_string_comparison = is_comparison && matches!(op, BinaryOp::Eq | BinaryOp::Ne);
+                let is_string_comparison =
+                    is_comparison && matches!(op, BinaryOp::Eq | BinaryOp::Ne);
                 if is_string_comparison {
                     // Check if either operand type is a string
                     let left_type = self.infer_expression_type(left);
@@ -523,7 +528,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let has_string = [left_type.as_ref(), right_type.as_ref()].iter().any(|t| {
                         t.is_some_and(|ty| {
                             crate::codegen::rust::types::is_windjammer_text_type(ty)
-                                || matches!(ty, Type::Reference(inner) 
+                                || matches!(ty, Type::Reference(inner)
                                     if crate::codegen::rust::types::is_windjammer_text_type(inner))
                         })
                     });
@@ -531,7 +536,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.in_string_comparison = true;
                     }
                 }
-                
+
                 let mut left_str = match left {
                     Expression::Binary { op: left_op, .. } => {
                         let child_is_cmp = matches!(
@@ -577,7 +582,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => self.generate_expression(right),
                 };
-                
+
                 // TDD FIX: Reset string comparison context flag after generating operands
                 if is_string_comparison {
                     self.in_string_comparison = false;
@@ -607,10 +612,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.comparison_other_side_needs_len_as_i64(right)
                 {
                     (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
-                        &left_str,
-                        &right_str,
-                        true,
-                        false,
+                        &left_str, &right_str, true, false,
                     );
                 } else if is_comparison
                     && right_is_usize
@@ -619,10 +621,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.comparison_other_side_needs_len_as_i64(left)
                 {
                     (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
-                        &left_str,
-                        &right_str,
-                        false,
-                        true,
+                        &left_str, &right_str, false, true,
                     );
                 }
                 // If both are usize: no cast (usize == usize is fine)
@@ -650,12 +649,8 @@ impl<'ast> CodeGenerator<'ast> {
                     // `usize`/`len()` ± untyped literal: Rust infers the literal as `usize` — do not
                     // rewrite to `1_usize as i64` etc.
                     let skip_int_promotion_usize_arith_untyped_lit = is_arithmetic
-                        && ((left_is_usize
-                            && right_is_int_literal
-                            && !right_is_usize)
-                            || (right_is_usize
-                                && left_is_int_literal
-                                && !left_is_usize));
+                        && ((left_is_usize && right_is_int_literal && !right_is_usize)
+                            || (right_is_usize && left_is_int_literal && !left_is_usize));
                     // Both operands are `usize` (locals/fields/suffixed literals): no `i64` promotion.
                     let skip_int_promotion_both_inferred_usize = (is_comparison || is_arithmetic)
                         && self.infer_expression_type_is_usize(left)
@@ -665,47 +660,49 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         if let Some(inference) = &self.int_inference {
                             if is_comparison || is_arithmetic {
-                            use crate::type_inference::int_implicit_casts::{
-                                get_cast_suffix, is_safe_implicit_cast, promote_types,
-                            };
-                            use crate::type_inference::IntType;
+                                use crate::type_inference::int_implicit_casts::{
+                                    get_cast_suffix, is_safe_implicit_cast, promote_types,
+                                };
+                                use crate::type_inference::IntType;
 
-                            let left_ty = self.int_type_for_mixed_int_codegen(left, inference);
-                            let right_ty = self.int_type_for_mixed_int_codegen(right, inference);
-                            if left_ty != IntType::Unknown
-                                && right_ty != IntType::Unknown
-                                && left_ty != right_ty
-                            {
-                                let promoted = promote_types(left_ty, right_ty);
-                                if promoted != IntType::Unknown {
-                                    if left_ty != promoted
-                                        && is_safe_implicit_cast(left_ty, promoted)
-                                    {
-                                        let suffix = get_cast_suffix(promoted);
-                                        let needs_inner = matches!(left, Expression::Binary { .. })
-                                            || left_str.contains(" as ");
-                                        left_str = if needs_inner {
-                                            format!("({}) as {}", left_str, suffix)
-                                        } else {
-                                            format!("{} as {}", left_str, suffix)
-                                        };
-                                    }
-                                    if right_ty != promoted
-                                        && is_safe_implicit_cast(right_ty, promoted)
-                                    {
-                                        let suffix = get_cast_suffix(promoted);
-                                        let needs_inner =
-                                            matches!(right, Expression::Binary { .. })
-                                                || right_str.contains(" as ");
-                                        right_str = if needs_inner {
-                                            format!("({}) as {}", right_str, suffix)
-                                        } else {
-                                            format!("{} as {}", right_str, suffix)
-                                        };
+                                let left_ty = self.int_type_for_mixed_int_codegen(left, inference);
+                                let right_ty =
+                                    self.int_type_for_mixed_int_codegen(right, inference);
+                                if left_ty != IntType::Unknown
+                                    && right_ty != IntType::Unknown
+                                    && left_ty != right_ty
+                                {
+                                    let promoted = promote_types(left_ty, right_ty);
+                                    if promoted != IntType::Unknown {
+                                        if left_ty != promoted
+                                            && is_safe_implicit_cast(left_ty, promoted)
+                                        {
+                                            let suffix = get_cast_suffix(promoted);
+                                            let needs_inner =
+                                                matches!(left, Expression::Binary { .. })
+                                                    || left_str.contains(" as ");
+                                            left_str = if needs_inner {
+                                                format!("({}) as {}", left_str, suffix)
+                                            } else {
+                                                format!("{} as {}", left_str, suffix)
+                                            };
+                                        }
+                                        if right_ty != promoted
+                                            && is_safe_implicit_cast(right_ty, promoted)
+                                        {
+                                            let suffix = get_cast_suffix(promoted);
+                                            let needs_inner =
+                                                matches!(right, Expression::Binary { .. })
+                                                    || right_str.contains(" as ");
+                                            right_str = if needs_inner {
+                                                format!("({}) as {}", right_str, suffix)
+                                            } else {
+                                                format!("{} as {}", right_str, suffix)
+                                            };
+                                        }
                                     }
                                 }
                             }
-                        }
                         }
                     }
                 }
@@ -822,9 +819,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // natively in Rust. But &String iteration vars still need XOR deref
                 // when compared with owned String (&String == String doesn't compile).
                 if is_comparison {
-
-                let is_str_param = |name: &str| {
-                    self.current_function_params.iter().any(|p| {
+                    let is_str_param = |name: &str| {
+                        self.current_function_params.iter().any(|p| {
                         p.name == name
                             && (matches!(p.type_, crate::parser::Type::String)
                                 || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "string")
@@ -832,83 +828,97 @@ impl<'ast> CodeGenerator<'ast> {
                                     if crate::codegen::rust::types::is_windjammer_text_type(inner)))
                             && self.inferred_borrowed_params.contains(name)
                     })
-                };
+                    };
 
-                // Check if identifier is tracked (function param, match binding, local var)
-                let left_is_tracked = match left {
-                    Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
-                            || self.local_var_types.contains_key(name.as_str())
-                            || self.current_function_params.iter().any(|p| p.name == *name)
-                    }
-                    _ => true, // Non-identifier expressions are "tracked" (we know their type)
-                };
+                    // Check if identifier is tracked (function param, match binding, local var)
+                    let left_is_tracked = match left {
+                        Expression::Identifier { name, .. } => {
+                            self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name)
+                                || self.local_var_types.contains_key(name.as_str())
+                                || self.current_function_params.iter().any(|p| p.name == *name)
+                        }
+                        _ => true, // Non-identifier expressions are "tracked" (we know their type)
+                    };
 
-                let right_is_tracked = match right {
-                    Expression::Identifier { name, .. } => {
-                        self.inferred_borrowed_params.contains(name.as_str())
-                            || self.borrowed_iterator_vars.contains(name)
-                            || self.local_var_types.contains_key(name.as_str())
-                            || self.current_function_params.iter().any(|p| p.name == *name)
-                    }
-                    _ => true, // Non-identifier expressions are "tracked" (we know their type)
-                };
+                    let right_is_tracked = match right {
+                        Expression::Identifier { name, .. } => {
+                            self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name)
+                                || self.local_var_types.contains_key(name.as_str())
+                                || self.current_function_params.iter().any(|p| p.name == *name)
+                        }
+                        _ => true, // Non-identifier expressions are "tracked" (we know their type)
+                    };
 
-                let left_is_borrowed = match left {
-                    Expression::Identifier { name, .. } => {
-                        !is_str_param(name)
-                            && (self.inferred_borrowed_params.contains(name.as_str())
-                                || self.borrowed_iterator_vars.contains(name))
-                    }
-                    Expression::MethodCall { method, .. } => {
-                        method == "as_str"
-                    }
-                    _ => false,
-                };
+                    let left_is_borrowed = match left {
+                        Expression::Identifier { name, .. } => {
+                            !is_str_param(name)
+                                && (self.inferred_borrowed_params.contains(name.as_str())
+                                    || self.borrowed_iterator_vars.contains(name))
+                        }
+                        Expression::MethodCall { method, .. } => method == "as_str",
+                        _ => false,
+                    };
 
-                let right_is_borrowed = match right {
-                    Expression::Identifier { name, .. } => {
-                        !is_str_param(name)
-                            && (self.inferred_borrowed_params.contains(name.as_str())
-                                || self.borrowed_iterator_vars.contains(name))
-                    }
-                    Expression::MethodCall { method, .. } => {
-                        method == "as_str"
-                    }
-                    _ => false,
-                };
-                
-                // Check if one side is an explicit deref of a borrowed value
-                // Example: *id == flag_id where id is &String
-                let left_is_explicit_deref = matches!(left, Expression::Unary { op: UnaryOp::Deref, .. });
-                let right_is_explicit_deref = matches!(right, Expression::Unary { op: UnaryOp::Deref, .. });
-                
-                // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
-                let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
-                    self.match_arm_bindings.contains(name.as_str())
-                } else {
-                    false
-                };
-                let right_is_match_binding = if let Expression::Identifier { name, .. } = right {
-                    self.match_arm_bindings.contains(name.as_str())
-                } else {
-                    false
-                };
+                    let right_is_borrowed = match right {
+                        Expression::Identifier { name, .. } => {
+                            !is_str_param(name)
+                                && (self.inferred_borrowed_params.contains(name.as_str())
+                                    || self.borrowed_iterator_vars.contains(name))
+                        }
+                        Expression::MethodCall { method, .. } => method == "as_str",
+                        _ => false,
+                    };
 
-                // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
-                // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
-                // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
-                // ALSO skip when one side is match arm binding - these are OWNED Copy values, never refs
-                if left_is_tracked && right_is_tracked && left_is_borrowed != right_is_borrowed 
-                    && !left_is_explicit_deref && !right_is_explicit_deref
-                    && !left_is_match_binding && !right_is_match_binding {
-                    if left_is_borrowed {
-                        left_str = format!("*{}", left_str);
+                    // Check if one side is an explicit deref of a borrowed value
+                    // Example: *id == flag_id where id is &String
+                    let left_is_explicit_deref = matches!(
+                        left,
+                        Expression::Unary {
+                            op: UnaryOp::Deref,
+                            ..
+                        }
+                    );
+                    let right_is_explicit_deref = matches!(
+                        right,
+                        Expression::Unary {
+                            op: UnaryOp::Deref,
+                            ..
+                        }
+                    );
+
+                    // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
+                    let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
+                        self.match_arm_bindings.contains(name.as_str())
                     } else {
-                        right_str = format!("*{}", right_str);
+                        false
+                    };
+                    let right_is_match_binding = if let Expression::Identifier { name, .. } = right
+                    {
+                        self.match_arm_bindings.contains(name.as_str())
+                    } else {
+                        false
+                    };
+
+                    // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
+                    // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
+                    // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
+                    // ALSO skip when one side is match arm binding - these are OWNED Copy values, never refs
+                    if left_is_tracked
+                        && right_is_tracked
+                        && left_is_borrowed != right_is_borrowed
+                        && !left_is_explicit_deref
+                        && !right_is_explicit_deref
+                        && !left_is_match_binding
+                        && !right_is_match_binding
+                    {
+                        if left_is_borrowed {
+                            left_str = format!("*{}", left_str);
+                        } else {
+                            right_str = format!("*{}", right_str);
+                        }
                     }
-                }
                 } // end is_comparison guard
 
                 // TDD FIX for E0614: Call balance_eq for ALL comparisons, not just == and !=
@@ -934,7 +944,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // TDD FIX: Explicit deref handling is now in balance_eq_operands_for_rust
                 // where we have access to BOTH operands to make the right decision
-                
+
                 let op_str = operators::unary_op_to_rust(op);
 
                 // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
@@ -1244,14 +1254,16 @@ impl<'ast> CodeGenerator<'ast> {
                             // infer_type_name returns None. Try module-qualified lookup directly.
                             if let Expression::Identifier { name: mod_name, .. } = &**call_obj {
                                 let qualified = format!("{}::{}", mod_name, call_method);
-                                if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                                if let Some(sig) = self.signature_registry.get_signature(&qualified)
+                                {
                                     return Some(sig.clone());
                                 }
                             }
                             if super::stdlib_method_traits::is_common_stdlib_method(call_method) {
                                 None
                             } else {
-                                let bare_sig = self.signature_registry.get_signature(call_method).cloned();
+                                let bare_sig =
+                                    self.signature_registry.get_signature(call_method).cloned();
                                 bare_sig
                             }
                         });
@@ -1281,8 +1293,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
                                     match ownership {
                                         OwnershipMode::Borrowed => {
-                                            // Destination wants borrowed — use same rules as MethodCall
-                                            // (fixes `map.get(&key)` when `key: str` → Rust `&str`, E0277).
+                                            // PHASE 1: Generate &String parameters for correctness
                                             let is_string_literal = matches!(
                                                 arg_to_generate,
                                                 Expression::Literal {
@@ -1299,7 +1310,17 @@ impl<'ast> CodeGenerator<'ast> {
                                                 } else {
                                                     false
                                                 };
-                                            if !is_string_literal && !is_user_closure_param {
+
+                                            // PHASE 1: String literals need conversion for &String parameters
+                                            if is_string_literal {
+                                                // Check if parameter is String type
+                                                let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                                    matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                                });
+                                                if param_is_string {
+                                                    arg_str = format!("&{}.to_string()", arg_str);
+                                                }
+                                            } else if !is_user_closure_param {
                                                 let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                                                     arg_to_generate,
                                                     &arg_str,
@@ -1315,6 +1336,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                     Some(&self.local_var_types),
                                                     Some(&self.stdlib_method_signatures),
                                                     Some(&self.method_signatures_by_type),
+                                                    &self.match_arm_bindings, // TDD FIX: E0308 fix
                                                 );
                                                 if should_ref {
                                                     arg_str = format!("&{}", arg_str);
@@ -1443,7 +1465,8 @@ impl<'ast> CodeGenerator<'ast> {
                             .map(|tn| format!("{}::{}", tn, call_method))
                             .and_then(|q| self.signature_registry.get_signature(&q).cloned())
                             .or_else(|| {
-                                if super::stdlib_method_traits::is_common_stdlib_method(call_method) {
+                                if super::stdlib_method_traits::is_common_stdlib_method(call_method)
+                                {
                                     None
                                 } else {
                                     self.signature_registry.get_signature(call_method).cloned()
@@ -1494,6 +1517,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         Some(&self.local_var_types),
                                         Some(&self.stdlib_method_signatures),
                                         Some(&self.method_signatures_by_type),
+                                        &self.match_arm_bindings, // TDD FIX: E0308 fix
                                     );
                                 if should_ref {
                                     arg_str = format!("&{}", arg_str);
@@ -1505,10 +1529,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                     let call_str = format!("{}.{}({})", obj_str, call_method, args.join(", "));
 
-                    let is_extern_call = method_signature
-                        .as_ref()
-                        .is_some_and(|sig| sig.is_extern)
-                        || self.signature_registry
+                    let is_extern_call = method_signature.as_ref().is_some_and(|sig| sig.is_extern)
+                        || self
+                            .signature_registry
                             .get_signature(call_method)
                             .is_some_and(|sig| sig.is_extern)
                         || self.extern_function_names.contains(call_method);
@@ -1565,8 +1588,13 @@ impl<'ast> CodeGenerator<'ast> {
                     let generated_args: Vec<String> = arguments
                         .iter()
                         .map(|(_label, arg)| {
-                            let is_explicit_ref = matches!(arg,
-                                Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. }
+                            let is_explicit_ref = matches!(
+                                arg,
+                                Expression::Unary {
+                                    op: crate::parser::UnaryOp::Ref
+                                        | crate::parser::UnaryOp::MutRef,
+                                    ..
+                                }
                             );
                             if !is_explicit_ref {
                                 self.in_owned_value_context = true;
@@ -1781,37 +1809,35 @@ impl<'ast> CodeGenerator<'ast> {
                     // Not a parameter - try registry lookup
                     let direct = self.signature_registry.get_signature(&func_name).cloned();
                     direct.or_else(|| {
-                            if let Some(pos) = func_name.rfind("::") {
-                                let qualifier = &func_name[..pos];
-                                let simple_name = &func_name[pos + 2..];
-                                let is_type_qualifier = qualifier
-                                    .chars()
-                                    .next()
-                                    .is_some_and(|c| c.is_uppercase());
-                                if is_type_qualifier {
-                                    self.signature_registry
-                                        .get_signature(simple_name)
-                                        .cloned()
-                                } else {
-                                    // For module-qualified calls (e.g., draw::draw_text),
-                                    // try progressively shorter qualified names.
-                                    // Do NOT fall back to simple name - it may collide
-                                    // with a different module's function with the same name.
-                                    let parts: Vec<&str> = func_name.split("::").collect();
-                                    let mut found = None;
-                                    for start in (0..parts.len().saturating_sub(1)).rev() {
-                                        let candidate = parts[start..].join("::");
-                                        if let Some(sig) = self.signature_registry.get_signature(&candidate) {
-                                            found = Some(sig.clone());
-                                            break;
-                                        }
-                                    }
-                                    found
-                                }
+                        if let Some(pos) = func_name.rfind("::") {
+                            let qualifier = &func_name[..pos];
+                            let simple_name = &func_name[pos + 2..];
+                            let is_type_qualifier =
+                                qualifier.chars().next().is_some_and(|c| c.is_uppercase());
+                            if is_type_qualifier {
+                                self.signature_registry.get_signature(simple_name).cloned()
                             } else {
-                                None
+                                // For module-qualified calls (e.g., draw::draw_text),
+                                // try progressively shorter qualified names.
+                                // Do NOT fall back to simple name - it may collide
+                                // with a different module's function with the same name.
+                                let parts: Vec<&str> = func_name.split("::").collect();
+                                let mut found = None;
+                                for start in (0..parts.len().saturating_sub(1)).rev() {
+                                    let candidate = parts[start..].join("::");
+                                    if let Some(sig) =
+                                        self.signature_registry.get_signature(&candidate)
+                                    {
+                                        found = Some(sig.clone());
+                                        break;
+                                    }
+                                }
+                                found
                             }
-                        })
+                        } else {
+                            None
+                        }
+                    })
                 };
 
                 // For module-qualified calls (e.g., gpu::load_compute_shader_from_file),
@@ -1826,7 +1852,9 @@ impl<'ast> CodeGenerator<'ast> {
                     // Try resolving through module alias map first
                     if let Some(original_module) = self.module_alias_map.get(qualifier) {
                         let resolved_name = format!("{}::{}", original_module, simple);
-                        if let Some(resolved_sig) = self.signature_registry.get_signature(&resolved_name) {
+                        if let Some(resolved_sig) =
+                            self.signature_registry.get_signature(&resolved_name)
+                        {
                             signature = Some(resolved_sig.clone());
                             // NOT a simple fallback — we resolved through the alias
                         }
@@ -1882,7 +1910,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         self.in_call_argument_generation = prev_in_call_arg;
                         self.in_field_access_object = prev_field_access_obj;
-                        
+
                         // TDD FIX: Cast int arguments to usize for stdlib methods
                         // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
                         // Vec::with_capacity(10) where 10: int literal → Vec::with_capacity(10_usize)
@@ -2036,9 +2064,8 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Some(&ownership) = sig.param_ownership.get(i) {
                                 match ownership {
                                     OwnershipMode::Borrowed if !has_ownership_collision => {
-                                        // NEW DESIGN: Borrowed string parameters → &str (not &String!)
-                                        // String literals are already &str in Rust, so they can be passed directly.
-                                        // No conversion needed: "literal" → &str parameter is a perfect match
+                                        // PHASE 1: Generate &String parameters for correctness
+                                        // String literals need conversion: "foo" → &"foo".to_string()
                                         let is_string_literal = matches!(
                                             arg,
                                             Expression::Literal {
@@ -2048,9 +2075,17 @@ impl<'ast> CodeGenerator<'ast> {
                                         );
 
                                         if is_string_literal {
-                                            // String literals are already &str, pass directly to &str parameter
-                                            // No & needed, no .to_string() needed
-                                            return vec![arg_str];
+                                            // Check if parameter is String type
+                                            let param_is_string = sig.param_types.get(i).is_some_and(|t| {
+                                                matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                            });
+                                            if param_is_string {
+                                                // Convert &str literal to &String: "World" → &"World".to_string()
+                                                return vec![format!("&{}.to_string()", arg_str)];
+                                            } else {
+                                                // Non-string type - pass directly
+                                                return vec![arg_str];
+                                            }
                                         }
 
                                         // TDD FIX: Check if parameter is already a reference type
@@ -2540,12 +2575,38 @@ impl<'ast> CodeGenerator<'ast> {
                 let receiver_float_type = self.infer_expression_type(object);
                 let is_float_method = matches!(
                     method.as_str(),
-                    "clamp" | "max" | "min" | "abs" | "copysign" | "recip"
-                        | "to_degrees" | "to_radians" | "signum" | "powf" | "powi"
-                        | "sqrt" | "cbrt" | "hypot" | "sin" | "cos" | "tan"
-                        | "asin" | "acos" | "atan" | "atan2" | "exp" | "exp2"
-                        | "ln" | "log" | "log2" | "log10" | "round" | "floor"
-                        | "ceil" | "trunc" | "fract"
+                    "clamp"
+                        | "max"
+                        | "min"
+                        | "abs"
+                        | "copysign"
+                        | "recip"
+                        | "to_degrees"
+                        | "to_radians"
+                        | "signum"
+                        | "powf"
+                        | "powi"
+                        | "sqrt"
+                        | "cbrt"
+                        | "hypot"
+                        | "sin"
+                        | "cos"
+                        | "tan"
+                        | "asin"
+                        | "acos"
+                        | "atan"
+                        | "atan2"
+                        | "exp"
+                        | "exp2"
+                        | "ln"
+                        | "log"
+                        | "log2"
+                        | "log10"
+                        | "round"
+                        | "floor"
+                        | "ceil"
+                        | "trunc"
+                        | "fract"
                 );
                 if is_float_method {
                     if let Some(ref rft) = receiver_float_type {
@@ -2900,6 +2961,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(&self.local_var_types),
                                 Some(&self.stdlib_method_signatures),
                                 Some(&self.method_signatures_by_type),
+                                &self.match_arm_bindings, // TDD FIX: Pass match arm bindings for E0308 fix
                             );
                             if should_ref {
                                 if let Expression::Cast { .. } = arg_to_generate {
@@ -3177,10 +3239,8 @@ impl<'ast> CodeGenerator<'ast> {
 
                                 // When the method expects &str (push_str, extend_from_slice),
                                 // add & to pass borrowed temp. Otherwise, pass owned value.
-                                let method_needs_borrow = matches!(
-                                    method.as_str(),
-                                    "push_str" | "extend_from_slice"
-                                );
+                                let method_needs_borrow =
+                                    matches!(method.as_str(), "push_str" | "extend_from_slice");
                                 if arg_str.starts_with("&") || method_needs_borrow {
                                     format!("&{}", temp_name)
                                 } else {
@@ -3897,7 +3957,8 @@ impl<'ast> CodeGenerator<'ast> {
                     .as_ref()
                     .and_then(|t| Self::peeled_collection_element_type(t))
                     .cloned();
-                let force_clone_for_owned_context = (self.in_struct_literal_field || self.in_owned_value_context)
+                let force_clone_for_owned_context = (self.in_struct_literal_field
+                    || self.in_owned_value_context)
                     && element_type
                         .as_ref()
                         .map(|et| !self.is_type_copy(et))
@@ -4163,10 +4224,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let is_borrowed_param = self.inferred_borrowed_params.contains(name)
                         || self.current_function_params.iter().any(|p| {
                             p.name == *name
-                                && matches!(
-                                    p.ownership,
-                                    OwnershipHint::Ref | OwnershipHint::Mut
-                                )
+                                && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
                         });
                     if is_borrowed_param && !expr_str.starts_with('*') {
                         expr_str = format!("*{}", expr_str);
@@ -4278,13 +4336,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
                         let needs_string_conversion_from_type =
-                            Self::return_type_expects_owned_string(&self.current_function_return_type)
-                                || arms.iter().any(|arm| {
-                                    string_analysis::expression_produces_string(arm.body)
-                                        || arm_string_analysis::arm_returns_converted_string(
-                                            arm.body,
-                                        )
-                                });
+                            Self::return_type_expects_owned_string(
+                                &self.current_function_return_type,
+                            ) || arms.iter().any(|arm| {
+                                string_analysis::expression_produces_string(arm.body)
+                                    || arm_string_analysis::arm_returns_converted_string(arm.body)
+                            });
 
                         // Set context flag BEFORE generating arms
                         let old_in_match_arm = self.in_match_arm_needing_string;
@@ -4316,7 +4373,8 @@ impl<'ast> CodeGenerator<'ast> {
                             let match_bound_type_entries =
                                 self.infer_match_bound_types(value, &arm.pattern);
                             for (var_name, var_type) in &match_bound_type_entries {
-                                self.local_var_types.insert(var_name.clone(), var_type.clone());
+                                self.local_var_types
+                                    .insert(var_name.clone(), var_type.clone());
                             }
 
                             let body_str = self.generate_expression(arm.body);
@@ -4372,19 +4430,28 @@ impl<'ast> CodeGenerator<'ast> {
                             if match_binds_refs && !final_arm_str.ends_with(".clone()") {
                                 let mut bound_vars = std::collections::HashSet::new();
                                 self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
-                                let binding_name: Option<&str> = if let Expression::Identifier { name, .. } = arm.body {
-                                    Some(name)
-                                } else if let Expression::Block { statements, .. } = arm.body {
-                                    if let Some(Statement::Expression { expr, .. }) = statements.last() {
-                                        if statements.len() == 1 {
-                                            if let Expression::Identifier { name, .. } = expr {
-                                                Some(name)
-                                            } else { None }
-                                        } else { None }
-                                    } else { None }
-                                } else {
-                                    None
-                                };
+                                let binding_name: Option<&str> =
+                                    if let Expression::Identifier { name, .. } = arm.body {
+                                        Some(name)
+                                    } else if let Expression::Block { statements, .. } = arm.body {
+                                        if let Some(Statement::Expression { expr, .. }) =
+                                            statements.last()
+                                        {
+                                            if statements.len() == 1 {
+                                                if let Expression::Identifier { name, .. } = expr {
+                                                    Some(name)
+                                                } else {
+                                                    None
+                                                }
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    };
                                 if let Some(name) = binding_name {
                                     if bound_vars.contains(name) {
                                         let bound_type = self
@@ -4392,14 +4459,17 @@ impl<'ast> CodeGenerator<'ast> {
                                             .into_iter()
                                             .find(|(n, _)| n == name)
                                             .map(|(_, t)| t);
-                                        let is_copy = bound_type.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                        let is_copy = bound_type
+                                            .as_ref()
+                                            .is_some_and(|t| self.is_type_copy(t));
                                         if is_copy {
                                             if final_arm_str.trim() == name {
                                                 final_arm_str = format!("*{}", name);
                                             } else {
                                                 let old_str = format!("{}\n", name);
                                                 let new_str = format!("*{}\n", name);
-                                                final_arm_str = final_arm_str.replacen(&old_str, &new_str, 1);
+                                                final_arm_str =
+                                                    final_arm_str.replacen(&old_str, &new_str, 1);
                                             }
                                         } else {
                                             if final_arm_str.trim() == name {
@@ -4407,7 +4477,8 @@ impl<'ast> CodeGenerator<'ast> {
                                             } else {
                                                 let old_str = format!("{}\n", name);
                                                 let new_str = format!("{}.clone()\n", name);
-                                                final_arm_str = final_arm_str.replacen(&old_str, &new_str, 1);
+                                                final_arm_str =
+                                                    final_arm_str.replacen(&old_str, &new_str, 1);
                                             }
                                         }
                                     }
@@ -4806,7 +4877,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Operand may be `Type::Float` (no f32/f64 distinction) while children carry F32/F64 in
         // float inference — recurse so `(f32_expr) + 0.5_f64` and similar dogfooding patterns
         // still promote (E0277).
-        if let Expression::Binary { left: l, right: r, .. } = expr {
+        if let Expression::Binary {
+            left: l, right: r, ..
+        } = expr
+        {
             match (
                 self.float_class_for_binary_operand(l),
                 self.float_class_for_binary_operand(r),
@@ -4872,10 +4946,22 @@ impl<'ast> CodeGenerator<'ast> {
             let is_non_scalar_custom = |expr: &Expression| -> bool {
                 if let Some(ty) = self.infer_expression_type(expr) {
                     match &ty {
-                        Type::Custom(name) => !matches!(name.as_str(),
-                            "f32" | "f64" | "i32" | "u32" | "i64" | "u64"
-                            | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                            | "bool" | "char"
+                        Type::Custom(name) => !matches!(
+                            name.as_str(),
+                            "f32"
+                                | "f64"
+                                | "i32"
+                                | "u32"
+                                | "i64"
+                                | "u64"
+                                | "usize"
+                                | "isize"
+                                | "i8"
+                                | "u8"
+                                | "i16"
+                                | "u16"
+                                | "bool"
+                                | "char"
                         ),
                         _ => false,
                     }
@@ -5001,24 +5087,22 @@ impl<'ast> CodeGenerator<'ast> {
             let left_is_cast = matches!(left, Expression::Cast { .. });
             let right_is_cast = matches!(right, Expression::Cast { .. });
             if left_is_cast && !right_is_cast && !right_float_lit {
-                let inner = if matches!(right, Expression::Binary { .. })
-                    || right_str.contains(" as ")
-                {
-                    format!("({})", right_str)
-                } else {
-                    right_str.to_string()
-                };
+                let inner =
+                    if matches!(right, Expression::Binary { .. }) || right_str.contains(" as ") {
+                        format!("({})", right_str)
+                    } else {
+                        right_str.to_string()
+                    };
                 *right_str = format!("{} as f64", inner);
                 return;
             }
             if right_is_cast && !left_is_cast && !left_float_lit {
-                let inner = if matches!(left, Expression::Binary { .. })
-                    || left_str.contains(" as ")
-                {
-                    format!("({})", left_str)
-                } else {
-                    left_str.to_string()
-                };
+                let inner =
+                    if matches!(left, Expression::Binary { .. }) || left_str.contains(" as ") {
+                        format!("({})", left_str)
+                    } else {
+                        left_str.to_string()
+                    };
                 *left_str = format!("{} as f64", inner);
                 return;
             }
@@ -5044,11 +5128,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // Type::Float is generic "expression involves floats" — NOT proof the
                 // result is f32/f64. E.g. `Vec3 * 0.5` yields Vec3, not f32, even though
                 // float inference marks it F32 due to the literal.
-                let is_confirmed_float = |t: &Type| {
-                    matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
-                };
-                let left_confirmed_float =
-                    self.infer_expression_type(left).as_ref().is_some_and(|t| is_confirmed_float(t))
+                let is_confirmed_float =
+                    |t: &Type| matches!(t, Type::Custom(n) if n == "f32" || n == "f64");
+                let left_confirmed_float = self
+                    .infer_expression_type(left)
+                    .as_ref()
+                    .is_some_and(|t| is_confirmed_float(t))
                     || matches!(left, Expression::Cast { type_, .. }
                         if matches!(type_, Type::Custom(n) if n == "f32" || n == "f64"))
                     || left_str.contains("_f32")
@@ -5061,13 +5146,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // GUARD: Never cast non-scalar types (Vec3, Color, etc.) to float.
-                let right_is_non_scalar = self.infer_expression_type(right).as_ref().is_some_and(|t| {
-                    matches!(t, Type::Custom(n) if !matches!(n.as_str(),
-                        "f32" | "f64" | "i32" | "u32" | "i64" | "u64"
-                        | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                        | "bool" | "char"
-                    ))
-                });
+                let right_is_non_scalar =
+                    self.infer_expression_type(right).as_ref().is_some_and(|t| {
+                        matches!(t, Type::Custom(n) if !matches!(n.as_str(),
+                            "f32" | "f64" | "i32" | "u32" | "i64" | "u64"
+                            | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
+                            | "bool" | "char"
+                        ))
+                    });
                 if right_is_non_scalar {
                     return;
                 }
@@ -5077,21 +5163,21 @@ impl<'ast> CodeGenerator<'ast> {
                     FloatType::F64 => "f64",
                     _ => return,
                 };
-                let inner = if matches!(right, Expression::Binary { .. })
-                    || right_str.contains(" as ")
-                {
-                    format!("({})", right_str)
-                } else {
-                    right_str.to_string()
-                };
+                let inner =
+                    if matches!(right, Expression::Binary { .. }) || right_str.contains(" as ") {
+                        format!("({})", right_str)
+                    } else {
+                        right_str.to_string()
+                    };
                 *right_str = format!("{} as {}", inner, target);
             }
             (None, Some(ft)) if !left_float_lit => {
-                let is_confirmed_float = |t: &Type| {
-                    matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
-                };
-                let right_confirmed_float =
-                    self.infer_expression_type(right).as_ref().is_some_and(|t| is_confirmed_float(t))
+                let is_confirmed_float =
+                    |t: &Type| matches!(t, Type::Custom(n) if n == "f32" || n == "f64");
+                let right_confirmed_float = self
+                    .infer_expression_type(right)
+                    .as_ref()
+                    .is_some_and(|t| is_confirmed_float(t))
                     || matches!(right, Expression::Cast { type_, .. }
                         if matches!(type_, Type::Custom(n) if n == "f32" || n == "f64"))
                     || right_str.contains("_f32")
@@ -5104,13 +5190,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // GUARD: Never cast non-scalar types (Vec3, Color, etc.) to float.
-                let left_is_non_scalar = self.infer_expression_type(left).as_ref().is_some_and(|t| {
-                    matches!(t, Type::Custom(n) if !matches!(n.as_str(),
-                        "f32" | "f64" | "i32" | "u32" | "i64" | "u64"
-                        | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                        | "bool" | "char"
-                    ))
-                });
+                let left_is_non_scalar =
+                    self.infer_expression_type(left).as_ref().is_some_and(|t| {
+                        matches!(t, Type::Custom(n) if !matches!(n.as_str(),
+                            "f32" | "f64" | "i32" | "u32" | "i64" | "u64"
+                            | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
+                            | "bool" | "char"
+                        ))
+                    });
                 if left_is_non_scalar {
                     return;
                 }
@@ -5120,13 +5207,12 @@ impl<'ast> CodeGenerator<'ast> {
                     FloatType::F64 => "f64",
                     _ => return,
                 };
-                let inner = if matches!(left, Expression::Binary { .. })
-                    || left_str.contains(" as ")
-                {
-                    format!("({})", left_str)
-                } else {
-                    left_str.to_string()
-                };
+                let inner =
+                    if matches!(left, Expression::Binary { .. }) || left_str.contains(" as ") {
+                        format!("({})", left_str)
+                    } else {
+                        left_str.to_string()
+                    };
                 *left_str = format!("{} as {}", inner, target);
             }
             _ => {}
@@ -5263,41 +5349,58 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::Literal;
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
-        
+
         // TDD FIX: Handle explicit * deref of &String in comparisons
         // Problem: User writes *id == flag_id where both could be &String or mixed
         // Case 1: id: &String, flag_id: &String → Remove * → id == flag_id (both &String) ✓
         // Case 2: id: &String, flag_id: String → Keep * or add to other → *id == flag_id (String == String) ✓
         // Solution: Check if BOTH operands are borrowed strings, only then remove *
-        
-        let left_is_explicit_deref = matches!(left, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
-        let right_is_explicit_deref = matches!(right, Expression::Unary { op: crate::parser::UnaryOp::Deref, .. });
-        
+
+        let left_is_explicit_deref = matches!(
+            left,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                ..
+            }
+        );
+        let right_is_explicit_deref = matches!(
+            right,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                ..
+            }
+        );
+
         // Helper: Check if an identifier is a borrowed string
         let is_borrowed_string_identifier = |expr: &Expression| -> bool {
             if let Expression::Identifier { name, .. } = expr {
                 // Check if it's a borrowed parameter
                 let is_borrowed_param = self.inferred_borrowed_params.contains(name.as_str())
                     && self.current_function_params.iter().any(|p| {
-                        p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                     });
-                
+
                 // Check if it's a borrowed iterator variable
                 let is_borrowed_iter = self.borrowed_iterator_vars.contains(name)
-                    && self.local_var_types.get(name.as_str())
+                    && self
+                        .local_var_types
+                        .get(name.as_str())
                         .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
-                
+
                 is_borrowed_param || is_borrowed_iter
             } else {
                 false
             }
         };
-        
+
         // Helper: Check if an identifier is an owned string (from local vars, not borrowed)
         let is_owned_string_identifier = |expr: &Expression| -> bool {
             if let Expression::Identifier { name, .. } = expr {
                 // Check if it's a local variable (not borrowed param/iter)
-                let is_local_var = self.local_var_types.get(name.as_str())
+                let is_local_var = self
+                    .local_var_types
+                    .get(name.as_str())
                     .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
                     && !self.inferred_borrowed_params.contains(name.as_str())
                     && !self.borrowed_iterator_vars.contains(name);
@@ -5306,91 +5409,123 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             }
         };
-        
+
         // Check the operands of explicit deref expressions
-        let left_deref_operand_borrowed = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = left {
+        let left_deref_operand_borrowed = if let Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } = left
+        {
             is_borrowed_string_identifier(operand)
         } else {
             false
         };
-        
-        let left_deref_operand_owned = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = left {
+
+        let left_deref_operand_owned = if let Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } = left
+        {
             is_owned_string_identifier(operand)
         } else {
             false
         };
-        
-        let right_deref_operand_borrowed = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = right {
+
+        let right_deref_operand_borrowed = if let Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } = right
+        {
             is_borrowed_string_identifier(operand)
         } else {
             false
         };
-        
-        let right_deref_operand_owned = if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = right {
+
+        let right_deref_operand_owned = if let Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } = right
+        {
             is_owned_string_identifier(operand)
         } else {
             false
         };
-        
+
         // Check if non-deref side is borrowed
         let left_is_borrowed = if !left_is_explicit_deref {
             is_borrowed_string_identifier(left)
         } else {
             false
         };
-        
+
         let right_is_borrowed = if !right_is_explicit_deref {
             is_borrowed_string_identifier(right)
         } else {
             false
         };
-        
+
         // Remove * ONLY when comparing two borrowed strings
         // If left has *id (borrowed) and right is borrowed param/iter → Remove *
         if left_is_explicit_deref && left_deref_operand_borrowed && right_is_borrowed {
             // Both sides are borrowed strings, remove the *
             if left_str.starts_with("(*") && left_str.ends_with(')') {
-                *left_str = left_str[2..left_str.len()-1].to_string();
+                *left_str = left_str[2..left_str.len() - 1].to_string();
             } else if left_str.starts_with('*') {
                 *left_str = left_str[1..].to_string();
             }
         }
-        
+
         if right_is_explicit_deref && right_deref_operand_borrowed && left_is_borrowed {
             // Both sides are borrowed strings, remove the *
             if right_str.starts_with("(*") && right_str.ends_with(')') {
-                *right_str = right_str[2..right_str.len()-1].to_string();
+                *right_str = right_str[2..right_str.len() - 1].to_string();
             } else if right_str.starts_with('*') {
                 *right_str = right_str[1..].to_string();
             }
         }
-        
+
         // Handle mixed cases: one side has explicit deref, other doesn't
         // Case A: *borrowed == borrowed → Remove * (both &String)
         // Case B: *borrowed == owned → Add * to owned (*borrowed → &str, need owned → String for deref)
         // Case C: *owned == borrowed → Add * to borrowed (*owned → String, need borrowed → String for deref)
-        
+
         // Case B: left is *borrowed (&str after deref), right is borrowed (&String) → Add * to right
-        if left_is_explicit_deref && left_deref_operand_borrowed && right_is_borrowed && !right_is_explicit_deref {
+        if left_is_explicit_deref
+            && left_deref_operand_borrowed
+            && right_is_borrowed
+            && !right_is_explicit_deref
+        {
             // This contradicts Case A, so skip (already handled above by removing *)
         }
-        
+
         // Case C: left is *owned (String after deref), right is borrowed (&String) → Add * to right
-        if left_is_explicit_deref && left_deref_operand_owned && right_is_borrowed && !right_is_explicit_deref {
+        if left_is_explicit_deref
+            && left_deref_operand_owned
+            && right_is_borrowed
+            && !right_is_explicit_deref
+        {
             // left: *id (String), right: borrowed_param (&String) → Add * to right
             if !right_str.starts_with('*') {
                 *right_str = format!("*{}", right_str);
             }
         }
-        
+
         // Mirror cases for right side
-        if right_is_explicit_deref && right_deref_operand_owned && left_is_borrowed && !left_is_explicit_deref {
+        if right_is_explicit_deref
+            && right_deref_operand_owned
+            && left_is_borrowed
+            && !left_is_explicit_deref
+        {
             // right: *id (String), left: borrowed_param (&String) → Add * to left
             if !left_str.starts_with('*') {
                 *left_str = format!("*{}", left_str);
             }
         }
-        
+
         let is_text = |t: Option<&Type>| {
             t.is_some_and(|t| {
                 crate::codegen::rust::types::is_windjammer_text_type(t)
@@ -5415,19 +5550,24 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => false,
                 }
             };
-            
+
             // Check if expression is an explicit deref (*x) that produces owned String
             let is_explicit_deref_string = |expr: &Expression| -> bool {
-                if let Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } = expr {
+                if let Expression::Unary {
+                    op: crate::parser::UnaryOp::Deref,
+                    operand,
+                    ..
+                } = expr
+                {
                     // *operand produces String if operand is &String
                     if let Some(operand_type) = self.infer_expression_type(operand) {
-                        return matches!(operand_type, Type::Reference(inner) 
+                        return matches!(operand_type, Type::Reference(inner)
                             if crate::codegen::rust::types::is_windjammer_text_type(&inner));
                     }
                 }
                 false
             };
-            
+
             // Check if expression is a borrowed string parameter
             let is_borrowed_string_identifier = |expr: &Expression| -> bool {
                 if let Expression::Identifier { name, .. } = expr {
@@ -5439,13 +5579,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             };
-            
+
             // Check if type is &String reference
             let is_ref_type = |t: Option<&Type>| -> bool {
-                matches!(t, Some(Type::Reference(inner)) 
+                matches!(t, Some(Type::Reference(inner))
                     if crate::codegen::rust::types::is_windjammer_text_type(inner))
             };
-            
+
             // Check if type is &String (not String, not &str)
             let is_ref_string = |t: Option<&Type>| -> bool {
                 match t {
@@ -5457,7 +5597,7 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => false,
                 }
             };
-            
+
             // TDD FIX: Also check expressions directly for borrowed parameters or match arm bindings
             // When type inference fails for field access, check if right/left is a borrowed string parameter
             let is_borrowed_string_param = |expr: &Expression| -> bool {
@@ -5472,7 +5612,7 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             };
-            
+
             // Check if identifier is an owned String variable (match arm binding, local var)
             let is_owned_string_var = |expr: &Expression| -> bool {
                 if let Expression::Identifier { name, .. } = expr {
@@ -5483,7 +5623,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             };
-            
+
             // Determine ownership explicitly, being careful about match arm bindings
             let left_is_owned = is_owned_string(lt.as_ref()) || is_owned_string_var(left);
             let right_is_owned = is_owned_string(rt.as_ref()) || is_owned_string_var(right);
@@ -5493,10 +5633,10 @@ impl<'ast> CodeGenerator<'ast> {
             let left_is_borrowed_param = is_borrowed_string_param(left);
             let left_type_unknown = lt.is_none();
             let right_type_unknown = rt.is_none();
-            
+
             // TDD FIX: ONLY deref when we're CERTAIN about type mismatch
             // Rules (from most specific to most general):
-            
+
             // Rule 0: One unknown + one &String (likely closure param + match arm binding)
             // Both are probably &String, so NO deref
             if left_type_unknown && right_is_ref && !right_is_owned {
@@ -5505,19 +5645,27 @@ impl<'ast> CodeGenerator<'ast> {
             if right_type_unknown && left_is_ref && !left_is_owned {
                 return; // &String == &String works natively
             }
-            
+
             // Rule 1: Both types KNOWN and mismatch
             // String (owned, known) == &String (ref, known) → deref right
-            if left_is_owned && !left_type_unknown && (right_is_ref || right_is_borrowed_param) && !right_type_unknown {
+            if left_is_owned
+                && !left_type_unknown
+                && (right_is_ref || right_is_borrowed_param)
+                && !right_type_unknown
+            {
                 *right_str = Self::star_for_deref_compare(right, right_str);
                 return;
             }
             // &String (ref, known) == String (owned, known) → deref left
-            if (left_is_ref || left_is_borrowed_param) && !left_type_unknown && right_is_owned && !right_type_unknown {
+            if (left_is_ref || left_is_borrowed_param)
+                && !left_type_unknown
+                && right_is_owned
+                && !right_type_unknown
+            {
                 *left_str = Self::star_for_deref_compare(left, left_str);
                 return;
             }
-            
+
             // Rule 2: One borrowed param (known), one unknown
             // Unknown closure params default to &T, so deref the borrowed param side
             if left_is_borrowed_param && !left_type_unknown && right_type_unknown {
@@ -5528,13 +5676,13 @@ impl<'ast> CodeGenerator<'ast> {
                 *right_str = Self::star_for_deref_compare(right, right_str);
                 return;
             }
-            
+
             // Rule 3: Both types unknown (closure params, etc.)
             // Trust Rust's PartialEq - no deref needed
             if left_type_unknown && right_type_unknown {
                 return;
             }
-            
+
             // All other string combinations work natively (&str, etc.)
             return;
         }
@@ -5563,7 +5711,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             false
         };
-        
+
         if let (Some(lb), Some(rb)) = (lhs_base, rhs_base) {
             if lb == rb && self.is_type_copy(lb) {
                 // Don't add * if right side is a match arm binding (owned, not ref)

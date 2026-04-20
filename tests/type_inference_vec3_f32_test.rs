@@ -6,7 +6,6 @@
 /// ROOT CAUSE: Type inference not propagating Vec3::new param types (f32) to literals.
 ///
 /// SUCCESS: Vec3::new(1.0, 2.0, 3.0) should generate 1.0_f32, 2.0_f32, 3.0_f32.
-
 use std::fs;
 use std::process::Command;
 use windjammer::{build_project, CompilationTarget};
@@ -52,25 +51,25 @@ pub fn make_vec() -> Vec3 {
     let output_dir = "/tmp/wj_test_vec3_f32";
     let (success, err_msg) = run_wj_build(wj_source, output_dir);
 
-    assert!(
-        success,
-        "Compilation should succeed: {}",
-        err_msg
-    );
+    assert!(success, "Compilation should succeed: {}", err_msg);
 
     let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
         .expect("Generated Rust file not found");
 
     // Vec3::new params are f32 - literals MUST be f32
     assert!(
-        rust_code.contains("1.0_f32") && rust_code.contains("2.0_f32") && rust_code.contains("3.0_f32"),
+        rust_code.contains("1.0_f32")
+            && rust_code.contains("2.0_f32")
+            && rust_code.contains("3.0_f32"),
         "Vec3::new(1.0, 2.0, 3.0) should generate f32 literals, got:\n{}",
         rust_code
     );
 
     // Should NOT have f64 for those literals (any f64 causes E0308)
     assert!(
-        !rust_code.contains("1.0_f64") && !rust_code.contains("2.0_f64") && !rust_code.contains("3.0_f64"),
+        !rust_code.contains("1.0_f64")
+            && !rust_code.contains("2.0_f64")
+            && !rust_code.contains("3.0_f64"),
         "Vec3::new literals should not be f64 (causes E0308), got:\n{}",
         rust_code
     );
@@ -119,11 +118,7 @@ pub fn add_vecs() -> Vec3 {
     let output_dir = "/tmp/wj_test_vec3_math";
     let (success, err_msg) = run_wj_build(wj_source, output_dir);
 
-    assert!(
-        success,
-        "Compilation should succeed: {}",
-        err_msg
-    );
+    assert!(success, "Compilation should succeed: {}", err_msg);
 
     let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
         .expect("Generated Rust file not found");
@@ -197,7 +192,10 @@ pub fn make_vec() -> Vec3 {
     fs::write(format!("{}/game.wj", output_dir), game_source).unwrap();
 
     // Build via wj binary (full multi-file flow with metadata)
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args(["build", "--target",
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            "--target",
             "rust",
             "--no-cargo",
             &format!("{}/game.wj", output_dir),
@@ -222,14 +220,18 @@ pub fn make_vec() -> Vec3 {
 
     // Literals must be f32 (from Vec3::new signature in metadata)
     assert!(
-        rust_code.contains("1.0_f32") && rust_code.contains("2.0_f32") && rust_code.contains("3.0_f32"),
+        rust_code.contains("1.0_f32")
+            && rust_code.contains("2.0_f32")
+            && rust_code.contains("3.0_f32"),
         "Cross-module Vec3::new should generate f32 literals, got:\n{}",
         rust_code
     );
 
     // Should NOT have f64 (would cause E0308)
     assert!(
-        !rust_code.contains("1.0_f64") && !rust_code.contains("2.0_f64") && !rust_code.contains("3.0_f64"),
+        !rust_code.contains("1.0_f64")
+            && !rust_code.contains("2.0_f64")
+            && !rust_code.contains("3.0_f64"),
         "Vec3::new literals should not be f64, got:\n{}",
         rust_code
     );

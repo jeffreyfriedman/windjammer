@@ -36,7 +36,7 @@ pub fn create_cell() -> Cell {
         "Float literal should match struct field type (f32).\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT contain f64 suffix
     assert!(
         !rust_code.contains("1.0_f64"),
@@ -77,7 +77,7 @@ pub fn calculate() -> f32 {
         "Float expression should use f32 type.\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT contain f64
     assert!(
         !rust_code.contains("_f64") && !rust_code.contains("f64"),
@@ -117,11 +117,12 @@ pub fn progress_percentage(requirement: u32) -> f32 {
 
     // When return type is f32, literals in if-else branches should be f32
     assert!(
-        rust_code.contains("1.0_f32") || (rust_code.contains("1.0") && !rust_code.contains("1.0_f64")),
+        rust_code.contains("1.0_f32")
+            || (rust_code.contains("1.0") && !rust_code.contains("1.0_f64")),
         "Float literals in if-else should match return type (f32).\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT contain f64 suffix
     assert!(
         !rust_code.contains("_f64"),

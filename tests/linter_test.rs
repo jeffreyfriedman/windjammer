@@ -45,7 +45,12 @@ impl Counter {
         "Message should mention explicit ownership"
     );
     assert!(
-        w0001.unwrap().suggestion.as_ref().map(|s| s.contains("self")).unwrap_or(false),
+        w0001
+            .unwrap()
+            .suggestion
+            .as_ref()
+            .map(|s| s.contains("self"))
+            .unwrap_or(false),
         "Suggestion should mention self"
     );
 }
@@ -203,7 +208,10 @@ fn process(data: String) -> String {
         warnings.len(),
         0,
         "Idiomatic Windjammer should have zero warnings - got: {:?}",
-        warnings.iter().map(|w| (&w.lint_name, &w.message)).collect::<Vec<_>>()
+        warnings
+            .iter()
+            .map(|w| (&w.lint_name, &w.message))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -237,11 +245,18 @@ impl Game {
         warnings.iter().map(|w| &w.lint_name).collect::<Vec<_>>()
     );
 
-    let codes: std::collections::HashSet<_> = warnings.iter().map(|w| w.lint_name.as_str()).collect();
-    assert!(codes.contains("W0001"), "Should detect W0001 (explicit ownership)");
+    let codes: std::collections::HashSet<_> =
+        warnings.iter().map(|w| w.lint_name.as_str()).collect();
+    assert!(
+        codes.contains("W0001"),
+        "Should detect W0001 (explicit ownership)"
+    );
     assert!(codes.contains("W0002"), "Should detect W0002 (unwrap)");
     assert!(codes.contains("W0003"), "Should detect W0003 (iter)");
-    assert!(codes.contains("W0004"), "Should detect W0004 (explicit borrow)");
+    assert!(
+        codes.contains("W0004"),
+        "Should detect W0004 (explicit borrow)"
+    );
 }
 
 #[test]
@@ -260,7 +275,10 @@ impl Counter {
 
     let warnings = parse_and_lint(source);
 
-    let w0001 = warnings.iter().find(|w| w.lint_name == "W0001").expect("Should have W0001");
+    let w0001 = warnings
+        .iter()
+        .find(|w| w.lint_name == "W0001")
+        .expect("Should have W0001");
     assert!(w0001.suggestion.is_some(), "Should have suggestion");
     assert!(
         w0001.suggestion.as_ref().unwrap().contains("self"),

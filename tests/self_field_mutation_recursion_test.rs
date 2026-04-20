@@ -69,8 +69,11 @@ impl Game {
     let rust = result.unwrap();
 
     // Should infer &mut self (self.score and self.lives are mutated)
-    assert!(rust.contains("pub fn update(&mut self, event: i32)"), 
-            "Should infer &mut self for mutating method\nGenerated:\n{}", rust);
+    assert!(
+        rust.contains("pub fn update(&mut self, event: i32)"),
+        "Should infer &mut self for mutating method\nGenerated:\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -103,7 +106,7 @@ impl Player {
 
     // take_damage mutates self.health, so needs &mut self
     assert!(rust.contains("pub fn take_damage(&mut self, amount: f32)"));
-    
+
     // process_event calls take_damage, so also needs &mut self
     assert!(rust.contains("pub fn process_event(&mut self, event: i32)"));
 }

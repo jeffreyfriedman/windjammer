@@ -84,18 +84,18 @@ fn main() {
         );
     }
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust, no Clippy warnings)
-    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &str works perfectly
-    // - User wrote `&name` → generated code passes `name` directly (already &str)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
+    // - Borrowed string param → &String (correct for Vec<String>::contains, etc.)
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &String works
+    // - String literals need conversion: "test" → &"test".to_string()
     assert!(
-        generated.contains("name: &str"),
-        "Should generate &str parameter (not &String)\n\nGenerated:\n{}",
+        generated.contains("name: &String"),
+        "Should generate &String parameter (Phase 1 baseline)\n\nGenerated:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(name)"),
-        "Should pass name directly (already &str, no extra &)\n\nGenerated:\n{}",
+        "Should pass name directly (already &String, no extra &)\n\nGenerated:\n{}",
         generated
     );
 }

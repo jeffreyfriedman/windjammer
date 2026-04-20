@@ -16,7 +16,11 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_and_get_rust(source: &str) -> String {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = PathBuf::from(format!("/tmp/trait_impl_ownership_{}_{}", std::process::id(), counter));
+    let test_dir = PathBuf::from(format!(
+        "/tmp/trait_impl_ownership_{}_{}",
+        std::process::id(),
+        counter
+    ));
 
     std::fs::create_dir_all(&test_dir).unwrap();
 
@@ -180,7 +184,12 @@ impl Port for Real {
 
     let out_lib = temp_dir.path().join("lib.rlib");
     let rustc_output = Command::new("rustc")
-        .args([rs_file.to_str().unwrap(), "--crate-type=lib", "-o", out_lib.to_str().unwrap()])
+        .args([
+            rs_file.to_str().unwrap(),
+            "--crate-type=lib",
+            "-o",
+            out_lib.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to run rustc");
 

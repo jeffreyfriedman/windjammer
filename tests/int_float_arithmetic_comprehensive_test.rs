@@ -8,7 +8,6 @@
 /// - Self fields: self.count * 0.5
 /// - Nested: (a + b) + c, base * count + offset
 /// - Method calls, field access, cast expressions
-
 use std::process::Command;
 use windjammer::*;
 
@@ -74,9 +73,7 @@ fn assert_no_e0277(rust_code: &str, stderr: &str, context: &str) {
     assert!(
         !has_e0277,
         "E0277 int/float in {}:\nstderr: {}\n\nGenerated:\n{}",
-        context,
-        stderr,
-        rust_code
+        context, stderr, rust_code
     );
 }
 
@@ -94,7 +91,11 @@ pub fn test(x: f32, y: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(y) as f32"), "f32 op i32 should cast y. Got:\n{}", output);
+    assert!(
+        output.contains("(y) as f32"),
+        "f32 op i32 should cast y. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -112,7 +113,11 @@ pub fn test(x: i32, y: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(x) as f32"), "i32 op f32 should cast x. Got:\n{}", output);
+    assert!(
+        output.contains("(x) as f32"),
+        "i32 op f32 should cast x. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -126,7 +131,11 @@ pub fn add_one(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "x + 1 should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "x + 1 should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -140,7 +149,11 @@ pub fn add(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "1 + x should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "1 + x should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -157,7 +170,11 @@ pub fn accumulate() -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "price += 1 should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "price += 1 should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -173,7 +190,11 @@ pub fn scale_by(count: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "scale *= count should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "scale *= count should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -211,7 +232,11 @@ pub fn offset(dx: i32, dy: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(dy) as f32"), "(dx as f32) + dy should cast dy. Got:\n{}", output);
+    assert!(
+        output.contains("(dy) as f32"),
+        "(dx as f32) + dy should cast dy. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -225,7 +250,11 @@ pub fn chain(a: f32, b: i32, c: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "nested should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "nested should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -254,7 +283,11 @@ pub fn test(x: f64, y: i32) -> f64 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(y) as f64"), "f64 + i32 should cast to f64. Got:\n{}", output);
+    assert!(
+        output.contains("(y) as f64"),
+        "f64 + i32 should cast to f64. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -268,7 +301,11 @@ pub fn test(x: uint, y: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(x) as f32"), "uint + f32 should cast x. Got:\n{}", output);
+    assert!(
+        output.contains("(x) as f32"),
+        "uint + f32 should cast x. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -282,7 +319,11 @@ pub fn test(x: usize, y: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "usize + f32 should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "usize + f32 should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -298,7 +339,11 @@ pub fn get_scale() -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "1.0 + 1 in const should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "1.0 + 1 in const should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -312,7 +357,11 @@ pub fn sub_one(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "x - 1 should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "x - 1 should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -326,7 +375,11 @@ pub fn half(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "x / 2 should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "x / 2 should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -340,7 +393,11 @@ pub fn wrap(x: f32, period: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(period) as f32"), "x % period should cast. Got:\n{}", output);
+    assert!(
+        output.contains("(period) as f32"),
+        "x % period should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -374,7 +431,11 @@ pub fn accumulate(total: f32, value: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("as f32"), "t += value should cast. Got:\n{}", output);
+    assert!(
+        output.contains("as f32"),
+        "t += value should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
@@ -388,7 +449,11 @@ pub fn compute(base: f32, count: i32, offset: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(output.contains("(count) as f32"), "base * count should cast. Got:\n{}", output);
+    assert!(
+        output.contains("(count) as f32"),
+        "base * count should cast. Got:\n{}",
+        output
+    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
 }

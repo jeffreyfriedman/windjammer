@@ -37,7 +37,8 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        let calls_mut = self.function_calls_mutating_self_methods_with_registry(func, registry, visited);
+        let calls_mut =
+            self.function_calls_mutating_self_methods_with_registry(func, registry, visited);
         if calls_mut {
             return true;
         }
@@ -128,7 +129,11 @@ impl<'ast> Analyzer<'ast> {
         thread_local! {
             static DEPTH_S: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
         }
-        let cur = DEPTH_S.with(|d| { let v = d.get(); d.set(v + 1); v });
+        let cur = DEPTH_S.with(|d| {
+            let v = d.get();
+            d.set(v + 1);
+            v
+        });
         if cur > 1000 {
             DEPTH_S.with(|d| d.set(d.get() - 1));
             return false;
@@ -146,9 +151,9 @@ impl<'ast> Analyzer<'ast> {
                     .iter()
                     .any(|s| self.statement_calls_mutating_self_methods(s, registry, visited))
                     || else_block.as_ref().is_some_and(|block| {
-                        block
-                            .iter()
-                            .any(|s| self.statement_calls_mutating_self_methods(s, registry, visited))
+                        block.iter().any(|s| {
+                            self.statement_calls_mutating_self_methods(s, registry, visited)
+                        })
                     })
             }
             Statement::While { body, .. } => body
@@ -186,7 +191,11 @@ impl<'ast> Analyzer<'ast> {
         thread_local! {
             static DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
         }
-        let cur = DEPTH.with(|d| { let v = d.get(); d.set(v + 1); v });
+        let cur = DEPTH.with(|d| {
+            let v = d.get();
+            d.set(v + 1);
+            v
+        });
         if cur > 1000 {
             DEPTH.with(|d| d.set(d.get() - 1));
             return false;
@@ -242,7 +251,10 @@ impl<'ast> Analyzer<'ast> {
                                 if let Some(sig) = reg.get_signature(method) {
                                     if sig.has_self_receiver {
                                         if let Some(&ownership) = sig.param_ownership.first() {
-                                            if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                            if matches!(
+                                                ownership,
+                                                super::OwnershipMode::MutBorrowed
+                                            ) {
                                                 return true;
                                             }
                                         }
@@ -255,10 +267,7 @@ impl<'ast> Analyzer<'ast> {
 
                 // Cross-type mutation propagation via self.field.method()
                 if self.expression_is_self_field_mutating_method_call(
-                    object,
-                    method,
-                    registry,
-                    visited,
+                    object, method, registry, visited,
                 ) {
                     return true;
                 }
@@ -309,9 +318,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 // Recurse into arguments for nested patterns
-                arguments
-                    .iter()
-                    .any(|(_, arg)| self.expression_calls_mutating_self_methods(arg, registry, visited))
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_calls_mutating_self_methods(arg, registry, visited)
+                })
             }
             Expression::Unary { operand, .. } => {
                 self.expression_calls_mutating_self_methods(operand, registry, visited)
@@ -457,16 +466,15 @@ impl<'ast> Analyzer<'ast> {
             }
             _ => return false,
         };
-        
+
         let peeled = Self::peel_ref_expr(iterable);
         if !self.expression_traces_to_self(peeled) {
             return false;
         }
-        
+
         // Check if ANY binding is mutated
         loop_vars.iter().any(|loop_var| {
-            body
-                .iter()
+            body.iter()
                 .any(|s| self.statement_tree_mutates_binding(s, loop_var.as_str()))
         })
     }
@@ -474,13 +482,19 @@ impl<'ast> Analyzer<'ast> {
     fn assignment_target_starts_with_var(expr: &Expression, var: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == var,
-            Expression::FieldAccess { object, .. } => Self::assignment_target_starts_with_var(object, var),
-            Expression::Index { object, .. } => Self::assignment_target_starts_with_var(object, var),
+            Expression::FieldAccess { object, .. } => {
+                Self::assignment_target_starts_with_var(object, var)
+            }
+            Expression::Index { object, .. } => {
+                Self::assignment_target_starts_with_var(object, var)
+            }
             // TDD FIX: Handle dereference assignments (*val = ..., *var.field = ...)
             // For: *val = value, need to detect that 'val' is the target variable
-            Expression::Unary { op: UnaryOp::Deref, operand, .. } => {
-                Self::assignment_target_starts_with_var(operand, var)
-            }
+            Expression::Unary {
+                op: UnaryOp::Deref,
+                operand,
+                ..
+            } => Self::assignment_target_starts_with_var(operand, var),
             _ => false,
         }
     }
@@ -488,7 +502,9 @@ impl<'ast> Analyzer<'ast> {
     /// Whether `stmt` mutates `var` or a field/index chain rooted at `var` (loop element patterns).
     fn statement_tree_mutates_binding(&self, stmt: &Statement, var: &str) -> bool {
         match stmt {
-            Statement::Assignment { target, .. } => Self::assignment_target_starts_with_var(target, var),
+            Statement::Assignment { target, .. } => {
+                Self::assignment_target_starts_with_var(target, var)
+            }
             Statement::If {
                 then_block,
                 else_block,
@@ -517,13 +533,13 @@ impl<'ast> Analyzer<'ast> {
                         .iter()
                         .any(|s| self.statement_tree_mutates_binding(s, var))
             }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expression_tree_mutates_binding(arm.body, var)
-            }),
-            Statement::Expression { expr, .. } => {
-                self.expression_tree_mutates_binding(expr, var)
-            }
-            Statement::Let { value, else_block, .. } => {
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| self.expression_tree_mutates_binding(arm.body, var)),
+            Statement::Expression { expr, .. } => self.expression_tree_mutates_binding(expr, var),
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 self.expression_tree_mutates_binding(value, var)
                     || else_block.as_ref().is_some_and(|block| {
                         block
@@ -531,9 +547,9 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.statement_tree_mutates_binding(s, var))
                     })
             }
-            Statement::Return { value: Some(expr), .. } => {
-                self.expression_tree_mutates_binding(expr, var)
-            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_tree_mutates_binding(expr, var),
             _ => false,
         }
     }
@@ -574,7 +590,11 @@ impl<'ast> Analyzer<'ast> {
         thread_local! {
             static DEPTH_SM: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
         }
-        let cur = DEPTH_SM.with(|d| { let v = d.get(); d.set(v + 1); v });
+        let cur = DEPTH_SM.with(|d| {
+            let v = d.get();
+            d.set(v + 1);
+            v
+        });
         if cur > 1000 {
             DEPTH_SM.with(|d| d.set(d.get() - 1));
             return false;
@@ -604,11 +624,9 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.statement_modifies_self_fields(s, registry, visited))
                     })
             }
-            Statement::While { body, .. } => {
-                body
-                    .iter()
-                    .any(|s| self.statement_modifies_self_fields(s, registry, visited))
-            }
+            Statement::While { body, .. } => body
+                .iter()
+                .any(|s| self.statement_modifies_self_fields(s, registry, visited)),
             Statement::For {
                 pattern,
                 iterable,
@@ -629,9 +647,9 @@ impl<'ast> Analyzer<'ast> {
                         self.expression_contains_self_field_mutations(arm.body, registry, visited)
                     })
             }
-            Statement::Return { value, .. } => value.as_ref().is_some_and(|expr| {
-                self.expression_mutates_self_fields(expr, registry, visited)
-            }),
+            Statement::Return { value, .. } => value
+                .as_ref()
+                .is_some_and(|expr| self.expression_mutates_self_fields(expr, registry, visited)),
             Statement::Let { value, .. } => {
                 self.expression_mutates_self_fields(value, registry, visited)
             }
@@ -649,9 +667,9 @@ impl<'ast> Analyzer<'ast> {
         visited: &mut HashSet<String>,
     ) -> bool {
         match expr {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_modifies_self_fields(s, registry, visited)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_modifies_self_fields(s, registry, visited)),
             Expression::MethodCall { .. } => {
                 self.expression_mutates_self_fields(expr, registry, visited)
             }
@@ -696,7 +714,11 @@ impl<'ast> Analyzer<'ast> {
         thread_local! {
             static DEPTH_EM: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
         }
-        let cur = DEPTH_EM.with(|d| { let v = d.get(); d.set(v + 1); v });
+        let cur = DEPTH_EM.with(|d| {
+            let v = d.get();
+            d.set(v + 1);
+            v
+        });
         if cur > 1000 {
             DEPTH_EM.with(|d| d.set(d.get() - 1));
             return false;
@@ -747,7 +769,10 @@ impl<'ast> Analyzer<'ast> {
                                 if let Some(sig) = reg.get_signature(method) {
                                     if sig.has_self_receiver {
                                         if let Some(&ownership) = sig.param_ownership.first() {
-                                            if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                            if matches!(
+                                                ownership,
+                                                super::OwnershipMode::MutBorrowed
+                                            ) {
                                                 return true;
                                             }
                                         }
@@ -759,26 +784,19 @@ impl<'ast> Analyzer<'ast> {
                 }
 
                 self.expression_is_self_field_mutating_method_call(
-                    object,
-                    method,
-                    registry,
-                    visited,
+                    object, method, registry, visited,
                 )
             }
-            Expression::Unary {
-                op,
-                operand,
-                ..
-            } => {
+            Expression::Unary { op, operand, .. } => {
                 if matches!(op, crate::parser::UnaryOp::MutRef) {
                     self.expression_is_self_field_access(operand)
                 } else {
                     self.expression_mutates_self_fields(operand, registry, visited)
                 }
             }
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_modifies_self_fields(s, registry, visited)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_modifies_self_fields(s, registry, visited)),
             _ => false,
         }
     }
@@ -860,20 +878,20 @@ impl<'ast> Analyzer<'ast> {
     fn expression_consumes_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
-            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
-                matches!(v, Expression::Identifier { name, .. } if name == "self")
-            }),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self")),
             _ => false,
         }
     }
 
     /// Check if `self` is used as a match scrutinee (match self { ... })
     /// AND the match arms actually consume values from self.
-    /// 
+    ///
     /// TDD FIX for E0606: match self { Value::Int(v) => v as f32, ... }
     /// If match arms return/use bound variables, self must be owned.
     /// If match arms only return literals, &self is sufficient.
-    /// 
+    ///
     /// Examples:
     ///   match self { Value::Int(v) => v as f32 } → needs `self` (v is used)
     ///   match self { Condition::HasItem(_) => false } → needs `&self` (literal returned)
@@ -887,10 +905,10 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if function iterates over self.field and calls consuming methods on elements.
-    /// 
+    ///
     /// TDD FIX for E0507: for cond in self.conditions { cond.check() }
     /// If loop elements call methods that consume self, the outer method must consume self.
-    /// 
+    ///
     /// Example:
     ///   for item in self.items { item.consume() } → needs `self` (owned)
     pub(super) fn function_consumes_self_field_elements(
@@ -912,7 +930,12 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match stmt {
-            Statement::For { pattern, iterable, body, .. } => {
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } => {
                 // Check if iterable is self.field (e.g., self.conditions)
                 if !self.expression_is_self_field(iterable) {
                     return false;
@@ -925,20 +948,28 @@ impl<'ast> Analyzer<'ast> {
                 };
 
                 // Check if loop body calls consuming methods on loop_var
-                body.iter().any(|s| self.statement_calls_consuming_method_on_var(s, &loop_var, registry))
+                body.iter()
+                    .any(|s| self.statement_calls_consuming_method_on_var(s, &loop_var, registry))
             }
-            Statement::If { then_block, else_block, .. } => {
-                then_block.iter().any(|s| self.statement_consumes_self_field_elements(s, registry))
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_consumes_self_field_elements(s, registry))
                     || else_block.as_ref().map_or(false, |body| {
-                        body.iter().any(|s| self.statement_consumes_self_field_elements(s, registry))
+                        body.iter()
+                            .any(|s| self.statement_consumes_self_field_elements(s, registry))
                     })
             }
-            Statement::While { body, .. } |
-            Statement::Loop { body, .. } |
-            Statement::Thread { body, .. } |
-            Statement::Async { body, .. } => {
-                body.iter().any(|s| self.statement_consumes_self_field_elements(s, registry))
-            }
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| self.statement_consumes_self_field_elements(s, registry)),
             _ => false,
         }
     }
@@ -959,17 +990,28 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } |
-            Statement::Return { value: Some(expr), .. } |
-            Statement::Let { value: expr, .. } |
-            Statement::Assignment { value: expr, .. } => {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. } => {
                 self.expression_calls_consuming_method_on_var(expr, var_name, registry)
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.expression_calls_consuming_method_on_var(condition, var_name, registry)
-                    || then_block.iter().any(|s| self.statement_calls_consuming_method_on_var(s, var_name, registry))
+                    || then_block.iter().any(|s| {
+                        self.statement_calls_consuming_method_on_var(s, var_name, registry)
+                    })
                     || else_block.as_ref().map_or(false, |body| {
-                        body.iter().any(|s| self.statement_calls_consuming_method_on_var(s, var_name, registry))
+                        body.iter().any(|s| {
+                            self.statement_calls_consuming_method_on_var(s, var_name, registry)
+                        })
                     })
             }
             _ => false,
@@ -990,7 +1032,7 @@ impl<'ast> Analyzer<'ast> {
                         // Check if the method consumes self
                         // We need to look up the method's signature
                         // For now, use heuristics: methods that match on self usually consume
-                        return true;  // Conservative: assume method consumes
+                        return true; // Conservative: assume method consumes
                     }
                 }
                 false
@@ -999,11 +1041,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_calls_consuming_method_on_var(left, var_name, registry)
                     || self.expression_calls_consuming_method_on_var(right, var_name, registry)
             }
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_, arg)| {
-                    self.expression_calls_consuming_method_on_var(arg, var_name, registry)
-                })
-            }
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expression_calls_consuming_method_on_var(arg, var_name, registry)
+            }),
             Expression::Unary { operand, .. } => {
                 self.expression_calls_consuming_method_on_var(operand, var_name, registry)
             }
@@ -1020,35 +1060,46 @@ impl<'ast> Analyzer<'ast> {
                     return self.match_arms_consume_bound_values(arms);
                 }
                 // Recursively check match arm bodies (which are expressions)
-                arms.iter().any(|arm| {
-                    self.expression_contains_match_on_self_consuming(&arm.body)
-                })
+                arms.iter()
+                    .any(|arm| self.expression_contains_match_on_self_consuming(&arm.body))
             }
-            Statement::Let { value: expr, .. } |
-            Statement::Assignment { value: expr, .. } |
-            Statement::Expression { expr, .. } |
-            Statement::Return { value: Some(expr), .. } => {
-                self.expression_contains_match_on_self_consuming(expr)
-            }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. }
+            | Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_contains_match_on_self_consuming(expr),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.expression_contains_match_on_self_consuming(condition)
-                    || then_block.iter().any(|s| self.statement_matches_on_self_consuming(s))
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_matches_on_self_consuming(s))
                     || else_block.as_ref().map_or(false, |body| {
-                        body.iter().any(|s| self.statement_matches_on_self_consuming(s))
+                        body.iter()
+                            .any(|s| self.statement_matches_on_self_consuming(s))
                     })
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expression_contains_match_on_self_consuming(condition)
-                    || body.iter().any(|s| self.statement_matches_on_self_consuming(s))
+                    || body
+                        .iter()
+                        .any(|s| self.statement_matches_on_self_consuming(s))
             }
-            Statement::For { body, .. } => {
-                body.iter().any(|s| self.statement_matches_on_self_consuming(s))
-            }
-            Statement::Loop { body, .. } |
-            Statement::Thread { body, .. } |
-            Statement::Async { body, .. } => {
-                body.iter().any(|s| self.statement_matches_on_self_consuming(s))
-            }
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_matches_on_self_consuming(s)),
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| self.statement_matches_on_self_consuming(s)),
             Statement::Defer { statement, .. } => {
                 self.statement_matches_on_self_consuming(statement)
             }
@@ -1060,46 +1111,44 @@ impl<'ast> Analyzer<'ast> {
     /// vs. just returning literals without using the bindings.
     fn match_arms_consume_bound_values(&self, arms: &[crate::parser::MatchArm]) -> bool {
         use crate::parser::Pattern;
-        
+
         for arm in arms {
             // Get all variable names bound in the pattern
             let bound_vars = self.pattern_bound_variables(&arm.pattern);
-            
+
             // Check if the arm body uses any of these variables in a consuming way
             if self.expression_uses_variables_consuming(&arm.body, &bound_vars) {
                 return true;
             }
         }
-        
+
         false
     }
 
     fn pattern_bound_variables(&self, pattern: &Pattern) -> Vec<String> {
         use crate::parser::EnumPatternBinding;
-        
+
         let mut vars = Vec::new();
         match pattern {
             Pattern::Identifier(name) if !name.starts_with('_') => {
                 vars.push(name.clone());
             }
-            Pattern::EnumVariant(_, binding) => {
-                match binding {
-                    EnumPatternBinding::Single(name) if !name.starts_with('_') => {
-                        vars.push(name.clone());
-                    }
-                    EnumPatternBinding::Tuple(patterns) => {
-                        for p in patterns {
-                            vars.append(&mut self.pattern_bound_variables(p));
-                        }
-                    }
-                    EnumPatternBinding::Struct(fields, _) => {
-                        for (_, p) in fields {
-                            vars.append(&mut self.pattern_bound_variables(p));
-                        }
-                    }
-                    _ => {}
+            Pattern::EnumVariant(_, binding) => match binding {
+                EnumPatternBinding::Single(name) if !name.starts_with('_') => {
+                    vars.push(name.clone());
                 }
-            }
+                EnumPatternBinding::Tuple(patterns) => {
+                    for p in patterns {
+                        vars.append(&mut self.pattern_bound_variables(p));
+                    }
+                }
+                EnumPatternBinding::Struct(fields, _) => {
+                    for (_, p) in fields {
+                        vars.append(&mut self.pattern_bound_variables(p));
+                    }
+                }
+                _ => {}
+            },
             Pattern::Tuple(patterns) => {
                 for p in patterns {
                     vars.append(&mut self.pattern_bound_variables(p));
@@ -1115,54 +1164,60 @@ impl<'ast> Analyzer<'ast> {
 
     fn expression_uses_variables_consuming(&self, expr: &Expression, vars: &[String]) -> bool {
         use crate::parser::Expression;
-        
+
         match expr {
             // If the expression is just an identifier from our bound vars, it's consumed
             Expression::Identifier { name, .. } if vars.contains(name) => true,
-            
+
             // Casts consume the value
             Expression::Cast { expr: inner, .. } => {
                 self.expression_uses_variables_consuming(inner, vars)
             }
-            
+
             // Binary operations might consume (depends on the variable being used)
             Expression::Binary { left, right, .. } => {
                 self.expression_uses_variables_consuming(left, vars)
                     || self.expression_uses_variables_consuming(right, vars)
             }
-            
+
             // Method calls consume self if self is a bound var
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expression_uses_variables_consuming(object, vars)
-                    || arguments.iter().any(|(_, arg)| self.expression_uses_variables_consuming(arg, vars))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_uses_variables_consuming(arg, vars))
             }
-            
+
             // Function calls consume arguments
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_, arg)| self.expression_uses_variables_consuming(arg, vars))
-            }
-            
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_uses_variables_consuming(arg, vars)),
+
             // Field access on a bound var consumes if the field is non-Copy
             Expression::FieldAccess { object, .. } => {
                 self.expression_uses_variables_consuming(object, vars)
             }
-            
+
             // Literals don't consume anything
             Expression::Literal { .. } => false,
-            
+
             // Blocks: check last expression
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.statement_uses_variables_consuming(s, vars))
-            }
-            
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_uses_variables_consuming(s, vars)),
+
             _ => false,
         }
     }
 
     fn statement_uses_variables_consuming(&self, stmt: &Statement, vars: &[String]) -> bool {
         match stmt {
-            Statement::Return { value: Some(expr), .. } |
-            Statement::Expression { expr, .. } => {
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. } => {
                 self.expression_uses_variables_consuming(expr, vars)
             }
             _ => false,
@@ -1171,19 +1226,23 @@ impl<'ast> Analyzer<'ast> {
 
     fn expression_contains_match_on_self_consuming(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.statement_matches_on_self_consuming(s))
-            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_matches_on_self_consuming(s)),
             Expression::Binary { left, right, .. } => {
-                self.expression_contains_match_on_self_consuming(left) 
+                self.expression_contains_match_on_self_consuming(left)
                     || self.expression_contains_match_on_self_consuming(right)
             }
-            Expression::Call { arguments, .. } => {
-                arguments.iter().any(|(_, arg)| self.expression_contains_match_on_self_consuming(arg))
-            }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_contains_match_on_self_consuming(arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expression_contains_match_on_self_consuming(object)
-                    || arguments.iter().any(|(_, arg)| self.expression_contains_match_on_self_consuming(arg))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_contains_match_on_self_consuming(arg))
             }
             _ => false,
         }
@@ -1193,7 +1252,9 @@ impl<'ast> Analyzer<'ast> {
         use crate::parser::UnaryOp;
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
-            Expression::Unary { op, operand, .. } if matches!(op, UnaryOp::Ref | UnaryOp::MutRef) => {
+            Expression::Unary { op, operand, .. }
+                if matches!(op, UnaryOp::Ref | UnaryOp::MutRef) =>
+            {
                 matches!(&**operand, Expression::Identifier { name, .. } if name == "self")
             }
             _ => false,
@@ -1218,35 +1279,35 @@ impl<'ast> Analyzer<'ast> {
     fn statement_moves_non_copy_self_field(&self, stmt: &Statement) -> bool {
         use crate::parser::Statement;
         match stmt {
-            Statement::Let { value, .. } => {
-                self.expression_moves_non_copy_self_field(value)
-            }
-            Statement::Assignment { value, .. } => {
-                self.expression_moves_non_copy_self_field(value)
-            }
-            Statement::Expression { expr, .. } => {
-                self.expression_moves_non_copy_self_field(expr)
-            }
-            Statement::Return { value: Some(expr), .. } => {
-                self.expression_moves_non_copy_self_field(expr)
-            }
-            Statement::If { then_block, else_block, .. } => {
-                then_block.iter().any(|s| self.statement_moves_non_copy_self_field(s))
+            Statement::Let { value, .. } => self.expression_moves_non_copy_self_field(value),
+            Statement::Assignment { value, .. } => self.expression_moves_non_copy_self_field(value),
+            Statement::Expression { expr, .. } => self.expression_moves_non_copy_self_field(expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_moves_non_copy_self_field(expr),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_moves_non_copy_self_field(s))
                     || else_block.as_ref().is_some_and(|block| {
-                        block.iter().any(|s| self.statement_moves_non_copy_self_field(s))
+                        block
+                            .iter()
+                            .any(|s| self.statement_moves_non_copy_self_field(s))
                     })
             }
-            Statement::For { body, .. } => {
-                body.iter().any(|s| self.statement_moves_non_copy_self_field(s))
-            }
-            Statement::While { body, .. } => {
-                body.iter().any(|s| self.statement_moves_non_copy_self_field(s))
-            }
-            Statement::Match { arms, .. } => {
-                arms.iter().any(|arm| {
-                    self.expression_moves_non_copy_self_field(arm.body)
-                })
-            }
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_moves_non_copy_self_field(s)),
+            Statement::While { body, .. } => body
+                .iter()
+                .any(|s| self.statement_moves_non_copy_self_field(s)),
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| self.expression_moves_non_copy_self_field(arm.body)),
             _ => false,
         }
     }
@@ -1267,15 +1328,13 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
             // Struct literal: Foo { field: self.field, ... }
-            Expression::StructLiteral { fields, .. } => {
-                fields.iter().any(|(_, v)| {
-                    self.expression_moves_non_copy_self_field(v)
-                })
-            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expression_moves_non_copy_self_field(v)),
             // Block expression
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.statement_moves_non_copy_self_field(s))
-            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_moves_non_copy_self_field(s)),
             _ => false,
         }
     }
@@ -1511,9 +1570,9 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
-        func.body.iter().any(|s| {
-            self.statement_mutates_through_self_option_scrutinee(s, registry)
-        })
+        func.body
+            .iter()
+            .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
     }
 
     fn statement_mutates_through_self_option_scrutinee(
@@ -1524,9 +1583,9 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Match { value, arms, .. } => {
                 self.expression_is_self_field_access(value)
-                    && arms.iter().any(|arm| {
-                        self.match_arm_some_calls_mut_method_on_binding(arm, registry)
-                    })
+                    && arms
+                        .iter()
+                        .any(|arm| self.match_arm_some_calls_mut_method_on_binding(arm, registry))
             }
             Statement::If {
                 then_block,
@@ -1537,8 +1596,9 @@ impl<'ast> Analyzer<'ast> {
                     .iter()
                     .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
+                        b.iter().any(|s| {
+                            self.statement_mutates_through_self_option_scrutinee(s, registry)
+                        })
                     })
             }
             Statement::While { body, .. } | Statement::Loop { body, .. } => body
@@ -1557,7 +1617,9 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         let (variant, binding) = match &arm.pattern {
-            Pattern::EnumVariant(v, EnumPatternBinding::Single(name)) => (v.as_str(), name.as_str()),
+            Pattern::EnumVariant(v, EnumPatternBinding::Single(name)) => {
+                (v.as_str(), name.as_str())
+            }
             _ => return false,
         };
         let is_some_arm = variant == "Some" || variant.ends_with("::Some");
@@ -1609,9 +1671,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expr_calls_mut_self_method_on_identifier(operand, id, registry)
             }
-            Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| {
-                self.expr_calls_mut_self_method_on_identifier(a, id, registry)
-            }),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, a)| self.expr_calls_mut_self_method_on_identifier(a, id, registry)),
             _ => false,
         }
     }
@@ -1726,10 +1788,9 @@ impl<'ast> Analyzer<'ast> {
         }
         match analyzed.inferred_ownership.get("self") {
             Some(super::OwnershipMode::Borrowed) | None => {
-                analyzed.inferred_ownership.insert(
-                    "self".to_string(),
-                    super::OwnershipMode::MutBorrowed,
-                );
+                analyzed
+                    .inferred_ownership
+                    .insert("self".to_string(), super::OwnershipMode::MutBorrowed);
             }
             _ => {}
         }
@@ -1762,17 +1823,13 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if self.for_loop_over_self_field_triggers_mut_self(
-                    pattern,
-                    iterable,
-                    body,
-                    impl_ty,
-                    program,
-                    registry,
+                    pattern, iterable, body, impl_ty, program, registry,
                 ) {
                     return true;
                 }
-                body.iter()
-                    .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry))
+                body.iter().any(|s| {
+                    self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
+                })
             }
             Statement::If {
                 then_block,
@@ -1782,33 +1839,35 @@ impl<'ast> Analyzer<'ast> {
                 then_block.iter().any(|s| {
                     self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
                 }) || else_block.as_ref().is_some_and(|b| {
-                    b.iter()
-                        .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry))
+                    b.iter().any(|s| {
+                        self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
+                    })
                 })
             }
-            Statement::While { body, .. } | Statement::Loop { body, .. } => body.iter().any(|s| {
-                self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
-            }),
+            Statement::While { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)),
             Statement::Match { arms, .. } => arms.iter().any(|a| {
-                self.statement_tree_has_dispatch_for_loop_in_expr(a.body, impl_ty, program, registry)
+                self.statement_tree_has_dispatch_for_loop_in_expr(
+                    a.body, impl_ty, program, registry,
+                )
             }),
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 self.statement_tree_has_dispatch_for_loop_in_expr(value, impl_ty, program, registry)
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry))
+                        b.iter().any(|s| {
+                            self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
+                        })
                     })
             }
             Statement::Expression { expr, .. } => {
                 self.statement_tree_has_dispatch_for_loop_in_expr(expr, impl_ty, program, registry)
             }
-            Statement::Thread { body, .. } | Statement::Async { body, .. } => body.iter().any(|s| {
-                self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
-            }),
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)),
             Statement::Defer { statement, .. } => {
                 self.statement_tree_has_dispatch_for_loop(statement, impl_ty, program, registry)
             }
@@ -1824,9 +1883,9 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match expr {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry)),
             _ => false,
         }
     }
@@ -1858,16 +1917,16 @@ impl<'ast> Analyzer<'ast> {
         if !is_self_root {
             return false;
         }
-        let Some(field_ty) = Self::lookup_struct_field_type(program, impl_ty, field.as_str()) else {
+        let Some(field_ty) = Self::lookup_struct_field_type(program, impl_ty, field.as_str())
+        else {
             return false;
         };
         let Some(elem_ty) = Self::type_vec_element(&field_ty) else {
             return false;
         };
         let peeled = Self::peel_box_and_ref_type(&elem_ty);
-        body.iter().any(|s| {
-            self.stmt_calls_mut_dispatch_on_var(s, loop_var, peeled, registry)
-        })
+        body.iter()
+            .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, peeled, registry))
     }
 
     fn peel_ref_expr<'e>(expr: &'e Expression<'ast>) -> &'e Expression<'ast> {
@@ -1908,8 +1967,7 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 crate::parser::Item::Mod { items: inner, .. } => {
-                    if let Some(t) =
-                        Self::lookup_struct_field_type_items(inner, struct_base, field)
+                    if let Some(t) = Self::lookup_struct_field_type_items(inner, struct_base, field)
                     {
                         return Some(t);
                     }
@@ -1923,9 +1981,7 @@ impl<'ast> Analyzer<'ast> {
     fn type_vec_element(ty: &Type) -> Option<Type> {
         match ty {
             Type::Vec(inner) => Some(inner.as_ref().clone()),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::type_vec_element(inner)
-            }
+            Type::Reference(inner) | Type::MutableReference(inner) => Self::type_vec_element(inner),
             _ => None,
         }
     }
@@ -1949,11 +2005,10 @@ impl<'ast> Analyzer<'ast> {
         trait_name: &str,
         method: &str,
     ) -> Option<super::OwnershipMode> {
-        let from_map =
-            |m: &std::collections::HashMap<String, super::AnalyzedFunction<'ast>>| {
-                m.get(method)
-                    .and_then(|af| af.inferred_ownership.get("self").copied())
-            };
+        let from_map = |m: &std::collections::HashMap<String, super::AnalyzedFunction<'ast>>| {
+            m.get(method)
+                .and_then(|af| af.inferred_ownership.get("self").copied())
+        };
         if let Some(m) = self.analyzed_trait_methods.get(trait_name) {
             if let Some(o) = from_map(m) {
                 return Some(o);
@@ -2002,14 +2057,13 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_mut_dispatch_on_var(expr, loop_var, elem, registry)
             }
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 self.expr_calls_mut_dispatch_on_var(value, loop_var, elem, registry)
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
+                        b.iter().any(|s| {
+                            self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
+                        })
                     })
             }
             Statement::Assignment { target, value, .. } => {
@@ -2026,35 +2080,34 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 self.expr_calls_mut_dispatch_on_var(condition, loop_var, elem, registry)
-                    || then_block.iter().any(|s| {
-                        self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
-                    })
+                    || then_block
+                        .iter()
+                        .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
+                        b.iter().any(|s| {
+                            self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
+                        })
                     })
             }
-            Statement::While { condition, body, .. } => {
-                self.expr_calls_mut_dispatch_on_var(condition, loop_var, elem, registry)
-                    || body.iter().any(|s| {
-                        self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
-                    })
-            }
-            Statement::For {
-                iterable,
-                body,
-                ..
+            Statement::While {
+                condition, body, ..
             } => {
+                self.expr_calls_mut_dispatch_on_var(condition, loop_var, elem, registry)
+                    || body
+                        .iter()
+                        .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
+            }
+            Statement::For { iterable, body, .. } => {
                 self.expr_calls_mut_dispatch_on_var(iterable, loop_var, elem, registry)
-                    || body.iter().any(|s| {
-                        self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
-                    })
+                    || body
+                        .iter()
+                        .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry))
             }
             Statement::Loop { body, .. }
             | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body.iter().any(|s| {
-                self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
-            }),
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)),
             Statement::Match { value, arms, .. } => {
                 self.expr_calls_mut_dispatch_on_var(value, loop_var, elem, registry)
                     || arms.iter().any(|a| {
@@ -2085,7 +2138,8 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if let Expression::Identifier { name, .. } = &**object {
-                    if name == loop_var && self.type_needs_mut_receiver_for_method(elem, method, registry)
+                    if name == loop_var
+                        && self.type_needs_mut_receiver_for_method(elem, method, registry)
                     {
                         return true;
                     }
@@ -2093,15 +2147,19 @@ impl<'ast> Analyzer<'ast> {
                 if self.expr_calls_mut_dispatch_on_var(object, loop_var, elem, registry) {
                     return true;
                 }
-                arguments.iter().any(|(_, a)| {
-                    self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry)
-                })
+                arguments
+                    .iter()
+                    .any(|(_, a)| self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry))
             }
             Expression::Binary { left, right, .. } => {
                 self.expr_calls_mut_dispatch_on_var(left, loop_var, elem, registry)
                     || self.expr_calls_mut_dispatch_on_var(right, loop_var, elem, registry)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expr_calls_mut_dispatch_on_var(function, loop_var, elem, registry)
                     || arguments.iter().any(|(_, a)| {
                         self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry)
@@ -2110,9 +2168,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expr_calls_mut_dispatch_on_var(operand, loop_var, elem, registry)
             }
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, elem, registry)),
             Expression::FieldAccess { object, .. } => {
                 self.expr_calls_mut_dispatch_on_var(object, loop_var, elem, registry)
             }
@@ -2120,9 +2178,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_mut_dispatch_on_var(object, loop_var, elem, registry)
                     || self.expr_calls_mut_dispatch_on_var(index, loop_var, elem, registry)
             }
-            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
-                self.expr_calls_mut_dispatch_on_var(v, loop_var, elem, registry)
-            }),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expr_calls_mut_dispatch_on_var(v, loop_var, elem, registry)),
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|e| self.expr_calls_mut_dispatch_on_var(e, loop_var, elem, registry)),
@@ -2143,9 +2201,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_mut_dispatch_on_var(k, loop_var, elem, registry)
                     || self.expr_calls_mut_dispatch_on_var(v, loop_var, elem, registry)
             }),
-            Expression::MacroInvocation { args, .. } => args.iter().any(|a| {
-                self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry)
-            }),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|a| self.expr_calls_mut_dispatch_on_var(a, loop_var, elem, registry)),
             Expression::ChannelSend { channel, value, .. } => {
                 self.expr_calls_mut_dispatch_on_var(channel, loop_var, elem, registry)
                     || self.expr_calls_mut_dispatch_on_var(value, loop_var, elem, registry)

@@ -55,23 +55,26 @@ pub fn render(item: trait Drawable) {
         .output()
         .expect("Failed to execute wj compiler");
 
-    assert!(output.status.success(), 
-            "Compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr));
-    
+    assert!(
+        output.status.success(),
+        "Compilation failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     // Read generated Rust code
     let rust_code = fs::read_to_string(test_dir.join("build/trait_param.rs"))
         .expect("Failed to read generated Rust");
-    
+
     // Should generate proper trait handling
-    assert!(rust_code.contains("trait") || rust_code.contains("Drawable"),
-            "Should generate proper Rust trait syntax");
-    
+    assert!(
+        rust_code.contains("trait") || rust_code.contains("Drawable"),
+        "Should generate proper Rust trait syntax"
+    );
+
     // Cleanup
     fs::remove_dir_all(&test_dir).ok();
 }
-
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -149,20 +152,25 @@ impl EffectManager {
         .output()
         .expect("Failed to execute wj compiler");
 
-    assert!(output.status.success(), 
-            "Real-world shader effect pattern should compile:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr));
-    
+    assert!(
+        output.status.success(),
+        "Real-world shader effect pattern should compile:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     // Read generated Rust code
     let rust_code = fs::read_to_string(test_dir.join("build/shader_effect.rs"))
         .expect("Failed to read generated Rust");
-    
+
     // Verify key patterns are generated
-    assert!(rust_code.contains("ShaderEffect"), "Should preserve trait name");
+    assert!(
+        rust_code.contains("ShaderEffect"),
+        "Should preserve trait name"
+    );
     assert!(rust_code.contains("Box"), "Should generate boxing code");
     assert!(rust_code.contains("Vec"), "Should handle collections");
-    
+
     // Cleanup
     fs::remove_dir_all(&test_dir).ok();
 }

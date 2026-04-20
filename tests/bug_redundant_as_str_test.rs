@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::PathBuf;
 /// TDD Test: Redundant .as_str() on inferred &str parameters
 ///
 /// Bug: When a string parameter is inferred as &str, calling .as_str() on it
@@ -5,10 +7,7 @@
 ///
 /// Fix: Reject `.as_str()` at compile time (no-rust-leakage rule). The compiler
 /// emits a helpful error directing users to use `match ext { ... }` instead.
-
 use std::process::Command;
-use std::fs;
-use std::path::PathBuf;
 
 fn wj_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_wj"))
@@ -35,10 +34,7 @@ impl AssetType {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "wj_as_str_test_{}",
-        std::process::id()
-    ));
+    let temp_dir = std::env::temp_dir().join(format!("wj_as_str_test_{}", std::process::id()));
     fs::create_dir_all(&temp_dir).unwrap();
     let temp_file = temp_dir.join("test_as_str.wj");
     let output_dir = temp_dir.join("out");
@@ -95,10 +91,8 @@ impl FileType {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "wj_match_string_test_{}",
-        std::process::id()
-    ));
+    let temp_dir =
+        std::env::temp_dir().join(format!("wj_match_string_test_{}", std::process::id()));
     fs::create_dir_all(&temp_dir).unwrap();
     let temp_file = temp_dir.join("test_match_string.wj");
     let output_dir = temp_dir.join("out");

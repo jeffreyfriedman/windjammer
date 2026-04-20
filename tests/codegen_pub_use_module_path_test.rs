@@ -1,7 +1,6 @@
 /// TDD: Fix pub use module path bug
 /// BUG: Generates `pub use voxel_grid::VoxelGrid` instead of `pub use self::voxel_grid::VoxelGrid`
 /// FIX: Add `self::` prefix for module-relative pub use
-
 use std::fs;
 use std::process::Command;
 
@@ -28,7 +27,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -54,15 +54,16 @@ fn main() {
 
     // Should use self:: prefix for module-relative imports
     assert!(
-        rust_code.contains("pub use self::inner_module::MyType") ||
-        rust_code.contains("pub use crate::inner_module::MyType"),
+        rust_code.contains("pub use self::inner_module::MyType")
+            || rust_code.contains("pub use crate::inner_module::MyType"),
         "pub use should have self:: or crate:: prefix, got:\n{}",
         rust_code
     );
 
     assert!(
-        !rust_code.contains("pub use inner_module::VoxelGrid;") ||
-        rust_code.contains("self::") || rust_code.contains("crate::"),
+        !rust_code.contains("pub use inner_module::VoxelGrid;")
+            || rust_code.contains("self::")
+            || rust_code.contains("crate::"),
         "Bare module paths in pub use should be qualified"
     );
 }

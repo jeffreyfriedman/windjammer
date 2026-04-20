@@ -37,10 +37,7 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
         if cargo_toml_path.exists() {
             if let Ok(toml_content) = std::fs::read_to_string(&cargo_toml_path) {
                 if toml_content.contains("path = \"mod.rs\"") {
-                    let updated = toml_content.replace(
-                        "path = \"mod.rs\"",
-                        "path = \"lib.rs\"",
-                    );
+                    let updated = toml_content.replace("path = \"mod.rs\"", "path = \"lib.rs\"");
                     std::fs::write(&cargo_toml_path, updated)?;
                 }
             }
@@ -73,23 +70,17 @@ fn generate_mod_file_recursive(output_dir: &Path) -> Result<()> {
         let has_rs_files = fs::read_dir(subdir)
             .ok()
             .map(|entries| {
-                entries
-                    .filter_map(|e| e.ok())
-                    .any(|e| {
-                        let p = e.path();
-                        p.is_file()
-                            && p.extension().and_then(|s| s.to_str()) == Some("rs")
-                            && p.file_name().and_then(|n| n.to_str()) != Some("mod.rs")
-                    })
+                entries.filter_map(|e| e.ok()).any(|e| {
+                    let p = e.path();
+                    p.is_file()
+                        && p.extension().and_then(|s| s.to_str()) == Some("rs")
+                        && p.file_name().and_then(|n| n.to_str()) != Some("mod.rs")
+                })
             })
             .unwrap_or(false);
         let has_rs_subdirs = fs::read_dir(subdir)
             .ok()
-            .map(|entries| {
-                entries
-                    .filter_map(|e| e.ok())
-                    .any(|e| e.path().is_dir())
-            })
+            .map(|entries| entries.filter_map(|e| e.ok()).any(|e| e.path().is_dir()))
             .unwrap_or(false);
         if has_rs_files || has_rs_subdirs {
             generate_mod_file_recursive(subdir)?;

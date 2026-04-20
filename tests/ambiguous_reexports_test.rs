@@ -6,13 +6,16 @@ use tempfile::TempDir;
 
 #[cfg(feature = "cli")]
 /// Helper: build with library API (faster than spawning wj binary)
-fn build_with_module_file(src_dir: &std::path::Path, output_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+fn build_with_module_file(
+    src_dir: &std::path::Path,
+    output_dir: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     windjammer::build_project_ext(
         src_dir,
         output_dir,
         windjammer::CompilationTarget::Rust,
-        true,  // enable_lint
-        true,  // library - required for nested structure preservation
+        true, // enable_lint
+        true, // library - required for nested structure preservation
         &[],
     )?;
     windjammer::generate_mod_file(output_dir)?;

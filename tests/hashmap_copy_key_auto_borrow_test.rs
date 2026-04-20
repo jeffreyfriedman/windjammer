@@ -42,7 +42,8 @@ fn compile_and_check(test_name: &str, wj_source: &str, expected_patterns: &[&str
         assert!(
             rust_code.contains(pattern),
             "Expected pattern '{}' not found in generated code:\n{}",
-            pattern, rust_code
+            pattern,
+            rust_code
         );
     }
 
@@ -58,7 +59,8 @@ fn compile_and_check(test_name: &str, wj_source: &str, expected_patterns: &[&str
     assert!(
         compile_output.status.success(),
         "Generated code failed to compile.\nRustc errors:\n{}\nGenerated code:\n{}",
-        compile_stderr, rust_code
+        compile_stderr,
+        rust_code
     );
 
     let _ = fs::remove_dir_all(&test_dir);
@@ -159,7 +161,10 @@ impl Panel {
 
 fn main() {}
 "#,
-        &["names.get(&(entity_id as i64))", "names.remove(&(entity_id as i64))"],
+        &[
+            "names.get(&(entity_id as i64))",
+            "names.remove(&(entity_id as i64))",
+        ],
     );
 }
 

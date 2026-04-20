@@ -31,7 +31,8 @@ pub fn new_grid(size: i32) -> Vec<Cell> {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -45,7 +46,7 @@ pub fn new_grid(size: i32) -> Vec<Cell> {
         .expect("Failed to run wj");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // TDD DEBUG: Always print stderr to see debug output
     eprintln!("Compiler stderr:\n{}", stderr);
 

@@ -20,7 +20,10 @@ fn test_scene_manager_str_params_emit_ampersand_str() {
         .join("manager.wj");
 
     if !scene_manager_wj.exists() {
-        eprintln!("Skipping: game-host not found at {:?}", scene_manager_wj);
+        eprintln!(
+            "Skipping: game-host not found at {:?}",
+            scene_manager_wj
+        );
         return;
     }
 

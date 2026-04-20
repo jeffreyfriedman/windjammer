@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 /// TDD: Methods returning Copy-type fields should infer `&self`, not consuming `self`
 ///
 /// Bug: When a method body is just `self.field` and the field type is a Copy struct
@@ -9,14 +10,12 @@
 /// support cross-crate Copy detection via `.wj.meta` metadata.
 ///
 /// Windjammer principle: "Compiler does the hard work, not the developer."
-
 use windjammer::analyzer::{Analyzer, OwnershipMode};
 use windjammer::codegen::rust::CodeGenerator;
 use windjammer::lexer::Lexer;
 use windjammer::metadata::infer_copy_from_metadata_structs_pub;
 use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
-use std::collections::HashMap;
 
 fn compile_to_rust(source: &str) -> String {
     let mut lexer = Lexer::new(source);
@@ -25,9 +24,7 @@ fn compile_to_rust(source: &str) -> String {
     let program = parser.parse().unwrap();
 
     let mut analyzer = Analyzer::new();
-    let (analyzed, registry, _) = analyzer
-        .analyze_program(&program)
-        .expect("Analysis failed");
+    let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("Analysis failed");
 
     let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
     codegen.generate_program(&program, &analyzed)
@@ -43,9 +40,7 @@ fn compile_with_copy_structs(source: &str, copy_structs: &[&str]) -> String {
     for name in copy_structs {
         analyzer.register_copy_struct(name);
     }
-    let (analyzed, registry, _) = analyzer
-        .analyze_program(&program)
-        .expect("Analysis failed");
+    let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("Analysis failed");
 
     let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
     codegen.generate_program(&program, &analyzed)
@@ -188,52 +183,87 @@ impl Game {
 fn test_infer_copy_from_metadata_struct_fields() {
     // Simulate what happens when loading a .wj.meta file with struct field definitions.
     // Vec3 has all f32 fields -> should be auto-detected as Copy from metadata.
-    let mut struct_fields: HashMap<String, Vec<String>> = HashMap::new();
-    struct_fields.insert("Vec3".to_string(), vec![
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-    ]);
-    struct_fields.insert("Vec2".to_string(), vec![
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-    ]);
-    struct_fields.insert("Player".to_string(), vec![
-        "Custom(\"Vec3\")".to_string(), // Vec3 should be Copy
-        "String".to_string(),           // String is NOT Copy
-    ]);
-    struct_fields.insert("Color".to_string(), vec![
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-    ]);
+    // TDD FIX: Updated to use Vec<Vec<String>> for conservative Copy detection
+    let mut struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    struct_fields.insert(
+        "Vec3".to_string(),
+        vec![vec![
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+        ]],
+    );
+    struct_fields.insert(
+        "Vec2".to_string(),
+        vec![vec![
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+        ]],
+    );
+    struct_fields.insert(
+        "Player".to_string(),
+        vec![vec![
+            "Custom(\"Vec3\")".to_string(), // Vec3 should be Copy
+            "String".to_string(),           // String is NOT Copy
+        ]],
+    );
+    struct_fields.insert(
+        "Color".to_string(),
+        vec![vec![
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+        ]],
+    );
     // Transitive Copy: AABB has all Vec3 fields -> should be Copy if Vec3 is Copy
-    struct_fields.insert("AABB".to_string(), vec![
-        "Custom(\"Vec3\")".to_string(),
-        "Custom(\"Vec3\")".to_string(),
-    ]);
+    struct_fields.insert(
+        "AABB".to_string(),
+        vec![vec![
+            "Custom(\"Vec3\")".to_string(),
+            "Custom(\"Vec3\")".to_string(),
+        ]],
+    );
 
     let mut copy_structs = Vec::new();
     infer_copy_from_metadata_structs_pub(&struct_fields, &mut copy_structs);
 
-    assert!(copy_structs.contains(&"Vec3".to_string()), "Vec3 (all f32 fields) should be Copy");
-    assert!(copy_structs.contains(&"Vec2".to_string()), "Vec2 (all f32 fields) should be Copy");
-    assert!(copy_structs.contains(&"Color".to_string()), "Color (all f32 fields) should be Copy");
-    assert!(copy_structs.contains(&"AABB".to_string()), "AABB (all Vec3 fields) should be Copy via transitive detection");
-    assert!(!copy_structs.contains(&"Player".to_string()), "Player (has String field) should NOT be Copy");
+    assert!(
+        copy_structs.contains(&"Vec3".to_string()),
+        "Vec3 (all f32 fields) should be Copy"
+    );
+    assert!(
+        copy_structs.contains(&"Vec2".to_string()),
+        "Vec2 (all f32 fields) should be Copy"
+    );
+    assert!(
+        copy_structs.contains(&"Color".to_string()),
+        "Color (all f32 fields) should be Copy"
+    );
+    assert!(
+        copy_structs.contains(&"AABB".to_string()),
+        "AABB (all Vec3 fields) should be Copy via transitive detection"
+    );
+    assert!(
+        !copy_structs.contains(&"Player".to_string()),
+        "Player (has String field) should NOT be Copy"
+    );
 }
 
 #[test]
 fn test_metadata_copy_structs_integrate_with_analyzer() {
     // Simulate the full flow: metadata has struct with all-Copy fields,
     // analyzer uses that to correctly infer &self for getter methods.
-    let mut struct_fields: HashMap<String, Vec<String>> = HashMap::new();
-    struct_fields.insert("Vec3".to_string(), vec![
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-        "Custom(\"f32\")".to_string(),
-    ]);
+    // TDD FIX: Updated to use Vec<Vec<String>> for conservative Copy detection
+    let mut struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    struct_fields.insert(
+        "Vec3".to_string(),
+        vec![vec![
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+            "Custom(\"f32\")".to_string(),
+        ]],
+    );
 
     let mut copy_structs = Vec::new();
     infer_copy_from_metadata_structs_pub(&struct_fields, &mut copy_structs);
@@ -251,7 +281,10 @@ impl Container {
 }
 "#;
 
-    let code = compile_with_copy_structs(source, &copy_structs.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+    let code = compile_with_copy_structs(
+        source,
+        &copy_structs.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+    );
 
     assert!(
         code.contains("fn get_position(&self)"),

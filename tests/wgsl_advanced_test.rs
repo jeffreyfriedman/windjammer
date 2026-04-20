@@ -9,9 +9,9 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
     let tmp = TempDir::new().unwrap();
     let input_file = tmp.path().join("test.wj");
     let output_dir = tmp.path().join("out");
-    
+
     fs::write(&input_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -23,7 +23,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
         ])
         .output()
         .expect("Failed to compile");
-    
+
     if !output.status.success() {
         panic!(
             "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
@@ -31,7 +31,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
             String::from_utf8_lossy(&output.stdout)
         );
     }
-    
+
     let wgsl_file = output_dir.join("test.wgsl");
     fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
 }
@@ -47,9 +47,9 @@ pub fn get_value(arr: [uint; 10], idx: uint) -> uint {
     arr[idx]
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("arr[idx]"), "Generated:\n{}", generated);
 }
 
@@ -62,10 +62,14 @@ pub fn update(@builtin(global_invocation_id) id: vec3<uint>) {
     data[id.x] = 42
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("data[id.x] = 42"), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("data[id.x] = 42"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 // ============================================================================
@@ -81,12 +85,16 @@ pub fn counter() -> uint {
     count
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     // WGSL uses 'var' for mutable locals
     assert!(generated.contains("var count"), "Generated:\n{}", generated);
-    assert!(generated.contains("count =") && generated.contains("+ 1"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("count =") && generated.contains("+ 1"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -98,10 +106,14 @@ pub fn test_var() -> uint {
     x
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("var x: u32 = 10"), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("var x: u32 = 10"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 // ============================================================================
@@ -116,10 +128,14 @@ pub fn accumulate() {
     sum += 10
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("sum += 10") || generated.contains("sum = sum + 10"), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("sum += 10") || generated.contains("sum = sum + 10"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -131,10 +147,14 @@ pub fn set_flags() {
     flags |= 2
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("flags |= ") || generated.contains("flags = flags |"), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("flags |= ") || generated.contains("flags = flags |"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 // ============================================================================
@@ -148,9 +168,9 @@ pub fn extract(v: vec4<float>) -> vec3<float> {
     v.xyz
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains(".xyz"), "Generated:\n{}", generated);
 }
 
@@ -161,9 +181,9 @@ pub fn get_x(v: vec3<float>) -> float {
     v.x
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains(".x"), "Generated:\n{}", generated);
 }
 
@@ -178,9 +198,9 @@ pub fn clamp_value(x: float, lo: float, hi: float) -> float {
     max(lo, min(x, hi))
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("max("), "Generated:\n{}", generated);
     assert!(generated.contains("min("), "Generated:\n{}", generated);
 }
@@ -192,9 +212,9 @@ pub fn out_of_bounds(pos: vec3<float>, bounds: vec3<float>) -> bool {
     any(pos >= bounds)
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("any("), "Generated:\n{}", generated);
 }
 
@@ -205,10 +225,14 @@ pub fn unit_vector(v: vec3<float>) -> vec3<float> {
     normalize(v)
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
-    assert!(generated.contains("normalize("), "Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("normalize("),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 // ============================================================================
@@ -222,9 +246,9 @@ pub fn convert(x: uint) -> float {
     x as float
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("f32("), "Generated:\n{}", generated);
 }
 
@@ -235,8 +259,8 @@ pub fn convert(x: float) -> uint {
     x as uint
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("u32("), "Generated:\n{}", generated);
 }

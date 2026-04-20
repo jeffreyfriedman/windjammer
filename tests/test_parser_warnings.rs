@@ -5,7 +5,6 @@
 /// - Display warnings in IDE-friendly formats
 /// - Filter/suppress specific warnings
 /// - Test that warnings are generated correctly
-
 use windjammer::parser::Parser;
 
 #[test]
@@ -68,14 +67,8 @@ fn hello() -> string {
     let warnings = parser.warnings();
     if !warnings.is_empty() {
         let w = &warnings[0];
-        assert!(
-            w.file.is_some(),
-            "Warning should have file location"
-        );
-        assert!(
-            w.line.is_some(),
-            "Warning should have line number"
-        );
+        assert!(w.file.is_some(), "Warning should have file location");
+        assert!(w.line.is_some(), "Warning should have line number");
     }
 }
 

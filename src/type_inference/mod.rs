@@ -8,15 +8,14 @@
 /// 3. Unify constraints (all uses of a literal must agree)
 /// 4. Detect conflicts (f32 * f64 → Windjammer error)
 /// 5. Assign final types (each literal gets f32 or f64)
-
 pub mod float_inference;
-pub mod int_inference;
 pub mod int_implicit_casts;
+pub mod int_inference;
 pub(crate) mod struct_field_registry;
 
-pub use float_inference::{FloatInference, FloatType, ExprId};
+pub use float_inference::{ExprId, FloatInference, FloatType};
+pub use int_implicit_casts::{get_cast_suffix, is_safe_implicit_cast, promote_types};
 pub use int_inference::{IntInference, IntType};
-pub use int_implicit_casts::{is_safe_implicit_cast, get_cast_suffix, promote_types};
 
 /// Final segment of a possibly module-qualified generic name (`std::collections::HashMap` → `HashMap`).
 pub(crate) fn generic_type_base_name(name: &str) -> &str {

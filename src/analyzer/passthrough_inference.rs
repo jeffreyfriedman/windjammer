@@ -121,8 +121,9 @@ impl<'ast> Analyzer<'ast> {
                             (OwnershipMode::Owned, _) | (_, OwnershipMode::Owned) => {
                                 OwnershipMode::Owned
                             }
-                            (OwnershipMode::MutBorrowed, _)
-                            | (_, OwnershipMode::MutBorrowed) => OwnershipMode::MutBorrowed,
+                            (OwnershipMode::MutBorrowed, _) | (_, OwnershipMode::MutBorrowed) => {
+                                OwnershipMode::MutBorrowed
+                            }
                             _ => OwnershipMode::Borrowed,
                         },
                     });

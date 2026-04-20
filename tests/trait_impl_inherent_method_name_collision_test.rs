@@ -109,9 +109,5 @@ impl Port for Worker {
         "generated Rust must compile (no E0053). stderr:\n{}",
         rerr
     );
-    assert!(
-        !rerr.contains("E0053"),
-        "unexpected E0053:\n{}",
-        rerr
-    );
+    assert!(!rerr.contains("E0053"), "unexpected E0053:\n{}", rerr);
 }

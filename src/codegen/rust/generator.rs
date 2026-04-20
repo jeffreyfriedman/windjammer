@@ -245,8 +245,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
     /// Struct-like enum variants: same key as `enum_variant_types`, preserves field names for
     /// `infer_match_bound_types` when matching on `&vec[i]` (Rust binds `&T` per field).
-    pub(crate) enum_variant_struct_fields:
-        std::collections::HashMap<String, Vec<(String, Type)>>,
+    pub(crate) enum_variant_struct_fields: std::collections::HashMap<String, Vec<(String, Type)>>,
     // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
     // Maps expression locations to inferred float types (f32 vs f64)
     // Enables accurate float literal suffix generation without mixing errors
@@ -317,9 +316,7 @@ impl<'ast> CodeGenerator<'ast> {
             .signatures
             .iter()
             .filter(|(_, sig)| sig.is_extern)
-            .map(|(name, _)| {
-                name.rsplit("::").next().unwrap_or(name).to_string()
-            })
+            .map(|(name, _)| name.rsplit("::").next().unwrap_or(name).to_string())
             .collect();
         CodeGenerator {
             indent_level: 0,
@@ -425,12 +422,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Initialize stdlib method signatures (Vec, String, HashMap, etc.)
     /// This replaces ALL hard-coded method name heuristics with proper type-based lookup
-    fn init_stdlib_signatures() -> std::collections::HashMap<
-        String,
-        std::collections::HashMap<String, MethodSignature>,
-    > {
+    fn init_stdlib_signatures(
+    ) -> std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>> {
         let mut map = std::collections::HashMap::new();
-        
+
         // Vec<T> methods
         let mut vec_methods = std::collections::HashMap::new();
         vec_methods.insert(
@@ -467,7 +462,7 @@ impl<'ast> CodeGenerator<'ast> {
             ),
         );
         map.insert("Vec".to_string(), vec_methods);
-        
+
         // String methods
         let mut string_methods = std::collections::HashMap::new();
         string_methods.insert(
@@ -515,7 +510,7 @@ impl<'ast> CodeGenerator<'ast> {
             ),
         );
         map.insert("String".to_string(), string_methods);
-        
+
         // HashMap<K, V> methods
         let mut hashmap_methods = std::collections::HashMap::new();
         hashmap_methods.insert(
@@ -525,7 +520,9 @@ impl<'ast> CodeGenerator<'ast> {
                 "get",
                 vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
                 vec![OwnershipMode::Borrowed],
-                Some(Type::Option(Box::new(Type::Reference(Box::new(Type::Custom("V".to_string())))))),
+                Some(Type::Option(Box::new(Type::Reference(Box::new(
+                    Type::Custom("V".to_string()),
+                ))))),
                 true,
             ),
         );
@@ -563,12 +560,12 @@ impl<'ast> CodeGenerator<'ast> {
             ),
         );
         map.insert("HashMap".to_string(), hashmap_methods);
-        
+
         // TODO: Add more stdlib types (BTreeMap, HashSet, VecDeque, etc.)
-        
+
         map
     }
-    
+
     /// Pre-populate struct field types from cross-module definitions.
     /// This enables type inference for fields on imported structs,
     /// preventing unnecessary .clone() on Copy-type fields.
@@ -597,9 +594,7 @@ impl<'ast> CodeGenerator<'ast> {
 
             if let Some(base) = struct_name.rsplit("::").next() {
                 if base != struct_name.as_str() {
-                    let entry = simple_name_fields
-                        .entry(base.to_string())
-                        .or_default();
+                    let entry = simple_name_fields.entry(base.to_string()).or_default();
                     for (field_name, field_type) in fields {
                         entry
                             .entry(field_name.clone())
@@ -651,14 +646,14 @@ impl<'ast> CodeGenerator<'ast> {
                 return Some(sig);
             }
         }
-        
+
         // Then check stdlib methods (Vec, String, HashMap, etc.)
         if let Some(methods) = self.stdlib_method_signatures.get(receiver_type) {
             if let Some(sig) = methods.get(method_name) {
                 return Some(sig);
             }
         }
-        
+
         // Check with generic type parameters stripped (Vec<T> → Vec)
         if let Some(base) = receiver_type.split('<').next() {
             if base != receiver_type {
@@ -670,10 +665,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Register a user-defined method signature
     /// Called during function generation to build the method registry
     pub fn register_method_signature(&mut self, sig: MethodSignature) {
@@ -682,7 +677,7 @@ impl<'ast> CodeGenerator<'ast> {
             .or_insert_with(std::collections::HashMap::new)
             .insert(sig.method_name.clone(), sig);
     }
-    
+
     /// Resolve the type of a receiver expression for method calls
     /// Example: `self.inventory.has_item(...)` → resolve type of `self.inventory`
     /// This enables looking up the correct method signature
@@ -693,36 +688,38 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(ty) = self.local_var_types.get(name.as_str()) {
                     return Some(self.type_to_simple_name(ty));
                 }
-                
+
                 // Check function parameters
                 for param in &self.current_function_params {
                     if param.name == *name {
                         return Some(self.type_to_simple_name(&param.type_));
                     }
                 }
-                
+
                 None
             }
             Expression::FieldAccess { object, field, .. } => {
                 // Recursively resolve object type, then look up field type
                 let object_type = self.resolve_receiver_type(object)?;
-                
+
                 // Look up field type in struct_field_types
                 let field_types = self.struct_field_types.get(&object_type)?;
                 let field_type = field_types.get(field.as_str())?;
-                
+
                 Some(self.type_to_simple_name(field_type))
             }
             _ => None,
         }
     }
-    
+
     /// Convert a Type to a simple name for signature lookup
     /// Example: Type::Custom("Vec") → "Vec", Type::Reference(Box(Custom("String"))) → "String"
     fn type_to_simple_name(&self, ty: &Type) -> String {
         match ty {
             Type::Custom(name) => name.clone(),
-            Type::Reference(inner) | Type::MutableReference(inner) => self.type_to_simple_name(inner),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.type_to_simple_name(inner)
+            }
             Type::Vec(_) => "Vec".to_string(),
             Type::Option(_) => "Option".to_string(),
             Type::Result(_, _) => "Result".to_string(),
@@ -1096,10 +1093,16 @@ impl<'ast> CodeGenerator<'ast> {
         // PRE-PASS: Collect import aliases so type_to_rust skips stdlib mappings
         // when the user has defined their own alias (e.g., `use std::collections::HashMap as Map`)
         for item in &program.items {
-            if let Item::Use { alias: Some(alias_name), path, .. } = item {
+            if let Item::Use {
+                alias: Some(alias_name),
+                path,
+                ..
+            } = item
+            {
                 self.import_aliases.insert(alias_name.clone());
                 if let Some(last_segment) = path.last() {
-                    self.module_alias_map.insert(alias_name.clone(), last_segment.clone());
+                    self.module_alias_map
+                        .insert(alias_name.clone(), last_segment.clone());
                 }
             }
         }
@@ -1212,7 +1215,9 @@ impl<'ast> CodeGenerator<'ast> {
         if self.is_output_mod_rs() && !has_explicit_pub_use {
             for item in &program.items {
                 if let Item::Mod {
-                    name, is_public: true, ..
+                    name,
+                    is_public: true,
+                    ..
                 } = item
                 {
                     imports.push_str(&format!("pub use self::{}::*;\n", name));
@@ -1224,9 +1229,17 @@ impl<'ast> CodeGenerator<'ast> {
         for item in &program.items {
             match item {
                 Item::Const {
-                    name, is_pub, type_, value, ..
+                    name,
+                    is_pub,
+                    type_,
+                    value,
+                    ..
                 } => {
-                    let pub_prefix = if *is_pub || self.is_module { "pub " } else { "" };
+                    let pub_prefix = if *is_pub || self.is_module {
+                        "pub "
+                    } else {
+                        ""
+                    };
 
                     // Special case: string constants should use &'static str, not String
                     let rust_type = if matches!(type_, Type::String)
@@ -1737,7 +1750,9 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         let qualify = move |s: &str| {
             let dotted = s.replace('.', "::");
             if !map.is_empty() {
-                crate::codegen::rust::codegen_helpers::qualify_parent_child_external_path(map, &dotted)
+                crate::codegen::rust::codegen_helpers::qualify_parent_child_external_path(
+                    map, &dotted,
+                )
             } else {
                 dotted
             }

@@ -4,10 +4,10 @@ use std::path::Path;
 use tempfile::TempDir;
 
 /// TDD Test: Ownership inference for Copy types in method calls
-/// 
+///
 /// Bug: When calling a method that takes a Copy type by value,
 /// the compiler incorrectly infers & (reference) instead of owned.
-/// 
+///
 /// Example: `box.intersects(wall)` where wall: AABB (Copy)
 /// - Method signature: `fn intersects(&self, other: AABB) -> bool`
 /// - Generated (wrong): `box.intersects(&wall)`
@@ -17,12 +17,14 @@ use tempfile::TempDir;
 fn test_copy_type_method_param_no_explicit_ref() {
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
-    
+
     // Copy type (simple struct - auto-derives Copy)
     // Method takes Copy type by value (owned)
     // Windjammer code passes it without & (owned)
     // Compiler should generate: value (not &value)
-    fs::write(&test_file, r#"
+    fs::write(
+        &test_file,
+        r#"
 struct Point {
     x: f32,
     y: f32
@@ -49,8 +51,10 @@ pub fn main() {
     let result = shape.contains_point(test_point)
     println("{}", result)
 }
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
         .current_dir(temp_dir.path())
@@ -59,25 +63,25 @@ pub fn main() {
         .arg("test.wj")
         .output()
         .unwrap();
-    
+
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should compile without ownership errors
     assert!(
         output.status.success(),
         "Build should SUCCEED! Windjammer code doesn't use &, compiler shouldn't add it.\n\nStderr:\n{}",
         stderr
     );
-    
+
     // Verify generated code doesn't have unnecessary &
     let build_dir = temp_dir.path().join("build");
     let generated = fs::read_to_string(build_dir.join("test.rs")).unwrap();
-    
+
     // Should generate: shape.contains_point(test_point)
     // NOT: shape.contains_point(&test_point)
     assert!(
-        generated.contains("contains_point(test_point)") || 
-        !generated.contains("contains_point(&test_point)"),
+        generated.contains("contains_point(test_point)")
+            || !generated.contains("contains_point(&test_point)"),
         "Generated code should pass Copy type by value, not reference!\nFound:\n{}",
         generated
             .lines()
@@ -91,12 +95,14 @@ pub fn main() {
 fn test_copy_type_owned_param_to_method() {
     let temp_dir = TempDir::new().unwrap();
     let test_file = temp_dir.path().join("test.wj");
-    
+
     // Matches the EXACT game pattern:
     // - Function parameter: wall: AABB (owned)
     // - Passed to method: intersects_aabb(wall) - no &
     // - Method expects: other: AABB (owned)
-    fs::write(&test_file, r#"
+    fs::write(
+        &test_file,
+        r#"
 struct AABB {
     min_x: f32,
     min_y: f32,
@@ -146,8 +152,10 @@ pub fn main() {
     let collides = player.will_collide_with(wall)
     println("{}", collides)
 }
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     let mut cmd = Command::cargo_bin("wj").unwrap();
     let output = cmd
         .current_dir(temp_dir.path())
@@ -156,19 +164,19 @@ pub fn main() {
         .arg("test.wj")
         .output()
         .unwrap();
-    
+
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should compile without "expected AABB, found &AABB" errors
     assert!(
         output.status.success(),
         "Build should SUCCEED! AABB is Copy, no & needed.\n\nStderr:\n{}",
         stderr
     );
-    
+
     let build_dir = temp_dir.path().join("build");
     let generated = fs::read_to_string(build_dir.join("test.rs")).unwrap();
-    
+
     // Should NOT generate: future_box.intersects_aabb(&wall)
     // Should generate: future_box.intersects_aabb(wall)
     // This is the EXACT pattern that breaks in the game!

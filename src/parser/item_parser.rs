@@ -25,7 +25,10 @@ fn type_structurally_contains_self(ty: &Type) -> bool {
         Type::Tuple(types) => types.iter().any(type_structurally_contains_self),
         Type::Parameterized(_, args) => args.iter().any(type_structurally_contains_self),
         Type::Array(inner, _) => type_structurally_contains_self(inner),
-        Type::FunctionPointer { params, return_type } => {
+        Type::FunctionPointer {
+            params,
+            return_type,
+        } => {
             params.iter().any(type_structurally_contains_self)
                 || return_type
                     .as_ref()
@@ -101,76 +104,77 @@ impl Parser {
         };
 
         // Check if this is "impl Trait for Type" or just "impl Type"
-        let (trait_name, trait_type_args, type_name): (_, _, String) = if self.current_token() == &Token::For {
-            self.advance(); // consume "for"
+        let (trait_name, trait_type_args, type_name): (_, _, String) =
+            if self.current_token() == &Token::For {
+                self.advance(); // consume "for"
 
-            // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
-            let base_type_name = match self.current_token() {
-                Token::Ident(name) => {
-                    let n = name.clone();
-                    self.advance();
-                    n
-                }
-                Token::Int => {
-                    self.advance();
-                    "int".to_string()
-                }
-                Token::Int32 => {
-                    self.advance();
-                    "i32".to_string()
-                }
-                Token::Uint => {
-                    self.advance();
-                    "uint".to_string()
-                }
-                Token::Float => {
-                    self.advance();
-                    "float".to_string()
-                }
-                Token::Bool => {
-                    self.advance();
-                    "bool".to_string()
-                }
-                Token::String => {
-                    self.advance();
-                    "string".to_string()
-                }
-                _ => {
-                    return Err("Expected type name after 'for'".to_string());
-                }
-            };
-
-            let mut type_name = base_type_name;
-
-            // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
-            if self.current_token() == &Token::Lt {
-                type_name.push('<');
-                self.advance();
-
-                loop {
-                    // Parse full type to handle both generic params and concrete types
-                    let type_arg = self.parse_type()?;
-                    type_name.push_str(&self.type_to_string(&type_arg));
-
-                    if self.current_token() == &Token::Comma {
-                        type_name.push_str(", ");
+                // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
+                let base_type_name = match self.current_token() {
+                    Token::Ident(name) => {
+                        let n = name.clone();
                         self.advance();
-                    } else if self.current_token() == &Token::Gt {
-                        type_name.push('>');
+                        n
+                    }
+                    Token::Int => {
                         self.advance();
-                        break;
-                    } else {
-                        return Err(
-                            "Expected ',' or '>' in type parameters after 'for'".to_string()
-                        );
+                        "int".to_string()
+                    }
+                    Token::Int32 => {
+                        self.advance();
+                        "i32".to_string()
+                    }
+                    Token::Uint => {
+                        self.advance();
+                        "uint".to_string()
+                    }
+                    Token::Float => {
+                        self.advance();
+                        "float".to_string()
+                    }
+                    Token::Bool => {
+                        self.advance();
+                        "bool".to_string()
+                    }
+                    Token::String => {
+                        self.advance();
+                        "string".to_string()
+                    }
+                    _ => {
+                        return Err("Expected type name after 'for'".to_string());
+                    }
+                };
+
+                let mut type_name = base_type_name;
+
+                // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
+                if self.current_token() == &Token::Lt {
+                    type_name.push('<');
+                    self.advance();
+
+                    loop {
+                        // Parse full type to handle both generic params and concrete types
+                        let type_arg = self.parse_type()?;
+                        type_name.push_str(&self.type_to_string(&type_arg));
+
+                        if self.current_token() == &Token::Comma {
+                            type_name.push_str(", ");
+                            self.advance();
+                        } else if self.current_token() == &Token::Gt {
+                            type_name.push('>');
+                            self.advance();
+                            break;
+                        } else {
+                            return Err(
+                                "Expected ',' or '>' in type parameters after 'for'".to_string()
+                            );
+                        }
                     }
                 }
-            }
 
-            (Some(first_name), first_type_args, type_name)
-        } else {
-            (None, None, first_name_with_args)
-        };
+                (Some(first_name), first_type_args, type_name)
+            } else {
+                (None, None, first_name_with_args)
+            };
 
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
@@ -722,13 +726,13 @@ impl Parser {
         // Parse return type with optional decorators: -> @location(0) vec4<float>
         let (return_type, return_decorators) = if self.current_token() == &Token::Arrow {
             self.advance();
-            
+
             // Collect decorators on return type
             let mut ret_decorators = Vec::new();
             while matches!(self.current_token(), Token::At | Token::Decorator(_)) {
                 ret_decorators.push(self.parse_decorator()?);
             }
-            
+
             (Some(self.parse_type()?), ret_decorators)
         } else {
             (None, Vec::new())
@@ -762,7 +766,7 @@ impl Parser {
             is_async: false,        // Set by parse_item
             parameters,
             return_type,
-            return_decorators,      // Decorators on return type
+            return_decorators, // Decorators on return type
             body,
             parent_type: None, // Set by parse_impl for methods
             impl_trait: None,
@@ -779,7 +783,7 @@ impl Parser {
             while let Token::Decorator(_) = self.current_token() {
                 decorators.push(self.parse_decorator()?);
             }
-            
+
             // Check for self parameters
             if self.current_token() == &Token::Ampersand {
                 self.advance();

@@ -10,7 +10,6 @@
 /// - Return: return {unknown} where fn -> f32 → {unknown} = f32
 ///
 /// GOAL: Windjammer errors for mixing (not Rust errors)
-
 use std::fs;
 use std::process::Command;
 
@@ -33,7 +32,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -61,7 +61,7 @@ fn main() {
         "2.0 should be inferred as f32 from x: f32, got:\n{}",
         rust_code
     );
-    
+
     assert!(
         rust_code.contains("5.0_f32") || rust_code.contains("compute(5.0)"),
         "5.0 should be inferred as f32 from compute parameter, got:\n{}",
@@ -104,7 +104,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -127,9 +128,9 @@ fn main() {
         .expect("Generated Rust file not found");
 
     // All literals should be f32 (propagated through function parameters)
-    let has_consistent_types = rust_code.contains("0.5_f32") || 
-                               rust_code.contains("0.0_f32") ||
-                               !rust_code.contains("0.5_f64"); // Should NOT have f64
+    let has_consistent_types = rust_code.contains("0.5_f32")
+        || rust_code.contains("0.0_f32")
+        || !rust_code.contains("0.5_f64"); // Should NOT have f64
 
     assert!(
         has_consistent_types,
@@ -169,7 +170,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -183,7 +185,7 @@ fn main() {
         .expect("Failed to run wj");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Windjammer should detect mixing and report error BEFORE generating Rust
     // This test currently FAILS - we need to implement the type checker
     // TODO: Uncomment when type checker is implemented
@@ -230,7 +232,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -294,7 +297,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -323,7 +327,9 @@ fn main() {
     assert!(
         f32_count == 0 || f64_count == 0,
         "All literals should unify to same type, got {} f32 and {} f64:\n{}",
-        f32_count, f64_count, rust_code
+        f32_count,
+        f64_count,
+        rust_code
     );
 
     // Verify Rust compilation succeeds

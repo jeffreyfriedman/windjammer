@@ -69,7 +69,11 @@ fn run_test(wj_code: &str, test_name: &str) {
 
     let build_dir = format!("{}/build", test_dir);
     let cargo_output = Command::new("cargo")
-        .args(&["build", "--manifest-path", &format!("{}/Cargo.toml", build_dir)])
+        .args(&[
+            "build",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", build_dir),
+        ])
         .output()
         .expect("Failed to run cargo build");
 
