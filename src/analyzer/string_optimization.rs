@@ -39,12 +39,16 @@ impl<'ast> Analyzer<'ast> {
     /// - If parameter flows to such a method → must use &String
     /// - Otherwise → can safely use &str
     ///
-    /// PHASE 2 MVP: Conservative - returns empty set (unless @str_ref decorator)
-    /// This maintains Phase 1 baseline (&String everywhere) until full analysis is implemented
-    pub fn analyze_str_ref_optimizable_params(&self, func: &FunctionDecl) -> HashSet<String> {
+    /// PHASE 2 FULL: Implement type-based analysis using signature registry
+    /// Analyzes function body to determine which string parameters can safely use &str
+    pub fn analyze_str_ref_optimizable_params(
+        &self,
+        func: &FunctionDecl,
+        registry: &super::SignatureRegistry,
+    ) -> HashSet<String> {
         let mut optimizable = HashSet::new();
 
-        // PHASE 3: Check for manual override decorators
+        // PHASE 3: Check for manual override decorators first
         for param in &func.parameters {
             // Only consider string parameters
             let is_string = matches!(param.type_, Type::String)
@@ -68,50 +72,222 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             } else {
                 // No decorator - use automatic analysis
-                // TODO: Implement proper type-based analysis (Phase 2 full)
-                // For now: conservative - don't optimize
+                // PHASE 2 FULL: Check if parameter is passed to methods needing &String
+                let needs_string_ref = self.param_needs_string_ref(&param.name, &func.body, registry);
+                
+                if !needs_string_ref {
+                    // Safe to use &str optimization
+                    optimizable.insert(param.name.clone());
+                }
             }
         }
-
-        // PHASE 2 MVP: Returns empty set for non-decorated params
-        // TODO: Implement full type-based analysis for automatic optimization
-        // let _body = &func.body; // Will use this in full implementation
 
         optimizable
     }
 
-    /// Helper: Check if an expression is a method call that needs &String
-    ///
-    /// THE PROPER WAY: Look up method signature, check parameter types
-    /// NO STRING MATCHING!
-    #[allow(dead_code)]
-    fn expr_needs_string_ref(&self, _expr: &Expression) -> bool {
-        // TODO: Implement with type registry lookup
-        //
-        // Example proper implementation:
-        // match expr {
-        //     Expression::MethodCall { object, method, .. } => {
-        //         let receiver_type = self.infer_expression_type(object);
-        //         if let Some(method_sig) = self.lookup_method_signature(&receiver_type, method) {
-        //             // Check if ANY parameter is &String (not &str)
-        //             return method_sig.parameters.iter().any(|p| {
-        //                 matches!(p.type_, Type::Reference(box Type::String))
-        //             });
-        //         }
-        //     }
-        //     _ => {}
-        // }
+    /// Check if a parameter needs &String (passed to method that requires it)
+    /// Recursively traverses the function body to find all usages
+    fn param_needs_string_ref(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_uses_param_in_string_ref_context(param_name, stmt, registry) {
+                return true;
+            }
+        }
         false
     }
 
-    /// Helper: Check if a statement contains method calls needing &String
-    #[allow(dead_code)]
-    fn statement_needs_string_ref(&self, _stmt: &Statement) -> bool {
-        // TODO: Recursive traversal of statement AST
-        // For each expression in statement:
-        //   - Check if it's a method call
-        //   - Look up method signature
-        //   - Check parameter types
+    /// Check if a statement uses the parameter in a context requiring &String
+    fn statement_uses_param_in_string_ref_context(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, expr, registry)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, value, registry)
+            }
+            Statement::If { condition, then_block, else_block, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, condition, registry)
+                    || self.block_needs_string_ref(param_name, then_block, registry)
+                    || else_block.as_ref().map(|b| self.block_needs_string_ref(param_name, b, registry)).unwrap_or(false)
+            }
+            Statement::While { condition, body, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, condition, registry)
+                    || self.block_needs_string_ref(param_name, body, registry)
+            }
+            Statement::For { body, .. } => {
+                self.block_needs_string_ref(param_name, body, registry)
+            }
+            Statement::Return { value: Some(expr), .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, expr, registry)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, value, registry)
+                    || arms.iter().any(|arm| self.expr_uses_param_in_string_ref_context(param_name, &arm.body, registry))
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a block needs &String (block is Vec<&Statement>)
+    fn block_needs_string_ref(
+        &self,
+        param_name: &str,
+        block: &Vec<&Statement>,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        for stmt in block {
+            if self.statement_uses_param_in_string_ref_context(param_name, stmt, registry) {
+                return true;
+            }
+        }
         false
+    }
+
+    /// Check if an expression uses the parameter in a context requiring &String
+    fn expr_uses_param_in_string_ref_context(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match expr {
+            // Check method calls: param.method() or something.method(&param)
+            Expression::MethodCall { object, method, arguments, .. } => {
+                // First check if any argument is our parameter (like items.contains(&id))
+                for (idx, arg) in arguments.iter().enumerate() {
+                    let arg_expr = &arg.1;
+                    
+                    // Check if this argument is &param or param
+                    if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                        // SPECIAL CASE: Vec<String>::contains needs &String
+                        // This is a Rust stdlib method, not in our signature registry
+                        if method == "contains" && idx == 0 {
+                            // Check if the object is a Vec<String>
+                            // For now, assume any contains() call on a collection needs &String
+                            // This is a conservative but correct heuristic
+                            return true;
+                        }
+                        
+                        // Check if this method expects &String for this parameter position
+                        if let Some(sig) = registry.get_signature(method) {
+                            // Get the parameter type at this position
+                            // Note: idx is the argument index, which corresponds to parameter index
+                            // (assuming no self receiver in the signature - methods store self separately)
+                            if let Some(param_type) = sig.param_types.get(idx) {
+                                if self.type_is_string_ref_not_str(param_type) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Recursively check argument expressions
+                    if self.expr_uses_param_in_string_ref_context(param_name, arg_expr, registry) {
+                        return true;
+                    }
+                }
+                
+                // Also check if the method is called ON the parameter (param.method())
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == param_name {
+                        // param.method() - check if method needs &String receiver
+                        if let Some(sig) = registry.get_signature(method) {
+                            // Check all parameter types in the signature
+                            for param_type in &sig.param_types {
+                                if self.type_is_string_ref_not_str(param_type) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                false
+            }
+            // Check function calls: function(&param)
+            Expression::Call { function, arguments, .. } => {
+                // Check if param is passed to a function expecting &String
+                if let Expression::Identifier { name: fn_name, .. } = &**function {
+                    if let Some(sig) = registry.get_signature(fn_name) {
+                        for (i, arg) in arguments.iter().enumerate() {
+                            let arg_expr = &arg.1;
+                            // Check if this argument is our parameter
+                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                // Check if the corresponding parameter type in the signature is &String
+                                if let Some(param_type) = sig.param_types.get(i) {
+                                    if self.type_is_string_ref_not_str(param_type) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            // Recursively check
+                            if self.expr_uses_param_in_string_ref_context(param_name, arg_expr, registry) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            // Check binary operations (comparisons, etc.)
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, left, registry)
+                    || self.expr_uses_param_in_string_ref_context(param_name, right, registry)
+            }
+            // Check unary operations
+            Expression::Unary { operand, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, operand, registry)
+            }
+            // Check field access
+            Expression::FieldAccess { object, .. } => {
+                self.expr_uses_param_in_string_ref_context(param_name, object, registry)
+            }
+            // Check blocks
+            Expression::Block { statements, .. } => {
+                self.param_needs_string_ref(param_name, statements, registry)
+            }
+            // Identifiers by themselves don't require &String (only when passed to methods)
+            Expression::Identifier { .. } => false,
+            // Other expressions
+            _ => false,
+        }
+    }
+
+    /// Check if an expression is the parameter or &parameter
+    fn expr_is_param_or_ref_to_param(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+                if let Expression::Identifier { name, .. } = &**operand {
+                    name == param_name
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a type is &String (not &str)
+    /// This is the key distinction for the optimization
+    fn type_is_string_ref_not_str(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Reference(inner) => match &**inner {
+                Type::String => true,
+                Type::Custom(name) if name == "string" => true,
+                _ => false,
+            },
+            _ => false,
+        }
     }
 }

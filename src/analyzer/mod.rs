@@ -2070,7 +2070,7 @@ impl<'ast> Analyzer<'ast> {
             .collect();
 
         // PHASE 2: Analyze which string parameters can use &str optimization
-        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func);
+        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
 
         Ok(AnalyzedFunction {
             decl: func.clone(),
