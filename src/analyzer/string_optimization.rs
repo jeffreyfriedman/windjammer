@@ -21,7 +21,6 @@
 /// 1. Method signature lookup in type registry
 /// 2. AST traversal to find method calls
 /// 3. Parameter flow analysis (which params are passed where)
-
 use crate::analyzer::Analyzer;
 use crate::parser::{Expression, FunctionDecl, Statement, Type};
 use std::collections::HashSet;
@@ -29,41 +28,66 @@ use std::collections::HashSet;
 impl<'ast> Analyzer<'ast> {
     /// Analyze all string parameters in a function and return the set that can use &str
     ///
-    /// THE PROPER WAY:
+    /// PHASE 3: Manual Override Support
+    /// - Check for @str_ref decorator → force &str (developer promises it's safe)
+    /// - Check for @string_ref decorator → force &String (developer wants conservative)
+    ///
+    /// THE PROPER WAY (Phase 2 full):
     /// - Traverse function body AST
     /// - For each method call, look up its signature in type registry
     /// - Check if any method parameter expects &String (not &str)
     /// - If parameter flows to such a method → must use &String
     /// - Otherwise → can safely use &str
     ///
-    /// PHASE 2 MVP: Conservative - returns empty set
+    /// PHASE 2 MVP: Conservative - returns empty set (unless @str_ref decorator)
     /// This maintains Phase 1 baseline (&String everywhere) until full analysis is implemented
     pub fn analyze_str_ref_optimizable_params(&self, func: &FunctionDecl) -> HashSet<String> {
-        // Phase 2 MVP: Conservative - no optimization yet
-        // Returns empty set → all borrowed string params use &String
-        
-        // TODO: Implement proper type-based analysis:
-        // 1. Walk function body statements
-        // 2. For each method call expression:
-        //    - Look up receiver type (Vec<T>, HashMap<K,V>, etc.)
-        //    - Look up method signature from type registry
-        //    - Check parameter types for &String
-        // 3. Track which function parameters flow to those methods
-        // 4. Return set of params that DON'T flow to &String methods
-        
-        let _body = &func.body; // Will use this in full implementation
-        
-        HashSet::new()
+        let mut optimizable = HashSet::new();
+
+        // PHASE 3: Check for manual override decorators
+        for param in &func.parameters {
+            // Only consider string parameters
+            let is_string = matches!(param.type_, Type::String)
+                || matches!(param.type_, Type::Custom(ref name) if name == "string");
+
+            if !is_string {
+                continue;
+            }
+
+            // Check for explicit decorators
+            let has_str_ref = param.decorators.iter().any(|d| d.name == "str_ref");
+            let has_string_ref = param.decorators.iter().any(|d| d.name == "string_ref");
+
+            if has_str_ref {
+                // PHASE 3: Developer explicitly requested &str
+                // Trust the developer - they promise it's safe
+                optimizable.insert(param.name.clone());
+            } else if has_string_ref {
+                // PHASE 3: Developer explicitly requested &String
+                // Don't optimize this parameter
+                continue;
+            } else {
+                // No decorator - use automatic analysis
+                // TODO: Implement proper type-based analysis (Phase 2 full)
+                // For now: conservative - don't optimize
+            }
+        }
+
+        // PHASE 2 MVP: Returns empty set for non-decorated params
+        // TODO: Implement full type-based analysis for automatic optimization
+        // let _body = &func.body; // Will use this in full implementation
+
+        optimizable
     }
 
     /// Helper: Check if an expression is a method call that needs &String
-    /// 
+    ///
     /// THE PROPER WAY: Look up method signature, check parameter types
     /// NO STRING MATCHING!
     #[allow(dead_code)]
     fn expr_needs_string_ref(&self, _expr: &Expression) -> bool {
         // TODO: Implement with type registry lookup
-        // 
+        //
         // Example proper implementation:
         // match expr {
         //     Expression::MethodCall { object, method, .. } => {
