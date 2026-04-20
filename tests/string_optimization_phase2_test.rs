@@ -183,7 +183,7 @@ fn main() {
 
 #[test]
 fn test_phase1_baseline_still_works() {
-    // TDD: Phase 1 baseline (&String everywhere) must continue to work
+    // TDD: Phase 2 optimization - function using format!() can use &str
     let code = r#"
 pub fn greet(name: string) -> string {
     format!("Hello, {}!", name)
@@ -199,17 +199,17 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 1 BASELINE: Currently generates &String (conservative)
+    // PHASE 2 OPTIMIZATION: format!() works with &str, so optimize to &str
     assert!(
-        generated.contains("fn greet(name: &String)"),
-        "Expected &String parameter (Phase 1 baseline). Generated:\n{}",
+        generated.contains("fn greet(name: &str)"),
+        "Expected &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
 
-    // String literal converted to &String
+    // String literal passed directly (no conversion for &str)
     assert!(
-        generated.contains(r#"greet(&"World".to_string())"#),
-        "Expected converted string literal. Generated:\n{}",
+        generated.contains(r#"greet("World")"#),
+        "Expected direct string literal (no conversion for &str). Generated:\n{}",
         generated
     );
 

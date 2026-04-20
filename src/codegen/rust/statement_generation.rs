@@ -98,7 +98,7 @@ impl<'ast> CodeGenerator<'ast> {
                         let expr_uses_as_str = expr_str.contains(".as_str()");
 
                         // Check if we should suppress conversion (sibling branch has .as_str())
-                        let should_suppress = self.suppress_string_conversion;
+                        let should_suppress = self.suppress_string_conversion.get();
 
                         if (returns_string || in_match_needing_string)
                             && !expr_uses_as_str
@@ -261,7 +261,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                             let in_match_needing_string = self.in_match_arm_needing_string;
                             let expr_uses_as_str = expr_str.contains(".as_str()");
-                            let should_suppress = self.suppress_string_conversion;
+                            let should_suppress = self.suppress_string_conversion.get();
 
                             if (returns_string || in_match_needing_string)
                                 && !expr_uses_as_str
@@ -1055,9 +1055,9 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .is_some_and(|b| string_analysis::block_has_as_str(b));
 
-                let old_suppress = self.suppress_string_conversion;
+                let old_suppress = self.suppress_string_conversion.get();
                 if any_branch_has_as_str {
-                    self.suppress_string_conversion = true;
+                    self.suppress_string_conversion.set(true);
                 }
 
                 let mut output = self.indent();
@@ -1123,7 +1123,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 self.in_function_body = old_in_func_body;
 
-                self.suppress_string_conversion = old_suppress;
+                self.suppress_string_conversion.set(old_suppress);
                 output.push('\n');
                 output
             }
