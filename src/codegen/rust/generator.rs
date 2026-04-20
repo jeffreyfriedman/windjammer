@@ -6,6 +6,7 @@ use crate::analyzer::*;
 use crate::codegen::rust::expression_helpers;
 use crate::parser::*;
 use crate::CompilationTarget;
+use std::cell::Cell;
 
 /// Method signature for type-based parameter resolution
 /// Stores the full signature of a method including parameter types and ownership
@@ -118,7 +119,8 @@ pub struct CodeGenerator<'ast> {
     // Workspace root for source maps
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
-    pub(crate) suppress_string_conversion: bool,
+    // Cell for interior mutability (needed for call-site optimization in immutable context)
+    pub(crate) suppress_string_conversion: Cell<bool>,
     /// When true, string literals emit `"...".to_string()` (owned String contexts: match arms, returns, if values, etc.)
     pub(crate) coerce_string_literals_to_owned: bool,
     // LOCAL VARIABLE TRACKING: Stack of scopes, each scope contains local variable names
@@ -363,7 +365,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_return_type: None,
             current_function_body: Vec::new(),
             workspace_root: None,
-            suppress_string_conversion: false,
+            suppress_string_conversion: Cell::new(false),
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
