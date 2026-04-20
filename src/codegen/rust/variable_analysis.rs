@@ -42,7 +42,10 @@ impl<'ast> CodeGenerator<'ast> {
         self.precompute_for_loop_borrows_walk(body, 0, &counts);
     }
 
-    fn count_for_loop_iterable_identifiers(stmts: &[&Statement], counts: &mut HashMap<String, usize>) {
+    fn count_for_loop_iterable_identifiers(
+        stmts: &[&Statement],
+        counts: &mut HashMap<String, usize>,
+    ) {
         for stmt in stmts {
             match stmt {
                 Statement::For { iterable, body, .. } => {
@@ -307,7 +310,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn walk_condition_mark_usize_loop_counters(&mut self, expr: &Expression) {
         match expr {
-            Expression::Binary { left, op, right, .. } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 if matches!(op, BinaryOp::And | BinaryOp::Or) {
                     self.walk_condition_mark_usize_loop_counters(left);
                     self.walk_condition_mark_usize_loop_counters(right);
@@ -333,9 +338,11 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = maybe_counter else {
             return;
         };
-        if self.current_function_params.iter().any(|p| {
-            p.name == *name && matches!(&p.type_, Type::Int)
-        }) {
+        if self
+            .current_function_params
+            .iter()
+            .any(|p| p.name == *name && matches!(&p.type_, Type::Int))
+        {
             return;
         }
         if self.expression_is_usize_loop_bound(bound) {
@@ -609,8 +616,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }) || self.inferred_borrowed_params.contains(name)
                     || self.borrowed_iterator_vars.contains(name)
                     || self.local_var_types.get(name).is_some_and(|t| {
-                        matches!(t, crate::parser::Type::Reference(_)
-                            | crate::parser::Type::MutableReference(_))
+                        matches!(
+                            t,
+                            crate::parser::Type::Reference(_)
+                                | crate::parser::Type::MutableReference(_)
+                        )
                     })
             }
             Expression::MethodCall { method, .. } => {
@@ -649,8 +659,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(elem) = Self::extract_iterator_element_type(&iter_t) else {
             return false;
         };
-        body
-            .iter()
+        body.iter()
             .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem))
     }
 
@@ -675,10 +684,11 @@ impl<'ast> CodeGenerator<'ast> {
         trait_name: &str,
         method: &str,
     ) -> Option<crate::analyzer::OwnershipMode> {
-        let from_map = |m: &std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>| {
-            m.get(method)
-                .and_then(|af| af.inferred_ownership.get("self").copied())
-        };
+        let from_map =
+            |m: &std::collections::HashMap<String, crate::analyzer::AnalyzedFunction<'ast>>| {
+                m.get(method)
+                    .and_then(|af| af.inferred_ownership.get("self").copied())
+            };
         if let Some(m) = self.analyzed_trait_methods.get(trait_name) {
             if let Some(o) = from_map(m) {
                 return Some(o);
@@ -726,9 +736,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem)
             }
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
                     || else_block.as_ref().is_some_and(|b| {
@@ -761,17 +769,15 @@ impl<'ast> CodeGenerator<'ast> {
                             .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
                     })
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expr_contains_mut_dispatch_on_var(condition, loop_var, elem)
                     || body
                         .iter()
                         .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, elem))
             }
-            Statement::For {
-                iterable,
-                body,
-                ..
-            } => {
+            Statement::For { iterable, body, .. } => {
                 self.expr_contains_mut_dispatch_on_var(iterable, loop_var, elem)
                     || body
                         .iter()
@@ -785,8 +791,9 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Match { value, arms, .. } => {
                 self.expr_contains_mut_dispatch_on_var(value, loop_var, elem)
                     || arms.iter().any(|a| {
-                        a.guard.is_some_and(|g| self.expr_contains_mut_dispatch_on_var(g, loop_var, elem))
-                            || self.expr_contains_mut_dispatch_on_var(a.body, loop_var, elem)
+                        a.guard.is_some_and(|g| {
+                            self.expr_contains_mut_dispatch_on_var(g, loop_var, elem)
+                        }) || self.expr_contains_mut_dispatch_on_var(a.body, loop_var, elem)
                     })
             }
             Statement::Defer { statement, .. } => {
@@ -827,7 +834,11 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expr_contains_mut_dispatch_on_var(left, loop_var, elem)
                     || self.expr_contains_mut_dispatch_on_var(right, loop_var, elem)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expr_contains_mut_dispatch_on_var(function, loop_var, elem)
                     || arguments
                         .iter()
@@ -862,7 +873,9 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Closure { body, .. } => {
                 self.expr_contains_mut_dispatch_on_var(body, loop_var, elem)
             }
-            Expression::Cast { expr, .. } => self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem),
+            Expression::Cast { expr, .. } => {
+                self.expr_contains_mut_dispatch_on_var(expr, loop_var, elem)
+            }
             Expression::Range { start, end, .. } => {
                 self.expr_contains_mut_dispatch_on_var(start, loop_var, elem)
                     || self.expr_contains_mut_dispatch_on_var(end, loop_var, elem)
@@ -951,10 +964,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Case 2: Parser produces Identifier("Type::method") for `Type::method()` style
                 if let Expression::Identifier { name, .. } = &**function {
                     if let Some(type_name) = name.split("::").next() {
-                        if type_name
-                            .chars()
-                            .next()
-                            .is_some_and(|c| c.is_uppercase())
+                        if type_name.chars().next().is_some_and(|c| c.is_uppercase())
                             && name.contains("::")
                         {
                             return Some(type_name.to_string());
@@ -963,9 +973,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 None
             }
-            Expression::StructLiteral { name, .. } => {
-                name.split('<').next().map(|s| s.to_string())
-            }
+            Expression::StructLiteral { name, .. } => name.split('<').next().map(|s| s.to_string()),
             _ => None,
         }
     }
@@ -1062,9 +1070,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 _ => None,
                             })
                             .or_else(|| {
-                                self.local_var_types.get(var_name).and_then(|t| {
-                                    Self::type_to_name(t)
-                                })
+                                self.local_var_types
+                                    .get(var_name)
+                                    .and_then(|t| Self::type_to_name(t))
                             })
                             .or_else(|| self.infer_local_var_type_from_body(var_name));
 
@@ -1093,13 +1101,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     for bound_trait in bounds {
                                         let trait_qualified =
                                             format!("{}::{}", bound_trait, method);
-                                        if let Some(sig) = self
-                                            .signature_registry
-                                            .get_signature(&trait_qualified)
+                                        if let Some(sig) =
+                                            self.signature_registry.get_signature(&trait_qualified)
                                         {
                                             if sig.has_self_receiver {
-                                                if let Some(ownership) =
-                                                    sig.param_ownership.first()
+                                                if let Some(ownership) = sig.param_ownership.first()
                                                 {
                                                     if matches!(
                                                         ownership,
@@ -1224,8 +1230,7 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::While {
                 condition, body, ..
             } => {
-                let cond_usage =
-                    self.analyze_variable_usage_in_expression(var_name, condition);
+                let cond_usage = self.analyze_variable_usage_in_expression(var_name, condition);
                 if matches!(cond_usage, VariableUsage::Moved) {
                     return VariableUsage::Moved;
                 }
@@ -1246,11 +1251,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 VariableUsage::NotUsed
             }
-            Statement::For {
-                body, iterable, ..
-            } => {
-                let iter_usage =
-                    self.analyze_variable_usage_in_expression(var_name, iterable);
+            Statement::For { body, iterable, .. } => {
+                let iter_usage = self.analyze_variable_usage_in_expression(var_name, iterable);
                 if matches!(iter_usage, VariableUsage::Moved) {
                     return VariableUsage::Moved;
                 }
@@ -1263,14 +1265,12 @@ impl<'ast> CodeGenerator<'ast> {
                 iter_usage
             }
             Statement::Match { value, arms, .. } => {
-                let value_usage =
-                    self.analyze_variable_usage_in_expression(var_name, value);
+                let value_usage = self.analyze_variable_usage_in_expression(var_name, value);
                 if matches!(value_usage, VariableUsage::Moved) {
                     return VariableUsage::Moved;
                 }
                 for arm in arms {
-                    let usage =
-                        self.analyze_variable_usage_in_expression(var_name, arm.body);
+                    let usage = self.analyze_variable_usage_in_expression(var_name, arm.body);
                     if matches!(usage, VariableUsage::Moved) {
                         return VariableUsage::Moved;
                     }

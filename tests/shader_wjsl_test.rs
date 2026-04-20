@@ -52,7 +52,11 @@ fn test_wj_shader_compile_cli() {
         .output();
 
     let result = result.expect("wj binary failed to run");
-    assert!(result.status.success(), "stderr: {}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
 
     let wgsl = fs::read_to_string(&output).unwrap();
     assert!(wgsl.contains("struct Uniforms"));
@@ -66,6 +70,10 @@ fn test_type_checker_integration() {
     let module = parse_shader(source).unwrap();
     let checker = TypeChecker::new();
 
-    assert!(checker.check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F32)).is_ok());
-    assert!(checker.check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F64)).is_err());
+    assert!(checker
+        .check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F32))
+        .is_ok());
+    assert!(checker
+        .check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F64))
+        .is_err());
 }

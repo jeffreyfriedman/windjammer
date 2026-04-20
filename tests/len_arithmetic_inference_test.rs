@@ -75,11 +75,7 @@ fn check_bounds(items: Vec<i32>, i: usize) -> bool {
 }
 "#;
 
-    let rust = compile_and_read_rs(
-        test_wj,
-        "/tmp/test_len_cmp_sub.wj",
-        "test_len_cmp_sub",
-    );
+    let rust = compile_and_read_rs(test_wj, "/tmp/test_len_cmp_sub.wj", "test_len_cmp_sub");
 
     assert!(
         rust.contains("1_usize"),

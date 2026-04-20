@@ -30,7 +30,8 @@ impl Grid {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -64,7 +65,7 @@ impl Grid {
             .filter(|l| l.contains("generate_literal_with_context(1.414)"))
             .collect();
         eprintln!("Debug output for 1.414:\n{}", debug_lines.join("\n"));
-        
+
         assert!(
             debug_lines.iter().any(|l| l.contains("F32")),
             "Inference should return F32 for 1.414 in binary op with f32 method return"

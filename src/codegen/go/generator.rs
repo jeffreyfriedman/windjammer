@@ -75,17 +75,17 @@ impl GoGenerator {
             declared_enums: std::collections::HashMap::new(),
         }
     }
-    
+
     /// TDD FIX: Escape Go keywords when used as identifiers
     /// Go keywords: break, case, chan, const, continue, default, defer, else,
     /// fallthrough, for, func, go, goto, if, import, interface, map, package,
     /// range, return, select, struct, switch, type, var
     fn escape_go_keyword(name: &str) -> String {
         match name {
-            "break" | "case" | "chan" | "const" | "continue" | "default" | "defer" 
-            | "else" | "fallthrough" | "for" | "func" | "go" | "goto" | "if" 
-            | "import" | "interface" | "map" | "package" | "range" | "return" 
-            | "select" | "struct" | "switch" | "type" | "var" => {
+            "break" | "case" | "chan" | "const" | "continue" | "default" | "defer" | "else"
+            | "fallthrough" | "for" | "func" | "go" | "goto" | "if" | "import" | "interface"
+            | "map" | "package" | "range" | "return" | "select" | "struct" | "switch" | "type"
+            | "var" => {
                 format!("{}_", name) // Append underscore to avoid keyword conflict
             }
             _ => name.to_string(),
@@ -457,7 +457,13 @@ impl GoGenerator {
             .parameters
             .iter()
             .filter(|p| p.name != "self")
-            .map(|p| format!("{} {}", Self::escape_go_keyword(&p.name), self.type_to_go(&p.type_)))
+            .map(|p| {
+                format!(
+                    "{} {}",
+                    Self::escape_go_keyword(&p.name),
+                    self.type_to_go(&p.type_)
+                )
+            })
             .collect();
 
         // Return type
@@ -686,12 +692,16 @@ impl GoGenerator {
                 let indent = self.indent();
                 let var_name = self.pattern_to_go(pattern);
                 let mut value_str = self.generate_expression(value);
-                
+
                 // TDD FIX: Always cast bare integer literals to int64 in Go
                 // Reason: Windjammer `int` → Go `int64`, but Go's `0` is `int`
                 // This prevents type mismatches: `var sum = 0` with Vec<int> iteration
-                let is_bare_int_literal = matches!(value, 
-                    Expression::Literal { value: Literal::Int(_) | Literal::IntSuffixed(_, _), .. }
+                let is_bare_int_literal = matches!(
+                    value,
+                    Expression::Literal {
+                        value: Literal::Int(_) | Literal::IntSuffixed(_, _),
+                        ..
+                    }
                 );
                 if is_bare_int_literal {
                     value_str = format!("int64({})", value_str);
@@ -713,7 +723,7 @@ impl GoGenerator {
                 } else {
                     false
                 };
-                
+
                 // Go doesn't allow re-declaration of a variable in the same scope.
                 // For shadowing, we use a temporary variable + assignment pattern.
                 let result = if self.is_var_declared(&var_name) {
@@ -726,7 +736,10 @@ impl GoGenerator {
                         if let Expression::Identifier { name, .. } = &**function {
                             if let Some((enum_name, _)) = name.split_once("::") {
                                 self.declare_var(&var_name);
-                                return format!("{}var {} {} = {}\n", indent, var_name, enum_name, value_str);
+                                return format!(
+                                    "{}var {} {} = {}\n",
+                                    indent, var_name, enum_name, value_str
+                                );
                             }
                         }
                     }
@@ -878,16 +891,20 @@ impl GoGenerator {
                 let output = if let Expression::Range { start, end, .. } = iterable {
                     let mut start_str = self.generate_expression(start);
                     let end_str = self.generate_expression(end);
-                    
+
                     // TDD FIX: Cast range start to int64 for Windjammer int semantics
                     // Go's `for i := 0` makes `i` an `int`, but we need `int64`
-                    let is_int_literal = matches!(start, 
-                        Expression::Literal { value: Literal::Int(_) | Literal::IntSuffixed(_, _), .. }
+                    let is_int_literal = matches!(
+                        start,
+                        Expression::Literal {
+                            value: Literal::Int(_) | Literal::IntSuffixed(_, _),
+                            ..
+                        }
                     );
                     if is_int_literal {
                         start_str = format!("int64({})", start_str);
                     }
-                    
+
                     format!(
                         "{}for {} := {}; {} < {}; {}++ {{\n",
                         indent, var, start_str, var, end_str, var
@@ -1122,7 +1139,7 @@ impl GoGenerator {
                 let go_type = self.enum_variant_to_go_type(variant_name);
                 let mut out = format!("{}case {}:\n", indent, go_type);
                 self.indent_level += 1;
-                
+
                 // Extract pattern variables from variant data
                 // For Maybe::Some(v), binding is EnumPatternBinding::Single("v")
                 // Need to extract: v := _v.Field0
@@ -1154,7 +1171,7 @@ impl GoGenerator {
                         out.push_str(&format!("{}_ = _v\n", self.indent()));
                     }
                 }
-                
+
                 out.push_str(&format!("{}{}\n", self.indent(), body_str));
                 self.indent_level -= 1;
                 out
@@ -1352,40 +1369,38 @@ impl GoGenerator {
 
         let mut out = format!("{}{}:\n", indent, case_label);
         self.indent_level += 1;
-        
+
         // TDD FIX: Extract pattern variables with returns
         use crate::parser::EnumPatternBinding;
         match &arm.pattern {
-            Pattern::EnumVariant(_, binding) => {
-                match binding {
-                    EnumPatternBinding::Single(var_name) => {
-                        out.push_str(&format!("{}{} := _v.Field0\n", self.indent(), var_name));
-                    }
-                    EnumPatternBinding::Tuple(patterns) => {
-                        for (i, pat) in patterns.iter().enumerate() {
-                            if let Pattern::Identifier(var_name) = pat {
-                                out.push_str(&format!(
-                                    "{}{} := _v.Field{}\n",
-                                    self.indent(),
-                                    var_name,
-                                    i
-                                ));
-                            }
+            Pattern::EnumVariant(_, binding) => match binding {
+                EnumPatternBinding::Single(var_name) => {
+                    out.push_str(&format!("{}{} := _v.Field0\n", self.indent(), var_name));
+                }
+                EnumPatternBinding::Tuple(patterns) => {
+                    for (i, pat) in patterns.iter().enumerate() {
+                        if let Pattern::Identifier(var_name) = pat {
+                            out.push_str(&format!(
+                                "{}{} := _v.Field{}\n",
+                                self.indent(),
+                                var_name,
+                                i
+                            ));
                         }
                     }
-                    EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
-                        out.push_str(&format!("{}_ = _v\n", self.indent()));
-                    }
-                    EnumPatternBinding::Struct(_, _) => {
-                        out.push_str(&format!("{}_ = _v\n", self.indent()));
-                    }
                 }
-            }
+                EnumPatternBinding::Wildcard | EnumPatternBinding::None => {
+                    out.push_str(&format!("{}_ = _v\n", self.indent()));
+                }
+                EnumPatternBinding::Struct(_, _) => {
+                    out.push_str(&format!("{}_ = _v\n", self.indent()));
+                }
+            },
             _ => {
                 out.push_str(&format!("{}_ = _v\n", self.indent()));
             }
         }
-        
+
         out.push_str(&format!("{}return {}\n", self.indent(), body_str));
         self.indent_level -= 1;
         out
@@ -1530,7 +1545,7 @@ impl GoGenerator {
                         }
                         _ => {}
                     }
-                    
+
                     if name.contains("::") {
                         if let Some((type_name, method_or_variant)) = name.split_once("::") {
                             if self.declared_enums.contains_key(type_name) {
@@ -1551,9 +1566,11 @@ impl GoGenerator {
                                 let go_func = if method_or_variant == "new" {
                                     format!("New{}", capitalize_first(type_name))
                                 } else {
-                                    format!("{}{}",
+                                    format!(
+                                        "{}{}",
                                         capitalize_first(type_name),
-                                        capitalize_first(method_or_variant))
+                                        capitalize_first(method_or_variant)
+                                    )
                                 };
                                 let args: Vec<String> = arguments
                                     .iter()

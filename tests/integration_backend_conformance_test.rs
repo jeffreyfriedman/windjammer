@@ -97,10 +97,7 @@ fn compile_and_run_rust(source: &str, test_name: &str) -> BackendResult {
             backend: "rust".into(),
             stdout: String::new(),
             success: false,
-            error: format!(
-                "rustc failed: {}",
-                String::from_utf8_lossy(&rustc.stderr)
-            ),
+            error: format!("rustc failed: {}", String::from_utf8_lossy(&rustc.stderr)),
         };
     }
 
@@ -244,7 +241,11 @@ fn compile_and_run_js(source: &str, test_name: &str) -> BackendResult {
     };
 
     let runner = output_dir.join("_run.mjs");
-    fs::write(&runner, format!("{}\nif (typeof main === 'function') main();\n", stripped)).unwrap();
+    fs::write(
+        &runner,
+        format!("{}\nif (typeof main === 'function') main();\n", stripped),
+    )
+    .unwrap();
 
     let run = Command::new("node")
         .arg(&runner)
@@ -307,8 +308,7 @@ fn run_integration_test(test_name: &str, source: &str) {
     assert!(
         rust_result.success,
         "[{}] Rust failed: {}",
-        test_name,
-        rust_result.error
+        test_name, rust_result.error
     );
     assert!(
         rust_result.stdout.contains("PASSED"),
@@ -318,15 +318,9 @@ fn run_integration_test(test_name: &str, source: &str) {
     );
 
     if let Some(ref go) = go_result {
-        assert!(
-            go.success,
-            "[{}] Go failed: {}",
-            test_name,
-            go.error
-        );
+        assert!(go.success, "[{}] Go failed: {}", test_name, go.error);
         assert_eq!(
-            rust_result.stdout,
-            go.stdout,
+            rust_result.stdout, go.stdout,
             "[{}] Rust vs Go mismatch",
             test_name
         );
@@ -335,12 +329,10 @@ fn run_integration_test(test_name: &str, source: &str) {
     assert!(
         js_result.success,
         "[{}] JS failed: {}",
-        test_name,
-        js_result.error
+        test_name, js_result.error
     );
     assert_eq!(
-        rust_result.stdout,
-        js_result.stdout,
+        rust_result.stdout, js_result.stdout,
         "[{}] Rust vs JS mismatch",
         test_name
     );
@@ -348,12 +340,10 @@ fn run_integration_test(test_name: &str, source: &str) {
     assert!(
         interp_result.success,
         "[{}] Interpreter failed: {}",
-        test_name,
-        interp_result.error
+        test_name, interp_result.error
     );
     assert_eq!(
-        rust_result.stdout,
-        interp_result.stdout,
+        rust_result.stdout, interp_result.stdout,
         "[{}] Rust vs Interpreter mismatch",
         test_name
     );
@@ -419,8 +409,7 @@ fn test_integration_traits() {
         interp_result.error
     );
     assert_eq!(
-        rust_result.stdout,
-        interp_result.stdout,
+        rust_result.stdout, interp_result.stdout,
         "[traits] Rust vs Interpreter mismatch"
     );
     assert!(

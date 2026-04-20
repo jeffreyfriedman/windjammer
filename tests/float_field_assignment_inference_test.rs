@@ -14,7 +14,10 @@ fn build_rust(src: &str, _lint: bool) -> Result<String, String> {
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
     if !float_inference.errors.is_empty() {
-        return Err(format!("float inference errors: {:?}", float_inference.errors));
+        return Err(format!(
+            "float inference errors: {:?}",
+            float_inference.errors
+        ));
     }
 
     let mut analyzer = analyzer::Analyzer::new();

@@ -3,8 +3,8 @@
 //! Validates that game shaders written in WJSL can be correctly transpiled
 //! to WGSL by the transpile_wjsl() pipeline.
 
-use windjammer::wjsl::transpile_wjsl;
 use std::path::Path;
+use windjammer::wjsl::transpile_wjsl;
 
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -175,7 +175,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let wgsl = transpile_wjsl(source)
         .expect("explicit f32() casts in vec2<f32> constructor should transpile");
     assert!(wgsl.contains("f32("), "output should retain f32() casts");
-    assert!(wgsl.contains("vec2<f32>"), "output should have vec2<f32> constructor");
+    assert!(
+        wgsl.contains("vec2<f32>"),
+        "output should have vec2<f32> constructor"
+    );
 }
 
 #[test]
@@ -196,8 +199,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     out[idx] = 1u;
 }
 "#;
-    let wgsl = transpile_wjsl(source)
-        .expect("u32() casts from f32 screen_size should transpile");
+    let wgsl = transpile_wjsl(source).expect("u32() casts from f32 screen_size should transpile");
     assert!(wgsl.contains("u32("), "output should contain u32() casts");
 }
 
@@ -213,8 +215,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     buf[idx] = 1.0;
 }
 "#;
-    transpile_wjsl(source)
-        .expect("i32 to u32 cast should transpile cleanly");
+    transpile_wjsl(source).expect("i32 to u32 cast should transpile cleanly");
 }
 
 #[test]
@@ -247,8 +248,8 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     color_output[0u] = vec4(albedo, 1.0);
 }
 "#;
-    let wgsl = transpile_wjsl(source)
-        .expect("function call followed by .rgb swizzle should transpile");
+    let wgsl =
+        transpile_wjsl(source).expect("function call followed by .rgb swizzle should transpile");
     assert!(wgsl.contains(".rgb"), "output should preserve .rgb swizzle");
 }
 
@@ -275,15 +276,20 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     out[0u] = vec4(sky * lighting.ambient_intensity, 1.0);
 }
 "#;
-    let wgsl = transpile_wjsl(source)
-        .expect("nested struct.member.swizzle should transpile");
-    assert!(wgsl.contains("lighting.sky_color"), "should access struct member");
+    let wgsl = transpile_wjsl(source).expect("nested struct.member.swizzle should transpile");
+    assert!(
+        wgsl.contains("lighting.sky_color"),
+        "should access struct member"
+    );
 }
 
 #[test]
 fn test_wjsl_full_lighting_shader() {
     let wgsl = transpile_shader("voxel_lighting.wjsl");
-    assert!(wgsl.contains("fn main"), "transpiled output should contain main function");
+    assert!(
+        wgsl.contains("fn main"),
+        "transpiled output should contain main function"
+    );
 }
 
 #[test]
@@ -293,13 +299,19 @@ fn test_wjsl_gbuffer_struct_consistency() {
     let denoise = read_shader_source("voxel_denoise.wjsl");
 
     fn extract_gbuffer_struct(source: &str) -> String {
-        let start = source.find("struct GBufferPixel").expect("GBufferPixel not found");
+        let start = source
+            .find("struct GBufferPixel")
+            .expect("GBufferPixel not found");
         let end = source[start..].find('}').expect("closing brace not found") + start + 1;
         source[start..end]
             .lines()
             .map(|l| {
                 let l = l.trim();
-                if let Some(idx) = l.find("//") { l[..idx].trim() } else { l }
+                if let Some(idx) = l.find("//") {
+                    l[..idx].trim()
+                } else {
+                    l
+                }
             })
             .filter(|l| !l.is_empty())
             .collect::<Vec<_>>()
@@ -310,6 +322,12 @@ fn test_wjsl_gbuffer_struct_consistency() {
     let lt_struct = extract_gbuffer_struct(&lighting);
     let dn_struct = extract_gbuffer_struct(&denoise);
 
-    assert_eq!(rm_struct, lt_struct, "Raymarch and Lighting GBufferPixel must match");
-    assert_eq!(rm_struct, dn_struct, "Raymarch and Denoise GBufferPixel must match");
+    assert_eq!(
+        rm_struct, lt_struct,
+        "Raymarch and Lighting GBufferPixel must match"
+    );
+    assert_eq!(
+        rm_struct, dn_struct,
+        "Raymarch and Denoise GBufferPixel must match"
+    );
 }

@@ -23,10 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
     fn method_returns_impl_struct(&self, func: &FunctionDecl) -> bool {
         use crate::parser::Type;
         let returns_self_type = match &func.return_type {
-            Some(Type::Custom(name)) => self
-                .current_struct_name
-                .as_ref()
-                .is_some_and(|s| s == name),
+            Some(Type::Custom(name)) => {
+                self.current_struct_name.as_ref().is_some_and(|s| s == name)
+            }
             _ => false,
         };
         if !returns_self_type {
@@ -34,7 +33,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Exclude clone/copy factory methods that create a new instance rather than
         // flowing `self` through. These need `&self` to avoid E0507.
-        !matches!(func.name.as_str(), "clone" | "copy" | "duplicate" | "deep_clone" | "clone_from")
+        !matches!(
+            func.name.as_str(),
+            "clone" | "copy" | "duplicate" | "deep_clone" | "clone_from"
+        )
     }
 
     fn function_returns_self_type(&self, func: &FunctionDecl) -> bool {
@@ -92,15 +94,12 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Option<OwnershipMode> {
         if self.in_trait_impl {
             if let Some(trait_name) = &self.current_trait_impl_name {
-                let methods = self
-                    .analyzed_trait_methods
-                    .get(trait_name)
-                    .or_else(|| {
-                        trait_name
-                            .rfind("::")
-                            .map(|i| &trait_name[i + 2..])
-                            .and_then(|key| self.analyzed_trait_methods.get(key))
-                    });
+                let methods = self.analyzed_trait_methods.get(trait_name).or_else(|| {
+                    trait_name
+                        .rfind("::")
+                        .map(|i| &trait_name[i + 2..])
+                        .and_then(|key| self.analyzed_trait_methods.get(key))
+                });
                 if let Some(trait_method) = methods.and_then(|m| m.get(func_name)) {
                     let ownership = trait_method.inferred_ownership.get("self").copied();
                     match ownership {
@@ -108,8 +107,8 @@ impl<'ast> CodeGenerator<'ast> {
                             return ownership;
                         }
                         Some(OwnershipMode::Owned) => {
-                            // Trait method analysis says `Owned` → the trait codegen 
-                            // defaults to `&self` for trait methods (OwnershipHint::Inferred 
+                            // Trait method analysis says `Owned` → the trait codegen
+                            // defaults to `&self` for trait methods (OwnershipHint::Inferred
                             // maps to "&self" in item_generation.rs). The impl MUST match.
                             return Some(OwnershipMode::Borrowed);
                         }
@@ -134,37 +133,65 @@ impl<'ast> CodeGenerator<'ast> {
                     .rfind("::")
                     .map(|i| &trait_name[i + 2..])
                     .unwrap_or(trait_name);
-                return Some(if matches!(
-                    base_trait,
-                    "Add" | "Sub" | "Mul" | "Div" | "Rem" | "Neg" | "Not"
-                        | "BitAnd" | "BitOr" | "BitXor" | "Shl" | "Shr"
-                        | "Into" | "From" | "TryInto" | "TryFrom"
-                ) {
-                    OwnershipMode::Owned
-                } else if matches!(
-                    base_trait,
-                    "Display" | "Debug" | "Hash" | "PartialEq" | "Eq"
-                        | "PartialOrd" | "Ord" | "Clone" | "Copy" | "Default"
-                        | "Iterator" | "IntoIterator" | "AsRef" | "Deref"
-                ) {
-                    OwnershipMode::Borrowed
-                } else {
-                    // For custom cross-file traits, use body analysis first.
-                    // If body analysis found explicit ownership (mutation detected
-                    // or read-only access confirmed), use that.
-                    if let Some(body_ownership) = analyzed.inferred_ownership.get("self").copied() {
-                        body_ownership
+                return Some(
+                    if matches!(
+                        base_trait,
+                        "Add"
+                            | "Sub"
+                            | "Mul"
+                            | "Div"
+                            | "Rem"
+                            | "Neg"
+                            | "Not"
+                            | "BitAnd"
+                            | "BitOr"
+                            | "BitXor"
+                            | "Shl"
+                            | "Shr"
+                            | "Into"
+                            | "From"
+                            | "TryInto"
+                            | "TryFrom"
+                    ) {
+                        OwnershipMode::Owned
+                    } else if matches!(
+                        base_trait,
+                        "Display"
+                            | "Debug"
+                            | "Hash"
+                            | "PartialEq"
+                            | "Eq"
+                            | "PartialOrd"
+                            | "Ord"
+                            | "Clone"
+                            | "Copy"
+                            | "Default"
+                            | "Iterator"
+                            | "IntoIterator"
+                            | "AsRef"
+                            | "Deref"
+                    ) {
+                        OwnershipMode::Borrowed
                     } else {
-                        // No body analysis result - match the trait declaration heuristic:
-                        // methods WITH a return type default to &self,
-                        // methods WITHOUT default to &mut self.
-                        if analyzed.decl.return_type.is_some() {
-                            OwnershipMode::Borrowed
+                        // For custom cross-file traits, use body analysis first.
+                        // If body analysis found explicit ownership (mutation detected
+                        // or read-only access confirmed), use that.
+                        if let Some(body_ownership) =
+                            analyzed.inferred_ownership.get("self").copied()
+                        {
+                            body_ownership
                         } else {
-                            OwnershipMode::MutBorrowed
+                            // No body analysis result - match the trait declaration heuristic:
+                            // methods WITH a return type default to &self,
+                            // methods WITHOUT default to &mut self.
+                            if analyzed.decl.return_type.is_some() {
+                                OwnershipMode::Borrowed
+                            } else {
+                                OwnershipMode::MutBorrowed
+                            }
                         }
-                    }
-                });
+                    },
+                );
             }
         }
         analyzed.inferred_ownership.get("self").copied()
@@ -216,7 +243,8 @@ impl<'ast> CodeGenerator<'ast> {
                 statements.iter().any(|s| self.statement_modifies_self(s))
             }
             Expression::MethodCall { object, method, .. } => {
-                let is_mutating_method = super::stdlib_method_traits::method_mutates_receiver(method);
+                let is_mutating_method =
+                    super::stdlib_method_traits::method_mutates_receiver(method);
 
                 if is_mutating_method {
                     // Check if the object is self.field
@@ -262,7 +290,10 @@ impl<'ast> CodeGenerator<'ast> {
             } else if matches!(&param.type_, Type::String)
                 || matches!(&param.type_, Type::Custom(name) if name == "string" || name == "String")
             {
-                params.push(format!("{}: windjammer_runtime::ffi::FfiString", param.name));
+                params.push(format!(
+                    "{}: windjammer_runtime::ffi::FfiString",
+                    param.name
+                ));
             } else {
                 params.push(format!(
                     "{}: {}",
@@ -359,6 +390,26 @@ impl<'ast> CodeGenerator<'ast> {
         let has_property_test = func.decorators.iter().any(|d| d.name == "property_test");
         if has_property_test {
             output.push_str("#[test]\n");
+        }
+
+        // PHASE 1: Suppress Clippy warnings for &String parameters
+        // We use &String (not &str) for correctness with Vec<String>, but Clippy warns
+        // Phase 2 will optimize to &str when safe
+        let has_borrowed_string_param = analyzed
+            .inferred_ownership
+            .iter()
+            .any(|(_, ownership)| matches!(ownership, OwnershipMode::Borrowed))
+            && func.parameters.iter().enumerate().any(|(idx, param)| {
+                let inferred_type = analyzed
+                    .inferred_param_types
+                    .get(idx)
+                    .unwrap_or(&param.type_);
+                matches!(inferred_type, Type::String)
+                    || matches!(inferred_type, Type::Custom(ref name) if name == "string")
+            });
+
+        if has_borrowed_string_param {
+            output.push_str("#[allow(clippy::ptr_arg)]\n");
         }
 
         // Function signature
@@ -1054,7 +1105,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.method_return_types
                     .insert(func.name.to_string(), ret_type.clone());
             }
-            
+
             // NEW ARCHITECTURE: Register method signature for type-based parameter resolution
             // This replaces ALL hard-coded method name heuristics
             if let Some(impl_type) = &self.current_struct_name {
@@ -1062,11 +1113,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // Use the actual inferred ownership from the analyzer, not defaults!
                 let mut param_types = Vec::new();
                 let mut param_ownership = Vec::new();
-                
+
                 for param in &func.parameters {
                     if param.name != "self" {
                         param_types.push(param.type_.clone());
-                        
+
                         // Use ACTUAL analyzed ownership from inferred_ownership
                         let ownership = analyzed
                             .inferred_ownership
@@ -1076,10 +1127,10 @@ impl<'ast> CodeGenerator<'ast> {
                         param_ownership.push(ownership);
                     }
                 }
-                
+
                 // Check if method has self receiver
                 let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-                
+
                 let signature = crate::codegen::rust::generator::MethodSignature::new(
                     impl_type.clone(),
                     func.name.clone(),
@@ -1088,7 +1139,7 @@ impl<'ast> CodeGenerator<'ast> {
                     func.return_type.clone(),
                     has_self_receiver,
                 );
-                
+
                 self.register_method_signature(signature);
             }
         }
@@ -1337,24 +1388,24 @@ impl<'ast> CodeGenerator<'ast> {
         // associated functions returning Self). So the impl must also have self to match.
         let needs_self_from_trait = self.in_trait_impl
             && !has_explicit_self
-            && self.current_trait_impl_name.as_ref().is_some_and(|trait_name| {
-                let methods = self
-                    .analyzed_trait_methods
-                    .get(trait_name)
-                    .or_else(|| {
+            && self
+                .current_trait_impl_name
+                .as_ref()
+                .is_some_and(|trait_name| {
+                    let methods = self.analyzed_trait_methods.get(trait_name).or_else(|| {
                         trait_name
                             .rfind("::")
                             .map(|i| &trait_name[i + 2..])
                             .and_then(|key| self.analyzed_trait_methods.get(key))
                     });
-                let found = methods.is_some_and(|m| m.contains_key(&func.name));
-                if !found && !has_inferred_self && !is_constructor {
-                    // Cross-file trait impl: trait definition not available in single-file compilation.
-                    // Default to requiring self since trait impl methods almost always need it.
-                    return true;
-                }
-                found
-            });
+                    let found = methods.is_some_and(|m| m.contains_key(&func.name));
+                    if !found && !has_inferred_self && !is_constructor {
+                        // Cross-file trait impl: trait definition not available in single-file compilation.
+                        // Default to requiring self since trait impl methods almost always need it.
+                        return true;
+                    }
+                    found
+                });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
             let ownership = self
@@ -1457,9 +1508,9 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             // E0053 FIX: Use trait's ownership when in trait impl
-                            let eff_ownership = self.get_effective_self_ownership(&func.name, analyzed);
-                            if let Some(ownership_mode) = eff_ownership
-                            {
+                            let eff_ownership =
+                                self.get_effective_self_ownership(&func.name, analyzed);
+                            if let Some(ownership_mode) = eff_ownership {
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
@@ -1639,10 +1690,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
-                                        // TDD FIX: Borrowed String → &String (not &str!) for CORRECTNESS
-                                        // While &str is more idiomatic, &String is CORRECT when the method body
-                                        // calls Vec<String>::contains or other generic stdlib methods expecting &String
-                                        // TODO: Add lint to suggest &str when safe (not calling Vec<String> methods)
+                                        // PHASE 1: Generate &String for correctness (works with Vec<String>)
+                                        // PHASE 2: Will optimize to &str when safe
                                         format!("&{}", self.type_to_rust(inferred_type))
                                     }
                                 }

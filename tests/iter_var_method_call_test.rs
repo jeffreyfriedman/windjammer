@@ -42,8 +42,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     }
 
     let generated_file = out_dir.join("test.rs");
-    fs::read_to_string(&generated_file)
-        .map_err(|e| format!("Failed to read generated file: {}", e))
+    fs::read_to_string(&generated_file).map_err(|e| format!("Failed to read generated file: {}", e))
 }
 
 fn compile_and_verify_rustc(code: &str) -> String {
@@ -54,7 +53,11 @@ fn compile_and_verify_rustc(code: &str) -> String {
 
     let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
     let temp_dir = std::env::temp_dir();
-    let rs_file = temp_dir.join(format!("verify_iter_method_{}_{}.rs", std::process::id(), verify_id));
+    let rs_file = temp_dir.join(format!(
+        "verify_iter_method_{}_{}.rs",
+        std::process::id(),
+        verify_id
+    ));
     std::fs::write(&rs_file, &generated).expect("Failed to write rs file");
 
     let verify = Command::new("rustc")

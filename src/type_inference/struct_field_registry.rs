@@ -60,7 +60,10 @@ pub fn resolve_use_path_to_qualified_key(
     // as crate-root `system::Foo`. Try current-module-relative first, then crate-root segments.
     let resolved_candidates: Vec<Vec<String>> = match module_prefix.first().map(|s| s.as_str()) {
         None | Some("crate") | Some("super") | Some("self") => {
-            vec![resolve_module_prefix_from_use_path(module_prefix, current_module)]
+            vec![resolve_module_prefix_from_use_path(
+                module_prefix,
+                current_module,
+            )]
         }
         Some(_) => {
             let rel = append_module_prefix_relative_to_current(current_module, module_prefix);
@@ -253,7 +256,11 @@ pub fn merge_module_reexports_from_items<'ast>(
                     ));
                 }
             }
-            Item::Mod { name, items: nested, .. } => {
+            Item::Mod {
+                name,
+                items: nested,
+                ..
+            } => {
                 let mut next = declaring_module.to_vec();
                 next.push(name.clone());
                 merge_module_reexports_from_items(
@@ -365,7 +372,10 @@ fn append_module_prefix_relative_to_current(
     out
 }
 
-fn resolve_module_prefix_from_use_path(module_path: &[String], current_module: &[String]) -> Vec<String> {
+fn resolve_module_prefix_from_use_path(
+    module_path: &[String],
+    current_module: &[String],
+) -> Vec<String> {
     if module_path.is_empty() {
         return current_module.to_vec();
     }

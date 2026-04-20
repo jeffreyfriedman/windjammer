@@ -4,7 +4,6 @@
 /// Pattern: match x { Some(y) => y, _ => 0.0 } generates 0.0_f64
 /// Root Cause: Wildcard pattern not included in arm unification
 /// Expected: All match arms (including _) should infer to same type
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,9 +22,9 @@ pub fn get_value(opt: Option<f32>) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // The wildcard arm 0.0 should be f32
     assert!(
         output.contains("0.0_f32"),
@@ -51,9 +50,9 @@ pub fn unwrap_or_zero(res: Result<f32, String>) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(
         output.contains("0.0_f32"),
         "Expected '0.0_f32', got: {}",
@@ -80,9 +79,9 @@ pub fn get_factor(node: Node) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(
         output.contains("0.0_f32"),
         "Expected '0.0_f32', got: {}",
@@ -102,9 +101,9 @@ pub fn get_value_or_one(opt: Option<f32>) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(
         output.contains("1.0_f32"),
         "Expected '1.0_f32', got: {}",
@@ -131,9 +130,9 @@ pub fn wildcard_none(opt: Option<f32>) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Both explicit None and wildcard _ should infer to f32
     assert!(
         output.matches("0.0_f32").count() >= 2,
@@ -145,31 +144,36 @@ pub fn wildcard_none(opt: Option<f32>) -> f32 {
 // Helper function to compile Windjammer code and return generated Rust
 fn compile_and_get_rust(source: &str) -> String {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/match_wildcard_test_{}_{}", std::process::id(), counter);
-    
+    let test_dir = format!(
+        "/tmp/match_wildcard_test_{}_{}",
+        std::process::id(),
+        counter
+    );
+
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let source_file = PathBuf::from(&test_dir).join("test.wj");
     std::fs::write(&source_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
             "build",
             source_file.to_str().unwrap(),
-            "--target", "rust",
-            "--output", &test_dir,
+            "--target",
+            "rust",
+            "--output",
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     assert!(
         output.status.success(),
         "Compilation failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    
+
     let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    std::fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

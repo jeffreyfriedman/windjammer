@@ -158,8 +158,19 @@ impl Parser {
         &self.warnings
     }
 
-    pub(crate) fn emit_warning(&mut self, message: String, file: Option<String>, line: Option<usize>, column: Option<usize>) {
-        self.warnings.push(ParseWarning { message, file, line, column });
+    pub(crate) fn emit_warning(
+        &mut self,
+        message: String,
+        file: Option<String>,
+        line: Option<usize>,
+        column: Option<usize>,
+    ) {
+        self.warnings.push(ParseWarning {
+            message,
+            file,
+            line,
+            column,
+        });
     }
 
     /// Allocate an expression in the arena
@@ -416,7 +427,7 @@ impl Parser {
                 if self.peek(1) == Some(&Token::Let) {
                     self.advance(); // consume extern
                     self.advance(); // consume let
-                    
+
                     let name = if let Token::Ident(n) = self.current_token() {
                         let n = n.clone();
                         self.advance();
@@ -424,15 +435,15 @@ impl Parser {
                     } else {
                         return Err("Expected variable name after extern let".to_string());
                     };
-                    
+
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
-                    
+
                     // Semicolon optional (ASI)
                     if self.current_token() == &Token::Semicolon {
                         self.advance();
                     }
-                    
+
                     Ok(Item::ExternLet {
                         name,
                         type_,

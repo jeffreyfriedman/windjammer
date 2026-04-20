@@ -5,7 +5,7 @@
 // Example (breach-protocol):
 //   File 1: input/keyboard.wj
 //     KeyboardState::update_key(self) mutates self.keys → &mut self
-//   
+//
 //   File 2: game.wj
 //     Game::poll_keyboard_input(self) calls self.keyboard.update_key(...)
 //     Should infer &mut self, but currently infers &self
@@ -27,7 +27,7 @@ fn test_cross_file_transitive_mutation() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(src.join("input")).unwrap();
-    
+
     // File 1: KeyboardState in input/keyboard.wj (defines mutating method)
     std::fs::write(
         src.join("input/keyboard.wj"),
@@ -56,7 +56,7 @@ impl KeyboardState {
 "#,
     )
     .unwrap();
-    
+
     // File 2: Game in game.wj (calls KeyboardState methods)
     std::fs::write(
         src.join("game.wj"),
@@ -92,7 +92,7 @@ impl Game {
 "#,
     )
     .unwrap();
-    
+
     // File 3: input/mod.wj (module declaration)
     std::fs::write(
         src.join("input/mod.wj"),
@@ -101,7 +101,7 @@ pub mod keyboard
 "#,
     )
     .unwrap();
-    
+
     // File 4: Root mod.wj
     std::fs::write(
         src.join("mod.wj"),
@@ -111,7 +111,7 @@ pub mod game
 "#,
     )
     .unwrap();
-    
+
     // Build as library (multi-file)
     build_project_ext(
         &src.join("mod.wj"),
@@ -122,7 +122,7 @@ pub mod game
         &[],
     )
     .expect("Build should succeed");
-    
+
     // Check KeyboardState methods
     let keyboard_code = std::fs::read_to_string(build.join("input/keyboard.rs")).unwrap();
     assert!(
@@ -133,22 +133,28 @@ pub mod game
         keyboard_code.contains("pub fn is_key_down(&self"),
         "KeyboardState::is_key_down should be &self (read-only)"
     );
-    
+
     // Check Game methods - THIS IS WHERE THE BUG IS
     let game_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
-    
+
     // ASSERT: poll_input should be &mut self (calls mutating method on field)
     assert!(
         game_code.contains("fn poll_input(&mut self)"),
         "Game::poll_input should be &mut self (cross-file transitive mutation). Found:\n{}",
-        game_code.lines().find(|l| l.contains("fn poll_input")).unwrap_or("NOT FOUND")
+        game_code
+            .lines()
+            .find(|l| l.contains("fn poll_input"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     // ASSERT: update should be &mut self (calls poll_input which is &mut)
     assert!(
         game_code.contains("pub fn update(&mut self)"),
         "Game::update should be &mut self (level 2 cross-file). Found:\n{}",
-        game_code.lines().find(|l| l.contains("fn update")).unwrap_or("NOT FOUND")
+        game_code
+            .lines()
+            .find(|l| l.contains("fn update"))
+            .unwrap_or("NOT FOUND")
     );
 }
 
@@ -159,7 +165,7 @@ fn test_cross_file_with_three_files() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // File 1: state.wj (level 0 - direct mutation)
     std::fs::write(
         src.join("state.wj"),
@@ -180,7 +186,7 @@ impl State {
 "#,
     )
     .unwrap();
-    
+
     // File 2: manager.wj (level 1 - calls State::increment)
     std::fs::write(
         src.join("manager.wj"),
@@ -205,7 +211,7 @@ impl Manager {
 "#,
     )
     .unwrap();
-    
+
     // File 3: app.wj (level 2 - calls Manager::tick)
     std::fs::write(
         src.join("app.wj"),
@@ -230,7 +236,7 @@ impl App {
 "#,
     )
     .unwrap();
-    
+
     // Root
     std::fs::write(
         src.join("mod.wj"),
@@ -241,7 +247,7 @@ pub mod app
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("mod.wj"),
         &build,
@@ -251,20 +257,20 @@ pub mod app
         &[],
     )
     .expect("Build should succeed");
-    
+
     // Verify all levels have correct inference
     let state_code = std::fs::read_to_string(build.join("state.rs")).unwrap();
     assert!(
         state_code.contains("pub fn increment(&mut self)"),
         "State::increment should be &mut self"
     );
-    
+
     let manager_code = std::fs::read_to_string(build.join("manager.rs")).unwrap();
     assert!(
         manager_code.contains("fn tick(&mut self)"),
         "Manager::tick should be &mut self (cross-file level 1)"
     );
-    
+
     let app_code = std::fs::read_to_string(build.join("app.rs")).unwrap();
     assert!(
         app_code.contains("pub fn run(&mut self)"),

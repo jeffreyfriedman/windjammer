@@ -5,7 +5,6 @@
 /// 2. Cast chains: (value as f32 * 0.5).sin() * 6.28
 /// 3. Nested division: 6.28318 / count as f32
 /// 4. Method result * literals: (seed * 1234.567).sin() * 3.14159265 * 2.0
-
 use std::process::Command;
 use windjammer::*;
 
@@ -85,8 +84,7 @@ pub fn degrees_from_sin(x: f32) -> f32 {
     assert!(
         rustc_ok,
         "rustc failed (E0308/E0277):\nstderr: {}\n\nGenerated:\n{}",
-        stderr,
-        output
+        stderr, output
     );
 }
 
@@ -111,7 +109,10 @@ pub fn to_radians(deg: f32) -> f32 {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot divide")) {
-        panic!("E0277 in generated code:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in generated code:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -134,7 +135,10 @@ pub fn emit_angle(seed: f32) -> f32 {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot add")) {
-        panic!("E0277 in emitter pattern:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in emitter pattern:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -149,15 +153,14 @@ pub fn formation_angle(member_index: i32, count: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     let has_f32_safety = output.contains("6.28318_f32") || output.contains("as f32");
-    assert!(
-        has_f32_safety,
-        "6.28318 in f32 context. Got:\n{}",
-        output
-    );
+    assert!(has_f32_safety, "6.28318 in f32 context. Got:\n{}", output);
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && stderr.contains("cannot multiply") {
-        panic!("E0277 in squad tactics pattern:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in squad tactics pattern:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -192,7 +195,10 @@ pub fn create_sphere(radius: f32, slices: i32, stacks: i32) {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot divide")) {
-        panic!("E0277 in mesh3d sphere:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in mesh3d sphere:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -221,7 +227,10 @@ pub fn test_bounds() {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && stderr.contains("can't compare") {
-        panic!("E0277 in assert_eq:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in assert_eq:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -252,7 +261,10 @@ pub fn smooth(scale: f32) {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && stderr.contains("cannot divide") {
-        panic!("E0277 in terrain smooth:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in terrain smooth:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }
 
@@ -329,6 +341,9 @@ pub fn adjust_price(price: f32, rep_modifier: f64) -> f32 {
 
     let (rustc_ok, stderr) = run_rustc(&output);
     if !rustc_ok && stderr.contains("cannot multiply-assign") {
-        panic!("E0277 in compound assignment:\nstderr: {}\n\nGenerated:\n{}", stderr, output);
+        panic!(
+            "E0277 in compound assignment:\nstderr: {}\n\nGenerated:\n{}",
+            stderr, output
+        );
     }
 }

@@ -2,14 +2,13 @@
 ///
 /// Tracks constraints for integer literals and unifies them across expressions.
 /// Mirrors FloatInference architecture. Defaults to i32 for unknown contexts (Rust convention).
-
-use crate::parser::ast::core::{Expression, Statement, Item};
+use crate::parser::ast::core::{Expression, Item, Statement};
 use crate::parser::ast::operators::BinaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
-use crate::type_inference::ExprId;
 use crate::type_inference::int_implicit_casts::is_safe_implicit_cast;
 use crate::type_inference::struct_field_registry;
+use crate::type_inference::ExprId;
 use std::collections::HashMap;
 
 /// Integer type (i32, i64, u32, u64, usize, etc.)
@@ -105,17 +104,17 @@ impl IntInference {
             current_impl_type: None,
             const_types: HashMap::new(),
         };
-        
+
         // TDD FIX: Register stdlib method signatures (Vec, HashMap, etc.)
         inference.register_stdlib_signatures();
-        
+
         inference
     }
-    
+
     /// Register common stdlib method signatures for type inference
     fn register_stdlib_signatures(&mut self) {
         use crate::parser::Type;
-        
+
         // Vec<T> methods
         self.function_signatures.insert(
             "Vec::with_capacity".to_string(),
@@ -133,13 +132,13 @@ impl IntInference {
             "Vec::truncate".to_string(),
             (vec![Type::Custom("usize".to_string())], None),
         );
-        
+
         // HashMap<K,V> methods
         self.function_signatures.insert(
             "HashMap::with_capacity".to_string(),
             (vec![Type::Custom("usize".to_string())], None),
         );
-        
+
         // String methods
         self.function_signatures.insert(
             "String::with_capacity".to_string(),
@@ -184,10 +183,7 @@ impl IntInference {
     }
 
     /// All defining module prefixes per bare struct name (for duplicate names across modules).
-    pub fn set_struct_defining_module_paths(
-        &mut self,
-        paths: HashMap<String, Vec<Vec<String>>>,
-    ) {
+    pub fn set_struct_defining_module_paths(&mut self, paths: HashMap<String, Vec<Vec<String>>>) {
         self.struct_defining_module_paths = paths;
     }
 
@@ -231,7 +227,10 @@ impl IntInference {
     }
 
     /// See `float_inference::FloatInference::lookup_struct_fields_for_impl_type`.
-    fn lookup_struct_fields_for_impl_type(&self, impl_type_basename: &str) -> Option<&HashMap<String, Type>> {
+    fn lookup_struct_fields_for_impl_type(
+        &self,
+        impl_type_basename: &str,
+    ) -> Option<&HashMap<String, Type>> {
         let base = if let Some(idx) = impl_type_basename.find('<') {
             &impl_type_basename[..idx]
         } else {
@@ -246,7 +245,11 @@ impl IntInference {
         self.lookup_struct_fields(base)
     }
 
-    fn register_struct_fields_for_module<'ast>(&mut self, item: &Item<'ast>, module_prefix: &[String]) {
+    fn register_struct_fields_for_module<'ast>(
+        &mut self,
+        item: &Item<'ast>,
+        module_prefix: &[String],
+    ) {
         match item {
             Item::Struct { decl, .. } => {
                 let key = struct_field_registry::qualify_struct_key(module_prefix, &decl.name);
@@ -310,8 +313,7 @@ impl IntInference {
                         let imported_name = alias
                             .clone()
                             .unwrap_or_else(|| path.last().cloned().unwrap_or_default());
-                        self.imported_type_registry_keys
-                            .insert(imported_name, key);
+                        self.imported_type_registry_keys.insert(imported_name, key);
                     }
                 }
                 Item::Mod { items, .. } => self.register_use_imports_from_items(items),
@@ -323,22 +325,22 @@ impl IntInference {
     fn register_function_signature<'ast>(&mut self, item: &Item<'ast>) {
         match item {
             Item::Function { decl, .. } => {
-                let param_types: Vec<Type> = decl.parameters.iter().map(|p| p.type_.clone()).collect();
-                self.function_signatures.insert(
-                    decl.name.clone(),
-                    (param_types, decl.return_type.clone()),
-                );
+                let param_types: Vec<Type> =
+                    decl.parameters.iter().map(|p| p.type_.clone()).collect();
+                self.function_signatures
+                    .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
             }
             Item::Impl { block, .. } => {
                 let type_name = block.type_name.clone();
                 for func_decl in &block.functions {
-                    let param_types: Vec<Type> =
-                        func_decl.parameters.iter().map(|p| p.type_.clone()).collect();
+                    let param_types: Vec<Type> = func_decl
+                        .parameters
+                        .iter()
+                        .map(|p| p.type_.clone())
+                        .collect();
                     let full_name = format!("{}::{}", type_name, func_decl.name);
-                    self.function_signatures.insert(
-                        full_name,
-                        (param_types, func_decl.return_type.clone()),
-                    );
+                    self.function_signatures
+                        .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
             _ => {}
@@ -369,14 +371,18 @@ impl IntInference {
                 self.var_assignments.clear(); // TDD FIX: Clear per-function scope
                 let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                 for param in &decl.parameters {
-                    self.var_types.insert(param.name.clone(), param.type_.clone());
+                    self.var_types
+                        .insert(param.name.clone(), param.type_.clone());
                 }
                 // TDD FIX: Pre-pass - populate var_types from return statements
                 // e.g. "return count" with return type u32 → var_types["count"] = u32
                 // Enables compound assignment "count += 1" to infer 1_u32 before we process it
                 if let Some(return_type) = &decl.return_type {
                     for stmt in &decl.body {
-                        if let Statement::Return { value: Some(expr), .. } = stmt {
+                        if let Statement::Return {
+                            value: Some(expr), ..
+                        } = stmt
+                        {
                             if let Expression::Identifier { name, .. } = expr {
                                 self.var_types.insert(name.clone(), return_type.clone());
                             }
@@ -403,12 +409,16 @@ impl IntInference {
                     self.var_assignments.clear(); // TDD FIX: Clear per-function scope
                     let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                     for param in &func.parameters {
-                        self.var_types.insert(param.name.clone(), param.type_.clone());
+                        self.var_types
+                            .insert(param.name.clone(), param.type_.clone());
                     }
                     // TDD FIX: Pre-pass - populate var_types from return statements (same as Function)
                     if let Some(return_type) = &func.return_type {
                         for stmt in &func.body {
-                            if let Statement::Return { value: Some(expr), .. } = stmt {
+                            if let Statement::Return {
+                                value: Some(expr), ..
+                            } = stmt
+                            {
                                 if let Expression::Identifier { name, .. } = expr {
                                     self.var_types.insert(name.clone(), return_type.clone());
                                 }
@@ -430,7 +440,9 @@ impl IntInference {
                 }
                 self.current_impl_type = None;
             }
-            Item::Const { name, type_, value, .. } => {
+            Item::Const {
+                name, type_, value, ..
+            } => {
                 self.collect_expression_constraints(value, None);
                 if let Some(int_ty) = self.extract_int_type(type_) {
                     let expr_id = self.get_expr_id(value);
@@ -441,7 +453,9 @@ impl IntInference {
                     ));
                 }
             }
-            Item::Static { name, type_, value, .. } => {
+            Item::Static {
+                name, type_, value, ..
+            } => {
                 self.collect_expression_constraints(value, None);
                 if let Some(int_ty) = self.extract_int_type(type_) {
                     let expr_id = self.get_expr_id(value);
@@ -481,9 +495,14 @@ impl IntInference {
         return_type: Option<&Type>,
     ) {
         match stmt {
-            Statement::Let { pattern, value, type_, .. } => {
+            Statement::Let {
+                pattern,
+                value,
+                type_,
+                ..
+            } => {
                 let explicit_type = type_.as_ref().and_then(|ty| self.extract_int_type(ty));
-                
+
                 // Don't pass return_type to let statement values - they have their own types!
                 self.collect_expression_constraints(value, type_.as_ref());
 
@@ -537,7 +556,12 @@ impl IntInference {
                     }
                 }
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.collect_expression_constraints(condition, return_type);
                 for s in then_block {
                     self.collect_statement_constraints(s, return_type);
@@ -548,7 +572,9 @@ impl IntInference {
                     }
                 }
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.collect_expression_constraints(condition, return_type);
                 for s in body {
                     self.collect_statement_constraints(s, return_type);
@@ -560,7 +586,12 @@ impl IntInference {
                     self.collect_statement_constraints(s, return_type);
                 }
             }
-            Statement::Assignment { target, value, compound_op, .. } => {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op,
+                ..
+            } => {
                 self.collect_expression_constraints(target, return_type);
                 self.collect_expression_constraints(value, return_type);
                 let target_id = self.get_expr_id(target);
@@ -570,7 +601,7 @@ impl IntInference {
                     value_id,
                     "assignment".to_string(),
                 ));
-                
+
                 // Simple assignment: constrain RHS literals to the target's integer type (i64, usize, u32, …).
                 // MustMatch alone can leave the literal as default i32 when the LHS is a field access.
                 if compound_op.is_none() {
@@ -587,7 +618,7 @@ impl IntInference {
                         }
                     }
                 }
-                
+
                 // TDD FIX: Detect compound assignment pattern even when compound_op is None
                 // Parser generates: x = x + 1 (compound_op: None, value: Binary)
                 // Codegen optimizes to: x += 1
@@ -596,21 +627,47 @@ impl IntInference {
                 // Pattern: target = Binary { left: target, op: Add/Sub/Mul/Div, right: literal }
                 let is_compound_pattern = if let Expression::Binary { left, op, .. } = value {
                     let targets_match = match (target, &**left) {
-                        (Expression::Identifier { name: t, .. }, Expression::Identifier { name: l, .. }) => t == l,
-                        (Expression::FieldAccess { object: to, field: tf, .. }, Expression::FieldAccess { object: lo, field: lf, .. }) => {
+                        (
+                            Expression::Identifier { name: t, .. },
+                            Expression::Identifier { name: l, .. },
+                        ) => t == l,
+                        (
+                            Expression::FieldAccess {
+                                object: to,
+                                field: tf,
+                                ..
+                            },
+                            Expression::FieldAccess {
+                                object: lo,
+                                field: lf,
+                                ..
+                            },
+                        ) => {
                             // Both are field accesses - check if same field
-                            tf == lf && match (&**to, &**lo) {
-                                (Expression::Identifier { name: ton, .. }, Expression::Identifier { name: lon, .. }) => ton == lon,
-                                _ => false
-                            }
+                            tf == lf
+                                && match (&**to, &**lo) {
+                                    (
+                                        Expression::Identifier { name: ton, .. },
+                                        Expression::Identifier { name: lon, .. },
+                                    ) => ton == lon,
+                                    _ => false,
+                                }
                         }
-                        _ => false
+                        _ => false,
                     };
-                    targets_match && matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod)
+                    targets_match
+                        && matches!(
+                            op,
+                            BinaryOp::Add
+                                | BinaryOp::Sub
+                                | BinaryOp::Mul
+                                | BinaryOp::Div
+                                | BinaryOp::Mod
+                        )
                 } else {
                     false
                 };
-                
+
                 // TDD FIX: Compound assignment (+=, -=, etc.) - RHS literal must match LHS type
                 // e.g. count += 1 where count: u32 → 1 must be u32, not i32
                 if compound_op.is_some() || is_compound_pattern {
@@ -624,7 +681,10 @@ impl IntInference {
                                     self.constraints.push(IntConstraint::MustBe(
                                         right_id,
                                         int_ty,
-                                        format!("compound pattern RHS must match LHS type {:?}", int_ty),
+                                        format!(
+                                            "compound pattern RHS must match LHS type {:?}",
+                                            int_ty
+                                        ),
                                     ));
                                 }
                             } else {
@@ -666,7 +726,11 @@ impl IntInference {
     ) {
         match expr {
             Expression::Identifier { name, .. } => {
-                if let Some(var_type) = self.var_types.get(name).or_else(|| self.const_types.get(name)) {
+                if let Some(var_type) = self
+                    .var_types
+                    .get(name)
+                    .or_else(|| self.const_types.get(name))
+                {
                     if let Some(int_ty) = self.extract_int_type(var_type) {
                         let id = self.get_expr_id(expr);
                         self.constraints.push(IntConstraint::MustBe(
@@ -677,7 +741,11 @@ impl IntInference {
                     }
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.collect_expression_constraints(function, return_type);
 
                 let func_name = match function {
@@ -685,28 +753,30 @@ impl IntInference {
                     Expression::FieldAccess { object, field, .. } => {
                         // Resolve the object's type name for qualified method lookup.
                         // Handles: identifier.method(), self.field.method(), expr.method()
-                        let resolved_type_name = if let Expression::Identifier { name: obj_name, .. } = object {
-                            if obj_name.chars().next().map_or(false, |c| c.is_lowercase()) {
-                                if obj_name == "self" {
-                                    self.current_impl_type.clone()
+                        let resolved_type_name =
+                            if let Expression::Identifier { name: obj_name, .. } = object {
+                                if obj_name.chars().next().map_or(false, |c| c.is_lowercase()) {
+                                    if obj_name == "self" {
+                                        self.current_impl_type.clone()
+                                    } else {
+                                        self.var_types.get(obj_name).and_then(|ty| match ty {
+                                            Type::Custom(n) => Some(n.clone()),
+                                            _ => None,
+                                        })
+                                    }
                                 } else {
-                                    self.var_types.get(obj_name).and_then(|ty| match ty {
-                                        Type::Custom(n) => Some(n.clone()),
-                                        _ => None,
-                                    })
+                                    Some(obj_name.clone())
                                 }
                             } else {
-                                Some(obj_name.clone())
-                            }
-                        } else {
-                            // Nested expression (e.g., self.entries.remove) - resolve via type inference
-                            self.infer_type_from_expression(object).and_then(|ty| match &ty {
-                                Type::Custom(n) => Some(n.clone()),
-                                Type::Parameterized(n, _) => Some(n.clone()),
-                                Type::Vec(_) => Some("Vec".to_string()),
-                                _ => None,
-                            })
-                        };
+                                // Nested expression (e.g., self.entries.remove) - resolve via type inference
+                                self.infer_type_from_expression(object)
+                                    .and_then(|ty| match &ty {
+                                        Type::Custom(n) => Some(n.clone()),
+                                        Type::Parameterized(n, _) => Some(n.clone()),
+                                        Type::Vec(_) => Some("Vec".to_string()),
+                                        _ => None,
+                                    })
+                            };
                         if let Some(ref type_name) = resolved_type_name {
                             Some(format!("{}::{}", type_name, field))
                         } else {
@@ -717,10 +787,19 @@ impl IntInference {
                 };
 
                 // Vec index-based methods via Call(FieldAccess) need usize constraint
-                if let Expression::FieldAccess { object: call_obj, field: call_method, .. } = function {
-                    let is_vec_index_method = matches!(call_method.as_str(), "remove" | "swap" | "swap_remove" | "split_off" | "drain");
+                if let Expression::FieldAccess {
+                    object: call_obj,
+                    field: call_method,
+                    ..
+                } = function
+                {
+                    let is_vec_index_method = matches!(
+                        call_method.as_str(),
+                        "remove" | "swap" | "swap_remove" | "split_off" | "drain"
+                    );
                     if is_vec_index_method && !arguments.is_empty() {
-                        let receiver_is_vec = self.infer_type_from_expression(call_obj)
+                        let receiver_is_vec = self
+                            .infer_type_from_expression(call_obj)
                             .map_or(false, |t| matches!(t, Type::Vec(_)));
                         if receiver_is_vec {
                             if let Some((_label, arg)) = arguments.first() {
@@ -728,7 +807,10 @@ impl IntInference {
                                 self.constraints.push(IntConstraint::MustBe(
                                     arg_id,
                                     IntType::Usize,
-                                    format!(".{}() index parameter must be usize (via Call)", call_method),
+                                    format!(
+                                        ".{}() index parameter must be usize (via Call)",
+                                        call_method
+                                    ),
                                 ));
                             }
                         }
@@ -736,7 +818,8 @@ impl IntInference {
                 }
 
                 // TDD FIX: assert_eq/assert_ne - both args must have same int type
-                if (func_name.as_deref() == Some("assert_eq") || func_name.as_deref() == Some("assert_ne"))
+                if (func_name.as_deref() == Some("assert_eq")
+                    || func_name.as_deref() == Some("assert_ne"))
                     && arguments.len() >= 2
                 {
                     for (_label, arg) in arguments {
@@ -760,12 +843,18 @@ impl IntInference {
                 // TDD FIX: Some(expr) with expected Option<T> - constrain argument to T
                 // Handles: Node { children: Some(vec![2, 3]) } where children: Option<Vec<int>>
                 let arg_expected_type: Option<Type> = if arguments.len() == 1 {
-                    if func_name.as_deref() == Some("Some") || func_name.as_deref() == Some("Option::Some") {
-                        return_type.and_then(|ty| self.extract_option_inner_type(ty)).or_else(|| {
-                            func_name.as_ref().and_then(|name| self.function_signatures.get(name))
-                                .and_then(|(params, _)| params.first())
-                                .and_then(|param_ty| self.extract_option_inner_type(param_ty))
-                        })
+                    if func_name.as_deref() == Some("Some")
+                        || func_name.as_deref() == Some("Option::Some")
+                    {
+                        return_type
+                            .and_then(|ty| self.extract_option_inner_type(ty))
+                            .or_else(|| {
+                                func_name
+                                    .as_ref()
+                                    .and_then(|name| self.function_signatures.get(name))
+                                    .and_then(|(params, _)| params.first())
+                                    .and_then(|param_ty| self.extract_option_inner_type(param_ty))
+                            })
                     } else {
                         None
                     }
@@ -820,32 +909,38 @@ impl IntInference {
                     }
                 }
             }
-            Expression::MethodCall { object, method, arguments, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 self.collect_expression_constraints(object, return_type);
 
                 // Prefer qualified lookup (Type::method) to avoid ambiguous matches.
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
-                let qualified_sig = self.infer_type_from_expression(object)
-                    .and_then(|ty| match &ty {
-                        Type::Custom(n) => {
-                            let base = n.split('<').next().unwrap_or(n);
-                            let qualified = format!("{}::{}", base, method);
-                            self.function_signatures.get(&qualified).cloned()
-                        }
-                        Type::Vec(_) => {
-                            let qualified = format!("Vec::{}", method);
-                            self.function_signatures.get(&qualified).cloned()
-                        }
-                        _ => None,
-                    });
+                let qualified_sig =
+                    self.infer_type_from_expression(object)
+                        .and_then(|ty| match &ty {
+                            Type::Custom(n) => {
+                                let base = n.split('<').next().unwrap_or(n);
+                                let qualified = format!("{}::{}", base, method);
+                                self.function_signatures.get(&qualified).cloned()
+                            }
+                            Type::Vec(_) => {
+                                let qualified = format!("Vec::{}", method);
+                                self.function_signatures.get(&qualified).cloned()
+                            }
+                            _ => None,
+                        });
 
                 let method_sig = qualified_sig.map(|(params, _)| params).or_else(|| {
                     self.function_signatures
                         .iter()
                         .filter(|(func_name, (params, _))| {
                             let name_match = func_name.split("::").last() == Some(method.as_str());
-                            let param_match =
-                                params.len() == arguments.len() + 1 || params.len() == arguments.len();
+                            let param_match = params.len() == arguments.len() + 1
+                                || params.len() == arguments.len();
                             name_match && param_match
                         })
                         .map(|(_, (params, _))| params.clone())
@@ -878,16 +973,27 @@ impl IntInference {
                 }
 
                 // TDD FIX: Vec index-based methods - first arg must be usize
-                let is_always_usize_method = method == "with_capacity" || method == "reserve" || method == "truncate";
-                let is_vec_index_method = method == "remove" || method == "swap" || method == "swap_remove"
-                    || method == "split_off" || method == "drain";
-                let receiver_is_vec = self.infer_type_from_expression(object)
+                let is_always_usize_method =
+                    method == "with_capacity" || method == "reserve" || method == "truncate";
+                let is_vec_index_method = method == "remove"
+                    || method == "swap"
+                    || method == "swap_remove"
+                    || method == "split_off"
+                    || method == "drain";
+                let receiver_is_vec = self
+                    .infer_type_from_expression(object)
                     .map_or(false, |t| matches!(t, Type::Vec(_)))
                     || {
-                        if let Expression::FieldAccess { object: inner_obj, field: field_name, .. } = object {
+                        if let Expression::FieldAccess {
+                            object: inner_obj,
+                            field: field_name,
+                            ..
+                        } = object
+                        {
                             if let Expression::Identifier { name, .. } = &**inner_obj {
                                 if name == "self" {
-                                    self.current_impl_type.as_deref()
+                                    self.current_impl_type
+                                        .as_deref()
                                         .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
                                         .and_then(|fields| fields.get(field_name))
                                         .is_some_and(|t| matches!(t, Type::Vec(_)))
@@ -901,7 +1007,9 @@ impl IntInference {
                             false
                         }
                     };
-                if (is_always_usize_method || (is_vec_index_method && receiver_is_vec)) && !arguments.is_empty() {
+                if (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
+                    && !arguments.is_empty()
+                {
                     if let Some((_label, arg)) = arguments.first() {
                         let arg_id = self.get_expr_id(arg);
                         self.constraints.push(IntConstraint::MustBe(
@@ -911,7 +1019,7 @@ impl IntInference {
                         ));
                     }
                 }
-                
+
                 // TDD FIX: HashMap<K,V>::insert and Vec<T>::push - propagate generic types from receiver
                 // Handles: mgr.name_to_id.insert("test", 42) where name_to_id: HashMap<string, int>
                 if let Some(receiver_type) = self.infer_type_from_expression(object) {
@@ -949,15 +1057,20 @@ impl IntInference {
             }
             Expression::StructLiteral { name, fields, .. } => {
                 // Two-phase to avoid borrow checker: collect field types first, then iterate
-                let field_data: Vec<(&'ast Expression<'ast>, IntType, String, Option<Type>)> =
-                    self.lookup_struct_fields(name).map_or_else(Vec::new, |struct_fields| {
+                let field_data: Vec<(&'ast Expression<'ast>, IntType, String, Option<Type>)> = self
+                    .lookup_struct_fields(name)
+                    .map_or_else(Vec::new, |struct_fields| {
                         fields
                             .iter()
                             .map(|(field_name, field_expr)| {
                                 let field_type = struct_fields.get(field_name).cloned();
                                 let (int_ty, reason) = field_type
                                     .as_ref()
-                                    .and_then(|ft| self.extract_nested_int_type(ft).map(|it| (it, format!("struct {}.{}", name, field_name))))
+                                    .and_then(|ft| {
+                                        self.extract_nested_int_type(ft).map(|it| {
+                                            (it, format!("struct {}.{}", name, field_name))
+                                        })
+                                    })
                                     .unwrap_or((IntType::Unknown, String::new()));
                                 (*field_expr, int_ty, reason, field_type)
                             })
@@ -976,21 +1089,27 @@ impl IntInference {
                 // TDD FIX: Pass field type when recursing so nested generics (Option<Vec<int>>) propagate
                 for (i, (_field_name, expr)) in fields.iter().enumerate() {
                     let expected_type = field_data.get(i).and_then(|(_, _, _, ft)| ft.as_ref());
-                    self.collect_expression_constraints(
-                        expr,
-                        expected_type.or(return_type),
-                    );
+                    self.collect_expression_constraints(expr, expected_type.or(return_type));
                 }
             }
-            Expression::Binary { left, op, right, .. } => {
+            Expression::Binary {
+                left, op, right, ..
+            } => {
                 use crate::parser::ast::operators::BinaryOp;
                 let left_id = self.get_expr_id(left);
                 let right_id = self.get_expr_id(right);
 
                 match op {
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
-                    | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor
-                    | BinaryOp::Shl | BinaryOp::Shr => {
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor
+                    | BinaryOp::Shl
+                    | BinaryOp::Shr => {
                         self.constraints.push(IntConstraint::MustMatch(
                             left_id,
                             right_id,
@@ -999,10 +1118,8 @@ impl IntInference {
 
                         // TDD: items.len() - 1 / items.len() + k → literal must be usize (Rust len is usize)
                         if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
-                            let left_is_len =
-                                matches!(left, Expression::MethodCall { method, .. } if method == "len");
-                            let right_is_len =
-                                matches!(right, Expression::MethodCall { method, .. } if method == "len");
+                            let left_is_len = matches!(left, Expression::MethodCall { method, .. } if method == "len");
+                            let right_is_len = matches!(right, Expression::MethodCall { method, .. } if method == "len");
                             let left_is_literal = matches!(left, Expression::Literal { .. });
                             let right_is_literal = matches!(right, Expression::Literal { .. });
                             if left_is_len && right_is_literal {
@@ -1020,14 +1137,14 @@ impl IntInference {
                                 ));
                             }
                         }
-                        
+
                         // TDD FIX: Propagate type from left side (identifier or field access)
                         let left_int_ty = match left {
-                            Expression::Identifier { name, .. } => {
-                                self.var_types.get(name)
-                                    .or_else(|| self.const_types.get(name))
-                                    .and_then(|ty| self.extract_int_type(ty))
-                            }
+                            Expression::Identifier { name, .. } => self
+                                .var_types
+                                .get(name)
+                                .or_else(|| self.const_types.get(name))
+                                .and_then(|ty| self.extract_int_type(ty)),
                             Expression::FieldAccess { object, field, .. } => {
                                 // Handle self.field or obj.field
                                 if let Expression::Identifier { ref name, .. } = **object {
@@ -1035,16 +1152,15 @@ impl IntInference {
                                     let struct_name = if name == "self" {
                                         self.current_impl_type.as_ref()
                                     } else {
-                                        self.var_types.get(name.as_str())
-                                            .and_then(|ty| {
-                                                if let Type::Custom(sname) = ty {
-                                                    Some(sname)
-                                                } else {
-                                                    None
-                                                }
-                                            })
+                                        self.var_types.get(name.as_str()).and_then(|ty| {
+                                            if let Type::Custom(sname) = ty {
+                                                Some(sname)
+                                            } else {
+                                                None
+                                            }
+                                        })
                                     };
-                                    
+
                                     struct_name.and_then(|sname| {
                                         self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
@@ -1060,7 +1176,7 @@ impl IntInference {
                                     .and_then(|ty| self.extract_int_type(&ty))
                             }
                         };
-                        
+
                         if let Some(int_ty) = left_int_ty {
                             self.constraints.push(IntConstraint::MustBe(
                                 right_id,
@@ -1068,29 +1184,28 @@ impl IntInference {
                                 format!("LHS has type {:?}", int_ty),
                             ));
                         }
-                        
+
                         // TDD FIX: Propagate type from right side (identifier or field access)
                         let right_int_ty = match right {
-                            Expression::Identifier { name, .. } => {
-                                self.var_types.get(name)
-                                    .or_else(|| self.const_types.get(name))
-                                    .and_then(|ty| self.extract_int_type(ty))
-                            }
+                            Expression::Identifier { name, .. } => self
+                                .var_types
+                                .get(name)
+                                .or_else(|| self.const_types.get(name))
+                                .and_then(|ty| self.extract_int_type(ty)),
                             Expression::FieldAccess { object, field, .. } => {
                                 if let Expression::Identifier { ref name, .. } = **object {
                                     let struct_name = if name == "self" {
                                         self.current_impl_type.as_ref()
                                     } else {
-                                        self.var_types.get(name.as_str())
-                                            .and_then(|ty| {
-                                                if let Type::Custom(sname) = ty {
-                                                    Some(sname)
-                                                } else {
-                                                    None
-                                                }
-                                            })
+                                        self.var_types.get(name.as_str()).and_then(|ty| {
+                                            if let Type::Custom(sname) = ty {
+                                                Some(sname)
+                                            } else {
+                                                None
+                                            }
+                                        })
                                     };
-                                    
+
                                     struct_name.and_then(|sname| {
                                         self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
@@ -1106,7 +1221,7 @@ impl IntInference {
                                     .and_then(|ty| self.extract_int_type(&ty))
                             }
                         };
-                        
+
                         if let Some(int_ty) = right_int_ty {
                             self.constraints.push(IntConstraint::MustBe(
                                 left_id,
@@ -1115,21 +1230,25 @@ impl IntInference {
                             ));
                         }
                     }
-                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le
-                    | BinaryOp::Gt | BinaryOp::Ge => {
+                    BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge => {
                         self.constraints.push(IntConstraint::MustMatch(
                             left_id,
                             right_id,
                             format!("comparison {:?}", op),
                         ));
-                        
+
                         // TDD FIX: When comparing with .len() (returns usize), constrain literal to usize
                         // e.g., items.len() > 0 → 0 should be usize, not i32
                         let left_is_len = matches!(left, Expression::MethodCall { method, .. } if method == "len");
                         let right_is_len = matches!(right, Expression::MethodCall { method, .. } if method == "len");
                         let left_is_literal = matches!(left, Expression::Literal { .. });
                         let right_is_literal = matches!(right, Expression::Literal { .. });
-                        
+
                         if left_is_len && right_is_literal {
                             self.constraints.push(IntConstraint::MustBe(
                                 right_id,
@@ -1144,30 +1263,29 @@ impl IntInference {
                                 "comparison with .len() (usize)".to_string(),
                             ));
                         }
-                        
+
                         // TDD FIX: Propagate type from left side for comparisons
                         // First try pattern matching for direct field access/identifier
                         let left_int_ty = match left {
-                            Expression::Identifier { name, .. } => {
-                                self.var_types.get(name)
-                                    .or_else(|| self.const_types.get(name))
-                                    .and_then(|ty| self.extract_int_type(ty))
-                            }
+                            Expression::Identifier { name, .. } => self
+                                .var_types
+                                .get(name)
+                                .or_else(|| self.const_types.get(name))
+                                .and_then(|ty| self.extract_int_type(ty)),
                             Expression::FieldAccess { object, field, .. } => {
                                 if let Expression::Identifier { ref name, .. } = **object {
                                     let struct_name = if name == "self" {
                                         self.current_impl_type.as_ref()
                                     } else {
-                                        self.var_types.get(name.as_str())
-                                            .and_then(|ty| {
-                                                if let Type::Custom(sname) = ty {
-                                                    Some(sname)
-                                                } else {
-                                                    None
-                                                }
-                                            })
+                                        self.var_types.get(name.as_str()).and_then(|ty| {
+                                            if let Type::Custom(sname) = ty {
+                                                Some(sname)
+                                            } else {
+                                                None
+                                            }
+                                        })
                                     };
-                                    
+
                                     struct_name.and_then(|sname| {
                                         self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
@@ -1184,7 +1302,7 @@ impl IntInference {
                                     .and_then(|ty| self.extract_int_type(&ty))
                             }
                         };
-                        
+
                         if let Some(int_ty) = left_int_ty {
                             self.constraints.push(IntConstraint::MustBe(
                                 right_id,
@@ -1192,29 +1310,28 @@ impl IntInference {
                                 format!("comparison LHS has type {:?}", int_ty),
                             ));
                         }
-                        
+
                         // TDD FIX: Propagate type from right side for comparisons
                         let right_int_ty = match right {
-                            Expression::Identifier { name, .. } => {
-                                self.var_types.get(name)
-                                    .or_else(|| self.const_types.get(name))
-                                    .and_then(|ty| self.extract_int_type(ty))
-                            }
+                            Expression::Identifier { name, .. } => self
+                                .var_types
+                                .get(name)
+                                .or_else(|| self.const_types.get(name))
+                                .and_then(|ty| self.extract_int_type(ty)),
                             Expression::FieldAccess { object, field, .. } => {
                                 if let Expression::Identifier { ref name, .. } = **object {
                                     let struct_name = if name == "self" {
                                         self.current_impl_type.as_ref()
                                     } else {
-                                        self.var_types.get(name.as_str())
-                                            .and_then(|ty| {
-                                                if let Type::Custom(sname) = ty {
-                                                    Some(sname)
-                                                } else {
-                                                    None
-                                                }
-                                            })
+                                        self.var_types.get(name.as_str()).and_then(|ty| {
+                                            if let Type::Custom(sname) = ty {
+                                                Some(sname)
+                                            } else {
+                                                None
+                                            }
+                                        })
                                     };
-                                    
+
                                     struct_name.and_then(|sname| {
                                         self.lookup_struct_fields(sname.as_str())
                                             .and_then(|fields| fields.get(field.as_str()))
@@ -1230,7 +1347,7 @@ impl IntInference {
                                     .and_then(|ty| self.extract_int_type(&ty))
                             }
                         };
-                        
+
                         if let Some(int_ty) = right_int_ty {
                             self.constraints.push(IntConstraint::MustBe(
                                 left_id,
@@ -1245,7 +1362,9 @@ impl IntInference {
                 self.collect_expression_constraints(left, return_type);
                 self.collect_expression_constraints(right, return_type);
             }
-            Expression::Cast { expr: inner, type_, .. } => {
+            Expression::Cast {
+                expr: inner, type_, ..
+            } => {
                 // Cast converts between types - do NOT constrain operand to match target.
                 // e.g. (x as usize) is valid when x is i32, u32, etc.
                 self.collect_expression_constraints(inner, return_type);
@@ -1305,10 +1424,10 @@ impl IntInference {
                         }
                     }
                 }
-                
+
                 // Don't pass return_type to object - Vec has its own type
                 self.collect_expression_constraints(object, None);
-                
+
                 // TDD FIX: Array indices must be usize in Rust
                 let index_id = self.get_expr_id(index);
                 self.constraints.push(IntConstraint::MustBe(
@@ -1320,7 +1439,9 @@ impl IntInference {
             }
             Expression::Array { elements, .. } => {
                 // TDD FIX: [a, b, c] with expected Vec<T> - constrain elements to T
-                if let Some(elem_type) = return_type.and_then(|ty| self.extract_vec_element_type(ty)) {
+                if let Some(elem_type) =
+                    return_type.and_then(|ty| self.extract_vec_element_type(ty))
+                {
                     for elem in elements {
                         self.collect_expression_constraints(elem, Some(&elem_type));
                         if let Some(int_ty) = self.extract_nested_int_type(&elem_type) {
@@ -1338,7 +1459,12 @@ impl IntInference {
                     }
                 }
             }
-            Expression::MacroInvocation { name, args, is_repeat, .. } => {
+            Expression::MacroInvocation {
+                name,
+                args,
+                is_repeat,
+                ..
+            } => {
                 // TDD FIX: assert_eq!/assert_ne! - both args must have same int type
                 if (*name == "assert_eq" || *name == "assert_ne") && args.len() >= 2 {
                     for arg in args {
@@ -1355,7 +1481,9 @@ impl IntInference {
                 }
                 // TDD FIX: vec![a, b, c] with expected Vec<T> - constrain elements to T
                 if *name == "vec" && !*is_repeat {
-                    if let Some(elem_type) = return_type.and_then(|ty| self.extract_vec_element_type(ty)) {
+                    if let Some(elem_type) =
+                        return_type.and_then(|ty| self.extract_vec_element_type(ty))
+                    {
                         for arg in args {
                             self.collect_expression_constraints(arg, Some(&elem_type));
                             if let Some(int_ty) = self.extract_nested_int_type(&elem_type) {
@@ -1382,14 +1510,15 @@ impl IntInference {
                 // TDD FIX: Ranges like 0..vec.len() should have unified types
                 // If end is .len() (returns usize), constrain start to usize
                 // Otherwise, unify both expressions to the same type
-                
+
                 // Collect constraints from both expressions
                 self.collect_expression_constraints(start, return_type);
                 self.collect_expression_constraints(end, return_type);
-                
+
                 // Check if end is a .len() call (returns usize)
-                let end_is_len = matches!(end, Expression::MethodCall { method, .. } if method == "len");
-                
+                let end_is_len =
+                    matches!(end, Expression::MethodCall { method, .. } if method == "len");
+
                 if end_is_len {
                     // Constrain start to usize to match .len()
                     let start_id = self.get_expr_id(start);
@@ -1458,9 +1587,13 @@ impl IntInference {
             Type::Parameterized(name, args) if name == "BTreeMap" && args.len() >= 2 => {
                 self.extract_nested_int_type(&args[1])
             }
-            Type::Reference(inner) | Type::MutableReference(inner) => self.extract_nested_int_type(inner),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.extract_nested_int_type(inner)
+            }
             Type::Option(inner) => self.extract_nested_int_type(inner),
-            Type::Result(ok, err) => self.extract_nested_int_type(ok).or_else(|| self.extract_nested_int_type(err)),
+            Type::Result(ok, err) => self
+                .extract_nested_int_type(ok)
+                .or_else(|| self.extract_nested_int_type(err)),
             _ => None,
         }
     }
@@ -1488,7 +1621,10 @@ impl IntInference {
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.clone()),
                     Expression::FieldAccess { object, field, .. } => {
-                        if let Expression::Identifier { name: type_name, .. } = object {
+                        if let Expression::Identifier {
+                            name: type_name, ..
+                        } = object
+                        {
                             Some(format!("{}::{}", type_name, field))
                         } else {
                             None
@@ -1537,9 +1673,7 @@ impl IntInference {
                 } else {
                     self.lookup_struct_fields(base_name)
                 };
-                fields
-                    .and_then(|m| m.get(field))
-                    .cloned()
+                fields.and_then(|m| m.get(field)).cloned()
             }
             Expression::Index { object, .. } => {
                 let object_type = self.infer_type_from_expression(object)?;
@@ -1552,14 +1686,25 @@ impl IntInference {
                 // For comparison (Eq, Lt, Gt, etc.): result type = bool
                 use crate::parser::ast::operators::BinaryOp;
                 match op {
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
-                    | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor
-                    | BinaryOp::Shl | BinaryOp::Shr => {
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor
+                    | BinaryOp::Shl
+                    | BinaryOp::Shr => {
                         // Arithmetic: result has same type as operands
                         self.infer_type_from_expression(left)
                     }
-                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le
-                    | BinaryOp::Gt | BinaryOp::Ge => {
+                    BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge => {
                         // Comparison: result is bool
                         Some(Type::Bool)
                     }
@@ -1663,8 +1808,11 @@ impl IntInference {
                                     // TDD FIX: Only emit error if NOT a safe implicit cast
                                     // DON'T modify inferred types - let codegen insert casts
                                     if !is_safe_implicit_cast(other, int_ty) {
-                                        let file_path = self.id_to_file_name.get(&expr_id.file_id)
-                                            .map(|s| s.as_str()).unwrap_or("?");
+                                        let file_path = self
+                                            .id_to_file_name
+                                            .get(&expr_id.file_id)
+                                            .map(|s| s.as_str())
+                                            .unwrap_or("?");
                                         self.errors.push(format!(
                                             "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
                                             file_path, expr_id.line, expr_id.col, int_ty, reason, other
@@ -1690,12 +1838,17 @@ impl IntInference {
                         let t2 = self.inferred_types.get(&id2).copied();
 
                         match (t1, t2) {
-                            (Some(a), Some(b)) if a != b && a != IntType::Unknown && b != IntType::Unknown => {
+                            (Some(a), Some(b))
+                                if a != b && a != IntType::Unknown && b != IntType::Unknown =>
+                            {
                                 // TDD FIX: Only emit error if NOT a safe implicit cast in either direction
                                 // DON'T modify inferred types - let codegen insert casts
                                 if !is_safe_implicit_cast(a, b) && !is_safe_implicit_cast(b, a) {
-                                    let file_path = self.id_to_file_name.get(&id1.file_id)
-                                        .map(|s| s.as_str()).unwrap_or("?");
+                                    let file_path = self
+                                        .id_to_file_name
+                                        .get(&id1.file_id)
+                                        .map(|s| s.as_str())
+                                        .unwrap_or("?");
                                     self.errors.push(format!(
                                         "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
                                         file_path, id1.line, id1.col, reason, a, b, reason

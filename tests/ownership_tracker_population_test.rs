@@ -53,7 +53,10 @@ pub fn process() -> i32 {
 
     let result = compile_to_rust(src).expect("compile");
     assert!(result.contains("let x = 5"), "Expected let x = 5 in output");
-    assert!(result.contains("let y = x + 1"), "Expected let y = x + 1 in output");
+    assert!(
+        result.contains("let y = x + 1"),
+        "Expected let y = x + 1 in output"
+    );
 }
 
 #[test]
@@ -103,7 +106,10 @@ pub fn process(opt: Option<i32>) -> i32 {
 "#;
 
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("Some(x)"), "Expected match arm with binding");
+    assert!(
+        result.contains("Some(x)"),
+        "Expected match arm with binding"
+    );
 }
 
 #[test]
@@ -120,7 +126,10 @@ pub fn process(opt: Option<i32>) -> i32 {
 "#;
 
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("if let Some(x)"), "Expected if let with binding");
+    assert!(
+        result.contains("if let Some(x)"),
+        "Expected if let with binding"
+    );
 }
 
 #[test]
@@ -135,5 +144,8 @@ pub fn process() -> i32 {
 "#;
 
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("let (a, b, c)"), "Expected tuple destructuring");
+    assert!(
+        result.contains("let (a, b, c)"),
+        "Expected tuple destructuring"
+    );
 }

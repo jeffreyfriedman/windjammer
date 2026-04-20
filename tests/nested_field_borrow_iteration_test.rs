@@ -18,7 +18,8 @@ fn compile_to_rust(source: &str) -> String {
 #[test]
 fn test_single_field_access_borrows_for_iteration() {
     // Baseline: for x in self.items should borrow
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 struct Container {
     items: Vec<i32>,
 }
@@ -32,7 +33,8 @@ impl Container {
         total
     }
 }
-"#);
+"#,
+    );
     assert!(
         output.contains("&self.items") || output.contains("& self.items"),
         "for x in self.items should borrow (&self.items). Got:\n{}",
@@ -44,7 +46,8 @@ impl Container {
 fn test_nested_field_access_borrows_for_iteration() {
     // Bug: for x in self.renderer.items should also borrow, but doesn't
     // because should_borrow_for_iteration only checks one level of FieldAccess
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 struct Renderer {
     items: Vec<i32>,
 }
@@ -62,7 +65,8 @@ impl Engine {
         sum
     }
 }
-"#);
+"#,
+    );
     assert!(
         output.contains("&self.renderer.items") || output.contains("& self.renderer.items"),
         "for x in self.renderer.items should borrow. Got:\n{}",
@@ -72,7 +76,8 @@ impl Engine {
 
 #[test]
 fn test_triple_nested_field_access_borrows() {
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 struct Inner {
     values: Vec<i32>,
 }
@@ -94,7 +99,8 @@ impl Outer {
         n
     }
 }
-"#);
+"#,
+    );
     assert!(
         output.contains("&self.middle.inner.values"),
         "for x in self.middle.inner.values should borrow. Got:\n{}",

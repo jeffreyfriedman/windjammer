@@ -67,17 +67,17 @@ fn main() {
 
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&name` → we generate `contains_key(name)` (already &str, no extra &)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
+    // - Borrowed string param → &String (correct for Vec<String>::contains, HashMap, etc.)
+    // - User wrote `&name` → we generate `contains_key(name)` (already &String, works)
     assert!(
-        generated.contains("name: &str"),
-        "Should generate &str parameter. Got:\n{}",
+        generated.contains("name: &String"),
+        "Should generate &String parameter (Phase 1 baseline). Got:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(name)"),
-        "Should pass name directly (already &str). Got:\n{}",
+        "Should pass name directly (already &String). Got:\n{}",
         generated
     );
 

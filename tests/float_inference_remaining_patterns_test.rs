@@ -5,7 +5,6 @@
 /// 2. Struct field / literal: `self.size.x / 2.0` → 2.0 should be f32 (nested FieldAccess)
 /// 3. Nested division: `(member_index as f32) * (6.28318 / self.members.len() as f32)` → 6.28318 f32
 /// 4. Method result * literal: `(seed * 1234.567).sin() * 3.14159265 * 2.0` → all f32
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {

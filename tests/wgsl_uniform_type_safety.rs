@@ -66,7 +66,7 @@ fn test_uint_in_uniform_auto_converts_to_f32() {
     // Result: GARBAGE VALUES → BLACK SCREEN!
     //
     // FIX: Auto-convert uint → f32 in uniforms
-    
+
     let source = r#"
 @uniform
 @binding(0)
@@ -78,27 +78,35 @@ fn main() {
     let w = screen_width as uint;
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
-    
+
     // CRITICAL: Should generate f32, not u32!
-    assert!(generated.contains("var<uniform> screen_width:") && generated.contains("f32"), 
-        "Uniform should be f32, not u32! Got:\n{}", generated);
-    
+    assert!(
+        generated.contains("var<uniform> screen_width:") && generated.contains("f32"),
+        "Uniform should be f32, not u32! Got:\n{}",
+        generated
+    );
+
     // Should NOT contain u32 in uniform declaration (after var<uniform>)
-    assert!(!generated.contains("var<uniform> screen_width: u32"),
-        "Found u32 in uniform - this causes black screen bug!");
-    
+    assert!(
+        !generated.contains("var<uniform> screen_width: u32"),
+        "Found u32 in uniform - this causes black screen bug!"
+    );
+
     // Should have auto-conversion comment
-    assert!(generated.contains("auto-converted"),
-        "Should document the type conversion! Got:\n{}", generated);
+    assert!(
+        generated.contains("auto-converted"),
+        "Should document the type conversion! Got:\n{}",
+        generated
+    );
 }
 
 #[test]
 fn test_vec2_uint_in_uniform_converts_to_vec2_f32() {
     // The exact pattern that caused the black screen
-    
+
     let source = r#"
 @uniform
 @binding(3)
@@ -110,43 +118,50 @@ fn main(@builtin(global_invocation_id) id: vec3<uint>) {
     let h = screen_size.y as uint;
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
-    
+
     // MUST be vec2<f32>, not vec2<u32>!
-    assert!(generated.contains("var<uniform> screen_size:") && generated.contains("vec2<f32>"),
-        "Expected vec2<f32>, got:\n{}", generated);
-    
+    assert!(
+        generated.contains("var<uniform> screen_size:") && generated.contains("vec2<f32>"),
+        "Expected vec2<f32>, got:\n{}",
+        generated
+    );
+
     // Should NOT have vec2<u32> in uniform
     let has_bad_pattern = generated.contains("var<uniform> screen_size: vec2<u32>");
-    assert!(!has_bad_pattern,
-        "vec2<u32> in uniform causes type mismatch bug!");
-    
+    assert!(
+        !has_bad_pattern,
+        "vec2<u32> in uniform causes type mismatch bug!"
+    );
+
     // Should have auto-conversion comment
-    assert!(generated.contains("auto-converted"),
-        "Should document the type conversion!");
+    assert!(
+        generated.contains("auto-converted"),
+        "Should document the type conversion!"
+    );
 }
 
 #[test]
 fn test_f32_in_uniform_stays_f32() {
     // f32 is correct - should pass through unchanged
-    
+
     let source = r#"
 @uniform
 @binding(0)
 extern let exposure: float;
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("var<uniform> exposure: f32"));
 }
 
 #[test]
 fn test_struct_with_uint_fields_in_uniform_converts() {
     // Structs in uniforms should also have uint → f32 conversion
-    
+
     let source = r#"
 struct ScreenDimensions {
     width: uint,
@@ -157,9 +172,9 @@ struct ScreenDimensions {
 @binding(0)
 extern let dims: ScreenDimensions;
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     // Struct fields should be f32, not u32
     // (This is more complex - may require struct transformation)
     // For now, we can at least verify the uniform is declared
@@ -169,15 +184,15 @@ extern let dims: ScreenDimensions;
 #[test]
 fn test_u32_in_storage_buffer_is_allowed() {
     // u32 is fine in storage buffers, only problematic in uniforms
-    
+
     let source = r#"
 @storage(read_write)
 @binding(0)
 extern let indices: array<uint>;
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     // u32 is OK in storage buffers
     assert!(generated.contains("array<u32>") || generated.contains("u32"));
 }
@@ -185,15 +200,15 @@ extern let indices: array<uint>;
 #[test]
 fn test_warning_message_for_uint_conversion() {
     // Transpiler should warn developer about the conversion
-    
+
     let source = r#"
 @uniform
 @binding(0)
 extern let count: uint;
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     // Should include a comment explaining the conversion
     // (This is optional but good for debugging)
     assert!(generated.contains("f32") && !generated.contains("var<uniform> count: u32"));

@@ -8,7 +8,6 @@
 /// - f32_field + i32_var → i32_var as f32
 /// - i32_var * f32_literal → i32_var as f32
 /// - usize_var + f32_field → usize_var as f32
-
 use std::process::Command;
 use windjammer::*;
 
@@ -76,8 +75,7 @@ pub fn compute(x: i32) -> f32 {
     assert!(
         rustc_ok,
         "`x as f32 + 1` should auto-cast literal to f32. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -102,8 +100,7 @@ impl Camera {
     assert!(
         rustc_ok,
         "`usize + f32` should auto-cast usize to f32. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -138,8 +135,7 @@ impl Grid {
     assert!(
         rustc_ok,
         "Function call should auto-cast i32 args to f32. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -165,8 +161,7 @@ impl Physics {
     assert!(
         rustc_ok,
         "i32 * f32 should auto-cast. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -191,7 +186,6 @@ impl Grid {
     assert!(
         rustc_ok,
         "i32 * f32_literal should auto-cast. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }

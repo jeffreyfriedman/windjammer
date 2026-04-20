@@ -26,7 +26,8 @@ fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, 
         fs::write(&full_path, content).unwrap();
     }
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             src_dir.to_str().unwrap(),
             "-o",
@@ -164,7 +165,8 @@ fn test_mod_rs_respects_explicit_pub_use() {
     // Should have the explicit pub use from mod.wj
     // self:: prefix is correct Rust 2018+ for child module re-exports
     assert!(
-        mod_rs.contains("pub use tile_id::TileId;") || mod_rs.contains("pub use self::tile_id::TileId;"),
+        mod_rs.contains("pub use tile_id::TileId;")
+            || mod_rs.contains("pub use self::tile_id::TileId;"),
         "Should have explicit pub use from mod.wj.\nGenerated:\n{}",
         mod_rs
     );

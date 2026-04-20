@@ -5,13 +5,14 @@
 /// 2. Emit W0010 warning for non-canonical string types
 /// 3. Exempt extern fn declarations from the warning
 /// 4. Generate identical codegen regardless of which spelling was used
-
 use std::process::Command;
 
 /// Compile .wj source and return (generated_rust, stderr_output)
 fn compile_wj(source: &str, test_name: &str) -> (String, String) {
     let dir = std::env::temp_dir().join(format!(
-        "wj_string_unify_{}_{}", test_name, std::process::id()
+        "wj_string_unify_{}_{}",
+        test_name,
+        std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -231,10 +232,7 @@ pub fn main() {
 }
 "#;
     let (rust, _) = compile_wj(source, "struct_field_str");
-    assert!(
-        !rust.is_empty(),
-        "Should generate code"
-    );
+    assert!(!rust.is_empty(), "Should generate code");
     // Struct fields should be String (owned)
     assert!(
         rust.contains("name: String") || rust.contains("name : String"),
@@ -258,10 +256,7 @@ pub fn main() {
 }
 "#;
     let (rust, _) = compile_wj(source, "vec_str_codegen");
-    assert!(
-        !rust.is_empty(),
-        "Should generate code"
-    );
+    assert!(!rust.is_empty(), "Should generate code");
     assert!(
         rust.contains("Vec<String>"),
         "Vec<str> should become Vec<String> in Rust\nGenerated:\n{}",

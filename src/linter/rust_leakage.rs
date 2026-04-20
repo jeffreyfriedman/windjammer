@@ -4,13 +4,11 @@
 //! These patterns work but are not idiomatic - the compiler infers them automatically.
 
 use crate::error::SourceLocation;
-use crate::linter::{LintCategory, LintDiagnostic, LintLevel, LintCollector};
-use crate::parser::ast::core::{
-    Expression, FunctionDecl, Item, Parameter, Program, Statement,
-};
+use crate::linter::{LintCategory, LintCollector, LintDiagnostic, LintLevel};
+use crate::parser::ast::core::{Expression, FunctionDecl, Item, Parameter, Program, Statement};
 use crate::parser::ast::operators::UnaryOp;
-use crate::parser::ast::OwnershipHint;
 use crate::parser::ast::types::Type;
+use crate::parser::ast::OwnershipHint;
 use crate::source_map::Location;
 
 /// Convert AST location to error SourceLocation
@@ -134,7 +132,9 @@ impl<'ast> RustLeakageLinter<'ast> {
 
     fn check_statement(&mut self, stmt: &Statement<'ast>, file: &str) {
         match stmt {
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 self.check_expression(value, file);
                 if let Some(block) = else_block {
                     for s in block {
@@ -147,7 +147,9 @@ impl<'ast> RustLeakageLinter<'ast> {
                 self.check_expression(target, file);
                 self.check_expression(value, file);
             }
-            Statement::Return { value: Some(expr), .. } => self.check_expression(expr, file),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.check_expression(expr, file),
             Statement::If {
                 condition,
                 then_block,
@@ -176,13 +178,17 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.check_statement(s, file);
                 }
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.check_expression(condition, file);
                 for s in body {
                     self.check_statement(s, file);
                 }
             }
-            Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
                 for s in body {
                     self.check_statement(s, file);
                 }
@@ -210,9 +216,14 @@ impl<'ast> RustLeakageLinter<'ast> {
                         level: LintLevel::Warning,
                         message: format!("explicit .{}() call", method),
                         location: loc,
-                        help: Some("use explicit error handling: `if let Some(...)` or `match`".to_string()),
+                        help: Some(
+                            "use explicit error handling: `if let Some(...)` or `match`"
+                                .to_string(),
+                        ),
                         note: Some(".unwrap() is a Rust-specific panic convention".to_string()),
-                        suggestion: Some("prefer explicit error handling in Windjammer".to_string()),
+                        suggestion: Some(
+                            "prefer explicit error handling in Windjammer".to_string(),
+                        ),
                     });
                 }
 
@@ -227,7 +238,9 @@ impl<'ast> RustLeakageLinter<'ast> {
                         location: loc,
                         help: Some("use direct iteration: `for x in collection`".to_string()),
                         note: Some("Windjammer supports direct iteration".to_string()),
-                        suggestion: Some("remove .iter() - use the collection directly".to_string()),
+                        suggestion: Some(
+                            "remove .iter() - use the collection directly".to_string(),
+                        ),
                     });
                 }
 
@@ -240,9 +253,16 @@ impl<'ast> RustLeakageLinter<'ast> {
                         level: LintLevel::Warning,
                         message: "explicit .clone() call".to_string(),
                         location: loc,
-                        help: Some("remove .clone() - the compiler infers cloning automatically".to_string()),
-                        note: Some("Windjammer auto-clones values when moved and used again".to_string()),
-                        suggestion: Some("remove .clone() and let the compiler handle it".to_string()),
+                        help: Some(
+                            "remove .clone() - the compiler infers cloning automatically"
+                                .to_string(),
+                        ),
+                        note: Some(
+                            "Windjammer auto-clones values when moved and used again".to_string(),
+                        ),
+                        suggestion: Some(
+                            "remove .clone() and let the compiler handle it".to_string(),
+                        ),
                     });
                 }
 
@@ -368,7 +388,10 @@ impl<'ast> RustLeakageLinter<'ast> {
                     level: LintLevel::Note,
                     message: "explicit reference type in parameter".to_string(),
                     location,
-                    help: Some(format!("use inferred type: remove `&` from `{}`", param.name)),
+                    help: Some(format!(
+                        "use inferred type: remove `&` from `{}`",
+                        param.name
+                    )),
                     note: Some("Windjammer infers borrowing automatically".to_string()),
                     suggestion: Some(format!("use `{}` without reference type", param.name)),
                 });

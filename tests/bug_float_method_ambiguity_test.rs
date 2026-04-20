@@ -16,7 +16,6 @@
 /// or add explicit type annotations when needed.
 ///
 /// Root Cause: Windjammer doesn't track float type context during codegen.
-
 use std::fs;
 use std::process::Command;
 
@@ -76,8 +75,7 @@ fn main() {
     );
 
     let rs_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // Context-sensitive inference: Function returns f32, so literals should be f32
     // The compiler should generate: let tmin = 0.0_f32
@@ -199,8 +197,7 @@ fn main() {
     );
 
     let rs_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // Verify it compiles with rustc (should not have ambiguous float errors)
     let rustc_output = Command::new("rustc")
@@ -216,16 +213,17 @@ fn main() {
 
     if !rustc_output.status.success() {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);
-        
+
         // Check if it's the specific ambiguous float error
-        if stderr.contains("can't call method `max` on ambiguous numeric type") 
-            || stderr.contains("can't call method `min` on ambiguous numeric type") {
+        if stderr.contains("can't call method `max` on ambiguous numeric type")
+            || stderr.contains("can't call method `min` on ambiguous numeric type")
+        {
             panic!(
                 "AMBIGUOUS FLOAT TYPE ERROR (E0689):\n{}\n\nGenerated code:\n{}",
                 stderr, rust_code
             );
         }
-        
+
         panic!(
             "Rustc compilation failed:\n{}\n\nGenerated code:\n{}",
             stderr, rust_code

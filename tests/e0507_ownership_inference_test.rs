@@ -83,7 +83,11 @@ pub fn get_line(lines: Vec<string>, index: i32) -> string {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust.contains("&lines[") || rust.contains("& lines["), "Vec<String> index needs &: {}", rust);
+    assert!(
+        rust.contains("&lines[") || rust.contains("& lines["),
+        "Vec<String> index needs &: {}",
+        rust
+    );
     assert!(rust_compiles(&rust), "Generated Rust must compile");
 }
 
@@ -139,7 +143,11 @@ impl Equipment {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust.contains("&self.weapon"), "Option if let needs &self.field: {}", rust);
+    assert!(
+        rust.contains("&self.weapon"),
+        "Option if let needs &self.field: {}",
+        rust
+    );
     assert!(rust_compiles(&rust), "Generated Rust must compile");
 }
 
@@ -155,7 +163,11 @@ impl Node {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust.contains(".as_ref().map("), "Option::map needs .as_ref(): {}", rust);
+    assert!(
+        rust.contains(".as_ref().map("),
+        "Option::map needs .as_ref(): {}",
+        rust
+    );
     assert!(rust_compiles(&rust), "Generated Rust must compile");
 }
 
@@ -199,7 +211,11 @@ impl Entity {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust.contains("&self.health"), "Option match needs &self.field: {}", rust);
+    assert!(
+        rust.contains("&self.health"),
+        "Option match needs &self.field: {}",
+        rust
+    );
     assert!(rust_compiles(&rust), "Generated Rust must compile");
 }
 
@@ -214,7 +230,11 @@ pub fn get_x(points: Vec<Point>, i: i32) -> f32 {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Field access through Vec index must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Field access through Vec index must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -265,7 +285,11 @@ fn main() {}
     let rust = compile_to_rust(source).expect("compile");
     // When node is passed by value, no borrow needed. When by ref, need &node.children.
     // The analyzer infers from usage - if we pass &node, we need the fix.
-    assert!(rust_compiles(&rust), "Generated Rust must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Generated Rust must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -311,7 +335,11 @@ impl World {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Option match on iterator var field must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Option match on iterator var field must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -332,7 +360,11 @@ impl Npc {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Option if let with &mut self must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Option if let with &mut self must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -387,7 +419,11 @@ fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
     // When self is &self, self.bindings needs .clone() for struct literal
-    assert!(rust_compiles(&rust), "Struct literal from borrowed self.field must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Struct literal from borrowed self.field must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -466,7 +502,11 @@ impl World {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Option if let on iterator var field must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Option if let on iterator var field must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -487,7 +527,11 @@ pub fn create_pass() -> i32 {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Builder pattern must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Builder pattern must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -504,7 +548,11 @@ pub fn get_children(node: OctreeNode) -> Option<Vec<OctreeNode>> {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Option match param returning owned must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Option match param returning owned must compile: {}",
+        rust
+    );
 }
 
 #[test]
@@ -523,7 +571,11 @@ impl Builder {
 fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
-    assert!(rust_compiles(&rust), "Struct literal nested field must compile: {}", rust);
+    assert!(
+        rust_compiles(&rust),
+        "Struct literal nested field must compile: {}",
+        rust
+    );
 }
 
 #[test]

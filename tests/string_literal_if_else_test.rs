@@ -171,4 +171,3 @@ pub fn f(cond: bool, s: string) -> string {
         rust
     );
 }
-

@@ -6,8 +6,8 @@ use clap::ValueEnum;
 
 pub mod analyzer;
 pub mod auto_clone;
-pub mod cargo_toml;
 pub mod auto_fix;
+pub mod cargo_toml;
 pub mod codegen;
 pub mod component_analyzer;
 pub mod config;
@@ -20,10 +20,10 @@ pub mod interpreter;
 pub mod lexer;
 pub mod linter;
 pub mod metadata;
+pub mod method_registry;
 pub mod parser;
 pub mod parser_impl;
 pub mod source_map;
-pub mod method_registry;
 pub mod stdlib_scanner;
 #[cfg(feature = "highlighting")]
 pub mod syntax_highlighter;
@@ -31,15 +31,15 @@ pub mod syntax_highlighter;
 pub mod syntax_highlighter_stub;
 #[cfg(not(feature = "highlighting"))]
 pub use syntax_highlighter_stub as syntax_highlighter;
+pub mod compiler;
+pub mod decorator_registry;
+pub mod ejector;
+pub mod error_mapper;
+pub mod lib_rs_generator;
+pub mod shader;
 pub mod test_utils;
 pub mod type_inference;
 pub mod type_registry;
-pub mod compiler;
-pub mod decorator_registry;
-pub mod lib_rs_generator;
-pub mod ejector;
-pub mod error_mapper;
-pub mod shader;
 pub mod wjsl;
 
 // CLI-related modules (required for wj binary)
@@ -48,11 +48,11 @@ pub mod build_utils;
 #[cfg(feature = "cli")]
 pub mod cli;
 #[cfg(feature = "cli")]
-pub mod plugin;
-#[cfg(feature = "cli")]
 pub mod error_catalog;
 #[cfg(feature = "cli")]
 pub mod error_statistics;
+#[cfg(feature = "cli")]
+pub mod plugin;
 #[cfg(feature = "cli")]
 pub mod test_runner;
 

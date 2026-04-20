@@ -1,7 +1,6 @@
 /// TDD: Float literal inference with method return types
 /// BUG: `self.get_cost() * 1.414` generates f64 instead of f32
 /// FIX: Use float inference results in binary operations
-
 use std::fs;
 use std::process::Command;
 
@@ -33,7 +32,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",

@@ -8,7 +8,6 @@
 ///      2) Register with parent prefix "ffi::" so lookup succeeds
 ///      3) Fallback: try bare name when module-qualified lookup fails
 ///      4) Default f32 for unknown-sig float args
-
 use windjammer::*;
 
 fn compile_and_assert(source: &str, assertions: impl Fn(&str)) {

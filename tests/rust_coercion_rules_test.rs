@@ -12,17 +12,23 @@ use windjammer::codegen::rust::rust_coercion_rules::{Coercion, RustCoercionRules
 
 #[test]
 fn test_auto_deref_in_comparison() {
-    assert!(RustCoercionRules::rust_auto_derefs(DerefContext::Comparison));
+    assert!(RustCoercionRules::rust_auto_derefs(
+        DerefContext::Comparison
+    ));
 }
 
 #[test]
 fn test_auto_deref_in_method_call() {
-    assert!(RustCoercionRules::rust_auto_derefs(DerefContext::MethodCall));
+    assert!(RustCoercionRules::rust_auto_derefs(
+        DerefContext::MethodCall
+    ));
 }
 
 #[test]
 fn test_auto_deref_in_field_access() {
-    assert!(RustCoercionRules::rust_auto_derefs(DerefContext::FieldAccess));
+    assert!(RustCoercionRules::rust_auto_derefs(
+        DerefContext::FieldAccess
+    ));
 }
 
 #[test]
@@ -32,17 +38,23 @@ fn test_auto_deref_in_binary_op() {
 
 #[test]
 fn test_no_auto_deref_in_struct_literal() {
-    assert!(!RustCoercionRules::rust_auto_derefs(DerefContext::StructLiteral));
+    assert!(!RustCoercionRules::rust_auto_derefs(
+        DerefContext::StructLiteral
+    ));
 }
 
 #[test]
 fn test_no_auto_deref_in_function_arg() {
-    assert!(!RustCoercionRules::rust_auto_derefs(DerefContext::FunctionArg));
+    assert!(!RustCoercionRules::rust_auto_derefs(
+        DerefContext::FunctionArg
+    ));
 }
 
 #[test]
 fn test_no_auto_deref_in_standalone() {
-    assert!(!RustCoercionRules::rust_auto_derefs(DerefContext::Standalone));
+    assert!(!RustCoercionRules::rust_auto_derefs(
+        DerefContext::Standalone
+    ));
 }
 
 // ============================================================================
@@ -51,32 +63,50 @@ fn test_no_auto_deref_in_standalone() {
 
 #[test]
 fn test_auto_copy_for_copy_in_comparison() {
-    assert!(RustCoercionRules::rust_auto_copies(DerefContext::Comparison, true));
+    assert!(RustCoercionRules::rust_auto_copies(
+        DerefContext::Comparison,
+        true
+    ));
 }
 
 #[test]
 fn test_auto_copy_for_copy_in_binary_op() {
-    assert!(RustCoercionRules::rust_auto_copies(DerefContext::BinaryOp, true));
+    assert!(RustCoercionRules::rust_auto_copies(
+        DerefContext::BinaryOp,
+        true
+    ));
 }
 
 #[test]
 fn test_auto_copy_for_copy_in_struct_literal() {
-    assert!(RustCoercionRules::rust_auto_copies(DerefContext::StructLiteral, true));
+    assert!(RustCoercionRules::rust_auto_copies(
+        DerefContext::StructLiteral,
+        true
+    ));
 }
 
 #[test]
 fn test_auto_copy_for_copy_in_function_arg() {
-    assert!(RustCoercionRules::rust_auto_copies(DerefContext::FunctionArg, true));
+    assert!(RustCoercionRules::rust_auto_copies(
+        DerefContext::FunctionArg,
+        true
+    ));
 }
 
 #[test]
 fn test_no_auto_copy_for_noncopy() {
-    assert!(!RustCoercionRules::rust_auto_copies(DerefContext::Comparison, false));
+    assert!(!RustCoercionRules::rust_auto_copies(
+        DerefContext::Comparison,
+        false
+    ));
 }
 
 #[test]
 fn test_no_auto_copy_for_copy_in_standalone() {
-    assert!(!RustCoercionRules::rust_auto_copies(DerefContext::Standalone, true));
+    assert!(!RustCoercionRules::rust_auto_copies(
+        DerefContext::Standalone,
+        true
+    ));
 }
 
 // ============================================================================

@@ -2,7 +2,6 @@
 ///
 /// These patterns come from windjammer-game (squad_tactics, emitter, mesh3d, etc.)
 /// The fix ensures casts apply even when float_inference returns Unknown for both operands.
-
 use std::process::Command;
 use windjammer::*;
 

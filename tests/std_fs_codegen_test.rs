@@ -18,12 +18,14 @@ fn compile_to_rust(source: &str) -> String {
 #[test]
 fn test_std_fs_qualified_path_compiles() {
     // Qualified std::fs::read_to_string should pass through as valid Rust
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 fn read_file(path: String) -> String {
     let content = std::fs::read_to_string(path)
     content
 }
-"#);
+"#,
+    );
     assert!(
         output.contains("std::fs::read_to_string"),
         "Qualified std::fs::read_to_string should pass through. Got:\n{}",
@@ -34,14 +36,16 @@ fn read_file(path: String) -> String {
 #[test]
 fn test_use_std_fs_generates_import() {
     // `use std::fs` should generate a Rust import so unqualified fs::read_to_string works
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 use std::fs
 
 fn read_file(path: String) -> String {
     let content = fs::read_to_string(path)
     content
 }
-"#);
+"#,
+    );
     // Should generate `use std::fs;` or similar
     assert!(
         output.contains("use std::fs"),
@@ -52,11 +56,13 @@ fn read_file(path: String) -> String {
 
 #[test]
 fn test_std_fs_write_qualified() {
-    let output = compile_to_rust(r#"
+    let output = compile_to_rust(
+        r#"
 fn write_file(path: String, data: String) {
     std::fs::write(path, data)
 }
-"#);
+"#,
+    );
     assert!(
         output.contains("std::fs::write"),
         "std::fs::write should pass through. Got:\n{}",

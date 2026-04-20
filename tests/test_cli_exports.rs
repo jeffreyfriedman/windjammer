@@ -8,15 +8,13 @@
 fn test_run_tests_is_exported() {
     // Verify run_tests exists and can be called - use temp dir with no .wj files
     let temp = tempfile::tempdir().unwrap();
-    let result = windjammer::run_tests(
-        Some(temp.path()),
-        None,
-        false,
-        true,
-        false,
-    );
+    let result = windjammer::run_tests(Some(temp.path()), None, false, true, false);
     // Empty dir: no test files found, returns Ok(())
-    assert!(result.is_ok(), "run_tests should succeed for empty dir: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "run_tests should succeed for empty dir: {:?}",
+        result
+    );
 }
 
 #[cfg(feature = "cli")]

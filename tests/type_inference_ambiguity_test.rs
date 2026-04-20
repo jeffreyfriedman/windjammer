@@ -6,7 +6,6 @@
 /// Fix: Infer Vec<T> from first .push() in body and emit `let mut x: Vec<T> = Vec::new()`.
 ///
 /// Philosophy: "Fix inference when context exists" - don't guess when ambiguous.
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -19,7 +18,8 @@ fn compile_and_get_rust(source: &str) -> String {
     fs::create_dir_all(&output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -38,8 +38,7 @@ fn compile_and_get_rust(source: &str) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found")
+    fs::read_to_string(format!("{}/test.rs", output_dir)).expect("Generated Rust file not found")
 }
 
 /// E0282 Phase 9: Parser produces Call{function: Identifier("Vec::new")} not MethodCall.
@@ -381,7 +380,8 @@ impl Foo {
 
     // Should emit turbofish when passing to constructor: (*pos).clone::<Vec3>() or type ascription
     let has_turbofish = rust.contains("clone::<Vec3>()");
-    let has_type_ascription = rust.contains("let pos: &mut Vec3 = pos") || rust.contains("let pos: Vec3 = pos");
+    let has_type_ascription =
+        rust.contains("let pos: &mut Vec3 = pos") || rust.contains("let pos: Vec3 = pos");
     assert!(
         has_turbofish || has_type_ascription || rust.contains("InvestigationState::new(pos)"),
         "Should help Rust infer: turbofish, type ascription, or direct pass. Got:\n{}",

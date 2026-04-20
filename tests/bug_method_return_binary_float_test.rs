@@ -11,7 +11,6 @@
 /// **Root cause**: Binary operation inference doesn't check method call return types.
 ///
 /// **Proper fix**: Extend context inference to handle method_call * literal.
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
@@ -58,14 +57,14 @@ impl Grid {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     // 1.414 should be inferred as f32 from get_cost() return type
     assert!(
         output.contains("1.414_f32") || output.contains("1.414f32"),
         "1.414 in self.get_cost() * 1.414 should be f32 (get_cost returns f32):\n{}",
         output
     );
-    
+
     assert!(
         !output.contains("1.414_f64"),
         "Should not generate f64 when multiplying with f32 method result:\n{}",
@@ -87,7 +86,7 @@ pub fn compute() -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     // 3.14 should be f32 from get_value() return type
     assert!(
         output.contains("3.14_f32") || output.contains("3.14f32"),
@@ -132,7 +131,7 @@ impl AStarGrid {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     // Exact bug: self.get_cost(x+1, y+1) * 1.414 must generate 1.414_f32
     assert!(
         output.contains("1.414_f32") || output.contains("1.414f32"),
@@ -166,11 +165,11 @@ impl State {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     // Both 1.0 and 2.0 should be f32
     assert!(
-        (output.contains("1.0_f32") || output.contains("1_f32")) &&
-        (output.contains("2.0_f32") || output.contains("2_f32")),
+        (output.contains("1.0_f32") || output.contains("1_f32"))
+            && (output.contains("2.0_f32") || output.contains("2_f32")),
         "Both literals in (self.get() + 1.0) * 2.0 should be f32:\n{}",
         output
     );

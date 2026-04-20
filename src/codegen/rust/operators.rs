@@ -111,7 +111,10 @@ pub fn op_precedence(op: &BinaryOp) -> i32 {
 /// often must stay wrapped: e.g. `x / (2.0 * y)` must not become `x / 2.0 * y`.
 ///
 /// Returns true when the RHS subexpression must be wrapped in parentheses.
-pub fn binary_rhs_needs_parens_for_rust_left_assoc(parent: &BinaryOp, right_child: &BinaryOp) -> bool {
+pub fn binary_rhs_needs_parens_for_rust_left_assoc(
+    parent: &BinaryOp,
+    right_child: &BinaryOp,
+) -> bool {
     if op_precedence(parent) != op_precedence(right_child) {
         return false;
     }

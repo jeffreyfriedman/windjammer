@@ -1,7 +1,6 @@
 /// Regression guard: struct field `Vec<Copy>` indices must not use explicit `*` (E0614).
 ///
 /// Rust already yields `f32` / `i32` for `Copy` elements; `*(node.params[0])` is invalid.
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -11,8 +10,7 @@ fn compile_and_get_rust(source: &str) -> String {
     let input = test_dir.join("test.wj");
     std::fs::write(&input, source).expect("write test file");
 
-    let wj_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
+    let wj_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
     let output = Command::new(&wj_bin)
         .arg("build")
         .arg(&input)
@@ -21,9 +19,8 @@ fn compile_and_get_rust(source: &str) -> String {
         .expect("wj build");
 
     let rust_file = test_dir.join("test.rs");
-    std::fs::read_to_string(&rust_file).unwrap_or_else(|_| {
-        String::from_utf8_lossy(&output.stderr).to_string()
-    })
+    std::fs::read_to_string(&rust_file)
+        .unwrap_or_else(|_| String::from_utf8_lossy(&output.stderr).to_string())
 }
 
 #[test]

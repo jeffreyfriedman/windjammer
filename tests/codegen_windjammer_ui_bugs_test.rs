@@ -14,7 +14,6 @@
 ///   Source: let star_color = if filled { self.color } else { "#e2e8f0" }
 ///   Generated: self.color — but self is &Self, can't move String out
 ///   Fix: Auto-clone non-Copy types accessed from &self.
-
 use std::process::Command;
 use tempfile::TempDir;
 use windjammer::*;
@@ -89,8 +88,7 @@ impl Progress {
     assert!(
         rustc_ok,
         "Should compile without type mismatch in clamp args. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -121,8 +119,7 @@ impl Editor {
     assert!(
         rustc_ok,
         "Borrowed iterator var comparison should compile. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -198,8 +195,7 @@ impl Foo {
         rustc_ok,
         "Comparison between &String (iter var from destructured enum) and self.field \
          should compile. Both should be references. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -237,8 +233,7 @@ impl Builder {
     assert!(
         rustc_ok,
         "String + format!() should compile as string concatenation. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -288,8 +283,7 @@ impl Property {
     assert!(
         rustc_ok,
         "String concat in enum match arm should compile. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }
 
@@ -320,7 +314,6 @@ impl Rating {
     assert!(
         rustc_ok,
         "self.field should auto-clone non-Copy types in &self. stderr: {}\n\nGenerated:\n{}",
-        stderr,
-        result
+        stderr, result
     );
 }

@@ -56,11 +56,7 @@ fn test_nested_include() {
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path();
 
-    fs::write(
-        base.join("types.wjsl"),
-        "struct Vec2F { x: f32, y: f32 }\n",
-    )
-    .unwrap();
+    fs::write(base.join("types.wjsl"), "struct Vec2F { x: f32, y: f32 }\n").unwrap();
 
     fs::write(
         base.join("camera.wjsl"),
@@ -152,11 +148,7 @@ fn test_duplicate_include_deduplicated() {
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path();
 
-    fs::write(
-        base.join("types.wjsl"),
-        "struct Shared { value: f32 }\n",
-    )
-    .unwrap();
+    fs::write(base.join("types.wjsl"), "struct Shared { value: f32 }\n").unwrap();
 
     let source = r#"#include "types.wjsl"
 #include "types.wjsl"
@@ -280,17 +272,9 @@ fn test_use_and_include_both_work() {
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path();
 
-    fs::write(
-        base.join("types_a.wjsl"),
-        "struct TypeA { value: f32, }\n",
-    )
-    .unwrap();
+    fs::write(base.join("types_a.wjsl"), "struct TypeA { value: f32, }\n").unwrap();
 
-    fs::write(
-        base.join("types_b.wjsl"),
-        "struct TypeB { count: u32, }\n",
-    )
-    .unwrap();
+    fs::write(base.join("types_b.wjsl"), "struct TypeB { count: u32, }\n").unwrap();
 
     let source = r#"use "types_a.wjsl"
 #include "types_b.wjsl"

@@ -1546,7 +1546,9 @@ impl Parser {
                             Token::Ident(f) => Some(f.clone()),
                             Token::Thread => Some("thread".to_string()),
                             Token::Async => Some("async".to_string()),
-                            Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => Some(n.to_string()),
+                            Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => {
+                                Some(n.to_string())
+                            }
                             _ => None,
                         };
                         if let Some(field) = field_opt {

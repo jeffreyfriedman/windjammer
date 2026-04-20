@@ -1,7 +1,6 @@
 /// TDD: Vec.push with Index expressions — Copy elements use plain `vec[idx]` (no `&`, no `*`).
 ///
 /// Non-Copy elements still use `&vec[idx]` or `.clone()` per ownership analysis.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;

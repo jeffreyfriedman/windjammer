@@ -8,7 +8,6 @@
 ///
 /// Fix: Add type annotation support to `let` handling (like `var` already has).
 ///       Handle `Shr` in `skip_optional_angle_bracket` and `parse_type_annotation`.
-
 use windjammer::wjsl::transpile_wjsl;
 
 #[test]
@@ -25,7 +24,11 @@ fn test_shift(a: u32) -> u32 {
         result.err()
     );
     let wgsl = result.unwrap();
-    assert!(wgsl.contains(">>"), "WGSL should contain >>. Got:\n{}", wgsl);
+    assert!(
+        wgsl.contains(">>"),
+        "WGSL should contain >>. Got:\n{}",
+        wgsl
+    );
 }
 
 #[test]
@@ -98,7 +101,11 @@ fn test_combined(idx: u32) -> vec4<f32> {
         result.err()
     );
     let wgsl = result.unwrap();
-    assert!(wgsl.contains(">>"), "WGSL should contain >>. Got:\n{}", wgsl);
+    assert!(
+        wgsl.contains(">>"),
+        "WGSL should contain >>. Got:\n{}",
+        wgsl
+    );
 }
 
 #[test]
@@ -115,7 +122,11 @@ fn test_shl(a: u32) -> u32 {
         result.err()
     );
     let wgsl = result.unwrap();
-    assert!(wgsl.contains("<<"), "WGSL should contain <<. Got:\n{}", wgsl);
+    assert!(
+        wgsl.contains("<<"),
+        "WGSL should contain <<. Got:\n{}",
+        wgsl
+    );
 }
 
 #[test]
@@ -136,7 +147,11 @@ fn hash(input: u32) -> u32 {
         result.err()
     );
     let wgsl = result.unwrap();
-    assert!(wgsl.contains(">>"), "WGSL should contain >>. Got:\n{}", wgsl);
+    assert!(
+        wgsl.contains(">>"),
+        "WGSL should contain >>. Got:\n{}",
+        wgsl
+    );
 }
 
 #[test]

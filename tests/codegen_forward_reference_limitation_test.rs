@@ -1,20 +1,20 @@
 /// TDD Test: Forward Reference Limitation
-/// 
+///
 /// This test documents the current limitation of String → &str auto-conversion
 /// when methods are defined after they are used.
-/// 
+///
 /// **Current Behavior**: Fails when Inventory is defined after DialogCondition
 /// **Expected Behavior** (after two-pass analysis): Should work regardless of order
-/// 
+///
 /// **Status**: KNOWN LIMITATION - tracked for future enhancement
 
 #[test]
 #[ignore] // Ignore until two-pass analysis is implemented
 fn test_forward_reference_limitation() {
     use std::fs;
-    use std::process::Command;
     use std::path::Path;
-    
+    use std::process::Command;
+
     let test_code = r#"
 // ❌ CURRENT: This fails because Inventory is defined AFTER DialogCondition
 enum DialogCondition {
@@ -80,9 +80,9 @@ impl Inventory {
 #[test]
 fn test_forward_reference_workaround() {
     use std::fs;
-    use std::process::Command;
     use std::path::Path;
-    
+    use std::process::Command;
+
     let test_code = r#"
 // ✅ WORKAROUND: Define Inventory BEFORE DialogCondition
 struct Inventory {

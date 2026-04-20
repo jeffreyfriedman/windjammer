@@ -114,7 +114,9 @@ pub fn caller(x: &i32) {
     assert!(success, "Must compile. Error:\n{}", err);
     // &i32 to i32: may use x, *x, or (x).clone() - all valid for Copy
     assert!(
-        result.contains("takes_owned(x)") || result.contains("takes_owned(*x)") || result.contains("takes_owned((x).clone())"),
+        result.contains("takes_owned(x)")
+            || result.contains("takes_owned(*x)")
+            || result.contains("takes_owned((x).clone())"),
         "Copy type in function arg. Got:\n{}",
         result
     );

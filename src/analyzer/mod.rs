@@ -10,6 +10,7 @@ mod mutation_detection;
 mod optimization_detectors;
 mod passthrough_inference;
 mod self_analysis;
+mod string_optimization;
 pub mod type_collector;
 
 // Type alias for complex return type
@@ -47,6 +48,8 @@ pub struct AnalyzedFunction<'ast> {
     pub smallvec_optimizations: Vec<SmallVecOptimization>,
     // PHASE 9 OPTIMIZATION: Track string/data that can use Cow
     pub cow_optimizations: Vec<CowOptimization>,
+    // STRING PARAMETER OPTIMIZATION (Phase 2): Track which string params can use &str
+    pub str_ref_optimizable_params: HashSet<String>,
 }
 
 /// PHASE 5: Assignment operation that can be optimized to compound operator
@@ -288,7 +291,8 @@ impl SignatureRegistry {
             }
             self.signatures.insert(name.clone(), sig.clone());
         }
-        self.collision_keys.extend(other.collision_keys.iter().cloned());
+        self.collision_keys
+            .extend(other.collision_keys.iter().cloned());
     }
 }
 
@@ -380,6 +384,16 @@ impl<'ast> Analyzer<'ast> {
     /// Register a single struct as Copy (for cross-crate metadata or testing)
     pub fn register_copy_struct(&mut self, name: &str) {
         self.copy_structs.insert(name.to_string());
+    }
+
+    /// TDD FIX: Remove a struct from the Copy set (e.g., when local definition differs from metadata)
+    pub fn unregister_copy_struct(&mut self, name: &str) {
+        self.copy_structs.remove(name);
+    }
+
+    /// TDD FIX: Check if a struct is registered as Copy
+    pub fn is_copy_struct(&self, name: &str) -> bool {
+        self.copy_structs.contains(name)
     }
 
     /// Get all detected Copy struct names (for metadata emission)
@@ -579,7 +593,7 @@ impl<'ast> Analyzer<'ast> {
                     if already {
                         continue;
                     }
-                    
+
                     // Skip body analysis for abstract trait methods (body = None)
                     // Only analyze trait methods with default implementations
                     if method.body.is_none() {
@@ -601,7 +615,7 @@ impl<'ast> Analyzer<'ast> {
                             impl_trait: None,
                             doc_comment: method.doc_comment.clone(),
                         };
-                        
+
                         // Analyze as trait method - this will infer ownership without walking body
                         let analyzed_func = self.analyze_trait_method(&func, &empty_registry)?;
                         to_add.push((method.name.clone(), analyzed_func));
@@ -645,7 +659,7 @@ impl<'ast> Analyzer<'ast> {
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
         // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns before analysis
         self.check_forbidden_rust_patterns(program)?;
-        
+
         self.analyze_program_with_global_signatures(program, &SignatureRegistry::new())
     }
 
@@ -653,11 +667,16 @@ impl<'ast> Analyzer<'ast> {
     /// These are implementation details that the compiler should handle automatically.
     pub fn check_forbidden_rust_patterns(&self, program: &Program<'ast>) -> Result<(), String> {
         use crate::parser::ast::core::Expression;
-        
+
         // Recursively check an expression for forbidden patterns
         fn check_expr(expr: &Expression) -> Result<(), String> {
             match expr {
-                Expression::MethodCall { method, object, arguments, .. } => {
+                Expression::MethodCall {
+                    method,
+                    object,
+                    arguments,
+                    ..
+                } => {
                     // FORBIDDEN: .as_str() - Rust-specific string conversion
                     // The compiler should handle this automatically based on context
                     if method == "as_str" && arguments.is_empty() {
@@ -676,14 +695,18 @@ impl<'ast> Analyzer<'ast> {
                              don't have .as_str())."
                         ));
                     }
-                    
+
                     // Recursively check object and arguments
                     check_expr(object)?;
                     for (_label, arg) in arguments {
                         check_expr(arg)?;
                     }
                 }
-                Expression::Call { function, arguments, .. } => {
+                Expression::Call {
+                    function,
+                    arguments,
+                    ..
+                } => {
                     // ALSO check Call expressions - .as_str() might be parsed as Call(FieldAccess)
                     if let Expression::FieldAccess { field, .. } = &**function {
                         if field == "as_str" && arguments.is_empty() {
@@ -703,7 +726,7 @@ impl<'ast> Analyzer<'ast> {
                             ));
                         }
                     }
-                    
+
                     check_expr(function)?;
                     for (_label, arg) in arguments {
                         check_expr(arg)?;
@@ -778,15 +801,16 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 // Base cases - no sub-expressions
-                Expression::Literal { .. }
-                | Expression::Identifier { .. } => {}
+                Expression::Literal { .. } | Expression::Identifier { .. } => {}
             }
             Ok(())
         }
-        
+
         fn check_stmt(stmt: &Statement) -> Result<(), String> {
             match stmt {
-                Statement::Let { value, else_block, .. } => {
+                Statement::Let {
+                    value, else_block, ..
+                } => {
                     check_expr(value)?;
                     if let Some(block) = else_block {
                         for s in block {
@@ -809,7 +833,12 @@ impl<'ast> Analyzer<'ast> {
                         check_expr(val)?;
                     }
                 }
-                Statement::If { condition, then_block, else_block, .. } => {
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     check_expr(condition)?;
                     for s in then_block {
                         check_stmt(s)?;
@@ -826,7 +855,9 @@ impl<'ast> Analyzer<'ast> {
                         check_expr(arm.body)?;
                     }
                 }
-                Statement::While { condition, body, .. } => {
+                Statement::While {
+                    condition, body, ..
+                } => {
                     check_expr(condition)?;
                     for s in body {
                         check_stmt(s)?;
@@ -838,7 +869,7 @@ impl<'ast> Analyzer<'ast> {
                         check_stmt(s)?;
                     }
                 }
-                Statement::Loop { body, .. } 
+                Statement::Loop { body, .. }
                 | Statement::Thread { body, .. }
                 | Statement::Async { body, .. } => {
                     for s in body {
@@ -852,7 +883,7 @@ impl<'ast> Analyzer<'ast> {
             }
             Ok(())
         }
-        
+
         // Check all items in the program
         for item in &program.items {
             match item {
@@ -882,13 +913,15 @@ impl<'ast> Analyzer<'ast> {
                 }
                 Item::Mod { items, .. } => {
                     // Recursively check module items
-                    let mod_program = Program { items: items.clone() };
+                    let mod_program = Program {
+                        items: items.clone(),
+                    };
                     self.check_forbidden_rust_patterns(&mod_program)?;
                 }
                 _ => {}
             }
         }
-        
+
         Ok(())
     }
 
@@ -964,8 +997,8 @@ impl<'ast> Analyzer<'ast> {
                 if self.copy_structs.contains(name) {
                     continue;
                 }
-                let all_copy = field_types.is_empty()
-                    || field_types.iter().all(|ft| self.is_copy_type(ft));
+                let all_copy =
+                    field_types.is_empty() || field_types.iter().all(|ft| self.is_copy_type(ft));
                 if all_copy {
                     self.copy_structs.insert(name.clone());
                     changed = true;
@@ -1089,7 +1122,7 @@ impl<'ast> Analyzer<'ast> {
                     block: impl_block, ..
                 } => {
                     // TDD FIX: Multi-pass fixed-point iteration for transitive mutability inference
-                    // 
+                    //
                     // Problem: Single-pass analysis fails for multi-level call chains:
                     //   update() calls poll_input() which calls keyboard.update_key(&mut self)
                     //   Single pass: update(&self) ❌ (wrong!)
@@ -1113,7 +1146,12 @@ impl<'ast> Analyzer<'ast> {
                                 &local_registry,
                             )?
                         } else {
-                            self.analyze_function_in_impl(func, impl_block, program, &local_registry)?
+                            self.analyze_function_in_impl(
+                                func,
+                                impl_block,
+                                program,
+                                &local_registry,
+                            )?
                         };
                         analyzed_funcs.insert(func.name.clone(), analyzed_func);
                     }
@@ -1130,8 +1168,7 @@ impl<'ast> Analyzer<'ast> {
                         // Update local registry with current analyzed signatures
                         for (name, analyzed_func) in &analyzed_funcs {
                             let signature = self.build_signature(analyzed_func);
-                            let qualified_name =
-                                format!("{}::{}", impl_block.type_name, name);
+                            let qualified_name = format!("{}::{}", impl_block.type_name, name);
                             local_registry.add_function(qualified_name, signature.clone());
                             local_registry.add_function(name.clone(), signature);
                         }
@@ -1147,7 +1184,12 @@ impl<'ast> Analyzer<'ast> {
                                     &local_registry,
                                 )?
                             } else {
-                                self.analyze_function_in_impl(func, impl_block, program, &local_registry)?
+                                self.analyze_function_in_impl(
+                                    func,
+                                    impl_block,
+                                    program,
+                                    &local_registry,
+                                )?
                             };
 
                             // Check if self ownership changed
@@ -1212,7 +1254,9 @@ impl<'ast> Analyzer<'ast> {
                         if let Some(base_name) = impl_block.type_name.split('<').next() {
                             if base_name != impl_block.type_name {
                                 let base_qualified = format!("{}::{}", base_name, func.name);
-                                if !is_trait_impl || registry.get_signature(&base_qualified).is_none() {
+                                if !is_trait_impl
+                                    || registry.get_signature(&base_qualified).is_none()
+                                {
                                     registry.add_function(base_qualified, signature.clone());
                                 }
                             }
@@ -1321,24 +1365,23 @@ impl<'ast> Analyzer<'ast> {
 
                                 // Pass 1: Initial analysis
                                 for func in &impl_block.functions {
-                                    let analyzed_func = if let Some(trait_name) =
-                                        &impl_block.trait_name
-                                    {
-                                        self.analyze_trait_impl_function(
-                                            func,
-                                            trait_name,
-                                            impl_block,
-                                            program,
-                                            &local_registry,
-                                        )?
-                                    } else {
-                                        self.analyze_function_in_impl(
-                                            func,
-                                            impl_block,
-                                            program,
-                                            &local_registry,
-                                        )?
-                                    };
+                                    let analyzed_func =
+                                        if let Some(trait_name) = &impl_block.trait_name {
+                                            self.analyze_trait_impl_function(
+                                                func,
+                                                trait_name,
+                                                impl_block,
+                                                program,
+                                                &local_registry,
+                                            )?
+                                        } else {
+                                            self.analyze_function_in_impl(
+                                                func,
+                                                impl_block,
+                                                program,
+                                                &local_registry,
+                                            )?
+                                        };
                                     analyzed_funcs.insert(func.name.clone(), analyzed_func);
                                 }
 
@@ -1359,24 +1402,23 @@ impl<'ast> Analyzer<'ast> {
 
                                     // Re-analyze
                                     for func in &impl_block.functions {
-                                        let new_analyzed = if let Some(trait_name) =
-                                            &impl_block.trait_name
-                                        {
-                                            self.analyze_trait_impl_function(
-                                                func,
-                                                trait_name,
-                                                impl_block,
-                                                program,
-                                                &local_registry,
-                                            )?
-                                        } else {
-                                            self.analyze_function_in_impl(
-                                                func,
-                                                impl_block,
-                                                program,
-                                                &local_registry,
-                                            )?
-                                        };
+                                        let new_analyzed =
+                                            if let Some(trait_name) = &impl_block.trait_name {
+                                                self.analyze_trait_impl_function(
+                                                    func,
+                                                    trait_name,
+                                                    impl_block,
+                                                    program,
+                                                    &local_registry,
+                                                )?
+                                            } else {
+                                                self.analyze_function_in_impl(
+                                                    func,
+                                                    impl_block,
+                                                    program,
+                                                    &local_registry,
+                                                )?
+                                            };
 
                                         // Check if ownership changed
                                         let old_analyzed = &analyzed_funcs[&func.name];
@@ -1413,19 +1455,25 @@ impl<'ast> Analyzer<'ast> {
                                         self.detect_cow_opportunities(func);
 
                                     let signature = self.build_signature(&analyzed_func);
-                                    let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
+                                    let qualified_name =
+                                        format!("{}::{}", impl_block.type_name, func.name);
                                     if is_trait_impl {
                                         if registry.get_signature(&qualified_name).is_none() {
-                                            registry.add_function(qualified_name, signature.clone());
+                                            registry
+                                                .add_function(qualified_name, signature.clone());
                                         }
                                         if let Some(trait_name) = &impl_block.trait_name {
-                                            let trait_qualified = format!("{}::{}", trait_name, func.name);
-                                            registry.add_function(trait_qualified, signature.clone());
+                                            let trait_qualified =
+                                                format!("{}::{}", trait_name, func.name);
+                                            registry
+                                                .add_function(trait_qualified, signature.clone());
                                         }
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());
                                     }
-                                    if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                                    if !is_trait_impl
+                                        || registry.get_signature(&func.name).is_none()
+                                    {
                                         registry.add_function(func.name.clone(), signature);
                                     }
                                     analyzed.push(analyzed_func);
@@ -1681,8 +1729,15 @@ impl<'ast> Analyzer<'ast> {
         // Windjammer trait methods often omit self - add default so infer_trait_signatures_from_impls can upgrade.
         let is_constructor = matches!(
             func.name.as_str(),
-            "new" | "default" | "from" | "from_str" | "from_bytes"
-                | "with_capacity" | "empty" | "zero" | "one"
+            "new"
+                | "default"
+                | "from"
+                | "from_str"
+                | "from_bytes"
+                | "with_capacity"
+                | "empty"
+                | "zero"
+                | "one"
         );
         // Associated functions on the trait (return Self, no receiver) must not get implicit &self.
         let returns_bare_self = matches!(
@@ -1738,7 +1793,11 @@ impl<'ast> Analyzer<'ast> {
         for item in items {
             match item {
                 Item::Impl { block, .. } => {
-                    let block_base = block.type_name.split('<').next().unwrap_or(&block.type_name);
+                    let block_base = block
+                        .type_name
+                        .split('<')
+                        .next()
+                        .unwrap_or(&block.type_name);
                     if block_base == type_base {
                         for f in &block.functions {
                             merged.insert(f.name.clone(), f.clone());
@@ -1891,8 +1950,7 @@ impl<'ast> Analyzer<'ast> {
                         let returns_self = self.function_returns_self(func);
                         let returns_non_copy_field =
                             self.function_returns_non_copy_self_field(func);
-                        let body_moves_fields =
-                            self.function_body_moves_non_copy_self_fields(func);
+                        let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
 
                         if returns_self {
                             OwnershipMode::Owned
@@ -2011,6 +2069,9 @@ impl<'ast> Analyzer<'ast> {
             .map(|param| param.type_.clone())
             .collect();
 
+        // PHASE 2: Analyze which string parameters can use &str optimization
+        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func);
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
@@ -2026,6 +2087,7 @@ impl<'ast> Analyzer<'ast> {
             const_static_optimizations,
             smallvec_optimizations,
             cow_optimizations,
+            str_ref_optimizable_params,
         })
     }
 
@@ -2193,7 +2255,8 @@ impl<'ast> Analyzer<'ast> {
             // If multipass never stored analyzed trait fn types, still copy AST parameter types so
             // generated Rust matches the trait item (E0053).
             if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
-                if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
+                if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name)
+                {
                     let tf = self
                         .analyzed_trait_methods
                         .get(trait_key)
@@ -2207,9 +2270,7 @@ impl<'ast> Analyzer<'ast> {
                         if i >= analyzed.inferred_param_types.len() {
                             break;
                         }
-                        let use_ast = tf
-                            .and_then(|t| t.inferred_param_types.get(i))
-                            .is_none();
+                        let use_ast = tf.and_then(|t| t.inferred_param_types.get(i)).is_none();
                         if use_ast {
                             analyzed.inferred_param_types[i] = trait_param.type_.clone();
                         }
@@ -2374,9 +2435,13 @@ impl<'ast> Analyzer<'ast> {
         // - Pass 3: No changes → CONVERGED ✅
         //
         // IMPORTANT: Only use registry if callees expect stricter ownership than local usage
-        if let Some(pass_through_mode) =
-            self.infer_passthrough_ownership(param_name, param_type, body, registry, current_func_name)
-        {
+        if let Some(pass_through_mode) = self.infer_passthrough_ownership(
+            param_name,
+            param_type,
+            body,
+            registry,
+            current_func_name,
+        ) {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
                 OwnershipMode::MutBorrowed => return Ok(OwnershipMode::MutBorrowed),
@@ -2425,14 +2490,10 @@ impl<'ast> Analyzer<'ast> {
         _inside_ref: bool,
     ) -> bool {
         match stmt {
-            Statement::Let { value, .. } => {
-                self.expr_param_only_borrowed(param_name, value, false)
-            }
-            Statement::Return { value, .. } => {
-                value.as_ref().map_or(true, |e| {
-                    self.expr_param_only_borrowed(param_name, e, false)
-                })
-            }
+            Statement::Let { value, .. } => self.expr_param_only_borrowed(param_name, value, false),
+            Statement::Return { value, .. } => value.as_ref().map_or(true, |e| {
+                self.expr_param_only_borrowed(param_name, e, false)
+            }),
             Statement::Expression { expr, .. } => {
                 self.expr_param_only_borrowed(param_name, expr, false)
             }
@@ -2451,7 +2512,9 @@ impl<'ast> Analyzer<'ast> {
                             .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
                     })
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expr_param_only_borrowed(param_name, condition, false)
                     && body
                         .iter()
@@ -2487,16 +2550,18 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_param_only_borrowed(param_name, left, false)
                     && self.expr_param_only_borrowed(param_name, right, false)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expr_param_only_borrowed(param_name, function, false)
                     && arguments
                         .iter()
                         .all(|(_, a)| self.expr_param_only_borrowed(param_name, a, false))
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 self.expr_param_only_borrowed(param_name, object, false)
                     && arguments
@@ -2727,8 +2792,7 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
                     let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
-                    let is_enum_constructor =
-                        Self::looks_like_enum_variant_constructor(fn_name);
+                    let is_enum_constructor = Self::looks_like_enum_variant_constructor(fn_name);
 
                     if is_known_wrapper || is_enum_constructor {
                         for (_label, arg) in arguments {

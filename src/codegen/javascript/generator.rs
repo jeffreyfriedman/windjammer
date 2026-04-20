@@ -67,7 +67,7 @@ impl JavaScriptGenerator {
         }
         name.to_string()
     }
-    
+
     /// TDD FIX: Escape JavaScript reserved keywords
     /// JS keywords: break, case, catch, class, const, continue, debugger, default,
     /// delete, do, else, export, extends, finally, for, function, if, import, in,
@@ -77,12 +77,11 @@ impl JavaScriptGenerator {
     fn escape_js_keyword(name: &str) -> String {
         match name {
             "break" | "case" | "catch" | "class" | "const" | "continue" | "debugger"
-            | "default" | "delete" | "do" | "else" | "export" | "extends" | "finally"
-            | "for" | "function" | "if" | "import" | "in" | "instanceof" | "let"
-            | "new" | "return" | "super" | "switch" | "this" | "throw" | "try"
-            | "typeof" | "var" | "void" | "while" | "with" | "yield" | "async"
-            | "await" | "enum" | "implements" | "interface" | "package" | "private"
-            | "protected" | "public" | "static" => {
+            | "default" | "delete" | "do" | "else" | "export" | "extends" | "finally" | "for"
+            | "function" | "if" | "import" | "in" | "instanceof" | "let" | "new" | "return"
+            | "super" | "switch" | "this" | "throw" | "try" | "typeof" | "var" | "void"
+            | "while" | "with" | "yield" | "async" | "await" | "enum" | "implements"
+            | "interface" | "package" | "private" | "protected" | "public" | "static" => {
                 format!("{}_", name) // Append underscore to avoid keyword conflict
             }
             _ => name.to_string(),
@@ -368,7 +367,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         output.push('(');
 
         // Parameters (TDD FIX: Escape JavaScript keywords)
-        let params: Vec<String> = func.parameters
+        let params: Vec<String> = func
+            .parameters
             .iter()
             .map(|p| Self::escape_js_keyword(&p.name))
             .collect();
@@ -380,7 +380,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         // Declare parameters in scope (TDD FIX: Use escaped names)
         for p in &func.parameters {
             let escaped = Self::escape_js_keyword(&p.name);
-            self.var_scopes.last_mut().unwrap().insert(p.name.clone(), escaped);
+            self.var_scopes
+                .last_mut()
+                .unwrap()
+                .insert(p.name.clone(), escaped);
         }
         self.indent_level += 1;
         let body_len = func.body.len();
@@ -1216,27 +1219,25 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                                 output.push_str(&format!("let {};\n", id));
                             }
                         }
-                        Pattern::EnumVariant(_, binding) => {
-                            match binding {
-                                EnumPatternBinding::Single(var) => {
-                                    if declared.insert(var.clone()) {
-                                        output.push_str(&self.indent());
-                                        output.push_str(&format!("let {};\n", var));
-                                    }
+                        Pattern::EnumVariant(_, binding) => match binding {
+                            EnumPatternBinding::Single(var) => {
+                                if declared.insert(var.clone()) {
+                                    output.push_str(&self.indent());
+                                    output.push_str(&format!("let {};\n", var));
                                 }
-                                EnumPatternBinding::Tuple(patterns) => {
-                                    for pat in patterns {
-                                        if let Pattern::Identifier(var) = pat {
-                                            if declared.insert(var.clone()) {
-                                                output.push_str(&self.indent());
-                                                output.push_str(&format!("let {};\n", var));
-                                            }
+                            }
+                            EnumPatternBinding::Tuple(patterns) => {
+                                for pat in patterns {
+                                    if let Pattern::Identifier(var) = pat {
+                                        if declared.insert(var.clone()) {
+                                            output.push_str(&self.indent());
+                                            output.push_str(&format!("let {};\n", var));
                                         }
                                     }
                                 }
-                                _ => {}
                             }
-                        }
+                            _ => {}
+                        },
                         _ => {}
                     }
                 }

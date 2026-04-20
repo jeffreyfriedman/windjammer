@@ -21,9 +21,8 @@ fn compile_and_get_rust(source: &str) -> String {
         .expect("wj build");
 
     let rust_file = test_dir.join("test.rs");
-    std::fs::read_to_string(&rust_file).unwrap_or_else(|_| {
-        String::from_utf8_lossy(&output.stderr).to_string()
-    })
+    std::fs::read_to_string(&rust_file)
+        .unwrap_or_else(|_| String::from_utf8_lossy(&output.stderr).to_string())
 }
 
 #[test]

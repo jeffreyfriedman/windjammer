@@ -12,7 +12,6 @@
 ///
 /// The compiler should recognize that `v` is owned (moved from enum variant),
 /// not borrowed, allowing the cast to work.
-
 use std::env;
 use std::fs;
 use std::path::PathBuf;

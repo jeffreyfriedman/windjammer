@@ -6,8 +6,8 @@
 //! - Bounded loops only
 //! - Limited pointer usage
 
-use crate::parser::{Program, FunctionDecl, Statement, Expression};
-use anyhow::{Result, bail};
+use crate::parser::{Expression, FunctionDecl, Program, Statement};
+use anyhow::{bail, Result};
 
 /// Validate that a program can be compiled to WGSL
 pub fn validate_for_gpu(program: &Program) -> Result<()> {
@@ -28,12 +28,12 @@ fn validate_function(func: &FunctionDecl) -> Result<()> {
             func.name
         );
     }
-    
+
     // Validate function body
     for stmt in &func.body {
         validate_statement(stmt)?;
     }
-    
+
     Ok(())
 }
 
@@ -53,21 +53,30 @@ fn statement_calls_function(stmt: &Statement, func_name: &str) -> bool {
     match stmt {
         Statement::Expression { expr, .. } => expression_calls_function(expr, func_name),
         Statement::Let { value, .. } => expression_calls_function(value, func_name),
-        Statement::Return { value: Some(expr), .. } => expression_calls_function(expr, func_name),
-        Statement::If { condition, then_block, else_block, .. } => {
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_calls_function(expr, func_name),
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
             expression_calls_function(condition, func_name)
-                || then_block.iter().any(|s| statement_calls_function(s, func_name))
+                || then_block
+                    .iter()
+                    .any(|s| statement_calls_function(s, func_name))
                 || else_block.as_ref().map_or(false, |block| {
                     block.iter().any(|s| statement_calls_function(s, func_name))
                 })
         }
-        Statement::While { condition, body, .. } => {
+        Statement::While {
+            condition, body, ..
+        } => {
             expression_calls_function(condition, func_name)
                 || body.iter().any(|s| statement_calls_function(s, func_name))
         }
-        Statement::For { body, .. } => {
-            body.iter().any(|s| statement_calls_function(s, func_name))
-        }
+        Statement::For { body, .. } => body.iter().any(|s| statement_calls_function(s, func_name)),
         _ => false,
     }
 }
@@ -75,25 +84,31 @@ fn statement_calls_function(stmt: &Statement, func_name: &str) -> bool {
 /// Check if expression contains call to given function
 fn expression_calls_function(expr: &Expression, func_name: &str) -> bool {
     match expr {
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             // Check if this is a call to the function
             if let Expression::Identifier { name, .. } = &**function {
                 if name == func_name {
                     return true;
                 }
             }
-            
+
             // Check arguments recursively
-            arguments.iter().any(|(_, arg)| expression_calls_function(arg, func_name))
+            arguments
+                .iter()
+                .any(|(_, arg)| expression_calls_function(arg, func_name))
         }
         Expression::Binary { left, right, .. } => {
             expression_calls_function(left, func_name)
                 || expression_calls_function(right, func_name)
         }
         Expression::Unary { operand, .. } => expression_calls_function(operand, func_name),
-        Expression::Block { statements, .. } => {
-            statements.iter().any(|s| statement_calls_function(s, func_name))
-        }
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_calls_function(s, func_name)),
         _ => false,
     }
 }

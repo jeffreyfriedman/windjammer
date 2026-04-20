@@ -276,7 +276,9 @@ impl Camera {
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
-        !rs.contains("*(self.aspect)") && !rs.contains("*(self.near)") && !rs.contains("*(self.far)"),
+        !rs.contains("*(self.aspect)")
+            && !rs.contains("*(self.near)")
+            && !rs.contains("*(self.far)"),
         "Should NOT add * to camera f32 fields. Generated:\n{}",
         rs
     );
@@ -575,7 +577,9 @@ pub fn run(passes: Vec<Pass>) {
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
-        !rs.contains("*(pass.groups_x") && !rs.contains("*(pass.groups_y") && !rs.contains("*(pass.groups_z"),
+        !rs.contains("*(pass.groups_x")
+            && !rs.contains("*(pass.groups_y")
+            && !rs.contains("*(pass.groups_z"),
         "Should NOT add * to pass.groups_*.clone() (returns u32). Generated:\n{}",
         rs
     );

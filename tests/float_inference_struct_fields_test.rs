@@ -25,7 +25,7 @@ pub fn create_cells() -> Vec<AStarCell> {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -48,7 +48,7 @@ pub fn create_cells() -> Vec<AStarCell> {
         "Struct field literal should match field type (f32).\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT contain f64
     assert!(
         !rust_code.contains("cost: 1.0_f64"),
@@ -72,7 +72,7 @@ pub fn calculate_diagonal_cost(cost: f32) -> f32 {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -95,7 +95,7 @@ pub fn calculate_diagonal_cost(cost: f32) -> f32 {
         "Binary op literal should match operand type (f32).\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should NOT mix f32 * f64
     assert!(
         !rust_code.contains("1.414_f64"),
@@ -123,7 +123,7 @@ pub fn initialize_scores() -> HashMap<(i32, i32), f32> {
 
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }

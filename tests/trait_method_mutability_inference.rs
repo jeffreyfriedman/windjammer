@@ -23,7 +23,6 @@
 /// - `fn increment(&mut self)` in implementation
 ///
 /// This is **automatic ownership inference** for trait methods.
-
 use std::fs;
 use std::process::Command;
 
@@ -89,8 +88,7 @@ fn main() {
 
     // Read generated Rust code
     let rs_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // Trait definition should have &mut self
     assert!(
@@ -103,7 +101,7 @@ fn main() {
     let has_impl = rust_code.contains("impl Counter for MyCounter");
     let has_mut_method = rust_code[rust_code.find("impl Counter for MyCounter").unwrap_or(0)..]
         .contains("fn increment(&mut self)");
-    
+
     assert!(
         has_impl && has_mut_method,
         "Implementation should also have &mut self, got:\n{}",
@@ -151,7 +149,8 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -170,8 +169,7 @@ fn main() {
     );
 
     let rs_file = test_dir.join("build/main.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // Trait definition should have &self (readonly)
     assert!(
@@ -227,7 +225,8 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -246,8 +245,7 @@ fn main() {
     );
 
     let rs_file = test_dir.join("build/main.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // read() should be &self, write() should be &mut self
     assert!(
@@ -255,7 +253,7 @@ fn main() {
         "read() should infer &self, got:\n{}",
         rust_code
     );
-    
+
     assert!(
         rust_code.contains("fn write(&mut self, value: u32)"),
         "write() should infer &mut self, got:\n{}",
@@ -315,7 +313,8 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -334,8 +333,7 @@ fn main() {
     );
 
     let rs_file = test_dir.join("build/main.rs");
-    let rust_code = fs::read_to_string(&rs_file)
-        .expect("Failed to read generated Rust file");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // set_camera mutates, should be &mut self
     assert!(
@@ -343,7 +341,7 @@ fn main() {
         "set_camera should infer &mut self, got:\n{}",
         rust_code
     );
-    
+
     // get_output is readonly, should be &self
     assert!(
         rust_code.contains("fn get_output(&self) -> u32"),

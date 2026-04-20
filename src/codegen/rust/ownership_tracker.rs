@@ -115,16 +115,14 @@ impl OwnershipTracker {
     /// Get ownership of an expression - comprehensive handling for ALL expression types.
     pub fn get_expression_ownership(&self, expr: &Expression) -> OwnershipMode {
         match expr {
-            Expression::Identifier { name, .. } => {
-                self.get_variable_ownership(name).unwrap_or(OwnershipMode::Owned)
-            }
+            Expression::Identifier { name, .. } => self
+                .get_variable_ownership(name)
+                .unwrap_or(OwnershipMode::Owned),
             Expression::FieldAccess { object, .. } => self.get_expression_ownership(object),
             Expression::Index { object, .. } => self.get_expression_ownership(object),
-            Expression::MethodCall {
-                object,
-                method,
-                ..
-            } => self.get_method_call_ownership(object, method),
+            Expression::MethodCall { object, method, .. } => {
+                self.get_method_call_ownership(object, method)
+            }
             Expression::Unary { op, operand, .. } => self.get_unary_ownership(*op, operand),
             Expression::Cast { expr, .. } => self.get_expression_ownership(expr),
             Expression::TryOp { expr, .. } => self.get_expression_ownership(expr),
@@ -174,7 +172,10 @@ impl OwnershipTracker {
         match ty {
             Type::Custom(name) => {
                 self.copy_types.contains(name.as_str())
-                    || name.split("::").last().map_or(false, |b| self.copy_types.contains(b))
+                    || name
+                        .split("::")
+                        .last()
+                        .map_or(false, |b| self.copy_types.contains(b))
             }
             _ => false,
         }

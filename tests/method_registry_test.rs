@@ -13,14 +13,44 @@ fn test_known_mutating_methods_are_registered() {
     use windjammer::method_registry;
 
     let mutating = [
-        "push", "pop", "insert", "remove", "clear", "append", "extend",
-        "drain", "truncate", "resize", "retain", "sort", "sort_by",
-        "sort_by_key", "sort_unstable", "sort_unstable_by", "dedup",
-        "reverse", "swap", "swap_remove", "reserve", "shrink_to_fit",
-        "split_off", "fill", "rotate_left", "rotate_right", "set_len",
-        "push_str", "push_front", "push_back", "pop_front", "pop_back",
-        "make_ascii_lowercase", "make_ascii_uppercase",
-        "take", "replace", "get_or_insert", "get_or_insert_with",
+        "push",
+        "pop",
+        "insert",
+        "remove",
+        "clear",
+        "append",
+        "extend",
+        "drain",
+        "truncate",
+        "resize",
+        "retain",
+        "sort",
+        "sort_by",
+        "sort_by_key",
+        "sort_unstable",
+        "sort_unstable_by",
+        "dedup",
+        "reverse",
+        "swap",
+        "swap_remove",
+        "reserve",
+        "shrink_to_fit",
+        "split_off",
+        "fill",
+        "rotate_left",
+        "rotate_right",
+        "set_len",
+        "push_str",
+        "push_front",
+        "push_back",
+        "pop_front",
+        "pop_back",
+        "make_ascii_lowercase",
+        "make_ascii_uppercase",
+        "take",
+        "replace",
+        "get_or_insert",
+        "get_or_insert_with",
         "entry",
     ];
 
@@ -38,17 +68,73 @@ fn test_known_readonly_methods_are_registered() {
     use windjammer::method_registry;
 
     let readonly = [
-        "len", "is_empty", "contains", "contains_key", "get", "first",
-        "last", "capacity", "keys", "values", "iter", "windows", "chunks",
-        "enumerate", "clone", "to_string", "to_owned", "as_str", "as_ref",
-        "as_slice", "as_bytes", "as_deref", "trim", "starts_with",
-        "ends_with", "chars", "bytes", "split", "lines", "to_lowercase",
-        "to_uppercase", "is_ascii", "abs", "ceil", "floor", "round",
-        "sqrt", "powi", "powf", "sin", "cos", "tan", "log", "exp",
-        "min", "max", "clamp", "display", "fmt", "cmp", "partial_cmp",
-        "eq", "ne", "is_some", "is_none", "is_ok", "is_err",
-        "unwrap", "unwrap_or", "unwrap_or_else", "unwrap_or_default",
-        "expect", "map", "and_then", "or_else", "ok_or", "ok_or_else",
+        "len",
+        "is_empty",
+        "contains",
+        "contains_key",
+        "get",
+        "first",
+        "last",
+        "capacity",
+        "keys",
+        "values",
+        "iter",
+        "windows",
+        "chunks",
+        "enumerate",
+        "clone",
+        "to_string",
+        "to_owned",
+        "as_str",
+        "as_ref",
+        "as_slice",
+        "as_bytes",
+        "as_deref",
+        "trim",
+        "starts_with",
+        "ends_with",
+        "chars",
+        "bytes",
+        "split",
+        "lines",
+        "to_lowercase",
+        "to_uppercase",
+        "is_ascii",
+        "abs",
+        "ceil",
+        "floor",
+        "round",
+        "sqrt",
+        "powi",
+        "powf",
+        "sin",
+        "cos",
+        "tan",
+        "log",
+        "exp",
+        "min",
+        "max",
+        "clamp",
+        "display",
+        "fmt",
+        "cmp",
+        "partial_cmp",
+        "eq",
+        "ne",
+        "is_some",
+        "is_none",
+        "is_ok",
+        "is_err",
+        "unwrap",
+        "unwrap_or",
+        "unwrap_or_else",
+        "unwrap_or_default",
+        "expect",
+        "map",
+        "and_then",
+        "or_else",
+        "ok_or",
+        "ok_or_else",
     ];
 
     for method in &readonly {
@@ -96,8 +182,17 @@ fn test_iterator_returning_methods() {
     use windjammer::method_registry;
 
     let iterator_methods = [
-        "keys", "values", "iter", "iter_mut", "into_iter", "lines",
-        "chars", "bytes", "split", "split_whitespace", "drain",
+        "keys",
+        "values",
+        "iter",
+        "iter_mut",
+        "into_iter",
+        "lines",
+        "chars",
+        "bytes",
+        "split",
+        "split_whitespace",
+        "drain",
     ];
 
     for method in &iterator_methods {
@@ -113,9 +208,7 @@ fn test_iterator_returning_methods() {
 fn test_map_key_methods() {
     use windjammer::method_registry;
 
-    let map_key_methods = [
-        "contains_key", "get", "get_mut", "remove", "get_key_value",
-    ];
+    let map_key_methods = ["contains_key", "get", "get_mut", "remove", "get_key_value"];
 
     for method in &map_key_methods {
         assert!(
@@ -131,7 +224,12 @@ fn test_index_taking_methods() {
     use windjammer::method_registry;
 
     let index_methods = [
-        "remove", "swap_remove", "split_off", "swap", "drain", "insert",
+        "remove",
+        "swap_remove",
+        "split_off",
+        "swap",
+        "drain",
+        "insert",
     ];
 
     for method in &index_methods {
@@ -148,8 +246,17 @@ fn test_closure_taking_methods() {
     use windjammer::method_registry;
 
     let closure_methods = [
-        "filter", "any", "all", "find", "find_map", "position",
-        "take_while", "skip_while", "map_while", "partition", "rposition",
+        "filter",
+        "any",
+        "all",
+        "find",
+        "find_map",
+        "position",
+        "take_while",
+        "skip_while",
+        "map_while",
+        "partition",
+        "rposition",
     ];
 
     for method in &closure_methods {
@@ -166,10 +273,25 @@ fn test_common_stdlib_method_names() {
     use windjammer::method_registry;
 
     let common = [
-        "get", "get_mut", "remove", "contains_key", "contains",
-        "insert", "push", "pop", "len", "is_empty", "iter",
-        "keys", "values", "first", "last", "clear", "binary_search",
-        "starts_with", "ends_with",
+        "get",
+        "get_mut",
+        "remove",
+        "contains_key",
+        "contains",
+        "insert",
+        "push",
+        "pop",
+        "len",
+        "is_empty",
+        "iter",
+        "keys",
+        "values",
+        "first",
+        "last",
+        "clear",
+        "binary_search",
+        "starts_with",
+        "ends_with",
     ];
 
     for method in &common {
@@ -189,11 +311,11 @@ fn test_no_prefix_matching_for_user_methods() {
     // but are user-defined and should NOT match
     let false_positives = [
         "push_notification",        // starts with "push" but is not Vec::push
-        "insert_before_validation",  // starts with "insert" but is not Vec::insert
-        "remove_all_expired",        // starts with "remove" but may be &self
-        "clear_cache_if_stale",      // starts with "clear" but may be &self
-        "sort_algorithm",            // starts with "sort" but is not Vec::sort
-        "extend_deadline",           // starts with "extend" but is not Vec::extend
+        "insert_before_validation", // starts with "insert" but is not Vec::insert
+        "remove_all_expired",       // starts with "remove" but may be &self
+        "clear_cache_if_stale",     // starts with "clear" but may be &self
+        "sort_algorithm",           // starts with "sort" but is not Vec::sort
+        "extend_deadline",          // starts with "extend" but is not Vec::extend
     ];
 
     for method in &false_positives {

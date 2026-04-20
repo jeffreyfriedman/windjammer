@@ -208,7 +208,7 @@ impl Ejector {
         // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
         let mut float_inference = crate::type_inference::FloatInference::new();
         float_inference.infer_program(&program);
-        
+
         if !float_inference.errors.is_empty() {
             eprintln!("🚨 Float type inference errors:");
             for error in &float_inference.errors {

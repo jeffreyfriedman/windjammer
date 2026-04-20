@@ -6,7 +6,6 @@
 ///      Generate vec[idx].clone() only when owned value needed (e.g. struct literal)
 ///
 /// Discovered via dogfooding: breach-protocol save_manager.wj (split returns Vec<String>)
-
 use std::process::Command;
 
 fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {

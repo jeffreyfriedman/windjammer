@@ -7,7 +7,8 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_method_params() {
     // Compile the Windjammer file
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "tests/copy_type_method_params_test.wj",
             "--output",

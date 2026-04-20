@@ -19,8 +19,11 @@
 use std::process::Command;
 
 fn compile_wj_to_rust(source: &str, test_name: &str) -> String {
-    let dir = std::env::temp_dir()
-        .join(format!("wj_str_owned_container_{}_{}", test_name, std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "wj_str_owned_container_{}_{}",
+        test_name,
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 

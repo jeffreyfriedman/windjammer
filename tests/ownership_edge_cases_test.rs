@@ -7,8 +7,8 @@
 
 use std::fs;
 use tempfile::TempDir;
-use windjammer::CompilationTarget;
 use windjammer::compiler::build_project_ext;
+use windjammer::CompilationTarget;
 
 #[test]
 fn test_library_multipass_copy_newtype_getter_uses_shared_ref_self() {
@@ -51,15 +51,8 @@ impl Widget {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("library multipass build");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("library multipass build");
 
     let rs = fs::read_to_string(build.join("ids/widget.rs")).expect("widget.rs");
     assert!(
@@ -120,15 +113,8 @@ impl KeyRegistry {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("library multipass build");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("library multipass build");
 
     let rs = fs::read_to_string(build.join("demo/registry.rs")).expect("registry.rs");
     assert!(

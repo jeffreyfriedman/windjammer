@@ -70,7 +70,8 @@ fn main() {
     // Windjammer text types use .to_string() (not .clone()) because when the
     // param is lowered to &str, .clone() keeps &str (Copy), not String.
     assert!(
-        rust_code.contains("Member::new(name.to_string())") || rust_code.contains("Member::new(name.clone())"),
+        rust_code.contains("Member::new(name.to_string())")
+            || rust_code.contains("Member::new(name.clone())"),
         "Expected auto-conversion for iterator variable (&String -> String).\nGenerated code:\n{}",
         rust_code
     );

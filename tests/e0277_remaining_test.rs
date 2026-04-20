@@ -65,7 +65,8 @@ fn rustc_check(rs: &str) -> (bool, String) {
         if out.status.success() {
             return (true, last_err);
         }
-        if !last_err.contains("failed to build archive") && !last_err.contains("failed to open object file")
+        if !last_err.contains("failed to build archive")
+            && !last_err.contains("failed to open object file")
         {
             return (false, last_err);
         }
@@ -94,12 +95,7 @@ impl DialogueState {
 "#;
     let rs = compile_and_get_rust(src);
     let (ok, err) = rustc_check(&rs);
-    assert!(
-        ok,
-        "E0277 or other rustc error:\n{}\n\n{}",
-        err,
-        rs
-    );
+    assert!(ok, "E0277 or other rustc error:\n{}\n\n{}", err, rs);
     assert!(
         rs.contains("== &npc") || rs.contains("== & npc"),
         "expected & on owned String param for PartialEq; got:\n{}",
@@ -159,12 +155,7 @@ pub fn sphere_phi(ring: i32, rings: i32) -> f32 {
 "#;
     let rs = compile_and_get_rust(src);
     let (ok, err) = rustc_check(&rs);
-    assert!(
-        ok,
-        "mixed float E0277:\n{}\n\n{}",
-        err,
-        rs
-    );
+    assert!(ok, "mixed float E0277:\n{}\n\n{}", err, rs);
 }
 
 #[test]

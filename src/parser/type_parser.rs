@@ -12,10 +12,7 @@ use crate::parser_impl::Parser;
 /// - **Associated type** (`Self::Item`, `T::Output`, `MyTrait::Assoc`) → [`Type::Associated`].
 fn type_path_lhs_is_module_prefix(lhs: &str) -> bool {
     matches!(lhs, "crate" | "super" | "self")
-        || lhs
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
+        || lhs.chars().next().is_some_and(|c| c.is_ascii_lowercase())
 }
 
 impl Parser {
@@ -503,10 +500,7 @@ impl Parser {
                 // Normalize Rust string types to canonical Type::String
                 if (type_name == "str" || type_name == "String") && !self.in_extern_fn {
                     let loc = self.current_location();
-                    let (line, col) = loc
-                        .as_ref()
-                        .map(|l| (l.line, l.column))
-                        .unwrap_or((1, 1));
+                    let (line, col) = loc.as_ref().map(|l| (l.line, l.column)).unwrap_or((1, 1));
                     self.emit_warning(
                         format!(
                             "W0010: use `string` instead of `{}` -- Windjammer has one string type",

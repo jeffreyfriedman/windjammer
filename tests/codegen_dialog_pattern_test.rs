@@ -1,8 +1,7 @@
 /// TDD test for dialog.wj specific pattern
-/// 
+///
 /// Bug: When method with `self` calls another method with String parameter,
 /// and the String comes from a match arm that consumes self, we get E0308.
-
 use std::fs;
 use std::process::Command;
 

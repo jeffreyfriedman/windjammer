@@ -79,7 +79,8 @@ impl Table {
     let rust = compile_to_rust(source).unwrap_or_else(|e| panic!("compile failed: {}", e));
 
     assert!(
-        rust.contains("fn find_value(&self, key: &str)") || rust.contains("fn find_value(&self,key: &str)"),
+        rust.contains("fn find_value(&self, key: &str)")
+            || rust.contains("fn find_value(&self,key: &str)"),
         "lookup helper should borrow string key; got:\n{}",
         rust
     );

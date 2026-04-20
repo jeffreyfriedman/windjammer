@@ -278,7 +278,11 @@ pub fn run_tests(
             );
         }
         if let Err(e) = fs::remove_dir_all(&temp_dir) {
-            eprintln!("  Warning: failed to clean temp dir {}: {}", temp_dir.display(), e);
+            eprintln!(
+                "  Warning: failed to clean temp dir {}: {}",
+                temp_dir.display(),
+                e
+            );
         }
     }
 
@@ -691,8 +695,10 @@ fn detect_and_compile_library(
                             let abs_name_start = pkg_start + name_start + "name = \"".len();
                             if let Some(name_end) = cargo_toml[abs_name_start..].find('"') {
                                 let abs_name_end = abs_name_start + name_end;
-                                cargo_toml
-                                    .replace_range(abs_name_start..abs_name_end, &test_lib_package_name);
+                                cargo_toml.replace_range(
+                                    abs_name_start..abs_name_end,
+                                    &test_lib_package_name,
+                                );
                             }
                         }
                     }
@@ -702,7 +708,8 @@ fn detect_and_compile_library(
                             let abs_name_start = lib_start + name_start + "name = \"".len();
                             if let Some(name_end) = cargo_toml[abs_name_start..].find('"') {
                                 let abs_name_end = abs_name_start + name_end;
-                                cargo_toml.replace_range(abs_name_start..abs_name_end, &test_lib_name);
+                                cargo_toml
+                                    .replace_range(abs_name_start..abs_name_end, &test_lib_name);
                             }
                         }
                     }
@@ -952,7 +959,10 @@ fn find_windjammer_runtime_path() -> Result<PathBuf> {
 
     let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-    if current.join("crates/windjammer-runtime/Cargo.toml").exists() {
+    if current
+        .join("crates/windjammer-runtime/Cargo.toml")
+        .exists()
+    {
         return Ok(current.join("crates/windjammer-runtime"));
     }
 

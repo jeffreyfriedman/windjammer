@@ -26,7 +26,8 @@ fn find_path(g_score: HashMap<(i32, i32), f32>, x: i32, y: i32) -> f32 {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",

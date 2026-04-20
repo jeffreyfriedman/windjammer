@@ -62,14 +62,7 @@ pub fn execute(pass: CompiledPass) {
     )
     .unwrap();
 
-    let result = build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    );
+    let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
     let executor_rs = std::fs::read_to_string(build.join("executor.rs")).unwrap();
@@ -136,14 +129,7 @@ pub fn process(t: Transform) -> f32 {
     )
     .unwrap();
 
-    let result = build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    );
+    let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
     let physics_rs = std::fs::read_to_string(build.join("physics.rs")).unwrap();

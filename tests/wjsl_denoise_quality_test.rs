@@ -5,20 +5,24 @@
 /// New: 5x5 edge-aware filter with temporal neighborhood clamping
 
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
-    let base_dir = std::path::PathBuf::from(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../windjammer-game/windjammer-game-core/shaders")
-    );
+    let base_dir = std::path::PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../windjammer-game/windjammer-game-core/shaders"
+    ));
     let path = base_dir.join(filename);
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir)
-        .map_err(|e| e.to_string())
+    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir).map_err(|e| e.to_string())
 }
 
 #[test]
 fn test_denoise_shader_transpiles() {
     let result = transpile_shader_file("voxel_denoise.wjsl");
-    assert!(result.is_ok(), "Denoise shader must transpile: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Denoise shader must transpile: {:?}",
+        result.err()
+    );
 }
 
 #[test]
@@ -43,8 +47,9 @@ fn test_denoise_tile_size_144() {
 fn test_denoise_neighborhood_clamping() {
     let result = transpile_shader_file("voxel_denoise.wjsl").unwrap();
     assert!(
-        result.contains("color_min") && result.contains("color_max") &&
-        result.contains("clamped_history"),
+        result.contains("color_min")
+            && result.contains("color_max")
+            && result.contains("clamped_history"),
         "Temporal accumulation must use neighborhood clamping to prevent ghosting"
     );
 }

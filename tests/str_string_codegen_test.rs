@@ -36,7 +36,11 @@ use windjammer::parser::Type;
 fn test_string_parameter_type_str() {
     let ty = Type::Custom("str".to_string());
     let rust = type_to_rust(&ty);
-    assert_eq!(rust, "&str", "Type::Custom(\"str\") should emit &str, got {}", rust);
+    assert_eq!(
+        rust, "&str",
+        "Type::Custom(\"str\") should emit &str, got {}",
+        rust
+    );
 }
 
 /// string parameter type: Windjammer `string` must become Rust `String`
@@ -44,7 +48,11 @@ fn test_string_parameter_type_str() {
 fn test_string_parameter_type_string() {
     let ty = Type::String;
     let rust = type_to_rust(&ty);
-    assert_eq!(rust, "String", "Type::String should emit String, got {}", rust);
+    assert_eq!(
+        rust, "String",
+        "Type::String should emit String, got {}",
+        rust
+    );
 }
 
 /// Type::Custom("string") -> String (for type aliases)
@@ -52,7 +60,11 @@ fn test_string_parameter_type_string() {
 fn test_custom_string_emits_string() {
     let ty = Type::Custom("string".to_string());
     let rust = type_to_rust(&ty);
-    assert_eq!(rust, "String", "Type::Custom(\"string\") should emit String, got {}", rust);
+    assert_eq!(
+        rust, "String",
+        "Type::Custom(\"string\") should emit String, got {}",
+        rust
+    );
 }
 
 /// Struct field str: when used in struct, str is unsized - need String
@@ -65,7 +77,11 @@ fn test_string_field_type_str_becomes_string() {
     // Option<str> - str is unsized, Option<str> invalid. Must be Option<String>
     let ty = Type::Option(Box::new(Type::Custom("str".to_string())));
     let rust = type_to_rust(&ty);
-    assert_eq!(rust, "Option<String>", "Option<str> should emit Option<String>, got {}", rust);
+    assert_eq!(
+        rust, "Option<String>",
+        "Option<str> should emit Option<String>, got {}",
+        rust
+    );
 }
 
 /// String literal type: "hello" in Windjammer - the expression type is

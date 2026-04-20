@@ -1,8 +1,6 @@
 //! Parser for .wjsl (Windjammer Shader Language)
 
-use crate::shader::ast::{
-    AccessMode, ScalarType, ShaderModule, StorageDecl, Type, UniformDecl,
-};
+use crate::shader::ast::{AccessMode, ScalarType, ShaderModule, StorageDecl, Type, UniformDecl};
 use anyhow::{anyhow, Result};
 use std::iter::Peekable;
 use std::str::Chars;

@@ -9,7 +9,9 @@
 // 4. Default to i32 for unknown contexts (Rust convention)
 
 use tempfile::TempDir;
-use windjammer::{analyzer, build_project_ext, codegen, lexer, parser, type_inference, CompilationTarget};
+use windjammer::{
+    analyzer, build_project_ext, codegen, lexer, parser, type_inference, CompilationTarget,
+};
 
 /// TDD: Option<Vec<int>> struct field - vec! elements should infer i64
 #[test]
@@ -27,11 +29,8 @@ fn main() {
 
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new_with_source(
-        tokens,
-        "test.wj".to_string(),
-        source.to_string(),
-    );
+    let mut parser =
+        parser::Parser::new_with_source(tokens, "test.wj".to_string(), source.to_string());
     let program = parser.parse().expect("Failed to parse");
 
     let mut int_inference = type_inference::IntInference::new();
@@ -42,7 +41,9 @@ fn main() {
     }
 
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _registry, _) = analyzer.analyze_program(&program).expect("Failed to analyze");
+    let (analyzed, _registry, _) = analyzer
+        .analyze_program(&program)
+        .expect("Failed to analyze");
 
     let registry = analyzer::SignatureRegistry::new();
     let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
@@ -71,11 +72,8 @@ pub fn main() -> i32 {
 
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new_with_source(
-        tokens,
-        "test.wj".to_string(),
-        source.to_string(),
-    );
+    let mut parser =
+        parser::Parser::new_with_source(tokens, "test.wj".to_string(), source.to_string());
     let program = parser.parse().expect("Failed to parse");
 
     let mut int_inference = type_inference::IntInference::new();
@@ -86,7 +84,9 @@ pub fn main() -> i32 {
     }
 
     let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _registry, _) = analyzer.analyze_program(&program).expect("Failed to analyze");
+    let (analyzed, _registry, _) = analyzer
+        .analyze_program(&program)
+        .expect("Failed to analyze");
 
     let registry = analyzer::SignatureRegistry::new();
     let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
@@ -139,7 +139,11 @@ pub fn main() -> i32 {
     assert!(
         foo_code.contains("42_i32"),
         "Should infer i32 from take_i32 param. Generated:\n{}",
-        foo_code.lines().filter(|l| l.contains("take_i32") || l.contains("42")).collect::<Vec<_>>().join("\n")
+        foo_code
+            .lines()
+            .filter(|l| l.contains("take_i32") || l.contains("42"))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -266,7 +270,8 @@ pub mod combat
     assert!(
         enemy_code.contains("100_i32") || enemy_code.contains("CombatStats::new(100,"),
         "Should infer i32 from cross-file function signature. Generated:\n{}",
-        enemy_code.lines()
+        enemy_code
+            .lines()
             .filter(|l| l.contains("CombatStats::new") || l.contains("100") || l.contains("50"))
             .collect::<Vec<_>>()
             .join("\n")

@@ -26,13 +26,8 @@ pub struct Camera {
     fs::write(&input_file, source).expect("Failed to write source file");
 
     // Run the compiler
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 
@@ -85,13 +80,8 @@ pub struct Camera {
     let input_file = format!("{}/test_flatten.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 
@@ -156,13 +146,8 @@ impl Add for Vec2 {
     let input_file = format!("{}/test_ops.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 
@@ -219,13 +204,8 @@ pub struct MyStruct {
     let input_file = format!("{}/test_non_sibling.wj", input_dir);
     fs::write(&input_file, source).expect("Failed to write source file");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
-            "build",
-            &input_file,
-            "--output",
-            input_dir,
-            "--no-cargo",
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", &input_file, "--output", input_dir, "--no-cargo"])
         .output()
         .expect("Failed to run compiler");
 

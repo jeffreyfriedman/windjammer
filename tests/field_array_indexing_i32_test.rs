@@ -30,39 +30,38 @@ fn test_indexing() {
     println!("ID: {}", id)
 }
 "#;
-    
+
     let test_file = "/tmp/test_field_index.wj";
     fs::write(test_file, test_wj).expect("Failed to write test file");
-    
+
     // Transpile
     let output = Command::new("./target/release/wj")
         .args(&["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("Compilation failed: {}", stderr);
     }
-    
+
     // Read generated Rust
     let rs_file = "./build/test_field_index.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
+    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Verify auto-cast is generated for field access + indexing
     assert!(
-        rust_code.contains("agent.neighbors[i as usize]") ||
-        rust_code.contains("agent.neighbors[(i as usize)]"),
-        "Should auto-cast field array indexing: agent.neighbors[i as usize]\nGenerated:\n{}", 
+        rust_code.contains("agent.neighbors[i as usize]")
+            || rust_code.contains("agent.neighbors[(i as usize)]"),
+        "Should auto-cast field array indexing: agent.neighbors[i as usize]\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Cleanup
     let _ = fs::remove_file(test_file);
-    
+
     println!("✅ Field array indexing test PASSED");
 }
 
@@ -83,36 +82,35 @@ fn process_neighbors(agent: SteeringAgent) {
     }
 }
 "#;
-    
+
     let test_file = "/tmp/test_vec_loop.wj";
     fs::write(test_file, test_wj).expect("Failed to write test file");
-    
+
     let output = Command::new("./target/release/wj")
         .args(&["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("Compilation failed: {}", stderr);
     }
-    
+
     let rs_file = "./build/test_vec_loop.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
+    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Verify auto-cast in loop body
     assert!(
         rust_code.contains("agent.neighbors[i as usize]"),
-        "Should auto-cast in loop: agent.neighbors[i as usize]\nGenerated:\n{}", 
+        "Should auto-cast in loop: agent.neighbors[i as usize]\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Cleanup
     let _ = fs::remove_file(test_file);
-    
+
     println!("✅ Vec loop indexing test PASSED");
 }
 
@@ -130,35 +128,34 @@ impl Counter {
     }
 }
 "#;
-    
+
     let test_file = "/tmp/test_struct_field.wj";
     fs::write(test_file, test_wj).expect("Failed to write test file");
-    
+
     let output = Command::new("./target/release/wj")
         .args(&["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!("Compilation failed: {}", stderr);
     }
-    
+
     let rs_file = "./build/test_struct_field.rs";
-    let rust_code = fs::read_to_string(rs_file)
-        .expect("Failed to read generated .rs file");
-    
+    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+
     println!("Generated Rust:\n{}", rust_code);
-    
+
     // Verify struct field compound assignment uses correct type
     assert!(
         rust_code.contains("self.value += 1_usize"),
-        "Should generate: self.value += 1_usize (matching field type)\nGenerated:\n{}", 
+        "Should generate: self.value += 1_usize (matching field type)\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Cleanup
     let _ = fs::remove_file(test_file);
-    
+
     println!("✅ Struct field compound assignment test PASSED");
 }

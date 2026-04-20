@@ -4,7 +4,6 @@
 
 use windjammer::wjsl::{parse_wjsl, BindingKind, ShaderStage, StorageAccess};
 
-
 #[test]
 fn test_parse_vertex_shader() {
     let source = r#"
@@ -16,7 +15,10 @@ fn main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4 {
 }
 "#;
     let ast = parse_wjsl(source).unwrap();
-    assert!(!ast.entry_points.is_empty(), "Expected at least one entry point");
+    assert!(
+        !ast.entry_points.is_empty(),
+        "Expected at least one entry point"
+    );
     assert!(
         matches!(ast.entry_points[0].stage, ShaderStage::Vertex),
         "Expected vertex stage, got {:?}",
@@ -84,7 +86,10 @@ fn main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4 {
     assert_eq!(camera_binding.name, "camera");
     assert_eq!(camera_binding.group, 0);
     assert_eq!(camera_binding.binding, 0);
-    assert!(matches!(camera_binding.kind, windjammer::wjsl::BindingKind::Uniform(_)));
+    assert!(matches!(
+        camera_binding.kind,
+        windjammer::wjsl::BindingKind::Uniform(_)
+    ));
 
     let params_binding = &ast.bindings[1];
     assert_eq!(params_binding.name, "params");
@@ -217,7 +222,10 @@ fn test_parse_fixed_size_array() {
     if let windjammer::wjsl::Type::Array(element_type, size) = field_ty {
         assert_eq!(*size, Some(16), "Expected array<f32, 16> with size 16");
         assert!(
-            matches!(**element_type, windjammer::wjsl::Type::Scalar(windjammer::wjsl::ScalarType::F32)),
+            matches!(
+                **element_type,
+                windjammer::wjsl::Type::Scalar(windjammer::wjsl::ScalarType::F32)
+            ),
             "Expected element type f32, got {:?}",
             element_type
         );

@@ -73,7 +73,8 @@ pub fn origin() -> Vec3 {
     let rust = compile_and_get_rust(source);
     for (lit, field) in [("1.0", "x"), ("2.0", "y"), ("3.0", "z")] {
         assert!(
-            rust.contains(&format!("{}: {}_f32", field, lit)) || rust.contains(&format!("{}: {}f32", field, lit)),
+            rust.contains(&format!("{}: {}_f32", field, lit))
+                || rust.contains(&format!("{}: {}f32", field, lit)),
             "Expected {}_f32 for field {}. Got:\n{}",
             lit,
             field,

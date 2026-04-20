@@ -15,11 +15,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
-const MUTATES_RECEIVER: u16   = 0b0000_0001;
-const RETURNS_ITERATOR: u16   = 0b0000_0010;
-const MAP_KEY_METHOD: u16     = 0b0000_0100;
-const INDEX_TAKING: u16       = 0b0000_1000;
-const CLOSURE_TAKING: u16     = 0b0001_0000;
+const MUTATES_RECEIVER: u16 = 0b0000_0001;
+const RETURNS_ITERATOR: u16 = 0b0000_0010;
+const MAP_KEY_METHOD: u16 = 0b0000_0100;
+const INDEX_TAKING: u16 = 0b0000_1000;
+const CLOSURE_TAKING: u16 = 0b0001_0000;
 const COMMON_STDLIB_NAME: u16 = 0b0010_0000;
 
 struct MethodEntry {
@@ -44,157 +44,144 @@ const COMMON: u16 = COMMON_STDLIB_NAME;
 /// All downstream code automatically picks it up.
 static KNOWN_METHODS: &[MethodEntry] = &[
     // ── Vec / VecDeque / collections: mutating ──
-    m("push",                MUT | COMMON),
-    m("pop",                 MUT | COMMON),
-    m("insert",              MUT | COMMON | IDX),
-    m("remove",              MUT | COMMON | MAP_KEY | IDX),
-    m("clear",               MUT | COMMON),
-    m("append",              MUT),
-    m("extend",              MUT),
-    m("drain",               MUT | ITER | IDX),
-    m("truncate",            MUT),
-    m("resize",              MUT),
-    m("retain",              MUT),
-    m("sort",                MUT),
-    m("sort_by",             MUT),
-    m("sort_by_key",         MUT),
-    m("sort_unstable",       MUT),
-    m("sort_unstable_by",    MUT),
-    m("dedup",               MUT),
-    m("reverse",             MUT),
-    m("swap",                MUT | IDX),
-    m("swap_remove",         MUT | IDX),
-    m("reserve",             MUT),
-    m("shrink_to_fit",       MUT),
-    m("split_off",           MUT | IDX),
-    m("fill",                MUT),
-    m("set",                 MUT | COMMON),
-    m("rotate_left",         MUT),
-    m("rotate_right",        MUT),
-    m("set_len",             MUT),
-    m("push_str",            MUT),
-    m("push_front",          MUT),
-    m("push_back",           MUT),
-    m("pop_front",           MUT),
-    m("pop_back",            MUT),
+    m("push", MUT | COMMON),
+    m("pop", MUT | COMMON),
+    m("insert", MUT | COMMON | IDX),
+    m("remove", MUT | COMMON | MAP_KEY | IDX),
+    m("clear", MUT | COMMON),
+    m("append", MUT),
+    m("extend", MUT),
+    m("drain", MUT | ITER | IDX),
+    m("truncate", MUT),
+    m("resize", MUT),
+    m("retain", MUT),
+    m("sort", MUT),
+    m("sort_by", MUT),
+    m("sort_by_key", MUT),
+    m("sort_unstable", MUT),
+    m("sort_unstable_by", MUT),
+    m("dedup", MUT),
+    m("reverse", MUT),
+    m("swap", MUT | IDX),
+    m("swap_remove", MUT | IDX),
+    m("reserve", MUT),
+    m("shrink_to_fit", MUT),
+    m("split_off", MUT | IDX),
+    m("fill", MUT),
+    m("set", MUT | COMMON),
+    m("rotate_left", MUT),
+    m("rotate_right", MUT),
+    m("set_len", MUT),
+    m("push_str", MUT),
+    m("push_front", MUT),
+    m("push_back", MUT),
+    m("pop_front", MUT),
+    m("pop_back", MUT),
     m("make_ascii_lowercase", MUT),
     m("make_ascii_uppercase", MUT),
-
     // ── Option / Result: mutating ──
-    m("take",                MUT),
-    m("replace",             MUT),
-    m("get_or_insert",       MUT),
-    m("get_or_insert_with",  MUT),
-
+    m("take", MUT),
+    m("replace", MUT),
+    m("get_or_insert", MUT),
+    m("get_or_insert_with", MUT),
     // ── HashMap / BTreeMap: mutating + key methods ──
-    m("entry",               MUT),
-
+    m("entry", MUT),
     // ── HashMap / BTreeMap: read-only key methods ──
-    m("contains_key",        COMMON | MAP_KEY),
-    m("get",                 COMMON | MAP_KEY),
-    m("get_mut",             MUT | MAP_KEY | COMMON),
-    m("get_key_value",       MAP_KEY),
-
+    m("contains_key", COMMON | MAP_KEY),
+    m("get", COMMON | MAP_KEY),
+    m("get_mut", MUT | MAP_KEY | COMMON),
+    m("get_key_value", MAP_KEY),
     // ── Mutating iterator variants ──
-    m("iter_mut",            MUT | ITER),
-    m("values_mut",          MUT),
-
+    m("iter_mut", MUT | ITER),
+    m("values_mut", MUT),
     // ── Collection inspection: read-only ──
-    m("len",                 COMMON),
-    m("is_empty",            COMMON),
-    m("contains",            COMMON),
-    m("first",               COMMON),
-    m("last",                COMMON),
-    m("capacity",            0),
-    m("keys",                ITER | COMMON),
-    m("values",              ITER | COMMON),
-    m("binary_search",       COMMON),
-
+    m("len", COMMON),
+    m("is_empty", COMMON),
+    m("contains", COMMON),
+    m("first", COMMON),
+    m("last", COMMON),
+    m("capacity", 0),
+    m("keys", ITER | COMMON),
+    m("values", ITER | COMMON),
+    m("binary_search", COMMON),
     // ── Iterators: read-only ──
-    m("iter",                ITER | COMMON),
-    m("into_iter",           ITER),
-    m("windows",             0),
-    m("chunks",              0),
-    m("enumerate",           0),
-    m("lines",               ITER),
-    m("chars",               ITER),
-    m("bytes",               ITER),
-    m("split",               ITER),
-    m("split_whitespace",    ITER),
-
+    m("iter", ITER | COMMON),
+    m("into_iter", ITER),
+    m("windows", 0),
+    m("chunks", 0),
+    m("enumerate", 0),
+    m("lines", ITER),
+    m("chars", ITER),
+    m("bytes", ITER),
+    m("split", ITER),
+    m("split_whitespace", ITER),
     // ── Cloning / conversion: read-only ──
-    m("clone",               0),
-    m("to_string",           0),
-    m("to_owned",            0),
-    m("as_str",              0),
-    m("as_ref",              0),
-    m("as_slice",            0),
-    m("as_bytes",            0),
-    m("as_deref",            0),
-
+    m("clone", 0),
+    m("to_string", 0),
+    m("to_owned", 0),
+    m("as_str", 0),
+    m("as_ref", 0),
+    m("as_slice", 0),
+    m("as_bytes", 0),
+    m("as_deref", 0),
     // ── String inspection: read-only ──
-    m("trim",                0),
-    m("starts_with",         COMMON),
-    m("ends_with",           COMMON),
-    m("to_lowercase",        0),
-    m("to_uppercase",        0),
-    m("is_ascii",            0),
-
+    m("trim", 0),
+    m("starts_with", COMMON),
+    m("ends_with", COMMON),
+    m("to_lowercase", 0),
+    m("to_uppercase", 0),
+    m("is_ascii", 0),
     // ── Numeric: read-only (Copy types) ──
-    m("abs",                 0),
-    m("ceil",                0),
-    m("floor",               0),
-    m("round",               0),
-    m("sqrt",                0),
-    m("powi",                0),
-    m("powf",                0),
-    m("sin",                 0),
-    m("cos",                 0),
-    m("tan",                 0),
-    m("log",                 0),
-    m("exp",                 0),
-    m("min",                 0),
-    m("max",                 0),
-    m("clamp",               0),
-
+    m("abs", 0),
+    m("ceil", 0),
+    m("floor", 0),
+    m("round", 0),
+    m("sqrt", 0),
+    m("powi", 0),
+    m("powf", 0),
+    m("sin", 0),
+    m("cos", 0),
+    m("tan", 0),
+    m("log", 0),
+    m("exp", 0),
+    m("min", 0),
+    m("max", 0),
+    m("clamp", 0),
     // ── Display / formatting: read-only ──
-    m("display",             0),
-    m("fmt",                 0),
-
+    m("display", 0),
+    m("fmt", 0),
     // ── Comparison: read-only ──
-    m("cmp",                 0),
-    m("partial_cmp",         0),
-    m("eq",                  0),
-    m("ne",                  0),
-
+    m("cmp", 0),
+    m("partial_cmp", 0),
+    m("eq", 0),
+    m("ne", 0),
     // ── Option / Result inspection: read-only ──
-    m("is_some",             0),
-    m("is_none",             0),
-    m("is_ok",               0),
-    m("is_err",              0),
-    m("unwrap",              0),
-    m("unwrap_or",           0),
-    m("unwrap_or_else",      0),
-    m("unwrap_or_default",   0),
-    m("expect",              0),
-    m("map",                 0),
-    m("and_then",            0),
-    m("or_else",             0),
-    m("ok_or",               0),
-    m("ok_or_else",          0),
-
+    m("is_some", 0),
+    m("is_none", 0),
+    m("is_ok", 0),
+    m("is_err", 0),
+    m("unwrap", 0),
+    m("unwrap_or", 0),
+    m("unwrap_or_else", 0),
+    m("unwrap_or_default", 0),
+    m("expect", 0),
+    m("map", 0),
+    m("and_then", 0),
+    m("or_else", 0),
+    m("ok_or", 0),
+    m("ok_or_else", 0),
     // ── Closure-taking iterator methods ──
-    m("filter",              CLOSURE),
-    m("any",                 CLOSURE),
-    m("all",                 CLOSURE),
-    m("find",                CLOSURE),
-    m("find_map",            CLOSURE),
-    m("position",            CLOSURE),
-    m("take_while",          CLOSURE),
-    m("skip_while",          CLOSURE),
-    m("map_while",           CLOSURE),
-    m("partition",           CLOSURE),
-    m("rposition",           CLOSURE),
+    m("filter", CLOSURE),
+    m("any", CLOSURE),
+    m("all", CLOSURE),
+    m("find", CLOSURE),
+    m("find_map", CLOSURE),
+    m("position", CLOSURE),
+    m("take_while", CLOSURE),
+    m("skip_while", CLOSURE),
+    m("map_while", CLOSURE),
+    m("partition", CLOSURE),
+    m("rposition", CLOSURE),
 ];
 
 static REGISTRY: LazyLock<HashMap<&'static str, u16>> = LazyLock::new(|| {
@@ -205,9 +192,8 @@ static REGISTRY: LazyLock<HashMap<&'static str, u16>> = LazyLock::new(|| {
     map
 });
 
-static KNOWN_NAMES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    KNOWN_METHODS.iter().map(|e| e.name).collect()
-});
+static KNOWN_NAMES: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| KNOWN_METHODS.iter().map(|e| e.name).collect());
 
 fn get_traits(method: &str) -> Option<u16> {
     REGISTRY.get(method).copied()

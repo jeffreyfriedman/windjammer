@@ -64,7 +64,9 @@ impl<'a> Parser<'a> {
         self.current_column = self.lexer.column();
         let prev = std::mem::replace(
             &mut self.current,
-            self.peeked.take().unwrap_or_else(|| self.lexer.next_token()),
+            self.peeked
+                .take()
+                .unwrap_or_else(|| self.lexer.next_token()),
         );
         prev
     }
@@ -78,9 +80,20 @@ impl<'a> Parser<'a> {
 
     fn error_with_location(&self, msg: String) -> anyhow::Error {
         if let Some(ref fname) = self.filename {
-            anyhow!("[{}:{}:{}] {}", fname, self.current_line, self.current_column, msg)
+            anyhow!(
+                "[{}:{}:{}] {}",
+                fname,
+                self.current_line,
+                self.current_column,
+                msg
+            )
         } else {
-            anyhow!("[line {}:{}] {}", self.current_line, self.current_column, msg)
+            anyhow!(
+                "[line {}:{}] {}",
+                self.current_line,
+                self.current_column,
+                msg
+            )
         }
     }
 
@@ -92,7 +105,8 @@ impl<'a> Parser<'a> {
             self.current = Token::RAngle;
             Ok(())
         } else {
-            Err(self.error_with_location(format!("Expected {:?}, found {:?}", expected, self.current)))
+            Err(self
+                .error_with_location(format!("Expected {:?}, found {:?}", expected, self.current)))
         }
     }
 
@@ -430,7 +444,13 @@ impl<'a> Parser<'a> {
             self.expect(Token::Colon)?;
             let ty = self.parse_type()?;
             self.expect(Token::Semicolon)?;
-            (name, BindingKind::Storage { access_mode: access, ty })
+            (
+                name,
+                BindingKind::Storage {
+                    access_mode: access,
+                    ty,
+                },
+            )
         } else if matches!(self.current, Token::Texture2d) {
             self.advance();
             let name = self.expect_ident()?;
@@ -484,10 +504,7 @@ impl<'a> Parser<'a> {
         let mut location = None;
         let mut builtin = None;
 
-        while matches!(
-            self.current,
-            Token::AtLocation | Token::AtBuiltin
-        ) {
+        while matches!(self.current, Token::AtLocation | Token::AtBuiltin) {
             if matches!(self.current, Token::AtLocation) {
                 self.advance();
                 self.expect(Token::LParen)?;
@@ -523,10 +540,7 @@ impl<'a> Parser<'a> {
         let mut location = None;
         let mut builtin = None;
 
-        while matches!(
-            self.current,
-            Token::AtLocation | Token::AtBuiltin
-        ) {
+        while matches!(self.current, Token::AtLocation | Token::AtBuiltin) {
             if matches!(self.current, Token::AtLocation) {
                 self.advance();
                 self.expect(Token::LParen)?;
@@ -569,7 +583,11 @@ impl<'a> Parser<'a> {
         Ok(params)
     }
 
-    fn parse_entry_point(&mut self, stage: ShaderStage, workgroup_size: Option<(u32, u32, u32)>) -> Result<EntryPoint> {
+    fn parse_entry_point(
+        &mut self,
+        stage: ShaderStage,
+        workgroup_size: Option<(u32, u32, u32)>,
+    ) -> Result<EntryPoint> {
         self.expect(Token::Fn)?;
         let name = self.expect_ident()?;
         let params = self.parse_function_params()?;
@@ -678,7 +696,11 @@ impl<'a> Parser<'a> {
         self.expect(Token::Colon)?;
         let ty = self.parse_type()?;
         self.expect(Token::Semicolon)?;
-        Ok(PrivateVar { name, ty, address_space })
+        Ok(PrivateVar {
+            name,
+            ty,
+            address_space,
+        })
     }
 
     fn parse_const_decl(&mut self) -> Result<ConstDecl> {
@@ -743,7 +765,11 @@ impl<'a> Parser<'a> {
         self.expect(Token::Semicolon)?;
 
         let initializer = init_parts.join("");
-        Ok(ConstDecl { name, ty, initializer })
+        Ok(ConstDecl {
+            name,
+            ty,
+            initializer,
+        })
     }
 
     fn reconstruct_int_literal(&self, value: u64, source: &str, _hint_pos: usize) -> String {

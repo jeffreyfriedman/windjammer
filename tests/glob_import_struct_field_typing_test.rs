@@ -1,7 +1,7 @@
 //! TDD: Glob imports (`use super::*`, `use crate::...::*`) must register struct field registry keys.
 
-use windjammer::{build_project_ext, CompilationTarget};
 use tempfile::TempDir;
+use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_use_super_star_resolves_struct_fields() {
@@ -47,15 +47,8 @@ pub fn create() -> DialogueChoice {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Build should succeed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let examples_code = std::fs::read_to_string(build.join("dialogue/examples.rs")).unwrap();
 
@@ -95,15 +88,8 @@ pub fn create() -> Entity {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Build should succeed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let usage_code = std::fs::read_to_string(build.join("usage.rs")).unwrap();
 
@@ -174,15 +160,8 @@ pub fn create() -> DialogueChoice {
     )
     .unwrap();
 
-    build_project_ext(
-        &src,
-        &build,
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("Build should succeed");
+    build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+        .expect("Build should succeed");
 
     let examples_code = std::fs::read_to_string(build.join("dialogue/examples.rs")).unwrap();
     assert!(

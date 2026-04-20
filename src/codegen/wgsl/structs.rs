@@ -10,8 +10,8 @@
 //!
 //! The compiler automatically inserts padding to match GPU requirements.
 
+use crate::codegen::wgsl::types::{map_type_to_wgsl, WgslType};
 use crate::parser_impl::StructDecl;
-use crate::codegen::wgsl::types::{WgslType, map_type_to_wgsl};
 use anyhow::Result;
 
 #[derive(Debug, Clone)]
@@ -49,7 +49,7 @@ impl StructLayout {
             let misalignment = current_offset % field_alignment;
             if misalignment != 0 {
                 let padding_needed = field_alignment - misalignment;
-                
+
                 // Insert padding field(s)
                 // WGSL doesn't have explicit padding types, so use f32 for 4-byte chunks
                 let num_f32_pads = padding_needed / 4;
@@ -79,7 +79,7 @@ impl StructLayout {
         // Structs must be aligned to their largest member alignment
         // Round up to next multiple of alignment
         let total_size = align_up(current_offset, max_alignment);
-        
+
         // Add padding at end if needed
         if current_offset < total_size {
             let end_padding = total_size - current_offset;
@@ -107,11 +107,11 @@ impl StructLayout {
     /// Generate WGSL struct declaration with padding
     pub fn to_wgsl_string(&self) -> String {
         let mut output = String::new();
-        
+
         output.push_str("struct ");
         output.push_str(&self.name);
         output.push_str(" {\n");
-        
+
         for field in &self.fields {
             output.push_str("    ");
             output.push_str(&field.name);
@@ -119,9 +119,9 @@ impl StructLayout {
             output.push_str(&field.wgsl_type.to_wgsl_string());
             output.push_str(",\n");
         }
-        
+
         output.push_str("}");
-        
+
         output
     }
 }

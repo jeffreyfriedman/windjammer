@@ -15,7 +15,6 @@
 ///     }
 /// }
 /// ```
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -33,16 +32,16 @@ impl Controller {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Should generate 0.5_f32 since vy is f32
     assert!(
         output.contains("0.5_f32"),
         "Expected '0.5_f32' in generated code, got:\n{}",
         output
     );
-    
+
     // Should NOT generate 0.5_f64
     assert!(
         !output.contains("0.5_f64"),
@@ -71,9 +70,9 @@ impl Vec3 {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // All literals should be f32
     assert!(
         output.contains("0.5_f32"),
@@ -83,7 +82,7 @@ impl Vec3 {
         output.contains("0.25_f32"),
         "Expected '0.25_f32' in generated code"
     );
-    
+
     // Should NOT generate any f64
     assert!(
         !output.contains("_f64"),
@@ -110,9 +109,9 @@ impl Point {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // All literals should be f32
     assert!(
         output.contains("2.0_f32"),
@@ -126,7 +125,7 @@ impl Point {
         output.contains("0.5_f32"),
         "Expected '0.5_f32' in generated code"
     );
-    
+
     // Should NOT generate any f64
     assert!(
         !output.contains("_f64"),
@@ -142,32 +141,31 @@ fn compile_and_get_rust(source: &str) -> String {
     let test_file = temp_dir.join(format!("{}.wj", test_name));
     let output_dir = temp_dir.join(&test_name);
     let output_file = output_dir.join(format!("{}.rs", test_name));
-    
+
     // Write source to temporary file
     std::fs::write(&test_file, source).expect("Failed to write test file");
-    
+
     // Compile with wj (use local build)
-    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
-    
+    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+
     let status = Command::new(&wj_path)
         .arg("build")
         .arg(&test_file)
         .arg("-o")
         .arg(&output_dir)
-        .arg("--no-cargo")  // Skip cargo build to avoid dependency issues
+        .arg("--no-cargo") // Skip cargo build to avoid dependency issues
         .status()
         .expect("Failed to execute wj compiler");
-    
+
     assert!(status.success(), "Compilation failed");
-    
+
     // Read generated Rust
-    let rust_code = std::fs::read_to_string(&output_file)
-        .expect("Failed to read generated Rust file");
-    
+    let rust_code =
+        std::fs::read_to_string(&output_file).expect("Failed to read generated Rust file");
+
     // Cleanup
     let _ = std::fs::remove_file(&test_file);
     let _ = std::fs::remove_dir_all(&output_dir);
-    
+
     rust_code
 }

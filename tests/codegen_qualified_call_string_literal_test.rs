@@ -160,9 +160,8 @@ pub fn render() {
     }
 
     let game_rs = temp_dir.path().join("build").join("game.rs");
-    let generated = fs::read_to_string(&game_rs).unwrap_or_else(|_| {
-        panic!("Failed to read generated game.rs")
-    });
+    let generated =
+        fs::read_to_string(&game_rs).unwrap_or_else(|_| panic!("Failed to read generated game.rs"));
 
     // The qualified call draw::draw_text("HELLO", ...) should NOT get
     // .to_string() from the conflicting metadata's Owned signature.
@@ -221,9 +220,8 @@ pub fn make_label() -> Label {
     }
 
     let label_rs = temp_dir.path().join("build").join("label.rs");
-    let generated = fs::read_to_string(&label_rs).unwrap_or_else(|_| {
-        panic!("Failed to read generated label.rs")
-    });
+    let generated = fs::read_to_string(&label_rs)
+        .unwrap_or_else(|_| panic!("Failed to read generated label.rs"));
 
     // Label::new("Hello") should get .to_string() because the param is owned String
     assert!(

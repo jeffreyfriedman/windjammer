@@ -26,7 +26,8 @@ fn main() {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -60,7 +61,9 @@ fn main() {
     );
 
     assert!(
-        rust_code.contains("cost: 1.0_f32") || rust_code.contains("cost: 1_f32") || rust_code.contains("cost: 1.0"),
+        rust_code.contains("cost: 1.0_f32")
+            || rust_code.contains("cost: 1_f32")
+            || rust_code.contains("cost: 1.0"),
         "1.0 should be f32 (or type-inferred) when assigned to f32 struct field, got:\n{}",
         rust_code
     );

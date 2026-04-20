@@ -2,7 +2,6 @@
 ///
 /// Covers: function args, compound assign, return, method calls, nested expressions,
 /// Index (arr[i]), chained FieldAccess (self.player.position.x), const/static.
-
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {

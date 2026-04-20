@@ -4,7 +4,6 @@
 /// Root Cause: Analyzer doesn't infer self parameter for trait methods
 /// Expected: fn initialize() → fn initialize(&mut self)
 ///          fn get_name() → fn get_name(&self)
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,9 +20,9 @@ pub trait Counter {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Trait methods should have &mut self inferred
     assert!(
         output.contains("fn increment(&mut self)"),
@@ -49,9 +48,9 @@ pub trait Readable {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     assert!(
         output.contains("fn get_value(&self) -> i32"),
         "Expected 'fn get_value(&self) -> i32', got: {}",
@@ -74,9 +73,9 @@ pub trait Renderer {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Methods with parameters should infer &mut self
     assert!(
         output.contains("fn set_camera(&mut self, camera: i32)"),
@@ -109,16 +108,16 @@ impl Incrementable for Counter {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Trait definition should infer &mut self
     assert!(
         output.contains("fn increment(&mut self)"),
         "Expected trait method with &mut self, got: {}",
         output
     );
-    
+
     // Impl should match trait signature
     // The impl should also have &mut self (from trait)
 }
@@ -133,9 +132,9 @@ pub trait Factory {
 "#;
 
     let output = compile_and_get_rust(source);
-    
+
     println!("\n=== Generated Rust ===\n{}\n", output);
-    
+
     // Associated functions (constructors) should NOT have self
     assert!(
         output.contains("fn new() -> ") && !output.contains("fn new(&"),
@@ -147,31 +146,36 @@ pub trait Factory {
 // Helper function to compile Windjammer code and return generated Rust
 fn compile_and_get_rust(source: &str) -> String {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/trait_ownership_test_{}_{}", std::process::id(), counter);
-    
+    let test_dir = format!(
+        "/tmp/trait_ownership_test_{}_{}",
+        std::process::id(),
+        counter
+    );
+
     std::fs::create_dir_all(&test_dir).unwrap();
-    
+
     let source_file = PathBuf::from(&test_dir).join("test.wj");
     std::fs::write(&source_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(&[
             "build",
             source_file.to_str().unwrap(),
-            "--target", "rust",
-            "--output", &test_dir,
+            "--target",
+            "rust",
+            "--output",
+            &test_dir,
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
-    
+
     assert!(
         output.status.success(),
         "Compilation failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    
+
     let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    std::fs::read_to_string(&rust_file)
-        .expect("Failed to read generated Rust file")
+    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

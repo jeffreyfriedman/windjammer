@@ -35,7 +35,7 @@ impl Achievement {
     // TDD: Run float inference (like ModuleCompiler does)
     let mut float_inference = type_inference::FloatInference::new();
     float_inference.infer_program(&program);
-    
+
     if !float_inference.errors.is_empty() {
         panic!("Float inference errors: {:?}", float_inference.errors);
     }
@@ -53,7 +53,7 @@ impl Achievement {
         "Should not generate f64 when return type is f32.\nGenerated:\n{}",
         rust_code
     );
-    
+
     // Should contain f32
     assert!(
         rust_code.contains("1.0_f32") || rust_code.contains("1.0f32"),

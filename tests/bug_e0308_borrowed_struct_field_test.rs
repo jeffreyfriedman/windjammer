@@ -92,16 +92,14 @@ fn main() {
         );
     }
 
-    // WINDJAMMER DESIGN: String params infer to &str (not String!)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
     // When passing borrowed_struct.owned_field (where field is String):
     // - item: &Ingredient → item.item_id is &String
-    // - has_item expects item_id: &str (borrowed, read-only)
-    // - Just borrow: has_item(&item.item_id, ...) - &String coerces to &str
-    //
-    // This is CORRECT! No clone needed, just borrow the field.
+    // - has_item expects item_id: &String (borrowed, Phase 1 baseline)
+    // - Just borrow: has_item(&item.item_id, ...)
     assert!(
-        generated.contains("item_id: &str"),
-        "Should generate &str parameter. Got:\n{}",
+        generated.contains("item_id: &String"),
+        "Should generate &String parameter (Phase 1 baseline). Got:\n{}",
         generated
     );
     assert!(

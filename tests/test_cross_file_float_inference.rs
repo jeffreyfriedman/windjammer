@@ -5,8 +5,8 @@
 // Example from breach-protocol:
 //   File 1: combat_system.wj
 //     impl CombatStats { pub fn new(health: f32, damage: f32) -> CombatStats }
-//   
-//   File 2: enemy.wj  
+//
+//   File 2: enemy.wj
 //     CombatStats::new(100.0, 50.0)  // Should infer f32, generates f64
 //
 // Root Cause: FloatInference only sees current file's function signatures
@@ -21,7 +21,7 @@ fn test_cross_file_function_arg_inference() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(src.join("combat")).unwrap();
-    
+
     // File 1: Define struct and constructor with f32 params
     std::fs::write(
         src.join("combat/combat_system.wj"),
@@ -44,7 +44,7 @@ impl CombatStats {
 "#,
     )
     .unwrap();
-    
+
     // File 2: Call constructor with bare float literals
     std::fs::write(
         src.join("combat/enemy.wj"),
@@ -68,7 +68,7 @@ pub fn create_grunt(x: f32, y: f32) -> Enemy {
 "#,
     )
     .unwrap();
-    
+
     // File 3: combat/mod.wj
     std::fs::write(
         src.join("combat/mod.wj"),
@@ -78,7 +78,7 @@ pub mod enemy
 "#,
     )
     .unwrap();
-    
+
     // File 4: root mod.wj
     std::fs::write(
         src.join("mod.wj"),
@@ -87,7 +87,7 @@ pub mod combat
 "#,
     )
     .unwrap();
-    
+
     // Build as library
     build_project_ext(
         &src.join("mod.wj"),
@@ -98,29 +98,34 @@ pub mod combat
         &[],
     )
     .expect("Build should succeed");
-    
+
     // Check enemy.rs - THIS IS WHERE THE BUG IS
     let enemy_code = std::fs::read_to_string(build.join("combat/enemy.rs")).unwrap();
-    
-    println!("Generated enemy.rs:\n{}", 
-        enemy_code.lines()
+
+    println!(
+        "Generated enemy.rs:\n{}",
+        enemy_code
+            .lines()
             .filter(|l| l.contains("CombatStats::new") || l.contains("100.0") || l.contains("50.0"))
             .collect::<Vec<_>>()
             .join("\n")
     );
-    
+
     // ASSERT: Should generate f32 suffixes, NOT f64
     assert!(
         !enemy_code.contains("100.0_f64"),
         "Should infer f32 from CombatStats::new params (cross-file). Found:\n{}",
-        enemy_code.lines().find(|l| l.contains("100.0")).unwrap_or("NOT FOUND")
+        enemy_code
+            .lines()
+            .find(|l| l.contains("100.0"))
+            .unwrap_or("NOT FOUND")
     );
-    
+
     assert!(
         !enemy_code.contains("50.0_f64"),
         "Should infer f32 from function signature (cross-file)"
     );
-    
+
     assert!(
         !enemy_code.contains("10.0_f64"),
         "Should infer f32 from function signature (cross-file)"
@@ -134,7 +139,7 @@ fn test_cross_file_struct_field_inference() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // File 1: Define struct
     std::fs::write(
         src.join("types.wj"),
@@ -147,7 +152,7 @@ pub struct Position {
 "#,
     )
     .unwrap();
-    
+
     // File 2: Use struct
     std::fs::write(
         src.join("spawner.wj"),
@@ -164,7 +169,7 @@ pub fn spawn_at(x_pos: f32, y_pos: f32) -> Position {
 "#,
     )
     .unwrap();
-    
+
     // Root
     std::fs::write(
         src.join("mod.wj"),
@@ -174,7 +179,7 @@ pub mod spawner
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("mod.wj"),
         &build,
@@ -184,14 +189,14 @@ pub mod spawner
         &[],
     )
     .expect("Build should succeed");
-    
+
     let spawner_code = std::fs::read_to_string(build.join("spawner.rs")).unwrap();
-    
+
     // DEBUG: Print generated code
     eprintln!("=== Generated spawner.rs ===");
     eprintln!("{}", spawner_code);
     eprintln!("=========================");
-    
+
     // ASSERT: z: 0.0 should infer f32 from Position struct (cross-file)
     assert!(
         !spawner_code.contains("0.0_f64"),

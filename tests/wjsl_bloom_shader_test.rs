@@ -9,8 +9,7 @@ fn transpile_shader(filename: &str) -> Result<String, String> {
     let path = base_dir.join(filename);
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", filename, e))?;
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir)
-        .map_err(|e| e.to_string())
+    windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir).map_err(|e| e.to_string())
 }
 
 #[test]
@@ -22,7 +21,10 @@ fn test_bloom_extract_transpiles() {
 #[test]
 fn test_bloom_extract_has_threshold() {
     let wgsl = transpile_shader("bloom_extract.wjsl").expect("Should transpile");
-    assert!(wgsl.contains("threshold"), "Should use threshold for bright pixel selection");
+    assert!(
+        wgsl.contains("threshold"),
+        "Should use threshold for bright pixel selection"
+    );
 }
 
 #[test]
@@ -49,7 +51,10 @@ fn test_bloom_blur_uses_gaussian() {
 #[test]
 fn test_bloom_blur_uses_shared_memory() {
     let wgsl = transpile_shader("bloom_blur.wjsl").expect("Should transpile");
-    assert!(wgsl.contains("var<workgroup>"), "Should use shared memory for efficiency");
+    assert!(
+        wgsl.contains("var<workgroup>"),
+        "Should use shared memory for efficiency"
+    );
 }
 
 #[test]

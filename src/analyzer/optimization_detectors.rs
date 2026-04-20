@@ -764,19 +764,33 @@ impl<'ast> Analyzer<'ast> {
                 // Types with important Drop implementations - DO NOT defer
                 if matches!(
                     name.as_str(),
-                    "Mutex" | "RwLock" | "File" | "TcpStream" | "UdpSocket"
-                        | "Channel" | "Receiver" | "Sender" | "JoinHandle"
-                        | "MutexGuard" | "RwLockReadGuard" | "RwLockWriteGuard"
-                )
-                {
+                    "Mutex"
+                        | "RwLock"
+                        | "File"
+                        | "TcpStream"
+                        | "UdpSocket"
+                        | "Channel"
+                        | "Receiver"
+                        | "Sender"
+                        | "JoinHandle"
+                        | "MutexGuard"
+                        | "RwLockReadGuard"
+                        | "RwLockWriteGuard"
+                ) {
                     return false;
                 }
 
                 if matches!(
                     name.as_str(),
-                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet"
-                        | "Vec" | "VecDeque" | "LinkedList"
-                        | "String" | "IndexMap"
+                    "HashMap"
+                        | "BTreeMap"
+                        | "HashSet"
+                        | "BTreeSet"
+                        | "Vec"
+                        | "VecDeque"
+                        | "LinkedList"
+                        | "String"
+                        | "IndexMap"
                 ) {
                     return true;
                 }

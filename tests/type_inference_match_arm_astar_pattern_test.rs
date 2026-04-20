@@ -14,7 +14,8 @@ fn compile_and_get_rust(source: &str) -> String {
     fs::create_dir_all(output_dir).unwrap();
     fs::write(format!("{}/test.wj", output_dir), source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj")).args([
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
             "build",
             "--target",
             "rust",
@@ -34,8 +35,7 @@ fn compile_and_get_rust(source: &str) -> String {
         stderr
     );
 
-    fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found")
+    fs::read_to_string(format!("{}/test.rs", output_dir)).expect("Generated Rust file not found")
 }
 
 #[test]

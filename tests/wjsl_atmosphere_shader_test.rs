@@ -17,7 +17,10 @@ fn test_wjsl_atmosphere_transpiles() {
     let wgsl = transpile_shader("atmosphere.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
-    assert!(wgsl.contains("@compute"), "output should declare @compute entry point");
+    assert!(
+        wgsl.contains("@compute"),
+        "output should declare @compute entry point"
+    );
     assert!(
         wgsl.contains("AtmosphereParams"),
         "output should define AtmosphereParams struct"

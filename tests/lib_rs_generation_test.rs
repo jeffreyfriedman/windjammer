@@ -34,12 +34,36 @@ fn test_extract_exports_from_rs_file() {
         fn private_fn() {}
         "#,
     );
-    assert!(exports.iter().any(|s| s == "Vec2"), "Should extract pub struct: {:?}", exports);
-    assert!(exports.iter().any(|s| s == "Vec3"), "Should extract pub struct: {:?}", exports);
-    assert!(exports.iter().any(|s| s == "Color"), "Should extract pub enum: {:?}", exports);
-    assert!(exports.iter().any(|s| s == "create_default"), "Should extract pub fn: {:?}", exports);
-    assert!(exports.iter().any(|s| s == "Result"), "Should extract pub type: {:?}", exports);
-    assert!(!exports.iter().any(|s| s == "private_fn"), "Should NOT extract private: {:?}", exports);
+    assert!(
+        exports.iter().any(|s| s == "Vec2"),
+        "Should extract pub struct: {:?}",
+        exports
+    );
+    assert!(
+        exports.iter().any(|s| s == "Vec3"),
+        "Should extract pub struct: {:?}",
+        exports
+    );
+    assert!(
+        exports.iter().any(|s| s == "Color"),
+        "Should extract pub enum: {:?}",
+        exports
+    );
+    assert!(
+        exports.iter().any(|s| s == "create_default"),
+        "Should extract pub fn: {:?}",
+        exports
+    );
+    assert!(
+        exports.iter().any(|s| s == "Result"),
+        "Should extract pub type: {:?}",
+        exports
+    );
+    assert!(
+        !exports.iter().any(|s| s == "private_fn"),
+        "Should NOT extract private: {:?}",
+        exports
+    );
 }
 
 #[test]
@@ -55,9 +79,21 @@ fn test_extract_pub_use_from_mod_rs() {
         pub mod vec3;
         "#,
     );
-    assert!(exports.contains(&"Vec2".to_string()), "Should extract: {:?}", exports);
-    assert!(exports.contains(&"Vec3".to_string()), "Should extract: {:?}", exports);
-    assert!(exports.contains(&"Mat4".to_string()), "Should extract: {:?}", exports);
+    assert!(
+        exports.contains(&"Vec2".to_string()),
+        "Should extract: {:?}",
+        exports
+    );
+    assert!(
+        exports.contains(&"Vec3".to_string()),
+        "Should extract: {:?}",
+        exports
+    );
+    assert!(
+        exports.contains(&"Mat4".to_string()),
+        "Should extract: {:?}",
+        exports
+    );
 }
 
 #[test]
@@ -72,9 +108,18 @@ fn test_module_exports_with_submodules() {
         ),
     ]);
 
-    let exports = windjammer::lib_rs_generator::get_module_exports(temp_dir.path().join("game_loop"));
-    assert!(exports.iter().any(|s| s == "GameLoopConfig"), "Should get from submodule: {:?}", exports);
-    assert!(exports.iter().any(|s| s == "GameLoop"), "Should get trait: {:?}", exports);
+    let exports =
+        windjammer::lib_rs_generator::get_module_exports(temp_dir.path().join("game_loop"));
+    assert!(
+        exports.iter().any(|s| s == "GameLoopConfig"),
+        "Should get from submodule: {:?}",
+        exports
+    );
+    assert!(
+        exports.iter().any(|s| s == "GameLoop"),
+        "Should get trait: {:?}",
+        exports
+    );
 }
 
 #[test]
@@ -83,11 +128,20 @@ fn test_generate_lib_rs_only_valid_exports() {
     // lib.rs has pub use ai::SoundSource but ai doesn't export SoundSource
     // Should generate lib.rs with ONLY valid re-exports
     let temp_dir = create_test_dir(&[
-        ("lib.rs", "pub mod ai; pub mod game_loop; pub use ai::SoundSource; pub use game_loop::GameLoop;"),
-        ("ai/mod.rs", "pub use self::tilemap::Tilemap; pub mod tilemap;"),
+        (
+            "lib.rs",
+            "pub mod ai; pub mod game_loop; pub use ai::SoundSource; pub use game_loop::GameLoop;",
+        ),
+        (
+            "ai/mod.rs",
+            "pub use self::tilemap::Tilemap; pub mod tilemap;",
+        ),
         ("ai/tilemap.rs", "pub struct Tilemap {} pub struct Tile {}"),
         ("game_loop/mod.rs", "pub mod game_loop;"),
-        ("game_loop/game_loop.rs", "pub struct GameLoopConfig {} pub trait GameLoop {}"),
+        (
+            "game_loop/game_loop.rs",
+            "pub struct GameLoopConfig {} pub trait GameLoop {}",
+        ),
     ]);
 
     let generated = windjammer::lib_rs_generator::regenerate_lib_rs(temp_dir.path()).unwrap();
@@ -97,14 +151,20 @@ fn test_generate_lib_rs_only_valid_exports() {
     assert!(generated.contains("pub mod game_loop;"));
 
     // Should have valid re-exports only (submodule items use full path: game_loop::game_loop::X)
-    assert!(generated.contains("pub use ai::Tilemap;"), "ai exports Tilemap: {}", generated);
     assert!(
-        generated.contains("pub use game_loop::game_loop::GameLoop;") || generated.contains("pub use game_loop::GameLoop;"),
+        generated.contains("pub use ai::Tilemap;"),
+        "ai exports Tilemap: {}",
+        generated
+    );
+    assert!(
+        generated.contains("pub use game_loop::game_loop::GameLoop;")
+            || generated.contains("pub use game_loop::GameLoop;"),
         "game_loop exports GameLoop: {}",
         generated
     );
     assert!(
-        generated.contains("pub use game_loop::game_loop::GameLoopConfig;") || generated.contains("pub use game_loop::GameLoopConfig;"),
+        generated.contains("pub use game_loop::game_loop::GameLoopConfig;")
+            || generated.contains("pub use game_loop::GameLoopConfig;"),
         "game_loop exports GameLoopConfig: {}",
         generated
     );
@@ -129,17 +189,17 @@ fn test_generate_lib_rs_modules_without_exports() {
     let generated = windjammer::lib_rs_generator::regenerate_lib_rs(temp_dir.path()).unwrap();
 
     assert!(generated.contains("pub mod empty;"));
-    assert!(!generated.contains("pub use empty::"), "Empty module should have no re-exports");
+    assert!(
+        !generated.contains("pub use empty::"),
+        "Empty module should have no re-exports"
+    );
 }
 
 #[test]
 #[ignore = "lib_rs_generator removed 2026-03-15 - see docs/MANAGER_DECISION_REVERT.md"]
 fn test_generate_lib_rs_preserves_allow_attributes() {
     let temp_dir = create_test_dir(&[
-        (
-            "lib.rs",
-            "#![allow(unused_imports)]\npub mod foo;",
-        ),
+        ("lib.rs", "#![allow(unused_imports)]\npub mod foo;"),
         ("foo/mod.rs", "pub mod bar;"),
         ("foo/bar.rs", "pub struct Bar {}"),
     ]);

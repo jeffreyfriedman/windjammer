@@ -1,8 +1,8 @@
 // TDD: Test float literal type inference in multi-file builds
 //
 // Bug: Float inference works for single files but fails in multi-file library builds
-// 
-// Error: "Type conflict at seq_id=35, 56:33: must be f32 (identifier dt has type f32) 
+//
+// Error: "Type conflict at seq_id=35, 56:33: must be f32 (identifier dt has type f32)
 //         but was inferred as f64"
 //
 // Root Cause: Constraint solver state management across files OR
@@ -18,7 +18,7 @@ fn test_float_inference_single_file_with_f32_param() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     std::fs::write(
         src.join("mira.wj"),
         r#"
@@ -36,7 +36,7 @@ impl Companion {
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("mira.wj"),
         &build,
@@ -46,9 +46,9 @@ impl Companion {
         &[],
     )
     .expect("Single file build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("mira.rs")).unwrap();
-    
+
     // ASSERT: 1000.0 should be f32, not f64
     assert!(
         !rust_code.contains("1000.0_f64"),
@@ -63,7 +63,7 @@ fn test_float_inference_multi_file_with_f32_param() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(src.join("companions")).unwrap();
-    
+
     // File 1: companion.wj (defines Companion struct)
     std::fs::write(
         src.join("companions/companion.wj"),
@@ -84,7 +84,7 @@ impl Companion {
 "#,
     )
     .unwrap();
-    
+
     // File 2: mira.wj (uses Companion, has f32 param with literal)
     std::fs::write(
         src.join("companions/mira.wj"),
@@ -111,7 +111,7 @@ impl Mira {
 "#,
     )
     .unwrap();
-    
+
     // File 3: mod.wj (module root)
     std::fs::write(
         src.join("companions/mod.wj"),
@@ -121,7 +121,7 @@ pub mod mira
 "#,
     )
     .unwrap();
-    
+
     // Root mod.wj
     std::fs::write(
         src.join("mod.wj"),
@@ -130,7 +130,7 @@ pub mod companions
 "#,
     )
     .unwrap();
-    
+
     // Build as library (multi-file)
     build_project_ext(
         &src.join("mod.wj"),
@@ -141,14 +141,15 @@ pub mod companions
         &[],
     )
     .expect("Multi-file library build should succeed");
-    
+
     let rust_code = std::fs::read_to_string(build.join("companions/mira.rs")).unwrap();
-    
+
     // ASSERT: 1000.0 should be f32, not f64
     assert!(
         !rust_code.contains("1000.0_f64"),
         "1000.0 should be inferred as f32 (used with f32 parameter dt). Found:\n{}",
-        rust_code.lines()
+        rust_code
+            .lines()
             .find(|l| l.contains("1000.0"))
             .unwrap_or("NOT FOUND")
     );
@@ -161,7 +162,7 @@ fn test_float_inference_respects_parameter_types_across_files() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    
+
     // File 1
     std::fs::write(
         src.join("a.wj"),
@@ -172,7 +173,7 @@ pub fn helper(x: f32) -> f32 {
 "#,
     )
     .unwrap();
-    
+
     // File 2 - uses f32 param with literal
     std::fs::write(
         src.join("b.wj"),
@@ -183,7 +184,7 @@ pub fn main_func(dt: f32) -> f32 {
 "#,
     )
     .unwrap();
-    
+
     // Root
     std::fs::write(
         src.join("mod.wj"),
@@ -193,7 +194,7 @@ pub mod b
 "#,
     )
     .unwrap();
-    
+
     build_project_ext(
         &src.join("mod.wj"),
         &build,
@@ -203,9 +204,9 @@ pub mod b
         &[],
     )
     .expect("Build should succeed");
-    
+
     let b_code = std::fs::read_to_string(build.join("b.rs")).unwrap();
-    
+
     // Both literals should be f32
     assert!(
         !b_code.contains("1000.0_f64"),

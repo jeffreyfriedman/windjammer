@@ -51,8 +51,7 @@ fn main() {
 
     // Read generated Go code
     let go_file = temp_dir.path().join("build/main.go");
-    let go_code = std::fs::read_to_string(&go_file)
-        .expect("Failed to read generated Go file");
+    let go_code = std::fs::read_to_string(&go_file).expect("Failed to read generated Go file");
 
     // Check for proper value extraction
     // Should have: v := _v.Value (or similar extraction)
@@ -121,8 +120,7 @@ fn main() {
 
     // Read generated Go code
     let go_file = temp_dir.path().join("build/main.go");
-    let go_code = std::fs::read_to_string(&go_file)
-        .expect("Failed to read generated Go file");
+    let go_code = std::fs::read_to_string(&go_file).expect("Failed to read generated Go file");
 
     // Check for proper enum construction
     // Should NOT have: MaybeSome{}(42) - this is invalid Go syntax

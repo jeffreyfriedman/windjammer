@@ -7,7 +7,6 @@
 ///
 /// This tests whether the compiler can look up function signatures
 /// from other modules and use them for type inference.
-
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,10 +39,8 @@ impl Point {
 }
 "#;
 
-    let (test_dir, _counter) = setup_test_project(vec![
-        ("math.wj", math_src),
-        ("main.wj", main_src),
-    ]);
+    let (test_dir, _counter) =
+        setup_test_project(vec![("math.wj", math_src), ("main.wj", main_src)]);
 
     let output = compile_project(&test_dir, "main.wj");
 
@@ -74,10 +71,8 @@ pub fn calculate(v: Vector2) -> f32 {
 }
 "#;
 
-    let (test_dir, _counter) = setup_test_project(vec![
-        ("types.wj", types_src),
-        ("main.wj", main_src),
-    ]);
+    let (test_dir, _counter) =
+        setup_test_project(vec![("types.wj", types_src), ("main.wj", main_src)]);
 
     let output = compile_project(&test_dir, "main.wj");
 
@@ -113,10 +108,8 @@ pub fn calculate(calc: Calculator) -> f32 {
 }
 "#;
 
-    let (test_dir, _counter) = setup_test_project(vec![
-        ("math.wj", math_src),
-        ("main.wj", main_src),
-    ]);
+    let (test_dir, _counter) =
+        setup_test_project(vec![("math.wj", math_src), ("main.wj", main_src)]);
 
     let output = compile_project(&test_dir, "main.wj");
 

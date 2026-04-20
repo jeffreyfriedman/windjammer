@@ -592,22 +592,39 @@ pub fn build_project(
         }
     }
 
+    // TDD FIX: When multiple structs share the same name (different modules/files),
+    // be CONSERVATIVE: only mark as Copy if ALL definitions are Copy.
+    // Otherwise one Copy-able GameState in file A poisons non-Copy GameState in file B,
+    // causing E0382 errors when passing game_state to multiple functions.
+    //
+    // Strategy: Group structs by name, check if ALL variants are Copy, only then add to registry.
+    let mut structs_by_name: std::collections::HashMap<String, Vec<&StructInfo>> =
+        std::collections::HashMap::new();
+    for s in &all_structs {
+        structs_by_name.entry(s.name.clone()).or_default().push(s);
+    }
+
     // Fixed-point iteration: keep discovering Copy structs until stable
     loop {
         let mut changed = false;
-        for s in &all_structs {
-            if global_copy_structs.contains(&s.name) {
+        for (name, variants) in &structs_by_name {
+            if global_copy_structs.contains(name) {
                 continue; // Already known Copy
             }
+
             // Empty structs are Copy in Rust (and codegen derives Copy); include them here
             // so analyzer/registry match codegen and avoid E0382 from wrong `self` inference.
-            let all_copy = s.field_types.is_empty()
-                || s
-                    .field_types
-                    .iter()
-                    .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums));
-            if all_copy {
-                global_copy_structs.insert(s.name.clone());
+            //
+            // Check if ALL variants of this struct name are Copy
+            let all_variants_copy = variants.iter().all(|s| {
+                s.field_types.is_empty()
+                    || s.field_types
+                        .iter()
+                        .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums))
+            });
+
+            if all_variants_copy {
+                global_copy_structs.insert(name.clone());
                 changed = true;
             }
         }
@@ -643,7 +660,7 @@ pub fn build_project(
                 eprintln!("{}", e);
                 anyhow::bail!("{}", e);
             }
-            
+
             // Register any trait definitions found
             let mut has_traits = false;
             for item in &program.items {
@@ -849,7 +866,8 @@ pub fn build_project(
             let builtin_skip = ["crate", "super", "windjammer", "windjammer_runtime"];
             let mut combined_external_crates = filtered_external_crates;
             for dep in rust_code_deps {
-                if !combined_external_crates.contains(&dep) && !builtin_skip.contains(&dep.as_str()) {
+                if !combined_external_crates.contains(&dep) && !builtin_skip.contains(&dep.as_str())
+                {
                     combined_external_crates.push(dep);
                 }
             }
@@ -1134,11 +1152,18 @@ impl ModuleCompiler {
         // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
         // This must happen immediately after parsing, before any other processing
         {
-            eprintln!("🔍 LANGUAGE CHECK (compile_module): Scanning {} for .as_str()", module_path);
+            eprintln!(
+                "🔍 LANGUAGE CHECK (compile_module): Scanning {} for .as_str()",
+                module_path
+            );
             let checker_analyzer = analyzer::Analyzer::new();
-            checker_analyzer.check_forbidden_rust_patterns(&program)
+            checker_analyzer
+                .check_forbidden_rust_patterns(&program)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-            eprintln!("✅ LANGUAGE CHECK (compile_module): No .as_str() found in {}", module_path);
+            eprintln!(
+                "✅ LANGUAGE CHECK (compile_module): No .as_str() found in {}",
+                module_path
+            );
         }
 
         // Mark as "being compiled" to prevent infinite recursion
@@ -1263,9 +1288,12 @@ impl ModuleCompiler {
         float_inference.set_global_struct_field_types(&self.global_struct_field_types);
         float_inference.set_debug_source(&source);
         float_inference.infer_program(&program);
-        
+
         if !float_inference.errors.is_empty() {
-            eprintln!("🚨 Float type inference errors in module {} (file {:?}):", module_path, file_path);
+            eprintln!(
+                "🚨 Float type inference errors in module {} (file {:?}):",
+                module_path, file_path
+            );
             for error in &float_inference.errors {
                 eprintln!("  {}", error);
             }
@@ -1651,7 +1679,10 @@ fn compile_file_impl(
     store_program: bool,
     _path_key: &str,
 ) -> Result<(HashSet<String>, Vec<String>)> {
-    eprintln!("🚀 ENTERED compile_file_impl for {:?}", input_path.file_name());
+    eprintln!(
+        "🚀 ENTERED compile_file_impl for {:?}",
+        input_path.file_name()
+    );
     let target = module_compiler.target;
 
     // Read source file
@@ -1694,16 +1725,23 @@ fn compile_file_impl(
     // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
     // This must happen immediately after parsing, before any other processing
     {
-        eprintln!("🔍 LANGUAGE CHECK (file_impl): Scanning for .as_str() in {:?}", input_path.file_name());
+        eprintln!(
+            "🔍 LANGUAGE CHECK (file_impl): Scanning for .as_str() in {:?}",
+            input_path.file_name()
+        );
         let checker_analyzer = analyzer::Analyzer::new();
-        checker_analyzer.check_forbidden_rust_patterns(&program)
+        checker_analyzer
+            .check_forbidden_rust_patterns(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
     }
 
     // Cross-file ownership: load peer `*.wj.meta` (from prior `wj build` runs) into the registry
     // before analysis so call sites get `&` / `&mut` for callees defined in other files.
-    crate::metadata::merge_wj_meta_signatures_from_dir(source_root, &mut module_compiler.global_signatures);
+    crate::metadata::merge_wj_meta_signatures_from_dir(
+        source_root,
+        &mut module_compiler.global_signatures,
+    );
 
     // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
     if module_compiler.enable_lint {
@@ -2057,12 +2095,16 @@ fn compile_file_impl(
             // WINDJAMMER PHILOSOPHY: Expression-level float type inference (WASM target)
             let mut float_inference = type_inference::FloatInference::new();
             float_inference.set_source_root(source_root);
-            float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+            float_inference
+                .set_global_struct_field_types(&module_compiler.global_struct_field_types);
             float_inference.set_debug_source(&source);
             float_inference.infer_program(&program);
-            
+
             if !float_inference.errors.is_empty() {
-                eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+                eprintln!(
+                    "🚨 Float type inference errors in {}:",
+                    input_path.display()
+                );
                 for error in &float_inference.errors {
                     eprintln!("  {}", error);
                 }
@@ -2128,9 +2170,12 @@ fn compile_file_impl(
         float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
         float_inference.set_debug_source(&source);
         float_inference.infer_program(&program);
-        
+
         if !float_inference.errors.is_empty() {
-            eprintln!("🚨 Float type inference errors in {}:", input_path.display());
+            eprintln!(
+                "🚨 Float type inference errors in {}:",
+                input_path.display()
+            );
             for error in &float_inference.errors {
                 eprintln!("  {}", error);
             }
@@ -2318,14 +2363,14 @@ fn compile_file_impl(
     // TDD FIX: Emit metadata file for cross-module type inference
     if target == CompilationTarget::Rust {
         use crate::metadata::{metadata_function_sig_from_analyzer, ModuleMetadata};
-        
+
         let module_path = input_path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
-        
+
         let mut meta = ModuleMetadata::new(module_path.to_string());
-        
+
         // Function signatures: use analyzer registry (includes inferred param ownership)
         for item in &program.items {
             match item {
@@ -2356,22 +2401,30 @@ fn compile_file_impl(
                 parser::Item::Struct { decl, .. } => {
                     let mut fields = std::collections::HashMap::new();
                     for field in &decl.fields {
-                        fields.insert(field.name.clone(), ModuleMetadata::serialize_type(&field.field_type));
+                        fields.insert(
+                            field.name.clone(),
+                            ModuleMetadata::serialize_type(&field.field_type),
+                        );
                     }
                     meta.structs.insert(decl.name.clone(), fields);
                 }
                 _ => {}
             }
         }
-        
+
         let meta_path = crate::metadata::meta_cache_path(input_path);
         if let Some(parent) = meta_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let meta_json = serde_json::to_string_pretty(&meta)?;
         std::fs::write(&meta_path, &meta_json)?;
-        
-        eprintln!("📋 METADATA: {} ({} functions, {} structs)", meta_path.display(), meta.functions.len(), meta.structs.len());
+
+        eprintln!(
+            "📋 METADATA: {} ({} functions, {} structs)",
+            meta_path.display(),
+            meta.functions.len(),
+            meta.structs.len()
+        );
     }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
@@ -2519,7 +2572,10 @@ fn create_cargo_toml_with_deps(
                     };
 
                     let dep_name = processed_line.split(['=', ' ']).next().unwrap_or("").trim();
-                    let skip = matches!(dep_name, "windjammer" | "windjammer-runtime" | "windjammer_runtime");
+                    let skip = matches!(
+                        dep_name,
+                        "windjammer" | "windjammer-runtime" | "windjammer_runtime"
+                    );
                     if !skip {
                         source_cargo_deps.push(processed_line);
                     }

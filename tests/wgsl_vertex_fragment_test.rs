@@ -9,9 +9,9 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
     let tmp = TempDir::new().unwrap();
     let input_file = tmp.path().join("test.wj");
     let output_dir = tmp.path().join("out");
-    
+
     fs::write(&input_file, source).unwrap();
-    
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -23,7 +23,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
         ])
         .output()
         .expect("Failed to compile");
-    
+
     if !output.status.success() {
         panic!(
             "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
@@ -31,7 +31,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
             String::from_utf8_lossy(&output.stdout)
         );
     }
-    
+
     let wgsl_file = output_dir.join("test.wgsl");
     fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
 }
@@ -52,12 +52,16 @@ pub fn vs_main(@location(0) pos: vec2<float>) -> VertexOutput {
     }
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("@vertex"), "Generated:\n{}", generated);
     assert!(generated.contains("vs_main"), "Generated:\n{}", generated);
-    assert!(generated.contains("@location(0)"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("@location(0)"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -68,12 +72,16 @@ pub fn fs_main(@location(0) color: vec4<float>) -> @location(0) vec4<float> {
     color
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("@fragment"), "Generated:\n{}", generated);
     assert!(generated.contains("fs_main"), "Generated:\n{}", generated);
-    assert!(generated.contains("@location(0)"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("@location(0)"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -92,11 +100,15 @@ pub fn vs_main() -> VertexOutput {
     }
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("@vertex"), "Generated:\n{}", generated);
-    assert!(generated.contains("VertexOutput"), "Generated:\n{}", generated);
+    assert!(
+        generated.contains("VertexOutput"),
+        "Generated:\n{}",
+        generated
+    );
 }
 
 #[test]
@@ -114,9 +126,9 @@ pub fn create_output() -> Output {
     }
 }
 "#;
-    
+
     let generated = transpile_wj_to_wgsl(source);
-    
+
     assert!(generated.contains("Output("), "Generated:\n{}", generated);
     assert!(generated.contains("vec4(0"), "Generated:\n{}", generated);
 }

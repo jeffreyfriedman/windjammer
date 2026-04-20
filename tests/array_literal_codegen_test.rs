@@ -109,7 +109,9 @@ version = "0.1.0"
 
     // ASSERTION 2: [10, 20, 30] should also generate fixed-size array (with int suffixes from inference)
     assert!(
-        !generated.contains("vec![10") && !generated.contains("vec![20") && !generated.contains("vec![30"),
+        !generated.contains("vec![10")
+            && !generated.contains("vec![20")
+            && !generated.contains("vec![30"),
         "Array literal [10, 20, 30] should NOT generate vec!.\nGenerated:\n{}",
         generated
     );
@@ -195,7 +197,8 @@ version = "0.1.0"
 
     // ASSERTION: vec![10, 20, 30] should still generate vec![] (with int suffixes from inference)
     assert!(
-        generated.contains("vec![10_i32, 20_i32, 30_i32]") || generated.contains("vec![10, 20, 30]"),
+        generated.contains("vec![10_i32, 20_i32, 30_i32]")
+            || generated.contains("vec![10, 20, 30]"),
         "vec![] macro should still generate vec![] (with optional int suffixes).\nGenerated:\n{}",
         generated
     );

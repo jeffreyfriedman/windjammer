@@ -39,11 +39,7 @@ impl WjslCodegen {
                     cd.initializer
                 ));
             } else {
-                out.push_str(&format!(
-                    "const {} = {};\n",
-                    cd.name,
-                    cd.initializer
-                ));
+                out.push_str(&format!("const {} = {};\n", cd.name, cd.initializer));
             }
         }
         if !self.module.const_decls.is_empty() {
