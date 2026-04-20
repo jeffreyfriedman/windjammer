@@ -2061,16 +2061,26 @@ impl<'ast> Analyzer<'ast> {
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
         let cow_optimizations = Vec::new(); // TODO: Implement detection
 
-        // THE WINDJAMMER WAY: Keep parameter types as explicitly declared
-        // No smart string inference for parameters - respect the API contract
+        // PHASE 2: Analyze which string parameters can use &str optimization
+        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
+
+        // Build inferred parameter types based on Phase 2 analysis
         let inferred_param_types: Vec<Type> = func
             .parameters
             .iter()
-            .map(|param| param.type_.clone())
+            .map(|param| {
+                // Check if this parameter can be optimized to &str (instead of &String)
+                let can_use_str_ref = str_ref_optimizable_params.contains(&param.name);
+                
+                if can_use_str_ref {
+                    // Optimize to &str (not &String)
+                    Type::Reference(Box::new(Type::Custom("str".to_string())))
+                } else {
+                    // Keep original type (will become &String for string params)
+                    param.type_.clone()
+                }
+            })
             .collect();
-
-        // PHASE 2: Analyze which string parameters can use &str optimization
-        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
 
         Ok(AnalyzedFunction {
             decl: func.clone(),
@@ -3669,22 +3679,21 @@ impl<'ast> Analyzer<'ast> {
             })
             .collect();
 
-        // THE WINDJAMMER WAY: Respect explicit type annotations
-        // When a user writes `text: string`, they mean `String` (owned).
-        // Do NOT auto-convert to `&str` - that's too aggressive and breaks API contracts.
-        //
-        // Smart inference should only apply to:
-        // - Local variables (not parameters)
-        // - Return types (when optimizing)
-        //
-        // For parameters, the user's explicit type annotation is the contract.
+        // PHASE 2 STRING OPTIMIZATION: Use inferred parameter types when available
+        // The analyzer determines which string parameters can be &str vs &String
+        // based on how they're used in the function body.
         let mut param_types: Vec<Type> = func
             .decl
             .parameters
             .iter()
-            .map(|param| {
-                // Respect explicit type annotations - NO smart inference for parameters
-                param.type_.clone()
+            .enumerate()
+            .map(|(idx, param)| {
+                // Use inferred type if available (Phase 2 optimization)
+                // Otherwise fall back to explicit type annotation
+                func.inferred_param_types
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| param.type_.clone())
             })
             .collect();
 

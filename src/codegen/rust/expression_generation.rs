@@ -154,24 +154,52 @@ impl<'ast> CodeGenerator<'ast> {
                         || name == "Vec::reserve"
                 });
 
-                let args_str = arguments
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, (_label, arg))| {
-                        let arg_str = self.generate_expression_immut(arg);
-                        // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
-                        if idx == 0 && needs_usize_first_arg {
-                            if matches!(arg, Expression::Identifier { .. }) {
-                                format!("{} as usize", arg_str)
-                            } else {
-                                arg_str
-                            }
-                        } else {
-                            arg_str
+                // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
+                // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
+                let param_types: Option<Vec<Type>> = func_name.and_then(|name| {
+                    self.signature_registry.get_signature(name).map(|sig| sig.param_types.clone())
+                });
+
+                let mut arg_strings = Vec::new();
+                for (idx, (_label, arg)) in arguments.iter().enumerate() {
+                    // Check if this parameter is &str
+                    let param_is_str_ref = param_types.as_ref().and_then(|types| types.get(idx)).map(|t| {
+                        matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
+                    }).unwrap_or(false);
+
+                    // Check if argument is a string literal (with or without &)
+                    let is_string_literal = matches!(arg, Expression::Literal { value: crate::parser::Literal::String(_), .. });
+                    
+                    // Also check if it's &"string"
+                    let is_ref_string_literal = if let Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } = arg {
+                        matches!(&**operand, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+                    } else {
+                        false
+                    };
+                    
+                    // PHASE 2 CALL-SITE OPTIMIZATION: Suppress .to_string() for &str parameters
+                    let old_suppress = self.suppress_string_conversion.get();
+                    if param_is_str_ref && (is_string_literal || is_ref_string_literal) {
+                        self.suppress_string_conversion.set(true);
+                    }
+                    
+                    // Generate the argument string
+                    let mut arg_str = self.generate_expression_immut(arg);
+                    
+                    // Restore suppress flag
+                    self.suppress_string_conversion.set(old_suppress);
+                    
+                    // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
+                    if idx == 0 && needs_usize_first_arg {
+                        if matches!(arg, Expression::Identifier { .. }) {
+                            arg_str = format!("{} as usize", arg_str);
                         }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                    }
+                    
+                    arg_strings.push(arg_str);
+                }
+                
+                let args_str = arg_strings.join(", ");
                 format!("{}({})", func_str, args_str)
             }
             Expression::Index { object, index, .. } => {
@@ -1349,14 +1377,25 @@ impl<'ast> CodeGenerator<'ast> {
                                                     false
                                                 };
 
-                                            // PHASE 1: String literals need conversion for &String parameters
+                                            // PHASE 2: String literals need conversion for &String parameters (but not &str!)
                                             if is_string_literal {
-                                                // Check if parameter is String type
-                                                let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                                                    matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                                // Check if parameter is explicitly &str
+                                                let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                                    matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
                                                 });
-                                                if param_is_string {
-                                                    arg_str = format!("&{}.to_string()", arg_str);
+                                                
+                                                if param_is_str_ref {
+                                                    // Parameter is &str - pass literal directly (already a &str)
+                                                    // No conversion needed!
+                                                } else {
+                                                    // Parameter is Type::String (becomes &String in Rust)
+                                                    let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                                        matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                                    });
+                                                    if param_is_string {
+                                                        // Parameter is &String - need conversion
+                                                        arg_str = format!("&{}.to_string()", arg_str);
+                                                    }
                                                 }
                                             } else if !is_user_closure_param {
                                                 let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
@@ -2113,16 +2152,30 @@ impl<'ast> CodeGenerator<'ast> {
                                         );
 
                                         if is_string_literal {
-                                            // Check if parameter is String type
-                                            let param_is_string = sig.param_types.get(i).is_some_and(|t| {
-                                                matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                            // PHASE 2 CALL-SITE OPTIMIZATION: Check if parameter is &String vs &str
+                                            // In the AST, `string` parameters are Type::String (converted to &String by codegen)
+                                            // Explicit `&str` parameters are Type::Reference(Custom("str"))
+                                            let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
+                                                matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
                                             });
-                                            if param_is_string {
-                                                // Convert &str literal to &String: "World" → &"World".to_string()
-                                                return vec![format!("&{}.to_string()", arg_str)];
-                                            } else {
-                                                // Non-string type - pass directly
+                                            
+                                            if param_is_str_ref {
+                                                // Parameter is explicitly &str - pass literal directly (already a &str)
+                                                // "World" is already &str in Rust, no conversion needed!
                                                 return vec![arg_str];
+                                            } else {
+                                                // Parameter is Type::String (becomes &String in Rust)
+                                                // Check if it's actually a String type
+                                                let param_is_string = sig.param_types.get(i).is_some_and(|t| {
+                                                    matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                                });
+                                                if param_is_string {
+                                                    // Convert &str literal to &String: "World" → &"World".to_string()
+                                                    return vec![format!("&{}.to_string()", arg_str)];
+                                                } else {
+                                                    // Non-string type - pass directly
+                                                    return vec![arg_str];
+                                                }
                                             }
                                         }
 
@@ -4113,10 +4166,10 @@ impl<'ast> CodeGenerator<'ast> {
                         let arg_strs: Vec<String> = if args.is_empty() {
                             Vec::new()
                         } else {
-                            let prev_suppress = self.suppress_string_conversion;
-                            self.suppress_string_conversion = true;
+                            let prev_suppress = self.suppress_string_conversion.get();
+                            self.suppress_string_conversion.set(true);
                             let fmt = self.generate_expression(args[0]);
-                            self.suppress_string_conversion = prev_suppress;
+                            self.suppress_string_conversion.set(prev_suppress);
                             let rest: Vec<String> = args[1..]
                                 .iter()
                                 .map(|e| self.generate_expression(e))
@@ -4700,7 +4753,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     #[inline]
     fn should_coerce_string_literal_to_owned(&self) -> bool {
-        !self.suppress_string_conversion
+        !self.suppress_string_conversion.get()
             && (self.in_match_arm_needing_string || self.coerce_string_literals_to_owned)
     }
 
