@@ -1025,7 +1025,7 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall { object, method: _, .. } => {
                 // Check if object is our loop variable
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
@@ -1110,7 +1110,7 @@ impl<'ast> Analyzer<'ast> {
     /// Check if match arms consume bound values (return them, cast them, etc.)
     /// vs. just returning literals without using the bindings.
     fn match_arms_consume_bound_values(&self, arms: &[crate::parser::MatchArm]) -> bool {
-        use crate::parser::Pattern;
+        
 
         for arm in arms {
             // Get all variable names bound in the pattern

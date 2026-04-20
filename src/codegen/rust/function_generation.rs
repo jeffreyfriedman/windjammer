@@ -10,7 +10,6 @@
 use crate::analyzer::*;
 use crate::codegen::rust::{ast_utilities, codegen_helpers, self_analysis, type_analysis};
 use crate::parser::*;
-use crate::CompilationTarget;
 
 use super::CodeGenerator;
 

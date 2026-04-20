@@ -37,7 +37,6 @@ fn compile_windjammer_code(code: &str) -> Result<String, String> {
 }
 
 #[test]
-#[ignore] // TODO: Enable when full analyzer is implemented
 fn test_function_without_vec_methods_uses_str_ref() {
     // TDD: Function that only reads string param should use &str
     let code = r#"
@@ -70,7 +69,6 @@ fn main() {
 }
 
 #[test]
-#[ignore] // TODO: Enable when full analyzer is implemented
 fn test_function_with_vec_contains_uses_string_ref() {
     // TDD: Function calling Vec<String>::contains must use &String
     let code = r#"
@@ -91,14 +89,14 @@ fn main() {
 
     // PHASE 1 BASELINE: Should generate &String (Vec<String>::contains needs it)
     assert!(
-        generated.contains("fn has_item(items: Vec<String>, id: &String)"),
+        generated.contains("fn has_item(items: &Vec<String>, id: &String)"),
         "Expected &String parameter (Vec<String>::contains). Generated:\n{}",
         generated
     );
 
     // String literal must be converted to &String
     assert!(
-        generated.contains(r#"has_item(items, &"foo".to_string())"#),
+        generated.contains(r#"has_item(&items, &"foo".to_string())"#),
         "Expected converted string literal. Generated:\n{}",
         generated
     );
@@ -150,7 +148,6 @@ fn main() {
 }
 
 #[test]
-#[ignore] // TODO: Enable when full analyzer is implemented
 fn test_mixed_parameters_granular_optimization() {
     // TDD: Different parameters in same function can have different optimizations
     let code = r#"
@@ -178,7 +175,7 @@ fn main() {
     // - search: &String (passed to Vec<String>::contains)
     // - msg: &str (only passed to println, no Vec methods)
     assert!(
-        generated.contains("fn process(items: Vec<String>, search: &String, msg: &str)"),
+        generated.contains("fn process(items: &Vec<String>, search: &String, msg: &str)"),
         "Expected mixed optimization: search=&String, msg=&str. Generated:\n{}",
         generated
     );

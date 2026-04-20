@@ -686,7 +686,7 @@ impl GoGenerator {
                 pattern,
                 mutable,
                 value,
-                type_,
+                type_: _,
                 ..
             } => {
                 let indent = self.indent();

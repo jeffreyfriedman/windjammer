@@ -962,7 +962,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 .split('<')
                                 .next()
                                 .unwrap_or(struct_name.as_str());
-                            let mut resolve = || {
+                            let resolve = || {
                                 self.struct_field_types
                                     .get(struct_name.as_str())
                                     .or_else(|| self.struct_field_types.get(base))
