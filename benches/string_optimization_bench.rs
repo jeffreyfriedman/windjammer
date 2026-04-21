@@ -6,7 +6,6 @@
 /// Expected results:
 /// - Functions using &str: ~0% overhead (string literals pass directly)
 /// - Functions using &String: ~5-10% overhead (conversion + allocation)
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 // Simulates a function that only reads the string (can use &str)
@@ -48,7 +47,7 @@ fn benchmark_str_vs_string(c: &mut Criterion) {
     // Benchmark 3: Vec contains with &String
     let items: Vec<String> = (0..100).map(|i| format!("item_{}", i)).collect();
     let search = "item_50".to_string();
-    
+
     group.bench_function("contains_with_string", |b| {
         b.iter(|| {
             check_contains_string(black_box(&items), black_box(&search));
@@ -85,5 +84,9 @@ fn benchmark_allocation_overhead(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_str_vs_string, benchmark_allocation_overhead);
+criterion_group!(
+    benches,
+    benchmark_str_vs_string,
+    benchmark_allocation_overhead
+);
 criterion_main!(benches);

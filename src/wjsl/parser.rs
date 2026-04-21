@@ -665,7 +665,7 @@ impl<'a> Parser<'a> {
                         return Ok(Function {
                             name,
                             params,
-                            return_type: return_type,
+                            return_type,
                             body: body.to_string(),
                         });
                     }

@@ -9,7 +9,6 @@
 /// ROOT CAUSE: balance_eq_operands_for_rust doesn't distinguish between:
 /// 1. Explicit &str type (Type::Reference(Custom("str"))) - NO deref needed
 /// 2. Inferred borrowed string (Type::String with inferred borrow) - might need deref
-
 use std::fs;
 use std::process::Command;
 

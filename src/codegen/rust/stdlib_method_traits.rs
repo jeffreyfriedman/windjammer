@@ -2,7 +2,6 @@
 ///
 /// All functions here are thin wrappers preserving API compatibility
 /// while the codebase migrates to direct `method_registry` calls.
-
 pub fn method_mutates_receiver(method: &str) -> bool {
     crate::method_registry::mutates_receiver(method)
 }
