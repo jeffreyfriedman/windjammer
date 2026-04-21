@@ -1672,7 +1672,6 @@ impl FloatInference {
                                             FloatType::Unknown => continue,
                                         };
                                         self.constraints.push(value_constraint);
-                                    } else {
                                     }
                                 }
                             }
