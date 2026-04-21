@@ -53,11 +53,11 @@ log = "0.4"
 env_logger = "0.11"
 rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
-regex = "1.10"
+regex = "1.12"
 chrono = "0.4"
 
 # Parallel computation
-rayon = "1.8"
+rayon = "1.12"
 wasm-bindgen-futures = { version = "0.4", optional = true }
 
 # Web/WASM support for UI
