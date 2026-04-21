@@ -35,7 +35,7 @@ impl BuildType {
 
     // Compile to Rust
     let output = Command::new("wj")
-        .args(&[
+        .args([
             "build",
             "--output",
             "/tmp",
@@ -56,7 +56,7 @@ impl BuildType {
 
     // Verify: Should compile without E0658
     let compile = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "lib",
             "/tmp/test_string_match.rs",
@@ -114,7 +114,7 @@ impl BuildType {
     std::fs::write("/tmp/test_explicit_as_str.wj", source).unwrap();
 
     let output = Command::new("wj")
-        .args(&[
+        .args([
             "build",
             "--output",
             "/tmp",

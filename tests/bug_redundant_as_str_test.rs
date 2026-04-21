@@ -42,7 +42,7 @@ impl AssetType {
     fs::write(&temp_file, source).unwrap();
 
     let output = Command::new(wj_binary())
-        .args(&[
+        .args([
             "build",
             "--output",
             output_dir.to_str().unwrap(),
@@ -100,7 +100,7 @@ impl FileType {
     fs::write(&temp_file, source).unwrap();
 
     let output = Command::new(wj_binary())
-        .args(&[
+        .args([
             "build",
             "--output",
             output_dir.to_str().unwrap(),

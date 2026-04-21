@@ -734,20 +734,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                     let mut declared = std::collections::HashSet::new();
                     for arm in arms.iter() {
                         match &arm.pattern {
-                            Pattern::Identifier(id) => {
-                                if id != "_" && declared.insert(id.clone()) {
-                                    output.push_str(&self.indent());
-                                    output.push_str(&format!("let {};\n", id));
-                                }
+                            Pattern::Identifier(id) if id != "_" && declared.insert(id.clone()) => {
+                                output.push_str(&self.indent());
+                                output.push_str(&format!("let {};\n", id));
                             }
                             Pattern::EnumVariant(_, binding) => {
                                 // TDD FIX: Extract variables from enum variant patterns
                                 match binding {
-                                    EnumPatternBinding::Single(var) => {
-                                        if declared.insert(var.clone()) {
-                                            output.push_str(&self.indent());
-                                            output.push_str(&format!("let {};\n", var));
-                                        }
+                                    EnumPatternBinding::Single(var)
+                                        if declared.insert(var.clone()) =>
+                                    {
+                                        output.push_str(&self.indent());
+                                        output.push_str(&format!("let {};\n", var));
                                     }
                                     EnumPatternBinding::Tuple(patterns) => {
                                         for pat in patterns {
@@ -873,10 +871,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 // Convert Rust-style path syntax (Type::Variant) to JS dot notation (Type.Variant)
                 if id.contains("::") {
                     // TDD FIX: Escape keywords in path components (Type::default → Type.default_)
-                    let parts: Vec<String> = id
-                        .split("::")
-                        .map(|part| Self::escape_js_keyword(part))
-                        .collect();
+                    let parts: Vec<String> = id.split("::").map(Self::escape_js_keyword).collect();
                     parts.join(".")
                 } else {
                     // TDD FIX: Escape JavaScript keywords
@@ -1213,18 +1208,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 let mut declared = std::collections::HashSet::new();
                 for arm in arms.iter() {
                     match &arm.pattern {
-                        Pattern::Identifier(id) => {
-                            if id != "_" && declared.insert(id.clone()) {
-                                output.push_str(&self.indent());
-                                output.push_str(&format!("let {};\n", id));
-                            }
+                        Pattern::Identifier(id) if id != "_" && declared.insert(id.clone()) => {
+                            output.push_str(&self.indent());
+                            output.push_str(&format!("let {};\n", id));
                         }
                         Pattern::EnumVariant(_, binding) => match binding {
-                            EnumPatternBinding::Single(var) => {
-                                if declared.insert(var.clone()) {
-                                    output.push_str(&self.indent());
-                                    output.push_str(&format!("let {};\n", var));
-                                }
+                            EnumPatternBinding::Single(var) if declared.insert(var.clone()) => {
+                                output.push_str(&self.indent());
+                                output.push_str(&format!("let {};\n", var));
                             }
                             EnumPatternBinding::Tuple(patterns) => {
                                 for pat in patterns {

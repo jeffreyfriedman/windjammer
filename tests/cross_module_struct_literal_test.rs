@@ -24,7 +24,7 @@ fn test_cross_module_struct_u32_literal_via_types_module() {
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
-    std::fs::create_dir_all(&src.join("types")).unwrap();
+    std::fs::create_dir_all(src.join("types")).unwrap();
 
     // types/mod.wj - Module declaration
     std::fs::write(
@@ -224,7 +224,7 @@ fn test_cross_module_via_glob_import() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("parent")).unwrap();
+    std::fs::create_dir_all(src.join("parent")).unwrap();
 
     // parent/mod.wj - Re-exports types
     std::fs::write(

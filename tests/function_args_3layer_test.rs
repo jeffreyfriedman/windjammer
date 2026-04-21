@@ -245,7 +245,7 @@ pub fn caller(items: &Vec<Item>) {
     takes_id(items[0].id)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -260,7 +260,7 @@ pub fn caller(items: &Vec<Item>) {
     takes_name(&items[0].name)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -277,7 +277,7 @@ pub fn caller(x: &i32, y: i32, z: &string) {
     mixed(x, y, z)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -294,7 +294,7 @@ pub fn caller(x: i32, s: string) {
     unknown(x, s)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -312,7 +312,7 @@ pub fn caller() {
     let w = new("test")
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -333,7 +333,7 @@ pub fn caller(items: &Vec<Item>) {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -374,7 +374,7 @@ pub fn caller() {
     let v: Vec<i32> = Vec::new()
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -393,7 +393,7 @@ pub fn caller() {
     let e = Event::Message("hi")
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -411,7 +411,7 @@ pub fn caller(n: i32) {
     outer(inner(n))
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 

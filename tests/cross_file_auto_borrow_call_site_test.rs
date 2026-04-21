@@ -14,7 +14,6 @@
 // Fix: After all final analyses complete, rebuild the global registry from
 // all per-file final registries, then use that for codegen.
 
-use std::path::Path;
 use tempfile::TempDir;
 use windjammer::{build_project_ext, CompilationTarget};
 

@@ -20,6 +20,14 @@ use crate::analyzer::OwnershipMode;
 use crate::parser::{Expression, Literal, OwnershipHint, Parameter, Type};
 use std::collections::HashSet;
 
+/// Context for method call analysis, grouping related parameter collections
+pub struct MethodCallContext<'a, 'ast> {
+    pub usize_variables: &'a HashSet<String>,
+    pub current_function_params: &'a [Parameter<'ast>],
+    pub borrowed_iterator_vars: &'a HashSet<String>,
+    pub inferred_borrowed_params: &'a HashSet<String>,
+}
+
 /// Analyzes method calls to determine what automatic conversions are needed
 pub struct MethodCallAnalyzer;
 
@@ -570,16 +578,13 @@ impl MethodCallAnalyzer {
         );
 
         if is_stdlib_method {
-            return Self::needs_stdlib_ref(
-                method,
-                arg,
+            let ctx = MethodCallContext {
                 usize_variables,
                 current_function_params,
                 borrowed_iterator_vars,
                 inferred_borrowed_params,
-                arg_count,
-                receiver_type_name,
-            );
+            };
+            return Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name);
         }
 
         // Final fallback
@@ -920,13 +925,15 @@ impl MethodCallAnalyzer {
     fn needs_stdlib_ref(
         method: &str,
         arg: &Expression,
-        usize_variables: &HashSet<String>,
-        current_function_params: &[Parameter],
-        borrowed_iterator_vars: &HashSet<String>,
-        inferred_borrowed_params: &HashSet<String>,
+        ctx: &MethodCallContext,
         arg_count: usize,
         receiver_type_name: Option<&str>,
     ) -> bool {
+        // Destructure for easier access
+        let usize_variables = ctx.usize_variables;
+        let current_function_params = ctx.current_function_params;
+        let borrowed_iterator_vars = ctx.borrowed_iterator_vars;
+        let inferred_borrowed_params = ctx.inferred_borrowed_params;
         // Check if argument is already a reference (parameter or iterator variable)
         let arg_is_already_borrowed = if let Expression::Identifier { name, .. } = arg {
             // Check if it's a reference parameter

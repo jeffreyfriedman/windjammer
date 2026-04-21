@@ -139,8 +139,7 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Token {
-        let prev = std::mem::replace(&mut self.current, self.lexer.next_token());
-        prev
+        std::mem::replace(&mut self.current, self.lexer.next_token())
     }
 
     fn expect(&mut self, expected: Token) -> Result<()> {

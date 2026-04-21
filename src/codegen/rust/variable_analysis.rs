@@ -300,8 +300,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Mark plain loop counters as `usize` when compared only against `usize` bounds.
     ///
+    ///
     /// - `let mut i = 0` + `while i < vec.len()` → `i` is `usize` (push/swap_remove/index need it).
     /// - `while start < num_passes` with `num_passes` from `.len()` → `start` is `usize`.
+    ///
     /// Does **not** apply to parameters declared as Windjammer `int` (`idx < vec.len()` stays `int`
     /// and codegen casts `.len()` to `i64`).
     pub(super) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
@@ -309,24 +311,22 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn walk_condition_mark_usize_loop_counters(&mut self, expr: &Expression) {
-        match expr {
-            Expression::Binary {
-                left, op, right, ..
-            } => {
-                if matches!(op, BinaryOp::And | BinaryOp::Or) {
-                    self.walk_condition_mark_usize_loop_counters(left);
-                    self.walk_condition_mark_usize_loop_counters(right);
-                    return;
-                }
-                if matches!(
-                    op,
-                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-                ) {
-                    self.mark_identifier_usize_if_bound_is_usize(left, right);
-                    self.mark_identifier_usize_if_bound_is_usize(right, left);
-                }
+        if let Expression::Binary {
+            left, op, right, ..
+        } = expr
+        {
+            if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                self.walk_condition_mark_usize_loop_counters(left);
+                self.walk_condition_mark_usize_loop_counters(right);
+                return;
             }
-            _ => {}
+            if matches!(
+                op,
+                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+            ) {
+                self.mark_identifier_usize_if_bound_is_usize(left, right);
+                self.mark_identifier_usize_if_bound_is_usize(right, left);
+            }
         }
     }
 
@@ -1072,7 +1072,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .or_else(|| {
                                 self.local_var_types
                                     .get(var_name)
-                                    .and_then(|t| Self::type_to_name(t))
+                                    .and_then(Self::type_to_name)
                             })
                             .or_else(|| self.infer_local_var_type_from_body(var_name));
 

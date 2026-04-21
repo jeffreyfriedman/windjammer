@@ -101,7 +101,7 @@ impl Item {
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Idiomatic Windjammer (self.name) compiles - compiler handles conversion
-    assert!(generated.len() > 0, "Should generate valid Rust");
+    assert!(!generated.is_empty(), "Should generate valid Rust");
 }
 
 // =============================================================================

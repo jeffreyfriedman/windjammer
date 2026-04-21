@@ -23,7 +23,7 @@ fn has_items(items: Vec<i32>) -> bool {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -63,7 +63,7 @@ fn is_valid_team(team: Vec<String>) -> bool {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -108,7 +108,7 @@ impl Animation {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 

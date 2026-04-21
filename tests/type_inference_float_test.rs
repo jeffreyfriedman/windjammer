@@ -70,7 +70,7 @@ fn main() {
 
     // Verify Rust compilation succeeds (no mixing errors)
     let rust_build = Command::new("cargo")
-        .args(&["build"])
+        .args(["build"])
         .current_dir(output_dir)
         .output()
         .expect("Failed to build Rust");
@@ -140,7 +140,7 @@ fn main() {
 
     // Verify Rust compilation succeeds
     let rust_build = Command::new("cargo")
-        .args(&["build"])
+        .args(["build"])
         .current_dir(output_dir)
         .output()
         .expect("Failed to build Rust");
@@ -184,7 +184,7 @@ fn main() {
         .output()
         .expect("Failed to run wj");
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
 
     // Windjammer should detect mixing and report error BEFORE generating Rust
     // This test currently FAILS - we need to implement the type checker
@@ -264,7 +264,7 @@ fn main() {
 
     // Verify Rust compilation succeeds
     let rust_build = Command::new("cargo")
-        .args(&["build"])
+        .args(["build"])
         .current_dir(output_dir)
         .output()
         .expect("Failed to build Rust");
@@ -334,7 +334,7 @@ fn main() {
 
     // Verify Rust compilation succeeds
     let rust_build = Command::new("cargo")
-        .args(&["build"])
+        .args(["build"])
         .current_dir(output_dir)
         .output()
         .expect("Failed to build Rust");

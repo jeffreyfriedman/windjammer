@@ -66,8 +66,8 @@ fn main() {
     let rust_file = test_dir.join("build").join("match_owned.rs");
     let rust_code = fs::read_to_string(&rust_file).unwrap_or_default();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
 
     // Cleanup
     let _ = fs::remove_dir_all(&test_dir);
@@ -133,7 +133,7 @@ fn main() {
     fs::write(test_dir.join("match_string.wj"), test_content).unwrap();
 
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let output = std::process::Command::new(&wj_binary)
+    let _output = std::process::Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
         .arg("match_string.wj")

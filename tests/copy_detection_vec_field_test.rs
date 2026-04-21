@@ -71,7 +71,7 @@ pub fn use_twice(game_state: GameState) -> bool {
 
     // Compile with wj
     let output = Command::new(wj_bin)
-        .args(&["build", wj_file.to_str().unwrap(), "--no-cargo"])
+        .args(["build", wj_file.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -104,7 +104,7 @@ pub fn use_twice(game_state: GameState) -> bool {
 
     // TDD ASSERTION 2: Verify rustc compiles without E0382
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "lib",
             "--edition",

@@ -411,7 +411,7 @@ impl Parser {
                 && parameters[0].ownership == OwnershipHint::Inferred
                 && return_type
                     .as_ref()
-                    .is_some_and(|t| type_structurally_contains_self(t))
+                    .is_some_and(type_structurally_contains_self)
             {
                 parameters[0].ownership = OwnershipHint::Owned;
             }

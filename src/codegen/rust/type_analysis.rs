@@ -38,18 +38,16 @@ impl TypeAnalyzer {
     pub fn collect_partial_eq_types(&mut self, program: &Program) {
         for item in &program.items {
             match item {
-                Item::Struct { decl: s, .. } => {
+                Item::Struct { decl: s, .. }
                     // Struct supports PartialEq if all fields do
-                    if self.all_fields_are_partial_eq(&s.fields) {
+                    if self.all_fields_are_partial_eq(&s.fields) => {
                         self.partial_eq_types.insert(s.name.clone());
                     }
-                }
-                Item::Enum { decl: e, .. } => {
+                Item::Enum { decl: e, .. }
                     // Enum supports PartialEq if all variants do
-                    if self.all_enum_variants_are_partial_eq(&e.variants) {
+                    if self.all_enum_variants_are_partial_eq(&e.variants) => {
                         self.partial_eq_types.insert(e.name.clone());
                     }
-                }
                 _ => {}
             }
         }
@@ -1379,7 +1377,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub(super) fn expression_type_contains_reference(&self, expr: &Expression) -> bool {
         self.infer_expression_type(expr)
             .as_ref()
-            .is_some_and(|t| Self::type_contains_reference_static(t))
+            .is_some_and(Self::type_contains_reference_static)
     }
 
     pub(super) fn type_contains_reference_static(ty: &Type) -> bool {

@@ -7,7 +7,6 @@
 ///
 /// Philosophy: "Fix inference when context exists" - don't guess when ambiguous.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 fn compile_and_get_rust(source: &str) -> String {

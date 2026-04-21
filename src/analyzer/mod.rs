@@ -680,20 +680,18 @@ impl<'ast> Analyzer<'ast> {
                     // FORBIDDEN: .as_str() - Rust-specific string conversion
                     // The compiler should handle this automatically based on context
                     if method == "as_str" && arguments.is_empty() {
-                        return Err(format!(
-                            "error: `.as_str()` is forbidden in Windjammer source\n\
+                        return Err("error: `.as_str()` is forbidden in Windjammer source\n\
                              \n\
                              Windjammer automatically handles string conversions based on context.\n\
                              You don't need to call `.as_str()` - the compiler will generate the\n\
                              correct Rust code automatically.\n\
                              \n\
                              Example:\n\
-                             ❌ match name.as_str() {{ ... }}  // Don't do this\n\
-                             ✅ match name {{ ... }}            // Do this instead\n\
+                             ❌ match name.as_str() { ... }  // Don't do this\n\
+                             ✅ match name { ... }            // Do this instead\n\
                              \n\
                              This keeps Windjammer code clean and backend-agnostic (Go/JS/etc\n\
-                             don't have .as_str())."
-                        ));
+                             don't have .as_str()).".to_string());
                     }
 
                     // Recursively check object and arguments
@@ -710,20 +708,18 @@ impl<'ast> Analyzer<'ast> {
                     // ALSO check Call expressions - .as_str() might be parsed as Call(FieldAccess)
                     if let Expression::FieldAccess { field, .. } = &**function {
                         if field == "as_str" && arguments.is_empty() {
-                            return Err(format!(
-                                "error: `.as_str()` is forbidden in Windjammer source\n\
+                            return Err("error: `.as_str()` is forbidden in Windjammer source\n\
                                  \n\
                                  Windjammer automatically handles string conversions based on context.\n\
                                  You don't need to call `.as_str()` - the compiler will generate the\n\
                                  correct Rust code automatically.\n\
                                  \n\
                                  Example:\n\
-                                 ❌ match name.as_str() {{ ... }}  // Don't do this\n\
-                                 ✅ match name {{ ... }}            // Do this instead\n\
+                                 ❌ match name.as_str() { ... }  // Don't do this\n\
+                                 ✅ match name { ... }            // Do this instead\n\
                                  \n\
                                  This keeps Windjammer code clean and backend-agnostic (Go/JS/etc\n\
-                                 don't have .as_str())."
-                            ));
+                                 don't have .as_str()).".to_string());
                         }
                     }
 
@@ -1952,12 +1948,8 @@ impl<'ast> Analyzer<'ast> {
                             self.function_returns_non_copy_self_field(func);
                         let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
 
-                        if returns_self {
-                            OwnershipMode::Owned
-                        } else if returns_non_copy_field {
-                            OwnershipMode::Owned
-                        } else if body_moves_fields {
-                            // Body moves non-Copy self fields (e.g., Foo { f: self.bindings })
+                        if returns_self || returns_non_copy_field || body_moves_fields {
+                            // Returns self, non-Copy field, or body moves non-Copy self fields
                             OwnershipMode::Owned
                         } else if self.function_moves_self_into_return(func) {
                             // self is moved into a struct literal or returned directly
@@ -2004,7 +1996,6 @@ impl<'ast> Analyzer<'ast> {
                             let inferred_mode = self.infer_parameter_ownership(
                                 &param.name,
                                 &param.type_,
-                                &param.ownership,
                                 &func.body,
                                 &func.return_type,
                                 registry,
@@ -2313,9 +2304,8 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         param_type: &Type,
-        _original_hint: &OwnershipHint,
         body: &[&'ast Statement<'ast>],
-        _return_type: &Option<Type>,
+        return_type: &Option<Type>,
         registry: &SignatureRegistry,
         current_func_name: &str,
     ) -> Result<OwnershipMode, String> {
@@ -2344,7 +2334,7 @@ impl<'ast> Analyzer<'ast> {
         // For concatenate(a, b, c) -> a + &b + &c, b and c are borrowed, not consumed.
         // param_type_matches_return would incorrectly infer Owned for all string params.
         if !self.is_only_used_as_borrow(param_name, body) {
-            if let Some(return_type) = _return_type {
+            if let Some(return_type) = return_type {
                 if self.param_type_matches_return(param_type, return_type) {
                     // Windjammer `string` / `str` parameters: return type also being string-like
                     // does NOT mean the parameter is consumed into the return value.
@@ -2501,9 +2491,9 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match stmt {
             Statement::Let { value, .. } => self.expr_param_only_borrowed(param_name, value, false),
-            Statement::Return { value, .. } => value.as_ref().map_or(true, |e| {
-                self.expr_param_only_borrowed(param_name, e, false)
-            }),
+            Statement::Return { value, .. } => value
+                .as_ref()
+                .is_none_or(|e| self.expr_param_only_borrowed(param_name, e, false)),
             Statement::Expression { expr, .. } => {
                 self.expr_param_only_borrowed(param_name, expr, false)
             }
@@ -2517,7 +2507,7 @@ impl<'ast> Analyzer<'ast> {
                     && then_block
                         .iter()
                         .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
-                    && else_block.as_ref().map_or(true, |b| {
+                    && else_block.as_ref().is_none_or(|b| {
                         b.iter()
                             .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
                     })

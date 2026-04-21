@@ -125,7 +125,7 @@ fn compile_and_verify_rust(source: &str) -> (bool, String) {
 
     // Compile Windjammer -> Rust
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             source_file.to_str().unwrap(),
             "--target",

@@ -120,7 +120,7 @@ impl StructLayout {
             output.push_str(",\n");
         }
 
-        output.push_str("}");
+        output.push('}');
 
         output
     }

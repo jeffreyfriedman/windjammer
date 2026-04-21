@@ -29,7 +29,7 @@ fn create_entity() -> Entity {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -82,7 +82,7 @@ fn create_red() -> Color {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -133,7 +133,7 @@ fn create_nested() -> Outer {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -181,7 +181,7 @@ fn create_choices() -> Vec<Choice> {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 

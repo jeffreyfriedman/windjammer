@@ -210,7 +210,7 @@ pub fn cmp(a: i32, b: &i32) -> bool {
     a == b
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -244,7 +244,7 @@ pub fn sum(a: &i32, b: &i32) -> i32 {
     a + b + 1
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -354,7 +354,7 @@ pub fn get_val(opt: &Option<i32>) -> i32 {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -370,7 +370,7 @@ pub fn check(opt: &Option<i32>) -> bool {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -388,7 +388,7 @@ pub fn make(x: &i32) -> Outer {
     Outer { inner: Inner { x: x } }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -402,7 +402,7 @@ pub fn get(a: &A) -> i32 {
     a.b.c
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -414,7 +414,7 @@ pub fn first(items: &Vec<i32>) -> i32 {
     items[0]
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -426,7 +426,7 @@ pub fn double(opt: &Option<i32>) -> Option<i32> {
     opt.map(|x| x * 2)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -438,7 +438,7 @@ pub fn greet(name: &string) -> string {
     "Hello, " + name
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -464,7 +464,7 @@ pub fn read_mut(n: &mut i32) -> i32 {
     x
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -477,7 +477,7 @@ pub fn make_pair(x: &i32, y: &i32) -> Point {
     Point(x, y)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -490,7 +490,7 @@ pub fn get_x(d: &Data) -> i32 {
     d.x
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -503,7 +503,7 @@ pub fn assign(r: &i32) -> i32 {
     x
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -515,7 +515,7 @@ pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
     a + b + c
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -527,7 +527,7 @@ pub fn len(s: &string) -> usize {
     s.len()
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -540,7 +540,7 @@ pub fn apply(r: &i32) -> i32 {
     double(r)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -557,7 +557,7 @@ pub fn get(e: &E) -> i32 {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -574,7 +574,7 @@ impl S {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -586,7 +586,7 @@ pub fn msg(name: &string) -> string {
     format!("Hello {}", name)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -602,7 +602,7 @@ pub fn check(r: &bool) -> bool {
     }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -614,7 +614,7 @@ pub fn and(a: &bool, b: &bool) -> bool {
     a && b
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -626,7 +626,7 @@ pub fn first(arr: &[i32; 3]) -> i32 {
     arr[0]
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -640,6 +640,6 @@ pub fn add(a: &Vec2, b: &Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (success, _result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }

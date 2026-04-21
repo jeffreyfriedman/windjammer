@@ -97,21 +97,21 @@ pub fn promote_types(ty1: IntType, ty2: IntType) -> IntType {
     // Widening conversions
     match (ty1, ty2) {
         // Prefer wider integer
-        (I8, I16 | I32 | I64 | Isize) | (I16 | I32 | I64 | Isize, I8) => return I64,
-        (I16, I32 | I64 | Isize) | (I32 | I64 | Isize, I16) => return I64,
-        (I32, I64 | Isize) | (I64 | Isize, I32) => return I64,
+        (I8, I16 | I32 | I64 | Isize) | (I16 | I32 | I64 | Isize, I8) => I64,
+        (I16, I32 | I64 | Isize) | (I32 | I64 | Isize, I16) => I64,
+        (I32, I64 | Isize) | (I64 | Isize, I32) => I64,
 
-        (U8, U16 | U32 | U64 | Usize) | (U16 | U32 | U64 | Usize, U8) => return U64,
-        (U16, U32 | U64 | Usize) | (U32 | U64 | Usize, U16) => return U64,
-        (U32, U64 | Usize) | (U64 | Usize, U32) => return U64,
+        (U8, U16 | U32 | U64 | Usize) | (U16 | U32 | U64 | Usize, U8) => U64,
+        (U16, U32 | U64 | Usize) | (U32 | U64 | Usize, U16) => U64,
+        (U32, U64 | Usize) | (U64 | Usize, U32) => U64,
 
         // Mixed signed/unsigned of same width → prefer unsigned
-        (I32, U32) | (U32, I32) => return U32,
-        (I64, U64) | (U64, I64) => return U64,
-        (Isize, Usize) | (Usize, Isize) => return Usize,
+        (I32, U32) | (U32, I32) => U32,
+        (I64, U64) | (U64, I64) => U64,
+        (Isize, Usize) | (Usize, Isize) => Usize,
 
         // Special case: usize is common in Rust, prefer it over specific widths
-        (Usize, I32 | I64) | (I32 | I64, Usize) => return Usize,
+        (Usize, I32 | I64) | (I32 | I64, Usize) => Usize,
 
         _ => ty1, // fallback
     }

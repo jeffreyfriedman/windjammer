@@ -21,7 +21,7 @@ use tempfile::TempDir;
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let _id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let wj_path = temp_dir.path().join("test.wj");
     let out_dir = temp_dir.path().join("out");

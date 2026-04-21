@@ -69,7 +69,7 @@ path = "test.rs"
     fs::write(format!("{}/Cargo.toml", output_dir), cargo_toml).unwrap();
 
     let rust_build = Command::new("cargo")
-        .args(&["build", "--release"])
+        .args(["build", "--release"])
         .current_dir(output_dir)
         .output()
         .expect("Failed to build Rust");

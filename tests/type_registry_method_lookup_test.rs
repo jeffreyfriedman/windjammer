@@ -39,7 +39,7 @@ impl TypeRegistry {
     fn register_method(&mut self, sig: MethodSignature) {
         self.method_signatures_by_type
             .entry(sig.receiver_type.clone())
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(sig.method_name.clone(), sig);
     }
 
@@ -164,7 +164,7 @@ fn test_should_add_ref_with_signature() {
     // This test demonstrates the proper logic for should_add_ref
     // based on ACTUAL type signatures, not hard-coded method names
 
-    let registry = TypeRegistry::new();
+    let _registry = TypeRegistry::new();
     // Imagine we have Vec::push registered with param_type = Owned T
 
     // Example decision logic:
@@ -192,21 +192,19 @@ fn test_should_add_ref_with_signature() {
     };
 
     // Test cases
-    assert_eq!(
+    assert!(
         should_add_ref_proper(
             &Type::Reference(Box::new(Type::Custom("str".to_string()))),
             &Type::Custom("String".to_string())
         ),
-        true,
         "String → &str should add &"
     );
 
-    assert_eq!(
-        should_add_ref_proper(
+    assert!(
+        !should_add_ref_proper(
             &Type::Custom("T".to_string()), // Owned T
             &Type::Custom("T".to_string())
         ),
-        false,
         "Owned T param with T arg should NOT add &"
     );
 }

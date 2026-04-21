@@ -172,11 +172,11 @@ pub fn map_type_to_wgsl(wj_type: &Type) -> Result<WgslType> {
         Type::Bool => Ok(WgslType::Bool),
 
         Type::Parameterized(name, type_params) if name == "vec2" => {
-            if let Some(Type::Float) = type_params.get(0) {
+            if let Some(Type::Float) = type_params.first() {
                 Ok(WgslType::Vec2F32)
-            } else if let Some(Type::Uint) = type_params.get(0) {
+            } else if let Some(Type::Uint) = type_params.first() {
                 Ok(WgslType::Vec2U32)
-            } else if let Some(Type::Int32) = type_params.get(0) {
+            } else if let Some(Type::Int32) = type_params.first() {
                 Ok(WgslType::Vec2I32)
             } else {
                 bail!("Unsupported vec2 element type: {:?}", type_params)
@@ -184,11 +184,11 @@ pub fn map_type_to_wgsl(wj_type: &Type) -> Result<WgslType> {
         }
 
         Type::Parameterized(name, type_params) if name == "vec3" => {
-            if let Some(Type::Float) = type_params.get(0) {
+            if let Some(Type::Float) = type_params.first() {
                 Ok(WgslType::Vec3F32)
-            } else if let Some(Type::Uint) = type_params.get(0) {
+            } else if let Some(Type::Uint) = type_params.first() {
                 Ok(WgslType::Vec3U32)
-            } else if let Some(Type::Int32) = type_params.get(0) {
+            } else if let Some(Type::Int32) = type_params.first() {
                 Ok(WgslType::Vec3I32)
             } else {
                 bail!("Unsupported vec3 element type: {:?}", type_params)
@@ -196,11 +196,11 @@ pub fn map_type_to_wgsl(wj_type: &Type) -> Result<WgslType> {
         }
 
         Type::Parameterized(name, type_params) if name == "vec4" => {
-            if let Some(Type::Float) = type_params.get(0) {
+            if let Some(Type::Float) = type_params.first() {
                 Ok(WgslType::Vec4F32)
-            } else if let Some(Type::Uint) = type_params.get(0) {
+            } else if let Some(Type::Uint) = type_params.first() {
                 Ok(WgslType::Vec4U32)
-            } else if let Some(Type::Int32) = type_params.get(0) {
+            } else if let Some(Type::Int32) = type_params.first() {
                 Ok(WgslType::Vec4I32)
             } else {
                 bail!("Unsupported vec4 element type: {:?}", type_params)
@@ -208,7 +208,7 @@ pub fn map_type_to_wgsl(wj_type: &Type) -> Result<WgslType> {
         }
 
         Type::Parameterized(name, type_params) if name == "mat4x4" => {
-            if let Some(Type::Float) = type_params.get(0) {
+            if let Some(Type::Float) = type_params.first() {
                 Ok(WgslType::Mat4x4F32)
             } else {
                 bail!("Unsupported mat4x4 element type: {:?}", type_params)

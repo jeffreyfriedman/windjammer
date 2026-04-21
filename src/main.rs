@@ -5970,6 +5970,13 @@ fn cleanup_stale_module_files_recursive(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn main() {
+    if let Err(e) = run_main_cli() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6017,12 +6024,5 @@ mod tests {
         //
         // The actual implementation is in build_project()
         // If this test compiles and passes, the concept is sound
-    }
-}
-
-fn main() {
-    if let Err(e) = run_main_cli() {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
     }
 }

@@ -57,7 +57,7 @@ pub fn is_available(game_state: GameState) -> bool {
 
     // Compile with wj (set current_dir to temp_dir so ./build goes there)
     let output = Command::new(&wj_bin)
-        .args(&["build", "test.wj", "--no-cargo"])
+        .args(["build", "test.wj", "--no-cargo"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run wj compiler");
@@ -111,7 +111,7 @@ pub fn is_available(game_state: GameState) -> bool {
     // Note: There may be other errors (E0308 for tuple destructuring, string literals),
     // but E0382 specifically tests if GameState was wrongly marked as Copy.
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "lib",
             "--edition",

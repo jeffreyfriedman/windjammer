@@ -15,7 +15,7 @@ fn run_wj_build(wj_source: &str, output_dir: &str) -> (bool, String) {
     fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
 
     let result = build_project(
-        &std::path::Path::new(&format!("{}/test.wj", output_dir)),
+        std::path::Path::new(&format!("{}/test.wj", output_dir)),
         std::path::Path::new(output_dir),
         CompilationTarget::Rust,
         false,
@@ -76,7 +76,7 @@ pub fn make_vec() -> Vec3 {
 
     // Verify Rust compiles with rustc (no E0308, no Cargo.toml needed)
     let rust_build = Command::new("rustc")
-        .args(&[
+        .args([
             &format!("{}/test.rs", output_dir),
             "--crate-type=lib",
             "-o",
@@ -133,7 +133,7 @@ pub fn add_vecs() -> Vec3 {
 
     // Verify Rust compiles with rustc
     let rust_build = Command::new("rustc")
-        .args(&[
+        .args([
             &format!("{}/test.rs", output_dir),
             "--crate-type=lib",
             "-o",
