@@ -157,7 +157,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
                 // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
                 let param_types: Option<Vec<Type>> = func_name.and_then(|name| {
-                    self.signature_registry.get_signature(name).map(|sig| sig.param_types.clone())
+                    self.signature_registry
+                        .get_signature(name)
+                        .map(|sig| sig.param_types.clone())
                 });
 
                 let mut arg_strings = Vec::new();
@@ -168,37 +170,54 @@ impl<'ast> CodeGenerator<'ast> {
                     }).unwrap_or(false);
 
                     // Check if argument is a string literal (with or without &)
-                    let is_string_literal = matches!(arg, Expression::Literal { value: crate::parser::Literal::String(_), .. });
-                    
+                    let is_string_literal = matches!(
+                        arg,
+                        Expression::Literal {
+                            value: crate::parser::Literal::String(_),
+                            ..
+                        }
+                    );
+
                     // Also check if it's &"string"
-                    let is_ref_string_literal = if let Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } = arg {
-                        matches!(&**operand, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+                    let is_ref_string_literal = if let Expression::Unary {
+                        op: crate::parser::UnaryOp::Ref,
+                        operand,
+                        ..
+                    } = arg
+                    {
+                        matches!(
+                            &**operand,
+                            Expression::Literal {
+                                value: crate::parser::Literal::String(_),
+                                ..
+                            }
+                        )
                     } else {
                         false
                     };
-                    
+
                     // PHASE 2 CALL-SITE OPTIMIZATION: Suppress .to_string() for &str parameters
                     let old_suppress = self.suppress_string_conversion.get();
                     if param_is_str_ref && (is_string_literal || is_ref_string_literal) {
                         self.suppress_string_conversion.set(true);
                     }
-                    
+
                     // Generate the argument string
                     let mut arg_str = self.generate_expression_immut(arg);
-                    
+
                     // Restore suppress flag
                     self.suppress_string_conversion.set(old_suppress);
-                    
+
                     // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
                     if idx == 0 && needs_usize_first_arg {
                         if matches!(arg, Expression::Identifier { .. }) {
                             arg_str = format!("{} as usize", arg_str);
                         }
                     }
-                    
+
                     arg_strings.push(arg_str);
                 }
-                
+
                 let args_str = arg_strings.join(", ");
                 format!("{}({})", func_str, args_str)
             }
@@ -849,17 +868,17 @@ impl<'ast> CodeGenerator<'ast> {
                 if is_comparison {
                     let is_str_param = |name: &str| {
                         self.current_function_params.iter().any(|p| {
-                        p.name == name
-                            && (
-                                // Explicit &str type (Type::Reference(Custom("str")))
-                                matches!(&p.type_, Type::Reference(inner)
+                            p.name == name
+                                && (
+                                    // Explicit &str type (Type::Reference(Custom("str")))
+                                    matches!(&p.type_, Type::Reference(inner)
                                     if matches!(&**inner, Type::Custom(s) if s == "str"))
                                 // Inferred borrowed string (Type::String with inferred borrow)
                                 || ((matches!(p.type_, Type::String)
                                     || matches!(p.type_, Type::Custom(ref n) if n == "string"))
                                     && self.inferred_borrowed_params.contains(name))
-                            )
-                    })
+                                )
+                        })
                     };
 
                     // Check if identifier is tracked (function param, match binding, local var)
@@ -935,13 +954,17 @@ impl<'ast> CodeGenerator<'ast> {
 
                     // TDD FIX: Check if either side is an explicit &str parameter (has explicit & in source)
                     // These should NEVER get * derefs - Rust handles &str == &String natively
-                    let left_is_explicit_str_ref = if let Expression::Identifier { name, .. } = left {
+                    let left_is_explicit_str_ref = if let Expression::Identifier { name, .. } = left
+                    {
                         self.current_function_params.iter().any(|p| {
                             let matches_name = p.name == *name;
-                            let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                            let is_ref_ownership =
+                                matches!(p.ownership, crate::parser::OwnershipHint::Ref);
                             // Check if the inner type (after removing Reference) is a text type
                             let is_text = match &p.type_ {
-                                Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                                Type::Reference(inner) => {
+                                    crate::codegen::rust::types::is_windjammer_text_type(inner)
+                                }
                                 _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
                             };
                             matches_name && is_ref_ownership && is_text
@@ -949,13 +972,18 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         false
                     };
-                    let right_is_explicit_str_ref = if let Expression::Identifier { name, .. } = right {
+                    let right_is_explicit_str_ref = if let Expression::Identifier { name, .. } =
+                        right
+                    {
                         self.current_function_params.iter().any(|p| {
                             let matches_name = p.name == *name;
-                            let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
+                            let is_ref_ownership =
+                                matches!(p.ownership, crate::parser::OwnershipHint::Ref);
                             // Check if the inner type (after removing Reference) is a text type
                             let is_text = match &p.type_ {
-                                Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                                Type::Reference(inner) => {
+                                    crate::codegen::rust::types::is_windjammer_text_type(inner)
+                                }
                                 _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
                             };
                             matches_name && is_ref_ownership && is_text
@@ -1383,7 +1411,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                                     matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
                                                 });
-                                                
+
                                                 if param_is_str_ref {
                                                     // Parameter is &str - pass literal directly (already a &str)
                                                     // No conversion needed!
@@ -1491,7 +1519,6 @@ impl<'ast> CodeGenerator<'ast> {
                                                 }
                                             }
                                         }
-                                        _ => {}
                                     }
                                 }
 
@@ -2158,7 +2185,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
                                                 matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
                                             });
-                                            
+
                                             if param_is_str_ref {
                                                 // Parameter is explicitly &str - pass literal directly (already a &str)
                                                 // "World" is already &str in Rust, no conversion needed!
@@ -5641,7 +5668,9 @@ impl<'ast> CodeGenerator<'ast> {
                     let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
                     // Check if the inner type (after removing Reference) is a text type
                     let is_text = match &p.type_ {
-                        Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                        Type::Reference(inner) => {
+                            crate::codegen::rust::types::is_windjammer_text_type(inner)
+                        }
                         _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
                     };
                     matches_name && is_ref_ownership && is_text
@@ -5656,7 +5685,9 @@ impl<'ast> CodeGenerator<'ast> {
                     let is_ref_ownership = matches!(p.ownership, crate::parser::OwnershipHint::Ref);
                     // Check if the inner type (after removing Reference) is a text type
                     let is_text = match &p.type_ {
-                        Type::Reference(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+                        Type::Reference(inner) => {
+                            crate::codegen::rust::types::is_windjammer_text_type(inner)
+                        }
                         _ => crate::codegen::rust::types::is_windjammer_text_type(&p.type_),
                     };
                     matches_name && is_ref_ownership && is_text
@@ -5678,8 +5709,6 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => false,
                 }
             };
-
-
 
             // Check if type is &String (not String, not &str)
             let is_ref_string = |t: Option<&Type>| -> bool {

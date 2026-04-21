@@ -2071,7 +2071,7 @@ impl<'ast> Analyzer<'ast> {
             .map(|param| {
                 // Check if this parameter can be optimized to &str (instead of &String)
                 let can_use_str_ref = str_ref_optimizable_params.contains(&param.name);
-                
+
                 if can_use_str_ref {
                     // Optimize to &str (not &String)
                     Type::Reference(Box::new(Type::Custom("str".to_string())))

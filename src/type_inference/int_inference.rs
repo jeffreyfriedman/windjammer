@@ -1712,7 +1712,6 @@ impl IntInference {
                         // Logical: result is bool
                         Some(Type::Bool)
                     }
-                    _ => None,
                 }
             }
             _ => None,

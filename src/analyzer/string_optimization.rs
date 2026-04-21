@@ -73,8 +73,9 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 // No decorator - use automatic analysis
                 // PHASE 2 FULL: Check if parameter is passed to methods needing &String
-                let needs_string_ref = self.param_needs_string_ref(&param.name, &func.body, registry);
-                
+                let needs_string_ref =
+                    self.param_needs_string_ref(&param.name, &func.body, registry);
+
                 if !needs_string_ref {
                     // Safe to use &str optimization
                     optimizable.insert(param.name.clone());
@@ -115,24 +116,34 @@ impl<'ast> Analyzer<'ast> {
             Statement::Let { value, .. } => {
                 self.expr_uses_param_in_string_ref_context(param_name, value, registry)
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.expr_uses_param_in_string_ref_context(param_name, condition, registry)
                     || self.block_needs_string_ref(param_name, then_block, registry)
-                    || else_block.as_ref().map(|b| self.block_needs_string_ref(param_name, b, registry)).unwrap_or(false)
+                    || else_block
+                        .as_ref()
+                        .map(|b| self.block_needs_string_ref(param_name, b, registry))
+                        .unwrap_or(false)
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.expr_uses_param_in_string_ref_context(param_name, condition, registry)
                     || self.block_needs_string_ref(param_name, body, registry)
             }
-            Statement::For { body, .. } => {
-                self.block_needs_string_ref(param_name, body, registry)
-            }
-            Statement::Return { value: Some(expr), .. } => {
-                self.expr_uses_param_in_string_ref_context(param_name, expr, registry)
-            }
+            Statement::For { body, .. } => self.block_needs_string_ref(param_name, body, registry),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_uses_param_in_string_ref_context(param_name, expr, registry),
             Statement::Match { value, arms, .. } => {
                 self.expr_uses_param_in_string_ref_context(param_name, value, registry)
-                    || arms.iter().any(|arm| self.expr_uses_param_in_string_ref_context(param_name, &arm.body, registry))
+                    || arms.iter().any(|arm| {
+                        self.expr_uses_param_in_string_ref_context(param_name, &arm.body, registry)
+                    })
             }
             _ => false,
         }
@@ -162,11 +173,16 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             // Check method calls: param.method() or something.method(&param)
-            Expression::MethodCall { object, method, arguments, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 // First check if any argument is our parameter (like items.contains(&id))
                 for (idx, arg) in arguments.iter().enumerate() {
                     let arg_expr = &arg.1;
-                    
+
                     // Check if this argument is &param or param
                     if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
                         // SPECIAL CASE: Vec<String>::contains needs &String
@@ -177,7 +193,7 @@ impl<'ast> Analyzer<'ast> {
                             // This is a conservative but correct heuristic
                             return true;
                         }
-                        
+
                         // Check if this method expects &String for this parameter position
                         if let Some(sig) = registry.get_signature(method) {
                             // Get the parameter type at this position
@@ -190,13 +206,13 @@ impl<'ast> Analyzer<'ast> {
                             }
                         }
                     }
-                    
+
                     // Recursively check argument expressions
                     if self.expr_uses_param_in_string_ref_context(param_name, arg_expr, registry) {
                         return true;
                     }
                 }
-                
+
                 // Also check if the method is called ON the parameter (param.method())
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == param_name {
@@ -211,11 +227,15 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                
+
                 false
             }
             // Check function calls: function(&param)
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 // Check if param is passed to a function expecting &String
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
                     if let Some(sig) = registry.get_signature(fn_name) {
@@ -231,7 +251,9 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                             // Recursively check
-                            if self.expr_uses_param_in_string_ref_context(param_name, arg_expr, registry) {
+                            if self.expr_uses_param_in_string_ref_context(
+                                param_name, arg_expr, registry,
+                            ) {
                                 return true;
                             }
                         }
@@ -267,7 +289,11 @@ impl<'ast> Analyzer<'ast> {
     fn expr_is_param_or_ref_to_param(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
-            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref,
+                operand,
+                ..
+            } => {
                 if let Expression::Identifier { name, .. } = &**operand {
                     name == param_name
                 } else {

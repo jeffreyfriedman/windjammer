@@ -44,8 +44,8 @@ pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
         // Rationale: Signed/unsigned mixing in arithmetic contexts
         (I32, U32) | (U32, I32) => true,
 
-        // For loop ranges: i32 <-> i64
-        (I32, I64) | (I64, I32) => true,
+        // For loop ranges: i64 -> i32
+        (I64, I32) => true,
 
         // i64 ↔ u64 (common for IDs, handles, large counts)
         // Rationale: Large integer types mixing signed/unsigned
@@ -111,7 +111,7 @@ pub fn promote_types(ty1: IntType, ty2: IntType) -> IntType {
         (Isize, Usize) | (Usize, Isize) => return Usize,
 
         // Special case: usize is common in Rust, prefer it over specific widths
-        (Usize, U32 | U64 | I32 | I64) | (U32 | U64 | I32 | I64, Usize) => return Usize,
+        (Usize, I32 | I64) | (I32 | I64, Usize) => return Usize,
 
         _ => ty1, // fallback
     }
