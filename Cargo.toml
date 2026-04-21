@@ -42,7 +42,7 @@ rolt = { version = "0.3.1", optional = true }
 wgpu = { version = "0.19", optional = true }
 winit = { version = "0.29", optional = true }
 bytemuck = { version = "1.14", features = ["derive"], optional = true }
-windjammer-runtime = { path = "/Users/jeffreyfriedman/src/wj/windjammer/crates/windjammer-runtime", optional = true }
+windjammer-runtime = { path = "crates/windjammer-runtime", optional = true }
 
 [features]
 default = ["cli", "native-runtime"]

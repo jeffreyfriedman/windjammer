@@ -3746,17 +3746,36 @@ impl<'ast> CodeGenerator<'ast> {
                         // Pattern: fn create(name: &str) -> User { User { name: name } }
                         // When struct field is String but parameter is &str, add .to_string()
                         if let Expression::Identifier { name: id, .. } = expr {
-                            // Check if this identifier is a &str parameter
-                            // In the AST, &str parameters have type Reference(Custom("str"))
-                            let is_str_param = self.current_function_params.iter().any(|p| {
-                                p.name == *id && matches!(
-                                    &p.type_,
-                                    crate::parser::Type::Reference(inner) if matches!(**inner, crate::parser::Type::Custom(ref name) if name == "str")
-                                )
+                            // Check if this is a string parameter
+                            let is_string_param = self.current_function_params.iter().any(|p| {
+                                if p.name != *id {
+                                    return false;
+                                }
+                                // Any string-like type
+                                match &p.type_ {
+                                    crate::parser::Type::String => true,
+                                    crate::parser::Type::Custom(ref name) if name == "string" => true,
+                                    crate::parser::Type::Reference(inner) => {
+                                        matches!(**inner, crate::parser::Type::Custom(ref name) if name == "str")
+                                    }
+                                    _ => false,
+                                }
                             });
 
-                            if is_str_param && !expr_str.contains(".to_string()") {
-                                expr_str = format!("{}.to_string()", expr_str);
+                            if is_string_param && !expr_str.contains(".to_string()") {
+                                // Check if struct field expects String (owned)
+                                if let Some(field_types) = self.struct_field_types.get(name) {
+                                    if let Some(field_type) = field_types.get(field_name) {
+                                        let field_is_string = matches!(field_type, Type::String)
+                                            || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
+                                        if field_is_string {
+                                            // PHASE 2 SAFETY: Always add .to_string() for string params
+                                            // This handles both explicit &str and Phase 2 optimized params
+                                            // (For owned String params, this creates a clone, which is safe if redundant)
+                                            expr_str = format!("{}.to_string()", expr_str);
+                                        }
+                                    }
+                                }
                             }
                         }
 
