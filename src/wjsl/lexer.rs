@@ -5,6 +5,7 @@
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // Some tokens reserved for future WGSL features
 pub enum Token {
     // Keywords
     Fn,
@@ -134,6 +135,7 @@ impl fmt::Display for Token {
 
 /// Token with source location
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Reserved for future error reporting
 pub struct TokenWithLoc {
     pub token: Token,
     pub line: usize,
