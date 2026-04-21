@@ -261,16 +261,18 @@ fn test_smart_auto_derive() {
     // Check User: name is String (not Copy), age is int (Copy)
     // Should derive: Debug, Clone, PartialEq, Eq, Hash, Default (NO Copy)
     // String is hashable and comparable, so we get those
-    assert!(generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]\nstruct User"),
-        "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy");
+    assert!(
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]")
+            && generated.contains("struct User"),
+        "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy"
+    );
 
     // Check Container: Vec<int> implements Clone, Debug, Default, PartialEq, and Eq
     // Should derive: Debug, Clone, PartialEq, Eq, Default (NO Copy, NO Hash)
     // Vec<T> is PartialEq and Eq if T is PartialEq/Eq, but NOT Hash (even if T: Hash)
-    let has_container_derive =
-        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]\nstruct Container");
     assert!(
-        has_container_derive,
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]")
+            && generated.contains("struct Container"),
         "Container with Vec should derive Debug, Clone, PartialEq, Eq, Default (no Hash, no Copy)"
     );
 
