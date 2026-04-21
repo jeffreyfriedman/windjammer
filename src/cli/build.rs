@@ -94,9 +94,7 @@ pub fn execute(
     let external_metadata: Vec<(&str, &Path)> = metadata
         .iter()
         .filter_map(|s| {
-            let mut split = s.splitn(2, '=');
-            let name = split.next()?;
-            let path_str = split.next()?;
+            let (name, path_str) = s.split_once('=')?;
             Some((name, Path::new(path_str)))
         })
         .collect();

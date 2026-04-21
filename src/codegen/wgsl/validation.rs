@@ -131,7 +131,7 @@ fn validate_statement(stmt: &Statement) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests for WGSL validation (commented out pending implementation)
 
     #[test]
     fn test_recursion_detection() {

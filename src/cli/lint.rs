@@ -62,7 +62,7 @@ fn collect_wj_files(path: &Path, files: &mut Vec<std::path::PathBuf>) -> Result<
         bail!("Path does not exist: {}", path.display());
     }
     if path.is_file() {
-        if path.extension().map_or(false, |e| e == "wj") {
+        if path.extension().is_some_and(|e| e == "wj") {
             files.push(path.to_path_buf());
         }
         return Ok(());
@@ -73,7 +73,7 @@ fn collect_wj_files(path: &Path, files: &mut Vec<std::path::PathBuf>) -> Result<
             let p = entry.path();
             if p.is_dir() {
                 collect_wj_files(&p, files)?;
-            } else if p.extension().map_or(false, |e| e == "wj") {
+            } else if p.extension().is_some_and(|e| e == "wj") {
                 files.push(p);
             }
         }

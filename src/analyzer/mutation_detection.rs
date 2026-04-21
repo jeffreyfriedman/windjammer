@@ -13,6 +13,7 @@ impl<'ast> Analyzer<'ast> {
     /// CRITICAL: For Index expressions, only check the object, NOT the index!
     /// When we see `arr[i].method()`, only `arr` is being used mutably, NOT `i`.
     /// The index `i` is just being READ to select which element to call the method on.
+    #[allow(dead_code)] // Reserved for future mutation analysis
     fn expr_contains_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,

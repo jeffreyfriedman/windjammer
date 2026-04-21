@@ -222,7 +222,7 @@ impl TypeRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{Item, StructDecl, TypeParam};
+    // Future: May need Item, StructDecl, TypeParam for generic testing
 
     #[test]
     fn test_file_path_to_module_path() {

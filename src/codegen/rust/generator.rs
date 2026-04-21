@@ -683,6 +683,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Resolve the type of a receiver expression for method calls
     /// Example: `self.inventory.has_item(...)` → resolve type of `self.inventory`
     /// This enables looking up the correct method signature
+    #[allow(dead_code)] // Reserved for future type resolution
     pub(crate) fn resolve_receiver_type(&self, receiver: &Expression) -> Option<String> {
         match receiver {
             Expression::Identifier { name, .. } => {
@@ -716,6 +717,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Convert a Type to a simple name for signature lookup
     /// Example: Type::Custom("Vec") → "Vec", Type::Reference(Box(Custom("String"))) → "String"
+    #[allow(dead_code)] // Reserved for future type conversion
     fn type_to_simple_name(&self, ty: &Type) -> String {
         match ty {
             Type::Custom(name) => name.clone(),
