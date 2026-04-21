@@ -5,7 +5,6 @@
 ///
 /// This validates that we can replace ALL hard-coded heuristics with type-based logic.
 use std::fs;
-use std::path::PathBuf;
 
 fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();

@@ -237,17 +237,15 @@ impl<'ast> Linter<'ast> {
             match stmt {
                 Statement::Return {
                     value: Some(expr), ..
-                } => {
-                    if Self::expression_contains_identifier(expr, param_name) {
+                }
+                    if Self::expression_contains_identifier(expr, param_name) => {
                         return true;
                     }
-                }
-                Statement::Expression { expr, .. } => {
+                Statement::Expression { expr, .. }
                     // Check if last expression returns the parameter
-                    if Self::expression_contains_identifier(expr, param_name) {
+                    if Self::expression_contains_identifier(expr, param_name) => {
                         return true;
                     }
-                }
                 _ => {}
             }
         }

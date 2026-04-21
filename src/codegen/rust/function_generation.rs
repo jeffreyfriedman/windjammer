@@ -1407,16 +1407,14 @@ impl<'ast> CodeGenerator<'ast> {
                 });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
-            let ownership = self
-                .get_effective_self_ownership(&func.name, analyzed)
-                .or_else(|| {
-                    // Trait has method but no self in analyzed - default to &mut self (trait convention)
-                    if needs_self_from_trait {
-                        Some(OwnershipMode::MutBorrowed)
-                    } else {
-                        None
-                    }
-                });
+            let ownership = self.get_effective_self_ownership(&func.name, analyzed).or({
+                // Trait has method but no self in analyzed - default to &mut self (trait convention)
+                if needs_self_from_trait {
+                    Some(OwnershipMode::MutBorrowed)
+                } else {
+                    None
+                }
+            });
 
             if let Some(ownership) = ownership {
                 let self_param = match ownership {

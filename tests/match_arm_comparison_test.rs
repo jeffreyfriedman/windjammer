@@ -1,5 +1,5 @@
+use std::fs;
 use std::process::Command;
-use std::{fs, path::Path};
 
 #[test]
 fn test_match_arm_binding_comparison_copy_type_cloned_in_if() {
@@ -56,7 +56,7 @@ pub fn main() {
     fs::write(&wj_file, wj_code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", &wj_file])
+        .args(["build", &wj_file])
         .current_dir(test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -94,7 +94,7 @@ pub fn main() {
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&[
+        .args([
             "build",
             "--manifest-path",
             &format!("{}/Cargo.toml", build_dir),
@@ -144,7 +144,7 @@ pub fn main() {
     fs::write(&wj_file, wj_code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", &wj_file])
+        .args(["build", &wj_file])
         .current_dir(test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -174,7 +174,7 @@ pub fn main() {
     );
 
     let cargo_output = Command::new("cargo")
-        .args(&[
+        .args([
             "build",
             "--manifest-path",
             &format!("{}/Cargo.toml", build_dir),
@@ -235,7 +235,7 @@ pub fn main() {
     fs::write(&wj_file, wj_code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", &wj_file])
+        .args(["build", &wj_file])
         .current_dir(test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -248,7 +248,7 @@ pub fn main() {
 
     let build_dir = format!("{}/build", test_dir);
     let cargo_output = Command::new("cargo")
-        .args(&[
+        .args([
             "build",
             "--manifest-path",
             &format!("{}/Cargo.toml", build_dir),

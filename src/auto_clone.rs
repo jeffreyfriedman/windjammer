@@ -399,12 +399,11 @@ impl AutoCloneAnalysis {
                     pattern: Pattern::Identifier(var_name),
                     value,
                     ..
-                } => {
+                }
                     // Check if value is a string literal or a match/if that returns string literals
-                    if Self::expr_returns_string_literal(value) {
+                    if Self::expr_returns_string_literal(value) => {
                         self.string_literal_vars.insert(var_name.clone());
                     }
-                }
                 Statement::Let { .. } => {
                     // Non-identifier patterns (tuple, wildcard, etc.)
                 }

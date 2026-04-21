@@ -88,6 +88,12 @@ pub struct FloatInference {
     module_re_exports: HashMap<String, HashMap<String, String>>,
 }
 
+impl Default for FloatInference {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FloatInference {
     pub fn new() -> Self {
         FloatInference {
@@ -230,7 +236,7 @@ impl FloatInference {
         self.register_use_imports_from_items(&program.items);
 
         // Pass 1: Collect constraints from all expressions
-        for (_i, item) in program.items.iter().enumerate() {
+        for item in program.items.iter() {
             self.collect_item_constraints(item);
         }
 
@@ -357,7 +363,7 @@ impl FloatInference {
                     .skip_while(|s| {
                         s.as_str() == "crate" || s.as_str() == "self" || s.as_str() == "super"
                     })
-                    .map(|s| s.clone())
+                    .cloned()
                     .collect();
 
                 if module_path.is_empty() {
@@ -368,8 +374,7 @@ impl FloatInference {
                 let type_name = module_path.pop(); // Remove type name (Vec3)
 
                 // CROSS-CRATE: Check for external crate metadata first
-                if let (Some(ref crate_name), Some(ref ty_name)) = (module_path.first(), &type_name)
-                {
+                if let (Some(crate_name), Some(ref ty_name)) = (module_path.first(), &type_name) {
                     let crate_key = crate_name.replace('-', "_");
                     if let Some(meta_dir) = self.external_crate_metadata_paths.get(&crate_key) {
                         let metadata_path = meta_dir.join("metadata.json");
@@ -630,7 +635,7 @@ impl FloatInference {
                 }
 
                 // Collect return type constraints (now var_element_types is populated)
-                for (_i, stmt) in decl.body.iter().enumerate() {
+                for stmt in decl.body.iter() {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
 
@@ -663,7 +668,7 @@ impl FloatInference {
                         }
                     }
 
-                    for (_i, stmt) in func.body.iter().enumerate() {
+                    for stmt in func.body.iter() {
                         self.collect_statement_constraints(stmt, func.return_type.as_ref());
                     }
 
@@ -946,7 +951,7 @@ impl FloatInference {
                 self.constraints.push(Constraint::MustMatch(
                     target_id,
                     value_id,
-                    format!("assignment target and value"),
+                    "assignment target and value".to_string(),
                 ));
 
                 // TDD: Direct RHS constraint from inferred LHS type (field, index, deref, etc.).
@@ -1328,18 +1333,16 @@ impl FloatInference {
 
                 // TDD FIX: .min() and .max() methods - argument must match receiver type
                 // Pattern: (self.level + amount).min(100.0) - the 100.0 must be f32
-                if method == "min" || method == "max" {
-                    if arguments.len() == 1 {
-                        let receiver_id = self.get_expr_id(object);
-                        let arg_id = self.get_expr_id(arguments[0].1);
+                if (method == "min" || method == "max") && arguments.len() == 1 {
+                    let receiver_id = self.get_expr_id(object);
+                    let arg_id = self.get_expr_id(arguments[0].1);
 
-                        // Receiver and argument must be same type
-                        self.constraints.push(Constraint::MustMatch(
-                            receiver_id,
-                            arg_id,
-                            format!(".{}() argument must match receiver type", method),
-                        ));
-                    }
+                    // Receiver and argument must be same type
+                    self.constraints.push(Constraint::MustMatch(
+                        receiver_id,
+                        arg_id,
+                        format!(".{}() argument must match receiver type", method),
+                    ));
                 }
 
                 // TDD FIX: Method calls - constrain args from method signature (metadata)
@@ -1405,13 +1408,13 @@ impl FloatInference {
                                             FloatType::F32 => {
                                                 self.constraints.push(Constraint::MustBeF32(
                                                     value_id,
-                                                    format!("HashMap<K, f32>.insert(K, f32)"),
+                                                    "HashMap<K, f32>.insert(K, f32)".to_string(),
                                                 ));
                                             }
                                             FloatType::F64 => {
                                                 self.constraints.push(Constraint::MustBeF64(
                                                     value_id,
-                                                    format!("HashMap<K, f64>.insert(K, f64)"),
+                                                    "HashMap<K, f64>.insert(K, f64)".to_string(),
                                                 ));
                                             }
                                             FloatType::Unknown => {}
@@ -1425,20 +1428,20 @@ impl FloatInference {
                         if method == "push" {
                             if let Some(elem_type) = self.extract_vec_element_type(&var_type) {
                                 if let Some(float_ty) = self.extract_float_type(&elem_type) {
-                                    if arguments.len() >= 1 {
+                                    if !arguments.is_empty() {
                                         let value_arg = arguments[0].1;
                                         let value_id = self.get_expr_id(value_arg);
                                         match float_ty {
                                             FloatType::F32 => {
                                                 self.constraints.push(Constraint::MustBeF32(
                                                     value_id,
-                                                    format!("Vec<f32>.push(f32)"),
+                                                    "Vec<f32>.push(f32)".to_string(),
                                                 ));
                                             }
                                             FloatType::F64 => {
                                                 self.constraints.push(Constraint::MustBeF64(
                                                     value_id,
-                                                    format!("Vec<f64>.push(f64)"),
+                                                    "Vec<f64>.push(f64)".to_string(),
                                                 ));
                                             }
                                             FloatType::Unknown => {}
@@ -1450,19 +1453,17 @@ impl FloatInference {
                     // TDD FIX: Also check var_element_types for inferred collection types
                     } else if let Some(elem_type) = self.var_element_types.get(name).cloned() {
                         if method == "push" {
-                            if arguments.len() >= 1 {
+                            if !arguments.is_empty() {
                                 let value_arg = arguments[0].1;
 
                                 // TDD FIX: Recursively constrain with the element type
                                 // This handles both simple types (f32) and complex types (Tuple)
                                 self.collect_expression_constraints(value_arg, Some(&elem_type));
                             }
-                        } else if method == "insert" {
-                            if arguments.len() >= 2 {
-                                let value_arg = arguments[1].1;
-                                // TDD FIX: Recursively constrain with the value type
-                                self.collect_expression_constraints(value_arg, Some(&elem_type));
-                            }
+                        } else if method == "insert" && arguments.len() >= 2 {
+                            let value_arg = arguments[1].1;
+                            // TDD FIX: Recursively constrain with the value type
+                            self.collect_expression_constraints(value_arg, Some(&elem_type));
                         }
                     }
                 }
@@ -1902,22 +1903,20 @@ impl FloatInference {
             Expression::MacroInvocation { name, args, .. } => {
                 // TDD FIX: assert_eq!/assert_ne! - both args must have same type
                 // assert_eq!(transform.x, 15.0) → 15.0 should infer f32 from transform.x
-                if name == "assert_eq" || name == "assert_ne" {
-                    if args.len() >= 2 {
-                        // Recurse into args first (FieldAccess adds MustBeF32 for transform.x)
-                        for arg in args {
-                            self.collect_expression_constraints(arg, return_type);
-                        }
-                        // Link first and second arg: same type required
-                        let first_id = self.get_expr_id(args[0]);
-                        let second_id = self.get_expr_id(args[1]);
-                        self.constraints.push(Constraint::MustMatch(
-                            first_id,
-                            second_id,
-                            format!("{}! requires both arguments to have same type", name),
-                        ));
-                        return; // Already recursed
+                if (name == "assert_eq" || name == "assert_ne") && args.len() >= 2 {
+                    // Recurse into args first (FieldAccess adds MustBeF32 for transform.x)
+                    for arg in args {
+                        self.collect_expression_constraints(arg, return_type);
                     }
+                    // Link first and second arg: same type required
+                    let first_id = self.get_expr_id(args[0]);
+                    let second_id = self.get_expr_id(args[1]);
+                    self.constraints.push(Constraint::MustMatch(
+                        first_id,
+                        second_id,
+                        format!("{}! requires both arguments to have same type", name),
+                    ));
+                    return; // Already recursed
                 }
                 // Other macros (format!, vec!, etc.): just recurse into args
                 for arg in args {
@@ -2037,12 +2036,11 @@ impl FloatInference {
                     "to_degrees",
                     "to_radians",
                 ];
-                if PRIMITIVE_SAME_TYPE.contains(&method.as_str()) {
-                    if matches!(object_type, Type::Custom(ref s) if s == "f32" || s == "f64")
-                        || matches!(object_type, Type::Float)
-                    {
-                        return Some(object_type);
-                    }
+                if PRIMITIVE_SAME_TYPE.contains(&method.as_str())
+                    && (matches!(object_type, Type::Custom(ref s) if s == "f32" || s == "f64")
+                        || matches!(object_type, Type::Float))
+                {
+                    return Some(object_type);
                 }
                 None
             }
@@ -2163,7 +2161,7 @@ impl FloatInference {
             Type::Vec(inner) => Some((**inner).clone()),
             Type::Parameterized(name, type_args) if name == "Vec" => {
                 // Vec<T> has 1 type argument
-                if type_args.len() >= 1 {
+                if !type_args.is_empty() {
                     Some(type_args[0].clone())
                 } else {
                     None
@@ -2361,12 +2359,12 @@ impl FloatInference {
         for constraint in &self.constraints {
             match constraint {
                 Constraint::MustBeF32(expr_id, _) => {
-                    if self.inferred_types.get(expr_id).is_none() {
+                    if !self.inferred_types.contains_key(expr_id) {
                         self.inferred_types.insert(*expr_id, FloatType::F32);
                     }
                 }
                 Constraint::MustBeF64(expr_id, _) => {
-                    if self.inferred_types.get(expr_id).is_none() {
+                    if !self.inferred_types.contains_key(expr_id) {
                         self.inferred_types.insert(*expr_id, FloatType::F64);
                     }
                 }
@@ -2654,33 +2652,30 @@ impl FloatInference {
     /// TDD FIX: Constrain an expression to match a specific type
     /// Used for implicit returns: return type → variable type → collection elements
     fn constrain_expr_to_type<'ast>(&mut self, expr: &Expression<'ast>, target_type: &Type) {
-        match expr {
-            Expression::Identifier { name, .. } => {
-                // Variable being returned - store its element type if it's a collection
-                match target_type {
-                    Type::Vec(inner) => {
-                        // Vec<T>
-                        self.var_element_types
-                            .insert(name.clone(), (**inner).clone());
-                    }
-                    Type::Parameterized(type_name, parameters) => {
-                        // Vec<T>, HashMap<K,V>, Option<T>, etc.
-                        let base = crate::type_inference::generic_type_base_name(type_name);
-                        if base == "Vec" && parameters.len() == 1 {
-                            self.var_element_types
-                                .insert(name.clone(), parameters[0].clone());
-                        } else if matches!(base, "HashMap" | "Map" | "BTreeMap")
-                            && parameters.len() == 2
-                        {
-                            // Store the value type (second parameter)
-                            self.var_element_types
-                                .insert(name.clone(), parameters[1].clone());
-                        }
-                    }
-                    _ => {}
+        if let Expression::Identifier { name, .. } = expr {
+            // Variable being returned - store its element type if it's a collection
+            match target_type {
+                Type::Vec(inner) => {
+                    // Vec<T>
+                    self.var_element_types
+                        .insert(name.clone(), (**inner).clone());
                 }
+                Type::Parameterized(type_name, parameters) => {
+                    // Vec<T>, HashMap<K,V>, Option<T>, etc.
+                    let base = crate::type_inference::generic_type_base_name(type_name);
+                    if base == "Vec" && parameters.len() == 1 {
+                        self.var_element_types
+                            .insert(name.clone(), parameters[0].clone());
+                    } else if matches!(base, "HashMap" | "Map" | "BTreeMap")
+                        && parameters.len() == 2
+                    {
+                        // Store the value type (second parameter)
+                        self.var_element_types
+                            .insert(name.clone(), parameters[1].clone());
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 }

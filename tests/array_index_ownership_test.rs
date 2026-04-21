@@ -25,7 +25,7 @@ fn collect_values(params: [f32; 3]) -> Vec<f32> {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -68,7 +68,7 @@ fn collect_from_index(data: [f32; 10]) -> Vec<f32> {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -111,7 +111,7 @@ fn emit_instruction(node: Node, buf: Vec<f32>) {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 

@@ -51,7 +51,7 @@ impl UserManager {
 
     // Build both modules
     let output1 = Command::new("./target/release/wj")
-        .args(&[
+        .args([
             "build",
             &format!("{}/user.wj", test_dir),
             "-o",
@@ -67,7 +67,7 @@ impl UserManager {
     }
 
     let output2 = Command::new("./target/release/wj")
-        .args(&[
+        .args([
             "build",
             &format!("{}/manager.wj", test_dir),
             "-o",
@@ -92,8 +92,8 @@ impl UserManager {
     // (This test documents current behavior - it will FAIL showing the bug)
 
     // Try to compile the generated Rust
-    let user_rs_path = format!("{}/user.rs", test_dir);
-    let manager_rs_path = format!("{}/manager.rs", test_dir);
+    let _user_rs_path = format!("{}/user.rs", test_dir);
+    let _manager_rs_path = format!("{}/manager.rs", test_dir);
 
     // Create a simple main.rs that uses both
     let main_rs = r#"
@@ -109,7 +109,7 @@ fn main() {
 
     // Try to compile with rustc
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "bin",
             "-o",
@@ -165,7 +165,7 @@ pub struct UserManager {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 

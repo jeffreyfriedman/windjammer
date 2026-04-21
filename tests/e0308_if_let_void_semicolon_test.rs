@@ -22,7 +22,7 @@ fn compile_wj_to_rust(input: &str) -> String {
             if let Ok(entries) = std::fs::read_dir(&dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.extension().map_or(false, |e| e == "rs") {
+                    if path.extension().is_some_and(|e| e == "rs") {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             return content;
                         }

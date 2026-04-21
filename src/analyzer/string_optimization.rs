@@ -142,7 +142,7 @@ impl<'ast> Analyzer<'ast> {
             Statement::Match { value, arms, .. } => {
                 self.expr_uses_param_in_string_ref_context(param_name, value, registry)
                     || arms.iter().any(|arm| {
-                        self.expr_uses_param_in_string_ref_context(param_name, &arm.body, registry)
+                        self.expr_uses_param_in_string_ref_context(param_name, arm.body, registry)
                     })
             }
             _ => false,

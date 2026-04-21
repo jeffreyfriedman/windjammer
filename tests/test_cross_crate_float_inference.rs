@@ -39,7 +39,7 @@ impl Vec3 {
     fs::create_dir_all(&lib_output).unwrap();
 
     let wj_status = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             lib_dir.join("src").to_str().unwrap(),
             "-o",
@@ -96,7 +96,7 @@ pub struct Vec3 {
     fs::create_dir_all(&lib_output).unwrap();
 
     Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             lib_dir.join("src").to_str().unwrap(),
             "-o",
@@ -129,7 +129,7 @@ fn update(pos: Vec3) {
 
     // Build app with --metadata to load external crate struct fields
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             app_dir.join("src").join("main.wj").to_str().unwrap(),
             "-o",

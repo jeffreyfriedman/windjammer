@@ -194,14 +194,14 @@ impl WjslCodegen {
     fn emit_function(&self, out: &mut String, f: &Function) {
         out.push_str("fn ");
         out.push_str(&f.name);
-        out.push_str("(");
+        out.push('(');
         for (i, p) in f.params.iter().enumerate() {
             if i > 0 {
                 out.push_str(", ");
             }
             self.emit_param(out, p);
         }
-        out.push_str(")");
+        out.push(')');
         if let Some(ref ret) = f.return_type {
             out.push_str(" -> ");
             out.push_str(&self.type_to_wgsl(ret));
@@ -250,14 +250,14 @@ impl WjslCodegen {
         }
         out.push_str("fn ");
         out.push_str(&ep.name);
-        out.push_str("(");
+        out.push('(');
         for (i, p) in ep.params.iter().enumerate() {
             if i > 0 {
                 out.push_str(", ");
             }
             self.emit_param(out, p);
         }
-        out.push_str(")");
+        out.push(')');
         if let Some(ref ret) = ep.return_type {
             out.push_str(" -> ");
             if let Some(loc) = ret.location {

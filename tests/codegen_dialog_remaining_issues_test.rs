@@ -11,7 +11,6 @@
 /// ✗ Option-returning method ownership inference (1 E0507)
 /// ✗ For-loop tuple element mutability inference (5 E0594)
 use std::fs;
-use std::path::PathBuf;
 
 fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();

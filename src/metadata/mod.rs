@@ -121,12 +121,9 @@ pub fn metadata_function_sig_from_analyzer(
         params: sig
             .param_types
             .iter()
-            .map(|t| ModuleMetadata::serialize_type(t))
+            .map(ModuleMetadata::serialize_type)
             .collect(),
-        return_type: sig
-            .return_type
-            .as_ref()
-            .map(|t| ModuleMetadata::serialize_type(t)),
+        return_type: sig.return_type.as_ref().map(ModuleMetadata::serialize_type),
         is_associated,
         parent_type,
         param_ownership: sig

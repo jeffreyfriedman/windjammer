@@ -219,7 +219,7 @@ fn main() {
     fs::write(&rs_file, &generated).expect("Failed to write Rust file");
 
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "bin",
             "--edition",

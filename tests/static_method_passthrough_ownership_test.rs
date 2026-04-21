@@ -210,7 +210,7 @@ impl Palette {
         stderr
     );
 
-    let generated = fs::read_to_string(output_dir.join("enum_variant_test.rs"))
+    let _generated = fs::read_to_string(output_dir.join("enum_variant_test.rs"))
         .expect("Generated .rs file not found");
 
     // i32 params are Copy types, so they should remain owned regardless.

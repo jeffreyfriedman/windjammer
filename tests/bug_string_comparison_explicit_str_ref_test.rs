@@ -107,7 +107,7 @@ fn main() {
     fs::write(&rs_file, &rust_code).expect("Failed to write Rust file");
 
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "bin",
             "--edition",
@@ -184,7 +184,7 @@ fn main() {
     fs::write(&rs_file, &rust_code).expect("Failed to write Rust file");
 
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "bin",
             "--edition",

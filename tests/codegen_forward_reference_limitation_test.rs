@@ -12,7 +12,7 @@
 #[ignore] // Ignore until two-pass analysis is implemented
 fn test_forward_reference_limitation() {
     use std::fs;
-    use std::path::Path;
+
     use std::process::Command;
 
     let test_code = r#"
@@ -80,7 +80,7 @@ impl Inventory {
 #[test]
 fn test_forward_reference_workaround() {
     use std::fs;
-    use std::path::Path;
+
     use std::process::Command;
 
     let test_code = r#"

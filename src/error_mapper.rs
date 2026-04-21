@@ -534,10 +534,8 @@ impl ErrorMapper {
         for field in fields {
             let d = levenshtein_distance(typo, field);
             let max_distance = std::cmp::min(3, std::cmp::max(typo.len(), field.len()) * 3 / 10);
-            if d <= max_distance && d > 0 {
-                if best.as_ref().map(|(_, bd)| d < *bd).unwrap_or(true) {
-                    best = Some((field.clone(), d));
-                }
+            if d <= max_distance && d > 0 && best.as_ref().map(|(_, bd)| d < *bd).unwrap_or(true) {
+                best = Some((field.clone(), d));
             }
         }
         best.map(|(s, _)| s)

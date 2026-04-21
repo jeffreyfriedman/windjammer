@@ -676,7 +676,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub fn register_method_signature(&mut self, sig: MethodSignature) {
         self.method_signatures_by_type
             .entry(sig.receiver_type.clone())
-            .or_insert_with(std::collections::HashMap::new)
+            .or_default()
             .insert(sig.method_name.clone(), sig);
     }
 

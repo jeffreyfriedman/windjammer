@@ -34,7 +34,7 @@ fn test_array_index() {
 
     // Transpile
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -79,7 +79,7 @@ fn process_items() {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", test_file, "-o", "./build", "--no-cargo"])
+        .args(["build", test_file, "-o", "./build", "--no-cargo"])
         .output()
         .expect("Failed to run wj compiler");
 

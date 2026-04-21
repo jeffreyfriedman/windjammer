@@ -143,7 +143,7 @@ fn compile_project(test_dir: &str, entry_file: &str) -> String {
     let source_file = PathBuf::from(test_dir).join(entry_file);
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             source_file.to_str().unwrap(),
             "--target",

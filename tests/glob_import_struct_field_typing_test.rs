@@ -8,7 +8,7 @@ fn test_use_super_star_resolves_struct_fields() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("dialogue")).unwrap();
+    std::fs::create_dir_all(src.join("dialogue")).unwrap();
 
     std::fs::write(
         src.join("dialogue").join("mod.wj"),
@@ -64,7 +64,7 @@ fn test_use_crate_star_resolves_types() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("types")).unwrap();
+    std::fs::create_dir_all(src.join("types")).unwrap();
 
     std::fs::write(
         src.join("types").join("entity.wj"),
@@ -106,7 +106,7 @@ fn test_pub_use_child_module_path_resolves_under_parent_module() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("dialogue")).unwrap();
+    std::fs::create_dir_all(src.join("dialogue")).unwrap();
 
     std::fs::write(
         src.join("dialogue").join("mod.wj"),

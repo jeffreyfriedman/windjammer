@@ -36,7 +36,7 @@ fn test_indexing() {
 
     // Transpile
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -87,7 +87,7 @@ fn process_neighbors(agent: SteeringAgent) {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -133,7 +133,7 @@ impl Counter {
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
 

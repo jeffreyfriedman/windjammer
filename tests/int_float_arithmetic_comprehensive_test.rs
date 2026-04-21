@@ -270,7 +270,7 @@ pub fn formation_angle(member_index: i32, count: i32) -> f32 {
     let output = compile_and_get_rust(source);
     let has_f32 = output.contains("as f32") || output.contains("_f32");
     assert!(has_f32, "Should have f32 consistency. Got:\n{}", output);
-    let (ok, stderr) = run_rustc(&output);
+    let (_ok, stderr) = run_rustc(&output);
     assert_no_e0277(&output, &stderr, "formation_angle");
 }
 
