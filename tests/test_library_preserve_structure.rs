@@ -5,7 +5,6 @@
 //
 // Fix: Preserve relative directory structure from input to output
 
-use std::path::PathBuf;
 use tempfile::TempDir;
 use windjammer::{build_project_ext, CompilationTarget};
 

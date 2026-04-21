@@ -81,6 +81,12 @@ pub struct IntInference {
     const_types: HashMap<String, Type>,
 }
 
+impl Default for IntInference {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IntInference {
     pub fn new() -> Self {
         let mut inference = IntInference {
@@ -755,7 +761,7 @@ impl IntInference {
                         // Handles: identifier.method(), self.field.method(), expr.method()
                         let resolved_type_name =
                             if let Expression::Identifier { name: obj_name, .. } = object {
-                                if obj_name.chars().next().map_or(false, |c| c.is_lowercase()) {
+                                if obj_name.chars().next().is_some_and(|c| c.is_lowercase()) {
                                     if obj_name == "self" {
                                         self.current_impl_type.clone()
                                     } else {
@@ -777,11 +783,9 @@ impl IntInference {
                                         _ => None,
                                     })
                             };
-                        if let Some(ref type_name) = resolved_type_name {
-                            Some(format!("{}::{}", type_name, field))
-                        } else {
-                            None
-                        }
+                        resolved_type_name
+                            .as_ref()
+                            .map(|type_name| format!("{}::{}", type_name, field))
                     }
                     _ => None,
                 };
@@ -800,7 +804,7 @@ impl IntInference {
                     if is_vec_index_method && !arguments.is_empty() {
                         let receiver_is_vec = self
                             .infer_type_from_expression(call_obj)
-                            .map_or(false, |t| matches!(t, Type::Vec(_)));
+                            .is_some_and(|t| matches!(t, Type::Vec(_)));
                         if receiver_is_vec {
                             if let Some((_label, arg)) = arguments.first() {
                                 let arg_id = self.get_expr_id(arg);
@@ -826,7 +830,7 @@ impl IntInference {
                         self.collect_expression_constraints(arg, return_type);
                     }
                     if let (Some((_, first)), Some((_, second))) =
-                        (arguments.get(0), arguments.get(1))
+                        (arguments.first(), arguments.get(1))
                     {
                         let first_id = self.get_expr_id(first);
                         let second_id = self.get_expr_id(second);
@@ -982,7 +986,7 @@ impl IntInference {
                     || method == "drain";
                 let receiver_is_vec = self
                     .infer_type_from_expression(object)
-                    .map_or(false, |t| matches!(t, Type::Vec(_)))
+                    .is_some_and(|t| matches!(t, Type::Vec(_)))
                     || {
                         if let Expression::FieldAccess {
                             object: inner_obj,
@@ -1032,7 +1036,7 @@ impl IntInference {
                                     self.constraints.push(IntConstraint::MustBe(
                                         value_id,
                                         int_ty,
-                                        format!("HashMap/BTreeMap.insert value type"),
+                                        "HashMap/BTreeMap.insert value type".to_string(),
                                     ));
                                 }
                             }
@@ -1047,7 +1051,7 @@ impl IntInference {
                                     self.constraints.push(IntConstraint::MustBe(
                                         value_id,
                                         int_ty,
-                                        format!("Vec.push element type"),
+                                        "Vec.push element type".to_string(),
                                     ));
                                 }
                             }
@@ -1470,8 +1474,8 @@ impl IntInference {
                     for arg in args {
                         self.collect_expression_constraints(arg, return_type);
                     }
-                    let first_id = self.get_expr_id(&args[0]);
-                    let second_id = self.get_expr_id(&args[1]);
+                    let first_id = self.get_expr_id(args[0]);
+                    let second_id = self.get_expr_id(args[1]);
                     self.constraints.push(IntConstraint::MustMatch(
                         first_id,
                         second_id,
@@ -1783,7 +1787,7 @@ impl IntInference {
     fn solve_constraints(&mut self) {
         for constraint in &self.constraints.clone() {
             if let IntConstraint::MustBe(expr_id, int_ty, _) = constraint {
-                if self.inferred_types.get(expr_id).is_none() {
+                if !self.inferred_types.contains_key(expr_id) {
                     self.inferred_types.insert(*expr_id, *int_ty);
                 }
             }
@@ -1802,24 +1806,24 @@ impl IntInference {
                     IntConstraint::MustBe(expr_id, int_ty, reason) => {
                         let current = self.inferred_types.get(&expr_id).copied();
                         match current {
-                            Some(other) if other != int_ty && other != IntType::Unknown => {
-                                if int_ty != IntType::Unknown {
+                            Some(other)
+                                if other != int_ty && other != IntType::Unknown
+                                && int_ty != IntType::Unknown
                                     // TDD FIX: Only emit error if NOT a safe implicit cast
                                     // DON'T modify inferred types - let codegen insert casts
-                                    if !is_safe_implicit_cast(other, int_ty) {
-                                        let file_path = self
-                                            .id_to_file_name
-                                            .get(&expr_id.file_id)
-                                            .map(|s| s.as_str())
-                                            .unwrap_or("?");
-                                        self.errors.push(format!(
-                                            "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
-                                            file_path, expr_id.line, expr_id.col, int_ty, reason, other
-                                        ));
-                                    }
-                                    // else: Safe cast - silently allow it
-                                }
+                                    && !is_safe_implicit_cast(other, int_ty) =>
+                            {
+                                let file_path = self
+                                    .id_to_file_name
+                                    .get(&expr_id.file_id)
+                                    .map(|s| s.as_str())
+                                    .unwrap_or("?");
+                                self.errors.push(format!(
+                                    "{}:{}:{}: Type conflict: must be {:?} ({}) but was {:?}",
+                                    file_path, expr_id.line, expr_id.col, int_ty, reason, other
+                                ));
                             }
+                            // else: Safe cast - silently allow it
                             Some(IntType::Unknown) | None => {
                                 let to_insert = if int_ty == IntType::Unknown {
                                     IntType::I32
@@ -1838,23 +1842,22 @@ impl IntInference {
 
                         match (t1, t2) {
                             (Some(a), Some(b))
-                                if a != b && a != IntType::Unknown && b != IntType::Unknown =>
-                            {
+                                if a != b && a != IntType::Unknown && b != IntType::Unknown
                                 // TDD FIX: Only emit error if NOT a safe implicit cast in either direction
                                 // DON'T modify inferred types - let codegen insert casts
-                                if !is_safe_implicit_cast(a, b) && !is_safe_implicit_cast(b, a) {
-                                    let file_path = self
-                                        .id_to_file_name
-                                        .get(&id1.file_id)
-                                        .map(|s| s.as_str())
-                                        .unwrap_or("?");
-                                    self.errors.push(format!(
-                                        "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
-                                        file_path, id1.line, id1.col, reason, a, b, reason
-                                    ));
-                                }
-                                // else: Safe cast in at least one direction - silently allow it
+                                && !is_safe_implicit_cast(a, b) && !is_safe_implicit_cast(b, a) =>
+                            {
+                                let file_path = self
+                                    .id_to_file_name
+                                    .get(&id1.file_id)
+                                    .map(|s| s.as_str())
+                                    .unwrap_or("?");
+                                self.errors.push(format!(
+                                    "{}:{}:{}: Type mismatch {}: {:?} vs {:?} ({})",
+                                    file_path, id1.line, id1.col, reason, a, b, reason
+                                ));
                             }
+                            // else: Safe cast in at least one direction - silently allow it
                             (Some(concrete), None | Some(IntType::Unknown)) => {
                                 let to_use = if concrete == IntType::Unknown {
                                     IntType::I32

@@ -1,6 +1,5 @@
 use assert_cmd::Command;
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 
 /// TDD Test: Ownership inference for Copy types from external crates

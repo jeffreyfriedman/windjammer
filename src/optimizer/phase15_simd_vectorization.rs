@@ -327,18 +327,16 @@ fn classify_loop_operation<'ast>(
     // Simple heuristic: look for common patterns
     for stmt in body {
         match stmt {
-            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+            Statement::Let { value, .. } | Statement::Const { value, .. }
                 // Check for accumulation pattern (sum += ...)
-                if contains_compound_assignment(value) {
+                if contains_compound_assignment(value) => {
                     return VectorOperation::Reduction;
                 }
-            }
-            Statement::Expression { expr, .. } => {
+            Statement::Expression { expr, .. }
                 // Check for array assignment (a[i] = ...)
-                if is_array_assignment(expr, variable) {
+                if is_array_assignment(expr, variable) => {
                     return VectorOperation::Map;
                 }
-            }
             _ => {}
         }
     }
@@ -356,10 +354,8 @@ fn check_vectorization_safety<'ast>(body: &[&'ast Statement<'ast>]) -> bool {
                 return false
             }
             Statement::If { .. } | Statement::While { .. } | Statement::For { .. } => return false,
-            Statement::Expression { expr, .. } => {
-                if contains_function_call(expr) {
-                    return false;
-                }
+            Statement::Expression { expr, .. } if contains_function_call(expr) => {
+                return false;
             }
             _ => {}
         }

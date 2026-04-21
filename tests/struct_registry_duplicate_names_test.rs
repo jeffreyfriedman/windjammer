@@ -8,7 +8,7 @@ fn test_duplicate_struct_names_different_modules() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("dialogue")).unwrap();
+    std::fs::create_dir_all(src.join("dialogue")).unwrap();
 
     std::fs::write(
         src.join("dialogue").join("legacy.wj"),
@@ -71,7 +71,7 @@ fn test_qualified_struct_literal_typing() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
-    std::fs::create_dir_all(&src.join("types")).unwrap();
+    std::fs::create_dir_all(src.join("types")).unwrap();
 
     std::fs::write(
         src.join("types").join("entity.wj"),

@@ -590,7 +590,7 @@ fn main() -> anyhow::Result<()> {
                         let p = entry.path();
                         if p.is_dir() {
                             find_wjsl_files(&p, files);
-                        } else if p.extension().map_or(false, |e| e == "wjsl") {
+                        } else if p.extension().is_some_and(|e| e == "wjsl") {
                             files.push(p);
                         }
                     }

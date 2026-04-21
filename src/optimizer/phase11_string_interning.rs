@@ -98,12 +98,11 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
         Expression::Literal {
             value: Literal::String(s),
             ..
-        } => {
+        }
             // Only intern strings >= 10 characters
-            if s.len() >= 10 {
+            if s.len() >= 10 => {
                 *frequency.entry(s.clone()).or_insert(0) += 1;
             }
-        }
         Expression::Binary { left, right, .. } => {
             collect_strings_from_expression(left, frequency);
             collect_strings_from_expression(right, frequency);

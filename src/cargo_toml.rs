@@ -784,7 +784,7 @@ mod tests {
     fn test_infer_project_name_from_parent_game_toml() {
         let temp = std::env::temp_dir().join("wj_infer_parent_game");
         let _ = fs::remove_dir_all(&temp);
-        fs::create_dir_all(&temp.join("src")).unwrap();
+        fs::create_dir_all(temp.join("src")).unwrap();
         fs::write(temp.join("game.toml"), r#"name = "My Game Title""#).unwrap();
 
         assert_eq!(infer_project_name(&temp.join("src")), "my-game-title");

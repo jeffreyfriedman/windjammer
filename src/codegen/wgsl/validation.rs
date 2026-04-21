@@ -66,7 +66,7 @@ fn statement_calls_function(stmt: &Statement, func_name: &str) -> bool {
                 || then_block
                     .iter()
                     .any(|s| statement_calls_function(s, func_name))
-                || else_block.as_ref().map_or(false, |block| {
+                || else_block.as_ref().is_some_and(|block| {
                     block.iter().any(|s| statement_calls_function(s, func_name))
                 })
         }
@@ -137,6 +137,5 @@ mod tests {
     fn test_recursion_detection() {
         // This would need actual AST construction
         // For now, just verify the function exists
-        assert!(true);
     }
 }

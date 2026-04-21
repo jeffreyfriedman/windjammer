@@ -62,13 +62,13 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Token {
         self.current_line = self.lexer.line();
         self.current_column = self.lexer.column();
-        let prev = std::mem::replace(
+
+        std::mem::replace(
             &mut self.current,
             self.peeked
                 .take()
                 .unwrap_or_else(|| self.lexer.next_token()),
-        );
-        prev
+        )
     }
 
     fn peek(&mut self) -> &Token {

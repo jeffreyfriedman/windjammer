@@ -62,7 +62,7 @@ impl Node {
     fs::write(&wj_file, source).unwrap();
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
+    let _output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
         .arg("--no-cargo")

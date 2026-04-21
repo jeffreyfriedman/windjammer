@@ -56,7 +56,7 @@ fn run_test(wj_code: &str, test_name: &str) {
     fs::write(&wj_file, wj_code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&["build", &wj_file])
+        .args(["build", &wj_file])
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -69,7 +69,7 @@ fn run_test(wj_code: &str, test_name: &str) {
 
     let build_dir = format!("{}/build", test_dir);
     let cargo_output = Command::new("cargo")
-        .args(&[
+        .args([
             "build",
             "--manifest-path",
             &format!("{}/Cargo.toml", build_dir),

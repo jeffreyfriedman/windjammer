@@ -130,7 +130,7 @@ fn compile_and_get_rust(source: &str) -> String {
     std::fs::write(&source_file, source).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             source_file.to_str().unwrap(),
             "--target",

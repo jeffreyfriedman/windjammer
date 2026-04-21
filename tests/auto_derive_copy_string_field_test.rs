@@ -125,7 +125,7 @@ pub struct InputBinding {
 
     // Neither struct should derive Copy
     // InputAction has String, InputBinding has InputAction (which has String)
-    let binding_section = rust.split("pub struct InputBinding").nth(1).unwrap_or("");
+    let _binding_section = rust.split("pub struct InputBinding").nth(1).unwrap_or("");
 
     // The InputBinding derive should not contain Copy
     let action_derive_line = rust

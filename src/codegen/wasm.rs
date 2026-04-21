@@ -133,10 +133,8 @@ impl WasmBackend {
             match item {
                 Item::Struct {
                     decl: struct_decl, ..
-                } => {
-                    if analyzer.is_component(&struct_decl.name) {
-                        code.push_str(&component_gen.generate_component_struct(struct_decl));
-                    }
+                } if analyzer.is_component(&struct_decl.name) => {
+                    code.push_str(&component_gen.generate_component_struct(struct_decl));
                 }
                 Item::Impl {
                     block: impl_block, ..

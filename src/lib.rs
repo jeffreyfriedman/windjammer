@@ -32,6 +32,7 @@ pub mod syntax_highlighter_stub;
 #[cfg(not(feature = "highlighting"))]
 pub use syntax_highlighter_stub as syntax_highlighter;
 pub mod compiler;
+pub mod compiler_database;
 pub mod decorator_registry;
 pub mod ejector;
 pub mod error_mapper;

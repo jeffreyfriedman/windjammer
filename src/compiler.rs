@@ -18,9 +18,10 @@
 //! 2. Have a different crate structure
 //!
 //! For now: the tests that use build_project (cross_file, integration_ffi, etc.)
+//!
 //! - do they actually run? Let me check the build. The lib build fails because
-//! we don't have the impl. So we need the impl. Let me add a minimal impl that
-//! does single-file compilation using the existing analyzer/codegen.
+//!   we don't have the impl. So we need the impl. Let me add a minimal impl that
+//!   does single-file compilation using the existing analyzer/codegen.
 
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
@@ -222,7 +223,7 @@ pub fn build_project_ext(
                                 return_type: decl
                                     .return_type
                                     .as_ref()
-                                    .map(|t| ModuleMetadata::serialize_type(t)),
+                                    .map(ModuleMetadata::serialize_type),
                                 is_associated: false,
                                 parent_type: None,
                                 param_ownership: vec![],
@@ -245,7 +246,7 @@ pub fn build_project_ext(
                                     return_type: func_decl
                                         .return_type
                                         .as_ref()
-                                        .map(|t| ModuleMetadata::serialize_type(t)),
+                                        .map(ModuleMetadata::serialize_type),
                                     is_associated: true,
                                     parent_type: Some(block.type_name.clone()),
                                     param_ownership: vec![],
@@ -934,7 +935,7 @@ fn build_library_multipass(
                             return_type: decl
                                 .return_type
                                 .as_ref()
-                                .map(|t| ModuleMetadata::serialize_type(t)),
+                                .map(ModuleMetadata::serialize_type),
                             is_associated: false,
                             parent_type: None,
                             param_ownership: vec![],
@@ -957,7 +958,7 @@ fn build_library_multipass(
                                 return_type: func_decl
                                     .return_type
                                     .as_ref()
-                                    .map(|t| ModuleMetadata::serialize_type(t)),
+                                    .map(ModuleMetadata::serialize_type),
                                 is_associated: true,
                                 parent_type: Some(block.type_name.clone()),
                                 param_ownership: vec![],
@@ -1347,7 +1348,7 @@ fn build_library_multipass(
     };
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
-    for (_file_idx, (file, source)) in sources.iter().enumerate() {
+    for (file, source) in sources.iter() {
         // Final parse
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();

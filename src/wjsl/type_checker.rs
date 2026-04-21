@@ -241,15 +241,10 @@ impl<'a> BodyParser<'a> {
                 self.expect_semicolon()?;
             } else if matches!(self.current, Token::Var) {
                 self.parse_var_decl()?;
-            } else if matches!(self.current, Token::If) {
-                self.skip_block()?;
-            } else if matches!(self.current, Token::For) {
-                self.skip_block()?;
-            } else if matches!(self.current, Token::While) {
-                self.skip_block()?;
-            } else if matches!(self.current, Token::Loop) {
-                self.skip_block()?;
-            } else if matches!(self.current, Token::Switch) {
+            } else if matches!(
+                self.current,
+                Token::If | Token::For | Token::While | Token::Loop | Token::Switch
+            ) {
                 self.skip_block()?;
             } else if matches!(self.current, Token::LBrace) {
                 self.skip_braces()?;
@@ -504,45 +499,30 @@ impl<'a> BodyParser<'a> {
 
     fn parse_bitwise_or(&mut self) -> Result<Type> {
         let mut left = self.parse_bitwise_xor()?;
-        loop {
-            match &self.current {
-                Token::BitOr => {
-                    self.advance();
-                    let right = self.parse_bitwise_xor()?;
-                    left = check_binary_op(&left, BinaryOp::BitOr, &right)?;
-                }
-                _ => break,
-            }
+        while let Token::BitOr = &self.current {
+            self.advance();
+            let right = self.parse_bitwise_xor()?;
+            left = check_binary_op(&left, BinaryOp::BitOr, &right)?;
         }
         Ok(left)
     }
 
     fn parse_bitwise_xor(&mut self) -> Result<Type> {
         let mut left = self.parse_bitwise_and()?;
-        loop {
-            match &self.current {
-                Token::BitXor => {
-                    self.advance();
-                    let right = self.parse_bitwise_and()?;
-                    left = check_binary_op(&left, BinaryOp::BitXor, &right)?;
-                }
-                _ => break,
-            }
+        while let Token::BitXor = &self.current {
+            self.advance();
+            let right = self.parse_bitwise_and()?;
+            left = check_binary_op(&left, BinaryOp::BitXor, &right)?;
         }
         Ok(left)
     }
 
     fn parse_bitwise_and(&mut self) -> Result<Type> {
         let mut left = self.parse_shift()?;
-        loop {
-            match &self.current {
-                Token::BitAnd => {
-                    self.advance();
-                    let right = self.parse_shift()?;
-                    left = check_binary_op(&left, BinaryOp::BitAnd, &right)?;
-                }
-                _ => break,
-            }
+        while let Token::BitAnd = &self.current {
+            self.advance();
+            let right = self.parse_shift()?;
+            left = check_binary_op(&left, BinaryOp::BitAnd, &right)?;
         }
         Ok(left)
     }

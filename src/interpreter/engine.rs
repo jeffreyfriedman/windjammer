@@ -509,7 +509,7 @@ impl<'a> Interpreter<'a> {
             Pattern::Wildcard => {} // Discard
             Pattern::Tuple(patterns) => {
                 if let Value::Tuple(items) = value {
-                    for (pat, val) in patterns.iter().zip(items.into_iter()) {
+                    for (pat, val) in patterns.iter().zip(items) {
                         self.bind_pattern(pat, val);
                     }
                 }

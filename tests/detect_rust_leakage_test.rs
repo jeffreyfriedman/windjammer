@@ -163,7 +163,7 @@ fn try_compile(source: &str) -> CompileResult {
     std::fs::write(&source_file, source).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(&[
+        .args([
             "build",
             source_file.to_str().unwrap(),
             "--target",

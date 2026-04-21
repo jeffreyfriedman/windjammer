@@ -65,7 +65,7 @@ impl CopySemantics {
                     || name
                         .split("::")
                         .last()
-                        .map_or(false, |b| self.copy_types.contains(b))
+                        .is_some_and(|b| self.copy_types.contains(b))
                     || matches!(
                         name.as_str(),
                         "i8" | "i16"

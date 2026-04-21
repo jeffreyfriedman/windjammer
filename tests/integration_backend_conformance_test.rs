@@ -67,7 +67,7 @@ fn compile_and_run_rust(source: &str, test_name: &str) -> BackendResult {
             .ok()
             .and_then(|dir| {
                 dir.filter_map(|e| e.ok())
-                    .find(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+                    .find(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
                     .map(|e| e.path())
             })
             .unwrap_or_else(|| {

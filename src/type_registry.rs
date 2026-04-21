@@ -100,21 +100,19 @@ impl TypeRegistry {
                         file_path.to_path_buf(),
                     );
                 }
-                Item::Function { decl, .. } => {
+                Item::Function { decl, .. }
                     // Register top-level functions
-                    if decl.is_pub {
+                    if decl.is_pub => {
                         self.register_function(decl.name.clone(), module_path.clone());
                     }
-                }
-                Item::TypeAlias { name, is_pub, .. } => {
-                    if *is_pub {
+                Item::TypeAlias { name, is_pub, .. }
+                    if *is_pub => {
                         self.register_type(
                             name.clone(),
                             module_path.clone(),
                             file_path.to_path_buf(),
                         );
                     }
-                }
                 Item::Mod { items, .. } => {
                     // For inline modules, types and functions are defined in the parent module
                     // Example: mod utils { struct Helper {} } -> Helper is in current module
@@ -141,20 +139,18 @@ impl TypeRegistry {
                                     file_path.to_path_buf(),
                                 );
                             }
-                            Item::Function { decl, .. } => {
-                                if decl.is_pub {
+                            Item::Function { decl, .. }
+                                if decl.is_pub => {
                                     self.register_function(decl.name.clone(), module_path.clone());
                                 }
-                            }
-                            Item::TypeAlias { name, is_pub, .. } => {
-                                if *is_pub {
+                            Item::TypeAlias { name, is_pub, .. }
+                                if *is_pub => {
                                     self.register_type(
                                         name.clone(),
                                         module_path.clone(),
                                         file_path.to_path_buf(),
                                     );
                                 }
-                            }
                             _ => {}
                         }
                     }

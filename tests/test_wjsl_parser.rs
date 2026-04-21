@@ -2,7 +2,7 @@
 //!
 //! Tests the RFC syntax: @vertex, @fragment, @compute, @group, @binding, etc.
 
-use windjammer::wjsl::{parse_wjsl, BindingKind, ShaderStage, StorageAccess};
+use windjammer::wjsl::{parse_wjsl, ShaderStage};
 
 #[test]
 fn test_parse_vertex_shader() {

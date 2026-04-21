@@ -21,7 +21,7 @@ fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     for entry in fs::read_dir(dir).ok()? {
         let entry = entry.ok()?;
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |e| e == "rs") {
+        if path.is_file() && path.extension().is_some_and(|e| e == "rs") {
             return Some(path);
         }
         if path.is_dir() {

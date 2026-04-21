@@ -27,7 +27,7 @@ extern fn test_string_param(path: string) -> u32
 
     // Transpile with wj compiler
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -90,7 +90,7 @@ extern fn func_c()
     fs::write(test_file, test_wj).expect("Failed to write test file");
 
     let output = Command::new("./target/release/wj")
-        .args(&["build", "--no-cargo", test_file])
+        .args(["build", "--no-cargo", test_file])
         .output()
         .expect("Failed to run wj compiler");
 

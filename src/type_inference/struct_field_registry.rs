@@ -316,7 +316,7 @@ pub fn expand_glob_import(
 
     let mut n_direct = 0usize;
     // 1) Structs defined directly in this module (exactly one path segment after the module prefix)
-    for (key, _) in struct_field_types {
+    for key in struct_field_types.keys() {
         if module_key.is_empty() {
             if !key.contains("::") {
                 out.insert(key.clone(), key.clone());

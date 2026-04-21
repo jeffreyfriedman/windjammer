@@ -33,7 +33,7 @@ pub fn create_dialog(id: string) -> DialogTree {
 
     // Compile with Windjammer
     let output = Command::new("wj")
-        .args(&["build", "--output", "/tmp", "--target", "rust", temp_file])
+        .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
         .output()
         .expect("Failed to run wj");
 
@@ -85,7 +85,7 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
     fs::write(temp_file, source).unwrap();
 
     let output = Command::new("wj")
-        .args(&["build", "--output", "/tmp", "--target", "rust", temp_file])
+        .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
         .output()
         .expect("Failed to run wj");
 

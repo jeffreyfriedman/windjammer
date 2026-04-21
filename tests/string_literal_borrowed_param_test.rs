@@ -30,7 +30,7 @@ pub fn test_greet() -> string {
 
     // Compile with wj
     let output = Command::new(&wj_bin)
-        .args(&["build", "test.wj", "--no-cargo"])
+        .args(["build", "test.wj", "--no-cargo"])
         .current_dir(&temp_dir)
         .output()
         .expect("Failed to run wj compiler");
@@ -51,7 +51,7 @@ pub fn test_greet() -> string {
 
     // TDD ASSERTION: Verify rustc compiles without E0308
     let rustc_output = Command::new("rustc")
-        .args(&[
+        .args([
             "--crate-type",
             "lib",
             "--edition",

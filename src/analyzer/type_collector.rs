@@ -82,12 +82,11 @@ fn push_custom_path(out: &mut HashSet<String>, name: &str) {
         return;
     }
     // Only types / modules following Rust conventions (uppercase start or qualified path).
-    if trimmed.contains('.') {
-        out.insert(trimmed.to_string());
-    } else if trimmed
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_uppercase())
+    if trimmed.contains('.')
+        || trimmed
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
     {
         out.insert(trimmed.to_string());
     }
@@ -389,10 +388,7 @@ pub fn rust_use_path_from_module_to_type(
     let lcp = longest_common_prefix_len(current_module, defining_module);
     let ups = current_module.len().saturating_sub(lcp);
     let down = &defining_module[lcp..];
-    let mut parts: Vec<&str> = Vec::new();
-    for _ in 0..ups {
-        parts.push("super");
-    }
+    let mut parts: Vec<&str> = vec!["super"; ups];
     for seg in down {
         parts.push(seg.as_str());
     }

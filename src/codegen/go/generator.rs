@@ -709,20 +709,11 @@ impl GoGenerator {
 
                 // TDD FIX: Detect enum variant construction (Maybe::Some(...))
                 // Need explicit type annotation for interface: var opt Maybe = MaybeSome{...}
-                let needs_interface_type = if let Expression::Call { function, .. } = value {
-                    if let Expression::Identifier { name, .. } = &**function {
-                        // Check if this is an enum variant (Type::Variant)
-                        if let Some((enum_name, _variant)) = name.split_once("::") {
-                            self.declared_enums.contains_key(enum_name)
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let needs_interface_type = matches!(value, Expression::Call { function, .. }
+                    if matches!(&**function, Expression::Identifier { name, .. }
+                        if name.split_once("::").map(|(enum_name, _)| self.declared_enums.contains_key(enum_name)).unwrap_or(false)
+                    )
+                );
 
                 // Go doesn't allow re-declaration of a variable in the same scope.
                 // For shadowing, we use a temporary variable + assignment pattern.
@@ -732,20 +723,18 @@ impl GoGenerator {
                 } else if needs_interface_type {
                     // TDD: Enum variant assignment needs interface type
                     // Extract enum name from variant construction
-                    if let Expression::Call { function, .. } = value {
-                        if let Expression::Identifier { name, .. } = &**function {
-                            if let Some((enum_name, _)) = name.split_once("::") {
-                                self.declare_var(&var_name);
-                                return format!(
-                                    "{}var {} {} = {}\n",
-                                    indent, var_name, enum_name, value_str
-                                );
-                            }
-                        }
-                    }
-                    // Fallback (shouldn't reach here)
+                    // Since needs_interface_type is true, we know value matches the pattern
+                    let (enum_name, _) = match value {
+                        Expression::Call { function, .. } => match &**function {
+                            Expression::Identifier { name, .. } => name
+                                .split_once("::")
+                                .expect("needs_interface_type guarantees :: exists"),
+                            _ => unreachable!("needs_interface_type guarantees Identifier"),
+                        },
+                        _ => unreachable!("needs_interface_type guarantees Call"),
+                    };
                     self.declare_var(&var_name);
-                    format!("{}{} := {}\n", indent, var_name, value_str)
+                    format!("{}var {} {} = {}\n", indent, var_name, enum_name, value_str)
                 } else if *mutable {
                     self.declare_var(&var_name);
                     format!("{}var {} = {}\n", indent, var_name, value_str)

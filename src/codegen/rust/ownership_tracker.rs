@@ -98,9 +98,8 @@ impl OwnershipTracker {
 
     /// Check if variable is tracked as borrowed (shared or mut)
     pub fn is_variable_borrowed(&self, name: &str) -> bool {
-        self.get_variable_ownership(name).map_or(false, |o| {
-            matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-        })
+        self.get_variable_ownership(name)
+            .is_some_and(|o| matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed))
     }
 
     /// Derive ownership from inferred type (for local_var_types)
@@ -127,10 +126,8 @@ impl OwnershipTracker {
             Expression::Cast { expr, .. } => self.get_expression_ownership(expr),
             Expression::TryOp { expr, .. } => self.get_expression_ownership(expr),
             Expression::Block { statements, .. } => {
-                if let Some(last) = statements.last() {
-                    if let crate::parser::Statement::Expression { expr, .. } = last {
-                        return self.get_expression_ownership(expr);
-                    }
+                if let Some(crate::parser::Statement::Expression { expr, .. }) = statements.last() {
+                    return self.get_expression_ownership(expr);
                 }
                 OwnershipMode::Owned
             }
@@ -175,7 +172,7 @@ impl OwnershipTracker {
                     || name
                         .split("::")
                         .last()
-                        .map_or(false, |b| self.copy_types.contains(b))
+                        .is_some_and(|b| self.copy_types.contains(b))
             }
             _ => false,
         }

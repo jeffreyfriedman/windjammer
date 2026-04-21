@@ -15,6 +15,12 @@ use super::validation::validate_for_gpu;
 
 pub struct WgslBackend;
 
+impl Default for WgslBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WgslBackend {
     pub fn new() -> Self {
         WgslBackend
@@ -47,7 +53,7 @@ impl WgslBackend {
                 continue;
             }
 
-            output.push_str("@");
+            output.push('@');
             output.push_str(&decorator.name);
 
             if !decorator.arguments.is_empty() {
@@ -147,7 +153,7 @@ impl WgslBackend {
                                     }
                                     output.push_str(&self.generate_expression(elem)?);
                                 }
-                                output.push_str(")");
+                                output.push(')');
                             }
                         }
                     }
@@ -176,7 +182,7 @@ impl WgslBackend {
 
             // Generate parameter decorators (@builtin, @location, etc.)
             for decorator in &param.decorators {
-                output.push_str("@");
+                output.push('@');
                 output.push_str(&decorator.name);
 
                 // Generate decorator arguments

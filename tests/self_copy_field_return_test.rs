@@ -10,7 +10,7 @@ use std::collections::HashMap;
 /// support cross-crate Copy detection via `.wj.meta` metadata.
 ///
 /// Windjammer principle: "Compiler does the hard work, not the developer."
-use windjammer::analyzer::{Analyzer, OwnershipMode};
+use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;
 use windjammer::lexer::Lexer;
 use windjammer::metadata::infer_copy_from_metadata_structs_pub;

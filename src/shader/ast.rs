@@ -29,17 +29,12 @@ pub struct StorageDecl {
 }
 
 /// Storage buffer access mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AccessMode {
     Read,
     Write,
+    #[default]
     ReadWrite,
-}
-
-impl Default for AccessMode {
-    fn default() -> Self {
-        AccessMode::ReadWrite
-    }
 }
 
 /// Shader function (compute, vertex, fragment)

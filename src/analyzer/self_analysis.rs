@@ -959,7 +959,7 @@ impl<'ast> Analyzer<'ast> {
                 then_block
                     .iter()
                     .any(|s| self.statement_consumes_self_field_elements(s, registry))
-                    || else_block.as_ref().map_or(false, |body| {
+                    || else_block.as_ref().is_some_and(|body| {
                         body.iter()
                             .any(|s| self.statement_consumes_self_field_elements(s, registry))
                     })
@@ -1008,7 +1008,7 @@ impl<'ast> Analyzer<'ast> {
                     || then_block.iter().any(|s| {
                         self.statement_calls_consuming_method_on_var(s, var_name, registry)
                     })
-                    || else_block.as_ref().map_or(false, |body| {
+                    || else_block.as_ref().is_some_and(|body| {
                         body.iter().any(|s| {
                             self.statement_calls_consuming_method_on_var(s, var_name, registry)
                         })
@@ -1063,7 +1063,7 @@ impl<'ast> Analyzer<'ast> {
                 }
                 // Recursively check match arm bodies (which are expressions)
                 arms.iter()
-                    .any(|arm| self.expression_contains_match_on_self_consuming(&arm.body))
+                    .any(|arm| self.expression_contains_match_on_self_consuming(arm.body))
             }
             Statement::Let { value: expr, .. }
             | Statement::Assignment { value: expr, .. }
@@ -1081,7 +1081,7 @@ impl<'ast> Analyzer<'ast> {
                     || then_block
                         .iter()
                         .any(|s| self.statement_matches_on_self_consuming(s))
-                    || else_block.as_ref().map_or(false, |body| {
+                    || else_block.as_ref().is_some_and(|body| {
                         body.iter()
                             .any(|s| self.statement_matches_on_self_consuming(s))
                     })
@@ -1117,7 +1117,7 @@ impl<'ast> Analyzer<'ast> {
             let bound_vars = self.pattern_bound_variables(&arm.pattern);
 
             // Check if the arm body uses any of these variables in a consuming way
-            if self.expression_uses_variables_consuming(&arm.body, &bound_vars) {
+            if self.expression_uses_variables_consuming(arm.body, &bound_vars) {
                 return true;
             }
         }
@@ -1252,9 +1252,11 @@ impl<'ast> Analyzer<'ast> {
         use crate::parser::UnaryOp;
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
-            Expression::Unary { op, operand, .. }
-                if matches!(op, UnaryOp::Ref | UnaryOp::MutRef) =>
-            {
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                operand,
+                ..
+            } => {
                 matches!(&**operand, Expression::Identifier { name, .. } if name == "self")
             }
             _ => false,

@@ -147,7 +147,7 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 };
 
-                let needs_usize_first_arg = func_name.map_or(false, |name| {
+                let needs_usize_first_arg = func_name.is_some_and(|name| {
                     name == "Vec::with_capacity"
                         || name == "HashMap::with_capacity"
                         || name == "String::with_capacity"
@@ -163,8 +163,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .or_else(|| {
                             // Fallback: Try finding by suffix (e.g., "::new" matches "Thing::new")
                             // Extract just the method name for lookup
-                            let method_name = name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
-                            self.signature_registry.find_signature_ending_with(method_name)
+                            let method_name =
+                                name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
+                            self.signature_registry
+                                .find_signature_ending_with(method_name)
                         })
                         .map(|sig| sig.param_types.clone())
                 });
@@ -4748,7 +4750,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// f32/f64 suffix for a float literal on an assignment RHS when FloatInference is Unknown.
     /// Uses codegen's `infer_expression_type` (impl `self.field`, index elements, etc.).
     fn float_literal_suffix_from_assignment_lhs(ty: &Type) -> Option<&'static str> {
-        fn peel_refs<'a>(ty: &'a Type) -> &'a Type {
+        fn peel_refs(ty: &Type) -> &Type {
             match ty {
                 Type::Reference(inner) | Type::MutableReference(inner) => peel_refs(inner),
                 t => t,
@@ -5134,8 +5136,8 @@ impl<'ast> CodeGenerator<'ast> {
                         "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
                     ))
             };
-            let left_is_int = lt_actual.as_ref().is_some_and(|t| is_int_type(t));
-            let right_is_int = rt_actual.as_ref().is_some_and(|t| is_int_type(t));
+            let left_is_int = lt_actual.as_ref().is_some_and(&is_int_type);
+            let right_is_int = rt_actual.as_ref().is_some_and(is_int_type);
             // Both sides are integers: float inference is wrong, clear classifications
             if left_is_int && right_is_int && !left_float_lit && !right_float_lit {
                 lc = None;
@@ -5277,7 +5279,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let left_confirmed_float = self
                     .infer_expression_type(left)
                     .as_ref()
-                    .is_some_and(|t| is_confirmed_float(t))
+                    .is_some_and(is_confirmed_float)
                     || matches!(left, Expression::Cast { type_, .. }
                         if matches!(type_, Type::Custom(n) if n == "f32" || n == "f64"))
                     || left_str.contains("_f32")
@@ -5321,7 +5323,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let right_confirmed_float = self
                     .infer_expression_type(right)
                     .as_ref()
-                    .is_some_and(|t| is_confirmed_float(t))
+                    .is_some_and(is_confirmed_float)
                     || matches!(right, Expression::Cast { type_, .. }
                         if matches!(type_, Type::Custom(n) if n == "f32" || n == "f64"))
                     || right_str.contains("_f32")
@@ -5530,7 +5532,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self
                         .local_var_types
                         .get(name.as_str())
-                        .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
 
                 is_borrowed_param || is_borrowed_iter
             } else {
@@ -5545,7 +5547,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let is_local_var = self
                     .local_var_types
                     .get(name.as_str())
-                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
                     && !self.inferred_borrowed_params.contains(name.as_str())
                     && !self.borrowed_iterator_vars.contains(name);
                 is_local_var
@@ -5845,7 +5847,7 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
 
-        fn peel_reference_layer<'a>(t: &'a Type) -> &'a Type {
+        fn peel_reference_layer(t: &Type) -> &Type {
             match t {
                 Type::Reference(inner) => inner.as_ref(),
                 _ => t,

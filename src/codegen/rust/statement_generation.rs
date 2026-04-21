@@ -194,7 +194,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if self
                                 .infer_expression_type(expr)
                                 .as_ref()
-                                .is_some_and(|t| Self::type_contains_mut_reference_static(t))
+                                .is_some_and(Self::type_contains_mut_reference_static)
                             {
                                 expr_str = format!("{}.map(|v| v.clone())", expr_str);
                             } else {
@@ -349,7 +349,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 if self
                                     .infer_expression_type(expr)
                                     .as_ref()
-                                    .is_some_and(|t| Self::type_contains_mut_reference_static(t))
+                                    .is_some_and(Self::type_contains_mut_reference_static)
                                 {
                                     expr_str = format!("{}.map(|v| v.clone())", expr_str);
                                 } else {
@@ -976,7 +976,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if self
                             .infer_expression_type(e)
                             .as_ref()
-                            .is_some_and(|t| Self::type_contains_mut_reference_static(t))
+                            .is_some_and(Self::type_contains_mut_reference_static)
                         {
                             return_str = format!("{}.map(|v| v.clone())", return_str);
                         } else {
@@ -988,14 +988,14 @@ impl<'ast> CodeGenerator<'ast> {
                     // e.g. return self.slots[idx] where slots: Vec<SaveSlot> → need .clone()
                     // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
                     if return_str.starts_with("&") && !return_str.ends_with(".clone()") {
-                        let expects_owned = match &self.current_function_return_type {
-                            Some(Type::Reference(_)) | Some(Type::MutableReference(_)) => false,
-                            _ => true,
-                        };
+                        let expects_owned = !matches!(
+                            &self.current_function_return_type,
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                        );
                         if expects_owned {
-                            let inner_type = self.infer_expression_type(e).and_then(|t| match &t {
-                                Type::Reference(inner) => Some(inner.as_ref().clone()),
-                                _ => Some(t),
+                            let inner_type = self.infer_expression_type(e).map(|t| match &t {
+                                Type::Reference(inner) => inner.as_ref().clone(),
+                                _ => t,
                             });
                             if let Some(inner) = inner_type {
                                 if !self.is_type_copy(&inner) {
@@ -1008,10 +1008,10 @@ impl<'ast> CodeGenerator<'ast> {
                     // `let (a, b) = &vec[i]` in Rust: Copy fields like `i32` are still `&i32` bindings.
                     // When we record `Type::Reference(i32)` in local_var_types, `return b` must become `*b`.
                     if let Expression::Identifier { .. } = e {
-                        let expects_owned_ref = match &self.current_function_return_type {
-                            Some(Type::Reference(_)) | Some(Type::MutableReference(_)) => false,
-                            _ => true,
-                        };
+                        let expects_owned_ref = !matches!(
+                            &self.current_function_return_type,
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                        );
                         if expects_owned_ref {
                             if let Some(Type::Reference(inner)) = self.infer_expression_type(e) {
                                 if self.is_type_copy(inner.as_ref()) && !return_str.starts_with('*')
