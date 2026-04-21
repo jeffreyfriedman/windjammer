@@ -124,10 +124,8 @@ fn resolve_includes_inner(
 fn parse_include_directive(line: &str) -> Option<&str> {
     let rest = if let Some(r) = line.strip_prefix("use ") {
         r
-    } else if let Some(r) = line.strip_prefix("#include") {
-        r
     } else {
-        return None;
+        line.strip_prefix("#include")?
     };
     let rest = rest.trim();
     if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {

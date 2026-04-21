@@ -157,8 +157,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
                 // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
                 let param_types: Option<Vec<Type>> = func_name.and_then(|name| {
+                    // Try direct lookup first (e.g., "Thing::new")
                     self.signature_registry
                         .get_signature(name)
+                        .or_else(|| {
+                            // Fallback: Try finding by suffix (e.g., "::new" matches "Thing::new")
+                            // Extract just the method name for lookup
+                            let method_name = name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
+                            self.signature_registry.find_signature_ending_with(method_name)
+                        })
                         .map(|sig| sig.param_types.clone())
                 });
 
