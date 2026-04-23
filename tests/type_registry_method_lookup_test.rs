@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 // Mock structures for testing (will be replaced with actual compiler types)
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 enum Type {
     Custom(String),
     Reference(Box<Type>),
@@ -19,6 +20,7 @@ struct MethodSignature {
     receiver_type: String,
     method_name: String,
     param_types: Vec<Type>,
+    #[allow(dead_code)]
     return_type: Option<Type>,
 }
 

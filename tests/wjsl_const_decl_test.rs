@@ -4,7 +4,6 @@
 /// dropped during parsing because the WJSL parser doesn't recognize the
 /// `const` keyword. The voxel_denoise.wjsl shader fails because TILE_W,
 /// TILE_H, TILE_AREA are undefined when referenced in function bodies.
-
 fn transpile(source: &str) -> Result<String, String> {
     windjammer::wjsl::transpile_wjsl(source).map_err(|e| e.to_string())
 }

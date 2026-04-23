@@ -10,6 +10,7 @@ use windjammer::error_mapper::{DiagnosticLevel, ErrorMapper, WindjammerDiagnosti
 use windjammer::source_map::SourceMap;
 
 /// Helper to create a rustc JSON diagnostic line
+#[allow(clippy::too_many_arguments)]
 fn rustc_diagnostic_json(
     message: &str,
     level: &str,

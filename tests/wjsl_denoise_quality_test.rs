@@ -3,7 +3,6 @@
 ///
 /// Old: 3x3 filter (too small for GI noise), no neighborhood clamping
 /// New: 5x5 edge-aware filter with temporal neighborhood clamping
-
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
     let base_dir = std::path::PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),

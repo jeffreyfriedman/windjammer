@@ -8,6 +8,8 @@
 //
 // THE TRANSPILER MUST PREVENT THIS CLASS OF BUGS!
 
+#![allow(clippy::assertions_on_constants)]
+
 #[cfg(test)]
 mod wgsl_type_safety_tests {
     // TODO: Wire up proper Windjammer compile API once ready

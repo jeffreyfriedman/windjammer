@@ -625,12 +625,10 @@ impl FloatInference {
 
                 // TDD FIX: Handle implicit returns FIRST (before collecting constraints)
                 // This populates var_element_types so that .push()/.insert() can use them
-                if let Some(last_stmt) = decl.body.last() {
-                    if let Statement::Expression { expr, .. } = last_stmt {
-                        // This is an implicit return - store variable element types
-                        if let Some(return_type) = &decl.return_type {
-                            self.constrain_expr_to_type(expr, return_type);
-                        }
+                if let Some(Statement::Expression { expr, .. }) = decl.body.last() {
+                    // This is an implicit return - store variable element types
+                    if let Some(return_type) = &decl.return_type {
+                        self.constrain_expr_to_type(expr, return_type);
                     }
                 }
 
@@ -660,11 +658,9 @@ impl FloatInference {
                     }
 
                     // TDD FIX: Handle implicit returns FIRST (before collecting constraints)
-                    if let Some(last_stmt) = func.body.last() {
-                        if let Statement::Expression { expr, .. } = last_stmt {
-                            if let Some(return_type) = &func.return_type {
-                                self.constrain_expr_to_type(expr, return_type);
-                            }
+                    if let Some(Statement::Expression { expr, .. }) = func.body.last() {
+                        if let Some(return_type) = &func.return_type {
+                            self.constrain_expr_to_type(expr, return_type);
                         }
                     }
 
@@ -868,27 +864,30 @@ impl FloatInference {
                     }
                 }
             }
-            Statement::Return { value, .. } => {
-                if let Some(expr) = value {
-                    self.collect_expression_constraints(expr, return_type);
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                self.collect_expression_constraints(expr, return_type);
 
-                    // Return expression must match function return type
-                    if let Some(ret_ty) = return_type {
-                        if let Some(float_ty) = self.extract_float_type(ret_ty) {
-                            let expr_id = self.get_expr_id(expr);
-                            let constraint = match float_ty {
-                                FloatType::F32 => {
-                                    Constraint::MustBeF32(expr_id, "return type".to_string())
-                                }
-                                FloatType::F64 => {
-                                    Constraint::MustBeF64(expr_id, "return type".to_string())
-                                }
-                                FloatType::Unknown => return,
-                            };
-                            self.constraints.push(constraint);
-                        }
+                // Return expression must match function return type
+                if let Some(ret_ty) = return_type {
+                    if let Some(float_ty) = self.extract_float_type(ret_ty) {
+                        let expr_id = self.get_expr_id(expr);
+                        let constraint = match float_ty {
+                            FloatType::F32 => {
+                                Constraint::MustBeF32(expr_id, "return type".to_string())
+                            }
+                            FloatType::F64 => {
+                                Constraint::MustBeF64(expr_id, "return type".to_string())
+                            }
+                            FloatType::Unknown => return,
+                        };
+                        self.constraints.push(constraint);
                     }
                 }
+            }
+            Statement::Return { value: None, .. } => {
+                // Empty return, nothing to constrain
             }
             Statement::If {
                 condition,

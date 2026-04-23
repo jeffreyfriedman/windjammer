@@ -138,23 +138,20 @@ impl WgslBackend {
                     output.push_str("@compute");
 
                     // Extract workgroup_size argument
-                    if let Some((_key, workgroup_expr)) = decorator
+                    if let Some((_key, Expression::Array { elements, .. })) = decorator
                         .arguments
                         .iter()
                         .find(|(k, _)| k == "workgroup_size")
                     {
-                        // Parse array expression: [x, y, z]
-                        if let Expression::Array { elements, .. } = workgroup_expr {
-                            if elements.len() == 3 {
-                                output.push_str(" @workgroup_size(");
-                                for (i, elem) in elements.iter().enumerate() {
-                                    if i > 0 {
-                                        output.push_str(", ");
-                                    }
-                                    output.push_str(&self.generate_expression(elem)?);
+                        if elements.len() == 3 {
+                            output.push_str(" @workgroup_size(");
+                            for (i, elem) in elements.iter().enumerate() {
+                                if i > 0 {
+                                    output.push_str(", ");
                                 }
-                                output.push(')');
+                                output.push_str(&self.generate_expression(elem)?);
                             }
+                            output.push(')');
                         }
                     }
                     output.push('\n');

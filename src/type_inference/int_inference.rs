@@ -386,20 +386,17 @@ impl IntInference {
                 if let Some(return_type) = &decl.return_type {
                     for stmt in &decl.body {
                         if let Statement::Return {
-                            value: Some(expr), ..
+                            value: Some(Expression::Identifier { name, .. }),
+                            ..
                         } = stmt
                         {
-                            if let Expression::Identifier { name, .. } = expr {
-                                self.var_types.insert(name.clone(), return_type.clone());
-                            }
+                            self.var_types.insert(name.clone(), return_type.clone());
                         }
                     }
                 }
-                if let Some(last_stmt) = decl.body.last() {
-                    if let Statement::Expression { expr, .. } = last_stmt {
-                        if let Some(return_type) = &decl.return_type {
-                            self.constrain_expr_to_int_type(expr, return_type);
-                        }
+                if let Some(Statement::Expression { expr, .. }) = decl.body.last() {
+                    if let Some(return_type) = &decl.return_type {
+                        self.constrain_expr_to_int_type(expr, return_type);
                     }
                 }
                 for stmt in &decl.body {
@@ -422,20 +419,17 @@ impl IntInference {
                     if let Some(return_type) = &func.return_type {
                         for stmt in &func.body {
                             if let Statement::Return {
-                                value: Some(expr), ..
+                                value: Some(Expression::Identifier { name, .. }),
+                                ..
                             } = stmt
                             {
-                                if let Expression::Identifier { name, .. } = expr {
-                                    self.var_types.insert(name.clone(), return_type.clone());
-                                }
+                                self.var_types.insert(name.clone(), return_type.clone());
                             }
                         }
                     }
-                    if let Some(last_stmt) = func.body.last() {
-                        if let Statement::Expression { expr, .. } = last_stmt {
-                            if let Some(return_type) = &func.return_type {
-                                self.constrain_expr_to_int_type(expr, return_type);
-                            }
+                    if let Some(Statement::Expression { expr, .. }) = func.body.last() {
+                        if let Some(return_type) = &func.return_type {
+                            self.constrain_expr_to_int_type(expr, return_type);
                         }
                     }
                     for stmt in &func.body {
@@ -547,20 +541,23 @@ impl IntInference {
                     }
                 }
             }
-            Statement::Return { value, .. } => {
-                if let Some(expr) = value {
-                    self.collect_expression_constraints(expr, return_type);
-                    if let Some(ret_ty) = return_type {
-                        if let Some(int_ty) = self.extract_int_type(ret_ty) {
-                            let expr_id = self.get_expr_id(expr);
-                            self.constraints.push(IntConstraint::MustBe(
-                                expr_id,
-                                int_ty,
-                                "return type".to_string(),
-                            ));
-                        }
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                self.collect_expression_constraints(expr, return_type);
+                if let Some(ret_ty) = return_type {
+                    if let Some(int_ty) = self.extract_int_type(ret_ty) {
+                        let expr_id = self.get_expr_id(expr);
+                        self.constraints.push(IntConstraint::MustBe(
+                            expr_id,
+                            int_ty,
+                            "return type".to_string(),
+                        ));
                     }
                 }
+            }
+            Statement::Return { value: None, .. } => {
+                // Empty return, nothing to constrain
             }
             Statement::If {
                 condition,
@@ -987,29 +984,21 @@ impl IntInference {
                 let receiver_is_vec = self
                     .infer_type_from_expression(object)
                     .is_some_and(|t| matches!(t, Type::Vec(_)))
-                    || {
-                        if let Expression::FieldAccess {
+                    || match object {
+                        Expression::FieldAccess {
                             object: inner_obj,
                             field: field_name,
                             ..
-                        } = object
-                        {
-                            if let Expression::Identifier { name, .. } = &**inner_obj {
-                                if name == "self" {
-                                    self.current_impl_type
-                                        .as_deref()
-                                        .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
-                                        .and_then(|fields| fields.get(field_name))
-                                        .is_some_and(|t| matches!(t, Type::Vec(_)))
-                                } else {
-                                    false
-                                }
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
+                        } => {
+                            matches!(&**inner_obj, Expression::Identifier { name, .. } if name == "self")
+                                && self
+                                    .current_impl_type
+                                    .as_deref()
+                                    .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
+                                    .and_then(|fields| fields.get(field_name))
+                                    .is_some_and(|t| matches!(t, Type::Vec(_)))
                         }
+                        _ => false,
                     };
                 if (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
                     && !arguments.is_empty()

@@ -157,8 +157,8 @@ fn test() {
     let rust_code = compile_to_rust(source);
 
     let lines: Vec<&str> = rust_code.lines().collect();
-    let mut found_a_correct = false;
-    let mut found_b_correct = false;
+    let mut _found_a_correct = false;
+    let mut _found_b_correct = false;
 
     for line in &lines {
         if line.contains("TypeA::new") {
@@ -167,7 +167,7 @@ fn test() {
                 "TypeA::new(10) should NOT cast to f32 (param is i32).\nLine: {}",
                 line
             );
-            found_a_correct = true;
+            _found_a_correct = true;
         }
         if line.contains("TypeB::new") {
             assert!(
@@ -175,7 +175,7 @@ fn test() {
                 "TypeB::new(20) SHOULD cast to f32 (param is f32).\nLine: {}",
                 line
             );
-            found_b_correct = true;
+            _found_b_correct = true;
         }
     }
 }

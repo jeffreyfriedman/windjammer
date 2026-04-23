@@ -5,7 +5,6 @@
 /// complete SVO traversal failure and no voxels rendering.
 ///
 /// Fix: Changed get_octant -> get_child_index_64 with proper quarter-based subdivision.
-
 fn transpile(source: &str) -> Result<String, String> {
     windjammer::wjsl::transpile_wjsl(source).map_err(|e| e.to_string())
 }

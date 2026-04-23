@@ -23,6 +23,7 @@ use tempfile::TempDir;
 
 /// Result of compiling and running a .wj file on a specific backend
 struct BackendResult {
+    #[allow(dead_code)]
     backend: String,
     stdout: String,
     success: bool,

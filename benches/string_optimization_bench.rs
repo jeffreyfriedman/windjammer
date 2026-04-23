@@ -15,12 +15,12 @@ fn log_str(msg: &str) {
 }
 
 // Simulates a function that needs &String (e.g., passes to Vec<String>::contains)
-fn check_contains_string(items: &Vec<String>, search: &String) -> bool {
+fn check_contains_string(items: &[String], search: &String) -> bool {
     black_box(items.contains(search))
 }
 
 // Simulates the same with &str (if possible)
-fn check_contains_str(items: &Vec<String>, search: &str) -> bool {
+fn check_contains_str(items: &[String], search: &str) -> bool {
     // Note: This doesn't actually work for Vec<String>::contains in Rust
     // But shows what the performance would be if it did
     black_box(items.iter().any(|s| s.as_str() == search))
