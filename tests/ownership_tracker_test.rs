@@ -2,6 +2,8 @@
 //!
 //! TDD: Tests written to validate ownership detection for ALL expression types.
 
+#![allow(clippy::assertions_on_constants)]
+
 use windjammer::analyzer::OwnershipMode;
 use windjammer::codegen::rust::ownership_tracker::OwnershipTracker;
 use windjammer::parser::ast::builders::*;
@@ -320,7 +322,7 @@ fn test_literal_int_is_owned() {
 #[test]
 fn test_literal_float_is_owned() {
     let tracker = OwnershipTracker::new();
-    let expr = test_alloc_expr(expr_float(3.14));
+    let expr = test_alloc_expr(expr_float(3.5));
     assert_eq!(tracker.get_expression_ownership(expr), OwnershipMode::Owned);
 }
 

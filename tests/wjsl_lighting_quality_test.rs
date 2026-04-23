@@ -6,7 +6,6 @@
 /// Fresnel calculations completely wrong (not world-space).
 ///
 /// Fix: Add camera_position to LightingParams and use world-space view direction.
-
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
     let base_dir = std::path::PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),

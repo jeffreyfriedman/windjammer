@@ -4,7 +4,6 @@
 /// (mat3x3, mat4x4, mat2x2), then expects ')'. But WGSL matrix constructors
 /// take multiple column vectors: mat3x3(col0, col1, col2). The parser sees
 /// the comma after the first argument and errors with "Expected RParen, found Comma".
-
 fn transpile(source: &str) -> Result<String, String> {
     windjammer::wjsl::transpile_wjsl(source).map_err(|e| e.to_string())
 }
