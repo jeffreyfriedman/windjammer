@@ -3,7 +3,6 @@
 /// Bug: var<workgroup> declarations are silently dropped during parsing
 /// because parse_private_var() only handles var<private>.
 /// The Hi-Z downsample shader fails because tile_depth is undefined.
-
 fn transpile(source: &str) -> Result<String, String> {
     windjammer::wjsl::transpile_wjsl(source).map_err(|e| e.to_string())
 }

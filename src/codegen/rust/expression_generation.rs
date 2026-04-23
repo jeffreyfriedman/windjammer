@@ -1490,7 +1490,18 @@ impl<'ast> CodeGenerator<'ast> {
                                                 arg_to_generate,
                                                 Expression::Literal { value: Literal::String(_), .. }
                                             );
-                                            if is_str_lit {
+                                            // Also handle &str parameters being passed to methods expecting String
+                                            let is_str_param = matches!(
+                                                arg_to_generate,
+                                                Expression::Identifier { name, .. }
+                                                    if self.current_function_params.iter().any(|p| {
+                                                        &p.name == name && matches!(
+                                                            &p.type_,
+                                                            Type::Reference(inner) if matches!(**inner, Type::Custom(ref s) if s == "str")
+                                                        )
+                                                    })
+                                            );
+                                            if is_str_lit || is_str_param {
                                                 let is_explicit_str_ref = sig.param_types.get(sig_param_idx)
                                                     .is_some_and(|t| matches!(t, Type::Reference(inner) if
                                                         matches!(**inner, Type::String) ||
@@ -1599,11 +1610,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.coerce_string_literals_to_owned = prev_coerce_string_literals;
                                 self.in_match_arm_needing_string = prev_match_arm_str;
 
+                                // Check if this argument needs .to_string() conversion
+                                // This handles both string literals AND &str parameters
                                 let is_string_literal = matches!(
                                     arg_to_generate,
                                     Expression::Literal { value: Literal::String(_), .. }
                                 );
-                                if is_string_literal {
+                                let is_str_param = matches!(
+                                    arg_to_generate,
+                                    Expression::Identifier { name, .. }
+                                        if self.inferred_borrowed_params.contains(name)
+                                            || self.current_function_params.iter().any(|p| {
+                                                &p.name == name && matches!(
+                                                    &p.type_,
+                                                    Type::Reference(inner) if matches!(**inner, Type::Custom(ref s) if s == "str")
+                                                )
+                                            })
+                                );
+                                if is_string_literal || is_str_param {
                                     let needs_to_string = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
                                         i,
                                         call_method,

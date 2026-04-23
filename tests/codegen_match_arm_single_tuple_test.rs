@@ -5,7 +5,7 @@
 ///
 /// Root cause: Single-element tuple variants may not be registered correctly
 /// in enum_variant_types, causing infer_match_bound_types to return empty vec
-
+///
 /// Compile .wj code and return generated Rust code
 fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();

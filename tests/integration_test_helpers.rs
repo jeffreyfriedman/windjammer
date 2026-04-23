@@ -34,6 +34,12 @@ pub struct MultiFileTest {
     _temp_dir: TempDir,
 }
 
+impl Default for MultiFileTest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiFileTest {
     /// Creates an empty project with `src/` and `build/` under a fresh temp directory.
     pub fn new() -> Self {
