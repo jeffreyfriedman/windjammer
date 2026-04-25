@@ -403,8 +403,10 @@ jobs:
           echo "   ✅ Package structure valid"
           echo ""
           echo "📦 Package validation: windjammer-runtime"
-          cargo package --list -p windjammer-runtime > /dev/null
+          cd crates/windjammer-runtime
+          cargo package --list > /dev/null
           echo "   ✅ Package structure valid"
+          cd ../..
           echo ""
           echo "ℹ️  Note: Full 'cargo publish --dry-run' validation happens on release branches"
           echo "   where all dependency versions exist on crates.io."
