@@ -17,9 +17,11 @@ COPY rendering_ffi/Cargo.toml ./rendering_ffi/
 
 # Create dummy source files to build dependencies
 RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src rendering_ffi/src && \
+    echo "fn main() {}" > build.rs && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > src/lib.rs && \
     echo "fn main() {}" > src/bin/wj.rs && \
+    echo "fn main() {}" > src/bin/wj-lint.rs && \
     echo "fn main() {}" > benches/compilation.rs && \
     echo "fn main() {}" > benches/runtime.rs && \
     echo "fn main() {}" > benches/defer_drop_bench.rs && \
