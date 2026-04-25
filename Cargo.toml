@@ -51,10 +51,6 @@ tempfile = "3.0"
 assert_cmd = "2.0"
 criterion = "0.5"
 
-[[bin]]
-name = "wj-build-helper"
-path = "build.rs"
-
 # wj binary requires cli feature - excluded from default build so tests can run
 [[bin]]
 name = "wj"
