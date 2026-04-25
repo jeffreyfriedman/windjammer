@@ -33,18 +33,10 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "cast_plus_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
+    use tempfile::TempDir;
 
-    let rs_file = test_dir.join("test.rs");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let rs_file = temp_dir.path().join("test.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
 
     let output = Command::new("rustc")
@@ -53,11 +45,12 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
         .arg("lib")
         .arg("--edition")
         .arg("2021")
+        .arg("--out-dir")
+        .arg(temp_dir.path())
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     (output.status.success(), stderr)
 }

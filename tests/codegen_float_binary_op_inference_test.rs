@@ -3,6 +3,7 @@
 /// FIX: Infer float literals from operand types in binary operations
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_float_literal_in_f32_binary_op() {
@@ -20,9 +21,9 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_float_binop";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, wj_source).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
@@ -30,11 +31,10 @@ fn main() {
             "--target",
             "rust",
             "--no-cargo",
-            &format!("{}/test.wj", output_dir),
+            test_file.to_str().unwrap(),
             "--output",
-            output_dir,
+            temp_dir.path().to_str().unwrap(),
         ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
         .output()
         .expect("Failed to run wj");
 
@@ -44,8 +44,8 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Generated Rust file not found");
 
     // The literal 1.414 in `dist_sq * 1.414` should be f32 (from dist_sq: f32)
     assert!(
@@ -66,11 +66,12 @@ path = "test.rs"
 
 [workspace]
 "#;
-    fs::write(format!("{}/Cargo.toml", output_dir), cargo_toml).unwrap();
+    let cargo_toml_path = temp_dir.path().join("Cargo.toml");
+    fs::write(&cargo_toml_path, cargo_toml).unwrap();
 
     let rust_build = Command::new("cargo")
         .args(["build", "--release"])
-        .current_dir(output_dir)
+        .current_dir(temp_dir.path())
         .output()
         .expect("Failed to build Rust");
 

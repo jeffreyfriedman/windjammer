@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_array_element_function_call_copy_type() {
@@ -25,11 +26,18 @@ fn process_all(ids: [u32; 5]) {
 }
 "#;
 
-    let test_file = "/tmp/test_array_fn_call.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, test_wj).expect("Failed to write test file");
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -38,8 +46,8 @@ fn process_all(ids: [u32; 5]) {
         panic!("Compilation failed: {}", stderr);
     }
 
-    let rs_file = "./build/test_array_fn_call.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated .rs file");
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -56,9 +64,6 @@ fn process_all(ids: [u32; 5]) {
         "Should pass Copy type array element by value\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Array element function call (Copy type) test PASSED");
 }
@@ -85,11 +90,18 @@ impl Processor {
 }
 "#;
 
-    let test_file = "/tmp/test_method_array.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, test_wj).expect("Failed to write test file");
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -98,8 +110,8 @@ impl Processor {
         panic!("Compilation failed: {}", stderr);
     }
 
-    let rs_file = "./build/test_method_array.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated .rs file");
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -109,9 +121,6 @@ impl Processor {
         "Should NOT add & for u32 array element in method call\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Method call with array element test PASSED");
 }
@@ -132,11 +141,18 @@ fn process_vec(ids: Vec<u32>) {
 }
 "#;
 
-    let test_file = "/tmp/test_vec_index.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, test_wj).expect("Failed to write test file");
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -145,8 +161,8 @@ fn process_vec(ids: Vec<u32>) {
         panic!("Compilation failed: {}", stderr);
     }
 
-    let rs_file = "./build/test_vec_index.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated .rs file");
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -163,9 +179,6 @@ fn process_vec(ids: Vec<u32>) {
         "Should pass Vec<u32>[i] by value\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Vec indexing function call test PASSED");
 }
