@@ -3,6 +3,7 @@
 /// FIX: Use float inference results in binary operations
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_float_literal_with_f32_method_return() {
@@ -28,9 +29,9 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_method_f32";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, wj_source).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
@@ -38,11 +39,10 @@ fn main() {
             "--target",
             "rust",
             "--no-cargo",
-            &format!("{}/test.wj", output_dir),
+            test_file.to_str().unwrap(),
             "--output",
-            output_dir,
+            temp_dir.path().to_str().unwrap(),
         ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
         .output()
         .expect("Failed to run wj");
 
@@ -52,8 +52,8 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rust_file).expect("Generated Rust file not found");
 
     println!("Generated Rust code:\n{}", rust_code);
 

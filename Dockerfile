@@ -48,6 +48,7 @@ COPY rendering_ffi ./rendering_ffi
 COPY benches ./benches
 COPY std ./std
 COPY examples ./examples
+COPY docs ./docs
 
 # Build the actual binary
 RUN cargo build --release --bin wj
