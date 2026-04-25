@@ -36,7 +36,7 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
     echo "fn main() {}" > crates/windjammer-mcp/benches/mcp_tools_benchmarks.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-runtime/src/lib.rs && \
     echo "pub fn dummy() {}" > rendering_ffi/src/lib.rs && \
-    cargo build --release --no-default-features --features cli && \
+    cargo build --release && \
     rm -rf src benches crates/*/src crates/*/benches rendering_ffi/src
 
 # Copy the actual source code
@@ -47,8 +47,8 @@ COPY benches ./benches
 COPY std ./std
 COPY examples ./examples
 
-# Build the actual binary (compiler only, no game engine dependencies)
-RUN cargo build --release --bin wj --no-default-features --features cli
+# Build the actual binary
+RUN cargo build --release --bin wj
 
 # Runtime stage - use slim Debian image
 FROM debian:bookworm-slim
