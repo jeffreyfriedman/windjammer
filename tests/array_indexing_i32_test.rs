@@ -17,6 +17,7 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_array_indexing_with_i32() {
@@ -29,12 +30,19 @@ fn test_array_index() {
 }
 "#;
 
-    let test_file = "/tmp/test_array_index.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, test_wj).expect("Failed to write test file");
 
     // Transpile
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -44,8 +52,8 @@ fn test_array_index() {
     }
 
     // Read generated Rust
-    let rs_file = "./build/test_array_index.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated .rs file");
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -55,9 +63,6 @@ fn test_array_index() {
         "Should generate auto-cast: items[i as usize]\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Array indexing with i32 test PASSED");
 }
@@ -75,11 +80,18 @@ fn process_items() {
 }
 "#;
 
-    let test_file = "/tmp/test_loop_index.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, test_wj).expect("Failed to write test file");
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -88,8 +100,8 @@ fn process_items() {
         panic!("Compilation failed: {}", stderr);
     }
 
-    let rs_file = "./build/test_loop_index.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rs_file = temp_dir.path().join("test.rs");
+    let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated .rs file");
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -108,9 +120,6 @@ fn process_items() {
         "Should index array with i\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Loop variable indexing test PASSED");
 }
