@@ -16,8 +16,7 @@ examples/*/target/
 # Ignore CI
 .github/
 
-# Ignore documentation
-docs/
+# Ignore documentation (but keep docs/ for include_str! macros)
 *.md
 !README.md
 
