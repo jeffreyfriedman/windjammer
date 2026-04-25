@@ -5,6 +5,11 @@ edition = "2021"
 
 # Prevent this from being treated as part of parent workspace
 [workspace]
+members = [
+  "crates/windjammer-runtime",
+  "crates/windjammer-lsp",
+  "crates/windjammer-mcp",
+]
 
 [workspace.package]
 version = "0.46.0"
