@@ -71,17 +71,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
-    // - Borrowed string param → &String (works with Vec<String>, HashMap, etc.)
-    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &String works
+    // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &str works via Borrow trait
+    // - Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
-        generated.contains("key: &String"),
-        "Should generate &String parameter (Phase 1 baseline). Generated:\n{}",
+        generated.contains("key: &str"),
+        "Should generate &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(key)"),
-        "Should pass key directly (already &String, strip &). Generated:\n{}",
+        "Should pass key directly (already &str). Generated:\n{}",
         generated
     );
 }
@@ -106,17 +106,17 @@ fn main() {
     let generated = run_wj_test(source);
     println!("Generated code:\n{}", generated);
 
-    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
-    // - Borrowed string param → &String (works with Vec<String>, HashMap, etc.)
-    // - HashMap::get takes &Q where Q: Borrow<K>, so &String works
+    // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods
+    // - HashMap::get takes &Q where Q: Borrow<K>, so &str works via Borrow trait
+    // - Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
-        generated.contains("key: &String"),
-        "Should generate &String parameter (Phase 1 baseline). Generated:\n{}",
+        generated.contains("key: &str"),
+        "Should generate &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("map.get(key)"),
-        "Should pass key directly (already &String, strip &). Generated:\n{}",
+        "Should pass key directly (already &str). Generated:\n{}",
         generated
     );
 }

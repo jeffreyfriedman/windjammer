@@ -9,31 +9,9 @@ use std::fs;
 use std::path::PathBuf;
 
 fn get_compiler_path() -> PathBuf {
-    // First try to find wj in the same directory as this test binary
-    let exe = std::env::current_exe().unwrap();
-    let test_dir = exe.parent().unwrap();
-
-    // Try release binary
-    let wj_path = test_dir.parent().unwrap().parent().unwrap().join("wj");
-    if wj_path.exists() {
-        return wj_path;
-    }
-
-    // Try debug binary
-    let wj_debug = test_dir
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("debug/wj");
-    if wj_debug.exists() {
-        return wj_debug;
-    }
-
-    // Fallback to PATH
-    PathBuf::from("wj")
+    // Use CARGO_BIN_EXE_wj to get the correct binary path
+    // This is set by cargo test and points to the built wj binary
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 fn compile_and_check(wj_code: &str, should_succeed: bool) -> (String, String) {

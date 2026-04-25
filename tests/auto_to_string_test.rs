@@ -165,12 +165,12 @@ fn test_multiple_string_params() {
 
     let generated = compile_code(code).expect("Compilation failed");
 
-    // PHASE 1 BASELINE: All borrowed string params → &String, all literals → &"lit".to_string()
+    // PHASE 2 OPTIMIZATION: Borrowed string params → &str, literals passed directly
     // a: Owned (used in addition) → needs .to_string()
-    // b, c: Borrowed (only read) → &String (Phase 1), literals need &.to_string()
+    // b, c: Borrowed (only read) → &str (Phase 2), literals passed directly
     assert!(
-        generated.contains("concatenate(\"Hello\".to_string(), &\"World\".to_string(), &\"!\".to_string())"),
-        "All params need conversion: owned (.to_string()) and borrowed (&.to_string()). Generated:\n{}",
+        generated.contains("concatenate(\"Hello\".to_string(), \"World\", \"!\")"),
+        "a needs .to_string(), b and c use literals directly (Phase 2). Generated:\n{}",
         generated
     );
 }

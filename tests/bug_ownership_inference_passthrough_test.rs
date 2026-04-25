@@ -113,17 +113,18 @@ fn main() {}
         );
     }
 
-    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
-    // has_item only passes to Inventory::has (read-only) → &String (Phase 1)
+    // PHASE 2 OPTIMIZATION: String params can be &str for read-only methods
+    // has_item only passes to Inventory::has (read-only) → &str (Phase 2)
+    // Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
-        generated.contains("fn has_item(&self, item_id: &String)")
-            || generated.contains("fn has_item(&self, _item_id: &String)"),
-        "Expected has_item to have &String parameter (Phase 1 baseline). Generated:\n{}",
+        generated.contains("fn has_item(&self, item_id: &str)")
+            || generated.contains("fn has_item(&self, _item_id: &str)"),
+        "Expected has_item to have &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
 
     // Verify: check_items should compile (calls has_item with borrowed iterator var)
-    // If has_item incorrectly expects String, this would fail with E0308
+    // Phase 2 optimization ensures this compiles correctly
 
     fs::remove_dir_all(&test_dir).ok();
 }

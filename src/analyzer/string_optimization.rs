@@ -102,7 +102,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    /// Check if a statement uses the parameter in a context requiring &String
+    /// Check if a statement uses the parameter in a context requiring &String or String (owned)
     fn statement_uses_param_in_string_ref_context(
         &self,
         param_name: &str,
@@ -115,6 +115,26 @@ impl<'ast> Analyzer<'ast> {
             }
             Statement::Let { value, .. } => {
                 self.expr_uses_param_in_string_ref_context(param_name, value, registry)
+            }
+            // TDD FIX: Check for direct assignment to String fields
+            // If `self.name = name` where self.name is String, parameter must be String (owned), not &str
+            Statement::Assignment { target, value, .. } => {
+                // Check if the value is our parameter (or & to our parameter)
+                let value_is_param = self.expr_is_param_or_ref_to_param(param_name, value);
+
+                if value_is_param {
+                    // Check if target is a String field
+                    // For simplicity, if assigning parameter directly to ANY field, be conservative
+                    // and require &String (the codegen will handle owned String if needed)
+                    // This prevents &str → String assignment errors
+                    if matches!(target, Expression::FieldAccess { .. }) {
+                        return true; // Assignment to field requires owned/&String, not &str
+                    }
+                }
+
+                // Recursively check both target and value
+                self.expr_uses_param_in_string_ref_context(param_name, target, registry)
+                    || self.expr_uses_param_in_string_ref_context(param_name, value, registry)
             }
             Statement::If {
                 condition,
@@ -185,6 +205,48 @@ impl<'ast> Analyzer<'ast> {
 
                     // Check if this argument is &param or param
                     if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                        // CONSERVATIVE HEURISTIC: If parameter is passed to a method on self (e.g., self.log(message)),
+                        // and we don't have signature information, conservatively assume owned String is needed.
+                        // This handles transitive dependencies like info(message) → log(message) → push(message).
+                        // Known read-only methods are excluded from this heuristic.
+                        let is_self_method = match &**object {
+                            Expression::Identifier { name, .. } => name == "self",
+                            // Also handle self.field (e.g., self.data.insert(...))
+                            Expression::FieldAccess { object: inner, .. } => {
+                                matches!(&**inner, Expression::Identifier { name, .. } if name == "self")
+                            }
+                            _ => false,
+                        };
+
+                        if is_self_method {
+                            // Whitelist of known read-only methods that can use &str
+                            let is_read_only_method = matches!(
+                                method.as_str(),
+                                "contains"
+                                    | "get"
+                                    | "contains_key"
+                                    | "starts_with"
+                                    | "ends_with"
+                                    | "is_empty"
+                                    | "len"
+                                    | "chars"
+                                    | "bytes"
+                                    | "lines"
+                                    | "split"
+                                    | "trim"
+                                    | "to_lowercase"
+                                    | "to_uppercase"
+                                    | "has" // Common user-defined read-only method name
+                                    | "find" // Common search method
+                                    | "search" // Common search method
+                            );
+
+                            if !is_read_only_method {
+                                // Conservative: Method on self (or self.field) that's not in the whitelist likely needs owned String
+                                return true;
+                            }
+                        }
+
                         // SPECIAL CASE: Vec<String>::contains needs &String
                         // This is a Rust stdlib method, not in our signature registry
                         if method == "contains" && idx == 0 {
@@ -194,7 +256,19 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        // Check if this method expects &String for this parameter position
+                        // SPECIAL CASE: Vec<String>::push needs String (owned), not &str
+                        // If parameter is passed to push(), it must be String
+                        if method == "push" && idx == 0 {
+                            return true; // Require String (owned), not &str
+                        }
+
+                        // SPECIAL CASE: HashMap<String, V>::insert needs String for first arg
+                        // If parameter is passed to insert() as key, it must be String
+                        if method == "insert" && idx == 0 {
+                            return true; // Require String (owned), not &str
+                        }
+
+                        // Check if this method expects &String or String (owned) for this parameter position
                         if let Some(sig) = registry.get_signature(method) {
                             // Get the parameter type at this position
                             // Note: idx is the argument index, which corresponds to parameter index
@@ -202,6 +276,11 @@ impl<'ast> Analyzer<'ast> {
                             if let Some(param_type) = sig.param_types.get(idx) {
                                 if self.type_is_string_ref_not_str(param_type) {
                                     return true;
+                                }
+                                // Also check if the parameter is owned String
+                                // This handles cases like self.log(message) where log takes String (owned)
+                                if self.type_is_owned_string(param_type) {
+                                    return true; // Require String (owned), not &str
                                 }
                             }
                         }
@@ -238,15 +317,39 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 // Check if param is passed to a function expecting &String
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
+                    // SPECIAL CASE: Enum variant constructors (e.g., Shape::Named(name), Some(name))
+                    // Enum variants consume their arguments (owned), so parameters passed to them must be String, not &str
+
+                    // Check for qualified paths (e.g., Shape::Named, Option::Some)
+                    // OR common unqualified enum variants (e.g., Some, Ok, Err)
+                    let is_enum_variant = fn_name.contains("::")
+                        || matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err");
+
+                    if is_enum_variant {
+                        // Check if any argument is our parameter
+                        for arg in arguments.iter() {
+                            let arg_expr = &arg.1;
+                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                // Enum variants consume their arguments (require owned String)
+                                return true; // Require String (owned), not &str
+                            }
+                        }
+                    }
+
                     if let Some(sig) = registry.get_signature(fn_name) {
                         for (i, arg) in arguments.iter().enumerate() {
                             let arg_expr = &arg.1;
                             // Check if this argument is our parameter
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                // Check if the corresponding parameter type in the signature is &String
+                                // Check if the corresponding parameter type in the signature is &String or String (owned)
                                 if let Some(param_type) = sig.param_types.get(i) {
                                     if self.type_is_string_ref_not_str(param_type) {
                                         return true;
+                                    }
+                                    // Also check if the parameter is owned String (not &str, not &String)
+                                    // This handles cases where param is passed to functions expecting String (owned)
+                                    if self.type_is_owned_string(param_type) {
+                                        return true; // Require String (owned), not &str
                                     }
                                 }
                             }
@@ -261,8 +364,21 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
-            // Check binary operations (comparisons, etc.)
-            Expression::Binary { left, right, .. } => {
+            // Check binary operations (comparisons, string concatenation, etc.)
+            Expression::Binary {
+                left, right, op, ..
+            } => {
+                // SPECIAL CASE: String concatenation `a + b` consumes the LHS (a must be String, not &str)
+                // If parameter is the LHS of +, it must be String (owned)
+                if matches!(op, crate::parser::BinaryOp::Add) {
+                    if let Expression::Identifier { name, .. } = &**left {
+                        if name == param_name {
+                            return true; // LHS of + must be String (owned), not &str
+                        }
+                    }
+                }
+
+                // Recursively check both sides
                 self.expr_uses_param_in_string_ref_context(param_name, left, registry)
                     || self.expr_uses_param_in_string_ref_context(param_name, right, registry)
             }
@@ -277,6 +393,40 @@ impl<'ast> Analyzer<'ast> {
             // Check blocks
             Expression::Block { statements, .. } => {
                 self.param_needs_string_ref(param_name, statements, registry)
+            }
+            // Check struct literals: Item { name: name } where name is a String field
+            Expression::StructLiteral { fields, .. } => {
+                for (_field_name, field_value) in fields {
+                    // Check if this field value is our parameter
+                    if self.expr_is_param_or_ref_to_param(param_name, field_value) {
+                        // Conservative: If parameter is assigned to any field, assume String (owned) is needed
+                        // This prevents &str → String assignment errors
+                        return true;
+                    }
+                    // Recursively check the field value
+                    if self.expr_uses_param_in_string_ref_context(param_name, field_value, registry)
+                    {
+                        return true;
+                    }
+                }
+                false
+            }
+            // Check tuple expressions: (name, value) where tuple might be stored
+            // This handles cases like relationships.push((npc, delta)) where npc must be owned String
+            Expression::Tuple { elements, .. } => {
+                for element in elements {
+                    // Check if any element is our parameter
+                    if self.expr_is_param_or_ref_to_param(param_name, element) {
+                        // Conservative: If parameter is used in tuple, assume String (owned) is needed
+                        // Tuples used in push/assign contexts require owned values
+                        return true;
+                    }
+                    // Recursively check each element
+                    if self.expr_uses_param_in_string_ref_context(param_name, element, registry) {
+                        return true;
+                    }
+                }
+                false
             }
             // Identifiers by themselves don't require &String (only when passed to methods)
             Expression::Identifier { .. } => false,
@@ -300,6 +450,13 @@ impl<'ast> Analyzer<'ast> {
                     false
                 }
             }
+            // TDD FIX: Detect param.clone() and param.method() patterns
+            // When a parameter is used in a struct literal like `Asset { name: name.clone() }`,
+            // we need to detect that `name` is being used even though it's wrapped in .clone()
+            Expression::MethodCall { object, .. } => {
+                // Check if the method is being called on our parameter
+                self.expr_is_param_or_ref_to_param(param_name, object)
+            }
             _ => false,
         }
     }
@@ -315,5 +472,11 @@ impl<'ast> Analyzer<'ast> {
             },
             _ => false,
         }
+    }
+
+    /// Check if a type is owned String (not &str, not &String)
+    /// Used to detect when parameters are passed to functions expecting owned String
+    fn type_is_owned_string(&self, ty: &Type) -> bool {
+        matches!(ty, Type::String) || matches!(ty, Type::Custom(name) if name == "string")
     }
 }

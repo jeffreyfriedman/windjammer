@@ -31,8 +31,9 @@ pub fn create_dialog(id: string) -> DialogTree {
     let temp_file = "/tmp/test_string_clone.wj";
     fs::write(temp_file, source).unwrap();
 
-    // Compile with Windjammer
-    let output = Command::new("wj")
+    // Compile with Windjammer (use CARGO_BIN_EXE_wj for correct binary)
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
         .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
         .output()
         .expect("Failed to run wj");
@@ -84,7 +85,8 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
     let temp_file = "/tmp/test_owned_string.wj";
     fs::write(temp_file, source).unwrap();
 
-    let output = Command::new("wj")
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
         .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
         .output()
         .expect("Failed to run wj");

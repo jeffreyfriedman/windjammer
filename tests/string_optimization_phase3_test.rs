@@ -116,10 +116,11 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 3: Decorators override, inferred uses default
+    // PHASE 3: Decorators override, inferred uses Phase 2 automatic optimization
+    // With Phase 2 enabled globally, non-decorated params are optimized to &str when safe
     assert!(
-        generated.contains("fn process(fast: &str, safe: &String, inferred: &String)"),
-        "Expected mixed decorators: fast=&str, safe=&String, inferred=&String (Phase 1 default). Generated:\n{}",
+        generated.contains("fn process(fast: &str, safe: &String, inferred: &str)"),
+        "Expected mixed decorators: fast=&str (decorator), safe=&String (decorator), inferred=&str (Phase 2 auto-opt). Generated:\n{}",
         generated
     );
 }
@@ -153,10 +154,11 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 3: @str_ref forces &str (even though Store has Vec<String> field)
+    // PHASE 3: @str_ref forces &str (even as static method)
+    // Note: Method defined without self, so it's a static method
     assert!(
-        generated.contains("fn check(&self, item_id: &str)"),
-        "Expected @str_ref to force &str despite Vec<String> field. Generated:\n{}",
+        generated.contains("fn check(item_id: &str)"),
+        "Expected @str_ref to force &str in static method. Generated:\n{}",
         generated
     );
 }

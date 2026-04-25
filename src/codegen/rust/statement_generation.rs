@@ -83,6 +83,20 @@ impl<'ast> CodeGenerator<'ast> {
                         let mut expr_str = self.generate_expression(expr);
                         self.coerce_string_literals_to_owned = old_coerce_lit;
 
+                        // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
+                        // For `for (_, val) in &vec` where val: &i32, implicit return `val` needs `*val`
+                        if let Expression::Identifier { name, .. } = expr {
+                            if self.borrowed_iterator_vars.contains(name) {
+                                let return_type_is_copy = self
+                                    .current_function_return_type
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_type_copy(t));
+                                if return_type_is_copy && !expr_str.starts_with('*') {
+                                    expr_str = format!("*{}", expr_str);
+                                }
+                            }
+                        }
+
                         // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
                         // BUT: Don't convert if:
                         // 1. The expression explicitly uses .as_str() (user wants &str)
@@ -252,6 +266,20 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             let mut expr_str = self.generate_expression(expr);
                             self.coerce_string_literals_to_owned = old_coerce_lit;
+
+                            // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
+                            // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`
+                            if let Expression::Identifier { name, .. } = expr {
+                                if self.borrowed_iterator_vars.contains(name) {
+                                    let return_type_is_copy = self
+                                        .current_function_return_type
+                                        .as_ref()
+                                        .is_some_and(|t| self.is_type_copy(t));
+                                    if return_type_is_copy && !expr_str.starts_with('*') {
+                                        expr_str = format!("*{}", expr_str);
+                                    }
+                                }
+                            }
 
                             // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
                             // Same logic as Statement::Expression implicit returns
@@ -882,6 +910,20 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(e) = expr {
                     output.push(' ');
                     let mut return_str = self.generate_expression(e);
+
+                    // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
+                    // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`
+                    if let Expression::Identifier { name, .. } = e {
+                        if self.borrowed_iterator_vars.contains(name) {
+                            let return_type_is_copy = self
+                                .current_function_return_type
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if return_type_is_copy && !return_str.starts_with('*') {
+                                return_str = format!("*{}", return_str);
+                            }
+                        }
+                    }
 
                     // WINDJAMMER PHILOSOPHY: Auto-convert string literals in return statements
                     // when the function returns String
@@ -1992,7 +2034,11 @@ impl<'ast> CodeGenerator<'ast> {
             let mut all_bindings = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut all_bindings);
             for var in all_bindings {
-                self.borrowed_iterator_vars.insert(var);
+                self.borrowed_iterator_vars.insert(var.clone());
+                // Track mutable borrows separately for compound assignment deref
+                if needs_mut_borrow {
+                    self.mut_borrowed_iterator_vars.insert(var);
+                }
             }
         }
 
@@ -2079,8 +2125,21 @@ impl<'ast> CodeGenerator<'ast> {
 
         if let Some(op) = compound_op {
             self.generating_assignment_target = true;
-            output.push_str(&self.generate_expression(target));
+            let target_str = self.generate_expression(target);
             self.generating_assignment_target = false;
+
+            // TDD FIX: Compound assignments on mutable references need dereference operator
+            // For loop variables bound from &mut iteration are &mut T, so `var += x` must become `*var += x`
+            let needs_deref = if let Expression::Identifier { name, .. } = target {
+                self.mut_borrowed_iterator_vars.contains(name)
+            } else {
+                false
+            };
+
+            if needs_deref {
+                output.push('*');
+            }
+            output.push_str(&target_str);
 
             output.push_str(match op {
                 CompoundOp::Add => " += ",
@@ -2209,6 +2268,17 @@ impl<'ast> CodeGenerator<'ast> {
                     self.generating_assignment_target = true;
                     let target_str = self.generate_expression(target);
                     self.generating_assignment_target = false;
+
+                    // TDD FIX: Compound assignments on mutable references need deref operator
+                    let needs_deref = if let Expression::Identifier { name, .. } = target {
+                        self.mut_borrowed_iterator_vars.contains(name)
+                    } else {
+                        false
+                    };
+
+                    if needs_deref {
+                        output.push('*');
+                    }
                     output.push_str(&target_str);
                     output.push(' ');
                     output.push_str(op_str);
@@ -2231,8 +2301,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.generating_assignment_target = true;
-        output.push_str(&self.generate_expression(target));
+        let target_str = self.generate_expression(target);
         self.generating_assignment_target = false;
+
+        // TDD FIX: Regular assignments on mutable references need deref operator
+        // For loop variables bound from &mut iteration are &mut T, so `var = x` must become `*var = x`
+        let needs_deref = if let Expression::Identifier { name, .. } = target {
+            self.mut_borrowed_iterator_vars.contains(name)
+        } else {
+            false
+        };
+
+        if needs_deref {
+            output.push('*');
+        }
+        output.push_str(&target_str);
         output.push_str(" = ");
 
         let old_expr_ctx = self.in_expression_context;
