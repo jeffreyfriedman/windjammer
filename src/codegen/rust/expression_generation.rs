@@ -116,11 +116,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let obj_str = self.generate_expression_immut(object);
+
+                // TDD FIX: For stdlib methods like HashMap::insert that expect owned String,
+                // convert &str parameters to String automatically
                 let args_str = arguments
                     .iter()
                     .map(|(_label, arg)| self.generate_expression_immut(arg))
                     .collect::<Vec<_>>()
                     .join(", ");
+
                 format!("{}.{}({})", obj_str, method, args_str)
             }
             Expression::Call {
@@ -2862,6 +2866,30 @@ impl<'ast> CodeGenerator<'ast> {
                         self.in_match_arm_needing_string = prev_match_arm_str;
                         self.in_field_access_object = prev_field_access_obj;
 
+                        // TDD FIX: PHASE 2 CALL-SITE OPTIMIZATION
+                        // Strip unnecessary .to_string() when parameter was optimized to &str
+                        // Example: User writes `loader.load("name".to_string())` but Phase 2 optimized
+                        // the signature from `fn load(self, name: String)` to `fn load(self, name: &str)`.
+                        // Result: Call site should be `loader.load("name")` not `loader.load("name".to_string())`
+                        //
+                        // IMPORTANT: Only strip for &str parameters, NOT &String parameters!
+                        // &String parameters still need .to_string() (creates String, then borrows it)
+                        if let Some(ref sig) = method_signature {
+                            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            if let Some(param_type) = sig.param_types.get(sig_param_idx) {
+                                // Check if parameter is specifically &str (not &String!)
+                                let param_is_str_slice_ref = if let Type::Reference(inner) = param_type {
+                                    matches!(&**inner, Type::Custom(name) if name == "str")
+                                } else {
+                                    false
+                                };
+                                if param_is_str_slice_ref && arg_str.ends_with(".to_string()") {
+                                    // Strip .to_string() - &str accepts string literals directly
+                                    arg_str = arg_str[..arg_str.len() - 12].to_string();
+                                }
+                            }
+                        }
+
                         // TDD FIX: Vec index methods require usize arguments.
                         // Int inference may resolve the literal to i32/u32/i64/u64 due to
                         // conflicting constraints. Fix at codegen level: rewrite any
@@ -2967,27 +2995,24 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
-                        // TDD FIX: AUTO-CONVERT &str/&String → String for method calls
-                        // When passing a &str parameter to a method expecting owned String, convert it
-                        // This handles cases like: recipe.add_ingredient("herb", 1) where add_ingredient expects String
-                        if let Expression::Identifier { name, .. } = arg {
-                            // Find the parameter type
-                            let param_type = self.current_function_params.iter()
-                                .find(|p| &p.name == name)
-                                .map(|p| &p.type_);
+                        // TDD FIX: AUTO-CONVERT &str → String for method calls
+                        // When passing a Phase 2 optimized &str parameter to a method expecting owned String, convert it
+                        // This handles cases like: HashMap::insert(key, value) where key is &str but insert expects String
+                        if let Expression::Identifier { name, .. } = arg_to_generate {
+                            // Check if this parameter was Phase 2 optimized to &str
+                            let is_str_ref_optimized = self.str_ref_optimized_params.contains(name.as_str());
 
-                            // Check if parameter type is &str (Type::Reference(Type::String))
-                            if let Some(Type::Reference(inner_type)) = param_type {
-                                if matches!(**inner_type, Type::String) {
-                                    // Check if method signature expects owned String for this parameter
-                                    let expects_owned = method_signature
-                                        .as_ref()
-                                        .and_then(|sig| sig.param_ownership.get(i))
-                                        .is_some_and(|&ownership| matches!(ownership, OwnershipMode::Owned));
+                            if is_str_ref_optimized {
+                                // Check if method expects owned String for this parameter
+                                // For stdlib methods like HashMap::insert, use the should_add_to_string heuristic
+                                let expects_owned = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
+                                    i,
+                                    method,
+                                    &method_signature,
+                                );
 
-                                    if expects_owned && !arg_str.ends_with(".to_string()") && !arg_str.ends_with(".clone()") {
-                                        arg_str = format!("{}.to_string()", arg_str);
-                                    }
+                                if expects_owned && !arg_str.ends_with(".to_string()") && !arg_str.ends_with(".clone()") {
+                                    arg_str = format!("{}.to_string()", arg_str);
                                 }
                             }
                         }

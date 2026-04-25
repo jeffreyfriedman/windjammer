@@ -84,18 +84,18 @@ fn main() {
         );
     }
 
-    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
-    // - Borrowed string param → &String (correct for Vec<String>::contains, etc.)
-    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &String works
-    // - String literals need conversion: "test" → &"test".to_string()
+    // PHASE 2 OPTIMIZATION: String params generate &str for PERFORMANCE
+    // - Borrowed string param → &str (works with HashMap::contains_key via Borrow trait)
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &str works perfectly
+    // - String literals can be passed directly without conversion
     assert!(
-        generated.contains("name: &String"),
-        "Should generate &String parameter (Phase 1 baseline)\n\nGenerated:\n{}",
+        generated.contains("name: &str"),
+        "Should generate &str parameter (Phase 2 optimization)\n\nGenerated:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(name)"),
-        "Should pass name directly (already &String, no extra &)\n\nGenerated:\n{}",
+        "Should pass name directly (already &str, no extra &)\n\nGenerated:\n{}",
         generated
     );
 }

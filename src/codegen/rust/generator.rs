@@ -149,6 +149,8 @@ pub struct CodeGenerator<'ast> {
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     pub(crate) borrowed_iterator_vars: std::collections::HashSet<String>,
+    // Track variables bound in for-loops with &mut iteration (need * for compound assignments)
+    pub(crate) mut_borrowed_iterator_vars: std::collections::HashSet<String>,
     // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
     // These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
@@ -166,6 +168,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_borrowed_params: std::collections::HashSet<String>,
     // INFERRED MUT BORROWED PARAMS: Parameters inferred to be &mut (for avoiding double &mut in passthrough)
     pub(crate) inferred_mut_borrowed_params: std::collections::HashSet<String>,
+    // PHASE 2 STRING OPTIMIZATION: Track string parameters optimized to &str
+    // These need .to_string() when passed to methods expecting owned String
+    pub(crate) str_ref_optimized_params: std::collections::HashSet<String>,
     // USER-WRITTEN CLOSURE: When true, suppress auto-borrowing transformations (preserve user intent)
     pub(crate) in_user_written_closure: bool,
     // USER CLOSURE PARAMS: Track parameters of current user-written closure
@@ -369,12 +374,14 @@ impl<'ast> CodeGenerator<'ast> {
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
+            mut_borrowed_iterator_vars: std::collections::HashSet::new(),
             match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             inferred_mut_borrowed_params: std::collections::HashSet::new(),
+            str_ref_optimized_params: std::collections::HashSet::new(),
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
