@@ -3,6 +3,11 @@ FROM rust:1.90 AS builder
 
 WORKDIR /app
 
+# Install build dependencies (cmake needed for joltc-sys/rolt)
+RUN apt-get update && \
+    apt-get install -y cmake build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy workspace and dependency files first for better caching
 COPY Cargo.toml Cargo.lock ./
 COPY crates/windjammer-lsp/Cargo.toml ./crates/windjammer-lsp/
