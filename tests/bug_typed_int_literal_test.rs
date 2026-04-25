@@ -10,20 +10,15 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn compile_wj_test(source: &str) -> (bool, String, String) {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    let source_file = temp_dir.join("test.wj");
+    let source_file = temp_dir.path().join("test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = temp_dir.join("out");
+    let output_dir = temp_dir.path().join("out");
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
@@ -46,14 +41,11 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
         .arg("--crate-type=lib")
         .arg(&rust_file)
         .arg("--out-dir")
-        .arg(&temp_dir)
+        .arg(temp_dir.path())
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     (rustc_output.status.success(), rust_code, stderr)
 }
