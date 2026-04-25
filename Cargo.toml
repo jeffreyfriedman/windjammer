@@ -34,24 +34,12 @@ syntect = { version = "5.2", optional = true }
 salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }
 
-# Native runtime dependencies (not used by compiler core, only in codegen templates)
-image = { version = "0.24", optional = true }
-pollster = { version = "0.3", optional = true }
-rapier3d = { version = "0.17", optional = true }
-rolt = { version = "0.3.1", optional = true }
-wgpu = { version = "0.19", optional = true }
-winit = { version = "0.29", optional = true }
-bytemuck = { version = "1.14", features = ["derive"], optional = true }
-windjammer-runtime = { version = "0.46.0", path = "crates/windjammer-runtime", optional = true }
-
 [features]
-default = ["cli", "native-runtime"]
+default = ["cli"]
 # CLI binary with full terminal UI, syntax highlighting, incremental compilation
 cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 # Syntax highlighting in error messages
 highlighting = ["dep:syntect"]
-# Native runtime deps (only needed for codegen templates that reference these crates)
-native-runtime = ["dep:image", "dep:pollster", "dep:rapier3d", "dep:rolt", "dep:wgpu", "dep:winit", "dep:bytemuck", "dep:windjammer-runtime"]
 
 [dev-dependencies]
 tempfile = "3.0"
