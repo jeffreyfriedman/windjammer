@@ -1154,6 +1154,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Track parameters inferred as borrowed/mut-borrowed for codegen decisions
         self.inferred_borrowed_params.clear();
         self.inferred_mut_borrowed_params.clear();
+        self.str_ref_optimized_params.clear();
         for (param_name, ownership) in &analyzed.inferred_ownership {
             match ownership {
                 crate::analyzer::OwnershipMode::Borrowed => {
@@ -1164,6 +1165,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 _ => {}
             }
+        }
+
+        // Track Phase 2 string-optimized parameters (string type params that become &str)
+        for param_name in &analyzed.str_ref_optimizable_params {
+            self.str_ref_optimized_params.insert(param_name.clone());
         }
 
         // METHOD PARAM OWNERSHIP: Register this method's parameter ownership modes

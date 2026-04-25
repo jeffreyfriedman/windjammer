@@ -49,16 +49,9 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    // Use tempfile::TempDir for proper isolation (prevents test collisions)
+    let test_dir_handle = tempfile::tempdir().unwrap();
+    let test_dir = test_dir_handle.path();
 
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
@@ -120,7 +113,7 @@ fn main() {
         "Call site should automatically add &mut"
     );
 
-    fs::remove_dir_all(&test_dir).ok();
+    // TempDir automatically cleans up on drop
 }
 
 #[test]
@@ -157,16 +150,9 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    // Use tempfile::TempDir for proper isolation (prevents test collisions)
+    let test_dir_handle = tempfile::tempdir().unwrap();
+    let test_dir = test_dir_handle.path();
 
     let wj_file = test_dir.join("test.wj");
     fs::write(&wj_file, source).unwrap();
@@ -222,5 +208,5 @@ fn main() {
         "Call site should automatically add &mut"
     );
 
-    fs::remove_dir_all(&test_dir).ok();
+    // TempDir automatically cleans up on drop
 }
