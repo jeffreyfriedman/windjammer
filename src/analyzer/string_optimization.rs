@@ -46,9 +46,13 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
         registry: &super::SignatureRegistry,
     ) -> HashSet<String> {
+        // Extern functions use FFI types - never optimize their parameters
+        if func.is_extern {
+            return HashSet::new();
+        }
+
         let mut optimizable = HashSet::new();
 
-        // PHASE 3: Check for manual override decorators first
         for param in &func.parameters {
             // Only consider string parameters
             let is_string = matches!(param.type_, Type::String)
@@ -315,23 +319,15 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                // Check if param is passed to a function expecting &String
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    // SPECIAL CASE: Enum variant constructors (e.g., Shape::Named(name), Some(name))
-                    // Enum variants consume their arguments (owned), so parameters passed to them must be String, not &str
-
-                    // Check for qualified paths (e.g., Shape::Named, Option::Some)
-                    // OR common unqualified enum variants (e.g., Some, Ok, Err)
                     let is_enum_variant = fn_name.contains("::")
                         || matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err");
 
                     if is_enum_variant {
-                        // Check if any argument is our parameter
                         for arg in arguments.iter() {
                             let arg_expr = &arg.1;
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                // Enum variants consume their arguments (require owned String)
-                                return true; // Require String (owned), not &str
+                                return true;
                             }
                         }
                     }
@@ -339,21 +335,31 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(sig) = registry.get_signature(fn_name) {
                         for (i, arg) in arguments.iter().enumerate() {
                             let arg_expr = &arg.1;
-                            // Check if this argument is our parameter
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                // Check if the corresponding parameter type in the signature is &String or String (owned)
                                 if let Some(param_type) = sig.param_types.get(i) {
                                     if self.type_is_string_ref_not_str(param_type) {
                                         return true;
                                     }
-                                    // Also check if the parameter is owned String (not &str, not &String)
-                                    // This handles cases where param is passed to functions expecting String (owned)
                                     if self.type_is_owned_string(param_type) {
-                                        return true; // Require String (owned), not &str
+                                        return true;
                                     }
                                 }
                             }
-                            // Recursively check
+                            if self.expr_uses_param_in_string_ref_context(
+                                param_name, arg_expr, registry,
+                            ) {
+                                return true;
+                            }
+                        }
+                    } else {
+                        // Signature not in registry (extern fns, unanalyzed fns).
+                        // Be conservative: if our param is passed as an argument,
+                        // assume String or &String is needed to prevent incorrect &str optimization.
+                        for arg in arguments.iter() {
+                            let arg_expr = &arg.1;
+                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                return true;
+                            }
                             if self.expr_uses_param_in_string_ref_context(
                                 param_name, arg_expr, registry,
                             ) {
