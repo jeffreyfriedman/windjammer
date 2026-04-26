@@ -6,18 +6,9 @@
 use std::process::Command;
 
 fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let dir = std::env::temp_dir().join(format!(
-        "wj_ownership_deref_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
 
-    let wj_file = dir.join("test.wj");
+    let wj_file = dir.path().join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
@@ -25,22 +16,22 @@ fn compile_wj_to_rust(source: &str) -> (String, bool) {
             "build",
             wj_file.to_str().unwrap(),
             "--output",
-            dir.to_str().unwrap(),
+            dir.path().to_str().unwrap(),
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
 
-    let src_dir = dir.join("src");
+    let src_dir = dir.path().join("src");
     let main_rs = if src_dir.join("main.rs").exists() {
         src_dir.join("main.rs")
     } else {
-        dir.join("test.rs")
+        dir.path().join("test.rs")
     };
 
     let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
 
-    let rlib_output = dir.join("test.rlib");
+    let rlib_output = dir.path().join("test.rlib");
     let rustc = Command::new("rustc")
         .args([
             "--crate-type",

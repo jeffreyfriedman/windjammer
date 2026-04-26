@@ -4927,10 +4927,12 @@ fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Convert a path to TOML-safe format (forward slashes on all platforms)
-/// Windows paths with backslashes cause TOML parse errors, but forward slashes work everywhere
+/// Convert a path to TOML-safe format (forward slashes, no Windows \\?\ prefix)
+/// Windows canonicalize() adds \\?\ prefix; backslashes cause TOML parse errors
 fn path_to_toml_string(path: &Path) -> String {
-    path.display().to_string().replace('\\', "/")
+    let s = path.display().to_string();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.replace('\\', "/")
 }
 
 /// Find windjammer-runtime path using robust search logic

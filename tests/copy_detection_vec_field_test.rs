@@ -8,13 +8,11 @@
 // FIX: Ensure Vec fields prevent struct from being Copy.
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 fn test_struct_with_vec_field_not_copy() {
-    let temp_dir = std::env::temp_dir().join("wj_test_copy_vec");
-    fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
 
     let wj_code = r#"
 pub struct PlayerState {
@@ -59,19 +57,17 @@ pub fn use_twice(game_state: GameState) -> bool {
 }
 "#;
 
-    let wj_file = temp_dir.join("test.wj");
+    let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
 
-    // Find wj compiler (use local build if available)
-    let wj_bin = if PathBuf::from("./target/release/wj").exists() {
-        "./target/release/wj"
-    } else {
-        "wj"
-    };
-
-    // Compile with wj
-    let output = Command::new(wj_bin)
-        .args(["build", wj_file.to_str().unwrap(), "--no-cargo"])
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            wj_file.to_str().unwrap(),
+            "--output",
+            temp_dir.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -82,15 +78,17 @@ pub fn use_twice(game_state: GameState) -> bool {
     println!("stdout: {}", stdout);
     println!("stderr: {}", stderr);
 
-    // Read generated Rust code
-    let rs_file = temp_dir.join("test.rs");
+    let src_dir = temp_dir.path().join("src");
+    let rs_file = if src_dir.join("main.rs").exists() {
+        src_dir.join("main.rs")
+    } else {
+        temp_dir.path().join("test.rs")
+    };
     let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     println!("=== GENERATED RUST ===");
     println!("{}", rust_code);
 
-    // TDD ASSERTION 1: GameState should take &GameState, not GameState (owned)
-    // If Copy detection is wrong, game_state will be owned and cause E0382
     assert!(
         rust_code.contains("fn check_flag(game_state: &GameState"),
         "check_flag should take &GameState (borrowed), not GameState (owned)\n\
@@ -102,17 +100,17 @@ pub fn use_twice(game_state: GameState) -> bool {
         "use_twice should take &GameState (borrowed), not GameState (owned)"
     );
 
-    // TDD ASSERTION 2: Verify rustc compiles without E0382
+    let rlib_output = temp_dir.path().join("output.rlib");
     let rustc_output = Command::new("rustc")
         .args([
             "--crate-type",
             "lib",
             "--edition",
             "2021",
-            rs_file.to_str().unwrap(),
-            "--out-dir",
-            temp_dir.to_str().unwrap(),
+            "-o",
+            rlib_output.to_str().unwrap(),
         ])
+        .arg(&rs_file)
         .output()
         .expect("Failed to run rustc");
 
@@ -120,7 +118,6 @@ pub fn use_twice(game_state: GameState) -> bool {
     println!("=== RUSTC OUTPUT ===");
     println!("{}", rustc_stderr);
 
-    // Check for E0382 (use of moved value)
     assert!(
         !rustc_stderr.contains("E0382"),
         "Generated Rust has E0382 (use of moved value)! GameState was wrongly marked as Copy.\n{}",
@@ -132,7 +129,4 @@ pub fn use_twice(game_state: GameState) -> bool {
         "Rustc compilation failed:\n{}",
         rustc_stderr
     );
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }
