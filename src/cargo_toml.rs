@@ -99,12 +99,19 @@ fn find_windjammer_runtime_path() -> PathBuf {
     PathBuf::from("./crates/windjammer-runtime")
 }
 
-/// Convert path to string suitable for Cargo.toml (absolute for reliability)
+/// Convert path to string suitable for Cargo.toml (absolute, forward-slash, no Windows \\?\ prefix)
 fn path_to_toml_string(path: &Path) -> String {
-    path.canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf())
-        .display()
-        .to_string()
+    let abs = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    sanitize_path_for_toml(&abs)
+}
+
+/// Sanitize a path for use in TOML string values:
+/// - Strip Windows extended-length prefix (\\?\)
+/// - Convert backslashes to forward slashes (valid in Cargo.toml on all platforms)
+fn sanitize_path_for_toml(path: &Path) -> String {
+    let s = path.display().to_string();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.replace('\\', "/")
 }
 
 /// Generate Cargo.toml for single-file builds.
@@ -660,19 +667,14 @@ fn check_cargo_toml(crate_dir: &Path, crate_name: &str, output_dir: &Path) -> Op
     }
     let actual_pkg = read_package_name(&cargo_toml).unwrap_or_else(|| crate_name.to_string());
     let hyphenated = crate_name.replace('_', "-");
+    let path_str = sanitize_path_for_toml(&abs);
     if actual_pkg.replace('-', "_") != crate_name {
         Some(format!(
             "{} = {{ path = \"{}\", package = \"{}\" }}",
-            crate_name,
-            abs.display(),
-            actual_pkg
+            crate_name, path_str, actual_pkg
         ))
     } else {
-        Some(format!(
-            "{} = {{ path = \"{}\" }}",
-            hyphenated,
-            abs.display()
-        ))
+        Some(format!("{} = {{ path = \"{}\" }}", hyphenated, path_str))
     }
 }
 

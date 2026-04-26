@@ -980,24 +980,19 @@ impl<'ast> CodeGenerator<'ast> {
         let params = &analyzed.decl.parameters;
         let param = params.get(param_idx);
 
-        // TDD FIX: Check if string literal needs .to_string() for String/&String parameters
-        // Since we now generate Borrowed string as &String (not &str), string literals need conversion
         let needs_to_string = if let Expression::Literal {
             value: Literal::String(_),
             ..
         } = arg_expr
         {
             if let Some(param) = param {
-                // Check if parameter type is string
                 let is_string_type = matches!(param.type_, Type::String)
                     || matches!(param.type_, Type::Custom(ref name) if name == "string");
 
                 if is_string_type {
-                    // TDD FIX: Always need .to_string() for string parameters (Owned OR Borrowed)
-                    // Owned → String needs .to_string()
-                    // Borrowed → &String needs .to_string() (then & is added by method_call_analyzer)
-                    // The ONLY case we don't need it is if we generated &str (but we don't anymore)
-                    true
+                    // Phase 2: if the param was optimized to &str, string literals are already
+                    // &str — no .to_string() needed. Only add for Owned or &String params.
+                    !analyzed.str_ref_optimizable_params.contains(&param.name)
                 } else {
                     false
                 }
