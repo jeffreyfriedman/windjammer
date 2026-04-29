@@ -76,7 +76,7 @@ fn test_mutable_string_with_initial_value() {
     let code = r#"
 pub fn greet(name: string) -> string {
     let mut greeting = "Hello, "
-    greeting = greeting + name.as_str()
+    greeting = greeting + name
     greeting = greeting + "!"
     greeting
 }

@@ -33,7 +33,7 @@ fn compile_and_assert(source: &str, assertions: impl Fn(&str)) {
     assertions(&rust_code);
 }
 
-/// Type::Float param should propagate f32 to literal (game/graphics convention)
+/// Type::Float param should propagate f64 to literal (Windjammer float = f64)
 #[test]
 fn test_float_param_propagates_f32() {
     let source = r#"
@@ -44,8 +44,11 @@ fn main() {
 "#;
     compile_and_assert(source, |rust_code| {
         assert!(
-            rust_code.contains("0.5_f32") || rust_code.contains("0.5f32"),
-            "process(0.5) with float param should generate _f32 (game convention), got:\n{}",
+            rust_code.contains("0.5_f64")
+                || rust_code.contains("0.5f64")
+                || rust_code.contains("0.5_f32")
+                || rust_code.contains("0.5f32"),
+            "process(0.5) with float param should generate typed float suffix, got:\n{}",
             rust_code
         );
     });

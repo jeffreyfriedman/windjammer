@@ -22,6 +22,58 @@ use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
+    /// Field-type map is keyed by the struct's declared name (`GpuVertex`); literals may use a
+    /// qualified path (`ffi::GpuVertex`). Try full path, then the last `::` segment.
+    fn lookup_struct_field_types(
+        &self,
+        struct_name: &str,
+    ) -> Option<&std::collections::HashMap<String, Type>> {
+        self.struct_field_types.get(struct_name).or_else(|| {
+            struct_name
+                .rsplit("::")
+                .next()
+                .and_then(|short| self.struct_field_types.get(short))
+        })
+    }
+
+    /// Inside `S { field: [...] }`, returns element type `T` when `field` is `[T; N]`.
+    fn struct_array_field_element_type(&self) -> Option<Type> {
+        if !self.in_struct_literal_field {
+            return None;
+        }
+        let sn = self.current_struct_literal_name.as_deref()?;
+        let fnm = self.current_struct_field_name.as_deref()?;
+        let fields = self.lookup_struct_field_types(sn)?;
+        match fields.get(fnm)? {
+            Type::Array(inner, _) => Some((**inner).clone()),
+            _ => None,
+        }
+    }
+
+    /// `let x = 1.0` may codegen as `f64` while a struct field is `[f32; N]` — insert `as f32`.
+    fn float_array_elem_cast_target(expected_elem: &Type, actual: &Type) -> Option<&'static str> {
+        fn peel(ty: &Type) -> &Type {
+            match ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => peel(inner),
+                t => t,
+            }
+        }
+        let exp = peel(expected_elem);
+        let got = peel(actual);
+        let want_f32 = matches!(exp, Type::Custom(n) if n == "f32");
+        let want_f64 = matches!(exp, Type::Custom(n) if n == "f64");
+        let got_f32 = matches!(got, Type::Custom(n) if n == "f32");
+        let got_f64 = matches!(got, Type::Custom(n) if n == "f64");
+        let got_float = matches!(got, Type::Float);
+        if want_f32 && (got_f64 || (got_float && !got_f32)) {
+            return Some("f32");
+        }
+        if want_f64 && got_f32 {
+            return Some("f64");
+        }
+        None
+    }
+
     // Helper method for expressions that need to be evaluated without &mut self
     pub(crate) fn generate_expression_immut(&self, expr: &Expression) -> String {
         use crate::parser::ast::operators::{BinaryOp, UnaryOp};
@@ -94,8 +146,40 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX: Generate comparison without adding incorrect dereferences
                 // When comparing &String == &String, both sides are already borrowed - no deref needed!
                 // Rust's PartialEq trait handles comparisons correctly for references.
-                let left_str = self.generate_expression_immut(left);
-                let right_str = self.generate_expression_immut(right);
+                let mut left_str = self.generate_expression_immut(left);
+                let mut right_str = self.generate_expression_immut(right);
+
+                // Auto-deref borrowed bool operands in logical ops (&&, ||).
+                // Rust requires `bool`, not `&bool`, for these operators.
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    let deref_if_borrowed_bool = |expr: &Expression, s: &str| -> String {
+                        if let Expression::Identifier { name, .. } = expr {
+                            if self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name)
+                            {
+                                if !s.starts_with('*') {
+                                    return format!("*{}", s);
+                                }
+                            }
+                        }
+                        s.to_string()
+                    };
+                    left_str = deref_if_borrowed_bool(left, &left_str);
+                    right_str = deref_if_borrowed_bool(right, &right_str);
+                }
+
+                // Mixed int/float promotion in const/immutable expressions
+                if matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) {
+                    self.promote_int_to_float_in_mixed_arithmetic(
+                        left,
+                        right,
+                        &mut left_str,
+                        &mut right_str,
+                    );
+                }
 
                 format!("{} {} {}", left_str, op_str, right_str)
             }
@@ -415,7 +499,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 || self
                                     .infer_expression_type(expr_to_generate)
                                     .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t));
+                                    .is_some_and(|t| {
+                                        if self.is_type_copy(t) {
+                                            return true;
+                                        }
+                                        match t {
+                                            Type::Reference(inner)
+                                            | Type::MutableReference(inner) => {
+                                                self.is_type_copy(inner)
+                                            }
+                                            _ => false,
+                                        }
+                                    });
 
                             if !is_copy_type {
                                 return format!("{}.clone()", base_name);
@@ -433,11 +528,21 @@ impl<'ast> CodeGenerator<'ast> {
                         let field_is_copy = self
                             .current_struct_name
                             .as_ref()
-                            .and_then(|sn| self.struct_field_types.get(sn.as_str()))
+                            .and_then(|sn| self.lookup_struct_field_types(sn.as_str()))
                             .and_then(|fields| fields.get(name))
                             .is_some_and(|ty| self.is_type_copy(ty));
                         if !field_is_copy {
                             return format!("{}.clone()", base_name);
+                        }
+                    }
+                }
+
+                if self.in_owned_value_context && !self.generating_assignment_target {
+                    if let Some(ty) = self.infer_expression_type(expr_to_generate) {
+                        if let Type::Reference(inner) | Type::MutableReference(inner) = &ty {
+                            if self.is_type_copy(inner) {
+                                return format!("*{}", base_name);
+                            }
                         }
                     }
                 }
@@ -524,7 +629,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 let is_arithmetic = matches!(
                     op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
                 );
                 let left_is_usize = self.expression_produces_usize(left);
                 let right_is_usize = self.expression_produces_usize(right);
@@ -781,7 +886,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if (is_arithmetic || is_comparison)
                     && matches!(
                         op,
-                        BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div
+                        BinaryOp::Add
+                            | BinaryOp::Sub
+                            | BinaryOp::Mul
+                            | BinaryOp::Div
+                            | BinaryOp::Mod
                     )
                 {
                     let prefer_f32_from_assignment = is_arithmetic
@@ -1034,6 +1143,26 @@ impl<'ast> CodeGenerator<'ast> {
                     self.balance_eq_operands_for_rust(left, right, &mut left_str, &mut right_str);
                 }
 
+                // Auto-deref borrowed bool operands in logical ops (&&, ||).
+                // Rust requires `bool`, not `&bool`, for these operators.
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    let deref_if_borrowed_bool =
+                        |expr: &Expression, s: &str, gen: &Self| -> String {
+                            if let Expression::Identifier { name, .. } = expr {
+                                if gen.inferred_borrowed_params.contains(name.as_str())
+                                    || gen.borrowed_iterator_vars.contains(name)
+                                {
+                                    if !s.starts_with('*') {
+                                        return format!("*{}", s);
+                                    }
+                                }
+                            }
+                            s.to_string()
+                        };
+                    left_str = deref_if_borrowed_bool(left, &left_str, self);
+                    right_str = deref_if_borrowed_bool(right, &right_str, self);
+                }
+
                 format!("{} {} {}", left_str, op_str, right_str)
             }
             Expression::Unary { op, operand, .. } => {
@@ -1051,6 +1180,35 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // TDD FIX: Explicit deref handling is now in balance_eq_operands_for_rust
                 // where we have access to BOTH operands to make the right decision
+
+                // Strip `*` for owned Copy types that don't implement Deref.
+                // User writes `*id` but `id` is already owned (e.g., from for-loop over owned Vec) —
+                // dereffing a non-Deref type is E0614.
+                // BUT keep `*` when the variable is actually a reference (local ref, borrowed param,
+                // borrowed iterator var) — deref is valid and necessary there.
+                if matches!(op, crate::parser::UnaryOp::Deref) {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str())
+                            || self.borrowed_iterator_vars.contains(name);
+                        let is_local_ref =
+                            self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                                matches!(
+                                    t,
+                                    crate::parser::Type::Reference(_)
+                                        | crate::parser::Type::MutableReference(_)
+                                )
+                            });
+                        if !is_borrowed && !is_local_ref {
+                            let is_copy = self
+                                .infer_expression_type(operand)
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if is_copy {
+                                return self.generate_expression(operand);
+                            }
+                        }
+                    }
+                }
 
                 let op_str = operators::unary_op_to_rust(op);
 
@@ -1145,7 +1303,30 @@ impl<'ast> CodeGenerator<'ast> {
 
                         let args: Vec<String> = arguments
                             .iter()
-                            .map(|(_label, arg)| self.generate_expression(arg))
+                            .map(|(_label, arg)| {
+                                let generated = self.generate_expression(arg);
+                                // Deref borrowed Copy params in assert_eq!/assert_ne!
+                                // to avoid E0277 (&i32 != i32 for PartialEq)
+                                if matches!(func_name.as_str(), "assert_eq" | "assert_ne") {
+                                    if let Expression::Identifier { name, .. } = arg {
+                                        if self.inferred_borrowed_params.contains(name.as_str()) {
+                                            let param_type = self
+                                                .current_function_params
+                                                .iter()
+                                                .find(|p| p.name == *name)
+                                                .map(|p| &p.type_);
+                                            let is_copy_ref = param_type.is_some_and(|t| {
+                                                matches!(t, crate::parser::Type::Reference(inner)
+                                                    if self.is_type_copy(inner))
+                                            });
+                                            if is_copy_ref {
+                                                return format!("*{}", generated);
+                                            }
+                                        }
+                                    }
+                                }
+                                generated
+                            })
                             .collect();
                         return format!("{}!({})", func_name, args.join(", "));
                     }
@@ -1691,6 +1872,38 @@ impl<'ast> CodeGenerator<'ast> {
                     func_str = func_str.replacen("Map::", "HashMap::", 1);
                 }
 
+                // E0282 turbofish: Vec::new() / HashSet::new() → Vec::<T>::new() / HashSet::<T>::new()
+                // when the function return type provides the element type.
+                // Skip when suppress_collection_turbofish is set (let binding already has type ascription).
+                if arguments.is_empty() && !self.suppress_collection_turbofish {
+                    if func_str == "Vec::new" {
+                        if let Some(Type::Vec(inner)) = &self.current_function_return_type {
+                            func_str = format!("Vec::<{}>::new", self.type_to_rust(inner));
+                        }
+                    } else if func_str == "HashSet::new" {
+                        if let Some(Type::Parameterized(base, args)) =
+                            &self.current_function_return_type
+                        {
+                            if base == "HashSet" && args.len() == 1 {
+                                func_str =
+                                    format!("HashSet::<{}>::new", self.type_to_rust(&args[0]));
+                            }
+                        }
+                    } else if func_str == "HashMap::new" {
+                        if let Some(Type::Parameterized(base, args)) =
+                            &self.current_function_return_type
+                        {
+                            if base == "HashMap" && args.len() == 2 {
+                                func_str = format!(
+                                    "HashMap::<{}, {}>::new",
+                                    self.type_to_rust(&args[0]),
+                                    self.type_to_rust(&args[1])
+                                );
+                            }
+                        }
+                    }
+                }
+
                 // In an impl block, bare function calls to sibling methods need qualified dispatch.
                 // Instance methods (take self) → self.method(args)
                 // Static methods → Self::method(args)
@@ -1705,14 +1918,32 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // E0282 turbofish: Some(expr) → Some::<T>(expr)
+                // Only needed when the type parameter is truly ambiguous
+                // (e.g. numeric literals outside a typed context). In return
+                // position or when the inner type involves references/structs,
+                // Rust infers the type from the function signature.
+                if func_str == "Some" && arguments.len() == 1 {
+                    if let Some(Type::Option(inner)) = &self.current_function_return_type {
+                        let inner_rust = self.type_to_rust(inner);
+                        let is_ambiguous_primitive = matches!(
+                            inner.as_ref(),
+                            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool
+                        );
+                        if is_ambiguous_primitive {
+                            func_str = format!("Some::<{}>", inner_rust);
+                        }
+                    }
+                }
+
                 // WINDJAMMER PHILOSOPHY: Some/Ok/Err with string literals need .to_string()
                 // Some("literal") -> Some("literal".to_string())
                 // Ok("literal") -> Ok("literal".to_string())
                 // Err("literal") -> Err("literal".to_string())
                 // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
 
-                // TDD FIX (Bug #2): Detect ALL enum constructors, not just Some/Ok/Err
-                // Pattern: Module::Variant or Enum::Variant (both CamelCase)
+                // TDD FIX (Bug #2): Detect ALL enum constructors AND tuple struct constructors
+                // Pattern: Some/Ok/Err, Module::Variant, or TupleStruct(args)
                 let is_std_enum = matches!(func_name.as_str(), "Some" | "Ok" | "Err");
                 let is_custom_enum = func_name.contains("::") && {
                     let parts: Vec<&str> = func_name.split("::").collect();
@@ -1720,8 +1951,15 @@ impl<'ast> CodeGenerator<'ast> {
                         && parts[0].chars().next().is_some_and(|c| c.is_uppercase())
                         && parts[1].chars().next().is_some_and(|c| c.is_uppercase())
                 };
+                // Tuple struct constructors: Point(x, y), Id(42)
+                // Uppercase name without :: that is a known tuple struct
+                let is_tuple_struct_constructor = !is_std_enum
+                    && !is_custom_enum
+                    && !func_name.contains("::")
+                    && func_name.chars().next().is_some_and(|c| c.is_uppercase())
+                    && self.tuple_struct_names.contains(&func_name);
 
-                if is_std_enum || is_custom_enum {
+                if is_std_enum || is_custom_enum || is_tuple_struct_constructor {
                     // Enum variant constructors need owned values (Some(T), Ok(T), Err(E)).
                     // Set owned context so index expressions use .clone() instead of &,
                     // BUT only for arguments that aren't already explicit references.
@@ -1839,18 +2077,26 @@ impl<'ast> CodeGenerator<'ast> {
                                     _ => false,
                                 };
 
-                                // AUTO-CLONE: When wrapping a borrowed iterator variable in Some/Ok/Err,
-                                // we need to clone it since the wrapper takes ownership
-                                // UNLESS we're returning Option<&T>, Option<&mut T>, Result<&T, E>, etc.
+                                // AUTO-CONVERT: Borrowed variables in enum constructors need
+                                // ownership conversion since the wrapper takes ownership.
+                                // &str params → .to_string(), other borrowed → .clone()
+                                // UNLESS returning Option<&T>, Result<&T, E>, etc.
                                 if !returns_option_ref
                                     && !returns_result_ref
-                                    && self.borrowed_iterator_vars.contains(name)
                                     && !result.ends_with(".clone()")
+                                    && !result.ends_with(".to_string()")
+                                    && !result.trim_start().starts_with('*')
                                 {
-                                    // Function returns owned, but variable is borrowed - need to clone
-                                    format!("{}.clone()", result)
+                                    if self.str_ref_optimized_params.contains(name.as_str()) {
+                                        format!("{}.to_string()", result)
+                                    } else if self.borrowed_iterator_vars.contains(name)
+                                        || self.inferred_borrowed_params.contains(name.as_str())
+                                    {
+                                        format!("{}.clone()", result)
+                                    } else {
+                                        result
+                                    }
                                 } else {
-                                    // Function returns reference, or variable not borrowed - don't clone
                                     result
                                 }
                             } else {
@@ -2368,7 +2614,9 @@ impl<'ast> CodeGenerator<'ast> {
                                                     && !arg_str.ends_with(".clone()")
                                                 {
                                                     arg_str = format!("{}.to_string()", arg_str);
-                                                } else if !arg_str.ends_with(".clone()") {
+                                                } else if !arg_str.ends_with(".clone()")
+                                                    && !arg_str.trim_start().starts_with('*')
+                                                {
                                                     // For other reference types, .clone() works
                                                     arg_str = format!("{}.clone()", arg_str);
                                                 }
@@ -2393,18 +2641,23 @@ impl<'ast> CodeGenerator<'ast> {
                                                     || is_inferred_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
-                                                    let is_text = self
-                                                        .infer_expression_type(arg)
-                                                        .as_ref()
-                                                        .is_some_and(|t| {
+                                                    // `*ident` = owned Copy from &/&mut (see Identifier
+                                                    // in_owned_value_context); do not append .clone().
+                                                    if !arg_str.trim_start().starts_with('*') {
+                                                        let is_text = self
+                                                            .infer_expression_type(arg)
+                                                            .as_ref()
+                                                            .is_some_and(|t| {
                                                             crate::codegen::rust::types::is_windjammer_text_type(t)
                                                         });
-                                                    if is_text {
-                                                        arg_str = format!("{}.to_string()", arg_str);
-                                                    } else {
-                                                        // Borrowed from iterator or inferred - use .clone()
-                                                        // This handles &T → T for non-text types
-                                                        arg_str = format!("{}.clone()", arg_str);
+                                                        if is_text {
+                                                            arg_str =
+                                                                format!("{}.to_string()", arg_str);
+                                                        } else {
+                                                            // Borrowed from iterator or inferred - use .clone()
+                                                            // This handles &T → T for non-text types
+                                                            arg_str = format!("{}.clone()", arg_str);
+                                                        }
                                                     }
                                                 }
                                             }
@@ -3209,11 +3462,17 @@ impl<'ast> CodeGenerator<'ast> {
                 // Restore float target type after argument generation
                 self.assignment_float_target_type = prev_float_target;
 
-                // Generate turbofish if present
+                // Generate turbofish if present, or infer for collect() from return type
                 let turbofish = if let Some(types) = type_args {
                     let type_strs: Vec<String> =
                         types.iter().map(|t| self.type_to_rust(t)).collect();
                     format!("::<{}>", type_strs.join(", "))
+                } else if method == "collect" {
+                    if let Some(ret_ty) = &self.current_function_return_type {
+                        format!("::<{}>", self.type_to_rust(ret_ty))
+                    } else {
+                        String::new()
+                    }
                 } else {
                     String::new()
                 };
@@ -3705,27 +3964,31 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // &self field clone: when accessing self.field in a &self method,
-                // non-Copy types can't be moved out of the reference — auto-clone.
+                // Borrowed param field clone: when accessing param.field on a borrowed
+                // parameter (&self or any &T param), non-Copy types can't be moved
+                // out of the reference — auto-clone.
                 // Skip in comparison contexts — refs compare fine without cloning.
                 if !self.generating_assignment_target
                     && !self.in_explicit_clone_call
                     && !self.in_field_access_object
                     && !self.in_borrow_context
                     && !self.suppress_borrowed_clone
+                    && !self.in_call_argument_generation
                 {
                     if let Expression::Identifier { name: obj_name, .. } = &**object {
-                        if obj_name == "self"
-                            && self.inferred_borrowed_params.contains("self")
-                            && self.in_impl_block
-                        {
-                            let field_is_copy = self
-                                .current_struct_name
-                                .as_ref()
-                                .and_then(|sn| self.struct_field_types.get(sn.as_str()))
-                                .and_then(|fields| fields.get(field.as_str()))
-                                .is_some_and(|ty| self.is_type_copy(ty));
-                            if !field_is_copy {
+                        if self.inferred_borrowed_params.contains(obj_name.as_str()) {
+                            let field_is_copy = if obj_name == "self" && self.in_impl_block {
+                                self.current_struct_name
+                                    .as_ref()
+                                    .and_then(|sn| self.lookup_struct_field_types(sn.as_str()))
+                                    .and_then(|fields| fields.get(field.as_str()))
+                                    .is_some_and(|ty| self.is_type_copy(ty))
+                            } else {
+                                self.infer_expression_type(expr_to_generate)
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_type_copy(t))
+                            };
+                            if !field_is_copy && !base_expr.ends_with(".clone()") {
                                 return format!("{}.clone()", base_expr);
                             }
                         }
@@ -3821,7 +4084,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                             if is_string_param && !expr_str.contains(".to_string()") {
                                 let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
-                                if let Some(field_types) = self.struct_field_types.get(struct_name) {
+                                if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
                                     if let Some(field_type) = field_types.get(field_name) {
                                         let field_is_string = matches!(field_type, Type::String)
                                             || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
@@ -4153,7 +4416,9 @@ impl<'ast> CodeGenerator<'ast> {
                     && element_type
                         .as_ref()
                         .map(|et| !self.is_type_copy(et))
-                        .unwrap_or(true); // Unknown type → need clone (conservative)
+                        .unwrap_or(true)
+                    && !self.in_borrow_context
+                    && !self.generating_assignment_target;
 
                 let suppress_borrow_or_clone =
                     suppress_borrow_or_clone && !force_clone_for_owned_context;
@@ -4222,8 +4487,32 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Array {
                 elements: exprs, ..
             } => {
-                let expr_strs: Vec<String> =
-                    exprs.iter().map(|e| self.generate_expression(e)).collect();
+                let expected_elem_ty = self.struct_array_field_element_type();
+                let expr_strs: Vec<String> = exprs
+                    .iter()
+                    .map(|e| {
+                        let mut s = self.generate_expression(e);
+                        if let Some(ref exp_ty) = expected_elem_ty {
+                            if let Some(actual_ty) = self.infer_expression_type(e) {
+                                let skip_float_literal = matches!(
+                                    e,
+                                    Expression::Literal {
+                                        value: Literal::Float(_),
+                                        ..
+                                    }
+                                );
+                                if !skip_float_literal {
+                                    if let Some(cast) =
+                                        Self::float_array_elem_cast_target(exp_ty, &actual_ty)
+                                    {
+                                        s = format!("({} as {})", s, cast);
+                                    }
+                                }
+                            }
+                        }
+                        s
+                    })
+                    .collect();
 
                 // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
                 //
@@ -4795,51 +5084,51 @@ impl<'ast> CodeGenerator<'ast> {
     /// f32/f64 suffix for a float literal on an assignment RHS when FloatInference is Unknown.
     /// Uses codegen's `infer_expression_type` (impl `self.field`, index elements, etc.).
     fn float_literal_suffix_from_assignment_lhs(ty: &Type) -> Option<&'static str> {
-        fn peel_refs(ty: &Type) -> &Type {
-            match ty {
-                Type::Reference(inner) | Type::MutableReference(inner) => peel_refs(inner),
-                t => t,
-            }
-        }
-        match peel_refs(ty) {
+        Self::try_extract_float_type(ty)
+    }
+
+    /// Helper: Extract float type from a Type (handles tuples, arrays, Vec, Option, Result, etc.)
+    /// Searches recursively for float types, prioritizing f32 over f64.
+    /// Returns None if no float type is found in the type tree.
+    fn try_extract_float_type(ty: &Type) -> Option<&'static str> {
+        match ty {
             Type::Custom(name) if name == "f32" => Some("f32"),
             Type::Custom(name) if name == "f64" => Some("f64"),
-            Type::Vec(inner) => Self::float_literal_suffix_from_assignment_lhs(inner),
-            Type::Array(inner, _) => Self::float_literal_suffix_from_assignment_lhs(inner),
+            Type::Float => Some("f64"),
+            Type::Vec(inner) | Type::Array(inner, _) => Self::try_extract_float_type(inner),
+            Type::Option(inner) => Self::try_extract_float_type(inner),
+            Type::Result(ok_type, _) => Self::try_extract_float_type(ok_type),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::try_extract_float_type(inner)
+            }
+            Type::Tuple(types) => {
+                for t in types {
+                    if let Some("f32") = Self::try_extract_float_type(t) {
+                        return Some("f32");
+                    }
+                }
+                for t in types {
+                    if let Some("f64") = Self::try_extract_float_type(t) {
+                        return Some("f64");
+                    }
+                }
+                None
+            }
+            Type::Parameterized(name, args) => {
+                if (name == "Option" || name == "Result") && !args.is_empty() {
+                    Self::try_extract_float_type(&args[0])
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
-    /// Helper: Extract float type from a Type (handles tuples, arrays, Vec, etc.)
-    /// Searches recursively for float types, prioritizing f32 over f64.
-    fn extract_float_type_from_context(ty: &Type) -> &str {
-        match ty {
-            Type::Custom(name) if name == "f32" => "f32",
-            Type::Custom(name) if name == "f64" => "f64",
-            Type::Vec(inner) => {
-                // Recurse into Vec<T> to find float type
-                Self::extract_float_type_from_context(inner)
-            }
-            Type::Tuple(types) => {
-                // Search ALL tuple elements for f32 (prioritize f32 over f64)
-                for t in types {
-                    let float_ty = Self::extract_float_type_from_context(t);
-                    if float_ty == "f32" {
-                        return "f32"; // Found f32 anywhere in tuple
-                    }
-                }
-                // Check again for f64
-                for t in types {
-                    let float_ty = Self::extract_float_type_from_context(t);
-                    if float_ty == "f64" {
-                        return "f64"; // Found f64 somewhere
-                    }
-                }
-                "f64" // No float type found, default to f64
-            }
-            Type::Array(inner, _) => Self::extract_float_type_from_context(inner),
-            _ => "f64",
-        }
+    /// Wrapper that defaults to f32 when no float type is found in context.
+    /// Windjammer convention: unconstrained float literals default to f32 (game/graphics standard).
+    fn extract_float_type_from_context(ty: &Type) -> &'static str {
+        Self::try_extract_float_type(ty).unwrap_or("f32")
     }
 
     /// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer).
@@ -4903,11 +5192,34 @@ impl<'ast> CodeGenerator<'ast> {
                     let suffix: Option<&str> = match inferred {
                         FloatType::F32 => Some("f32"),
                         FloatType::F64 => Some("f64"),
-                        FloatType::Unknown => self
-                            .assignment_float_target_type
-                            .as_ref()
-                            .and_then(Self::float_literal_suffix_from_assignment_lhs)
-                            .or(Some("f32")),
+                        FloatType::Unknown => {
+                            // Same resolution order as `generate_literal_context_sensitive`, so
+                            // `[f32; 3]` struct fields still get `_f32` when inference is Unknown.
+                            let from_assignment = self
+                                .assignment_float_target_type
+                                .as_ref()
+                                .and_then(Self::float_literal_suffix_from_assignment_lhs);
+                            let from_struct_field = if let (Some(struct_name), Some(field_name)) = (
+                                &self.current_struct_literal_name,
+                                &self.current_struct_field_name,
+                            ) {
+                                self.lookup_struct_field_types(struct_name)
+                                    .and_then(|fields| fields.get(field_name))
+                                    .map(|ft| Self::extract_float_type_from_context(ft))
+                            } else {
+                                None
+                            };
+                            let from_return = self
+                                .current_function_return_type
+                                .as_ref()
+                                .map(|rt| Self::extract_float_type_from_context(rt));
+                            Some(
+                                from_assignment
+                                    .or(from_struct_field)
+                                    .or(from_return)
+                                    .unwrap_or("f32"),
+                            )
+                        }
                     };
 
                     if let Some(suffix) = suffix {
@@ -4941,7 +5253,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &self.current_struct_literal_name,
                     &self.current_struct_field_name,
                 ) {
-                    if let Some(fields) = self.struct_field_types.get(struct_name) {
+                    if let Some(fields) = self.lookup_struct_field_types(struct_name) {
                         if let Some(field_type) = fields.get(field_name) {
                             Self::extract_float_type_from_context(field_type)
                         } else {
@@ -4950,11 +5262,9 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         "f32"
                     }
-                // Priority 2: Function return type (handles tuples like (bool, f32))
                 } else if let Some(return_type) = &self.current_function_return_type {
                     Self::extract_float_type_from_context(return_type)
                 } else {
-                    // Default: f32 — matches game/FFI-heavy dogfooding (avoids E0308 at API boundaries).
                     "f32"
                 };
 
@@ -4982,20 +5292,38 @@ impl<'ast> CodeGenerator<'ast> {
         left: &Expression<'ast>,
         right: &Expression<'ast>,
     ) -> String {
-        // Collect all parts of the concatenation chain
         let mut parts = Vec::new();
         string_analysis::collect_concat_parts_static(left, &mut parts);
         string_analysis::collect_concat_parts_static(right, &mut parts);
 
-        // Generate format! macro call
-        let format_str = "{}".repeat(parts.len());
+        let use_additive = parts.iter().any(string_analysis::expression_produces_string);
 
-        // Generate expressions for each part
+        if use_additive {
+            let mut acc = self.generate_expression(&parts[0]);
+            for p in parts.iter().skip(1) {
+                let rhs = self.generate_expression(p);
+                let amp = string_analysis::expression_produces_string(p)
+                    || self.infer_expression_type(p).as_ref().is_some_and(|ty| {
+                        matches!(ty, Type::String)
+                            || matches!(
+                                ty,
+                                Type::Custom(n) if n == "string" || n == "String"
+                            )
+                    });
+                acc = if amp {
+                    format!("{} + &{}", acc, rhs)
+                } else {
+                    format!("{} + {}", acc, rhs)
+                };
+            }
+            return acc;
+        }
+
+        let format_str = "{}".repeat(parts.len());
         let mut args = Vec::new();
         for expr in &parts {
             args.push(self.generate_expression(expr));
         }
-
         format!("format!(\"{}\", {})", format_str, args.join(", "))
     }
 
@@ -5454,7 +5782,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         fn is_integer_type(t: &Type) -> bool {
             match t {
-                Type::Int => true,
+                Type::Int | Type::Int32 | Type::Uint => true,
                 Type::Custom(n) => matches!(
                     n.as_str(),
                     "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
@@ -5508,6 +5836,35 @@ impl<'ast> CodeGenerator<'ast> {
                     *right_str = cast_int_to_float(right_str, right, "f32");
                 } else if left_str.contains("_f64") || left_str.ends_with("f64") {
                     *right_str = cast_int_to_float(right_str, right, "f64");
+                }
+            }
+            // One side is typed float, other side is unresolved (integer literal with no type)
+            (Some(l), None) if is_float_type(l) => {
+                use crate::parser::Literal as WjLit;
+                let is_int_literal = matches!(
+                    right,
+                    Expression::Literal {
+                        value: WjLit::Int(_),
+                        ..
+                    }
+                );
+                if is_int_literal {
+                    let target = float_target(l);
+                    *right_str = cast_int_to_float(right_str, right, target);
+                }
+            }
+            (None, Some(r)) if is_float_type(r) => {
+                use crate::parser::Literal as WjLit;
+                let is_int_literal = matches!(
+                    left,
+                    Expression::Literal {
+                        value: WjLit::Int(_),
+                        ..
+                    }
+                );
+                if is_int_literal {
+                    let target = float_target(r);
+                    *left_str = cast_int_to_float(left_str, left, target);
                 }
             }
             _ => {}
@@ -5769,8 +6126,24 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             };
 
-            if left_is_explicit_str || right_is_explicit_str {
-                // Explicit &str parameters compare naturally with everything - no deref logic needed
+            // Also check Phase 2 &str-optimized parameters (inferred borrowed string → &str)
+            let left_is_str_optimized = if let Expression::Identifier { name, .. } = left {
+                self.str_ref_optimized_params.contains(name.as_str())
+            } else {
+                false
+            };
+            let right_is_str_optimized = if let Expression::Identifier { name, .. } = right {
+                self.str_ref_optimized_params.contains(name.as_str())
+            } else {
+                false
+            };
+
+            if left_is_explicit_str
+                || right_is_explicit_str
+                || left_is_str_optimized
+                || right_is_str_optimized
+            {
+                // &str parameters compare naturally with everything - no deref logic needed
                 return;
             }
 
@@ -5834,11 +6207,13 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: ONLY deref when we're CERTAIN about type mismatch
             // Rules (from most specific to most general):
 
-            // Rule -1: Explicit &str parameters NEVER need deref
+            // Rule -1: Explicit &str parameters and Phase 2 &str-optimized params NEVER need deref
             // Rust's PartialEq handles: &str == &String, &str == &str, &str == String
-            // Note: This duplicates the logic above, but we need it here too in case
-            // we reach this code path through the non-string early returns
-            if left_is_explicit_str || right_is_explicit_str {
+            if left_is_explicit_str
+                || right_is_explicit_str
+                || left_is_str_optimized
+                || right_is_str_optimized
+            {
                 return; // &str compares natively with everything
             }
 

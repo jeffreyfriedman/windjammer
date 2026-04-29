@@ -80,14 +80,14 @@ fn test_is_known_copy_type_returns_false_for_entity() {
 }
 
 #[test]
-fn test_is_known_copy_type_returns_false_for_math_types() {
-    assert!(!is_known_copy_type("Vec2"));
-    assert!(!is_known_copy_type("Vec3"));
-    assert!(!is_known_copy_type("Vec4"));
-    assert!(!is_known_copy_type("AABB"));
-    assert!(!is_known_copy_type("Rect"));
-    assert!(!is_known_copy_type("Point"));
-    assert!(!is_known_copy_type("Color"));
+fn test_is_known_copy_type_returns_true_for_math_types() {
+    assert!(is_known_copy_type("Vec2"));
+    assert!(is_known_copy_type("Vec3"));
+    assert!(is_known_copy_type("Vec4"));
+    assert!(is_known_copy_type("AABB"));
+    assert!(is_known_copy_type("Rect"));
+    assert!(is_known_copy_type("Point"));
+    assert!(is_known_copy_type("Color"));
 }
 
 #[test]

@@ -40,19 +40,13 @@ pub fn helper() -> int {
 "#;
     fs::write(src_dir.join("utils.wj"), utils_wj).unwrap();
 
-    // Create hand-written FFI module in project root (alongside src_wj)
-    // THE WINDJAMMER WAY: FFI modules live in project root and are auto-discovered!
+    // Place hand-written FFI module in output dir (in real builds, wj game build syncs these)
     let ffi_rs = r#"
-// Hand-written Rust FFI code
-// THE WINDJAMMER WAY: Provide safe wrappers for FFI functions
 pub fn get_window_width() -> i64 {
-    // In a real implementation, this would call actual FFI
-    // For test purposes, just return a dummy value
     1024
 }
 "#;
-    let project_root = temp_dir.path();
-    fs::write(project_root.join("ffi.rs"), ffi_rs).unwrap();
+    fs::write(output_dir.join("ffi.rs"), ffi_rs).unwrap();
 
     // Compile the Windjammer project
     let result = windjammer::build_project(
@@ -131,14 +125,11 @@ pub fn helper() -> int {
 "#;
     fs::write(src_dir.join("utils.wj"), utils_wj).unwrap();
 
-    // Create FFI as a subdirectory with mod.rs in project root
-    // THE WINDJAMMER WAY: Hand-written modules live in project root!
-    let project_root = temp_dir.path();
-    let ffi_dir = project_root.join("ffi");
+    // Place hand-written FFI module in output dir (in real builds, wj game build syncs these)
+    let ffi_dir = output_dir.join("ffi");
     fs::create_dir_all(&ffi_dir).unwrap();
 
     let ffi_mod_rs = r#"
-// FFI module
 pub fn initialize() {
     println!("Initialized");
 }

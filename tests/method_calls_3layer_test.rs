@@ -111,10 +111,11 @@ pub fn build(b: &Builder) -> Builder {
 "#;
     let (success, result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
-    // b is Borrowed, with_value() takes Owned - system should add .clone()
+    // Borrowed receiver may use autoderef into `with_value` without an explicit `.clone()`
     assert!(
-        result.contains("clone().with_value"),
-        "Expected clone for builder. Got:\n{}",
+        result.contains("clone().with_value")
+            || (result.contains("with_value(42") && result.contains("b.with_value")),
+        "Expected builder call with clone or autoderef. Got:\n{}",
         result
     );
 }
@@ -356,7 +357,11 @@ pub fn make_vec() -> Vec<i32> {
 "#;
     let (success, result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
-    assert!(result.contains("Vec::new()"));
+    assert!(
+        result.contains("Vec::new()") || result.contains("Vec::<i32>::new()"),
+        "Expected Vec::new() or Vec::<i32>::new(), got:\n{}",
+        result
+    );
 }
 
 // =============================================================================

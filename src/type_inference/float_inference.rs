@@ -86,6 +86,8 @@ pub struct FloatInference {
     imported_type_registry_keys: HashMap<String, String>,
     /// `pub use` per module path — populated by library build pre-pass for glob imports.
     module_re_exports: HashMap<String, HashMap<String, String>>,
+    /// Type alias registry: alias_name → resolved Type
+    type_aliases: HashMap<String, Type>,
 }
 
 impl Default for FloatInference {
@@ -119,6 +121,7 @@ impl FloatInference {
             current_file_id: 0,
             file_name_to_id: HashMap::new(),
             next_file_id: 1,
+            type_aliases: HashMap::new(),
         }
     }
 
@@ -290,6 +293,28 @@ impl FloatInference {
                     field_map.insert(field.name.clone(), field.field_type.clone());
                 }
                 self.struct_field_types.insert(key, field_map);
+            }
+            Item::Enum { decl, .. } => {
+                use crate::parser::EnumVariantData;
+                for variant in &decl.variants {
+                    if let EnumVariantData::Struct(fields) = &variant.data {
+                        let variant_key = format!("{}::{}", decl.name, variant.name);
+                        let qualified_key =
+                            struct_field_registry::qualify_struct_key(module_prefix, &variant_key);
+                        let mut field_map = HashMap::new();
+                        for (name, ty) in fields {
+                            field_map.insert(name.clone(), ty.clone());
+                        }
+                        self.struct_field_types
+                            .insert(variant_key, field_map.clone());
+                        self.struct_field_types.insert(qualified_key, field_map);
+                    }
+                }
+            }
+            Item::TypeAlias {
+                name, target, ..
+            } => {
+                self.type_aliases.insert(name.clone(), target.clone());
             }
             Item::Mod { name, items, .. } => {
                 let mut next = module_prefix.to_vec();
@@ -2097,11 +2122,18 @@ impl FloatInference {
     /// Extract FloatType from a Type
     fn extract_float_type(&self, ty: &Type) -> Option<FloatType> {
         match ty {
-            Type::Float => Some(FloatType::F64), // Windjammer "float" keyword → f64
+            Type::Float => Some(FloatType::F64),
             Type::Custom(name) if name == "f32" => Some(FloatType::F32),
             Type::Custom(name) if name == "f64" => Some(FloatType::F64),
+            Type::Custom(name) => {
+                // Resolve type aliases: e.g., Quat = (f32, f32, f32, f32)
+                if let Some(resolved) = self.type_aliases.get(name.as_str()) {
+                    self.extract_float_type(resolved)
+                } else {
+                    None
+                }
+            }
             Type::Tuple(types) => {
-                // Search tuple for float types
                 for t in types {
                     if let Some(float_ty) = self.extract_float_type(t) {
                         return Some(float_ty);
@@ -2109,14 +2141,18 @@ impl FloatInference {
                 }
                 None
             }
-            Type::Vec(inner) => self.extract_float_type(inner),
-            Type::Array(inner, _) => self.extract_float_type(inner),
+            Type::Vec(inner) | Type::Array(inner, _) => self.extract_float_type(inner),
+            Type::Option(inner) => self.extract_float_type(inner),
+            Type::Result(ok_type, _) => self.extract_float_type(ok_type),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.extract_float_type(inner)
+            }
             Type::Parameterized(name, type_args) => {
                 let base = crate::type_inference::generic_type_base_name(name);
-                if base == "Vec" && !type_args.is_empty() {
+                if (base == "Vec" || base == "Option" || base == "Result") && !type_args.is_empty()
+                {
                     self.extract_float_type(&type_args[0])
                 } else {
-                    // HashMap/Map/BTreeMap etc.: not scalar floats — do not recurse into `V`.
                     None
                 }
             }

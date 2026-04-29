@@ -75,9 +75,11 @@ pub struct StructField<'ast> {
 pub struct StructDecl<'ast> {
     pub name: String,
     pub is_pub: bool,                // Whether this struct has pub visibility
+    pub is_extern: bool,             // `extern struct` — opaque / linked type
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField<'ast>>,
+    pub tuple_fields: Option<Vec<Type>>, // Tuple struct fields: struct Point(i32, i32)
     pub decorators: Vec<Decorator<'ast>>,
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
@@ -259,6 +261,7 @@ pub enum Pattern<'ast> {
     Reference(&'ast Pattern<'ast>), // Reference pattern: &x
     Ref(String),                    // Ref binding: ref x (borrows without moving)
     RefMut(String),                 // RefMut binding: ref mut x (mutable borrow)
+    MutBinding(String),             // Mut binding: mut x (takes ownership, allows mutation)
 }
 
 // ============================================================================
@@ -473,6 +476,8 @@ pub struct ImplBlock<'ast> {
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl<'ast>>,
     pub decorators: Vec<Decorator<'ast>>,
+    /// `extern impl` — signatures for FFI/linked code; same codegen shape as normal impl
+    pub is_extern: bool,
 }
 
 // ============================================================================

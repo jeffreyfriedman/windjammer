@@ -12,6 +12,18 @@ use super::self_analysis;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    fn collect_derive_trait_identifiers(expr: &Expression<'_>, out: &mut Vec<String>) {
+        match expr {
+            Expression::Identifier { name, .. } => out.push(name.clone()),
+            Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    Self::collect_derive_trait_identifiers(e, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// E0053 / E0599: pick the `AnalyzedFunction` for this exact `impl` method AST node.
     ///
     /// `impl Trait for T` and `impl T` can both define `set_lighting` (etc.). Matching only
@@ -121,12 +133,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Special handling for @derive decorator - generates #[derive(Trait1, Trait2)]
                 let mut traits = Vec::new();
                 for (_key, expr) in &decorator.arguments {
-                    if let Expression::Identifier {
-                        name: trait_name, ..
-                    } = expr
-                    {
-                        traits.push(trait_name.clone());
-                    }
+                    Self::collect_derive_trait_identifiers(expr, &mut traits);
                 }
                 if !traits.is_empty() {
                     let merged = CodeGenerator::merge_standard_derive_traits(
@@ -202,6 +209,19 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Add where clause if present
         output.push_str(&codegen_helpers::format_where_clause(&s.where_clause));
+
+        // Check for tuple struct: struct Name(T1, T2);
+        if let Some(tuple_types) = &s.tuple_fields {
+            self.tuple_struct_names.insert(s.name.clone());
+            output.push('(');
+            let fields: Vec<String> = tuple_types
+                .iter()
+                .map(|t| format!("pub {}", self.type_to_rust(t)))
+                .collect();
+            output.push_str(&fields.join(", "));
+            output.push_str(");");
+            return output;
+        }
 
         // Check if this is a unit struct (no fields)
         if s.fields.is_empty() {
@@ -394,7 +414,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn generate_enum(&self, e: &EnumDecl) -> String {
+    pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
         // WINDJAMMER PHILOSOPHY: Auto-derive common traits for enums
@@ -416,6 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
         let all_variants_copy = self.all_enum_variants_are_copy(&e.variants);
         if all_variants_copy {
             traits.push("Copy".to_string());
+            self.copy_types_registry.insert(e.name.clone());
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
@@ -565,30 +586,27 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Trait Method Ownership Inference
             // THE WINDJAMMER WAY: If trait method has no explicit self parameter,
             // infer it automatically based on the method type:
-            // - Constructors (new, default, from, etc.) → No self (associated function)
-            // - All other methods → &mut self (method)
+            // - Associated functions returning Self → No self (constructor)
+            // - All other methods → inferred from impl bodies or default &mut self
             let has_self_param = method.parameters.iter().any(|p| p.name == "self");
-            let is_constructor = matches!(
-                method.name.as_str(),
-                "new"
-                    | "default"
-                    | "from"
-                    | "from_str"
-                    | "from_bytes"
-                    | "with_capacity"
-                    | "empty"
-                    | "zero"
-                    | "one"
+
+            // Structural detection: a method that returns Self or the trait's type and has no self
+            // parameter is an associated function (constructor), not an instance method.
+            let returns_self = matches!(
+                &method.return_type,
+                Some(Type::Custom(name)) if name == "Self"
             );
+            let returns_trait_type = matches!(
+                &method.return_type,
+                Some(Type::Custom(name)) if name == &trait_decl.name
+            );
+            let is_associated_fn = !has_self_param && (returns_self || returns_trait_type);
 
             let mut params: Vec<String> = Vec::new();
 
-            // Add self parameter if missing and not a constructor
-            if !has_self_param && !is_constructor {
-                let returns_bare_self = matches!(
-                    &method.return_type,
-                    Some(Type::Custom(name)) if name == "Self"
-                );
+            // Add self parameter if missing and not an associated function
+            if !has_self_param && !is_associated_fn {
+                let returns_bare_self = returns_self;
                 // Check if we have analyzed ownership for this method
                 let self_ownership = if let Some(analyzed) = analyzed_method {
                     analyzed.inferred_ownership.get("self").copied()

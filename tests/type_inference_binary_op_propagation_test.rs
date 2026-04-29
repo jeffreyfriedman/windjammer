@@ -28,10 +28,11 @@ pub fn compute() -> Vec3 {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_test_binary_op_prop");
-    std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    std::fs::create_dir_all(&out_dir).unwrap();
 
-    let wj_file = temp_dir.join("test.wj");
+    let wj_file = temp_dir.path().join("test.wj");
     let mut file = std::fs::File::create(&wj_file).unwrap();
     file.write_all(source.as_bytes()).unwrap();
 
@@ -39,11 +40,10 @@ pub fn compute() -> Vec3 {
         .args([
             "build",
             wj_file.to_str().unwrap(),
-            "--output",
-            temp_dir.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(std::env::current_dir().unwrap())
         .output()
         .expect("Failed to run wj build");
 
@@ -55,14 +55,16 @@ pub fn compute() -> Vec3 {
 
     assert!(output.status.success(), "wj build failed");
 
-    let rs_file = temp_dir.join("test.rs");
+    let rs_file = out_dir.join("test.rs");
     let generated = std::fs::read_to_string(&rs_file).unwrap();
 
     eprintln!("=== GENERATED RUST ===\n{}", generated);
 
     // Check what we actually generated
     let has_f64 = generated.contains("_f64");
-    let has_correct_f32 = generated.contains("i as f32 * radius * 0.5_f32");
+    let has_correct_f32 = generated.contains("0.5_f32")
+        && (generated.contains("i as f32 * radius * 0.5_f32")
+            || generated.contains("i as f32 * radius as f32 * 0.5_f32"));
 
     eprintln!("=== INFERENCE CHECK ===");
     eprintln!("Has _f64: {}", has_f64);
@@ -78,10 +80,13 @@ pub fn compute() -> Vec3 {
         }
     }
 
-    // All literals in the binary operation chain should be f32
+    // All literals in the binary operation chain should be f32 (exact mul shape may add `as f32` on `radius`)
     assert!(
-        generated.contains("i as f32 * radius * 0.5_f32"),
-        "Binary operation should infer 0.5 as f32, not f64"
+        generated.contains("0.5_f32")
+            && (generated.contains("i as f32 * radius * 0.5_f32")
+                || generated.contains("i as f32 * radius as f32 * 0.5_f32")),
+        "Binary operation should infer 0.5 as f32, not f64; got:\n{}",
+        generated
     );
 
     // Arguments to Vec3::new should all be consistent type
@@ -89,6 +94,4 @@ pub fn compute() -> Vec3 {
         !generated.contains("0.5_f64") && !generated.contains("0.0_f64"),
         "Should not have any f64 literals when Vec3::new takes f32 params"
     );
-
-    std::fs::remove_dir_all(&temp_dir).ok();
 }

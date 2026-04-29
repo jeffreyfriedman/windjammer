@@ -25,7 +25,7 @@ fn count_unique(items: Vec<i32>) -> i32 {
 }
 
 fn main() {
-    let items = vec![1, 2, 3, 2, 1]
+    let items: Vec<i32> = vec![1, 2, 3, 2, 1]
     let count = count_unique(items)
 }
 "#;

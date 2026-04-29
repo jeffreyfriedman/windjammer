@@ -10,14 +10,15 @@ fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();
     let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
-    let compiler_dir = std::env::current_dir().unwrap();
-    let compiler = compiler_dir.join("target/release/wj");
-
-    let output = std::process::Command::new(&compiler)
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&wj_file)
-        .current_dir(temp_dir.path())
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run wj");
 
@@ -26,7 +27,7 @@ fn compile_to_rust(wj_code: &str) -> String {
         panic!("wj build failed:\n{}", stderr);
     }
 
-    let rs_file = temp_dir.path().join("build/test.rs");
+    let rs_file = out_dir.join("test.rs");
     fs::read_to_string(rs_file).expect("Failed to read generated Rust")
 }
 
@@ -128,7 +129,7 @@ pub fn main() {
 fn test_string_contains_uses_signature() {
     let code = r#"
 pub fn has_substring(text: string, pattern: string) -> bool {
-    text.contains(pattern)  // Should add & (String::contains wants &str)
+    text.contains(pattern)  // Signature: &str; `pattern: &String` deref-coerces
 }
 
 pub fn main() {
@@ -144,9 +145,11 @@ pub fn main() {
     );
 
     let rust_code = result.unwrap();
+    // WJ `string` is lowered to `&String`; `contains` needs `&str` — a plain `pattern`
+    // deref-coerces; `&pattern` would be `&&String` (wrong).
     assert!(
-        rust_code.contains("&pattern") || rust_code.contains(".contains(&"),
-        "String::contains should add & for &str parameter:\n{}",
+        rust_code.contains(".contains(pattern)"),
+        "String::contains should use deref to &str, not an extra &:\n{}",
         rust_code
     );
 }
@@ -172,9 +175,11 @@ pub fn main() {
     );
 
     let rust_code = result.unwrap();
+    // WJ `string` parameters lower to Rust `&str`. `get` takes `&Q` where `K: Borrow<Q>`;
+    // passing `&key` would be `&&str`. Correct call is `get(key)`.
     assert!(
-        rust_code.contains("&key") || rust_code.contains(".get(&"),
-        "HashMap::get should add & for &K parameter:\n{}",
+        rust_code.contains("map.get(key)") || rust_code.contains(".get(key)"),
+        "HashMap::get should use `get(key)` when `key` is already &str:\n{}",
         rust_code
     );
 }
@@ -291,7 +296,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Enable when Phase 3 (field-chain resolution) is implemented
 fn test_field_chain_method_lookup() {
     // This test validates field-chain type resolution: game_state.inventory.has_item
     // Should resolve: game_state: GameState → inventory: Inventory → has_item signature
@@ -334,7 +338,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Enable when match arm type tracking is complete
 fn test_match_arm_binding_with_signature_lookup() {
     // This test validates that match arm bindings work with signature lookup
     // Example: DialogCondition::HasItem(item_id, qty) → item_id should be String

@@ -4,13 +4,13 @@
 // greet(name: &String), and string literals need conversion: "World" → &"World".to_string()
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 fn test_string_literal_to_borrowed_string_param() {
-    let temp_dir = std::env::temp_dir().join("wj_test_string_literal");
-    fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
     let wj_code = r#"
 pub fn greet(name: string) -> string {
@@ -22,16 +22,18 @@ pub fn test_greet() -> string {
 }
 "#;
 
-    let wj_file = temp_dir.join("test.wj");
+    let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
 
-    // Find wj compiler (use absolute path)
-    let wj_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    // Compile with wj
-    let output = Command::new(&wj_bin)
-        .args(["build", "test.wj", "--no-cargo"])
-        .current_dir(&temp_dir)
+    let wj_bin = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_bin)
+        .args([
+            "build",
+            wj_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -42,8 +44,7 @@ pub fn test_greet() -> string {
     println!("stdout: {}", stdout);
     println!("stderr: {}", stderr);
 
-    // Read generated Rust code
-    let rs_file = temp_dir.join("build").join("test.rs");
+    let rs_file = out_dir.join("test.rs");
     let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     println!("=== GENERATED RUST ===");
@@ -58,7 +59,7 @@ pub fn test_greet() -> string {
             "2021",
             rs_file.to_str().unwrap(),
             "--out-dir",
-            temp_dir.to_str().unwrap(),
+            temp_dir.path().to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");
@@ -67,18 +68,17 @@ pub fn test_greet() -> string {
     println!("=== RUSTC OUTPUT ===");
     println!("{}", rustc_stderr);
 
-    // PHASE 1 BASELINE: Check that borrowed string param generates &String
+    // Read-only `string` param: idiomatic &str; literals pass as &str (including "World")
     assert!(
-        rust_code.contains("fn greet(name: &String)"),
-        "FAIL: Should generate &String parameter (Phase 1 baseline)!\n\
+        rust_code.contains("fn greet(name: &str)"),
+        "FAIL: Should generate &str for borrowed string param!\n\
          Generated:\n{}",
         rust_code
     );
 
-    // PHASE 1 BASELINE: String literals converted to &"literal".to_string()
     assert!(
-        rust_code.contains(r#"greet(&"World".to_string())"#),
-        "FAIL: Should convert string literal to &\"literal\".to_string()!\n\
+        rust_code.contains(r#"greet("World")"#),
+        "FAIL: String literal should call greet with a str literal at the call site!\n\
          Generated:\n{}",
         rust_code
     );
@@ -95,7 +95,4 @@ pub fn test_greet() -> string {
         "Rustc compilation failed:\n{}",
         rustc_stderr
     );
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }

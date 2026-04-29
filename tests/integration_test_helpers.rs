@@ -186,6 +186,7 @@ fn write_flat_lib_rs(build_dir: &Path) -> io::Result<()> {
         if path.is_file()
             && path.extension().and_then(|s| s.to_str()) == Some("rs")
             && path.file_stem().and_then(|s| s.to_str()) != Some("lib")
+            && path.file_stem().and_then(|s| s.to_str()) != Some("mod")
         {
             stems.push(
                 path.file_stem()

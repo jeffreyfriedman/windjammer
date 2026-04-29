@@ -11,7 +11,12 @@
 ///
 /// 15+ tests covering nested int/float patterns from game code.
 use std::process::Command;
+use tempfile::tempdir;
 use windjammer::*;
+
+fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
+    generated.contains(&format!("{ident} as f32"))
+}
 
 fn compile_and_get_rust(source: &str) -> String {
     let mut lexer = lexer::Lexer::new(source);
@@ -38,32 +43,25 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "int_float_nested_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let rs_file = test_dir.join("test.rs");
+    let temp = tempdir().expect("tempdir");
+    let test_dir = temp.path();
+    let rs_file = test_dir.join("lib.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
+    let out_lib = test_dir.join("out.rlib");
 
     let output = Command::new("rustc")
-        .arg(&rs_file)
+        .current_dir(test_dir)
+        .arg("lib.rs")
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
         .arg("2021")
+        .arg("-o")
+        .arg(&out_lib)
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 
@@ -327,7 +325,7 @@ pub fn diff(x: f32, y: i32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(y) as f32") || output.contains("y) as f32"),
+        cast_ident_to_f32(&output, "y"),
         "f32 - i32 should cast y. Got:\n{}",
         output
     );
@@ -345,7 +343,7 @@ pub fn sum(x: i32, y: f32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(x) as f32") || output.contains("x) as f32"),
+        cast_ident_to_f32(&output, "x"),
         "i32 + f32 should cast x. Got:\n{}",
         output
     );
@@ -364,7 +362,7 @@ pub fn angle(index: i32, count: i32) -> f32 {
     let output = compile_and_get_rust(source);
     // count must be cast to f32 for division
     assert!(
-        output.contains("(count) as f32") || output.contains("count) as f32"),
+        cast_ident_to_f32(&output, "count"),
         "f32 / count needs cast. Got:\n{}",
         output
     );

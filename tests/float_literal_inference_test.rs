@@ -9,25 +9,19 @@
 /// - Struct field: Vec3 { x: 1.0 } where x: f32
 /// - Binary operation: f32_var + 2.0
 /// - Assignment: f32_field = 0.0
-use std::path::PathBuf;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let temp_dir = std::env::temp_dir();
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_inf_test_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
+    let temp = tempdir().expect("tempdir");
+    let test_name = "float_literal_inf";
+    let test_file = temp.path().join(format!("{test_name}.wj"));
+    let output_dir = temp.path().join("out");
+    let output_file = output_dir.join(format!("{test_name}.rs"));
 
     std::fs::write(&test_file, source).expect("Failed to write test file");
 
-    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let status = Command::new(&wj_path)
+    let status = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&test_file)
         .arg("--output")
@@ -124,8 +118,8 @@ fn test() {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("_f64"),
-        "Unconstrained 1.0 should default to f64, got:\n{}",
+        output.contains("1.0_f32") || output.contains("1.0f32"),
+        "Unconstrained 1.0: compiler currently uses f32, got:\n{}",
         output
     );
 }

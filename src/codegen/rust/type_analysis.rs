@@ -61,8 +61,15 @@ impl TypeAnalyzer {
     pub fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
         let mut traits = vec!["Debug".to_string(), "Clone".to_string()]; // Always safe to derive
 
+        // Collect all field types (named fields for regular structs, tuple types for tuple structs)
+        let all_types: Vec<&Type> = if let Some(ref tuple_fields) = struct_.tuple_fields {
+            tuple_fields.iter().collect()
+        } else {
+            struct_.fields.iter().map(|f| &f.field_type).collect()
+        };
+
         // Check if all fields are Copy
-        if self.all_fields_are_copy(&struct_.fields) {
+        if all_types.iter().all(|t| self.is_copy_type(t)) {
             traits.push("Copy".to_string());
         }
 
@@ -647,6 +654,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// Extract a type name from a Type enum (for signature lookup)
     pub(super) fn type_to_name(type_: &Type) -> Option<String> {
         match type_ {
+            // WJ `string` / `String` must resolve to the stdlib registry key "String" so
+            // `infer_type_name` can find e.g. `String::contains` (Pattern/&str) signatures.
+            Type::String => Some("String".to_string()),
+            Type::Custom(name) if name == "string" => Some("String".to_string()),
             Type::Custom(name) => Some(name.clone()),
             Type::Parameterized(name, _) => Some(name.clone()),
             Type::Reference(inner) | Type::MutableReference(inner) => Self::type_to_name(inner),
@@ -738,21 +749,46 @@ impl<'ast> CodeGenerator<'ast> {
                     out.push((var_name.clone(), inner_t.as_ref().clone()));
                 }
             }
-            Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _))
-                if self.match_scrutinee_yields_ref_enum_bindings(scrutinee) =>
-            {
+            Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _)) => {
                 let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
                     return out;
                 };
                 let Some(named) = self.enum_variant_struct_fields.get(&key) else {
                     return out;
                 };
+                let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
                 let map: HashMap<String, Type> = named.iter().cloned().collect();
                 for (fname, pat) in fields.iter() {
                     if let Pattern::Identifier(binding_name) = pat {
                         if let Some(ft) = map.get(fname) {
-                            out.push((binding_name.clone(), Type::Reference(Box::new(ft.clone()))));
+                            if yields_refs {
+                                out.push((
+                                    binding_name.clone(),
+                                    Type::Reference(Box::new(ft.clone())),
+                                ));
+                            } else {
+                                out.push((binding_name.clone(), ft.clone()));
+                            }
                         }
+                    }
+                }
+            }
+            // Single-field tuple variants use EnumPatternBinding::Single (e.g. Cost::Gold(amount)).
+            // Tuple(..) is only used when the inner pattern is not a plain identifier.
+            Pattern::EnumVariant(variant_name, EnumPatternBinding::Single(var_name)) => {
+                let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
+                    return out;
+                };
+                let Some(types) = self.enum_variant_types.get(&key) else {
+                    return out;
+                };
+                if types.len() == 1 {
+                    let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
+                    let ty = &types[0];
+                    if yields_refs {
+                        out.push((var_name.clone(), Type::Reference(Box::new(ty.clone()))));
+                    } else {
+                        out.push((var_name.clone(), ty.clone()));
                     }
                 }
             }

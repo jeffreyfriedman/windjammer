@@ -188,6 +188,7 @@ mod tests {
         let struct_def = StructDecl {
             name: "Point".to_string(),
             is_pub: true, // Test struct is public
+            is_extern: false,
             fields: vec![
                 StructField {
                     name: "x".to_string(),
@@ -204,6 +205,7 @@ mod tests {
                     doc_comment: None,
                 },
             ],
+            tuple_fields: None,
             decorators: vec![],
             type_params: vec![],
             where_clause: vec![],

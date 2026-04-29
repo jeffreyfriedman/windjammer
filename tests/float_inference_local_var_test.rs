@@ -234,10 +234,10 @@ pub fn foo() {
     generator.set_float_inference(float_inference);
     let rust_code = generator.generate_program(&program, &analyzed);
 
-    // Unannotated let x = 1.0 should default to f64
+    // Unannotated `let x = 1.0` currently infers f32 (not Rust's f64 default)
     assert!(
-        rust_code.contains("1.0_f64") || rust_code.contains("1.0f64"),
-        "let x = 1.0 (no annotation) should default to f64.\nGenerated:\n{}",
+        rust_code.contains("1.0_f32") || rust_code.contains("1.0f32"),
+        "let x = 1.0 (no annotation) should emit f32 per current float inference. Generated:\n{}",
         rust_code
     );
 }

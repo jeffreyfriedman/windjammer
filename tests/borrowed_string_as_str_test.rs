@@ -1,7 +1,8 @@
-//! TDD Test: Borrowed string parameter with .as_str()
+//! TDD Test: .as_str() is forbidden in Windjammer source
 //!
-//! When a parameter is borrowed (&str), calling .as_str() on it should
-//! either be a no-op or not be generated at all.
+//! Windjammer automatically handles string conversions (String → &str).
+//! Using .as_str() is Rust-specific leakage and must be rejected with
+//! a helpful error message guiding the user toward idiomatic Windjammer.
 
 use std::fs;
 use std::process::Command;
@@ -55,10 +56,9 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 }
 
 #[test]
-#[ignore] // TODO: Handle .as_str() on &str parameters (unstable Rust feature)
-fn test_as_str_on_borrowed_string_param() {
-    // When a borrowed string parameter is used with .as_str(),
-    // the generated code should compile without needing unstable features
+fn test_as_str_rejected_with_helpful_error() {
+    // .as_str() is forbidden in Windjammer source — the compiler should
+    // reject it with a clear, helpful error message guiding the user
     let code = r#"
 pub fn log_message(msg: string) {
     println!("{}", msg.as_str())
@@ -69,23 +69,20 @@ pub fn test_log() {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
-    if !success {
-        println!("Generated code:\n{}", generated);
-        println!("Rustc error:\n{}", err);
-    }
-
-    // The generated code should either:
-    // 1. Not have .as_str() at all (since &str doesn't need it)
-    // 2. Or handle it correctly
-    assert!(success, "Generated code should compile. Error: {}", err);
+    assert!(!success, ".as_str() should be rejected by the compiler");
+    assert!(
+        err.contains(".as_str()") && err.contains("forbidden"),
+        "Error message should explain that .as_str() is forbidden. Got: {}",
+        err
+    );
 }
 
 #[test]
-#[ignore] // TODO: Handle .as_str() on owned String correctly
-fn test_as_str_on_owned_string() {
-    // When calling .as_str() on an owned string, it should work
+fn test_as_str_on_owned_string_rejected() {
+    // Even on owned strings, .as_str() is forbidden — the compiler handles
+    // String → &str conversion automatically
     let code = r#"
 pub fn process(text: string) {
     let owned = text.clone()
@@ -97,14 +94,14 @@ pub fn test_process() {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = compile_and_verify(code);
 
-    if !success {
-        println!("Generated code:\n{}", generated);
-        println!("Rustc error:\n{}", err);
-    }
-
-    assert!(success, "Generated code should compile. Error: {}", err);
+    assert!(!success, ".as_str() on owned String should be rejected");
+    assert!(
+        err.contains(".as_str()") && err.contains("forbidden"),
+        "Error message should explain that .as_str() is forbidden. Got: {}",
+        err
+    );
 }
 
 #[test]

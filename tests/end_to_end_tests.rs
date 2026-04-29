@@ -334,7 +334,6 @@ fn calculate(x: int, y: int, z: float) -> float {
 }
 
 #[test]
-#[ignore] // TODO: Fix TypeScript definitions quality test
 fn test_typescript_definitions_quality() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());

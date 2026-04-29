@@ -96,9 +96,17 @@ impl DialogueState {
     let rs = compile_and_get_rust(src);
     let (ok, err) = rustc_check(&rs);
     assert!(ok, "E0277 or other rustc error:\n{}\n\n{}", err, rs);
+    // Valid patterns for String/&str comparison:
+    // name == npc (Rust's PartialEq<&str> for &String handles this)
+    // *name == npc (deref &String to String for PartialEq<&str>)
+    // name == &npc (borrow npc for PartialEq<&String>)
     assert!(
-        rs.contains("== &npc") || rs.contains("== & npc"),
-        "expected & on owned String param for PartialEq; got:\n{}",
+        rs.contains("name == npc")
+            || rs.contains("== &npc")
+            || rs.contains("== & npc")
+            || rs.contains("*name == npc")
+            || rs.contains("*(name) == npc"),
+        "expected valid String comparison; got:\n{}",
         rs
     );
 }

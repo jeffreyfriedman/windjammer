@@ -379,6 +379,26 @@ pub fn build_project_ext(
             ));
         }
 
+        // Trait bound inference: walk function bodies to infer T: Display, T: Clone, etc.
+        let mut trait_inference = crate::inference::InferenceEngine::new();
+        let mut inferred_bounds_map = std::collections::HashMap::new();
+        for item in &program.items {
+            if let Item::Function { decl: func, .. } = item {
+                let bounds = trait_inference.infer_function_bounds(func);
+                if !bounds.is_empty() {
+                    inferred_bounds_map.insert(func.name.clone(), bounds);
+                }
+            }
+            if let Item::Impl { block, .. } = item {
+                for func in &block.functions {
+                    let bounds = trait_inference.infer_function_bounds(func);
+                    if !bounds.is_empty() {
+                        inferred_bounds_map.insert(func.name.clone(), bounds);
+                    }
+                }
+            }
+        }
+
         // Capture inferred signatures for .wj.meta before registry is moved into codegen
         let registry_snapshot = registry.clone();
 
@@ -387,21 +407,48 @@ pub fn build_project_ext(
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);
         codegen.set_int_inference(int_inference);
+        codegen.set_inferred_bounds(inferred_bounds_map);
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
         // Determine output file -- preserve source directory hierarchy.
+        // Single-file `wj build src_wj/ecs/foo.wj` uses the same layout as `build_project` in
+        // main (see `project_paths::find_source_root` + `get_relative_output_path`), not a flat
+        // `output/foo.rs`.
         let output_file = if wj_files.len() > 1 && library {
             let base_path = if path.is_file() {
                 path.parent().unwrap_or(path)
             } else {
                 path
             };
-            let relative_path = file.strip_prefix(base_path)?;
-            let output_with_structure = output.join(relative_path).with_extension("rs");
-            if let Some(parent) = output_with_structure.parent() {
+            let src_base =
+                std::fs::canonicalize(base_path).unwrap_or_else(|_| base_path.to_path_buf());
+            let output_file =
+                crate::project_paths::resolve_wj_output_path(&src_base, file, output)?;
+            if let Some(parent) = output_file.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            output_with_structure
+            output_file
+        } else if wj_files.len() == 1 {
+            let flat_rs = || {
+                let stem = file
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("output");
+                output.join(format!("{}.rs", stem))
+            };
+            if let Some(root) = crate::project_paths::find_source_root(file) {
+                match crate::project_paths::get_relative_output_path(root, file, output) {
+                    Ok(p) => {
+                        if let Some(parent) = p.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        p
+                    }
+                    Err(_) => flat_rs(),
+                }
+            } else {
+                flat_rs()
+            }
         } else {
             let stem = file
                 .file_stem()
@@ -1403,9 +1450,8 @@ fn build_library_multipass(
             }
         }
 
-        // Preserve directory structure
-        let relative_path = file.strip_prefix(&src_base)?;
-        let output_file = output.join(relative_path).with_extension("rs");
+        // Preserve directory structure (directory-module layout when `foo.wj` + `foo/*.wj` co-exist).
+        let output_file = crate::project_paths::resolve_wj_output_path(&src_base, file, output)?;
         if let Some(parent) = output_file.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -1427,6 +1473,28 @@ fn build_library_multipass(
         codegen.set_analyzed_trait_methods(merged_trait_methods);
         codegen.set_float_inference(global_float_inference.clone());
         codegen.set_int_inference(global_int_inference.clone());
+
+        // Trait bound inference for this file's functions
+        let mut trait_inference = crate::inference::InferenceEngine::new();
+        let mut inferred_bounds_map = std::collections::HashMap::new();
+        for item in &program.items {
+            if let Item::Function { decl: func, .. } = item {
+                let bounds = trait_inference.infer_function_bounds(func);
+                if !bounds.is_empty() {
+                    inferred_bounds_map.insert(func.name.clone(), bounds);
+                }
+            }
+            if let Item::Impl { block, .. } = item {
+                for func in &block.functions {
+                    let bounds = trait_inference.infer_function_bounds(func);
+                    if !bounds.is_empty() {
+                        inferred_bounds_map.insert(func.name.clone(), bounds);
+                    }
+                }
+            }
+        }
+        codegen.set_inferred_bounds(inferred_bounds_map);
+
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
         write_if_changed(&output_file, &rust_code)?;
 
@@ -1493,22 +1561,14 @@ fn build_library_multipass(
         write_if_changed(&metadata_path, &metadata_json)?;
     }
 
-    // Always regenerate lib.rs from mod.rs when mod.rs exists.
-    // lib.rs is derived from mod.rs (with `use super::*` stripped),
-    // so it must stay in sync when modules are added or removed.
-    let mod_rs_path = output.join("mod.rs");
-    let lib_rs_path = output.join("lib.rs");
-    if mod_rs_path.exists() {
-        let content = std::fs::read_to_string(&mod_rs_path)?;
-        let cleaned: String = content
-            .lines()
-            .filter(|line| {
-                let t = line.trim();
-                t != "use super::*;" && t != "#[allow(unused_imports)]"
-            })
-            .collect::<Vec<&str>>()
-            .join("\n");
-        write_if_changed(&lib_rs_path, &(cleaned + "\n"))?;
+    // Generate mod.rs (and lib.rs) so individual module files are tied
+    // together as submodules. Without this, `use super::*;` in generated
+    // files would fail because Cargo wouldn't know about the crate structure.
+    if target == CompilationTarget::Rust {
+        crate::build_utils::generate_mod_file_with_layout(
+            output,
+            Some((output, src_base.as_path())),
+        )?;
     }
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.

@@ -1277,6 +1277,14 @@ impl Parser {
                     // Parse the expression to match against
                     let expr = self.parse_match_value()?;
 
+                    // Parse optional guard: `if let Some(x) = opt if x > 0 { ... }`
+                    let guard = if self.current_token() == &Token::If {
+                        self.advance();
+                        Some(self.parse_match_value()?)
+                    } else {
+                        None
+                    };
+
                     self.expect(Token::LBrace)?;
                     let then_block = self.parse_block_statements()?;
                     self.expect(Token::RBrace)?;
@@ -1291,13 +1299,6 @@ impl Parser {
                         None
                     };
 
-                    // Desugar `if let` into a match expression
-                    // if let pattern = expr { then_block } else { else_block }
-                    // becomes:
-                    // match expr {
-                    //     pattern => { then_block }
-                    //     _ => { else_block }
-                    // }
                     let then_body = self.alloc_expr(Expression::Block {
                         statements: then_block,
                         is_unsafe: false,
@@ -1306,7 +1307,7 @@ impl Parser {
 
                     let mut arms = vec![MatchArm {
                         pattern,
-                        guard: None,
+                        guard,
                         body: then_body,
                     }];
 

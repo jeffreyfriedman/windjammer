@@ -106,15 +106,16 @@ impl<'ast> CodeGenerator<'ast> {
                             return ownership;
                         }
                         Some(OwnershipMode::Owned) => {
-                            // Trait method analysis says `Owned` → the trait codegen
-                            // defaults to `&self` for trait methods (OwnershipHint::Inferred
-                            // maps to "&self" in item_generation.rs). The impl MUST match.
-                            return Some(OwnershipMode::Borrowed);
+                            // Explicit or inferred consuming `self` on the trait (e.g. `fn consume(self) -> T`).
+                            return Some(OwnershipMode::Owned);
                         }
                         None => {
-                            // No self ownership inferred (method doesn't use self).
-                            // Trait codegen defaults None → &self, so impl must match.
-                            return Some(OwnershipMode::Borrowed);
+                            // Abstract trait method (no body): use the impl's own
+                            // analyzed ownership so that consuming impls
+                            // (e.g. `self.value` for non-Copy) get owned `self`.
+                            let impl_ownership =
+                                analyzed.inferred_ownership.get("self").copied();
+                            return impl_ownership.or(Some(OwnershipMode::Borrowed));
                         }
                     }
                 }
@@ -1167,6 +1168,18 @@ impl<'ast> CodeGenerator<'ast> {
             self.str_ref_optimized_params.insert(param_name.clone());
         }
 
+        // Track explicit &String/&string params that become &str via type_to_rust
+        // (Type::Reference(String) → "&str"). These aren't Phase 2 optimized but still
+        // need .to_string() conversions in the body (e.g., Some(s) → Some(s.to_string())).
+        for param in &func.parameters {
+            if matches!(&param.type_, Type::Reference(inner)
+                if matches!(&**inner, Type::String)
+                    || matches!(&**inner, Type::Custom(ref n) if n == "string" || n == "String"))
+            {
+                self.str_ref_optimized_params.insert(param.name.clone());
+            }
+        }
+
         // METHOD PARAM OWNERSHIP: Register this method's parameter ownership modes
         // for use at call sites (auto-borrow arguments).
         {
@@ -1407,7 +1420,7 @@ impl<'ast> CodeGenerator<'ast> {
                     found
                 });
 
-        if (has_inferred_self || needs_self_from_trait) && !has_explicit_self {
+        if (has_inferred_self || needs_self_from_trait) && !has_explicit_self && !is_constructor {
             let ownership = self.get_effective_self_ownership(&func.name, analyzed).or({
                 // Trait has method but no self in analyzed - default to &mut self (trait convention)
                 if needs_self_from_trait {

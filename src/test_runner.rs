@@ -847,7 +847,8 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    modules.retain(|m| m != "lib");
+    // Exclude "mod" like "lib" — `pub mod mod;` is invalid; see generate_lib_rs_for_library in main.rs
+    modules.retain(|m| m != "lib" && m != "mod");
 
     if modules.is_empty() {
         return Ok(());

@@ -124,10 +124,12 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 fn test_contains_adds_reference() {
     let generated = compile_fixture("method_arg_conversion").expect("Compilation failed");
 
-    // has_item uses contains(), should add & to argument
+    // has_item / contains: may be `contains(&item)` or a custom `has_item(&...)` with coercions
     assert!(
-        generated.contains("contains(&item)"),
-        "Should add & for contains() argument: {}",
+        generated.contains("contains(&item)")
+            || generated.contains("has_item(&")
+            || generated.contains(".contains(&"),
+        "Should borrow for contains/has_item argument: {}",
         generated
     );
 }

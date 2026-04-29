@@ -9,6 +9,7 @@
 /// - i32_var * f32_literal → i32_var as f32
 /// - usize_var + f32_field → usize_var as f32
 use std::process::Command;
+use tempfile::tempdir;
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
@@ -31,22 +32,14 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "mixed_arith_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
+    let temp = tempdir().expect("tempdir");
+    let test_dir = temp.path();
     let rs_file = test_dir.join("test.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
 
     let output = Command::new("rustc")
-        .arg(&rs_file)
+        .current_dir(test_dir)
+        .arg("test.rs")
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
@@ -55,8 +48,6 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 

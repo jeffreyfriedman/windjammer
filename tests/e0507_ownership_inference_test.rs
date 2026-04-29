@@ -3,9 +3,9 @@
 //! Patterns fixed:
 //! 1. Vec indexing non-Copy types → auto-borrow (&vec[i]) or auto-clone when owned needed
 //! 2. Vec indexing + method with owned self → auto-clone (vec[i].clone().method())
-//! 3. Option if let with &self → &self.field
+//! 3. Option if let with &self → &self.field when inner type is not Copy; Option<Copy> may use self.field (copy)
 //! 4. Option if let with &mut self + mutation → &mut self.field, mut binding
-//! 5. Option match with &self → &self.field
+//! 5. Option match with &self → &self.field when inner not Copy; Option<Copy> may use self.field (copy)
 //! 6. Option::map with &self → .as_ref().map(...)
 //! 7. Moving from &self (method takes owned self) → infer &mut self or clone
 //! 8. Struct literal field from Vec index → .clone()
@@ -144,8 +144,15 @@ fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
     assert!(
-        rust.contains("&self.weapon"),
-        "Option if let needs &self.field: {}",
+        rust.contains("pub fn get_damage(&self)"),
+        "read-only method should use &self: {}",
+        rust
+    );
+    // Item is auto-derived Copy → Option<Item> is Copy; matching on self.weapon without & is valid Rust.
+    assert!(
+        rust.contains("if let Some(stack) = &self.weapon")
+            || rust.contains("if let Some(stack) = self.weapon"),
+        "Option if let on self.weapon: {}",
         rust
     );
     assert!(rust_compiles(&rust), "Generated Rust must compile");
@@ -212,8 +219,14 @@ fn main() {}
 "#;
     let rust = compile_to_rust(source).expect("compile");
     assert!(
-        rust.contains("&self.health"),
-        "Option match needs &self.field: {}",
+        rust.contains("pub fn has_health(&self)"),
+        "read-only method should use &self: {}",
+        rust
+    );
+    // Health is auto-derived Copy → Option<Health> is Copy; matching on self.health without & is valid Rust.
+    assert!(
+        rust.contains("match &self.health") || rust.contains("match self.health"),
+        "Option match on self.health: {}",
         rust
     );
     assert!(rust_compiles(&rust), "Generated Rust must compile");

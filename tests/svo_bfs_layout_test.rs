@@ -37,12 +37,16 @@ fn write_flat_lib_rs(build_dir: &Path) -> io::Result<()> {
             && path.extension().and_then(|s| s.to_str()) == Some("rs")
             && path.file_stem().and_then(|s| s.to_str()) != Some("lib")
         {
-            stems.push(
-                path.file_stem()
-                    .expect("stem")
-                    .to_string_lossy()
-                    .into_owned(),
-            );
+            let stem = path
+                .file_stem()
+                .expect("stem")
+                .to_string_lossy()
+                .into_owned();
+            // `mod.rs` is the compiler's crate-root aggregator; do not `pub mod mod;` (invalid) or double-include modules.
+            if stem == "mod" {
+                continue;
+            }
+            stems.push(stem);
         }
     }
     stems.sort();

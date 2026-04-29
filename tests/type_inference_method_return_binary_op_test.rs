@@ -11,8 +11,12 @@
 ///     let elev = t.sin() * 0.8  // 0.8 should be f32, not f64
 /// }
 /// ```
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use tempfile::TempDir;
 
 #[test]
 fn test_method_return_in_binary_op_simple() {
@@ -126,38 +130,28 @@ fn test_method_return_with_let() {
     );
 }
 
+static METHOD_RETURN_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
 // Helper function to compile Windjammer source and get generated Rust
 fn compile_and_get_rust(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
-    let test_name = format!("method_return_test_{}", std::process::id());
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    // Write source to temporary file
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    // Compile with wj (use local build)
-    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let status = Command::new(&wj_path)
+    let temp = TempDir::new().expect("tempdir for method return test");
+    let n = METHOD_RETURN_TEST_ID.fetch_add(1, Ordering::SeqCst);
+    let stem = format!("method_return_{}_{}", std::process::id(), n);
+    let test_file = temp.path().join(format!("{}.wj", stem));
+    let output_dir = temp.path().join("out");
+    fs::write(&test_file, source).expect("Failed to write test file");
+    fs::create_dir_all(&output_dir).expect("output dir");
+    let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    let status = Command::new(&wj)
         .arg("build")
         .arg(&test_file)
         .arg("-o")
         .arg(&output_dir)
-        .arg("--no-cargo") // Skip cargo build to avoid dependency issues
+        .arg("--no-cargo")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .status()
         .expect("Failed to execute wj compiler");
-
     assert!(status.success(), "Compilation failed");
-
-    // Read generated Rust
-    let rust_code =
-        std::fs::read_to_string(&output_file).expect("Failed to read generated Rust file");
-
-    // Cleanup
-    let _ = std::fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
-
-    rust_code
+    let output_file = output_dir.join(format!("{}.rs", stem));
+    fs::read_to_string(&output_file).expect("Failed to read generated Rust file")
 }

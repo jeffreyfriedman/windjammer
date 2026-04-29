@@ -9,7 +9,6 @@
 /// **Status**: KNOWN LIMITATION - tracked for future enhancement
 
 #[test]
-#[ignore] // Ignore until two-pass analysis is implemented
 fn test_forward_reference_limitation() {
     use std::fs;
 
@@ -45,24 +44,26 @@ impl Inventory {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_forward_ref_test");
-    fs::create_dir_all(&temp_dir).unwrap();
-    let test_file = temp_dir.join("forward_ref_test.wj");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    let test_file = temp_dir.path().join("forward_ref_test.wj");
     fs::write(&test_file, test_code).unwrap();
 
-    // Run wj build
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .current_dir(&temp_dir)
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj build");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    // Check generated code
-    let generated_rs = temp_dir.join("build/forward_ref_test.rs");
+    let generated_rs = out_dir.join("forward_ref_test.rs");
     assert!(generated_rs.exists(), "Generated Rust file should exist");
 
     let generated_code = fs::read_to_string(&generated_rs).unwrap();
@@ -72,9 +73,6 @@ impl Inventory {
         generated_code.contains("gs.inventory.has_item(&item_id, qty)"),
         "Should auto-add & to convert String → &str (requires two-pass analysis)"
     );
-
-    // Clean up
-    fs::remove_dir_all(&temp_dir).ok();
 }
 
 #[test]
@@ -113,24 +111,26 @@ impl DialogCondition {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_forward_ref_workaround_test");
-    fs::create_dir_all(&temp_dir).unwrap();
-    let test_file = temp_dir.join("workaround_test.wj");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    let test_file = temp_dir.path().join("workaround_test.wj");
     fs::write(&test_file, test_code).unwrap();
 
-    // Run wj build
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .current_dir(&temp_dir)
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj build");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    // Check generated code
-    let generated_rs = temp_dir.join("build/workaround_test.rs");
+    let generated_rs = out_dir.join("workaround_test.rs");
     assert!(generated_rs.exists(), "Generated Rust file should exist");
 
     let generated_code = fs::read_to_string(&generated_rs).unwrap();
@@ -140,7 +140,4 @@ impl DialogCondition {
         generated_code.contains("gs.inventory.has_item(&item_id, qty)"),
         "Should auto-add & when Inventory is defined first"
     );
-
-    // Clean up
-    fs::remove_dir_all(&temp_dir).ok();
 }

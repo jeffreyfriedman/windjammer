@@ -22,6 +22,7 @@
 
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_param_used_multiple_times_in_loop() {
@@ -59,19 +60,15 @@ impl DialogNode {
 }
 "#;
 
-    // Compile with wj compiler
-    let temp_dir = "/tmp/windjammer_param_ownership";
-    let _ = std::fs::remove_dir_all(temp_dir);
-    std::fs::create_dir_all(temp_dir).unwrap();
+    let temp = TempDir::new().expect("tempdir");
+    let wj_file = temp.path().join("test.wj");
+    fs::write(&wj_file, wj_code).unwrap();
 
-    let wj_file = format!("{}/test.wj", temp_dir);
-    std::fs::write(&wj_file, wj_code).unwrap();
-
-    let wj_path = "/Users/jeffreyfriedman/src/wj/windjammer/target/release/wj";
-    let output = Command::new(wj_path)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&wj_file)
         .arg("--no-cargo")
+        .current_dir(temp.path())
         .output()
         .expect("Failed to run wj compiler");
 
@@ -84,9 +81,8 @@ impl DialogNode {
         );
     }
 
-    // Read generated Rust code
-    let rust_file = format!("{}/build/test.rs", temp_dir);
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust");
+    let build_rs = temp.path().join("build").join("test.rs");
+    let generated = fs::read_to_string(&build_rs).expect("Failed to read generated Rust");
 
     // ASSERT: game_state should be inferred as &GameState (not owned)
     // because it's used multiple times in the loop
@@ -97,11 +93,10 @@ impl DialogNode {
         generated
     );
 
-    // Verify rustc compilation
     let output = Command::new("rustc")
         .arg("--crate-type")
         .arg("lib")
-        .arg(&rust_file)
+        .arg(&build_rs)
         .output()
         .unwrap();
 

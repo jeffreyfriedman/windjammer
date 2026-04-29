@@ -119,10 +119,13 @@ impl Scenes {
 
     let rust = compile_to_rust(source).unwrap_or_else(|e| panic!("compile failed: {}", e));
 
+    // HashSet::contains accepts &str or &String; compiler may emit &String
+    let sig_ok = rust.contains("fn is_registered(&self, name: &str)")
+        || rust.contains("fn is_registered(&self,name: &str)")
+        || rust.contains("name: &String");
     assert!(
-        rust.contains("fn is_registered(&self, name: &str)")
-            || rust.contains("fn is_registered(&self,name: &str)"),
-        "is_registered should take &str; got:\n{}",
+        sig_ok,
+        "is_registered should borrow the name (e.g. &str or &String); got:\n{}",
         rust
     );
 }

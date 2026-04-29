@@ -34,22 +34,11 @@ fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
 }
 
 fn transpile_wj(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
+    let test_dir = tempfile::tempdir().expect("tempdir for extern fn ownership test");
+    let wj_file = test_dir.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let out_dir = test_dir.join("out");
+    let out_dir = test_dir.path().join("out");
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
@@ -93,11 +82,7 @@ fn transpile_wj(source: &str) -> String {
             all_files
         );
     });
-    let content = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    let _ = fs::remove_dir_all(&test_dir);
-
-    content
+    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
 
 #[test]

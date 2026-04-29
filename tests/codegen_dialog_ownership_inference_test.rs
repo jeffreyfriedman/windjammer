@@ -56,24 +56,26 @@ impl DialogCondition {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_dialog_ownership_test");
-    fs::create_dir_all(&temp_dir).unwrap();
-    let test_file = temp_dir.join("dialog_test.wj");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    let test_file = temp_dir.path().join("dialog_test.wj");
     fs::write(&test_file, test_code).unwrap();
 
-    // Run wj build
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .current_dir(&temp_dir)
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj build");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    // Check generated code
-    let generated_rs = temp_dir.join("build/dialog_test.rs");
+    let generated_rs = out_dir.join("dialog_test.rs");
     assert!(generated_rs.exists(), "Generated Rust file should exist");
 
     let generated_code = fs::read_to_string(&generated_rs).unwrap();
@@ -97,9 +99,6 @@ impl DialogCondition {
         has_correct_call,
         "Should auto-add & to convert String → &str even when game_state is borrowed"
     );
-
-    // Clean up
-    fs::remove_dir_all(&temp_dir).ok();
 }
 
 #[test]
@@ -150,22 +149,26 @@ impl DialogCondition {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_dialog_multi_string_test");
-    fs::create_dir_all(&temp_dir).unwrap();
-    let test_file = temp_dir.join("multi_string_test.wj");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    let test_file = temp_dir.path().join("multi_string_test.wj");
     fs::write(&test_file, test_code).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .current_dir(&temp_dir)
+        .args([
+            "build",
+            test_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj build");
 
     assert!(output.status.success(), "wj build should succeed");
 
-    let generated_rs = temp_dir.join("build/multi_string_test.rs");
+    let generated_rs = out_dir.join("multi_string_test.rs");
     let generated_code = fs::read_to_string(&generated_rs).unwrap();
 
     eprintln!("=== GENERATED CODE ===");
@@ -180,6 +183,4 @@ impl DialogCondition {
         generated_code.contains("game_state.quest_log.is_quest_complete(&quest_id)"),
         "Should auto-add & to quest_id"
     );
-
-    fs::remove_dir_all(&temp_dir).ok();
 }

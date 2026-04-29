@@ -7,13 +7,13 @@
 // EXPECTED: Parameters should be &GameState (Borrowed) when used multiple times
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 fn test_non_copy_struct_multi_use_infers_borrowed() {
-    let temp_dir = std::env::temp_dir().join("wj_test_e0382");
-    fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
     let wj_code = r#"
 pub struct PlayerState {
@@ -42,23 +42,18 @@ pub fn is_available(game_state: GameState) -> bool {
 }
 "#;
 
-    let wj_file = temp_dir.join("test.wj");
+    let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
 
-    // Find wj compiler (use absolute path for local build)
-    let wj_bin = {
-        let local_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-        if local_path.exists() {
-            local_path
-        } else {
-            PathBuf::from("wj")
-        }
-    };
-
-    // Compile with wj (set current_dir to temp_dir so ./build goes there)
-    let output = Command::new(&wj_bin)
-        .args(["build", "test.wj", "--no-cargo"])
-        .current_dir(&temp_dir)
+    let wj_bin = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_bin)
+        .args([
+            "build",
+            wj_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj compiler");
 
@@ -69,18 +64,17 @@ pub fn is_available(game_state: GameState) -> bool {
     println!("stdout: {}", stdout);
     println!("stderr: {}", stderr);
 
-    // Read generated Rust code (wj generates to ./build relative to cwd)
-    let rs_file = temp_dir.join("build").join("test.rs");
+    let rs_file = out_dir.join("test.rs");
 
-    // Debug: list what's in temp_dir
+    // Debug: list what's in temp if output missing
     if !rs_file.exists() {
         println!("=== TEMP DIR CONTENTS ===");
-        for entry in fs::read_dir(&temp_dir).unwrap() {
+        for entry in fs::read_dir(temp_dir.path()).unwrap() {
             let entry = entry.unwrap();
             println!("  {:?}", entry.path());
         }
-        if let Ok(entries) = fs::read_dir(temp_dir.join("build")) {
-            println!("=== BUILD DIR CONTENTS ===");
+        if let Ok(entries) = fs::read_dir(&out_dir) {
+            println!("=== OUT DIR CONTENTS ===");
             for entry in entries {
                 let entry = entry.unwrap();
                 println!("  {:?}", entry.path());
@@ -118,7 +112,7 @@ pub fn is_available(game_state: GameState) -> bool {
             "2021",
             rs_file.to_str().unwrap(),
             "--out-dir",
-            temp_dir.to_str().unwrap(),
+            temp_dir.path().to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");
@@ -140,7 +134,4 @@ pub fn is_available(game_state: GameState) -> bool {
 
     println!("\n✅ SUCCESS: No E0382 errors! GameState correctly inferred as non-Copy.");
     println!("✅ Ownership inference generated &GameState (Borrowed) signatures.");
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }

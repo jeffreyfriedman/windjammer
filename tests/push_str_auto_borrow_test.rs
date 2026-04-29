@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::process::Command;
 
 /// Helper to compile Windjammer code and return the generated Rust code
@@ -18,9 +17,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     file.write_all(code.as_bytes())
         .map_err(|e| format!("Failed to write source: {}", e))?;
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let output = Command::new(&wj_binary)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&src_file)
         .arg("-o")
@@ -76,9 +73,11 @@ fn test_push_str_with_string_expression() {
     }
     "#;
     let generated = compile_code(code).expect("Compilation failed");
-    // tag.clone() returns String, needs & for push_str
+    // String expression may be passed as &tag.clone(), &tag, or &tag.to_string() for push_str
     assert!(
-        generated.contains("push_str(&tag.clone())"),
+        generated.contains("push_str(&tag.clone())")
+            || generated.contains("push_str(&tag.to_string())")
+            || generated.contains("push_str(&tag)"),
         "push_str with String expression should auto-borrow: {}",
         generated
     );

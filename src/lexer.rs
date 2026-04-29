@@ -188,6 +188,9 @@ pub struct Lexer {
     current_char: Option<char>,
     line: usize,
     column: usize,
+    /// After a `.` token, the next numeric literal is a tuple/field index: do not merge `0.0` into
+    /// one float (so `outer.0.0` tokenizes as `0` `.` `0`, not `0.0`).
+    numeric_field_index_after_dot: bool,
 }
 
 impl Lexer {
@@ -201,6 +204,7 @@ impl Lexer {
             current_char,
             line: 1,
             column: 1,
+            numeric_field_index_after_dot: false,
         }
     }
 
@@ -242,6 +246,9 @@ impl Lexer {
     }
 
     fn read_number(&mut self) -> Token {
+        let int_only_after_field_dot = self.numeric_field_index_after_dot;
+        self.numeric_field_index_after_dot = false;
+
         let mut num_str = String::new();
         let mut is_float = false;
 
@@ -326,7 +333,11 @@ impl Lexer {
             } else if ch == '_' {
                 // Skip underscores in numeric literals (e.g., 1_000_000)
                 self.advance();
-            } else if ch == '.' && !is_float && self.peek(1).is_some_and(|c| c.is_ascii_digit()) {
+            } else if ch == '.'
+                && !is_float
+                && !int_only_after_field_dot
+                && self.peek(1).is_some_and(|c| c.is_ascii_digit())
+            {
                 is_float = true;
                 num_str.push(ch);
                 self.advance();
@@ -336,7 +347,9 @@ impl Lexer {
         }
 
         // Scientific notation: e.g. 1e10, 2.5e-3, 3E+2
-        if self.current_char == Some('e') || self.current_char == Some('E') {
+        if !int_only_after_field_dot
+            && (self.current_char == Some('e') || self.current_char == Some('E'))
+        {
             num_str.push(self.current_char.unwrap());
             self.advance();
             if self.current_char == Some('-') || self.current_char == Some('+') {
@@ -626,6 +639,13 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
+        // Pending "numeric field index after ." only applies if the next token is a number
+        if self.numeric_field_index_after_dot
+            && !matches!(self.current_char, Some(c) if c.is_ascii_digit())
+        {
+            self.numeric_field_index_after_dot = false;
+        }
+
         let token = match self.current_char {
             None => Token::Eof,
             Some('\n') => {
@@ -894,6 +914,7 @@ impl Lexer {
             }
             Some('.') => {
                 self.advance();
+                self.numeric_field_index_after_dot = true;
                 Token::Dot
             }
             Some(':') => {

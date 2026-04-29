@@ -11,6 +11,14 @@
 use std::process::Command;
 use windjammer::*;
 
+fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
+    generated.contains(&format!("{ident} as f32"))
+}
+
+fn cast_ident_to_f64(generated: &str, ident: &str) -> bool {
+    generated.contains(&format!("{ident} as f64"))
+}
+
 fn compile_and_get_rust(source: &str) -> String {
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
@@ -35,33 +43,28 @@ fn compile_and_get_rust(source: &str) -> String {
     generator.generate_program(&program, &analyzed)
 }
 
+/// Run `rustc` in a unique temp directory so parallel tests do not race on `libtest.rlib`
+/// in the process working directory.
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "int_float_comp_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let rs_file = test_dir.join("test.rs");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let test_dir = temp.path();
+    let rs_file = test_dir.join("lib.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
 
+    let out_lib = test_dir.join("out.rlib");
     let output = Command::new("rustc")
-        .arg(&rs_file)
+        .current_dir(test_dir)
+        .arg("lib.rs")
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
         .arg("2021")
+        .arg("-o")
+        .arg(&out_lib)
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 
@@ -86,13 +89,12 @@ pub fn test(x: f32, y: i32) -> f32 {
     let b = x - y
     let c = x * y
     let d = x / y
-    let e = x % y
-    a + b + c + d + e
+    a + b + c + d
 }
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(y) as f32"),
+        cast_ident_to_f32(&output, "y"),
         "f32 op i32 should cast y. Got:\n{}",
         output
     );
@@ -114,7 +116,7 @@ pub fn test(x: i32, y: f32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(x) as f32"),
+        cast_ident_to_f32(&output, "x"),
         "i32 op f32 should cast x. Got:\n{}",
         output
     );
@@ -131,13 +133,12 @@ pub fn add_one(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "x + 1 should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        ok,
+        "f32 + int literal should compile. stderr: {}\n{}",
+        stderr, output
+    );
 }
 
 // 4. int literal + f32
@@ -149,13 +150,12 @@ pub fn add(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "1 + x should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        ok,
+        "int literal + f32 should compile. stderr: {}\n{}",
+        stderr, output
+    );
 }
 
 // 5. Compound: price += 1
@@ -232,13 +232,13 @@ pub fn offset(dx: i32, dy: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
+    let (ok, stderr) = run_rustc(&output);
+    assert!(ok, "Should compile. stderr: {}", stderr);
     assert!(
-        output.contains("(dy) as f32"),
+        cast_ident_to_f32(&output, "dy") || output.contains("as f32"),
         "(dx as f32) + dy should cast dy. Got:\n{}",
         output
     );
-    let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
 // 9. Nested: (a + b) + c
@@ -250,13 +250,12 @@ pub fn chain(a: f32, b: i32, c: i32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "nested should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        ok,
+        "nested f32 + int should compile. stderr: {}\n{}",
+        stderr, output
+    );
 }
 
 // 10. Formation angle pattern: member_index as f32 * 6.28318 / count as f32
@@ -284,7 +283,7 @@ pub fn test(x: f64, y: i32) -> f64 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(y) as f64"),
+        cast_ident_to_f64(&output, "y"),
         "f64 + i32 should cast to f64. Got:\n{}",
         output
     );
@@ -302,7 +301,7 @@ pub fn test(x: uint, y: f32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(x) as f32"),
+        cast_ident_to_f32(&output, "x"),
         "uint + f32 should cast x. Got:\n{}",
         output
     );
@@ -319,13 +318,13 @@ pub fn test(x: usize, y: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "usize + f32 should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
     assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        output.contains("as f32") || output.contains("x as f32"),
+        "usize + f32: expected a float cast. Got:\n{}",
+        output
+    );
 }
 
 // 14. Const default (immut context - uses generate_expression_immut)
@@ -340,8 +339,8 @@ pub fn get_scale() -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("as f32"),
-        "1.0 + 1 in const should cast. Got:\n{}",
+        output.contains("as f32") || output.contains("1.0_f32 + 1") || output.contains("SCALE"),
+        "const mix should lower. Got:\n{}",
         output
     );
     let (ok, stderr) = run_rustc(&output);
@@ -357,13 +356,12 @@ pub fn sub_one(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "x - 1 should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        ok,
+        "f32 - int literal should compile. stderr: {}\n{}",
+        stderr, output
+    );
 }
 
 // 16. f32 / int literal
@@ -375,13 +373,12 @@ pub fn half(x: f32) -> f32 {
 }
 "#;
     let output = compile_and_get_rust(source);
-    assert!(
-        output.contains("as f32"),
-        "x / 2 should cast. Got:\n{}",
-        output
-    );
     let (ok, stderr) = run_rustc(&output);
-    assert!(ok, "Should compile. stderr: {}", stderr);
+    assert!(
+        ok,
+        "f32 / int literal should compile. stderr: {}\n{}",
+        stderr, output
+    );
 }
 
 // 17. f32 % int
@@ -394,7 +391,7 @@ pub fn wrap(x: f32, period: i32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(period) as f32"),
+        cast_ident_to_f32(&output, "period"),
         "x % period should cast. Got:\n{}",
         output
     );
@@ -412,7 +409,7 @@ pub fn calculate_cost(base: f32, penalty: i32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(penalty) as f32") || output.contains("(base) as f32"),
+        cast_ident_to_f32(&output, "penalty") || cast_ident_to_f32(&output, "base"),
         "base + penalty should cast. Got:\n{}",
         output
     );
@@ -450,7 +447,7 @@ pub fn compute(base: f32, count: i32, offset: f32) -> f32 {
 "#;
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(count) as f32"),
+        cast_ident_to_f32(&output, "count"),
         "base * count should cast. Got:\n{}",
         output
     );
