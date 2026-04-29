@@ -4,69 +4,54 @@
 //! Root Cause: IntInference doesn't constrain RHS literal to match LHS type for compound assignments
 //!
 //! Tests:
-//! - u32 += literal → literal must be u32
-//! - i64 += literal → literal must be i64
-//! - f32 += literal → (float inference, not int - skip)
-//! - vec[i] += literal where Vec<u32> → literal must be u32
+//! - u32 += literal -> literal must be u32
+//! - i64 += literal -> literal must be i64
+//! - f32 += literal -> (float inference, not int - skip)
+//! - vec[i] += literal where Vec<u32> -> literal must be u32
 
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
 
-fn compile_and_get_rust(wj_source: &str, test_name: &str) -> (bool, String, String) {
-    let output_dir = format!("/tmp/wj_compound_assign_{}", test_name);
-    fs::create_dir_all(&output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            &output_dir,
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let _stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .unwrap_or_else(|_| String::from("(file not generated)"));
-
-    (output.status.success(), rust_code, stderr)
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn rustc_compile(rust_code: &str) -> (bool, String) {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("rustc_compound_{}", timestamp));
-    fs::create_dir_all(&temp_dir).unwrap();
-    fs::write(temp_dir.join("test.rs"), rust_code).unwrap();
+    let dir = tempdir().expect("tempdir for rustc");
+    fs::write(dir.path().join("test.rs"), rust_code).unwrap();
 
     let output = Command::new("rustc")
         .arg("--crate-type=lib")
-        .arg(temp_dir.join("test.rs"))
+        .arg(dir.path().join("test.rs"))
         .arg("--out-dir")
-        .arg(&temp_dir)
+        .arg(dir.path())
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = fs::remove_dir_all(&temp_dir);
-
     (output.status.success(), stderr)
 }
 
 #[test]
 fn test_u32_compound_add_assign() {
-    // Explicit type ensures var_types has count before processing count += 1
     let source = r#"
 fn get_count() -> u32 {
     let mut count: u32 = 0
@@ -79,9 +64,7 @@ fn main() {
 }
 "#;
 
-    let (wj_ok, rust_code, _stderr) = compile_and_get_rust(source, "u32_add");
-
-    assert!(wj_ok, "Windjammer should compile");
+    let rust_code = compile_single_file(source);
 
     assert!(
         rust_code.contains("1_u32"),
@@ -104,7 +87,6 @@ fn main() {
 
 #[test]
 fn test_i64_compound_add_assign() {
-    // Use explicit type so var_types has total before we process total += 42
     let source = r#"
 fn get_total() -> int {
     let mut total: int = 0
@@ -117,9 +99,7 @@ fn main() {
 }
 "#;
 
-    let (wj_ok, rust_code, _stderr) = compile_and_get_rust(source, "i64_add");
-
-    assert!(wj_ok, "Windjammer should compile");
+    let rust_code = compile_single_file(source);
 
     assert!(
         rust_code.contains("42_i64"),
@@ -149,9 +129,7 @@ fn main() {
 }
 "#;
 
-    let (wj_ok, rust_code, _stderr) = compile_and_get_rust(source, "u32_sub");
-
-    assert!(wj_ok, "Windjammer should compile");
+    let rust_code = compile_single_file(source);
 
     assert!(
         rust_code.contains("1_u32"),
@@ -167,10 +145,6 @@ fn main() {
     );
 }
 
-// Note: test_u32_compound_add_assign_return_flow (count = 0u32, count += 1) would require
-// either: (a) lexer preserving type suffix in 0u32, or (b) stronger return-flow analysis.
-// For now, use explicit type: let mut count: u32 = 0
-
 #[test]
 fn test_vec_index_compound_assign() {
     let source = r#"
@@ -185,9 +159,7 @@ fn main() {
 }
 "#;
 
-    let (wj_ok, rust_code, _stderr) = compile_and_get_rust(source, "vec_index");
-
-    assert!(wj_ok, "Windjammer should compile");
+    let rust_code = compile_single_file(source);
 
     assert!(
         rust_code.contains("1_u32"),
