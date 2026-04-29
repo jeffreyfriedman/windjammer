@@ -140,7 +140,7 @@ fn test_struct_field_string_inference() {
 
     let generated = result.unwrap();
     assert!(generated.contains("name: \"default\".to_string()"));
-    assert!(generated.contains("Some(\"root\".to_string())"));
+    assert!(generated.contains("Some(\"root\".to_string()"));
 }
 
 #[test]

@@ -273,18 +273,17 @@ impl<'ast> Analyzer<'ast> {
                         }
 
                         // Check if this method expects &String or String (owned) for this parameter position
-                        if let Some(sig) = registry.get_signature(method) {
-                            // Get the parameter type at this position
-                            // Note: idx is the argument index, which corresponds to parameter index
-                            // (assuming no self receiver in the signature - methods store self separately)
-                            if let Some(param_type) = sig.param_types.get(idx) {
+                        if let Some(sig) = registry
+                            .get_signature(method)
+                            .or_else(|| registry.find_signature_ending_with(method))
+                        {
+                            let sig_idx = if sig.has_self_receiver { idx + 1 } else { idx };
+                            if let Some(param_type) = sig.param_types.get(sig_idx) {
                                 if self.type_is_string_ref_not_str(param_type) {
                                     return true;
                                 }
-                                // Also check if the parameter is owned String
-                                // This handles cases like self.log(message) where log takes String (owned)
                                 if self.type_is_owned_string(param_type) {
-                                    return true; // Require String (owned), not &str
+                                    return true;
                                 }
                             }
                         }
@@ -300,7 +299,10 @@ impl<'ast> Analyzer<'ast> {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == param_name {
                         // param.method() - check if method needs &String receiver
-                        if let Some(sig) = registry.get_signature(method) {
+                        if let Some(sig) = registry
+                            .get_signature(method)
+                            .or_else(|| registry.find_signature_ending_with(method))
+                        {
                             // Check all parameter types in the signature
                             for param_type in &sig.param_types {
                                 if self.type_is_string_ref_not_str(param_type) {
@@ -336,7 +338,8 @@ impl<'ast> Analyzer<'ast> {
                         for (i, arg) in arguments.iter().enumerate() {
                             let arg_expr = &arg.1;
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                if let Some(param_type) = sig.param_types.get(i) {
+                                let sig_idx = if sig.has_self_receiver { i + 1 } else { i };
+                                if let Some(param_type) = sig.param_types.get(sig_idx) {
                                     if self.type_is_string_ref_not_str(param_type) {
                                         return true;
                                     }

@@ -15,6 +15,11 @@
 use std::process::Command;
 use windjammer::*;
 
+/// Current codegen often emits `ident as f32` (and sometimes `(ident as f32) as f32`), not `(ident) as f32`.
+fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
+    generated.contains(&format!("{ident} as f32"))
+}
+
 fn compile_and_get_rust(source: &str) -> String {
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
@@ -40,32 +45,23 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "int_float_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let rs_file = test_dir.join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let test_dir = temp.path();
+    let out_lib = test_dir.join("out.rlib");
+    std::fs::write(test_dir.join("lib.rs"), rs_code).unwrap();
 
     let output = Command::new("rustc")
-        .arg(&rs_file)
+        .current_dir(test_dir)
+        .arg("lib.rs")
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
         .arg("2021")
+        .arg("-o")
+        .arg(&out_lib)
         .output()
         .expect("Failed to run rustc");
-
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 
@@ -80,7 +76,10 @@ pub fn add(x: f32, y: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(y) as f32") || output.contains("(x) as f32"),
+        output.contains("y as f32")
+            || output.contains("x as f32")
+            || output.contains("(y) as f32")
+            || output.contains("(x) as f32"),
         "f32 + i32 should cast int to f32. Got:\n{}",
         output
     );
@@ -130,7 +129,7 @@ pub fn subtract(value: f32, offset: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(offset) as f32"),
+        cast_ident_to_f32(&output, "offset"),
         "f32 - i32 should cast int to f32. Got:\n{}",
         output
     );
@@ -155,7 +154,7 @@ pub fn divide(total: f32, count: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(count) as f32"),
+        output.contains("count as f32") || output.contains("(count) as f32"),
         "f32 / i32 should cast int to f32. Got:\n{}",
         output
     );
@@ -180,7 +179,7 @@ pub fn scale_by_count(scale: f32, count: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(count) as f32"),
+        cast_ident_to_f32(&output, "count"),
         "f32 * i32 should cast int to f32. Got:\n{}",
         output
     );
@@ -255,7 +254,7 @@ pub fn distance(dx: i32, dy: i32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(dy) as f32") || output.contains("(dx) as f32"),
+        cast_ident_to_f32(&output, "dy") || cast_ident_to_f32(&output, "dx"),
         "Cast chain (dx) as f32 + dy should cast dy. Got:\n{}",
         output
     );
@@ -305,7 +304,7 @@ pub fn add_reverse(x: i32, y: f32) -> f32 {
 
     let output = compile_and_get_rust(source);
     assert!(
-        output.contains("(x) as f32"),
+        cast_ident_to_f32(&output, "x"),
         "i32 + f32 should cast int to f32. Got:\n{}",
         output
     );

@@ -152,7 +152,7 @@ fn main() {
 "#;
     let generated = compile_and_verify_rustc(source);
     assert!(
-        generated.contains("user.name == target"),
+        generated.contains("user.name == target") || generated.contains("user.name == *target"),
         "Should generate clean field comparison: {}",
         generated
     );
@@ -434,7 +434,7 @@ fn main() {
 "#;
     let generated = compile_and_verify_rustc(source);
     assert!(
-        generated.contains("user.name == target"),
+        generated.contains("user.name == target") || generated.contains("user.name == *target"),
         "Should generate clean field comparison: {}",
         generated
     );

@@ -689,6 +689,11 @@ impl<'ast> Analyzer<'ast> {
                     _ => false,
                 }
             }
+            // Handle self.slots[i] — Index wrapping a self field access
+            Expression::Index { object, .. } => {
+                self.expression_is_self_field_access(object)
+                    || self.expression_is_self_field_index_access(object)
+            }
             _ => false,
         }
     }
@@ -831,8 +836,10 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    /// Check if a function returns a non-Copy field from self (e.g., `self.content` where content is String).
-    /// Moving a field out of `self` requires owned self, not `&self`.
+    /// True when the function returns a non-Copy `self.field` expression (last statement).
+    /// Used only for **declared** `self` with `Inferred` ownership (`fn f(self)`): moving a field
+    /// out requires owned `self`. Omitted-receiver methods (`fn g() { self.x }`) use a different
+    /// path and treat final `self.field` as a `&self` getter (codegen inserts `.clone()`).
     pub(super) fn function_returns_non_copy_self_field(&self, func: &FunctionDecl) -> bool {
         use crate::parser::Statement;
 
@@ -842,6 +849,10 @@ impl<'ast> Analyzer<'ast> {
         };
 
         if self.is_copy_type(return_type) {
+            return false;
+        }
+
+        if !func.parameters.iter().any(|p| p.name == "self") {
             return false;
         }
 
@@ -1264,11 +1275,13 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if ANY statement in the function body moves a non-Copy field out of self.
-    /// Unlike `function_returns_non_copy_self_field` which only checks the return, this
-    /// walks the entire body for patterns like:
+    /// Walks the entire body for patterns like:
     ///   - `let x = self.field` (where field is non-Copy)
     ///   - `Foo { field: self.field }` (struct literal with non-Copy self field)
     ///   - `let mut x = self.field` (assignment from non-Copy self field)
+    ///
+    /// Direct `return self.field` / trailing `self.field` as implicit return are excluded: codegen
+    /// emits `.clone()` for `&self` receivers (same rule as read-only getters).
     pub(super) fn function_body_moves_non_copy_self_fields(&self, func: &FunctionDecl) -> bool {
         for stmt in &func.body {
             if self.statement_moves_non_copy_self_field(stmt) {
@@ -1283,10 +1296,20 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Let { value, .. } => self.expression_moves_non_copy_self_field(value),
             Statement::Assignment { value, .. } => self.expression_moves_non_copy_self_field(value),
-            Statement::Expression { expr, .. } => self.expression_moves_non_copy_self_field(expr),
+            Statement::Expression { expr, .. } => {
+                if self.expression_is_self_field_access(expr) {
+                    return false;
+                }
+                self.expression_moves_non_copy_self_field(expr)
+            }
             Statement::Return {
                 value: Some(expr), ..
-            } => self.expression_moves_non_copy_self_field(expr),
+            } => {
+                if self.expression_is_self_field_access(expr) {
+                    return false;
+                }
+                self.expression_moves_non_copy_self_field(expr)
+            }
             Statement::If {
                 then_block,
                 else_block,
@@ -1316,18 +1339,19 @@ impl<'ast> Analyzer<'ast> {
 
     fn expression_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
         match expr {
-            // `self.field` used as a value (not in a method call position)
+            // `self.field` or `self.a.b` used as a value (not in a method call position)
             Expression::FieldAccess { object, field, .. } => {
                 if self.expression_is_self(object) {
                     let field_type = self.lookup_field_type_for_self(field);
                     if let Some(ft) = field_type {
                         return !self.is_copy_type(&ft);
                     }
-                    // If we can't determine the type, conservatively assume non-Copy
-                    // for common field access patterns
                     return false;
                 }
-                false
+                // Nested field chain (e.g., self.graph.passes): if the parent
+                // accesses a non-Copy self field, moving any sub-field also
+                // requires owning self.
+                self.expression_moves_non_copy_self_field(object)
             }
             // Struct literal: Foo { field: self.field, ... }
             Expression::StructLiteral { fields, .. } => fields

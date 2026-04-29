@@ -47,32 +47,20 @@ fn compile_wj_to_rust(source: &str) -> (bool, String, String) {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "trait_auto_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let rs_file = test_dir.join("test.rs");
+    let test_dir = tempfile::tempdir().expect("tempdir for rustc");
+    let rs_file = test_dir.path().join("test.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
-
+    let rlib = test_dir.path().join("out.rlib");
     let output = Command::new("rustc")
         .arg(&rs_file)
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
+        .arg("--crate-type=lib")
+        .arg("--edition=2021")
+        .arg("-o")
+        .arg(&rlib)
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 

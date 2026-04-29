@@ -823,7 +823,6 @@ impl Config {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "TODO v0.41.0: Smart ownership inference - infer &T when parameter is only read"]
 fn test_iterator_var_borrowed_param_no_clone() {
     let code = r#"
 @auto

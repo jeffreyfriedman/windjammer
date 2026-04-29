@@ -138,7 +138,7 @@ impl HierarchyPanel {
     pub fn render(self, objects: Vec<SceneObject>) -> string {
         let mut html = "".to_string()
         for obj in &objects {
-            html = html + self.render_node(obj, 0).as_str()
+            html = html + self.render_node(obj, 0)
         }
         html
     }

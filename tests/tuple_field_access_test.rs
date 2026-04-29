@@ -133,7 +133,6 @@ pub fn use_coords() -> i32 {
 
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
-#[ignore] // Known limitation: nested tuple access requires parentheses: (outer.0).0
 fn test_nested_tuple_access() {
     let code = r#"
 pub fn nested() -> i32 {

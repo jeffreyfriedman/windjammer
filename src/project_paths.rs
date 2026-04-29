@@ -1,0 +1,176 @@
+//! Source-root detection and output paths (shared by `build_project` and `compiler`).
+
+use anyhow::Result;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Find the actual source root for a Windjammer file
+///
+/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
+/// by looking for a directory that looks like a source root:
+/// - Named "src_wj" or "src" (this is the most reliable indicator)
+/// - Or the topmost directory containing mod.wj
+pub fn find_source_root(file_path: &Path) -> Option<&Path> {
+    let mut current = file_path;
+    let mut topmost_mod_wj_dir = None;
+    let mut found_src_wj = None;
+
+    while let Some(parent) = current.parent() {
+        // Check if this directory looks like a source root by name
+        if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
+            // If named "src_wj", this is definitely the source root for multi-file projects
+            if dir_name == "src_wj" {
+                found_src_wj = Some(parent);
+            }
+        }
+
+        // Track the topmost directory with mod.wj
+        if parent.join("mod.wj").exists() {
+            topmost_mod_wj_dir = Some(parent);
+        }
+
+        current = parent;
+    }
+
+    // Prefer a directory named `src_wj` in the path — conventional layout for nested `ecs/foo.wj`
+    // and correct `get_relative_output_path` even when the project has no `mod.wj` yet.
+    if let Some(src_wj) = found_src_wj {
+        return Some(src_wj);
+    }
+
+    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
+    if let Some(mod_wj_dir) = topmost_mod_wj_dir {
+        return Some(mod_wj_dir);
+    }
+
+    // For single-file projects, use the file's parent directory
+    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
+    file_path.parent()
+}
+
+/// Calculate output path that preserves directory structure
+///
+/// Example:
+/// - source_root: "windjammer-game/src_wj"
+/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
+/// - output_dir: "build"
+/// - Result: "build/math/vec2.rs"
+pub fn get_relative_output_path(
+    source_root: &Path,
+    input_path: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    // Get the relative path from source_root to input_path
+    let relative = input_path.strip_prefix(source_root).unwrap_or(input_path);
+
+    // Get the base name without extension
+    let base_name = relative
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+
+    // TDD FIX: Check if there's a directory module with the same name
+    // If both window.wj and window/ exist, put window.wj content into window/mod.rs
+    // This prevents E0761: file for module `window` found at both "window.rs" and "window/mod.rs"
+    let source_dir_for_module = if let Some(parent) = input_path.parent() {
+        parent.join(base_name)
+    } else {
+        PathBuf::from(base_name)
+    };
+
+    let has_directory_module = source_dir_for_module.is_dir()
+        && source_dir_for_module
+            .read_dir()
+            .map(|mut entries| {
+                entries.any(|e| {
+                    e.ok()
+                        .and_then(|e| e.file_name().into_string().ok())
+                        .map(|name| name.ends_with(".wj"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+
+    // Replace .wj extension with .rs
+    let rs_filename = relative
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.replace(".wj", ".rs"))
+        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+
+    // Construct output path preserving directory structure
+    let mut output_path = output_dir.to_path_buf();
+
+    // Add parent directories if they exist
+    if let Some(parent) = relative.parent() {
+        if parent != Path::new("") {
+            output_path.push(parent);
+        }
+    }
+
+    // If there's a directory module, put content into mod.rs instead of window.rs
+    if has_directory_module {
+        output_path.push(base_name);
+        output_path.push("mod.rs");
+    } else {
+        // Add the .rs filename
+        output_path.push(rs_filename);
+    }
+
+    Ok(output_path)
+}
+
+/// Output path for a `.wj` file (directory-module layout when `stem/stem.wj` + `stem/*.wj` co-exist).
+/// Deletes a stale flat `stem.rs` when emitting `stem/mod.rs` so rustc never sees both (E0761).
+pub fn resolve_wj_output_path(
+    source_root: &Path,
+    wj_file: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    let path = get_relative_output_path(source_root, wj_file, output_dir)?;
+    if path.file_name().and_then(|s| s.to_str()) == Some("mod.rs") {
+        if let Ok(rel) = wj_file.strip_prefix(source_root) {
+            let stale = output_dir.join(rel.with_extension("rs"));
+            if stale != path {
+                let _ = fs::remove_file(stale);
+            }
+        }
+    }
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_get_relative_output_path_nested() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/math/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_flat() {
+        let source_root = Path::new("src_wj");
+        let input_path = Path::new("src_wj/vec2.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/vec2.rs"));
+    }
+
+    #[test]
+    fn test_get_relative_output_path_deeply_nested() {
+        let source_root = Path::new("game/src_wj");
+        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let output_dir = Path::new("build");
+
+        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
+        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
+    }
+}

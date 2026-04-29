@@ -158,7 +158,6 @@ pub fn remainder(x: i32, y: i32) -> i32 {
 //
 // Test kept to document this design decision.
 #[test]
-#[ignore] // Not a feature to implement - documents explicit cast requirement
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_mixed_int_float_cast() {
     let src = r#"
@@ -179,7 +178,6 @@ pub fn compute(x: f32, y: i32) -> f32 {
 // (Same rationale as test_binary_mixed_int_float_cast - applies to literals too)
 // To mix: x: f32 * 2.0  or  x * (2 as f32)  - be explicit.
 #[test]
-#[ignore] // Not a feature to implement - documents explicit cast requirement
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_float_plus_int_literal() {
     let src = r#"
@@ -323,7 +321,6 @@ pub fn lor(a: bool, b: bool) -> bool {
 // Feature: Multiple levels of references in expressions (&&&i32)
 // Status: Edge case - needs investigation
 #[test]
-#[ignore]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_add_three_refs() {
     let src = r#"
@@ -448,7 +445,6 @@ pub fn xor(a: &i32, b: &i32) -> i32 {
 // Feature: Owned + borrowed in binary ops (i32 + &i32)
 // Status: Needs proper auto-deref logic
 #[test]
-#[ignore]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_mixed_owned_borrowed() {
     let src = r#"

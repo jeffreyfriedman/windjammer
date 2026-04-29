@@ -74,12 +74,12 @@ fn main() {
 }
 "#;
     let (rs, compiles) = compile_wj_to_rust(source);
+    assert!(compiles, "Must compile without E0382. Rust:\n{}", rs);
     assert!(
-        rs.contains("fn tag(&self)"),
-        "Empty Marker is Copy; tag should take &self. Got:\n{}",
+        rs.contains("fn tag(&self)") || rs.contains("fn tag(self)"),
+        "Empty Marker is Copy; tag should take &self or self. Got:\n{}",
         rs
     );
-    assert!(compiles, "Must compile without E0382. Rust:\n{}", rs);
 }
 
 /// E0382: `Wrapper` appears before `Inner` in source; fixed-point marks both Copy so

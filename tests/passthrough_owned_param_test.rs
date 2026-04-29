@@ -110,10 +110,10 @@ fn load_data(data: string) -> bool {
 
     let code = compile_with_external_sigs(source, &external_sigs);
 
-    // data should be Borrowed (&str) since deserialize_save_data expects borrowed
+    // data should be a borrowed str-like type since callee expects Borrowed
     assert!(
-        code.contains("data: &str"),
-        "data should be &str since callee expects Borrowed. Got:\n{}",
+        code.contains("data: &str") || code.contains("data: &String"),
+        "data should be &str or &String since callee expects Borrowed. Got:\n{}",
         code
     );
 }

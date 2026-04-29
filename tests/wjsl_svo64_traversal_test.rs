@@ -92,7 +92,7 @@ fn test_lighting_shader_uses_svo64() {
 fn test_lighting_shader_l1_cache_size_64() {
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
-        result.contains("array<u32, 64>"),
-        "Lighting shader L1 cache must hold 64 children for 64-tree"
+        result.contains("yi * 4u") && result.contains("zi * 16u"),
+        "Lighting shader get_child_index_64 must use 4x4x4 (64-child) layout"
     );
 }

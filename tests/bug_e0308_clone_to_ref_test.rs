@@ -21,7 +21,6 @@ use std::process::Command;
 ///
 /// TODO (TDD): Fix codegen to auto-insert `.clone()` for this case
 #[test]
-#[ignore = "Compiler bug: missing .clone() for borrowed String field → owned String param (TODO: TDD fix)"]
 fn test_struct_field_to_ref_string_method() {
     let source = r#"
 struct Item {

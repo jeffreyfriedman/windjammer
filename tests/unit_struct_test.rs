@@ -212,8 +212,8 @@ fn test_unit_struct_with_decorators() {
     );
 
     assert!(
-        generated.contains("#[derive(Debug, Clone, Copy)]"),
-        "Derive decorators should be generated. Generated:\n{}",
+        generated.contains("Debug, Clone, Copy"),
+        "@derive(Debug, Clone, Copy) must appear in merged #[derive(...)]. Generated:\n{}",
         generated
     );
 }

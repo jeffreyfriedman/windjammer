@@ -13,14 +13,15 @@ fn compile_to_rust(wj_code: &str) -> String {
     let temp_dir = tempfile::tempdir().unwrap();
     let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
 
-    let compiler_dir = std::env::current_dir().unwrap();
-    let compiler = compiler_dir.join("target/release/wj");
-
-    let output = std::process::Command::new(&compiler)
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&wj_file)
-        .current_dir(temp_dir.path())
+        .arg("-o")
+        .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run wj");
 
@@ -29,7 +30,7 @@ fn compile_to_rust(wj_code: &str) -> String {
         panic!("wj build failed:\n{}", stderr);
     }
 
-    let rs_file = temp_dir.path().join("build/test.rs");
+    let rs_file = out_dir.join("test.rs");
     fs::read_to_string(rs_file).expect("Failed to read generated Rust")
 }
 

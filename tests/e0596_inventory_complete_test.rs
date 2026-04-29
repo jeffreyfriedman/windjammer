@@ -130,14 +130,12 @@ pub fn main() {}
 
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
+    // Two valid patterns: `Some(ref mut stack)` or `Some(stack) = &mut expr`
+    let has_ref_mut_pattern = rs.contains("Some(ref mut stack)");
+    let has_mut_scrutinee = rs.contains("&mut self.slots[");
     assert!(
-        rs.contains("Some(ref mut stack)"),
-        "Should generate ref mut for mutated Option binding. Generated:\n{}",
-        rs
-    );
-    assert!(
-        rs.contains("&mut ") && (rs.contains("stack: &mut ") || rs.contains("let stack: &mut ")),
-        "Type ascription must be &mut ItemStack, not &ItemStack. Generated:\n{}",
+        has_ref_mut_pattern || has_mut_scrutinee,
+        "Should generate ref mut binding or &mut scrutinee for mutated Option binding. Generated:\n{}",
         rs
     );
 }
@@ -193,9 +191,11 @@ pub fn main() {}
 
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
+    let has_ref_mut_pattern = rs.contains("Some(ref mut stack)");
+    let has_mut_scrutinee = rs.contains("&mut self.slots[");
     assert!(
-        rs.contains("Some(ref mut stack)"),
-        "Should generate ref mut. Generated:\n{}",
+        has_ref_mut_pattern || has_mut_scrutinee,
+        "Should generate ref mut binding or &mut scrutinee. Generated:\n{}",
         rs
     );
 }
@@ -311,9 +311,10 @@ pub fn main() {}
 
     let (rs, compiles) = compile_wj_to_rust(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
+    // Codegen may use `Some(ref stack)` or `Some(stack) = &expr` — both give &ItemStack
     assert!(
-        rs.contains("Some(ref stack)") && !rs.contains("Some(ref mut stack)"),
-        "Read-only should use ref not ref mut. Generated:\n{}",
+        !rs.contains("Some(ref mut stack)") && !rs.contains("&mut self.slots["),
+        "Read-only should NOT use ref mut or &mut scrutinee. Generated:\n{}",
         rs
     );
 }

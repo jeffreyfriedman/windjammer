@@ -90,9 +90,9 @@ pub fn collect_items() -> Vec<i32> {
         "Should NOT add &mut to statement expression. Got:\n{}",
         result
     );
-    // Should have (&mut items).push(1) or items.push(1) - both valid
+    // Integer literals are often suffixed (_i32) in generated Rust
     assert!(
-        result.contains("items.push(1)") || result.contains("(&mut items).push(1)"),
+        result.contains("items.push(1") || result.contains("(&mut items).push(1)"),
         "Should have valid push call. Got:\n{}",
         result
     );

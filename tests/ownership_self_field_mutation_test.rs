@@ -165,13 +165,8 @@ impl Outer {
 }
 
 #[test]
-#[ignore] // TODO: Parser doesn't support `extern struct` or `extern impl` yet
-          // Parser error: "Expected Fn, got Struct"
-          // Feature needed: extern struct/impl declarations for FFI types
-          // This test documents desired behavior once feature is implemented
 fn test_self_field_extern_method_infers_mut_self() {
-    // This is the ACTUAL bug: self.camera.look_at() where Camera3D is external
-    // The method can look up Camera3D::look_at in the registry, but needs to check it
+    // self.camera.look_at() where Camera3D comes from an extern impl signature stub
     let source = r#"
 // Simulate external type (from engine)
 extern struct Camera3D {}

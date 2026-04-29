@@ -55,8 +55,6 @@ fn main() {
 "#,
     );
 
-    // The compiler should auto-insert `&` before `items` in the for loop
-    // because `items` is used after the loop (items.len())
     assert!(
         generated.contains("for item in &items")
             || generated.contains("for item in & items")

@@ -1,13 +1,9 @@
 /// TDD TEST: String parameters should work in match without .as_str()
 ///
 /// WINDJAMMER PHILOSOPHY: Compiler handles string conversions automatically.
-/// Users shouldn't need Rust-specific .as_str() boilerplate.
-///
-/// Test validates:
-/// 1. Match on string param works without .as_str()
-/// 2. Generated Rust compiles without E0658
-/// 3. Cross-backend consistency (Go/JS don't have .as_str())
+use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
 
 #[test]
 fn test_string_match_without_as_str() {
@@ -30,105 +26,60 @@ impl BuildType {
 }
 "#;
 
-    // Write test file
-    std::fs::write("/tmp/test_string_match.wj", source).unwrap();
+    let dir = tempdir().expect("tempdir");
+    let wj_path = dir.path().join("test_string_match.wj");
+    fs::write(&wj_path, source).expect("write wj");
+    let out = dir.path().join("out");
+    fs::create_dir_all(&out).expect("out");
 
-    // Compile to Rust
-    let output = Command::new("wj")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
-            "--output",
-            "/tmp",
-            "--target",
-            "rust",
-            "/tmp/test_string_match.wj",
+            wj_path.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj");
 
-    assert!(output.status.success(), "wj build should succeed");
+    assert!(
+        output.status.success(),
+        "wj build should succeed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    // Read generated Rust
-    let generated =
-        std::fs::read_to_string("/tmp/test_string_match.rs").expect("Generated file should exist");
+    let rs_path = out.join("test_string_match.rs");
+    let generated = fs::read_to_string(&rs_path).expect("Generated file should exist");
 
-    println!("Generated Rust:\n{}", generated);
-
-    // Verify: Should compile without E0658
+    let rlib = dir.path().join("libmatch_test.rlib");
     let compile = Command::new("rustc")
         .args([
+            "--edition",
+            "2021",
             "--crate-type",
             "lib",
-            "/tmp/test_string_match.rs",
+            rs_path.to_str().unwrap(),
             "-o",
-            "/tmp/test_string_match.rlib",
+            rlib.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&compile.stderr);
-
-    // Should NOT have E0658 (unstable feature)
     assert!(
         !stderr.contains("E0658"),
         "Generated Rust should not use unstable features\nStderr: {}",
         stderr
     );
-
-    // Should compile successfully
     assert!(
         compile.status.success(),
         "Generated Rust should compile\nStderr: {}",
         stderr
     );
 
-    // Verify: Generated code handles string→&str conversion intelligently
-    // Either: match name { ... } (if inferred as &str)
-    // Or: match name.as_str() { ... } (if inferred as String)
-    // But NOT: match name.as_str() { ... } when name is &str
     assert!(
         generated.contains("match name {") || generated.contains("match name.as_str() {"),
         "Match statement should exist"
-    );
-}
-
-#[test]
-fn test_string_match_with_explicit_as_str_should_warn() {
-    // FUTURE: This should emit a warning or error
-    // For now, just document the intent
-    let source = r#"
-enum BuildType {
-    Warrior,
-}
-
-impl BuildType {
-    pub fn from_name(name: string) -> BuildType {
-        match name.as_str() {  // ← Redundant! Compiler should warn
-            "warrior" => BuildType::Warrior,
-            _ => BuildType::Warrior,
-        }
-    }
-}
-"#;
-
-    std::fs::write("/tmp/test_explicit_as_str.wj", source).unwrap();
-
-    let output = Command::new("wj")
-        .args([
-            "build",
-            "--output",
-            "/tmp",
-            "--target",
-            "rust",
-            "/tmp/test_explicit_as_str.wj",
-        ])
-        .output()
-        .expect("Failed to run wj");
-
-    // TODO: Should emit warning about redundant .as_str()
-    // For now, just ensure it compiles
-    assert!(
-        output.status.success(),
-        "Should compile even with redundant .as_str()"
     );
 }

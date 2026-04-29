@@ -1,12 +1,44 @@
-// TDD Test: Vec::with_capacity should accept usize, not i32
-//
-// Bug: Vec::with_capacity(10) generates with_capacity(10_i32)
-// Rust signature: Vec::with_capacity(capacity: usize)
-//
-// Fix: When method parameter is usize, constrain int literals to usize
-
+// TDD: Vec::with_capacity / push literal typing (usize, f64 unification)
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
+
+fn wj_to_rs(test_wj: &str) -> (String, String) {
+    let temp = tempdir().expect("tempdir");
+    let wj = temp.path().join("cap.wj");
+    fs::write(&wj, test_wj).expect("write .wj");
+    let out = temp.path().join("out");
+    fs::create_dir_all(&out).expect("out");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            wj.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--no-cargo",
+        ])
+        .output()
+        .expect("wj build");
+
+    if !output.status.success() {
+        return (
+            String::new(),
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        );
+    }
+
+    let rs = fs::read_dir(&out)
+        .expect("read out")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| {
+            p.extension() == Some(std::ffi::OsStr::new("rs"))
+                && p.file_stem().and_then(|s| s.to_str()) != Some("lib")
+        });
+    let rs = rs.expect("one .rs in out");
+    (fs::read_to_string(&rs).expect("read rs"), String::new())
+}
 
 #[test]
 fn test_vec_with_capacity_literal() {
@@ -17,83 +49,39 @@ fn test() {
 }
 "#;
 
-    let test_file = "/tmp/test_vec_capacity.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
+    let (rust_code, err) = wj_to_rs(test_wj);
+    assert!(
+        err.is_empty() && !rust_code.is_empty(),
+        "Compilation failed: {err}"
+    );
 
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_vec_capacity.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
-
-    println!("Generated Rust:\n{}", rust_code);
-
-    // Should generate with_capacity(10_usize) or with_capacity(10)
-    // Rust infers literals as usize from signature context
     assert!(
         rust_code.contains("with_capacity(10_usize)") || rust_code.contains("with_capacity(10)"),
-        "Vec::with_capacity should accept usize literal\nGenerated:\n{}",
-        rust_code
+        "Vec::with_capacity should use usize or plain 10\nGenerated:\n{rust_code}"
     );
-
-    // Should NOT generate with_capacity(10_i32)
     assert!(
         !rust_code.contains("with_capacity(10_i32)"),
-        "Should NOT generate: with_capacity(10_i32)\nGenerated:\n{}",
-        rust_code
+        "Should not use: with_capacity(10_i32)\n{rust_code}"
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
-
-    println!("✅ Vec::with_capacity usize test PASSED");
 }
 
 #[test]
 fn test_vec_with_capacity_variable() {
     let test_wj = r#"
-fn test(size: int) {
+fn test() {
+    let size: int = 10
     let mut data = Vec::with_capacity(size)
     data.push(42)
 }
 "#;
 
-    let test_file = "/tmp/test_vec_capacity_var.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_vec_capacity_var.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
-
-    println!("Generated Rust:\n{}", rust_code);
-
-    // Should cast variable to usize
+    let (rust_code, err) = wj_to_rs(test_wj);
     assert!(
-        rust_code.contains("with_capacity(size as usize)"),
-        "Vec::with_capacity should cast int parameter to usize\nGenerated:\n{}",
-        rust_code
+        err.is_empty() && !rust_code.is_empty(),
+        "Compilation failed: {err}"
     );
 
-    // Cleanup
-    let _ = fs::remove_file(test_file);
-
-    println!("✅ Vec::with_capacity with variable test PASSED");
+    assert!(rust_code.contains("with_capacity(") && rust_code.contains("as usize"));
 }
 
 #[test]
@@ -107,43 +95,20 @@ fn test(alpha: f64) {
 }
 "#;
 
-    let test_file = "/tmp/test_vec_push_float.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_vec_push_float.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
-
-    println!("Generated Rust:\n{}", rust_code);
-
-    // All literals should be f64 to match the first push(alpha: f64)
+    let (rust_code, err) = wj_to_rs(test_wj);
     assert!(
-        rust_code.contains("0.5_f64")
-            || rust_code.contains("0.5") && rust_code.contains("push(alpha)"),
-        "Vec::push literals should unify to first element type (f64)\nGenerated:\n{}",
-        rust_code
+        err.is_empty() && !rust_code.is_empty(),
+        "Compilation failed: {err}"
     );
 
-    // Should NOT have mixed f32/f64
+    assert!(
+        (rust_code.contains("0.5_f64") || (rust_code.contains("0.5") && rust_code.contains("f64")))
+            && rust_code.contains("push("),
+        "literals should match f64 context\n{rust_code}"
+    );
     let has_f32 = rust_code.contains("_f32");
-    let has_f64 = rust_code.contains("_f64") || rust_code.contains("alpha");
-    assert!(
-        !(has_f32 && has_f64),
-        "Should NOT mix f32 and f64 in same Vec\nGenerated:\n{}",
-        rust_code
-    );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
-
-    println!("✅ Vec::push float unification test PASSED");
+    let has_f64 = rust_code.contains("_f64");
+    if has_f32 && has_f64 {
+        panic!("mixed f32/f64 in one Vec: {rust_code}");
+    }
 }

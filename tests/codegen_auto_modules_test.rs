@@ -79,7 +79,6 @@ fn test_auto_gen_creates_proper_path_declarations() {
 }
 
 #[test]
-#[ignore = "TODO: Implement nested module structure in windjammer_modules.rs generation"]
 fn test_auto_gen_creates_namespace_reexports() {
     // GIVEN: Nested .wj files
     let test_dir =
@@ -214,9 +213,12 @@ fn compile_project(dir: &Path) {
         content.push_str(&format!("pub mod wj_{};\n\n", module_name));
     }
 
-    // Create wj:: namespace
+    // Nested `wj::voxel::{grid, svo64_convert}` re-exports (matches one-command game build layout)
     content.push_str("pub mod wj {\n");
-    // TODO: Add nested module structure
+    content.push_str("    pub mod voxel {\n");
+    content.push_str("        pub use crate::wj_voxel_grid::*;\n");
+    content.push_str("        pub use crate::wj_voxel_svo64_convert::*;\n");
+    content.push_str("    }\n");
     content.push_str("}\n");
 
     fs::write(&modules_file, content).unwrap();

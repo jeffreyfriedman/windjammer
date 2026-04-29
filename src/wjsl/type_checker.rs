@@ -1063,15 +1063,19 @@ fn scalar_of(ty: &Type) -> ScalarType {
     }
 }
 
+fn normalize_scalar(e: &Option<ScalarType>) -> ScalarType {
+    e.unwrap_or(ScalarType::F32)
+}
+
 fn types_match(a: &Type, b: &Type) -> bool {
     match (a, b) {
         (Type::Scalar(s1), Type::Scalar(s2)) => s1 == s2,
-        (Type::Vec2(e1), Type::Vec2(e2)) => e1 == e2,
-        (Type::Vec3(e1), Type::Vec3(e2)) => e1 == e2,
-        (Type::Vec4(e1), Type::Vec4(e2)) => e1 == e2,
-        (Type::Mat2x2(e1), Type::Mat2x2(e2)) => e1 == e2,
-        (Type::Mat3x3(e1), Type::Mat3x3(e2)) => e1 == e2,
-        (Type::Mat4x4(e1), Type::Mat4x4(e2)) => e1 == e2,
+        (Type::Vec2(e1), Type::Vec2(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
+        (Type::Vec3(e1), Type::Vec3(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
+        (Type::Vec4(e1), Type::Vec4(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
+        (Type::Mat2x2(e1), Type::Mat2x2(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
+        (Type::Mat3x3(e1), Type::Mat3x3(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
+        (Type::Mat4x4(e1), Type::Mat4x4(e2)) => normalize_scalar(e1) == normalize_scalar(e2),
         (Type::Struct(n1), Type::Struct(n2)) => n1 == n2,
         _ => false,
     }

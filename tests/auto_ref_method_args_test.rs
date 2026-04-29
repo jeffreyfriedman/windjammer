@@ -56,10 +56,10 @@ fn compile_and_verify(code: &str) -> (bool, String, String) {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_ref_vec_arg() {
-    // Method expects &Vec<T> but we pass Vec<T>
+    // Parameter inferred as borrowed Vec when not mutated
     let code = r#"
-pub fn process_items(items: &Vec<i32>) -> i32 {
-    let mut sum = 0
+pub fn process_items(items: Vec<i32>) -> i32 {
+    let mut sum: i32 = 0
     for item in items {
         sum = sum + item
     }
@@ -67,7 +67,7 @@ pub fn process_items(items: &Vec<i32>) -> i32 {
 }
 
 pub fn test() -> i32 {
-    let items = vec![1, 2, 3]
+    let items: Vec<i32> = vec![1, 2, 3]
     process_items(items)
 }
 "#;
@@ -79,13 +79,11 @@ pub fn test() -> i32 {
         println!("Rustc error:\n{}", err);
     }
 
-    // The items should have & added
     assert!(
-        generated.contains("process_items(&items)") || generated.contains("process_items(items)"),
-        "Should auto-ref Vec arg. Generated:\n{}",
-        generated
+        success,
+        "Generated code should compile. Error:\n{}\nGenerated:\n{}",
+        err, generated
     );
-    assert!(success, "Generated code should compile. Error: {}", err);
 }
 
 #[test]

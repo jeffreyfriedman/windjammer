@@ -27,10 +27,11 @@ pub fn compute(radius: f32) -> Vec3 {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join("wj_test_field_access");
-    std::fs::create_dir_all(&temp_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    std::fs::create_dir_all(&out_dir).unwrap();
 
-    let wj_file = temp_dir.join("test.wj");
+    let wj_file = temp_dir.path().join("test.wj");
     let mut file = std::fs::File::create(&wj_file).unwrap();
     file.write_all(source.as_bytes()).unwrap();
 
@@ -38,11 +39,10 @@ pub fn compute(radius: f32) -> Vec3 {
         .args([
             "build",
             wj_file.to_str().unwrap(),
-            "--output",
-            temp_dir.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
             "--no-cargo",
         ])
-        .current_dir(std::env::current_dir().unwrap())
         .output()
         .expect("Failed to run wj build");
 
@@ -54,7 +54,7 @@ pub fn compute(radius: f32) -> Vec3 {
 
     assert!(output.status.success(), "wj build failed");
 
-    let rs_file = temp_dir.join("test.rs");
+    let rs_file = out_dir.join("test.rs");
     let generated = std::fs::read_to_string(&rs_file).unwrap();
 
     eprintln!("=== GENERATED RUST ===\n{}", generated);
@@ -82,6 +82,4 @@ pub fn compute(radius: f32) -> Vec3 {
         generated.contains("radius * 0.5_f32") || generated.contains("0.5_f32"),
         "Expected 0.5 to be inferred as f32"
     );
-
-    std::fs::remove_dir_all(&temp_dir).ok();
 }

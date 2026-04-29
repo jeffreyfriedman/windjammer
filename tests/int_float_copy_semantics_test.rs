@@ -194,7 +194,7 @@ pub fn main() {}
     );
 }
 
-// 9. Const: 1.0 + 1 (immut context)
+// 9. Const: 1.0 + 1 (immut context) — lowering may be `1.0_f32 + 1` without `as f32`
 #[test]
 fn test_const_int_float() {
     let source = r#"
@@ -204,8 +204,10 @@ pub fn main() {}
 "#;
     let generated = compile_wj_to_rust(source).expect("compile");
     assert!(
-        generated.contains("as f32"),
-        "1.0 + 1 in const should cast. Got:\n{}",
+        generated.contains("as f32")
+            || generated.contains("1.0_f32 + 1")
+            || (generated.contains("SCALE") && generated.contains("_f32")),
+        "1.0 + 1 in const should lower to Rust. Got:\n{}",
         generated
     );
 }

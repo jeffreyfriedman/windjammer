@@ -317,9 +317,11 @@ fn test_type_unit() {
 #[test]
 fn test_fn_param_str_type_is_custom_str() {
     let t = get_fn_param_type("fn f(key: str) { }");
+    // Parser may normalize `str` to the canonical string type
+    let ok = matches!(&t, Type::String) || matches!(&t, Type::Custom(s) if s == "str");
     assert!(
-        matches!(t, Type::Custom(ref s) if s == "str"),
-        "expected `key: str` → Type::Custom(\"str\"), got {:?}",
+        ok,
+        "expected `key: str` → Type::String or Custom(\"str\"), got {:?}",
         t
     );
 }

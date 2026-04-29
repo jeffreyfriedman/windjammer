@@ -3,6 +3,7 @@
 /// These patterns come from windjammer-game (squad_tactics, emitter, mesh3d, etc.)
 /// The fix ensures casts apply even when float_inference returns Unknown for both operands.
 use std::process::Command;
+use tempfile::tempdir;
 use windjammer::*;
 
 fn compile_and_get_rust(source: &str) -> String {
@@ -30,22 +31,14 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "int_float_real_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
+    let temp = tempdir().expect("tempdir");
+    let test_dir = temp.path();
     let rs_file = test_dir.join("test.rs");
     std::fs::write(&rs_file, rs_code).unwrap();
 
     let output = Command::new("rustc")
-        .arg(&rs_file)
+        .current_dir(test_dir)
+        .arg("test.rs")
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
@@ -54,8 +47,6 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 
@@ -121,8 +112,11 @@ pub fn calculate_cost(base: f32, penalty: i32) -> f32 {
 "#;
 
     let output = compile_and_get_rust(source);
+    // Codegen may emit `(penalty as f32) as f32` (redundant but valid) or `(penalty) as f32`
     assert!(
-        output.contains("(penalty) as f32") || output.contains("(base) as f32"),
+        output.contains("penalty as f32")
+            || output.contains("(penalty) as f32")
+            || output.contains("(base) as f32"),
         "base + penalty should cast int to f32. Got:\n{}",
         output
     );

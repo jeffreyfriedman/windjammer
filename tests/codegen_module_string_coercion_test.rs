@@ -1,15 +1,8 @@
 use std::io::Write;
 
 fn compile_wj_to_rs(wj_code: &str) -> String {
-    let dir = std::env::temp_dir().join(format!(
-        "wj_mod_str_coercion_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        format!("{:?}", std::thread::current().id()).len(),
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let dir = temp_dir.path().to_path_buf();
 
     let wj_path = dir.join("test.wj");
     let mut f = std::fs::File::create(&wj_path).unwrap();
@@ -34,7 +27,7 @@ fn compile_wj_to_rs(wj_code: &str) -> String {
             String::from_utf8_lossy(&output.stderr),
         )
     });
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(temp_dir);
     content
 }
 

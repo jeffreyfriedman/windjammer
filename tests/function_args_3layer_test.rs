@@ -112,11 +112,12 @@ pub fn caller(x: &i32) {
 "#;
     let (success, result, err) = compile_and_verify(src);
     assert!(success, "Must compile. Error:\n{}", err);
-    // &i32 to i32: may use x, *x, or (x).clone() - all valid for Copy
+    // &i32 to i32: may deref, clone (Copy), or pass through — all valid
     assert!(
         result.contains("takes_owned(x)")
             || result.contains("takes_owned(*x)")
-            || result.contains("takes_owned((x).clone())"),
+            || result.contains("takes_owned((x).clone())")
+            || result.contains("takes_owned(x.clone())"),
         "Copy type in function arg. Got:\n{}",
         result
     );

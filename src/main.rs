@@ -5,6 +5,7 @@
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
+pub mod build_utils;
 pub mod cargo_toml;
 pub mod cli;
 pub mod codegen;
@@ -15,6 +16,7 @@ pub mod error;
 pub mod errors;
 pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
                 // Removed: codegen_legacy is now codegen::rust::generator
+pub mod project_paths;
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
@@ -682,7 +684,7 @@ pub fn build_project(
     // BUGFIX: For nested files like src_wj/ecs/entity.wj, we need to find src_wj,
     // not just the immediate parent (src_wj/ecs)
     let source_root = if path.is_file() {
-        find_source_root(path).unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
+        project_paths::find_source_root(path).unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
     } else {
         path
     };
@@ -1925,18 +1927,15 @@ fn compile_file_impl(
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
     // THE WINDJAMMER WAY: Run linter after analysis
-    // Compile predictably (respect explicit intent), warn helpfully (guide to better patterns)
-    if !store_program {
-        // Only run linter during PASS 2 (regeneration), not PASS 1 (registration)
-        let mut linter = linter::Linter::new();
-        for analyzed_func in &analyzed {
-            linter.lint_function(analyzed_func);
-        }
-        let diagnostics = linter.into_diagnostics();
-        for diagnostic in &diagnostics {
-            if diagnostic.level != linter::LintLevel::Allow {
-                eprintln!("{}", diagnostic);
-            }
+    // Single-file `wj build` uses store_program=true; lints must still run so stderr warnings work.
+    let mut linter = linter::Linter::new();
+    for analyzed_func in &analyzed {
+        linter.lint_function(analyzed_func);
+    }
+    let diagnostics = linter.into_diagnostics();
+    for diagnostic in &diagnostics {
+        if diagnostic.level != linter::LintLevel::Allow {
+            eprintln!("{}", diagnostic);
         }
     }
 
@@ -2138,7 +2137,8 @@ fn compile_file_impl(
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
-            let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+            let output_file_path =
+                project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
             // Create parent directories if needed
             if let Some(parent) = output_file_path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -2222,7 +2222,8 @@ fn compile_file_impl(
 
         // Set source file for error mapping
         generator.set_source_file(input_path);
-        let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+        let output_file_path =
+            project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
         // Create parent directories if needed
         if let Some(parent) = output_file_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -2274,7 +2275,7 @@ fn compile_file_impl(
     };
 
     // Write output (preserving directory structure)
-    let output_file = get_relative_output_path(source_root, input_path, output_dir)?;
+    let output_file = project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
 
     // Bug #2B FIX: Prevent lib.rs generation in subdirectories
     // --------------------------------------------------------
@@ -4670,7 +4671,8 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
     // TDD FIX: Filter out "lib" module to prevent E0761 conflict
     // "lib" is a reserved name for the library itself, not a module to import
     // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
-    modules.retain(|m| m != "lib");
+    // Also exclude "mod" — `pub mod mod;` is invalid (keyword); mod.rs is the barrel, not a child module
+    modules.retain(|m| m != "lib" && m != "mod");
 
     if modules.is_empty() {
         return Ok(()); // No modules to export after filtering
@@ -5481,124 +5483,6 @@ pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Find the actual source root for a Windjammer file
-///
-/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
-/// by looking for a directory that looks like a source root:
-/// - Named "src_wj" or "src" (this is the most reliable indicator)
-/// - Or the topmost directory containing mod.wj
-fn find_source_root(file_path: &Path) -> Option<&Path> {
-    let mut current = file_path;
-    let mut topmost_mod_wj_dir = None;
-    let mut found_src_wj = None;
-
-    while let Some(parent) = current.parent() {
-        // Check if this directory looks like a source root by name
-        if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            // If named "src_wj", this is definitely the source root for multi-file projects
-            if dir_name == "src_wj" {
-                found_src_wj = Some(parent);
-                // Don't return immediately, keep looking for mod.wj to confirm multi-file structure
-            }
-        }
-
-        // Track the topmost directory with mod.wj
-        if parent.join("mod.wj").exists() {
-            topmost_mod_wj_dir = Some(parent);
-        }
-
-        current = parent;
-    }
-
-    // Prefer src_wj with mod.wj (multi-file project)
-    if let Some(src_wj) = found_src_wj {
-        if src_wj.join("mod.wj").exists() || topmost_mod_wj_dir.is_some() {
-            return Some(src_wj);
-        }
-    }
-
-    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
-    if let Some(mod_wj_dir) = topmost_mod_wj_dir {
-        return Some(mod_wj_dir);
-    }
-
-    // For single-file projects, use the file's parent directory
-    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
-    file_path.parent()
-}
-
-/// Calculate output path that preserves directory structure
-///
-/// Example:
-/// - source_root: "windjammer-game/src_wj"
-/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
-/// - output_dir: "build"
-/// - Result: "build/math/vec2.rs"
-pub fn get_relative_output_path(
-    source_root: &Path,
-    input_path: &Path,
-    output_dir: &Path,
-) -> Result<PathBuf> {
-    // Get the relative path from source_root to input_path
-    let relative = input_path.strip_prefix(source_root).unwrap_or(input_path);
-
-    // Get the base name without extension
-    let base_name = relative
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-    // TDD FIX: Check if there's a directory module with the same name
-    // If both window.wj and window/ exist, put window.wj content into window/mod.rs
-    // This prevents E0761: file for module `window` found at both "window.rs" and "window/mod.rs"
-    let source_dir_for_module = if let Some(parent) = input_path.parent() {
-        parent.join(base_name)
-    } else {
-        PathBuf::from(base_name)
-    };
-
-    let has_directory_module = source_dir_for_module.is_dir()
-        && source_dir_for_module
-            .read_dir()
-            .map(|mut entries| {
-                entries.any(|e| {
-                    e.ok()
-                        .and_then(|e| e.file_name().into_string().ok())
-                        .map(|name| name.ends_with(".wj"))
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(false);
-
-    // Replace .wj extension with .rs
-    let rs_filename = relative
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|s| s.replace(".wj", ".rs"))
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-    // Construct output path preserving directory structure
-    let mut output_path = output_dir.to_path_buf();
-
-    // Add parent directories if they exist
-    if let Some(parent) = relative.parent() {
-        if parent != Path::new("") {
-            output_path.push(parent);
-        }
-    }
-
-    // If there's a directory module, put content into mod.rs instead of window.rs
-    if has_directory_module {
-        output_path.push(base_name);
-        output_path.push("mod.rs");
-    } else {
-        // Add the .rs filename
-        output_path.push(rs_filename);
-    }
-
-    Ok(output_path)
-}
-
 /// Generate nested module structure using the new Windjammer module system
 /// This replaces the old flat generate_mod_file with proper nested support
 pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) -> Result<()> {
@@ -5981,38 +5865,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_relative_output_path_nested() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/math/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_flat() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_deeply_nested() {
-        let source_root = Path::new("game/src_wj");
-        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
-    }
-
     #[test]
     fn test_two_pass_compilation_concept() {
         // This test documents the two-pass compilation approach:
