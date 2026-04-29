@@ -152,8 +152,16 @@ fn main() {
         "Enum variant behind borrowed field needs valid scrutinee strategy: {}",
         rust
     );
-    assert!(!rust.contains("*self.cost"), "Copy field should not be dereferenced: {}", rust);
-    assert!(rust_compiles(&rust), "Generated Rust must compile: {}", rust);
+    assert!(
+        !rust.contains("*self.cost"),
+        "Copy field should not be dereferenced: {}",
+        rust
+    );
+    assert!(
+        rust_compiles(&rust),
+        "Generated Rust must compile: {}",
+        rust
+    );
 }
 
 #[test]

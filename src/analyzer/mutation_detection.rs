@@ -221,7 +221,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::FieldAccess { object, .. } => {
                 Self::match_binding_is_assignment_target(object, var)
             }
-            Expression::Index { object, .. } => Self::match_binding_is_assignment_target(object, var),
+            Expression::Index { object, .. } => {
+                Self::match_binding_is_assignment_target(object, var)
+            }
             Expression::Unary {
                 op: UnaryOp::Deref,
                 operand,
@@ -238,9 +240,9 @@ impl<'ast> Analyzer<'ast> {
         registry: &SignatureRegistry,
     ) -> bool {
         match body {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.stmt_mutates_binding_in_tree(s, binding, registry)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry)),
             _ => self.expr_may_mutate_if_let_some_binding(binding, body, registry),
         }
     }
@@ -283,7 +285,9 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                then_block.iter().any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry))
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry))
                     || else_block.as_ref().is_some_and(|b| {
                         b.iter()
                             .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry))
@@ -376,10 +380,8 @@ impl<'ast> Analyzer<'ast> {
                             if let Some(mode) = sig.param_ownership.first() {
                                 // Owned receiver (Windjammer `fn m(self)` / by-value on Copy) updates
                                 // or consumes the receiver slot the same as &mut for mutation analysis.
-                                if matches!(
-                                    mode,
-                                    OwnershipMode::MutBorrowed | OwnershipMode::Owned
-                                ) {
+                                if matches!(mode, OwnershipMode::MutBorrowed | OwnershipMode::Owned)
+                                {
                                     return true;
                                 }
                             }

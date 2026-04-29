@@ -1299,11 +1299,8 @@ impl<'ast> Analyzer<'ast> {
 
                         // Trait methods (both abstract and default) should use &self or &mut self
                         // to work with unsized types. The Windjammer way: make it work!
-                        let mut analyzed_func = self.analyze_trait_method(
-                            &func,
-                            &registry,
-                            Some(decl.name.as_str()),
-                        )?;
+                        let mut analyzed_func =
+                            self.analyze_trait_method(&func, &registry, Some(decl.name.as_str()))?;
 
                         // PHASE 7: Detect const/static optimizations
                         analyzed_func.const_static_optimizations =
@@ -1647,12 +1644,10 @@ impl<'ast> Analyzer<'ast> {
                                 {
                                     merged_from_impls = Some(match merged_from_impls {
                                         None => impl_self_ownership,
-                                        Some(acc) => {
-                                            Self::merge_borrow_trait_receivers(
-                                                acc,
-                                                impl_self_ownership,
-                                            )
-                                        }
+                                        Some(acc) => Self::merge_borrow_trait_receivers(
+                                            acc,
+                                            impl_self_ownership,
+                                        ),
                                     });
                                 }
                             }
@@ -2787,12 +2782,7 @@ impl<'ast> Analyzer<'ast> {
         fn is_trivially_copy(ty: &Type) -> bool {
             matches!(
                 ty,
-                Type::Int
-                    | Type::Int32
-                    | Type::Uint
-                    | Type::Float
-                    | Type::Bool
-                    | Type::Infer
+                Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::Infer
             ) || matches!(ty, Type::Custom(s) if matches!(s.as_str(),
                 "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
                 | "usize" | "isize" | "f32" | "f64" | "bool" | "char"))

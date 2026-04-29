@@ -5,7 +5,6 @@
 /// .clone() which returns &str, not String, causing E0308 type mismatch.
 ///
 /// Fix: Detect when .clone() result needs to be String and generate .to_string() instead.
-
 use std::fs;
 use tempfile::tempdir;
 use windjammer::{build_project_ext, CompilationTarget};
@@ -80,8 +79,5 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
     let generated = compile_single_file(source);
     println!("Generated Rust:\n{}", generated);
 
-    assert!(
-        !generated.is_empty(),
-        "Should generate valid Rust code"
-    );
+    assert!(!generated.is_empty(), "Should generate valid Rust code");
 }
