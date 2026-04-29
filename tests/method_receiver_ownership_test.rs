@@ -79,8 +79,8 @@ fn test_method_builder_pattern() {
     "#;
 
     let result = compile_wj_to_rust(src).expect("Should compile");
-    // b is Owned, with_value() takes Owned -> b.with_value() (no clone)
-    assert!(result.contains("b.with_value(42)"));
+    // b is Owned, with_value() — literals may be suffixed (42_i32)
+    assert!(result.contains("b.with_value(42"));
 }
 
 #[test]
@@ -92,7 +92,6 @@ fn test_method_mutating_receiver() {
     "#;
 
     let result = compile_wj_to_rust(src).expect("Should compile");
-    // items is Owned, push() takes &mut self
-    // Should generate: (&mut items).push(5) or similar
-    assert!(result.contains("push(5)"));
+    // items + push: literal may be `5_i32`
+    assert!(result.contains("push(5"));
 }

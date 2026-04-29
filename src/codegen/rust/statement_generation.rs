@@ -35,6 +35,81 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn is_float_numeric_type(t: &Type) -> bool {
+        match t {
+            Type::Float => true,
+            Type::Custom(n) => n == "f32" || n == "f64",
+            _ => false,
+        }
+    }
+
+    fn is_int_numeric_type(t: &Type) -> bool {
+        match t {
+            Type::Int | Type::Int32 | Type::Uint => true,
+            Type::Custom(n) => matches!(
+                n.as_str(),
+                "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
+            ),
+            _ => false,
+        }
+    }
+
+    fn float_type_name(t: &Type) -> &'static str {
+        match t {
+            Type::Custom(n) if n == "f64" => "f64",
+            Type::Float => "f64",
+            _ => "f32",
+        }
+    }
+
+    /// Determine the concrete Rust float type name for a compound assignment target.
+    /// Priority: explicit type annotation → float inference engine → assignment context → inferred type.
+    fn resolve_compound_assign_float_target(&self, target: &Expression) -> Option<&'static str> {
+        // 1. Check local_var_types for explicit type annotation
+        if let Expression::Identifier { name, .. } = target {
+            if let Some(local_ty) = self.local_var_types.get(name) {
+                if Self::is_int_numeric_type(local_ty) {
+                    return None;
+                }
+                if matches!(local_ty, Type::Custom(n) if n == "f32") {
+                    return Some("f32");
+                }
+                if matches!(local_ty, Type::Custom(n) if n == "f64") {
+                    return Some("f64");
+                }
+            }
+        }
+        // 2. Use float inference engine (distinguishes f32 vs f64 precisely)
+        if let Some(fi) = &self.float_inference {
+            use crate::type_inference::FloatType;
+            match fi.get_float_type(target) {
+                FloatType::F32 => return Some("f32"),
+                FloatType::F64 => return Some("f64"),
+                FloatType::Unknown => {}
+            }
+        }
+        // 3. Check the assignment_float_target_type context
+        if let Some(ref aft) = self.assignment_float_target_type {
+            if matches!(aft, Type::Custom(n) if n == "f32") {
+                return Some("f32");
+            }
+            if Self::is_float_numeric_type(aft) {
+                return Some(Self::float_type_name(aft));
+            }
+        }
+        // 4. Infer from target expression type (fallback; may not distinguish f32/f64)
+        let tgt_ty = self.infer_expression_type(target);
+        if let Some(ref t) = tgt_ty {
+            if Self::is_int_numeric_type(t) {
+                return None;
+            }
+            if Self::is_float_numeric_type(t) {
+                return Some(Self::float_type_name(t));
+            }
+        }
+        None
+    }
+
     /// Generate a statement with automatic source tracking
     #[allow(dead_code)]
     pub(super) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
@@ -93,6 +168,28 @@ impl<'ast> CodeGenerator<'ast> {
                                     .is_some_and(|t| self.is_type_copy(t));
                                 if return_type_is_copy && !expr_str.starts_with('*') {
                                     expr_str = format!("*{}", expr_str);
+                                }
+                            }
+                        }
+
+                        // Deref local vars with reference types when returning Copy
+                        // e.g., `let (id, name) = &items[0]; id` → id is &i32, return i32 → *id
+                        // Also handles &mut refs: `let x = n; x` where n: &mut i32, return i32
+                        if let Expression::Identifier { .. } = expr {
+                            let expects_owned = !matches!(
+                                &self.current_function_return_type,
+                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                            );
+                            if expects_owned {
+                                if let Some(
+                                    Type::Reference(inner) | Type::MutableReference(inner),
+                                ) = self.infer_expression_type(expr)
+                                {
+                                    if self.is_type_copy(inner.as_ref())
+                                        && !expr_str.starts_with('*')
+                                    {
+                                        expr_str = format!("*{}", expr_str);
+                                    }
                                 }
                             }
                         }
@@ -179,10 +276,19 @@ impl<'ast> CodeGenerator<'ast> {
                         // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return
                         // Applies to all return types (SaveSlot, Option<String>, etc.), not just String
                         // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
-                        if expr_str.starts_with("&") && !expr_str.ends_with(".clone()") {
-                            if let Some(inner) = self.infer_expression_type(expr) {
-                                if !self.is_type_copy(&inner) {
-                                    expr_str = format!("({}).clone()", expr_str);
+                        if expr_str.starts_with("&")
+                            && !expr_str.starts_with("&mut")
+                            && !expr_str.ends_with(".clone()")
+                        {
+                            let expects_owned = !matches!(
+                                &self.current_function_return_type,
+                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                            );
+                            if expects_owned {
+                                if let Some(inner) = self.infer_expression_type(expr) {
+                                    if !self.is_type_copy(&inner) {
+                                        expr_str = format!("({}).clone()", expr_str);
+                                    }
                                 }
                             }
                         }
@@ -563,7 +669,49 @@ impl<'ast> CodeGenerator<'ast> {
                                                 || field.starts_with("with_")
                                                 || field == "default")
                                         {
-                                            Some(Type::Custom(type_name.to_string()))
+                                            // E0282: For Vec::new() / HashSet::new(), infer element type.
+                                            // Priority: 1) return type  2) forward-scan .push()/.insert()
+                                            if (type_name == "Vec" || type_name == "HashSet")
+                                                && field == "new"
+                                            {
+                                                let elem_from_return =
+                                                    match &self.current_function_return_type {
+                                                        Some(Type::Vec(inner))
+                                                            if type_name == "Vec" =>
+                                                        {
+                                                            Some(inner.as_ref().clone())
+                                                        }
+                                                        Some(Type::Parameterized(base, args))
+                                                            if base == type_name
+                                                                && !args.is_empty() =>
+                                                        {
+                                                            Some(args[0].clone())
+                                                        }
+                                                        _ => None,
+                                                    };
+                                                let elem_from_push = if elem_from_return.is_none() {
+                                                    var_name.and_then(|vn| {
+                                                            self.infer_collection_element_type_from_usage(vn)
+                                                        })
+                                                } else {
+                                                    None
+                                                };
+                                                let elem_type = elem_from_return.or(elem_from_push);
+                                                if let Some(inner) = elem_type {
+                                                    if type_name == "Vec" {
+                                                        Some(Type::Vec(Box::new(inner)))
+                                                    } else {
+                                                        Some(Type::Parameterized(
+                                                            type_name.to_string(),
+                                                            vec![inner],
+                                                        ))
+                                                    }
+                                                } else {
+                                                    Some(Type::Custom(type_name.to_string()))
+                                                }
+                                            } else {
+                                                Some(Type::Custom(type_name.to_string()))
+                                            }
                                         } else {
                                             // Not a constructor — look up return type from signature registry
                                             // e.g., MathHelper::fade(x) → return type is f32
@@ -574,6 +722,52 @@ impl<'ast> CodeGenerator<'ast> {
                                         }
                                     } else {
                                         None
+                                    }
+                                } else if let Expression::Identifier { name: fn_name, .. } =
+                                    *function
+                                {
+                                    // Handle Identifier("Vec::new") path (parser emits this form)
+                                    if fn_name == "Vec::new" || fn_name == "HashSet::new" {
+                                        let collection_name = if fn_name.starts_with("Vec") {
+                                            "Vec"
+                                        } else {
+                                            "HashSet"
+                                        };
+                                        let elem_from_return = match &self
+                                            .current_function_return_type
+                                        {
+                                            Some(Type::Vec(inner)) if collection_name == "Vec" => {
+                                                Some(inner.as_ref().clone())
+                                            }
+                                            Some(Type::Parameterized(base, args))
+                                                if base == collection_name && !args.is_empty() =>
+                                            {
+                                                Some(args[0].clone())
+                                            }
+                                            _ => None,
+                                        };
+                                        let elem_from_push = if elem_from_return.is_none() {
+                                            var_name.and_then(|vn| {
+                                                self.infer_collection_element_type_from_usage(vn)
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        let elem_type = elem_from_return.or(elem_from_push);
+                                        if let Some(inner) = elem_type {
+                                            if collection_name == "Vec" {
+                                                Some(Type::Vec(Box::new(inner)))
+                                            } else {
+                                                Some(Type::Parameterized(
+                                                    collection_name.to_string(),
+                                                    vec![inner],
+                                                ))
+                                            }
+                                        } else {
+                                            Some(Type::Custom(collection_name.to_string()))
+                                        }
+                                    } else {
+                                        self.infer_expression_type(value)
                                     }
                                 } else {
                                     // Simple function call: look up in signature registry
@@ -635,8 +829,28 @@ impl<'ast> CodeGenerator<'ast> {
                         // Without this, if/else branch bodies get `expr;` and infer `()` (E0308).
                         let old_ctx = self.in_expression_context;
                         self.in_expression_context = true;
+
+                        let prev_assign_float = self.assignment_float_target_type.take();
+                        if Self::assignment_target_needs_float_codegen_context(t) {
+                            self.assignment_float_target_type = Some(t.clone());
+                        }
+                        let prev_suppress_turbo = self.suppress_collection_turbofish;
+                        let suppress_turbofish_here = matches!(t, Type::Vec(_))
+                            || matches!(
+                                t,
+                                Type::Parameterized(base, _)
+                                    if base == "HashSet" || base == "HashMap"
+                            );
+                        if suppress_turbofish_here {
+                            self.suppress_collection_turbofish = true;
+                        }
+
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
+
+                        self.suppress_collection_turbofish = prev_suppress_turbo;
+                        self.assignment_float_target_type = prev_assign_float;
+
                         self.in_expression_context = old_ctx;
                         self.coerce_string_literals_to_owned = old_coerce_lit;
                         self.apply_vec_index_let_rhs_fixup(
@@ -671,6 +885,30 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         output.push_str(&value_str);
                     } else {
+                        // E0282: Emit type ascription for collection types.
+                        // Skip when the value's type is better inferred by Rust:
+                        // - Method calls may return a different type than the receiver
+                        //   (e.g., Vec::into_iter() → IntoIter, not Vec)
+                        // - Macro invocations (e.g., vec![1,2,3]) produce values whose
+                        //   element type should be inferred from usage context, not from
+                        //   Windjammer's default numeric types
+                        let type_inferred_from_context = matches!(
+                            value,
+                            Expression::MethodCall { .. } | Expression::MacroInvocation { .. }
+                        );
+                        let needs_collection_ascription_sv = !type_inferred_from_context
+                            && var_name.is_some_and(|vn| {
+                                matches!(
+                                    self.local_var_types.get(vn),
+                                    Some(Type::Vec(_)) | Some(Type::Parameterized(_, _))
+                                )
+                            });
+                        if needs_collection_ascription_sv {
+                            let vn = var_name.unwrap();
+                            let ty = self.local_var_types.get(vn).unwrap().clone();
+                            output.push_str(": ");
+                            output.push_str(&self.type_to_rust(&ty));
+                        }
                         output.push_str(" = ");
                         if needs_mut_ref {
                             output.push_str("&mut ");
@@ -680,6 +918,11 @@ impl<'ast> CodeGenerator<'ast> {
                         // This prevents adding semicolons to if-else branches when used in let bindings
                         let old_ctx = self.in_expression_context;
                         self.in_expression_context = true;
+
+                        let old_suppress = self.suppress_collection_turbofish;
+                        if needs_collection_ascription_sv {
+                            self.suppress_collection_turbofish = true;
+                        }
 
                         // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                         // String literals assigned to variables should become String (not &str)
@@ -729,6 +972,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Restore expression context
                         self.in_expression_context = old_ctx;
+                        self.suppress_collection_turbofish = old_suppress;
                     }
                 } else {
                     // No SmallVec optimization for this variable
@@ -741,8 +985,26 @@ impl<'ast> CodeGenerator<'ast> {
                         let old_ctx = self.in_expression_context;
                         self.in_expression_context = true;
 
+                        let prev_assign_float = self.assignment_float_target_type.take();
+                        if Self::assignment_target_needs_float_codegen_context(t) {
+                            self.assignment_float_target_type = Some(t.clone());
+                        }
+                        let prev_suppress_turbo = self.suppress_collection_turbofish;
+                        let suppress_turbofish_here = matches!(t, Type::Vec(_))
+                            || matches!(
+                                t,
+                                Type::Parameterized(base, _) if base == "HashSet" || base == "HashMap"
+                            );
+                        if suppress_turbofish_here {
+                            self.suppress_collection_turbofish = true;
+                        }
+
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
+
+                        self.suppress_collection_turbofish = prev_suppress_turbo;
+                        self.assignment_float_target_type = prev_assign_float;
+
                         self.apply_vec_index_let_rhs_fixup(
                             var_name,
                             value,
@@ -777,6 +1039,20 @@ impl<'ast> CodeGenerator<'ast> {
                         // Restore expression context
                         self.in_expression_context = old_ctx;
                     } else {
+                        // E0282: Emit type ascription for collection types inferred from
+                        // forward-scanned .push()/.insert() usage
+                        let needs_collection_ascription = var_name.is_some_and(|vn| {
+                            matches!(
+                                self.local_var_types.get(vn),
+                                Some(Type::Vec(_)) | Some(Type::Parameterized(_, _))
+                            )
+                        });
+                        if needs_collection_ascription {
+                            let vn = var_name.unwrap();
+                            let ty = self.local_var_types.get(vn).unwrap().clone();
+                            output.push_str(": ");
+                            output.push_str(&self.type_to_rust(&ty));
+                        }
                         output.push_str(" = ");
                         if needs_mut_ref {
                             output.push_str("&mut ");
@@ -785,6 +1061,11 @@ impl<'ast> CodeGenerator<'ast> {
                         // EXPRESSION CONTEXT: Mark that we're generating a value
                         let old_ctx = self.in_expression_context;
                         self.in_expression_context = true;
+
+                        let old_suppress = self.suppress_collection_turbofish;
+                        if needs_collection_ascription {
+                            self.suppress_collection_turbofish = true;
+                        }
 
                         // WINDJAMMER PHILOSOPHY: Auto-convert mutable string variables
                         // When a mutable variable is initialized with a string literal,
@@ -832,6 +1113,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Restore expression context
                         self.in_expression_context = old_ctx;
+                        self.suppress_collection_turbofish = old_suppress;
                     }
                 }
 
@@ -1029,7 +1311,12 @@ impl<'ast> CodeGenerator<'ast> {
                     // DOGFOODING FIX: Vec indexing returns &T for non-Copy, but return expects T
                     // e.g. return self.slots[idx] where slots: Vec<SaveSlot> → need .clone()
                     // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
-                    if return_str.starts_with("&") && !return_str.ends_with(".clone()") {
+                    // Never apply to &mut … — functions returning &mut T must pass the reference through
+                    // (e.g. return &mut self.items[i], not (&mut self.items[i]).clone()).
+                    if return_str.starts_with("&")
+                        && !return_str.starts_with("&mut")
+                        && !return_str.ends_with(".clone()")
+                    {
                         let expects_owned = !matches!(
                             &self.current_function_return_type,
                             Some(Type::Reference(_)) | Some(Type::MutableReference(_))
@@ -1104,7 +1391,33 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let mut output = self.indent();
                 output.push_str("if ");
-                output.push_str(&self.generate_expression(condition));
+                let cond_str = self.generate_expression(condition);
+                // Auto-deref borrowed bool in if-condition: `if r` where r: &bool → `if *r`
+                let cond_str = if let Expression::Identifier { name, .. } = condition {
+                    if self.inferred_borrowed_params.contains(name.as_str())
+                        || self.borrowed_iterator_vars.contains(name)
+                    {
+                        let is_bool_ref = self
+                            .infer_expression_type(condition)
+                            .as_ref()
+                            .is_some_and(|t| {
+                                matches!(t,
+                                    Type::Reference(inner) | Type::MutableReference(inner)
+                                    if matches!(&**inner, Type::Bool)
+                                )
+                            });
+                        if is_bool_ref && !cond_str.starts_with('*') {
+                            format!("*{}", cond_str)
+                        } else {
+                            cond_str
+                        }
+                    } else {
+                        cond_str
+                    }
+                } else {
+                    cond_str
+                };
+                output.push_str(&cond_str);
                 output.push_str(" {\n");
 
                 // DOGFOODING FIX: Preserve explicit returns in if-without-else
@@ -1348,9 +1661,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // TDD FIX: Detect `if let` pattern and generate `if let` instead of `match`
+        // Guards require full `match` syntax (if-let doesn't support guards in Rust)
         if arms.len() == 2
             && matches!(arms[1].pattern, Pattern::Wildcard)
             && arms[1].guard.is_none()
+            && arms[0].guard.is_none()
         {
             let wildcard_body_is_empty = if let Expression::Block { statements, .. } = arms[1].body
             {
@@ -1423,7 +1738,12 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     format!("&mut {}", &value_str[1..])
                 } else {
-                    format!("{}{}", scrutinee_ref_prefix, value_str)
+                    let base = if value_str.ends_with(".clone()") {
+                        value_str[..value_str.len() - 8].to_string()
+                    } else {
+                        value_str
+                    };
+                    format!("{}{}", scrutinee_ref_prefix, base)
                 };
                 let main_arm = &arms[0];
 
@@ -1465,9 +1785,20 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(var_name.clone(), var_type.clone());
                 }
 
+                // Upgrade pattern bindings to `mut` when the body mutates them
+                let upgraded_pattern = if let Expression::Block { statements, .. } = main_arm.body {
+                    self.upgrade_pattern_mut_bindings(
+                        &main_arm.pattern,
+                        statements.as_slice(),
+                        !scrutinee_ref_prefix.is_empty(),
+                    )
+                } else {
+                    main_arm.pattern.clone()
+                };
+
                 let mut output = self.indent();
                 output.push_str("if let ");
-                output.push_str(&self.generate_pattern(&main_arm.pattern));
+                output.push_str(&self.generate_pattern(&upgraded_pattern));
 
                 if let Some(guard) = &main_arm.guard {
                     output.push_str(" if ");
@@ -1651,7 +1982,12 @@ impl<'ast> CodeGenerator<'ast> {
             } else if p == "&mut " && value_str.starts_with('&') && !value_str.starts_with("&mut") {
                 format!("&mut {}", &value_str[1..])
             } else {
-                format!("{}{}", p, value_str)
+                let base = if value_str.ends_with(".clone()") {
+                    value_str[..value_str.len() - 8].to_string()
+                } else {
+                    value_str
+                };
+                format!("{}{}", p, base)
             }
         } else {
             match_scrutinee_ref_prefix = "";
@@ -1679,7 +2015,36 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if self.inferred_mut_borrowed_params.contains(root_name) {
                         format!("&mut {}", value_str)
                     } else if self.inferred_borrowed_params.contains(root_name) {
-                        format!("&{}", value_str)
+                        // Check if the underlying value type (not the reference) is Copy.
+                        // For `e: &E` the expression type is `&E` (Copy since refs are Copy),
+                        // but we need to know if `E` itself is Copy to decide the prefix:
+                        //   - Copy inner type: use `*e` (deref to get owned Copy value)
+                        //   - Non-Copy inner type: use `e` (let match ergonomics handle it)
+                        let inner_type_is_copy = if root_name == "self" {
+                            self.current_struct_name
+                                .as_ref()
+                                .is_some_and(|sn| self.is_type_copy(&Type::Custom(sn.clone())))
+                        } else {
+                            self.infer_expression_type(value)
+                                .map(|t| match &t {
+                                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                                        self.is_type_copy(inner)
+                                    }
+                                    _ => self.is_type_copy(&t),
+                                })
+                                .unwrap_or(false)
+                        };
+                        if inner_type_is_copy {
+                            if matches!(value, Expression::FieldAccess { .. }) {
+                                value_str
+                            } else {
+                                format!("*{}", value_str)
+                            }
+                        } else {
+                            // Non-Copy type: no prefix needed. `match e` where `e: &Light`
+                            // uses match ergonomics to auto-deref.
+                            value_str
+                        }
                     } else {
                         value_str
                     }
@@ -1762,10 +2127,43 @@ impl<'ast> CodeGenerator<'ast> {
         );
 
         let scrutinee_type_has_ref = self.expression_type_contains_reference(value);
+        // When the scrutinee has been dereferenced (`*self`, `*e`, etc.) for a Copy type,
+        // the match operates on an owned value and pattern bindings are owned — NOT refs.
+        // Generalized from the original `value_str == "*self"` to handle all Copy params.
+        let owned_bindings_from_copy_deref = if let Some(deref_name) = value_str.strip_prefix('*') {
+            if deref_name == "self" {
+                self.current_struct_name
+                    .as_ref()
+                    .is_some_and(|sn| self.is_type_copy(&Type::Custom(sn.clone())))
+            } else if let Some(ty) = self.infer_expression_type(value) {
+                let inner = match &ty {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(inner) && !Self::type_contains_reference(inner)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
 
         for arm in arms {
+            // Upgrade pattern bindings to `mut` when the arm body mutates them
+            let body_stmts: &[&Statement<'ast>] =
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements.as_slice()
+                } else {
+                    &[]
+                };
+            let upgraded_pattern = self.upgrade_pattern_mut_bindings(
+                &arm.pattern,
+                body_stmts,
+                !match_scrutinee_ref_prefix.is_empty(),
+            );
+
             output.push_str(&self.indent());
-            output.push_str(&self.generate_pattern(&arm.pattern));
+            output.push_str(&self.generate_pattern(&upgraded_pattern));
 
             if let Some(guard) = &arm.guard {
                 output.push_str(" if ");
@@ -1784,7 +2182,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.match_arm_bindings.insert(var.clone());
             }
 
-            let added_borrowed: Vec<String> = if match_binds_refs || scrutinee_type_has_ref {
+            let added_borrowed: Vec<String> = if (match_binds_refs || scrutinee_type_has_ref)
+                && !owned_bindings_from_copy_deref
+            {
                 bound_vars.iter().cloned().collect()
             } else {
                 Vec::new()
@@ -2163,6 +2563,34 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = tgt_ty.clone();
             }
             let mut value_str = self.generate_expression(value);
+
+            // Mixed int/float compound assignment: `f32 += i32` → `f32 += i32 as f32`
+            if matches!(
+                op,
+                CompoundOp::Add
+                    | CompoundOp::Sub
+                    | CompoundOp::Mul
+                    | CompoundOp::Div
+                    | CompoundOp::Mod
+            ) {
+                let val_ty = self.infer_expression_type(value);
+                if let Some(v) = &val_ty {
+                    if Self::is_int_numeric_type(v) {
+                        // Determine the concrete float target from the assignment context
+                        let float_name = self.resolve_compound_assign_float_target(target);
+                        if let Some(fname) = float_name {
+                            if value_str.contains(" as ")
+                                || matches!(value, Expression::Binary { .. })
+                            {
+                                value_str = format!("({}) as {}", value_str, fname);
+                            } else {
+                                value_str = format!("{} as {}", value_str, fname);
+                            }
+                        }
+                    }
+                }
+            }
+
             self.assignment_float_target_type = prev_assign_ty;
 
             // String += String doesn't work in Rust (needs String += &str).
@@ -2291,8 +2719,36 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         self.assignment_float_target_type = tgt_ty.clone();
                     }
-                    let right_str = self.generate_expression(right);
+                    let mut right_str = self.generate_expression(right);
+
+                    // Mixed int/float: cast RHS integer to target float type
+                    if matches!(
+                        op,
+                        BinaryOp::Add
+                            | BinaryOp::Sub
+                            | BinaryOp::Mul
+                            | BinaryOp::Div
+                            | BinaryOp::Mod
+                    ) {
+                        let rhs_ty = self.infer_expression_type(right);
+                        if let Some(v) = &rhs_ty {
+                            if Self::is_int_numeric_type(v) {
+                                let tgt_float = self.resolve_compound_assign_float_target(target);
+                                if let Some(float_name) = tgt_float {
+                                    if right_str.contains(" as ")
+                                        || matches!(&**right, Expression::Binary { .. })
+                                    {
+                                        right_str = format!("({}) as {}", right_str, float_name);
+                                    } else {
+                                        right_str = format!("{} as {}", right_str, float_name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     self.assignment_float_target_type = prev_assign_ty;
+
                     output.push_str(&right_str);
                     output.push_str(";\n");
                     return output;
@@ -2392,6 +2848,7 @@ impl<'ast> CodeGenerator<'ast> {
         match pattern {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
+            Pattern::MutBinding(name) => format!("mut {}", name),
             Pattern::Reference(inner) => format!("&{}", self.pattern_to_rust(inner)),
             Pattern::Ref(name) => format!("ref {}", name),
             Pattern::RefMut(name) => format!("ref mut {}", name),
@@ -2439,6 +2896,7 @@ impl<'ast> CodeGenerator<'ast> {
         match pattern {
             Pattern::Wildcard => "_".to_string(),
             Pattern::Identifier(name) => name.clone(),
+            Pattern::MutBinding(name) => format!("mut {}", name),
             Pattern::Reference(inner) => format!("&{}", self.generate_pattern(inner)),
             Pattern::Ref(name) => format!("ref {}", name),
             Pattern::RefMut(name) => format!("ref mut {}", name),
@@ -2495,7 +2953,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         use crate::parser::EnumPatternBinding;
         match pattern {
-            Pattern::Identifier(name) => {
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 bindings.insert(name.clone());
             }
             Pattern::Reference(inner) => {
@@ -2531,6 +2989,75 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Pattern::Wildcard | Pattern::Literal(_) => {}
+        }
+    }
+
+    /// Upgrade pattern bindings to `mut` when the body mutates them.
+    /// E.g. `if let Some(v) = opt { v.push(1) }` → `if let Some(mut v) = ...`
+    /// When `scrutinee_is_ref` is true, use `ref mut` instead of `mut` (borrowed context).
+    pub(super) fn upgrade_pattern_mut_bindings<'s>(
+        &self,
+        pattern: &Pattern<'s>,
+        body_stmts: &[&Statement<'s>],
+        scrutinee_is_ref: bool,
+    ) -> Pattern<'s> {
+        use crate::parser::EnumPatternBinding;
+        match pattern {
+            Pattern::Identifier(name) => {
+                let is_mutated = body_stmts.iter().any(|stmt| {
+                    self.statement_mutates_variable_field(stmt, name)
+                        || (scrutinee_is_ref
+                            && self.statement_nonreadonly_method_call_on_var(stmt, name))
+                });
+                if is_mutated {
+                    if scrutinee_is_ref {
+                        Pattern::RefMut(name.clone())
+                    } else {
+                        Pattern::MutBinding(name.clone())
+                    }
+                } else {
+                    pattern.clone()
+                }
+            }
+            Pattern::EnumVariant(variant, binding) => {
+                let new_binding = match binding {
+                    EnumPatternBinding::Single(name) => {
+                        let is_mutated = body_stmts.iter().any(|stmt| {
+                            self.statement_mutates_variable_field(stmt, name)
+                                || (scrutinee_is_ref
+                                    && self.statement_nonreadonly_method_call_on_var(stmt, name))
+                        });
+                        if is_mutated {
+                            if scrutinee_is_ref {
+                                EnumPatternBinding::Tuple(vec![Pattern::RefMut(name.clone())])
+                            } else {
+                                EnumPatternBinding::Tuple(vec![Pattern::MutBinding(name.clone())])
+                            }
+                        } else {
+                            binding.clone()
+                        }
+                    }
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let new_patterns: Vec<Pattern<'s>> = patterns
+                            .iter()
+                            .map(|p| {
+                                self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref)
+                            })
+                            .collect();
+                        EnumPatternBinding::Tuple(new_patterns)
+                    }
+                    other => other.clone(),
+                };
+                Pattern::EnumVariant(variant.clone(), new_binding)
+            }
+            Pattern::Tuple(patterns) => {
+                let new_patterns: Vec<Pattern<'s>> = patterns
+                    .iter()
+                    .map(|p| self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref))
+                    .collect();
+                Pattern::Tuple(new_patterns)
+            }
+            _ => pattern.clone(),
         }
     }
 
@@ -2690,6 +3217,21 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(super) fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
+        // When the scrutinee evaluates to a Copy type (or &CopyType where
+        // CopyType has no inner references), match ergonomics auto-copy the
+        // value, so pattern bindings are owned — not refs. Skip ONLY for
+        // types without inner references (e.g. a Copy enum with i32 payloads,
+        // NOT Option<&str> which borrows through the reference).
+        if let Some(ty) = self.infer_expression_type(expr) {
+            let inner = match &ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            if self.is_type_copy(inner) && !Self::type_contains_reference(inner) {
+                return false;
+            }
+        }
+
         match expr {
             Expression::Unary {
                 op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
@@ -2746,8 +3288,11 @@ impl<'ast> CodeGenerator<'ast> {
     fn type_contains_reference(ty: &Type) -> bool {
         match ty {
             Type::Reference(_) | Type::MutableReference(_) => true,
-            Type::Option(inner) => Self::type_contains_reference(inner),
-            Type::Result(ok, _err) => Self::type_contains_reference(ok),
+            Type::Option(inner) | Type::Vec(inner) => Self::type_contains_reference(inner),
+            Type::Result(ok, err) => {
+                Self::type_contains_reference(ok) || Self::type_contains_reference(err)
+            }
+            Type::Tuple(elems) => elems.iter().any(Self::type_contains_reference),
             _ => false,
         }
     }
@@ -2775,6 +3320,23 @@ impl<'ast> CodeGenerator<'ast> {
             "&mut "
         } else if self.inferred_borrowed_params.contains(root) {
             "&"
+        } else if root == "self" {
+            let self_is_mut_borrowed = self.current_function_params.iter().any(|p| {
+                p.name == "self"
+                    && matches!(p.ownership, crate::parser::OwnershipHint::Mut)
+            });
+            if self_is_mut_borrowed {
+                return "&mut ";
+            }
+            let self_is_borrowed = self.current_function_params.iter().any(|p| {
+                p.name == "self"
+                    && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+            });
+            if self_is_borrowed {
+                "&"
+            } else {
+                ""
+            }
         } else {
             ""
         }
@@ -2791,6 +3353,13 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(arm) = some_arm {
                 if self.option_match_needs_mut_scrutinee_for_some_arm(arm, value) {
                     return "&mut ";
+                }
+            }
+            // When the Option's inner type is Copy and the arm body doesn't mutate
+            // the binding, no `&` prefix is needed — Option<Copy> auto-copies.
+            if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
+                if self.is_type_copy(&inner) {
+                    return "";
                 }
             }
         }

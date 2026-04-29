@@ -134,7 +134,6 @@ fn test_type_registry_fixes_import_paths() {
 }
 
 #[test]
-#[ignore] // Will enable after TypeRegistry is fully integrated
 fn test_type_registry_handles_nested_modules() {
     // Test that TypeRegistry works with nested module structures
     // e.g., math/vec2.wj, rendering/color.wj

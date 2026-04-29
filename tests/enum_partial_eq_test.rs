@@ -78,7 +78,17 @@ fn test_enum_conservative_partialeq() {
         .iter()
         .position(|l| l.contains("struct Vec3"))
         .unwrap();
-    let vec3_derive = lines[vec3_idx - 1];
+    // Search backwards from struct line for #[derive(
+    let vec3_derive = (0..vec3_idx)
+        .rev()
+        .find_map(|i| {
+            if lines[i].contains("#[derive(") {
+                Some(lines[i])
+            } else {
+                None
+            }
+        })
+        .unwrap_or("");
     assert!(
         vec3_derive.contains("PartialEq"),
         "Vec3 should derive PartialEq (f32 implements PartialEq): {}",
@@ -86,12 +96,20 @@ fn test_enum_conservative_partialeq() {
     );
 
     // Command enum is CONSERVATIVE - doesn't derive PartialEq for custom type variants
-    // This is GOOD behavior - safe by default, prevents errors
     let enum_idx = lines
         .iter()
         .position(|l| l.contains("enum Command"))
         .unwrap();
-    let enum_derive = lines[enum_idx - 1];
+    let enum_derive = (0..enum_idx)
+        .rev()
+        .find_map(|i| {
+            if lines[i].contains("#[derive(") {
+                Some(lines[i])
+            } else {
+                None
+            }
+        })
+        .unwrap_or("");
     // Conservative approach: Skip PartialEq when variants contain custom types (even if they support it)
     // This prevents compilation errors and is safer
 
@@ -123,15 +141,22 @@ fn test_enum_without_f32_has_partialeq() {
     let generated = result.unwrap();
 
     // Point should have PartialEq (only i32 fields)
-    let point_derive = generated
-        .lines()
-        .find(|line| {
-            line.contains("#[derive(")
-                && generated
-                    .lines()
-                    .skip_while(|l| l != line)
-                    .nth(1)
-                    .is_some_and(|l| l.contains("struct Point"))
+    // Search for #[derive( line followed by struct Point within next 3 lines
+    // (there may be #[repr(C)] between them)
+    let lines: Vec<&str> = generated.lines().collect();
+    let point_derive = lines
+        .iter()
+        .enumerate()
+        .find_map(|(i, line)| {
+            if line.contains("#[derive(")
+                && lines[i + 1..std::cmp::min(i + 4, lines.len())]
+                    .iter()
+                    .any(|l| l.contains("struct Point"))
+            {
+                Some(*line)
+            } else {
+                None
+            }
         })
         .unwrap_or("");
     assert!(
@@ -140,15 +165,19 @@ fn test_enum_without_f32_has_partialeq() {
     );
 
     // Shape enum should have PartialEq (all variants support it)
-    let enum_derive = generated
-        .lines()
-        .find(|line| {
-            line.contains("#[derive(")
-                && generated
-                    .lines()
-                    .skip_while(|l| l != line)
-                    .nth(1)
-                    .is_some_and(|l| l.contains("enum Shape"))
+    let enum_derive = lines
+        .iter()
+        .enumerate()
+        .find_map(|(i, line)| {
+            if line.contains("#[derive(")
+                && lines[i + 1..std::cmp::min(i + 4, lines.len())]
+                    .iter()
+                    .any(|l| l.contains("enum Shape"))
+            {
+                Some(*line)
+            } else {
+                None
+            }
         })
         .unwrap_or("");
     assert!(

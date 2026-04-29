@@ -202,7 +202,6 @@ impl Vector {
 }
 
 #[test]
-#[ignore] // TODO: Implement trait method ownership inference from impl bodies (advanced feature)
 fn test_self_inference_trait_methods() {
     let code = r#"
 pub trait Drawable {

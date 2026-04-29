@@ -142,12 +142,18 @@ fn main() {
 }
 "#;
     let rust = compile_to_rust(source).expect("compile");
+    // Cost is Copy, so `match self.cost` through `&self` auto-copies the value.
+    // Valid strategies: bare `self.cost` (Copy), `&self.cost`, or `self.cost.clone()`.
+    let has_bare = rust.contains("match self.cost");
+    let has_ref = rust.contains("&self.cost") || rust.contains("match &");
+    let has_clone = rust.contains("self.cost.clone()");
     assert!(
-        rust.contains("&self.cost") || rust.contains("match &"),
-        "Enum variant behind borrowed field needs &scrutinee: {}",
+        has_bare || has_ref || has_clone,
+        "Enum variant behind borrowed field needs valid scrutinee strategy: {}",
         rust
     );
-    assert!(rust_compiles(&rust), "Generated Rust must compile");
+    assert!(!rust.contains("*self.cost"), "Copy field should not be dereferenced: {}", rust);
+    assert!(rust_compiles(&rust), "Generated Rust must compile: {}", rust);
 }
 
 #[test]

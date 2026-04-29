@@ -99,7 +99,7 @@ fn test_match_arm_binding_registered() {
     let src = r#"
 pub fn process(opt: Option<i32>) -> i32 {
     match opt {
-        Some(x) => x + 1
+        Some(x) => x + 1,
         None => 0
     }
 }

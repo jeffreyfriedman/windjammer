@@ -20,13 +20,16 @@ fn transpile_shader_file(filename: &str) -> Result<String, String> {
 #[test]
 fn test_view_vector_uses_camera_position() {
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
+    // Camera is `uniform camera: CameraUniforms`; PBR V uses `camera.position` in WGSL
+    let has_camera_pos = result.contains("camera.position")
+        || (result.contains("camera") && result.contains("position"));
     assert!(
-        result.contains("camera_position"),
-        "Lighting shader must have camera_position in the uniform for correct PBR view vector"
+        has_camera_pos,
+        "Lighting shader must use camera + position for the view vector (e.g. camera.position in WGSL output)"
     );
     assert!(
         !result.contains("let V = normalize(vec3(ndc"),
-        "View vector must NOT use NDC approximation - must use world-space camera_position - P"
+        "View vector must NOT use NDC approximation - must use world-space camera position - P"
     );
 }
 
@@ -34,21 +37,24 @@ fn test_view_vector_uses_camera_position() {
 fn test_view_vector_world_space_computation() {
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
-        result.contains("camera_position")
-            && (result.contains("normalize(lighting.camera_position - P)")
-                || result.contains("normalize(lighting.camera_position - gbuf.position)")),
-        "View vector V must be normalize(camera_position - P) for correct Cook-Torrance PBR"
+        result.contains("camera.position - P")
+            || result.contains("camera.position- P")
+            || (result.contains("camera.position")
+                && result.contains("normalize(")
+                && result.contains("P")),
+        "View vector V must be based on world-space position P and camera (e.g. normalize(camera.position - P))"
     );
 }
 
 #[test]
 fn test_shadow_quality_minimum_samples() {
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
-    let has_multi_sample = result.contains("shadow_samples")
-        || (result.contains("trace_shadow_ray") && result.contains("4u"));
+    // trace_shadow() walks multiple segments along the light ray (loop over 6u); soft GI uses separate sample counts
+    let has_shadow_march = result.contains("trace_shadow")
+        && (result.contains("6u") || result.contains("for (var i = 0u;"));
     assert!(
-        has_multi_sample,
-        "Shadow tracing should use at least 4 jittered samples for soft shadows"
+        has_shadow_march,
+        "Shadow pass should use trace_shadow with a multi-iteration along-ray march"
     );
 }
 

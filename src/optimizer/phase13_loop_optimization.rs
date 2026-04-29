@@ -161,6 +161,7 @@ fn optimize_loops_in_item<'ast>(
                     associated_types: impl_block.associated_types.clone(),
                     functions: new_functions,
                     decorators: impl_block.decorators.clone(),
+                    is_extern: impl_block.is_extern,
                 },
                 location: location.clone(),
             }

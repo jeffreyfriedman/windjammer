@@ -119,13 +119,14 @@ impl Factory for Thing {
     let result = compile_windjammer_code(code);
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
+    // In Rust, trait definition uses `-> Self`, impl may use `-> Self` or `-> Thing`
     assert!(
-        g.contains("fn create() -> Thing"),
-        "associated function should not add self; got:\n{}",
+        g.contains("fn create() -> Self") || g.contains("fn create() -> Thing"),
+        "associated function should have no self receiver; got:\n{}",
         g
     );
     assert!(
-        !g.contains("fn create(&self) -> Thing"),
+        !g.contains("fn create(&self)"),
         "should not infer &self for create() -> Self; got:\n{}",
         g
     );

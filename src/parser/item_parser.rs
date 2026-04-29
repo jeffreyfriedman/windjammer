@@ -7,10 +7,6 @@ use crate::lexer::Token;
 use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
-/// Whether a type structurally mentions `Self` (the trait receiver type).
-/// Used for abstract trait methods with only `self`: those that return `Self` (or `Option<Self>`, etc.)
-/// need a by-value receiver in Rust; getter-style methods like `fn flags(self) -> bool` must stay
-/// `Inferred` so the analyzer can emit `&self` and trait objects (`dyn Trait`) remain object-safe.
 fn type_structurally_contains_self(ty: &Type) -> bool {
     match ty {
         Type::Custom(name) if name == "Self" => true,
@@ -55,7 +51,10 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock<'static>, String> {
+    pub(crate) fn parse_impl(
+        &mut self,
+        is_extern_block: bool,
+    ) -> Result<ImplBlock<'static>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
@@ -240,6 +239,7 @@ impl Parser {
 
             self.expect(Token::Fn)?;
             let mut func = self.parse_function()?;
+            func.is_extern = is_extern_block;
             func.is_pub = is_pub;
             func.is_async = is_async;
             func.decorators = decorators;
@@ -260,6 +260,7 @@ impl Parser {
             associated_types,
             functions,
             decorators: Vec::new(),
+            is_extern: is_extern_block,
         })
     }
 
@@ -415,6 +416,11 @@ impl Parser {
             {
                 parameters[0].ownership = OwnershipHint::Owned;
             }
+
+            // Non-Self returns with abstract trait methods: keep Inferred.
+            // The analyzer will determine &self, &mut self, or self based on
+            // the implementation bodies. This avoids object-safety issues
+            // (bare `self` prevents dyn Trait usage).
 
             methods.push(TraitMethod {
                 name: method_name,
@@ -923,7 +929,7 @@ impl Parser {
     // TYPE PARSING (used by multiple sections above)
     // ------------------------------------------------------------------------
 
-    pub(crate) fn parse_struct(&mut self) -> Result<StructDecl<'static>, String> {
+    pub(crate) fn parse_struct(&mut self, is_extern: bool) -> Result<StructDecl<'static>, String> {
         // Token::Struct already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
@@ -939,6 +945,38 @@ impl Parser {
 
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
+
+        // Check for tuple struct: struct Name(T1, T2)
+        if self.current_token() == &Token::LParen {
+            self.advance(); // consume '('
+            let mut tuple_types = Vec::new();
+            while self.current_token() != &Token::RParen {
+                let is_pub = if self.current_token() == &Token::Pub {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let _ = is_pub; // visibility tracked but not used in tuple field types
+                let field_type = self.parse_type()?;
+                tuple_types.push(field_type);
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                }
+            }
+            self.expect(Token::RParen)?;
+            return Ok(StructDecl {
+                name,
+                is_pub: false,
+                is_extern,
+                type_params,
+                where_clause,
+                fields: Vec::new(),
+                tuple_fields: Some(tuple_types),
+                decorators: Vec::new(),
+                doc_comment: None,
+            });
+        }
 
         // Check for unit struct: struct Name;
         let fields = if self.current_token() == &Token::Semicolon {
@@ -1006,9 +1044,11 @@ impl Parser {
         Ok(StructDecl {
             name,
             is_pub: false, // Will be set by parse_item() if pub keyword present
+            is_extern,
             type_params,
             where_clause,
             fields,
+            tuple_fields: None,
             decorators: Vec::new(),
             doc_comment: None, // Set by parse_item if doc comments present
         })

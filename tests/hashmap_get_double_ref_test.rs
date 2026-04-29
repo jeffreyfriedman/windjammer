@@ -108,7 +108,6 @@ pub fn get_values(map: &HashMap<string, i32>) -> Vec<i32> {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Pre-existing bug - owned String parameters don't get & added
 fn test_hashmap_get_with_owned_key() {
     // Test Case 2: HashMap.get() with owned String key
     let code = r#"

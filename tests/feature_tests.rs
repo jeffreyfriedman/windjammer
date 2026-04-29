@@ -115,8 +115,12 @@ fn sign(x: int) -> string {
     if x > 0 { "positive" } else { "negative" }
 }
 "#;
-    // Check for the if/else logic (formatting may vary)
-    compile_and_check(source, &["if x > 0", "\"positive\"", "\"negative\""]);
+    let rust = compile_and_check(source, &["\"positive\"", "\"negative\""]);
+    assert!(
+        rust.contains("if x > 0") || rust.contains("if (x as i64) > 0_i64"),
+        "Expected if condition with x > 0 in:\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -335,9 +339,14 @@ fn countdown(n: int) {
     }
 }
 "#;
-    // Phase 5 optimization: n = n - 1 becomes n -= 1
-    // Note: &mut parameters auto-deref for assignments, so no * needed
-    compile_and_check(source, &["while n > 0", "n -= 1"]);
+    let rust = compile_and_check(source, &["n -= 1"]);
+    assert!(
+        rust.contains("while n > 0")
+            || rust.contains("while (n as i64) > 0_i64")
+            || rust.contains("while *n > 0"),
+        "Expected while condition with n > 0 in:\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -417,7 +426,12 @@ fn abs(x: int) -> int {
     }
 }
 "#;
-    compile_and_check(source, &["if x < 0", "-x", "else"]);
+    let rust = compile_and_check(source, &["-x", "else"]);
+    assert!(
+        rust.contains("if x < 0") || rust.contains("if (x as i64) < 0_i64"),
+        "Expected if condition with x < 0 in:\n{}",
+        rust
+    );
 }
 
 #[test]
@@ -498,7 +512,12 @@ fn coords() -> (int, int) {
     (0, 0)
 }
 "#;
-    compile_and_check(source, &["(i64, i64)", "(0, 0)"]);
+    let rust = compile_and_check(source, &["(i64, i64)"]);
+    assert!(
+        rust.contains("(0, 0)") || rust.contains("(0_i64, 0_i64)"),
+        "Expected tuple literal in:\n{}",
+        rust
+    );
 }
 
 #[test]

@@ -49,10 +49,14 @@ impl CodeGenerator<'_> {
     }
 
     pub(super) fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
-        let has_trait_object_field = struct_
-            .fields
-            .iter()
-            .any(|f| self.type_contains_trait_object(&f.field_type));
+        // For tuple structs, check tuple_fields instead of named fields
+        let all_types: Vec<&Type> = if let Some(ref tuple_fields) = struct_.tuple_fields {
+            tuple_fields.iter().collect()
+        } else {
+            struct_.fields.iter().map(|f| &f.field_type).collect()
+        };
+
+        let has_trait_object_field = all_types.iter().any(|t| self.type_contains_trait_object(t));
 
         let mut traits = if has_trait_object_field {
             vec![]
@@ -60,23 +64,47 @@ impl CodeGenerator<'_> {
             vec!["Debug".to_string(), "Clone".to_string()]
         };
 
-        if !has_trait_object_field && self.all_fields_are_copy(&struct_.fields) {
+        let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
+        if !has_trait_object_field && all_copy {
             traits.push("Copy".to_string());
         }
 
         if self.all_fields_are_partial_eq(&struct_.fields) {
-            traits.push("PartialEq".to_string());
+            // For tuple structs, check tuple field types directly
+            let partial_eq_ok = if struct_.tuple_fields.is_some() {
+                all_types.iter().all(|t| self.is_partial_eq_type(t))
+            } else {
+                true
+            };
+            if partial_eq_ok {
+                traits.push("PartialEq".to_string());
 
-            if self.all_fields_are_eq(&struct_.fields) {
-                traits.push("Eq".to_string());
+                let eq_ok = if struct_.tuple_fields.is_some() {
+                    all_types.iter().all(|t| self.is_eq_type(t))
+                } else {
+                    self.all_fields_are_eq(&struct_.fields)
+                };
+                if eq_ok {
+                    traits.push("Eq".to_string());
 
-                if self.all_fields_are_hashable(&struct_.fields) {
-                    traits.push("Hash".to_string());
+                    let hash_ok = if struct_.tuple_fields.is_some() {
+                        all_types.iter().all(|t| self.is_hashable_type(t))
+                    } else {
+                        self.all_fields_are_hashable(&struct_.fields)
+                    };
+                    if hash_ok {
+                        traits.push("Hash".to_string());
+                    }
                 }
             }
         }
 
-        if self.all_fields_have_default(&struct_.fields) {
+        let default_ok = if struct_.tuple_fields.is_some() {
+            all_types.iter().all(|t| self.has_default(t))
+        } else {
+            self.all_fields_have_default(&struct_.fields)
+        };
+        if default_ok {
             traits.push("Default".to_string());
         }
 
@@ -154,12 +182,6 @@ impl CodeGenerator<'_> {
                 break;
             }
         }
-    }
-
-    fn all_fields_are_copy(&self, fields: &[crate::parser::StructField]) -> bool {
-        fields
-            .iter()
-            .all(|field| self.is_copy_type_with_registry(&field.field_type))
     }
 
     /// TDD FIX: Check if a type is Copy, including user-defined types with @derive(Copy)

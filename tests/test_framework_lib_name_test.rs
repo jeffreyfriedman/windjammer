@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "Flaky in CI - Windows temp directory/file lock issues during Cargo.toml modification"]
+#[ignore = "wj test: test package build fails with E0432 (my_game_core not linked in test harness) — not the lib.rs `pub mod mod` issue fixed in main.rs/test_runner.rs"]
 fn test_library_uses_correct_lib_name() {
     let test_dir = std::env::temp_dir().join(format!(
         "wj_test_lib_name_{}_{}",

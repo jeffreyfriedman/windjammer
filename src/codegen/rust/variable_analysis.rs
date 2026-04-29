@@ -10,6 +10,8 @@
 //! - Iteration borrow semantics
 //! - Self-reference detection for closures
 
+use crate::analyzer::OwnershipMode;
+use crate::codegen::rust::ast_utilities;
 use crate::codegen::rust::pattern_analysis;
 use crate::codegen::rust::self_analysis;
 use crate::parser::*;
@@ -40,6 +42,49 @@ impl<'ast> CodeGenerator<'ast> {
         let mut counts: HashMap<String, usize> = HashMap::new();
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
         self.precompute_for_loop_borrows_walk(body, 0, &counts);
+        self.mark_for_loop_borrow_when_iterable_used_after_siblings(body);
+    }
+
+    /// When `for x in items` is followed (in the same block) by statements that use `items`,
+    /// the loop must not move the collection — same need as for sequential `for` loops.
+    fn mark_for_loop_borrow_when_iterable_used_after_siblings(
+        &mut self,
+        stmts: &[&'ast Statement<'ast>],
+    ) {
+        for (i, stmt) in stmts.iter().enumerate() {
+            if let Statement::For { iterable, .. } = stmt {
+                if let Expression::Identifier { name, .. } = iterable {
+                    if Self::variable_used_in_statements(&stmts[i + 1..], name) {
+                        self.for_loop_borrow_needed.insert(name.clone());
+                    }
+                }
+            }
+            match stmt {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.mark_for_loop_borrow_when_iterable_used_after_siblings(then_block);
+                    if let Some(e) = else_block {
+                        self.mark_for_loop_borrow_when_iterable_used_after_siblings(e);
+                    }
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    self.mark_for_loop_borrow_when_iterable_used_after_siblings(body);
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.mark_for_loop_borrow_when_iterable_used_after_siblings(statements);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     fn count_for_loop_iterable_identifiers(
@@ -989,7 +1034,11 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    fn statement_mutates_variable_field(&self, stmt: &Statement, var_name: &str) -> bool {
+    pub(super) fn statement_mutates_variable_field(
+        &self,
+        stmt: &Statement,
+        var_name: &str,
+    ) -> bool {
         match stmt {
             Statement::Assignment {
                 target,
@@ -997,6 +1046,12 @@ impl<'ast> CodeGenerator<'ast> {
                 compound_op,
                 ..
             } => {
+                // Direct reassignment: `x = expr` requires `let mut x`
+                if let Expression::Identifier { name, .. } = target {
+                    if name == var_name {
+                        return true;
+                    }
+                }
                 if self.expression_is_field_of_variable(target, var_name) {
                     return true;
                 }
@@ -1038,8 +1093,136 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Return {
                 value: Some(expr), ..
             } => self.expression_mutates_variable_field(expr, var_name),
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Some(g) = arm.guard {
+                    if self.expression_mutates_variable_field(g, var_name) {
+                        return true;
+                    }
+                }
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements
+                        .iter()
+                        .any(|s| self.statement_mutates_variable_field(s, var_name))
+                } else {
+                    self.expression_mutates_variable_field(arm.body, var_name)
+                }
+            }),
             _ => false,
         }
+    }
+
+    /// When matching on `&mut slots[i]`, a call `x.foo()` is a write through the borrow unless
+    /// `foo` is a known `&self` stdlib API. User methods may still lower to `&self`, but we need
+    /// `ref mut x` so updates reach the [`Vec`] element (see mutability_complete_test).
+    pub(super) fn statement_nonreadonly_method_call_on_var(
+        &self,
+        stmt: &Statement,
+        var_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_nonreadonly_method_call_on_var(expr, var_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.statement_nonreadonly_method_call_on_var(s, var_name)
+                }) || else_block.as_ref().is_some_and(|block| {
+                    block
+                        .iter()
+                        .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
+                })
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name)),
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name)),
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Some(g) = arm.guard {
+                    if self.expression_nonreadonly_method_call_on_var(g, var_name) {
+                        return true;
+                    }
+                }
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements
+                        .iter()
+                        .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
+                } else {
+                    self.expression_nonreadonly_method_call_on_var(arm.body, var_name)
+                }
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_nonreadonly_method_call_on_var(
+        &self,
+        expr: &Expression,
+        var_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == var_name {
+                        return !crate::method_registry::is_known_readonly_method(method);
+                    }
+                }
+                false
+            }
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_nonreadonly_method_call_on_var(s, var_name)
+            }),
+            _ => false,
+        }
+    }
+
+    /// `f(&mut v)` in the source or codegen requires `v` to be a mutable binding. Resolve the
+    /// callee's [SignatureRegistry] entry and see if any argument position is [MutBorrowed] for
+    /// this identifier (no hardcoded method names).
+    fn call_passes_var_as_mut_borrowed(
+        &self,
+        function: &Expression,
+        arguments: &[(Option<String>, &Expression)],
+        var_name: &str,
+    ) -> bool {
+        let func_name = ast_utilities::extract_function_name(function);
+        if func_name.is_empty() {
+            return false;
+        }
+        if self.signature_registry.has_collision(&func_name) {
+            return false;
+        }
+        let Some(sig) = self.signature_registry.get_signature(&func_name) else {
+            return false;
+        };
+        for (i, (_label, arg)) in arguments.iter().enumerate() {
+            let pidx = if sig.has_self_receiver {
+                i.saturating_add(1)
+            } else {
+                i
+            };
+            let Some(&OwnershipMode::MutBorrowed) = sig.param_ownership.get(pidx) else {
+                continue;
+            };
+            let matches_var = |e: &Expression| match e {
+                Expression::Identifier { name, .. } => name == var_name,
+                Expression::Unary {
+                    op: crate::parser::UnaryOp::MutRef,
+                    operand,
+                    ..
+                } => matches!(&**operand, Expression::Identifier { name, .. } if name == var_name),
+                _ => false,
+            };
+            if matches_var(arg) {
+                return true;
+            }
+        }
+        false
     }
 
     fn expression_is_field_of_variable(&self, expr: &Expression, var_name: &str) -> bool {
@@ -1129,16 +1312,32 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_mutates_variable_field(left, var_name)
                     || self.expression_mutates_variable_field(right, var_name)
             }
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, arg)| self.expression_mutates_variable_field(arg, var_name)),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if self.call_passes_var_as_mut_borrowed(function, arguments, var_name) {
+                    return true;
+                }
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expression_mutates_variable_field(arg, var_name))
+            }
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|stmt| self.statement_mutates_variable_field(stmt, var_name)),
             Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
                 self.expression_mutates_variable_field(expr, var_name)
             }
-            Expression::Unary { operand, .. } => {
+            Expression::Unary { op, operand, .. } => {
+                if matches!(op, crate::parser::UnaryOp::MutRef) {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        if name == var_name {
+                            return true;
+                        }
+                    }
+                }
                 self.expression_mutates_variable_field(operand, var_name)
             }
             _ => false,
@@ -1440,5 +1639,191 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => VariableUsage::NotUsed,
         }
+    }
+
+    /// Forward-scan the current function body for `.push()` / `.insert()` calls on a variable
+    /// to infer the collection element type for `Vec::new()` / `HashSet::new()` declarations.
+    /// Returns the inferred element `Type` if found.
+    pub(super) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
+        if let Some(ty) =
+            self.scan_statements_for_struct_literal_vec_binding(var_name, &self.current_function_body)
+        {
+            return Some(ty);
+        }
+        self.scan_statements_for_collection_usage(var_name, &self.current_function_body)
+    }
+
+    /// When `data` is moved into `Struct { field: data, ... }` and `field` is `Vec<T>`, infer `T`
+    /// for `let mut data = Vec::new()` (fixes `push(0)` typing vs `Vec<u8>` fields).
+    fn scan_statements_for_struct_literal_vec_binding(
+        &self,
+        var_name: &str,
+        stmts: &[&Statement<'_>],
+    ) -> Option<Type> {
+        for stmt in stmts {
+            if let Some(ty) = self.check_statement_for_struct_literal_vec_binding(var_name, stmt) {
+                return Some(ty);
+            }
+        }
+        None
+    }
+
+    fn check_statement_for_struct_literal_vec_binding(
+        &self,
+        var_name: &str,
+        stmt: &Statement<'_>,
+    ) -> Option<Type> {
+        match stmt {
+            Statement::Return { value, .. } => value
+                .and_then(|e| self.check_expr_struct_literal_vec_binding(var_name, e)),
+            Statement::Expression { expr, .. } => {
+                self.check_expr_struct_literal_vec_binding(var_name, expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => self
+                .scan_statements_for_struct_literal_vec_binding(var_name, then_block)
+                .or_else(|| {
+                    else_block.as_ref().and_then(|b| {
+                        self.scan_statements_for_struct_literal_vec_binding(var_name, b)
+                    })
+                }),
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::For { body, .. } => {
+                self.scan_statements_for_struct_literal_vec_binding(var_name, body)
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    if let Some(ty) =
+                        self.check_expr_struct_literal_vec_binding(var_name, arm.body)
+                    {
+                        return Some(ty);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn check_expr_struct_literal_vec_binding(
+        &self,
+        var_name: &str,
+        expr: &Expression<'_>,
+    ) -> Option<Type> {
+        match expr {
+            Expression::StructLiteral { name, fields, .. } => {
+                for (fname, val) in fields {
+                    if matches!(
+                        val,
+                        Expression::Identifier { name: n, .. } if n == var_name
+                    ) {
+                        if let Some(ft) = self.struct_field_types.get(name) {
+                            if let Some(f_ty) = ft.get(fname) {
+                                if let Type::Vec(inner) = f_ty {
+                                    return Some((**inner).clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                for (_fname, val) in fields {
+                    if let Some(ty) = self.check_expr_struct_literal_vec_binding(var_name, val) {
+                        return Some(ty);
+                    }
+                }
+                None
+            }
+            Expression::Block { statements, .. } => {
+                self.scan_statements_for_struct_literal_vec_binding(var_name, statements)
+            }
+            _ => None,
+        }
+    }
+
+    fn scan_statements_for_collection_usage(
+        &self,
+        var_name: &str,
+        stmts: &[&Statement<'_>],
+    ) -> Option<Type> {
+        for stmt in stmts {
+            if let Some(ty) = self.check_statement_for_collection_usage(var_name, stmt) {
+                return Some(ty);
+            }
+        }
+        None
+    }
+
+    fn check_statement_for_collection_usage(
+        &self,
+        var_name: &str,
+        stmt: &Statement<'_>,
+    ) -> Option<Type> {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.check_expr_for_collection_usage(var_name, expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                if let Some(ty) = self.scan_statements_for_collection_usage(var_name, then_block) {
+                    return Some(ty);
+                }
+                if let Some(else_stmts) = else_block {
+                    return self.scan_statements_for_collection_usage(var_name, else_stmts);
+                }
+                None
+            }
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::For { body, .. } => {
+                self.scan_statements_for_collection_usage(var_name, body)
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    if let Some(ty) = self.check_expr_for_collection_usage(var_name, arm.body) {
+                        return Some(ty);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn check_expr_for_collection_usage(
+        &self,
+        var_name: &str,
+        expr: &Expression<'_>,
+    ) -> Option<Type> {
+        if let Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } = expr
+        {
+            let is_target =
+                matches!(**object, Expression::Identifier { ref name, .. } if name == var_name);
+            if !is_target {
+                return None;
+            }
+
+            let is_push_or_insert = method == "push" || method == "insert";
+            if !is_push_or_insert || arguments.is_empty() {
+                return None;
+            }
+
+            // For .push(arg), the element type comes from the single argument
+            // For .insert(arg), same for HashSet (single arg)
+            let arg_expr = &arguments[arguments.len() - 1].1;
+            return self.infer_expression_type(arg_expr);
+        }
+        None
     }
 }

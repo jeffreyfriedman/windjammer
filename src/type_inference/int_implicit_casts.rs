@@ -51,6 +51,9 @@ pub fn is_safe_implicit_cast(from_ty: IntType, to_ty: IntType) -> bool {
         // Rationale: Large integer types mixing signed/unsigned
         (I64, U64) | (U64, I64) => true,
 
+        // i64 (Windjammer `int`) → usize: `Vec::with_capacity(x)` uses `x as usize` in codegen
+        (I64, Usize) => true,
+
         // Unknown defaults to i32
         (Unknown, _) => true,
         (_, Unknown) => true,

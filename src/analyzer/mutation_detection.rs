@@ -142,7 +142,7 @@ impl<'ast> Analyzer<'ast> {
                                 return true;
                             }
                         }
-                        if self.is_mutated_in_match_arm_body(name, arm.body, registry) {
+                        if self.is_mutated_in_match_arm_body(name, value, arm, registry) {
                             return true;
                         }
                     }
@@ -157,12 +157,159 @@ impl<'ast> Analyzer<'ast> {
     fn is_mutated_in_match_arm_body(
         &self,
         name: &str,
-        expr: &Expression,
+        scrutinee: &Expression<'ast>,
+        arm: &MatchArm<'ast>,
         registry: &SignatureRegistry,
     ) -> bool {
-        match expr {
+        if self.if_let_some_mutates_indexed_binding_of_param(name, scrutinee, arm, registry) {
+            return true;
+        }
+        match &arm.body {
             Expression::Block { statements, .. } => self.is_mutated(name, statements, registry),
-            _ => self.has_mutable_method_call(name, expr, registry),
+            _ => self.has_mutable_method_call(name, arm.body, registry),
+        }
+    }
+
+    /// `if let Some(x) = param[i]` with `Option` inner `Copy`: mutating `x` must update `param`'s
+    /// slot, so treat `param` as mut-borrowed. Plain `is_mutated` misses this because assignments
+    /// target `x`, not `param`.
+    fn if_let_some_mutates_indexed_binding_of_param(
+        &self,
+        param: &str,
+        scrutinee: &Expression<'ast>,
+        arm: &MatchArm<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        if matches!(arm.pattern, Pattern::Wildcard) {
+            return false;
+        }
+        let Some(inner_binding) = Self::enum_some_single_binding(&arm.pattern) else {
+            return false;
+        };
+        if Self::receiver_root_local_identifier(scrutinee) != Some(param) {
+            return false;
+        }
+        if !Self::expr_has_indexed_access(scrutinee) {
+            return false;
+        }
+        self.match_arm_body_mutates_binding(inner_binding, arm.body, registry)
+    }
+
+    fn enum_some_single_binding<'p>(pattern: &'p Pattern<'p>) -> Option<&'p str> {
+        match pattern {
+            Pattern::EnumVariant(v, EnumPatternBinding::Single(name))
+                if v == "Some" || v.ends_with("::Some") =>
+            {
+                Some(name.as_str())
+            }
+            _ => None,
+        }
+    }
+
+    /// True if `expr` is or contains an index operation (`vec[i]`, `a.b[i]`).
+    fn expr_has_indexed_access(expr: &Expression<'_>) -> bool {
+        match expr {
+            Expression::Index { .. } => true,
+            Expression::FieldAccess { object, .. } => Self::expr_has_indexed_access(object),
+            _ => false,
+        }
+    }
+
+    fn match_binding_is_assignment_target(expr: &Expression, var: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == var,
+            Expression::FieldAccess { object, .. } => {
+                Self::match_binding_is_assignment_target(object, var)
+            }
+            Expression::Index { object, .. } => Self::match_binding_is_assignment_target(object, var),
+            Expression::Unary {
+                op: UnaryOp::Deref,
+                operand,
+                ..
+            } => Self::match_binding_is_assignment_target(operand, var),
+            _ => false,
+        }
+    }
+
+    fn match_arm_body_mutates_binding(
+        &self,
+        binding: &str,
+        body: &Expression<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        match body {
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.stmt_mutates_binding_in_tree(s, binding, registry)
+            }),
+            _ => self.expr_may_mutate_if_let_some_binding(binding, body, registry),
+        }
+    }
+
+    /// Like [Self::has_mutable_method_call], plus: unknown methods on `binding` (not known &-self
+    /// std APIs) count as mutations. Used only for `if let Some(x) = vec[i]` bodies so `.add()` on
+    /// a Copy `Option` payload is not mistaken for a read (see mutability_complete_test).
+    fn expr_may_mutate_if_let_some_binding(
+        &self,
+        binding: &str,
+        expr: &Expression<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        if self.has_mutable_method_call(binding, expr, registry) {
+            return true;
+        }
+        if let Expression::MethodCall { object, method, .. } = expr {
+            if self.is_in_receiver_chain(binding, object) {
+                return !crate::method_registry::is_known_readonly_method(method);
+            }
+        }
+        false
+    }
+
+    fn stmt_mutates_binding_in_tree(
+        &self,
+        stmt: &Statement<'ast>,
+        binding: &str,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                Self::match_binding_is_assignment_target(target, binding)
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_may_mutate_if_let_some_binding(binding, expr, registry)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry))
+                    })
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry)),
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry)),
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Some(g) = arm.guard {
+                    if self.has_mutable_method_call(binding, g, registry) {
+                        return true;
+                    }
+                }
+                self.match_arm_body_mutates_binding(binding, arm.body, registry)
+            }),
+            Statement::Let { value, .. } | Statement::Const { value, .. } => {
+                self.expr_may_mutate_if_let_some_binding(binding, value, registry)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_may_mutate_if_let_some_binding(binding, expr, registry),
+            _ => false,
         }
     }
 
@@ -225,14 +372,23 @@ impl<'ast> Analyzer<'ast> {
                 if self.is_in_receiver_chain(name, object) {
                     // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
                     if let Some(sig) = registry.get_signature(method) {
-                        if sig.has_self_receiver
-                            && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed)
-                        {
-                            return true;
+                        if sig.has_self_receiver {
+                            if let Some(mode) = sig.param_ownership.first() {
+                                // Owned receiver (Windjammer `fn m(self)` / by-value on Copy) updates
+                                // or consumes the receiver slot the same as &mut for mutation analysis.
+                                if matches!(
+                                    mode,
+                                    OwnershipMode::MutBorrowed | OwnershipMode::Owned
+                                ) {
+                                    return true;
+                                }
+                            }
                         }
                     }
 
-                    return crate::method_registry::mutates_receiver(method);
+                    if crate::method_registry::mutates_receiver(method) {
+                        return true;
+                    }
                 }
                 false
             }

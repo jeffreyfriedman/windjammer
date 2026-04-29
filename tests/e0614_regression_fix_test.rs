@@ -485,11 +485,13 @@ pub enum Consequence {
     GiveItem(u32),
 }
 
-pub fn apply(self, state: bool) {
-    match self {
-        Consequence::GiveItem(item_id) => {
-            give_item(item_id.clone())
-        },
+impl Consequence {
+    pub fn apply(self, state: bool) {
+        match self {
+            Consequence::GiveItem(item_id) => {
+                give_item(item_id.clone())
+            },
+        }
     }
 }
 "#;

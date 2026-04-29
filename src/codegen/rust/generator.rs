@@ -129,6 +129,8 @@ pub struct CodeGenerator<'ast> {
     // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
     // Prevents adding semicolons to final expressions in if-else/match when used as values
     pub(crate) in_expression_context: bool,
+    // Suppress Vec::<T>::new() turbofish when let binding already has type ascription
+    pub(crate) suppress_collection_turbofish: bool,
     // TDD: Track if we're generating the top-level function body (enables return optimization)
     pub(crate) in_function_body: bool,
     // TDD: Track if the current statement being generated is the last in its block
@@ -217,6 +219,9 @@ pub struct CodeGenerator<'ast> {
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     pub(crate) struct_field_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
+    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    pub(crate) tuple_struct_names: std::collections::HashSet<String>,
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
@@ -399,6 +404,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_statement_match: false,
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
+            suppress_collection_turbofish: false,
             in_function_body: false,
             current_is_last_statement: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
@@ -406,6 +412,7 @@ impl<'ast> CodeGenerator<'ast> {
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
             in_struct_literal_field: false,
             in_owned_value_context: false,
@@ -1793,14 +1800,6 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 if self.copy_types_registry.contains(name.as_str()) {
                     return true;
                 }
-                // Recursive check: if we have struct field types and all fields are Copy, struct is Copy
-                if let Some(fields) = self.struct_field_types.get(name.as_str()) {
-                    if fields.values().all(|field_ty| self.is_type_copy(field_ty)) {
-                        return true;
-                    }
-                }
-                // Fallback: known Copy types from external crates (windjammer-app, etc.)
-                // These are common game engine types that are always Copy (primitives-only structs)
                 crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())
             }
             _ => false,

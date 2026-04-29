@@ -290,6 +290,11 @@ impl Parser {
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
+        // Skip leading blank lines so indented r#"\\n    @derive(...)"# still attaches decorators.
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+        }
+
         // Collect doc comments (/// lines) that appear before the item
         let mut doc_lines = Vec::new();
         while let Token::DocComment(content) = self.current_token() {
@@ -302,10 +307,18 @@ impl Parser {
             Some(doc_lines.join("\n"))
         };
 
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+        }
+
         // Check for decorators
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
             decorators.push(self.parse_decorator()?);
+        }
+
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
         }
 
         // Doc comments may appear after @derive and before the item (e.g. @derive(Clone)\n/// doc\npub struct S)
@@ -316,6 +329,10 @@ impl Parser {
         }
         if !doc_lines_after.is_empty() {
             doc_comment = Some(doc_lines_after.join("\n"));
+        }
+
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
         }
 
         // Check for pub keyword (for module functions)
@@ -357,7 +374,7 @@ impl Parser {
             }
             Token::Struct => {
                 self.advance();
-                let mut struct_decl = self.parse_struct()?;
+                let mut struct_decl = self.parse_struct(false)?;
                 struct_decl.decorators = decorators;
                 struct_decl.is_pub = is_pub;
                 struct_decl.doc_comment = doc_comment;
@@ -387,7 +404,7 @@ impl Parser {
             }
             Token::Impl => {
                 self.advance();
-                let mut impl_block = self.parse_impl()?;
+                let mut impl_block = self.parse_impl(false)?;
                 impl_block.decorators = decorators;
                 Ok(Item::Impl {
                     block: impl_block,
@@ -423,7 +440,7 @@ impl Parser {
                 })
             }
             Token::Extern => {
-                // Check if this is `extern let` (GPU bindings) or `extern fn` (FFI)
+                // `extern let` (GPU) | `extern struct` / `extern impl` (FFI types) | `extern fn` (FFI)
                 if self.peek(1) == Some(&Token::Let) {
                     self.advance(); // consume extern
                     self.advance(); // consume let
@@ -452,20 +469,47 @@ impl Parser {
                         location: self.current_location(),
                     })
                 } else {
-                    // extern fn - existing code path
-                    self.advance(); // Consume the Extern token
-                    self.expect(Token::Fn)?; // Expect fn after extern
-                    self.in_extern_fn = true;
-                    let mut func = self.parse_function()?;
-                    self.in_extern_fn = false;
-                    func.is_extern = true; // Mark as extern function
-                    func.is_pub = is_pub;
-                    func.decorators = decorators;
-                    func.doc_comment = doc_comment;
-                    Ok(Item::Function {
-                        decl: func,
-                        location: self.current_location(),
-                    })
+                    self.advance(); // consume Extern
+                    match self.current_token() {
+                        Token::Struct => {
+                            self.advance();
+                            let mut struct_decl = self.parse_struct(true)?;
+                            struct_decl.decorators = decorators;
+                            struct_decl.is_pub = is_pub;
+                            struct_decl.doc_comment = doc_comment;
+                            Ok(Item::Struct {
+                                decl: struct_decl,
+                                location: self.current_location(),
+                            })
+                        }
+                        Token::Impl => {
+                            self.advance();
+                            let mut impl_block = self.parse_impl(true)?;
+                            impl_block.decorators = decorators;
+                            Ok(Item::Impl {
+                                block: impl_block,
+                                location: self.current_location(),
+                            })
+                        }
+                        Token::Fn => {
+                            self.expect(Token::Fn)?; // Expect fn after extern
+                            self.in_extern_fn = true;
+                            let mut func = self.parse_function()?;
+                            self.in_extern_fn = false;
+                            func.is_extern = true; // Mark as extern function
+                            func.is_pub = is_pub;
+                            func.decorators = decorators;
+                            func.doc_comment = doc_comment;
+                            Ok(Item::Function {
+                                decl: func,
+                                location: self.current_location(),
+                            })
+                        }
+                        _ => {
+                            Err("expected `let`, `struct`, `impl`, or `fn` after `extern`"
+                                .to_string())
+                        }
+                    }
                 }
             }
             Token::Use => {

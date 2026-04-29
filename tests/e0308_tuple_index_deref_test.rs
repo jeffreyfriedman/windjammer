@@ -1,28 +1,35 @@
 //! Copy tuple from `Vec<(…)>[i]`: Rust yields the tuple by value; no explicit `*` on the index.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 fn compile_and_get_rust(source: &str) -> String {
-    let test_dir = std::env::temp_dir().join("wj_e0308_tuple_test");
-    let _ = std::fs::create_dir_all(&test_dir);
-    let input = test_dir.join("test.wj");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("out");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let input = temp_dir.path().join("test.wj");
     std::fs::write(&input, source).expect("write test file");
 
-    let wj_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-    let _ = Command::new(&wj_bin)
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&input)
-        .arg("--output")
-        .arg(&test_dir)
+    let wj_bin = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_bin)
+        .args([
+            "build",
+            input.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("wj build");
 
-    let rust_file = test_dir.join("test.rs");
-    std::fs::read_to_string(&rust_file).unwrap_or_else(|_| String::new())
+    let rust_file = out_dir.join("test.rs");
+    std::fs::read_to_string(&rust_file).unwrap_or_else(|_| {
+        panic!(
+            "Generated .rs file not found at {:?}\nstdout: {}\nstderr: {}",
+            rust_file,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        )
+    })
 }
 
 #[test]

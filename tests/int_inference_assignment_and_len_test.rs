@@ -36,7 +36,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn zero(mut self) {
+    pub fn zero(self) {
         self.total = 0
     }
 }
@@ -57,9 +57,10 @@ pub fn non_empty(ids: Vec<string>) -> bool {
 }
 "#;
     let rust = compile_with_int_inference(source);
+    // Prefer `!ids.is_empty()` over `len() > 0` — same semantics, valid optimization
     assert!(
-        rust.contains("0_usize") || rust.contains("0usize"),
-        "expected 0_usize when comparing to .len(); got:\n{}",
+        rust.contains("0_usize") || rust.contains("0usize") || rust.contains("is_empty()"),
+        "expected usize comparison, `!...is_empty()`, or equivalent for non-empty check; got:\n{}",
         rust
     );
 }

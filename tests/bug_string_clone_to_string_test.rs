@@ -7,10 +7,10 @@ use std::fs;
 ///
 /// Fix: Detect when .clone() result needs to be String and generate .to_string() instead.
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_string_clone_generates_to_string() {
-    // Windjammer code where id is inferred as &str, but DialogTree::new expects String
     let source = r#"
 struct DialogTree {
     id: string,
@@ -27,24 +27,29 @@ pub fn create_dialog(id: string) -> DialogTree {
 }
 "#;
 
-    // Write temporary file
-    let temp_file = "/tmp/test_string_clone.wj";
-    fs::write(temp_file, source).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_file = temp_dir.path().join("test_string_clone.wj");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    fs::write(&temp_file, source).unwrap();
 
-    // Compile with Windjammer (use CARGO_BIN_EXE_wj for correct binary)
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
-        .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
+        .args([
+            "build",
+            temp_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj");
 
-    let generated = fs::read_to_string("/tmp/test_string_clone.rs").unwrap();
+    let generated_path = out_dir.join("test_string_clone.rs");
+    let generated = fs::read_to_string(&generated_path).unwrap();
 
-    // The generated code should use .to_string() or .to_owned(), not .clone()
-    // when passing &str to a function expecting String
     println!("Generated Rust:\n{}", generated);
 
-    // Check that Rust compilation succeeds
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !stderr.contains("error[E0308]"),
@@ -52,8 +57,21 @@ pub fn create_dialog(id: string) -> DialogTree {
         stderr
     );
 
-    // Verify the generated code has proper string conversion
-    // When id is &str and needs to be String, should use .to_string() not .clone()
+    // Verify the generated code compiles with rustc
+    let rustc_output = Command::new("rustc")
+        .arg("--crate-type=lib")
+        .arg(&generated_path)
+        .arg("-o")
+        .arg(temp_dir.path().join("test.rlib"))
+        .output()
+        .expect("Failed to run rustc");
+    let rustc_err = String::from_utf8_lossy(&rustc_output.stderr);
+    assert!(
+        rustc_output.status.success(),
+        "Generated code should compile. Rustc stderr:\n{}",
+        rustc_err
+    );
+
     if generated.contains("id: &str") {
         assert!(
             generated.contains(".to_string()") || generated.contains(".to_owned()"),
@@ -64,7 +82,6 @@ pub fn create_dialog(id: string) -> DialogTree {
 
 #[test]
 fn test_owned_string_can_use_clone() {
-    // When parameter is owned String, .clone() is correct
     let source = r#"
 struct DialogTree {
     id: string,
@@ -82,12 +99,21 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
 }
 "#;
 
-    let temp_file = "/tmp/test_owned_string.wj";
-    fs::write(temp_file, source).unwrap();
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_file = temp_dir.path().join("test_owned_string.wj");
+    let out_dir = temp_dir.path().join("out");
+    fs::create_dir_all(&out_dir).unwrap();
+    fs::write(&temp_file, source).unwrap();
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
-        .args(["build", "--output", "/tmp", "--target", "rust", temp_file])
+        .args([
+            "build",
+            temp_file.to_str().unwrap(),
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to run wj");
 
@@ -96,5 +122,20 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
         !stderr.contains("error[E0308]"),
         "Should not have type mismatch error when cloning owned String. Stderr:\n{}",
         stderr
+    );
+
+    let generated_path = out_dir.join("test_owned_string.rs");
+    let rustc_output = Command::new("rustc")
+        .arg("--crate-type=lib")
+        .arg(&generated_path)
+        .arg("-o")
+        .arg(temp_dir.path().join("test.rlib"))
+        .output()
+        .expect("Failed to run rustc");
+    let rustc_err = String::from_utf8_lossy(&rustc_output.stderr);
+    assert!(
+        rustc_output.status.success(),
+        "Generated code should compile. Rustc stderr:\n{}",
+        rustc_err
     );
 }

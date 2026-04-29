@@ -137,7 +137,13 @@ impl Point {
 // Helper function to compile Windjammer source and get generated Rust
 fn compile_and_get_rust(source: &str) -> String {
     let temp_dir = std::env::temp_dir();
-    let test_name = format!("field_binary_test_{}", std::process::id());
+    // process::id() is identical across parallel test threads — unique per thread
+    // so `cargo test` does not clobber the same .wj / output dir.
+    let test_name = format!(
+        "field_binary_test_{}_{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    );
     let test_file = temp_dir.join(format!("{}.wj", test_name));
     let output_dir = temp_dir.join(&test_name);
     let output_file = output_dir.join(format!("{}.rs", test_name));

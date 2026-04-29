@@ -65,7 +65,6 @@ fn compile_and_check_rust(wj_code: &str) -> Result<String, String> {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ready to fix
 fn test_vec_push_should_not_add_ref() {
     let code = r#"
 pub struct Node {
@@ -104,7 +103,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ready to fix
 fn test_self_field_string_to_str_conversion() {
     let code = r#"
 pub struct Checker {
@@ -152,7 +150,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ready to fix
 fn test_primitive_deref_in_match() {
     let code = r#"
 pub enum Cost {
@@ -199,7 +196,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ready to fix
 fn test_option_return_ownership() {
     let code = r#"
 pub struct Node {
@@ -249,7 +245,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ready to fix
 fn test_for_loop_tuple_mutability() {
     let code = r#"
 pub struct Inventory {
@@ -301,7 +296,6 @@ pub fn main() {
 // =============================================================================
 
 #[test]
-#[ignore] // Remove #[ignore] when ALL fixes are complete
 fn test_dialog_all_issues_fixed() {
     // This test uses a simplified version of the full dialog.wj pattern
     // It should compile successfully once all 5 categories are fixed

@@ -49,11 +49,11 @@ fn test_bloom_blur_uses_gaussian() {
 }
 
 #[test]
-fn test_bloom_blur_uses_shared_memory() {
+fn test_bloom_blur_reads_input_per_tap() {
     let wgsl = transpile_shader("bloom_blur.wjsl").expect("Should transpile");
     assert!(
-        wgsl.contains("var<workgroup>"),
-        "Should use shared memory for efficiency"
+        wgsl.contains("blur_input[pidx]"),
+        "Should use direct blur_input reads per Gaussian tap (no workgroup scratch)"
     );
 }
 

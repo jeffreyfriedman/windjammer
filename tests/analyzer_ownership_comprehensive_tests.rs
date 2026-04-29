@@ -647,7 +647,6 @@ pub fn clone_item<T: Clone>(item: T) -> T {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO(Phase2): Fix struct literal &str->String conversion with explicit &str params
 fn test_auto_copy_struct_self_borrow_inference() {
     // Bug: When a struct has only Copy fields and no @derive decorator,
     // the codegen correctly auto-derives Copy on the struct, but the analyzer

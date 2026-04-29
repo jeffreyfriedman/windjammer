@@ -149,15 +149,15 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
+    let out_dir = test_dir.join("out");
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            wj_file.to_str().unwrap(),
-        ])
-        .current_dir(std::env::current_dir().unwrap())
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("rust")
+        .arg("--output")
+        .arg(&out_dir)
         .output()
         .expect("Failed to run windjammer compiler");
 
@@ -168,7 +168,7 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let rs_file = test_dir.join("build/main.rs");
+    let rs_file = out_dir.join("main.rs");
     let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // Trait definition should have &self (readonly)
@@ -225,15 +225,15 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
+    let out_dir = test_dir.join("out");
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            wj_file.to_str().unwrap(),
-        ])
-        .current_dir(std::env::current_dir().unwrap())
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("rust")
+        .arg("--output")
+        .arg(&out_dir)
         .output()
         .expect("Failed to run windjammer compiler");
 
@@ -244,7 +244,7 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let rs_file = test_dir.join("build/main.rs");
+    let rs_file = out_dir.join("main.rs");
     let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // read() should be &self, write() should be &mut self
@@ -313,15 +313,15 @@ fn main() {
     let wj_file = test_dir.join("main.wj");
     fs::write(&wj_file, source).unwrap();
 
+    let out_dir = test_dir.join("out");
+
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            wj_file.to_str().unwrap(),
-        ])
-        .current_dir(std::env::current_dir().unwrap())
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("rust")
+        .arg("--output")
+        .arg(&out_dir)
         .output()
         .expect("Failed to run windjammer compiler");
 
@@ -332,7 +332,7 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let rs_file = test_dir.join("build/main.rs");
+    let rs_file = out_dir.join("main.rs");
     let rust_code = fs::read_to_string(&rs_file).expect("Failed to read generated Rust file");
 
     // set_camera mutates, should be &mut self

@@ -69,6 +69,21 @@ impl Parser {
             }
         }
 
+        // Check for `mut x` pattern (mutable binding in destructuring)
+        if self.current_token() == &Token::Mut {
+            self.advance();
+            if let Token::Ident(var_name) = self.current_token() {
+                let var = var_name.clone();
+                self.advance();
+                return Ok(Pattern::MutBinding(var));
+            } else {
+                return Err(format!(
+                    "Expected identifier after 'mut', got {:?}",
+                    self.current_token()
+                ));
+            }
+        }
+
         match self.current_token() {
             Token::Underscore => {
                 self.advance();
@@ -451,6 +466,7 @@ impl Parser {
                 }
             }
             Pattern::Ref(name) | Pattern::RefMut(name) => name.clone(),
+            Pattern::MutBinding(name) => name.clone(),
         }
     }
 
@@ -458,6 +474,7 @@ impl Parser {
     pub fn pattern_to_string(pattern: &Pattern) -> String {
         match pattern {
             Pattern::Identifier(name) => name.clone(),
+            Pattern::MutBinding(name) => format!("mut {}", name),
             Pattern::Wildcard => "_".to_string(),
             Pattern::Tuple(patterns) => {
                 let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
@@ -511,7 +528,7 @@ impl Parser {
         match pattern {
             // Irrefutable patterns
             Pattern::Wildcard => false,
-            Pattern::Identifier(_) => false,
+            Pattern::Identifier(_) | Pattern::MutBinding(_) => false,
             Pattern::Tuple(patterns) => {
                 // Tuple is refutable if any element is refutable
                 patterns.iter().any(Self::is_pattern_refutable)

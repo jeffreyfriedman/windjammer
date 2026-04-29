@@ -34,8 +34,8 @@ fn test_wjsl_atmosphere_transpiles() {
         "output should contain generate_ray"
     );
     assert!(
-        wgsl.contains("sky_color_for_ray"),
-        "output should contain sky_color_for_ray"
+        wgsl.contains("compute_sky_color"),
+        "output should contain compute_sky_color (procedural sky + starfield path)"
     );
     assert!(
         wgsl.contains("gbuffer_base") || wgsl.contains("gbuffer"),

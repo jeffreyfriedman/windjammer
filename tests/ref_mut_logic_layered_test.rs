@@ -417,7 +417,12 @@ pub fn process(opt: Option<i32>) -> i32 {
 }
 "#;
     let result = compile_to_rust(src).expect("compile");
-    assert!(result.contains("if let"));
+    // Rust doesn't support guards in if-let, so this desugars to match with guard
+    assert!(
+        result.contains("if let") || result.contains("match"),
+        "Should generate if let or match. Got:\n{}",
+        result
+    );
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 

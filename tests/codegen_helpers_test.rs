@@ -150,10 +150,12 @@ fn test_get_item_location_struct() {
         decl: windjammer::parser::StructDecl {
             name: "Point".to_string(),
             fields: vec![],
+            tuple_fields: None,
             type_params: vec![],
             decorators: vec![],
             where_clause: vec![],
             is_pub: false,
+            is_extern: false,
             doc_comment: None,
         },
         location: location.clone(),

@@ -367,6 +367,7 @@ fn eliminate_dead_code_in_impl<'ast>(
         associated_types: impl_block.associated_types.clone(),
         functions: new_functions,
         decorators: impl_block.decorators.clone(),
+        is_extern: impl_block.is_extern,
     }
 }
 

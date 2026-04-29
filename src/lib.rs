@@ -23,6 +23,7 @@ pub mod metadata;
 pub mod method_registry;
 pub mod parser;
 pub mod parser_impl;
+pub mod project_paths;
 pub mod source_map;
 pub mod stdlib_scanner;
 #[cfg(feature = "highlighting")]

@@ -81,33 +81,23 @@ impl FpsCamera {
 }
 "#;
 
-    let test_dir = std::env::temp_dir().join("wj_static_method_passthrough_test");
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let test_dir = temp_dir.path();
+    let output_dir = test_dir.join("out");
+    fs::create_dir_all(&output_dir).unwrap();
 
     let source_file = test_dir.join("static_method_test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = test_dir.join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !wj_path.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            wj_path
-        );
-    }
-
-    let output = Command::new(&wj_path)
-        .arg("build")
-        .arg("--no-cargo")
-        .arg("--output")
-        .arg(output_dir.to_str().unwrap())
-        .arg(source_file.to_str().unwrap())
+    let wj_path = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_path)
+        .args([
+            "build",
+            source_file.to_str().unwrap(),
+            "-o",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("failed to run wj");
 
@@ -146,8 +136,6 @@ impl FpsCamera {
         "Expected collides to have grid: &VoxelGrid, but got:\n{}",
         generated
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -171,33 +159,23 @@ impl Palette {
 }
 "#;
 
-    let test_dir = std::env::temp_dir().join("wj_enum_variant_store_test");
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let test_dir = temp_dir.path();
+    let output_dir = test_dir.join("out");
+    fs::create_dir_all(&output_dir).unwrap();
 
     let source_file = test_dir.join("enum_variant_test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = test_dir.join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !wj_path.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            wj_path
-        );
-    }
-
-    let output = Command::new(&wj_path)
-        .arg("build")
-        .arg("--no-cargo")
-        .arg("--output")
-        .arg(output_dir.to_str().unwrap())
-        .arg(source_file.to_str().unwrap())
+    let wj_path = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_path)
+        .args([
+            "build",
+            source_file.to_str().unwrap(),
+            "-o",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("failed to run wj");
 
@@ -221,8 +199,6 @@ impl Palette {
         output.status.success(),
         "Compilation should succeed for enum variant storage patterns"
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -260,33 +236,23 @@ impl Player {
 }
 "#;
 
-    let test_dir = std::env::temp_dir().join("wj_multi_static_passthrough_test");
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let test_dir = temp_dir.path();
+    let output_dir = test_dir.join("out");
+    fs::create_dir_all(&output_dir).unwrap();
 
     let source_file = test_dir.join("multi_static_test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = test_dir.join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !wj_path.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            wj_path
-        );
-    }
-
-    let output = Command::new(&wj_path)
-        .arg("build")
-        .arg("--no-cargo")
-        .arg("--output")
-        .arg(output_dir.to_str().unwrap())
-        .arg(source_file.to_str().unwrap())
+    let wj_path = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_path)
+        .args([
+            "build",
+            source_file.to_str().unwrap(),
+            "-o",
+            output_dir.to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("failed to run wj");
 
@@ -308,6 +274,4 @@ impl Player {
         "Expected grid: &Grid (Borrowed) in can_move(), got:\n{}",
         generated
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }

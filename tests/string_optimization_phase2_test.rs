@@ -103,7 +103,6 @@ fn main() {
 }
 
 #[test]
-#[ignore] // TODO: Enable when full analyzer is implemented (requires passthrough analysis)
 fn test_passthrough_to_string_ref_function() {
     // TDD: Wrapper function passing to &String function should also use &String
     let code = r#"
@@ -132,10 +131,13 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 2 PASSTHROUGH: check_item should use &String (calls has which needs &String)
+    // PHASE 2 PASSTHROUGH: check_item should use &String (calls has which needs &String).
+    // inv may be `Inventory` or `&Inventory` depending on self/borrow inference.
     assert!(
-        generated.contains("fn check_item(inv: Inventory, item_id: &String)"),
-        "Expected &String parameter (passthrough to &String function). Generated:\n{}",
+        generated.contains("item_id: &String")
+            && (generated.contains("fn check_item(inv: &Inventory, item_id: &String)")
+                || generated.contains("fn check_item(inv: Inventory, item_id: &String)")),
+        "Expected &String on item_id and passthrough to has (need &String). Generated:\n{}",
         generated
     );
 
