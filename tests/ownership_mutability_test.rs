@@ -147,7 +147,8 @@ pub fn main() {}
     assert!(compiles, "Should compile. Got:\n{}", result);
     let ok = result.contains("Some(ref mut c)")
         || (result.contains("let mut o = opt")
-            && (result.contains("if let Some(c) = r") || result.contains("if let Some(mut c) = r")));
+            && (result.contains("if let Some(c) = r")
+                || result.contains("if let Some(mut c) = r")));
     assert!(
         ok,
         "Expected ref mut, or let mut o + if let Some(c)/Some(mut c). Got:\n{}",

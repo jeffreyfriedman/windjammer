@@ -350,7 +350,9 @@ mod owned_but_not_returned_tests {
         linter.lint_function(&analyzed);
         let diags = linter.into_diagnostics();
         assert!(
-            diags.iter().any(|d| d.lint_name == "owned-but-not-returned"),
+            diags
+                .iter()
+                .any(|d| d.lint_name == "owned-but-not-returned"),
             "expected owned-but-not-returned, got: {:?}",
             diags
         );

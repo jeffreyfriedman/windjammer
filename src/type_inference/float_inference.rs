@@ -311,9 +311,7 @@ impl FloatInference {
                     }
                 }
             }
-            Item::TypeAlias {
-                name, target, ..
-            } => {
+            Item::TypeAlias { name, target, .. } => {
                 self.type_aliases.insert(name.clone(), target.clone());
             }
             Item::Mod { name, items, .. } => {

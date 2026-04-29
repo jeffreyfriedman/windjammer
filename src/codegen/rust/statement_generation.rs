@@ -3322,15 +3322,13 @@ impl<'ast> CodeGenerator<'ast> {
             "&"
         } else if root == "self" {
             let self_is_mut_borrowed = self.current_function_params.iter().any(|p| {
-                p.name == "self"
-                    && matches!(p.ownership, crate::parser::OwnershipHint::Mut)
+                p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Mut)
             });
             if self_is_mut_borrowed {
                 return "&mut ";
             }
             let self_is_borrowed = self.current_function_params.iter().any(|p| {
-                p.name == "self"
-                    && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
             });
             if self_is_borrowed {
                 "&"
