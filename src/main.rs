@@ -16,13 +16,13 @@ pub mod error;
 pub mod errors;
 pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
                 // Removed: codegen_legacy is now codegen::rust::generator
-pub mod project_paths;
 pub mod compiler_database;
 pub mod config;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
-pub mod module_system; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
+pub mod module_system;
+pub mod project_paths; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
 
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
@@ -684,7 +684,8 @@ pub fn build_project(
     // BUGFIX: For nested files like src_wj/ecs/entity.wj, we need to find src_wj,
     // not just the immediate parent (src_wj/ecs)
     let source_root = if path.is_file() {
-        project_paths::find_source_root(path).unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
+        project_paths::find_source_root(path)
+            .unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
     } else {
         path
     };

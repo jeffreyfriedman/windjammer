@@ -1128,13 +1128,14 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block,
                 ..
             } => {
-                then_block.iter().any(|s| {
-                    self.statement_nonreadonly_method_call_on_var(s, var_name)
-                }) || else_block.as_ref().is_some_and(|block| {
-                    block
-                        .iter()
-                        .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
-                })
+                then_block
+                    .iter()
+                    .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
+                    || else_block.as_ref().is_some_and(|block| {
+                        block
+                            .iter()
+                            .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
+                    })
             }
             Statement::While { body, .. } | Statement::Loop { body, .. } => body
                 .iter()
@@ -1160,11 +1161,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn expression_nonreadonly_method_call_on_var(
-        &self,
-        expr: &Expression,
-        var_name: &str,
-    ) -> bool {
+    fn expression_nonreadonly_method_call_on_var(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
@@ -1174,9 +1171,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             }
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_nonreadonly_method_call_on_var(s, var_name)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name)),
             _ => false,
         }
     }
@@ -1645,8 +1642,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// to infer the collection element type for `Vec::new()` / `HashSet::new()` declarations.
     /// Returns the inferred element `Type` if found.
     pub(super) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
-        if let Some(ty) =
-            self.scan_statements_for_struct_literal_vec_binding(var_name, &self.current_function_body)
+        if let Some(ty) = self
+            .scan_statements_for_struct_literal_vec_binding(var_name, &self.current_function_body)
         {
             return Some(ty);
         }
@@ -1674,8 +1671,9 @@ impl<'ast> CodeGenerator<'ast> {
         stmt: &Statement<'_>,
     ) -> Option<Type> {
         match stmt {
-            Statement::Return { value, .. } => value
-                .and_then(|e| self.check_expr_struct_literal_vec_binding(var_name, e)),
+            Statement::Return { value, .. } => {
+                value.and_then(|e| self.check_expr_struct_literal_vec_binding(var_name, e))
+            }
             Statement::Expression { expr, .. } => {
                 self.check_expr_struct_literal_vec_binding(var_name, expr)
             }
@@ -1697,8 +1695,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Statement::Match { arms, .. } => {
                 for arm in arms {
-                    if let Some(ty) =
-                        self.check_expr_struct_literal_vec_binding(var_name, arm.body)
+                    if let Some(ty) = self.check_expr_struct_literal_vec_binding(var_name, arm.body)
                     {
                         return Some(ty);
                     }

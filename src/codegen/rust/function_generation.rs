@@ -113,8 +113,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // Abstract trait method (no body): use the impl's own
                             // analyzed ownership so that consuming impls
                             // (e.g. `self.value` for non-Copy) get owned `self`.
-                            let impl_ownership =
-                                analyzed.inferred_ownership.get("self").copied();
+                            let impl_ownership = analyzed.inferred_ownership.get("self").copied();
                             return impl_ownership.or(Some(OwnershipMode::Borrowed));
                         }
                     }

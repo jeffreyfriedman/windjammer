@@ -5296,7 +5296,9 @@ impl<'ast> CodeGenerator<'ast> {
         string_analysis::collect_concat_parts_static(left, &mut parts);
         string_analysis::collect_concat_parts_static(right, &mut parts);
 
-        let use_additive = parts.iter().any(string_analysis::expression_produces_string);
+        let use_additive = parts
+            .iter()
+            .any(string_analysis::expression_produces_string);
 
         if use_additive {
             let mut acc = self.generate_expression(&parts[0]);
