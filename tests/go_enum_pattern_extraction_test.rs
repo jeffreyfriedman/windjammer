@@ -7,8 +7,20 @@
 use std::process::Command;
 use tempfile::TempDir;
 
+fn go_is_installed() -> bool {
+    Command::new("go")
+        .arg("version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 #[test]
 fn test_go_enum_variant_value_extraction() {
+    if !go_is_installed() {
+        eprintln!("SKIP: Go not installed");
+        return;
+    }
     let source = r#"
 enum Maybe {
     Some(int),
@@ -85,6 +97,10 @@ fn main() {
 
 #[test]
 fn test_go_enum_variant_construction() {
+    if !go_is_installed() {
+        eprintln!("SKIP: Go not installed");
+        return;
+    }
     let source = r#"
 enum Maybe {
     Some(int),

@@ -2,50 +2,38 @@
 ///
 /// When float inference says f32 on one side but `infer_expression_type` only knows `Type::Float`,
 /// codegen must not treat that as f64 and promote the other operand.
+use std::fs;
 use std::process::Command;
-use windjammer::*;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "float_spurious_f64_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let rs_file = test_dir.join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
+    let dir = tempdir().expect("tempdir for rustc");
+    let rs_file = dir.path().join("test.rs");
+    fs::write(&rs_file, rs_code).unwrap();
 
     let output = Command::new("rustc")
-        .current_dir(&test_dir)
+        .current_dir(dir.path())
         .arg("test.rs")
         .arg("--crate-type")
         .arg("lib")
@@ -55,14 +43,11 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
-
     (output.status.success(), stderr)
 }
 
 #[test]
 fn test_f32_acos_mul_float_literal_no_as_f64_on_left() {
-    // Note: Windjammer tokenizes `57.29_f32` like Rust digit separators + `f32`; use plain literals in f32 context.
     let source = r#"
 pub fn angle_deg(value: f32) -> f32 {
     let x = value.acos() * 57.29
@@ -70,7 +55,7 @@ pub fn angle_deg(value: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = compile_single_file(source);
     assert!(
         !output.contains("acos() as f64") && !output.contains(".acos() as f64"),
         "must not cast f32 acos() to f64 when multiplying by float literal in f32 context; got:\n{}",
@@ -94,7 +79,7 @@ pub fn scaled(dist: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = compile_single_file(source);
     assert!(
         !output.contains(" as f64"),
         "must not insert f64 promotion in f32 * (f32 - f32); got:\n{}",
@@ -120,7 +105,7 @@ pub fn combine(v: Vis) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = compile_single_file(source);
     assert!(
         !output.contains(" as f64"),
         "f32 field * f32 field must not insert as f64; got:\n{}",
