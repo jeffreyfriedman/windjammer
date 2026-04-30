@@ -3,26 +3,16 @@
 /// Tests that the WGSL backend can compile a simple function to WGSL.
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn transpile_wj_to_wgsl(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_wgsl_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    let test_dir = tempdir().expect("tempdir for wgsl test");
 
-    let wj_file = test_dir.join("test.wj");
+    let wj_file = test_dir.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let out_dir = test_dir.join("out");
+    let out_dir = test_dir.path().join("out");
 
-    // Use CARGO_BIN_EXE_wj for cross-platform compatibility
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
         .arg("build")
@@ -35,7 +25,6 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
         .output()
         .expect("Failed to run wj compiler");
 
-    // Check compilation status
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -46,12 +35,7 @@ fn transpile_wj_to_wgsl(source: &str) -> String {
     }
 
     let wgsl_file = out_dir.join("test.wgsl");
-    let content = fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file");
-
-    // Clean up temp directory
-    let _ = fs::remove_dir_all(&test_dir);
-
-    content
+    fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file")
 }
 
 #[test]

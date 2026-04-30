@@ -9,21 +9,14 @@
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 #[ignore = "wj test: test package build fails with E0432 (my_game_core not linked in test harness) — not the lib.rs `pub mod mod` issue fixed in main.rs/test_runner.rs"]
 fn test_library_uses_correct_lib_name() {
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_test_lib_name_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
-
-    fs::create_dir_all(&test_dir).unwrap();
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
 
     // Create a minimal Cargo.toml with lib name
     let cargo_toml = r#"[package]
@@ -87,9 +80,6 @@ fn test_player_creation() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that tests pass (no E0433 errors)
     assert!(

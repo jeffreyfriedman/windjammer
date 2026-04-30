@@ -33,15 +33,14 @@ fn test_wj_shader_compile_cli() {
     use std::fs;
     use std::process::Command;
 
-    let temp = std::env::temp_dir().join("wjsl_test");
-    fs::create_dir_all(&temp).unwrap();
-    let input = temp.join("test.wjsl");
+    let temp = tempfile::tempdir().expect("tempdir for wjsl cli test");
+    let input = temp.path().join("test.wjsl");
     fs::write(
         &input,
         "shader S { uniform screen_size: Vec2<f32> storage out: array<Vec4<f32>> }",
     )
     .unwrap();
-    let output = temp.join("test.wgsl");
+    let output = temp.path().join("test.wgsl");
 
     let wj = env!("CARGO_BIN_EXE_wj");
     let result = Command::new(wj)
@@ -61,7 +60,6 @@ fn test_wj_shader_compile_cli() {
     let wgsl = fs::read_to_string(&output).unwrap();
     assert!(wgsl.contains("struct Uniforms"));
     assert!(wgsl.contains("vec2<f32>"));
-    let _ = fs::remove_dir_all(&temp);
 }
 
 #[test]

@@ -5,73 +5,51 @@
 //! 2. `Vec::with_capacity` + `u8` indexing → must not emit `&mask[i]` when element is Copy-in-practice
 //! 3. Mixed f32/f64: f64 literal × `as f32` and f32 chain + f64 literal
 
+use std::fs;
 use std::process::Command;
-use windjammer::*;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
 
 fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-    assert!(
-        float_inference.errors.is_empty(),
-        "{:?}",
-        float_inference.errors
-    );
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn rustc_check(rs: &str) -> (bool, String) {
-    let mut last_err = String::new();
-    for attempt in 0u32..3 {
-        let dir = std::env::temp_dir().join(format!(
-            "e0277_{}_{}_{}_{:?}",
-            std::process::id(),
-            attempt,
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let p = dir.join("crate_root.rs");
-        std::fs::write(&p, rs).unwrap();
-        let out = Command::new("rustc")
-            .args([
-                "--crate-type",
-                "lib",
-                "--edition",
-                "2021",
-                "--crate-name",
-                &format!("e0277_{}", attempt),
-                p.to_str().unwrap(),
-            ])
-            .output()
-            .expect("rustc");
-        last_err = String::from_utf8_lossy(&out.stderr).into_owned();
-        let _ = std::fs::remove_dir_all(&dir);
-        if out.status.success() {
-            return (true, last_err);
-        }
-        if !last_err.contains("failed to build archive")
-            && !last_err.contains("failed to open object file")
-        {
-            return (false, last_err);
-        }
-    }
-    (false, last_err)
+    let dir = tempdir().expect("tempdir for rustc");
+    let p = dir.path().join("verify.rs");
+    fs::write(&p, rs).unwrap();
+    let out = Command::new("rustc")
+        .args([
+            "--crate-type",
+            "lib",
+            "--emit",
+            "metadata",
+            "--edition",
+            "2021",
+            "-o",
+        ])
+        .arg(dir.path().join("verify.rmeta"))
+        .arg(&p)
+        .output()
+        .expect("rustc");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    (out.status.success(), stderr)
 }
 
 #[test]
