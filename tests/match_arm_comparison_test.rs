@@ -1,6 +1,29 @@
 use std::fs;
 use std::process::Command;
 
+/// Keeps temp dir alive for the rest of the test (drop order: tuple first field last if we use `_root` binding).
+fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let test_root = tempfile::tempdir().expect("tempdir");
+    let test_dir = test_root.path();
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, wj_code).expect("write test.wj");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", wj_file.to_str().unwrap()])
+        .current_dir(test_dir)
+        .output()
+        .expect("Failed to run wj build");
+
+    assert!(
+        output.status.success(),
+        "wj build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let build_dir = test_dir.join("build");
+    (test_root, build_dir)
+}
+
 #[test]
 fn test_match_arm_binding_comparison_copy_type_cloned_in_if() {
     // Problem: match self.cost.clone() { Cost::Gold(amount) => if gold >= amount { ... } }
@@ -50,25 +73,9 @@ pub fn main() {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_match_arm_copy_cloned_if";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Should NOT add * for Copy type match arm bindings (critical!)
@@ -93,12 +100,9 @@ pub fn main() {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 
@@ -138,25 +142,9 @@ pub fn main() {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_match_arm_copy";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Should NOT add * for Copy type match arm bindings
@@ -173,12 +161,9 @@ pub fn main() {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 
@@ -229,36 +214,17 @@ pub fn main() {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_match_arm_string";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 
     if !cargo_output.status.success() {
         let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        let rs_file = format!("{}/test.rs", build_dir);
+        let rs_file = build_dir.join("test.rs");
         let generated_code = fs::read_to_string(&rs_file).unwrap();
         println!("Generated Rust code:\n{}", generated_code);
         panic!("Cargo build failed:\n{}", stderr);

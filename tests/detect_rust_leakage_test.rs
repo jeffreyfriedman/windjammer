@@ -9,7 +9,6 @@
 /// - `.as_str()`, `.as_ref()`, `.as_mut()` method calls
 /// - `.unwrap()`, `.expect()` panic-inducing calls
 /// - Explicit lifetime annotations ('a, 'b, etc.)
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -154,12 +153,9 @@ struct CompileResult {
 }
 
 fn try_compile(source: &str) -> CompileResult {
-    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/rust_leakage_test_{}_{}", std::process::id(), counter);
-
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = PathBuf::from(&test_dir).join("test.wj");
+    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let source_file = tmp.path().join("test.wj");
     std::fs::write(&source_file, source).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
@@ -169,7 +165,7 @@ fn try_compile(source: &str) -> CompileResult {
             "--target",
             "rust",
             "--output",
-            &test_dir,
+            tmp.path().to_str().unwrap(),
             "--no-cargo",
         ])
         .output()

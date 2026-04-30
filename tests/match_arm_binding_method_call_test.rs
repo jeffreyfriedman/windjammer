@@ -27,6 +27,28 @@
 use std::fs;
 use std::process::Command;
 
+fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let test_root = tempfile::tempdir().expect("tempdir");
+    let test_dir = test_root.path();
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, wj_code).expect("write test.wj");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", wj_file.to_str().unwrap()])
+        .current_dir(test_dir)
+        .output()
+        .expect("Failed to run wj build");
+
+    assert!(
+        output.status.success(),
+        "wj build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let build_dir = test_dir.join("build");
+    (test_root, build_dir)
+}
+
 #[test]
 fn test_match_arm_binding_auto_borrow_for_method() {
     let wj_code = r#"
@@ -64,25 +86,9 @@ impl Inventory {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_match_arm_method_call";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Match arm bindings (owned String) should be auto-borrowed when passed to &String params
@@ -94,12 +100,9 @@ impl Inventory {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 
@@ -136,25 +139,9 @@ pub fn handle_event(event: Event, manager: DialogManager) -> bool {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_match_arm_multiple_params";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Both match arm bindings should be auto-borrowed
@@ -165,12 +152,9 @@ pub fn handle_event(event: Event, manager: DialogManager) -> bool {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 

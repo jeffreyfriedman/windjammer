@@ -4,9 +4,8 @@
 /// Root Cause: Analyzer doesn't infer self parameter for trait methods
 /// Expected: fn initialize() → fn initialize(&mut self)
 ///          fn get_name() → fn get_name(&self)
-use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tempfile::TempDir;
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -145,37 +144,19 @@ pub trait Factory {
 
 // Helper function to compile Windjammer code and return generated Rust
 fn compile_and_get_rust(source: &str) -> String {
-    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!(
-        "/tmp/trait_ownership_test_{}_{}",
-        std::process::id(),
-        counter
-    );
-
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = PathBuf::from(&test_dir).join("test.wj");
+    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let test_dir = TempDir::new().expect("tempdir");
+    let source_file = test_dir.path().join("test.wj");
     std::fs::write(&source_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_file.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
+    windjammer::build_project(
+        &source_file,
+        test_dir.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to compile Windjammer code");
 
-    assert!(
-        output.status.success(),
-        "Compilation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_file = PathBuf::from(&test_dir).join("test.rs");
+    let rust_file = test_dir.path().join("test.rs");
     std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

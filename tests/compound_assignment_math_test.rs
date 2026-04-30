@@ -13,7 +13,6 @@
 /// - >>= (right shift)
 ///
 /// Expected: All operators should work naturally with numeric types
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -306,43 +305,32 @@ pub fn compute() -> i32 {
 
 // Helper function
 fn compile_and_verify_rust(source: &str) -> (bool, String) {
-    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/math_compound_test_{}_{}", std::process::id(), counter);
-
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = PathBuf::from(&test_dir).join("test.wj");
+    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let source_file = tmp.path().join("test.wj");
     std::fs::write(&source_file, source).unwrap();
 
-    // Compile Windjammer -> Rust
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_file.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return (false, format!("Compilation failed: {}", stderr));
+    if let Err(e) = windjammer::build_project(
+        &source_file,
+        tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    ) {
+        return (false, format!("Compilation failed: {}", e));
     }
 
-    let rust_file = PathBuf::from(&test_dir).join("test.rs");
+    let rust_file = tmp.path().join("test.rs");
     let rust_code =
         std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
-    // Verify Rust compiles
+    let rmeta = tmp.path().join("verify.rmeta");
     let rustc = Command::new("rustc")
+        .arg("--edition=2021")
         .arg("--crate-type=lib")
-        .arg(&rust_file)
+        .arg("--emit=metadata")
         .arg("-o")
-        .arg(PathBuf::from(&test_dir).join("test.rlib"))
+        .arg(rmeta.to_str().unwrap())
+        .arg(rust_file.to_str().unwrap())
         .output()
         .expect("Failed to run rustc");
 

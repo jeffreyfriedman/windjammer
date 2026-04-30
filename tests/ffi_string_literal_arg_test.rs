@@ -42,7 +42,7 @@ fn test_string_literal_to_extern_fn_is_wrapped() {
 extern fn save_file(path: string, data: i32)
 
 pub fn do_save() {
-    save_file("/tmp/test.txt", 42)
+    save_file("fixture_output.txt", 42)
 }
 "#;
     let rust_code = compile_wj(code);
@@ -53,7 +53,7 @@ pub fn do_save() {
         rust_code
     );
     assert!(
-        !rust_code.contains("save_file(\"/tmp/test.txt\""),
+        !rust_code.contains("save_file(\"fixture_output.txt\""),
         "Raw string literal should NOT be passed directly to extern fn.\nGenerated:\n{}",
         rust_code
     );

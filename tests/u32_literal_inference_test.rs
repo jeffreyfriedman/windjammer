@@ -7,7 +7,28 @@
 // Fix: Constrain literals to match struct field types
 
 use std::fs;
-use std::process::Command;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[test]
 fn test_u32_struct_field_literal() {
@@ -25,21 +46,7 @@ fn create_entity() -> Entity {
 }
 "#;
 
-    let test_file = "/tmp/test_u32_field.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_u32_field.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -58,9 +65,6 @@ fn create_entity() -> Entity {
         rust_code
     );
 
-    // Cleanup
-    let _ = fs::remove_file(test_file);
-
     println!("✅ u32 struct field literal test PASSED");
 }
 
@@ -78,21 +82,7 @@ fn create_red() -> Color {
 }
 "#;
 
-    let test_file = "/tmp/test_u8_field.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_u8_field.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -102,9 +92,6 @@ fn create_red() -> Color {
         "Should NOT generate i32 literals for u8 fields\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ u8 struct field literal test PASSED");
 }
@@ -129,21 +116,7 @@ fn create_nested() -> Outer {
 }
 "#;
 
-    let test_file = "/tmp/test_nested_u32.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_nested_u32.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -153,9 +126,6 @@ fn create_nested() -> Outer {
         "Nested struct u32 fields should NOT generate i32 literals\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Nested struct u32 literal test PASSED");
 }
@@ -177,21 +147,7 @@ fn create_choices() -> Vec<Choice> {
 }
 "#;
 
-    let test_file = "/tmp/test_vec_struct_u32.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_vec_struct_u32.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -212,9 +168,6 @@ fn create_choices() -> Vec<Choice> {
         "Should generate u32 literals for u32 fields\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Vec of structs with u32 literals test PASSED");
 }
