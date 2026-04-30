@@ -9,38 +9,39 @@
 ///
 /// Discovered via dogfooding: windjammer-ui/curve_editor.wj
 use std::process::Command;
+use tempfile::tempdir;
 
-fn compile_wj_source_named(source: &str, name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("wj_vec_get_ref_{}", name));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn compile_wj_source_named(source: &str, _name: &str) -> String {
+    let dir = tempdir().expect("tempdir for compile_wj_source_named");
 
-    let wj_file = dir.join("test.wj");
+    let wj_file = dir.path().join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
+
+    let out = dir.path().join("out");
+    std::fs::create_dir_all(&out).unwrap();
 
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
-            dir.to_str().unwrap(),
+            out.to_str().unwrap(),
             "--no-cargo",
             "--library",
         ])
         .output()
         .expect("Failed to run wj compiler");
 
-    // Find the generated .rs file
     let mut rs_content = String::new();
-    for entry in std::fs::read_dir(&dir)
-        .unwrap()
-        .chain(std::fs::read_dir(dir.join("src")).into_iter().flatten())
-        .flatten()
-    {
-        if entry.path().extension().is_some_and(|e| e == "rs") {
-            if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                rs_content.push_str(&content);
-                rs_content.push('\n');
+    for search_dir in [&out, &dir.path().join("src")] {
+        if let Ok(entries) = std::fs::read_dir(search_dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|e| e == "rs") {
+                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                        rs_content.push_str(&content);
+                        rs_content.push('\n');
+                    }
+                }
             }
         }
     }

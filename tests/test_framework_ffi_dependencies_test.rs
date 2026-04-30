@@ -9,6 +9,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn get_wj_compiler() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_wj"))
@@ -17,12 +18,8 @@ fn get_wj_compiler() -> PathBuf {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_dependencies_copied_to_test_library() -> Result<()> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ffi_deps_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir)?;
+    let _tmp = tempdir()?;
+    let temp_dir = _tmp.path().to_path_buf();
 
     // Create src_wj with a simple test
     let src_wj_dir = temp_dir.join("src_wj");
@@ -117,9 +114,6 @@ fn test_simple() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     // Should NOT have "no external crate `wgpu`" error
     assert!(

@@ -12,39 +12,39 @@
 ///
 /// Discovered via dogfooding: ecs/components.wj (ComponentArray<T>)
 use std::process::Command;
+use tempfile::tempdir;
 
-fn compile_wj_source_named(source: &str, name: &str) -> String {
-    let dir =
-        std::env::temp_dir().join(format!("wj_vec_index_ctx_{}_{}", name, std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn compile_wj_source_named(source: &str, _name: &str) -> String {
+    let dir = tempdir().expect("tempdir for compile_wj_source_named");
 
-    let wj_file = dir.join("test.wj");
+    let wj_file = dir.path().join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
+
+    let out = dir.path().join("out");
+    std::fs::create_dir_all(&out).unwrap();
 
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
-            dir.to_str().unwrap(),
+            out.to_str().unwrap(),
             "--no-cargo",
             "--library",
         ])
         .output()
         .expect("Failed to run wj compiler");
 
-    // Find the generated .rs file
     let mut rs_content = String::new();
-    for entry in std::fs::read_dir(&dir)
-        .unwrap()
-        .chain(std::fs::read_dir(dir.join("src")).into_iter().flatten())
-        .flatten()
-    {
-        if entry.path().extension().is_some_and(|e| e == "rs") {
-            if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                rs_content.push_str(&content);
-                rs_content.push('\n');
+    for search_dir in [&out, &dir.path().join("src")] {
+        if let Ok(entries) = std::fs::read_dir(search_dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|e| e == "rs") {
+                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                        rs_content.push_str(&content);
+                        rs_content.push('\n');
+                    }
+                }
             }
         }
     }
@@ -53,39 +53,45 @@ fn compile_wj_source_named(source: &str, name: &str) -> String {
 }
 
 fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
-    let dir =
-        std::env::temp_dir().join(format!("wj_vec_index_context_check_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = tempdir().expect("tempdir for compile_wj_to_rust_and_check");
 
-    let wj_file = dir.join("test.wj");
+    let wj_file = dir.path().join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
+
+    let out = dir.path().join("out");
+    std::fs::create_dir_all(&out).unwrap();
 
     let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
             wj_file.to_str().unwrap(),
             "--output",
-            dir.to_str().unwrap(),
+            out.to_str().unwrap(),
             "--no-cargo",
         ])
         .output()
         .expect("Failed to run wj compiler");
 
-    // Find generated main.rs
-    let src_dir = dir.join("src");
+    let src_dir = out.join("src");
     let main_rs = if src_dir.join("main.rs").exists() {
         src_dir.join("main.rs")
     } else {
-        dir.join("test.rs")
+        out.join("test.rs")
     };
 
     let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
 
-    // Try to compile the generated Rust
-    let bin_output = dir.join("test_bin");
     let rustc = Command::new("rustc")
-        .args(["--edition", "2021", "-o", bin_output.to_str().unwrap()])
+        .args([
+            "--crate-type",
+            "lib",
+            "--emit",
+            "metadata",
+            "--edition",
+            "2021",
+            "-o",
+        ])
+        .arg(dir.path().join("verify.rmeta"))
         .arg(&main_rs)
         .output()
         .expect("Failed to run rustc");
