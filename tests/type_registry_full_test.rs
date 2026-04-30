@@ -9,7 +9,7 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_type_registry_generates_correct_imports() {
-    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     // Create a temporary directory structure
     let temp_dir =

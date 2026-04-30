@@ -11,17 +11,7 @@ use std::fs;
 use std::process::Command;
 
 fn wj_path() -> std::path::PathBuf {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !p.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            p
-        );
-    }
-    p
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 fn compile_wj(source: &str, test_name: &str) -> String {

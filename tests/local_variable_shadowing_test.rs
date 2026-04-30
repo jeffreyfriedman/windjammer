@@ -137,11 +137,7 @@ fn compile_code(code: &str) -> Result<String, String> {
 
     fs::create_dir(&output_dir).map_err(|e| format!("Failed to create output dir: {}", e))?;
 
-    // Find the wj binary (should be in target/release/wj)
-    let mut wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wj_path.push("target");
-    wj_path.push("release");
-    wj_path.push("wj");
+    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(&wj_path)
         .arg("build")

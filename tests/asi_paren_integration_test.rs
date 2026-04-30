@@ -24,7 +24,7 @@ pub fn test_asi() -> f32 {
     fs::write(&wj_file_path, wj_code).expect("Failed to write .wj test file");
 
     // Use the wj binary from target/release, built by cargo
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(&wj_binary)
         .arg("build")

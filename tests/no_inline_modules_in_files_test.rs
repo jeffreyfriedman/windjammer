@@ -73,7 +73,7 @@ fn test_no_inline_modules_in_individual_files() {
     )
     .unwrap();
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = temp_dir.path().join("output");
 

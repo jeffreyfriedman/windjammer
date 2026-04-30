@@ -22,7 +22,7 @@ fn compile_and_get_rust(source: &str) -> String {
     std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
     std::fs::write(&test_file, source).expect("Failed to write test file");
 
-    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let status = Command::new(&wj_path)
         .arg("build")
