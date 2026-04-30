@@ -56,6 +56,7 @@ fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
     let rs_file = out_dir.join("test.rs");
     let rustc_output = Command::new("rustc")
         .arg("--edition=2021")
+        .arg("--crate-type=lib")
         .arg("--emit=metadata")
         .arg("-o")
         .arg(temp_dir.path().join("test"))
