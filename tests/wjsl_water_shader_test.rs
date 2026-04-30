@@ -4,6 +4,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -15,6 +21,10 @@ fn transpile_shader(filename: &str) -> String {
 
 #[test]
 fn test_wjsl_water_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
@@ -38,6 +48,10 @@ fn test_wjsl_water_transpiles() {
 
 #[test]
 fn test_water_binding_layout() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     assert!(
@@ -67,6 +81,10 @@ fn test_water_binding_layout() {
 
 #[test]
 fn test_water_animation_features() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     // Wave animation using time
@@ -93,6 +111,10 @@ fn test_water_animation_features() {
 
 #[test]
 fn test_water_reflection_features() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     // Fresnel effect for reflection/refraction blending
@@ -119,6 +141,10 @@ fn test_water_reflection_features() {
 
 #[test]
 fn test_water_workgroup_size() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     assert!(
@@ -130,6 +156,10 @@ fn test_water_workgroup_size() {
 
 #[test]
 fn test_water_depth_and_transparency() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("water.wjsl");
 
     // Water depth affects transparency/absorption

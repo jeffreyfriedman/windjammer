@@ -3,6 +3,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -14,6 +20,10 @@ fn transpile_shader(filename: &str) -> String {
 
 #[test]
 fn test_wjsl_atmosphere_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("atmosphere.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
@@ -57,6 +67,10 @@ fn test_wjsl_atmosphere_transpiles() {
 
 #[test]
 fn test_atmosphere_binding_layout_matches_pipeline() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("atmosphere.wjsl");
 
     // Binding 0: AtmosphereParams uniform
@@ -90,6 +104,10 @@ fn test_atmosphere_binding_layout_matches_pipeline() {
 
 #[test]
 fn test_atmosphere_sky_rendering_features() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("atmosphere.wjsl");
 
     // Sky gradient blending (horizon → zenith)
@@ -123,6 +141,10 @@ fn test_atmosphere_sky_rendering_features() {
 
 #[test]
 fn test_atmosphere_workgroup_size() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("atmosphere.wjsl");
 
     assert!(

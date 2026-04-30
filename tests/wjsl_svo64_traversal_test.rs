@@ -9,6 +9,12 @@ fn transpile(source: &str) -> Result<String, String> {
     windjammer::wjsl::transpile_wjsl(source).map_err(|e| e.to_string())
 }
 
+fn game_shaders_available() -> bool {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
     let base_dir = std::path::PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -22,6 +28,10 @@ fn transpile_shader_file(filename: &str) -> Result<String, String> {
 
 #[test]
 fn test_svo64_child_index_function_present() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_raymarch.wjsl").unwrap();
     assert!(
         result.contains("get_child_index_64"),
@@ -31,6 +41,10 @@ fn test_svo64_child_index_function_present() {
 
 #[test]
 fn test_svo64_no_octant_function() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_raymarch.wjsl").unwrap();
     assert!(
         !result.contains("fn get_octant"),
@@ -40,6 +54,10 @@ fn test_svo64_no_octant_function() {
 
 #[test]
 fn test_svo64_quarter_based_subdivision() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_raymarch.wjsl").unwrap();
     assert!(
         result.contains("0.25"),
@@ -77,6 +95,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_lighting_shader_uses_svo64() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
         result.contains("get_child_index_64"),
@@ -90,6 +112,10 @@ fn test_lighting_shader_uses_svo64() {
 
 #[test]
 fn test_lighting_shader_l1_cache_size_64() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
         result.contains("yi * 4u") && result.contains("zi * 16u"),

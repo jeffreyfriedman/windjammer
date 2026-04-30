@@ -3,6 +3,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -14,6 +20,10 @@ fn transpile_shader(filename: &str) -> String {
 
 #[test]
 fn test_particle_simulation_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_simulation.wjsl");
 
     assert!(!wgsl.is_empty());
@@ -35,6 +45,10 @@ fn test_particle_simulation_transpiles() {
 
 #[test]
 fn test_particle_simulation_bindings() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_simulation.wjsl");
 
     assert!(
@@ -56,6 +70,10 @@ fn test_particle_simulation_bindings() {
 
 #[test]
 fn test_particle_simulation_physics() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_simulation.wjsl");
 
     assert!(
@@ -82,6 +100,10 @@ fn test_particle_simulation_physics() {
 
 #[test]
 fn test_particle_render_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_render.wjsl");
 
     assert!(!wgsl.is_empty());
@@ -103,6 +125,10 @@ fn test_particle_render_transpiles() {
 
 #[test]
 fn test_particle_render_bindings() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_render.wjsl");
 
     assert!(
@@ -129,6 +155,10 @@ fn test_particle_render_bindings() {
 
 #[test]
 fn test_particle_render_projection() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("particle_render.wjsl");
 
     assert!(
