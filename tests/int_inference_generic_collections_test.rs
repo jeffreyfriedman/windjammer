@@ -6,35 +6,22 @@
 // Tests: HashMap::insert, BTreeMap::insert, Vec::push, custom struct fields
 
 use std::fs;
-use std::process::Command;
+use tempfile::TempDir;
 
-fn compile_and_get_rust(wj_source: &str, test_name: &str) -> String {
-    let output_dir = format!("/tmp/wj_int_inference_{}", test_name);
-    fs::create_dir_all(&output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
+fn compile_and_get_rust(wj_source: &str, _test_name: &str) -> String {
+    let tmp = TempDir::new().expect("tempdir");
+    let source_file = tmp.path().join("test.wj");
+    fs::write(&source_file, wj_source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            &output_dir,
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
+    windjammer::build_project(
+        &source_file,
+        tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to compile Windjammer code");
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        stderr
-    );
-
-    fs::read_to_string(format!("{}/test.rs", output_dir)).expect("Generated Rust file not found")
+    fs::read_to_string(tmp.path().join("test.rs")).expect("Generated Rust file not found")
 }
 
 #[test]

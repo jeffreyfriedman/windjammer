@@ -6,7 +6,28 @@
 // Fix: Infer literals as usize when compared with .len()
 
 use std::fs;
-use std::process::Command;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[test]
 fn test_len_comparison_with_zero() {
@@ -19,21 +40,7 @@ fn has_items(items: Vec<i32>) -> bool {
 }
 "#;
 
-    let test_file = "/tmp/test_len_zero.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_len_zero.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -44,9 +51,6 @@ fn has_items(items: Vec<i32>) -> bool {
         "Should NOT generate i32 literal in len() comparison\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ len() > 0 test PASSED");
 }
@@ -59,21 +63,7 @@ fn is_valid_team(team: Vec<String>) -> bool {
 }
 "#;
 
-    let test_file = "/tmp/test_len_const.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_len_const.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -83,9 +73,6 @@ fn is_valid_team(team: Vec<String>) -> bool {
         "Should NOT generate i32 literal in len() comparison\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ len() >= 2 test PASSED");
 }
@@ -104,21 +91,7 @@ impl Animation {
 }
 "#;
 
-    let test_file = "/tmp/test_len_assign.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_len_assign.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -128,9 +101,6 @@ impl Animation {
         "Should generate usize literal for usize field\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ usize field assignment test PASSED");
 }

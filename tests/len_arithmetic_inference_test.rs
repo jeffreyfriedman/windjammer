@@ -3,25 +3,27 @@
 // Bug: items.len() - 1 → 1_i32 → E0277 cannot subtract i32 from usize
 
 use std::fs;
-use std::process::Command;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
 
-fn compile_and_read_rs(wj_src: &str, tmp_wj: &str, build_name: &str) -> String {
-    fs::write(tmp_wj, wj_src).expect("write temp .wj");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", tmp_wj, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("wj build");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let rs_path = format!("./build/{}.rs", build_name);
-    fs::read_to_string(&rs_path).unwrap_or_else(|e| panic!("read {}: {}", rs_path, e))
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[test]
@@ -32,7 +34,7 @@ fn last_index(items: Vec<i32>) -> usize {
 }
 "#;
 
-    let rust = compile_and_read_rs(test_wj, "/tmp/test_len_minus.wj", "test_len_minus");
+    let rust = compile_single_file(test_wj);
 
     assert!(
         rust.contains("1_usize"),
@@ -44,8 +46,6 @@ fn last_index(items: Vec<i32>) -> usize {
         "Should not default to i32 when subtracting from usize\n{}",
         rust
     );
-
-    let _ = fs::remove_file("/tmp/test_len_minus.wj");
 }
 
 #[test]
@@ -56,15 +56,13 @@ fn capacity_with_buffer(items: Vec<i32>) -> usize {
 }
 "#;
 
-    let rust = compile_and_read_rs(test_wj, "/tmp/test_len_plus.wj", "test_len_plus");
+    let rust = compile_single_file(test_wj);
 
     assert!(
         rust.contains("10_usize"),
         "Expected '10_usize' in len() addition. Generated:\n{}",
         rust
     );
-
-    let _ = fs::remove_file("/tmp/test_len_plus.wj");
 }
 
 #[test]
@@ -75,15 +73,13 @@ fn check_bounds(items: Vec<i32>, i: usize) -> bool {
 }
 "#;
 
-    let rust = compile_and_read_rs(test_wj, "/tmp/test_len_cmp_sub.wj", "test_len_cmp_sub");
+    let rust = compile_single_file(test_wj);
 
     assert!(
         rust.contains("1_usize"),
         "Expected '1_usize' in len()-1 comparison. Generated:\n{}",
         rust
     );
-
-    let _ = fs::remove_file("/tmp/test_len_cmp_sub.wj");
 }
 
 #[test]
@@ -95,17 +91,11 @@ fn set_last_index(items: Vec<i32>) {
 }
 "#;
 
-    let rust = compile_and_read_rs(
-        test_wj,
-        "/tmp/test_len_assign_sub.wj",
-        "test_len_assign_sub",
-    );
+    let rust = compile_single_file(test_wj);
 
     assert!(
         rust.contains("1_usize"),
         "Expected '1_usize' when assigning to usize var. Generated:\n{}",
         rust
     );
-
-    let _ = fs::remove_file("/tmp/test_len_assign_sub.wj");
 }

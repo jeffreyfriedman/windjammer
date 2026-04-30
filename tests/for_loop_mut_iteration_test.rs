@@ -1,6 +1,28 @@
 use std::fs;
 use std::process::Command;
 
+fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let test_root = tempfile::tempdir().expect("tempdir");
+    let test_dir = test_root.path();
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, wj_code).expect("write test.wj");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", wj_file.to_str().unwrap()])
+        .current_dir(test_dir)
+        .output()
+        .expect("Failed to run wj build");
+
+    assert!(
+        output.status.success(),
+        "wj build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let build_dir = test_dir.join("build");
+    (test_root, build_dir)
+}
+
 #[test]
 fn test_for_loop_detects_mutation_needs_mut() {
     // Problem: for (id, val) in self.items where val is mutated → needs &mut
@@ -28,27 +50,9 @@ pub fn main() {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_for_loop_mut";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-
-    // Check that generated code uses &mut
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Should generate &mut for mutable iteration
@@ -58,12 +62,9 @@ pub fn main() {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 
@@ -99,25 +100,9 @@ pub fn main() {
 }
 "#;
 
-    let test_dir = "/tmp/windjammer_for_loop_readonly";
-    fs::create_dir_all(test_dir).unwrap();
-    let wj_file = format!("{}/test.wj", test_dir);
-    fs::write(&wj_file, wj_code).unwrap();
+    let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &wj_file])
-        .current_dir(test_dir)
-        .output()
-        .expect("Failed to run wj build");
-
-    assert!(
-        output.status.success(),
-        "wj build failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let build_dir = format!("{}/build", test_dir);
-    let rs_file = format!("{}/test.rs", build_dir);
+    let rs_file = build_dir.join("test.rs");
     let generated_code = fs::read_to_string(&rs_file).unwrap();
 
     // Should generate & for readonly iteration
@@ -127,12 +112,9 @@ pub fn main() {
         generated_code
     );
 
+    let manifest = build_dir.join("Cargo.toml");
     let cargo_output = Command::new("cargo")
-        .args([
-            "build",
-            "--manifest-path",
-            &format!("{}/Cargo.toml", build_dir),
-        ])
+        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
         .output()
         .expect("Failed to run cargo build");
 

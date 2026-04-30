@@ -7,8 +7,6 @@
 /// This is critical for compound assignment optimization:
 /// - If right side is String, can't use += (needs =)
 /// - If right side is &str, can use += (efficient)
-use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -118,33 +116,18 @@ pub fn build_message(name: string, age: i32) -> string {
 
 // Helper function
 fn compile_and_get_rust(source: &str) -> String {
-    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/func_return_test_{}_{}", std::process::id(), counter);
-
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = PathBuf::from(&test_dir).join("test.wj");
+    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let source_file = tmp.path().join("test.wj");
     std::fs::write(&source_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_file.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
+    windjammer::build_project(
+        &source_file,
+        tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to run wj compiler");
 
-    assert!(
-        output.status.success(),
-        "Compilation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_file = PathBuf::from(&test_dir).join("test.rs");
-    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
+    std::fs::read_to_string(tmp.path().join("test.rs")).expect("Failed to read generated Rust file")
 }

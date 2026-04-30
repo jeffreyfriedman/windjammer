@@ -7,7 +7,28 @@
 //      Prefer usize for ranges ending with .len()
 
 use std::fs;
-use std::process::Command;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[test]
 fn test_range_with_vec_len() {
@@ -19,21 +40,7 @@ fn test(items: Vec<i32>) {
 }
 "#;
 
-    let test_file = "/tmp/test_range_len.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_range_len.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -50,9 +57,6 @@ fn test(items: Vec<i32>) {
         "Should NOT generate: 0_i32..items.len() (type mismatch)\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Range with vec.len() test PASSED - correct type unification!");
 }
@@ -73,21 +77,7 @@ impl Container {
 }
 "#;
 
-    let test_file = "/tmp/test_range_field_len.wj";
-    fs::write(test_file, test_wj).expect("Failed to write test file");
-
-    let output = Command::new("./target/release/wj")
-        .args(["build", test_file, "-o", "./build", "--no-cargo"])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
-    }
-
-    let rs_file = "./build/test_range_field_len.rs";
-    let rust_code = fs::read_to_string(rs_file).expect("Failed to read generated .rs file");
+    let rust_code = compile_single_file(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -105,9 +95,6 @@ impl Container {
         "Should NOT generate: 0_i32..self.items.len()\nGenerated:\n{}",
         rust_code
     );
-
-    // Cleanup
-    let _ = fs::remove_file(test_file);
 
     println!("✅ Range with field.len() test PASSED - correct type unification!");
 }
