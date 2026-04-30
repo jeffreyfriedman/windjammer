@@ -87,7 +87,14 @@ pub fn run_tests(
         println!();
     }
 
-    let temp_dir = std::env::temp_dir().join("windjammer-test");
+    let temp_dir = std::env::temp_dir().join(format!(
+        "windjammer-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir)?;
     }

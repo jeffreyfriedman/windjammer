@@ -11,20 +11,15 @@
 /// 2. Inferred borrowed string (Type::String with inferred borrow) - might need deref
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn compile_wj_test(source: &str) -> (bool, String, String) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_id = format!("test_{}_{}", std::process::id(), test_id);
-
-    let temp_dir = std::env::temp_dir();
-    let test_file = temp_dir.join(format!("{}.wj", unique_id));
+    let dir = tempdir().expect("tempdir for compile_wj_test");
+    let test_file = dir.path().join("test.wj");
     fs::write(&test_file, source).expect("Failed to write temp file");
 
-    let output_dir = temp_dir.join(format!("output_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
+    let output_dir = dir.path().join("output");
+    fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
@@ -40,12 +35,8 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let success = output.status.success();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-    let rs_file = output_dir.join(format!("{}.rs", unique_id));
+    let rs_file = output_dir.join("test.rs");
     let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    // Cleanup
-    let _ = fs::remove_file(&test_file);
-    let _ = fs::remove_dir_all(&output_dir);
 
     (success, rust_code, stderr)
 }
@@ -101,25 +92,24 @@ fn main() {
         rust_code
     );
 
-    // Verify it compiles with rustc
-    let temp_dir = std::env::temp_dir();
-    let rs_file = temp_dir.join(format!("test_str_ref_{}.rs", std::process::id()));
+    let rustc_dir = tempdir().expect("tempdir for rustc");
+    let rs_file = rustc_dir.path().join("verify.rs");
     fs::write(&rs_file, &rust_code).expect("Failed to write Rust file");
 
     let rustc_output = Command::new("rustc")
         .args([
             "--crate-type",
-            "bin",
+            "lib",
+            "--emit",
+            "metadata",
             "--edition",
             "2021",
-            rs_file.to_str().unwrap(),
-            "--out-dir",
-            temp_dir.to_str().unwrap(),
+            "-o",
         ])
+        .arg(rustc_dir.path().join("verify.rmeta"))
+        .arg(&rs_file)
         .output()
         .expect("Failed to run rustc");
-
-    let _ = fs::remove_file(&rs_file);
 
     if !rustc_output.status.success() {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);
@@ -178,25 +168,24 @@ fn main() {
         rust_code
     );
 
-    // Verify it compiles with rustc
-    let temp_dir = std::env::temp_dir();
-    let rs_file = temp_dir.join(format!("test_str_ref_struct_{}.rs", std::process::id()));
+    let rustc_dir = tempdir().expect("tempdir for rustc");
+    let rs_file = rustc_dir.path().join("verify.rs");
     fs::write(&rs_file, &rust_code).expect("Failed to write Rust file");
 
     let rustc_output = Command::new("rustc")
         .args([
             "--crate-type",
-            "bin",
+            "lib",
+            "--emit",
+            "metadata",
             "--edition",
             "2021",
-            rs_file.to_str().unwrap(),
-            "--out-dir",
-            temp_dir.to_str().unwrap(),
+            "-o",
         ])
+        .arg(rustc_dir.path().join("verify.rmeta"))
+        .arg(&rs_file)
         .output()
         .expect("Failed to run rustc");
-
-    let _ = fs::remove_file(&rs_file);
 
     if !rustc_output.status.success() {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr);

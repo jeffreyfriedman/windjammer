@@ -2,6 +2,7 @@
 /// format!() is Rust leakage and should emit a deprecation warning.
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
 
 fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     if !dir.exists() {
@@ -23,22 +24,12 @@ fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
 }
 
 fn compile_wj(source: &str) -> (String, String, String) {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_interp_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
+    let test_dir = tempdir().expect("tempdir for interpolation test");
 
-    let wj_file = test_dir.join("test.wj");
+    let wj_file = test_dir.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let out_dir = test_dir.join("out");
+    let out_dir = test_dir.path().join("out");
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_binary)
@@ -62,8 +53,6 @@ fn compile_wj(source: &str) -> (String, String, String) {
     } else {
         String::new()
     };
-
-    let _ = fs::remove_dir_all(&test_dir);
 
     (generated, stdout, stderr)
 }
