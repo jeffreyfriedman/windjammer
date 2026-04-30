@@ -12,10 +12,9 @@ fn compile_to_rust(wj_code: &str) -> String {
     let wj_file = temp_dir.path().join("test.wj");
     std::fs::write(&wj_file, wj_code).unwrap();
 
-    let compiler_dir = std::env::current_dir().unwrap();
-    let compiler = compiler_dir.join("target/release/wj");
+    let compiler = env!("CARGO_BIN_EXE_wj");
 
-    let output = std::process::Command::new(&compiler)
+    let output = std::process::Command::new(compiler)
         .arg("build")
         .arg(&wj_file)
         .current_dir(temp_dir.path())

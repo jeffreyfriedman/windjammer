@@ -16,7 +16,7 @@ fn test_std_ops_imports_map_to_rust_stdlib() {
     std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     // Get compiler path - use the test-built binary
-    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     // Compile the test file
     let output = Command::new(&wj_compiler)

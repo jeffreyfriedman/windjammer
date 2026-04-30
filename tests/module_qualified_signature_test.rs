@@ -18,15 +18,10 @@
 /// simple names in `build_library_multipass`, and seed the global registry
 /// with dependency crate metadata signatures.
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 
-fn wj_binary() -> String {
-    let local = Path::new("target/release/wj");
-    if local.exists() {
-        return local.to_string_lossy().to_string();
-    }
-    "wj".to_string()
+fn wj_binary() -> &'static str {
+    env!("CARGO_BIN_EXE_wj")
 }
 
 #[test]

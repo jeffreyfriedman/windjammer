@@ -1,13 +1,8 @@
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 
-fn get_wj_binary() -> String {
-    let local = Path::new("target/release/wj");
-    if local.exists() {
-        return local.to_string_lossy().to_string();
-    }
-    "wj".to_string()
+fn get_wj_binary() -> &'static str {
+    env!("CARGO_BIN_EXE_wj")
 }
 
 #[test]

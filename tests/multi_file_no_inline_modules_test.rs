@@ -46,7 +46,7 @@ pub struct PhysicsBody {
 
     // Compile project
     let output_dir = temp_dir.path().join("build");
-    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let status = std::process::Command::new(&wj_compiler)
         .args([
             "build",

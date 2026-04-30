@@ -28,7 +28,7 @@ impl Calculator for SimpleCalc {
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     fs::write(&wj_file_path, wj_code).expect("Failed to write .wj test file");
 
-    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(&wj_compiler)
         .arg("build")

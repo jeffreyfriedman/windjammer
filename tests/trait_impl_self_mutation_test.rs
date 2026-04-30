@@ -17,8 +17,7 @@ fn compile_code(code: &str) -> Result<String, String> {
     let output_dir = temp_dir.path().join("output");
     std::fs::create_dir(&output_dir).unwrap();
 
-    let compiler_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let wj_binary = compiler_path.join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = std::process::Command::new(&wj_binary)
         .arg("build")

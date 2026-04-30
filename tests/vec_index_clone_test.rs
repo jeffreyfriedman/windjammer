@@ -7,7 +7,6 @@
 //! Expected: `func(vec[i as usize].clone())`
 //! Actual:   `func(vec[i as usize])`
 
-use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -27,9 +26,9 @@ fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
     let wj_file = input_dir.join("test.wj");
     std::fs::write(&wj_file, wj_source).unwrap();
 
-    let wj_binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
 
-    let _output = Command::new(&wj_binary)
+    let _output = Command::new(wj_binary)
         .args([
             "build",
             wj_file.to_str().unwrap(),

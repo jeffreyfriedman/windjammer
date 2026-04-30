@@ -21,7 +21,7 @@ fn compile_to_rust(wj_source: &str) -> Result<String, String> {
     std::fs::create_dir_all(&out_dir).expect("Failed to create output dir");
     std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     if !wj_binary.exists() {
         // Fallback to debug build
         let debug = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj");
