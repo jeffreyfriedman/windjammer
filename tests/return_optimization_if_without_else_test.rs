@@ -32,33 +32,24 @@
 
 use anyhow::Result;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+use tempfile::tempdir;
 
 fn compile_wj_source(source: &str) -> Result<String> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir)?;
+    let temp_dir = tempdir()?;
 
-    let source_file = temp_dir.join("test.wj");
+    let source_file = temp_dir.path().join("test.wj");
     fs::write(&source_file, source)?;
 
-    let output_dir = temp_dir.join("output");
-    let wj = get_wj_compiler();
-    let output = Command::new(wj)
+    let output_dir = temp_dir.path().join("output");
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&source_file)
         .arg("--output")
         .arg(&output_dir)
         .arg("--target")
         .arg("rust")
-        .arg("--no-cargo") // Skip cargo build to avoid manifest issues
+        .arg("--no-cargo")
         .output()?;
 
     if !output.status.success() {
@@ -67,8 +58,6 @@ fn compile_wj_source(source: &str) -> Result<String> {
     }
 
     let rust_code = fs::read_to_string(output_dir.join("test.rs"))?;
-    fs::remove_dir_all(&temp_dir).ok();
-
     Ok(rust_code)
 }
 
