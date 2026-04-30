@@ -71,12 +71,9 @@ fn test_struct_init_in_for_loop() {
     std::fs::write(test_dir.join("main.wj"), code).unwrap();
 
     // Compile
-    let wj_binary = std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        format!("{}/target/release/wj", manifest_dir)
-    });
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
 
-    let output = Command::new(&wj_binary)
+    let output = Command::new(wj_binary)
         .arg("build")
         .arg("main.wj")
         .current_dir(&test_dir)

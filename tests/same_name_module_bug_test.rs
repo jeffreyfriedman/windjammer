@@ -85,7 +85,7 @@ fn test_same_name_module_compiles_correctly() {
     .unwrap();
 
     // Compile the FULL PROJECT (not individual files)
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = project_root.join("output");
 

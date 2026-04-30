@@ -65,7 +65,7 @@ fn test_module_declarations_only_include_local_modules() {
         .expect("Failed to write mod.wj");
 
     // Compile the project
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = temp_dir.path().join("build");
 
@@ -178,7 +178,7 @@ fn test_lib_rs_declares_only_top_level_modules() {
     .expect("Failed to write mod.wj");
 
     // Compile the project
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = temp_dir.path().join("build");
 

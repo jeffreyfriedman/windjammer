@@ -12,7 +12,7 @@ fn compile_windjammer_code(code: &str) -> Result<String, String> {
     let input_file = test_dir.join("test.wj");
     std::fs::write(&input_file, code).expect("Failed to write source file");
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     // Compile Windjammer to Rust
     let output = Command::new(&wj_binary)

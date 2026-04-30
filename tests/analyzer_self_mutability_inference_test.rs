@@ -6,17 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn wj_binary() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Prefer release binary (faster), fallback to debug
-    let release = manifest_dir.join("target/release/wj");
-    let debug = manifest_dir.join("target/debug/wj");
-    if release.exists() {
-        release
-    } else if debug.exists() {
-        debug
-    } else {
-        release // Will fail with clear error if neither exists
-    }
+    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String> {

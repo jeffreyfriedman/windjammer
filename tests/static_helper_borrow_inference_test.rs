@@ -15,6 +15,7 @@
 /// 3. Multiple static calls with the same parameter
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
 
 #[test]
 fn test_static_helper_with_instance_method_on_param() {
@@ -80,34 +81,14 @@ impl Camera {
 }
 "#;
 
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_test_static_helper_borrow_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = test_dir.join("camera_test.wj");
+    let test_dir = tempdir().expect("tempdir");
+    let source_file = test_dir.path().join("camera_test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = test_dir.join("build");
+    let output_dir = test_dir.path().join("build");
     fs::create_dir_all(&output_dir).unwrap();
 
-    let wj_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !wj_path.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            wj_path
-        );
-    }
-
-    let output = Command::new(&wj_path)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg("--no-cargo")
         .arg("--output")
@@ -195,34 +176,14 @@ impl Builder {
 }
 "#;
 
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_test_static_mut_borrow_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let _ = fs::remove_dir_all(&test_dir);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = test_dir.join("builder_test.wj");
+    let test_dir = tempdir().expect("tempdir");
+    let source_file = test_dir.path().join("builder_test.wj");
     fs::write(&source_file, source).unwrap();
 
-    let output_dir = test_dir.join("build");
+    let output_dir = test_dir.path().join("build");
     fs::create_dir_all(&output_dir).unwrap();
 
-    let wj_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !wj_path.exists() {
-        panic!(
-            "wj binary not found at {:?}. Run: cargo build --release --features cli",
-            wj_path
-        );
-    }
-
-    let output = Command::new(&wj_path)
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg("--no-cargo")
         .arg("--output")

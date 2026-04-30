@@ -40,7 +40,7 @@ fn test_single_nested_file_compiles_to_correct_path() {
     .unwrap();
 
     // Compile just this single file (NOT a full project)
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = project_root.join("output");
 
@@ -152,7 +152,7 @@ fn test_full_project_nested_modules_compile_to_correct_paths() {
     .unwrap();
 
     // Compile the project
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = project_root.join("output");
 

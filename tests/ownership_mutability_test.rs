@@ -14,7 +14,7 @@ fn compile(src: &str) -> String {
     let input_file = test_dir.join("test.wj");
     std::fs::write(&input_file, src).expect("Failed to write source file");
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let wj_binary = if wj_binary.exists() {
         wj_binary
     } else {
