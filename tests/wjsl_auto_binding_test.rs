@@ -5,6 +5,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 #[test]
 fn test_auto_generated_preamble_transpiles() {
     // Simulate what ShaderGraph would generate for the atmosphere pass:
@@ -60,6 +66,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_preamble_with_includes_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
 

@@ -6,6 +6,12 @@
 use std::path::Path;
 use windjammer::wjsl::transpile_wjsl;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -128,18 +134,30 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_wjsl_voxel_composite_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("voxel_composite.wjsl");
     assert!(!wgsl.is_empty(), "Generated WGSL should not be empty");
 }
 
 #[test]
 fn test_wjsl_voxel_lighting_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("voxel_lighting.wjsl");
     assert!(!wgsl.is_empty());
 }
 
 #[test]
 fn test_wjsl_voxel_denoise_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let source = std::fs::read_to_string(
         "../windjammer-game/windjammer-game-core/shaders/voxel_denoise.wjsl",
     );
@@ -157,6 +175,10 @@ fn test_wjsl_voxel_denoise_transpiles() {
 
 #[test]
 fn test_wjsl_voxel_raymarch_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("voxel_raymarch.wjsl");
     assert!(!wgsl.is_empty());
 }
@@ -285,6 +307,10 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_wjsl_full_lighting_shader() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("voxel_lighting.wjsl");
     assert!(
         wgsl.contains("fn main"),
@@ -294,6 +320,10 @@ fn test_wjsl_full_lighting_shader() {
 
 #[test]
 fn test_wjsl_gbuffer_struct_consistency() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let raymarch = read_shader_source("voxel_raymarch.wjsl");
     let lighting = read_shader_source("voxel_lighting.wjsl");
     let denoise = read_shader_source("voxel_denoise.wjsl");

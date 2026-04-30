@@ -4,6 +4,13 @@
 // all required HUD elements.
 
 use std::fs;
+use std::path::Path;
+
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
 
 fn transpile(wjsl_path: &str) -> Result<String, String> {
     let source = fs::read_to_string(wjsl_path)
@@ -14,6 +21,10 @@ fn transpile(wjsl_path: &str) -> Result<String, String> {
 
 #[test]
 fn test_hud_shader_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("hud_overlay.wjsl should transpile");
     assert!(!wgsl.is_empty(), "Generated WGSL should not be empty");
@@ -22,6 +33,10 @@ fn test_hud_shader_transpiles() {
 
 #[test]
 fn test_hud_has_crosshair() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(
@@ -32,6 +47,10 @@ fn test_hud_has_crosshair() {
 
 #[test]
 fn test_hud_has_health_bar() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(
@@ -42,6 +61,10 @@ fn test_hud_has_health_bar() {
 
 #[test]
 fn test_hud_has_ammo_display() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(
@@ -52,6 +75,10 @@ fn test_hud_has_ammo_display() {
 
 #[test]
 fn test_hud_has_damage_flash() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(
@@ -62,6 +89,10 @@ fn test_hud_has_damage_flash() {
 
 #[test]
 fn test_hud_params_struct() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/hud_overlay.wjsl")
         .expect("transpilation should succeed");
     assert!(wgsl.contains("HudParams"), "Should have HudParams struct");

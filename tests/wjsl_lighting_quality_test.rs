@@ -6,6 +6,12 @@
 /// Fresnel calculations completely wrong (not world-space).
 ///
 /// Fix: Add camera_position to LightingParams and use world-space view direction.
+fn game_shaders_available() -> bool {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
     let base_dir = std::path::PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -19,6 +25,10 @@ fn transpile_shader_file(filename: &str) -> Result<String, String> {
 
 #[test]
 fn test_view_vector_uses_camera_position() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     // Camera is `uniform camera: CameraUniforms`; PBR V uses `camera.position` in WGSL
     let has_camera_pos = result.contains("camera.position")
@@ -35,6 +45,10 @@ fn test_view_vector_uses_camera_position() {
 
 #[test]
 fn test_view_vector_world_space_computation() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
         result.contains("camera.position - P")
@@ -48,6 +62,10 @@ fn test_view_vector_world_space_computation() {
 
 #[test]
 fn test_shadow_quality_minimum_samples() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     // trace_shadow() walks multiple segments along the light ray (loop over 6u); soft GI uses separate sample counts
     let has_shadow_march = result.contains("trace_shadow")
@@ -60,6 +78,10 @@ fn test_shadow_quality_minimum_samples() {
 
 #[test]
 fn test_ao_uses_distance_falloff() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_lighting.wjsl").unwrap();
     assert!(
         result.contains("ao_distance")

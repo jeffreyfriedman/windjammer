@@ -4,6 +4,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -15,6 +21,10 @@ fn transpile_shader(filename: &str) -> String {
 
 #[test]
 fn test_wjsl_heat_distortion_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("heat_distortion.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
@@ -34,6 +44,10 @@ fn test_wjsl_heat_distortion_transpiles() {
 
 #[test]
 fn test_heat_distortion_binding_layout() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("heat_distortion.wjsl");
 
     assert!(
@@ -63,6 +77,10 @@ fn test_heat_distortion_binding_layout() {
 
 #[test]
 fn test_heat_distortion_uv_offset() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("heat_distortion.wjsl");
 
     assert!(
@@ -86,6 +104,10 @@ fn test_heat_distortion_uv_offset() {
 
 #[test]
 fn test_heat_distortion_heat_source() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("heat_distortion.wjsl");
 
     assert!(
@@ -109,6 +131,10 @@ fn test_heat_distortion_heat_source() {
 
 #[test]
 fn test_heat_distortion_workgroup_size() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("heat_distortion.wjsl");
 
     assert!(

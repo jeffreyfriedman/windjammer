@@ -2,6 +2,12 @@
 use std::fs;
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn read_shader_source(filename: &str) -> (String, std::path::PathBuf) {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -18,6 +24,10 @@ fn transpile_shader(filename: &str) -> Result<String, String> {
 
 #[test]
 fn test_fire_simulation_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader("fire_simulation.wjsl");
     assert!(
         result.is_ok(),
@@ -28,6 +38,10 @@ fn test_fire_simulation_transpiles() {
 
 #[test]
 fn test_fire_render_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader("fire_render.wjsl");
     assert!(
         result.is_ok(),
@@ -38,6 +52,10 @@ fn test_fire_render_transpiles() {
 
 #[test]
 fn test_fire_simulation_workgroup_size() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_simulation.wjsl").unwrap();
     assert!(
         wgsl.contains("@workgroup_size(4, 4, 4)"),
@@ -48,6 +66,10 @@ fn test_fire_simulation_workgroup_size() {
 
 #[test]
 fn test_fire_simulation_bindings() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_simulation.wjsl").unwrap();
     assert!(
         wgsl.contains("fire_params"),
@@ -61,6 +83,10 @@ fn test_fire_simulation_bindings() {
 
 #[test]
 fn test_fire_simulation_noise() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_simulation.wjsl").unwrap();
     assert!(
         wgsl.contains("noise3d") || wgsl.contains("fbm"),
@@ -71,6 +97,10 @@ fn test_fire_simulation_noise() {
 
 #[test]
 fn test_fire_render_blackbody() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_render.wjsl").unwrap();
     assert!(
         wgsl.contains("blackbody_color"),
@@ -81,6 +111,10 @@ fn test_fire_render_blackbody() {
 
 #[test]
 fn test_fire_render_bindings() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_render.wjsl").unwrap();
     assert!(
         wgsl.contains("fire_render_params"),
@@ -98,6 +132,10 @@ fn test_fire_render_bindings() {
 
 #[test]
 fn test_fire_render_camera() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_render.wjsl").unwrap();
     assert!(
         wgsl.contains("CameraUniforms"),
@@ -108,6 +146,10 @@ fn test_fire_render_camera() {
 
 #[test]
 fn test_fire_render_raymarching() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("fire_render.wjsl").unwrap();
     assert!(
         wgsl.contains("intersect_box"),

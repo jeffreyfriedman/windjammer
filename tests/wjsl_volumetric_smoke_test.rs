@@ -4,6 +4,12 @@
 
 use std::path::Path;
 
+fn game_shaders_available() -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader(filename: &str) -> String {
     let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../windjammer-game/windjammer-game-core/shaders");
@@ -15,6 +21,10 @@ fn transpile_shader(filename: &str) -> String {
 
 #[test]
 fn test_wjsl_volumetric_smoke_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
@@ -38,6 +48,10 @@ fn test_wjsl_volumetric_smoke_transpiles() {
 
 #[test]
 fn test_volumetric_smoke_binding_layout() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(
@@ -67,6 +81,10 @@ fn test_volumetric_smoke_binding_layout() {
 
 #[test]
 fn test_volumetric_smoke_raymarching() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(
@@ -90,6 +108,10 @@ fn test_volumetric_smoke_raymarching() {
 
 #[test]
 fn test_volumetric_smoke_noise() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(
@@ -107,6 +129,10 @@ fn test_volumetric_smoke_noise() {
 
 #[test]
 fn test_volumetric_smoke_light_scattering() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(
@@ -124,6 +150,10 @@ fn test_volumetric_smoke_light_scattering() {
 
 #[test]
 fn test_volumetric_smoke_workgroup_size() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let wgsl = transpile_shader("smoke_volumetric.wjsl");
 
     assert!(

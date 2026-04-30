@@ -3,6 +3,12 @@
 ///
 /// Old: 3x3 filter (too small for GI noise), no neighborhood clamping
 /// New: 5x5 edge-aware filter with temporal neighborhood clamping
+fn game_shaders_available() -> bool {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core/shaders")
+        .exists()
+}
+
 fn transpile_shader_file(filename: &str) -> Result<String, String> {
     let base_dir = std::path::PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -16,6 +22,10 @@ fn transpile_shader_file(filename: &str) -> Result<String, String> {
 
 #[test]
 fn test_denoise_shader_transpiles() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_denoise.wjsl");
     assert!(
         result.is_ok(),
@@ -26,6 +36,10 @@ fn test_denoise_shader_transpiles() {
 
 #[test]
 fn test_denoise_5x5_kernel() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_denoise.wjsl").unwrap();
     assert!(
         result.contains("-2i") && result.contains("2i"),
@@ -36,6 +50,10 @@ fn test_denoise_5x5_kernel() {
 /// Workgroup is 8×8 = 64 threads; shader does not use a 12×12 (144) shared-memory tile.
 #[test]
 fn test_denoise_workgroup_8x8_64() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_denoise.wjsl").unwrap();
     assert!(
         result.contains("@workgroup_size(8, 8, 1)"),
@@ -46,6 +64,10 @@ fn test_denoise_workgroup_8x8_64() {
 
 #[test]
 fn test_denoise_neighborhood_clamping() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_denoise.wjsl").unwrap();
     // Current shader uses temporal `mix` + depth rejection; stricter a-trous may add explicit min/max history clamps later
     let has_temporal_temper = (result.contains("mix(") && result.contains("history"))
@@ -60,6 +82,10 @@ fn test_denoise_neighborhood_clamping() {
 
 #[test]
 fn test_denoise_disocclusion_detection() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
     let result = transpile_shader_file("voxel_denoise.wjsl").unwrap();
     assert!(
         result.contains("depth_change") || result.contains("disocclusion"),
