@@ -7,9 +7,8 @@
 ///
 /// This tests whether the compiler can look up function signatures
 /// from other modules and use them for type inference.
-use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tempfile::TempDir;
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -125,44 +124,29 @@ pub fn calculate(calc: Calculator) -> f32 {
 
 // Helper functions
 
-fn setup_test_project(files: Vec<(&str, &str)>) -> (String, u64) {
+fn setup_test_project(files: Vec<(&str, &str)>) -> (TempDir, u64) {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("/tmp/cross_module_test_{}_{}", std::process::id(), counter);
-
-    std::fs::create_dir_all(&test_dir).unwrap();
+    let test_dir = TempDir::new().expect("tempdir");
 
     for (filename, content) in files {
-        let file_path = PathBuf::from(&test_dir).join(filename);
+        let file_path = test_dir.path().join(filename);
         std::fs::write(&file_path, content).unwrap();
     }
 
     (test_dir, counter)
 }
 
-fn compile_project(test_dir: &str, entry_file: &str) -> String {
-    let source_file = PathBuf::from(test_dir).join(entry_file);
+fn compile_project(test_dir: &TempDir, entry_file: &str) -> String {
+    let source_file = test_dir.path().join(entry_file);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_file.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
+    windjammer::build_project(
+        &source_file,
+        test_dir.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to compile Windjammer code");
 
-    if !output.status.success() {
-        panic!(
-            "Compilation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    // Read the generated main.rs file
-    let rust_file = PathBuf::from(test_dir).join(entry_file.replace(".wj", ".rs"));
+    let rust_file = test_dir.path().join(entry_file.replace(".wj", ".rs"));
     std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }

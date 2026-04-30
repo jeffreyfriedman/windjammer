@@ -1,21 +1,50 @@
 // TDD Test: Struct field (owned String) auto-borrow when passed to methods expecting &String
 // Reproduces E0308 error in dialog.wj line 238 (line 212 in generated code)
-//
-// PROBLEM:
-// self.stat_name (String field) passed to get_attribute(name: &String)
-// Compiler should auto-add & to make it &self.stat_name
-//
-// EXAMPLE:
-// game_state.player.get_attribute(self.stat_name) >= value
-//                                  ^^^^^^^^^^^^^^
-// ERROR: expected `&String`, found `String`
-//
-// SOLUTION:
-// Auto-borrow struct fields when methods expect borrowed parameters
 
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .expect("build_project_ext");
+    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
+    raw.lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn verify_with_rustc(rust_code: &str) {
+    let dir = tempdir().expect("tempdir for rustc");
+    let rs_file = dir.path().join("verify.rs");
+    fs::write(&rs_file, rust_code).expect("write .rs for rustc");
+    let output = Command::new("rustc")
+        .arg("--edition=2021")
+        .arg("--emit=metadata")
+        .arg("-o")
+        .arg(dir.path().join("verify.rmeta"))
+        .arg(&rs_file)
+        .output()
+        .expect("failed to run rustc");
+    assert!(
+        output.status.success(),
+        "Generated code should compile. Error:\n{}\n\nGenerated:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+        rust_code
+    );
+}
 
 #[test]
 fn test_struct_field_string_auto_borrow() {
@@ -48,34 +77,8 @@ impl StatCheck {
 }
 "#;
 
-    let temp_dir = tempdir().expect("tempdir");
-    let wj_file = temp_dir.path().join("test.wj");
-    fs::write(&wj_file, code).expect("write wj");
-    let out_dir = temp_dir.path().join("out");
-    fs::create_dir_all(&out_dir).expect("out dir");
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
+    let generated = compile_single_file(code);
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "wj compilation failed:\nSTDOUT:\n{}\nSTDERR:\n{}",
-            stdout, stderr
-        );
-    }
-
-    // Read generated Rust code (output stem matches input: test.wj -> test.rs)
-    let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust");
-
-    // ASSERT: Should auto-borrow self.stat_name when passing to get_attribute
     assert!(
         generated.contains("player.get_attribute(&self.stat_name)")
             || generated.contains("player.get_attribute(&*self.stat_name)")
@@ -84,28 +87,11 @@ impl StatCheck {
         generated
     );
 
-    // Verify rustc compilation
-    let output = Command::new("rustc")
-        .arg("--edition")
-        .arg("2021")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg(&rust_file)
-        .output()
-        .unwrap();
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!(
-            "Generated code should compile. Error:\n{}\n\nGenerated:\n{}",
-            stderr, generated
-        );
-    }
+    verify_with_rustc(&generated);
 }
 
 #[test]
 fn test_struct_field_in_comparison() {
-    // TDD: Struct field used in comparison with method call result
     let code = r#"
 struct Config {
     max_health: i32,
@@ -118,48 +104,13 @@ impl Config {
 }
 "#;
 
-    let temp_dir = tempdir().expect("tempdir");
-    let wj_file = temp_dir.path().join("test.wj");
-    fs::write(&wj_file, code).expect("write wj");
-    let out_dir = temp_dir.path().join("out");
-    fs::create_dir_all(&out_dir).expect("out dir");
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
+    let generated = compile_single_file(code);
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "wj compilation failed:\nSTDOUT:\n{}\nSTDERR:\n{}",
-            stdout, stderr
-        );
-    }
+    assert!(
+        generated.contains("health <= self.max_health"),
+        "Should generate comparison with struct field. Generated:\n{}",
+        generated
+    );
 
-    // Read generated Rust code
-    let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust");
-
-    // Verify rustc compilation (i32 is Copy, should work fine)
-    let output = Command::new("rustc")
-        .arg("--edition")
-        .arg("2021")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg(&rust_file)
-        .output()
-        .unwrap();
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!(
-            "Generated code should compile. Error:\n{}\n\nGenerated:\n{}",
-            stderr, generated
-        );
-    }
+    verify_with_rustc(&generated);
 }

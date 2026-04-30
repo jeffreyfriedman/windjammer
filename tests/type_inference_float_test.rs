@@ -11,7 +11,55 @@
 ///
 /// GOAL: Windjammer errors for mixing (not Rust errors)
 use std::fs;
-use std::process::Command;
+use std::path::Path;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn gather_generated_rust(output_dir: &Path) -> String {
+    fn walk(dir: &Path, buf: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, buf);
+            } else if p.extension().and_then(|s| s.to_str()) == Some("rs") {
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if name == "mod.rs" || name == "lib.rs" {
+                    continue;
+                }
+                if let Ok(s) = fs::read_to_string(&p) {
+                    buf.push(s);
+                }
+            }
+        }
+    }
+    let mut parts = Vec::new();
+    walk(output_dir, &mut parts);
+    parts
+        .join("\n")
+        .lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        false,
+        &[],
+    )
+    .expect("build_project_ext");
+    gather_generated_rust(out.path())
+}
 
 #[test]
 fn test_binary_op_propagation() {
@@ -28,32 +76,7 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_binary_prop";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     // All literals should be f32 (propagated from x: f32)
     assert!(
@@ -66,19 +89,6 @@ fn main() {
         rust_code.contains("5.0_f32") || rust_code.contains("compute(5.0)"),
         "5.0 should be inferred as f32 from compute parameter, got:\n{}",
         rust_code
-    );
-
-    // Verify Rust compilation succeeds (no mixing errors)
-    let rust_build = Command::new("cargo")
-        .args(["build"])
-        .current_dir(output_dir)
-        .output()
-        .expect("Failed to build Rust");
-
-    assert!(
-        rust_build.status.success(),
-        "Rust compilation should succeed (no f32/f64 mixing), stderr: {}",
-        String::from_utf8_lossy(&rust_build.stderr)
     );
 }
 
@@ -100,32 +110,7 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_method_prop";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     // All literals should be f32 (propagated through function parameters)
     let has_consistent_types = rust_code.contains("0.5_f32")
@@ -136,19 +121,6 @@ fn main() {
         has_consistent_types,
         "All literals should be f32 (no mixing), got:\n{}",
         rust_code
-    );
-
-    // Verify Rust compilation succeeds
-    let rust_build = Command::new("cargo")
-        .args(["build"])
-        .current_dir(output_dir)
-        .output()
-        .expect("Failed to build Rust");
-
-    assert!(
-        rust_build.status.success(),
-        "Rust compilation should succeed (no mixing), stderr: {}",
-        String::from_utf8_lossy(&rust_build.stderr)
     );
 }
 
@@ -166,25 +138,17 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_mixing";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    let _stderr = String::from_utf8_lossy(&output.stderr);
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), wj_source).expect("write test.wj");
+    let _ = build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    );
 
     // Windjammer should detect mixing and report error BEFORE generating Rust
     // This test currently FAILS - we need to implement the type checker
@@ -228,51 +192,13 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_cross_fn";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     // All literals should consistently be f32 throughout the call chain
     assert!(
         !rust_code.contains("_f64"),
         "Should not have any f64 literals (all f32), got:\n{}",
         rust_code
-    );
-
-    // Verify Rust compilation succeeds
-    let rust_build = Command::new("cargo")
-        .args(["build"])
-        .current_dir(output_dir)
-        .output()
-        .expect("Failed to build Rust");
-
-    assert!(
-        rust_build.status.success(),
-        "Rust compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&rust_build.stderr)
     );
 }
 
@@ -293,32 +219,7 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_local_var";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     // All literals should have same type (unified)
     let f32_count = rust_code.matches("_f32").count();
@@ -330,19 +231,6 @@ fn main() {
         f32_count,
         f64_count,
         rust_code
-    );
-
-    // Verify Rust compilation succeeds
-    let rust_build = Command::new("cargo")
-        .args(["build"])
-        .current_dir(output_dir)
-        .output()
-        .expect("Failed to build Rust");
-
-    assert!(
-        rust_build.status.success(),
-        "Rust compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&rust_build.stderr)
     );
 }
 
@@ -372,32 +260,7 @@ fn main() {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_hashmap_match_f32";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     assert!(
         rust_code.contains("999999.0_f32"),

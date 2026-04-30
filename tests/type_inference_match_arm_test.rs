@@ -6,7 +6,55 @@
 // Dogfooding Win: Common pattern in game code (default values)
 
 use std::fs;
-use std::process::Command;
+use std::path::Path;
+use tempfile::tempdir;
+use windjammer::{build_project_ext, CompilationTarget};
+
+fn gather_generated_rust(output_dir: &Path) -> String {
+    fn walk(dir: &Path, buf: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, buf);
+            } else if p.extension().and_then(|s| s.to_str()) == Some("rs") {
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if name == "mod.rs" || name == "lib.rs" {
+                    continue;
+                }
+                if let Ok(s) = fs::read_to_string(&p) {
+                    buf.push(s);
+                }
+            }
+        }
+    }
+    let mut parts = Vec::new();
+    walk(output_dir, &mut parts);
+    parts
+        .join("\n")
+        .lines()
+        .filter(|l| !l.contains("use super::"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn compile_single_file(source: &str) -> String {
+    let src = tempdir().expect("tempdir for src");
+    let out = tempdir().expect("tempdir for out");
+    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
+    build_project_ext(
+        src.path(),
+        out.path(),
+        CompilationTarget::Rust,
+        false,
+        false,
+        &[],
+    )
+    .expect("build_project_ext");
+    gather_generated_rust(out.path())
+}
 
 #[test]
 fn test_float_literal_in_match_arm() {
@@ -19,34 +67,7 @@ fn get_score_or_default(scores: HashMap<i32, f32>, key: i32) -> f32 {
 }
 "#;
 
-    let output_dir = "/tmp/wj_test_match_arm";
-    fs::create_dir_all(output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), wj_source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            output_dir,
-        ])
-        .current_dir("/Users/jeffreyfriedman/src/wj/windjammer")
-        .output()
-        .expect("Failed to run wj");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    assert!(
-        output.status.success(),
-        "Compilation should succeed, stderr: {}",
-        stderr
-    );
-
-    let rust_code = fs::read_to_string(format!("{}/test.rs", output_dir))
-        .expect("Generated Rust file not found");
+    let rust_code = compile_single_file(wj_source);
 
     eprintln!("Generated Rust:\n{}", rust_code);
 

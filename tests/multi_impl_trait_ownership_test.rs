@@ -2,7 +2,6 @@
 //! Contract: if ANY impl needs &mut self, trait and all impls use &mut self.
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
@@ -10,27 +9,20 @@ use tempfile::TempDir;
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_and_get_rust(source: &str) -> String {
-    let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = PathBuf::from(format!(
-        "/tmp/multi_impl_trait_ownership_{}_{}",
-        std::process::id(),
-        counter
-    ));
-
-    std::fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = test_dir.join("test.wj");
+    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let test_dir = TempDir::new().expect("tempdir");
+    let source_file = test_dir.path().join("test.wj");
     std::fs::write(&source_file, source).unwrap();
 
     windjammer::build_project(
         &source_file,
-        &test_dir,
+        test_dir.path(),
         windjammer::CompilationTarget::Rust,
         true,
     )
     .expect("Failed to compile Windjammer code");
 
-    let rust_file = test_dir.join("test.rs");
+    let rust_file = test_dir.path().join("test.rs");
     std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
 
@@ -38,14 +30,14 @@ fn assert_rustc_lib_ok(rust: &str) {
     let temp_dir = TempDir::new().unwrap();
     let rs_file = temp_dir.path().join("test.rs");
     fs::write(&rs_file, rust).unwrap();
-    let out_lib = temp_dir.path().join("lib.rlib");
+    let rmeta = temp_dir.path().join("verify.rmeta");
     let rustc_output = Command::new("rustc")
-        .args([
-            rs_file.to_str().unwrap(),
-            "--crate-type=lib",
-            "-o",
-            out_lib.to_str().unwrap(),
-        ])
+        .arg("--edition=2021")
+        .arg("--crate-type=lib")
+        .arg("--emit=metadata")
+        .arg("-o")
+        .arg(rmeta.to_str().unwrap())
+        .arg(rs_file.to_str().unwrap())
         .output()
         .expect("Failed to run rustc");
     assert!(

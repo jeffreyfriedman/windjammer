@@ -7,37 +7,25 @@
 ///
 /// Philosophy: "Fix inference when context exists" - don't guess when ambiguous.
 use std::fs;
-use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use tempfile::TempDir;
 
 fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let output_dir = format!("/tmp/wj_e0282_test_{}", id);
-    fs::create_dir_all(&output_dir).unwrap();
-    fs::write(format!("{}/test.wj", output_dir), source).unwrap();
+    let _ = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let tmp = TempDir::new().expect("tempdir");
+    let source_file = tmp.path().join("test.wj");
+    fs::write(&source_file, source).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            "--no-cargo",
-            &format!("{}/test.wj", output_dir),
-            "--output",
-            &output_dir,
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
+    windjammer::build_project(
+        &source_file,
+        tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to run wj");
 
-    assert!(
-        output.status.success(),
-        "Compilation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    fs::read_to_string(format!("{}/test.rs", output_dir)).expect("Generated Rust file not found")
+    fs::read_to_string(tmp.path().join("test.rs")).expect("Generated Rust file not found")
 }
 
 /// E0282 Phase 9: Parser produces Call{function: Identifier("Vec::new")} not MethodCall.
