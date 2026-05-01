@@ -37,7 +37,8 @@ ffi_dir = "ffi"
 "#;
 
     let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
-    let wj_toml = wj_toml.replace("__RUNTIME_PATH__", &runtime_path.to_string_lossy());
+    let runtime_path_str = runtime_path.to_string_lossy().replace('\\', "/");
+    let wj_toml = wj_toml.replace("__RUNTIME_PATH__", &runtime_path_str);
 
     fs::write(test_dir.join("wj.toml"), wj_toml).unwrap();
 
@@ -112,6 +113,7 @@ ffi_dir = "ffi"
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("crates/windjammer-runtime")
             .to_string_lossy()
+            .replace('\\', "/")
     );
 
     fs::write(test_dir.join("wj.toml"), wj_toml).unwrap();
