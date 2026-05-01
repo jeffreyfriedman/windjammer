@@ -3,7 +3,8 @@ use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
 
 fn compile_to_rust(code: &str) -> String {
-    let dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let dir = _tmp.path().join(format!(
         "wj_str_coerce_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -11,6 +12,7 @@ fn compile_to_rust(code: &str) -> String {
             .unwrap()
             .as_nanos()
     ));
+
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("test.wj"), code).unwrap();
     let out = dir.join("build");

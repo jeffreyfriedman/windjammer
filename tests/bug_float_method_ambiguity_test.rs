@@ -39,7 +39,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_float_method_{}",
         std::time::SystemTime::now()
@@ -104,8 +107,6 @@ fn main() {
             stderr, rust_code
         );
     }
-
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -161,7 +162,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2.path();
+
     let test_id = format!(
         "wj_collision_{}",
         std::time::SystemTime::now()
@@ -229,6 +233,4 @@ fn main() {
             stderr, rust_code
         );
     }
-
-    let _ = fs::remove_dir_all(&test_dir);
 }

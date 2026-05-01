@@ -12,7 +12,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_with_assignment() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_match_assign_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -55,7 +56,6 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Should compile successfully (NOT "Expected pattern, got Assign")
     assert!(
@@ -76,7 +76,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_with_complex_assignment() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_match_complex_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -124,7 +125,6 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Should compile successfully
     assert!(

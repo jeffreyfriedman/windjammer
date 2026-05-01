@@ -48,7 +48,10 @@ impl Merchant {
 fn main() {}
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -107,6 +110,4 @@ fn main() {}
         generated.contains("&stack.item.id") || generated.contains("stack.item.id.clone()"),
         "Should add & or .clone() for nested field: Expected '&stack.item.id' or 'stack.item.id.clone()'"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

@@ -264,7 +264,12 @@ fn test_generated_to_bytes_compiles_with_rustc() {
     "#;
     let output = compile_to_rust(source);
 
-    let test_dir = std::env::temp_dir().join(format!("wj_to_bytes_rustc_{}", std::process::id()));
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp
+        .path()
+        .join(format!("wj_to_bytes_rustc_{}", std::process::id()));
+
     std::fs::create_dir_all(&test_dir).unwrap();
     std::fs::write(test_dir.join("main.rs"), &output).unwrap();
 
@@ -291,8 +296,6 @@ fn test_generated_to_bytes_compiles_with_rustc() {
         run.status.success(),
         "Generated to_bytes() should produce correct output at runtime"
     );
-
-    std::fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -318,7 +321,12 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
     "#;
     let output = compile_to_rust(source);
 
-    let test_dir = std::env::temp_dir().join(format!("wj_to_bytes_bits_{}", std::process::id()));
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp2
+        .path()
+        .join(format!("wj_to_bytes_bits_{}", std::process::id()));
+
     std::fs::create_dir_all(&test_dir).unwrap();
     std::fs::write(test_dir.join("main.rs"), &output).unwrap();
 
@@ -341,8 +349,6 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
         run.status.success(),
         "f32 and u32 must produce different byte patterns (type-safe serialization)"
     );
-
-    std::fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]

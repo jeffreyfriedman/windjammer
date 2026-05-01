@@ -18,7 +18,10 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let unique_id = format!("test_{}_{}", std::process::id(), test_id);
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_file = temp_dir.join(format!("{}.wj", unique_id));
     fs::write(&test_file, source).expect("Failed to write temp file");
 
@@ -43,7 +46,6 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
 
     let _ = fs::remove_file(&test_file);
-    let _ = fs::remove_dir_all(&output_dir);
 
     (success, rust_code, stderr)
 }
@@ -62,7 +64,9 @@ fn compile_wj_and_verify(source: &str) -> String {
     }
 
     let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2.path();
+
     let rs_file = temp_dir.join(format!(
         "verify_iter_ref_{}_{}.rs",
         std::process::id(),

@@ -13,13 +13,13 @@ fn compile_fixture(fixture_name: &str) -> Result<String, String> {
 
     // Use a unique temp directory to avoid race conditions in parallel tests
     // Include both process ID and thread ID for uniqueness
-    let output_dir = std::env::temp_dir()
-        .join("windjammer_iter_test")
-        .join(format!(
-            "{}_{:?}",
-            fixture_name,
-            std::thread::current().id()
-        ));
+    let _tmp = tempfile::tempdir().unwrap();
+    let output_dir = _tmp.path().join("windjammer_iter_test").join(format!(
+        "{}_{:?}",
+        fixture_name,
+        std::thread::current().id()
+    ));
+
     let _ = std::fs::remove_dir_all(&output_dir); // Clean if exists
     std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 

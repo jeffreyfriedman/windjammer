@@ -7,7 +7,9 @@ use std::process::Command;
 fn compile_and_check_casts(code: &str) -> Result<String, String> {
     // Use unique temp directory per test to avoid parallel test conflicts
     let thread_id = format!("{:?}", std::thread::current().id());
-    let temp_dir = std::env::temp_dir().join(format!("usize_cast_test_{}", thread_id));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("usize_cast_test_{}", thread_id));
+
     let test_dir = temp_dir.to_str().unwrap();
     fs::create_dir_all(test_dir).expect("Failed to create test dir");
     let input_file = format!("{}/test.wj", test_dir);
@@ -19,15 +21,12 @@ fn compile_and_check_casts(code: &str) -> Result<String, String> {
         .expect("Failed to run compiler");
 
     if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
     // Read generated file
     let generated_file = format!("{}/test.rs", test_dir);
     let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    fs::remove_dir_all(&temp_dir).ok();
 
     Ok(generated)
 }

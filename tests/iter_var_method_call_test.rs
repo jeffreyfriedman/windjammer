@@ -52,7 +52,9 @@ fn compile_and_verify_rustc(code: &str) -> String {
     let generated = compile_code(code).expect("WJ compilation failed");
 
     let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let rs_file = temp_dir.join(format!(
         "verify_iter_method_{}_{}.rs",
         std::process::id(),

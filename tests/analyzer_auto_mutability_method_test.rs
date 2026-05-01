@@ -13,7 +13,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_on_mutating_method_call() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_auto_mut_method_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -67,7 +68,6 @@ fn main() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that `mut` was automatically added
     assert!(
@@ -88,7 +88,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_with_multiple_method_calls() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_auto_mut_methods_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -150,7 +151,6 @@ fn main() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that `mut` was automatically added
     assert!(
@@ -171,7 +171,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_no_mut_when_only_immutable_methods() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp3.path().join(format!(
         "wj_no_mut_immutable_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -225,7 +226,6 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap_or_default();
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that `mut` was NOT added (only immutable methods called)
     assert!(

@@ -19,7 +19,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_produces_owned_value_not_borrowed() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_match_owned_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -70,7 +71,6 @@ fn main() {
     let _stderr = String::from_utf8_lossy(&output.stderr);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // The generated code should NOT have `&i32` in match arms
     assert!(
@@ -97,7 +97,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_ownership_with_string() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_match_string_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -145,7 +146,6 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap_or_default();
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Method should consume self (owned)
     assert!(

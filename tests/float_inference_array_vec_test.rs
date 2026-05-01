@@ -15,7 +15,10 @@ fn compile_and_get_rust(source: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
     let test_name = format!("float_arr_vec_{}_{}", std::process::id(), unique_id);
     let test_file = temp_dir.join(format!("{}.wj", test_name));
@@ -41,7 +44,6 @@ fn compile_and_get_rust(source: &str) -> String {
     let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
 
     let _ = std::fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
 
     rust_code
 }

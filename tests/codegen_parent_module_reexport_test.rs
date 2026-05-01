@@ -36,7 +36,11 @@ fn test_parent_module_reexport_import() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_parent_reexport_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_parent_reexport_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj/rendering directory
@@ -108,7 +112,6 @@ struct Sprite {
     let sprite_rs_content = fs::read_to_string(&sprite_rs_path)?;
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     // Should NOT have super::rendering::Texture (invalid path)
     assert!(

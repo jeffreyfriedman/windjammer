@@ -9,12 +9,13 @@ use std::process::Command;
 
 /// Compile .wj source and return (generated_rust, stderr_output)
 fn compile_wj(source: &str, test_name: &str) -> (String, String) {
-    let dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let dir = _tmp.path().join(format!(
         "wj_string_unify_{}_{}",
         test_name,
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&dir);
+
     std::fs::create_dir_all(&dir).unwrap();
 
     let wj_file = dir.join("test.wj");
@@ -40,7 +41,7 @@ fn compile_wj(source: &str, test_name: &str) -> (String, String) {
 
     let rust_code = std::fs::read_to_string(&main_rs).unwrap_or_default();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&dir);
+
     (rust_code, stderr)
 }
 

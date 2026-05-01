@@ -21,7 +21,9 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir).unwrap();
 
     let source_file = temp_dir.join("test.wj");
@@ -57,7 +59,6 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     (rustc_output.status.success(), rust_code, stderr)
 }

@@ -41,7 +41,11 @@ fn test_array_literal_generates_fixed_array_not_vec() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_array_literal_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_array_literal_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -122,7 +126,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -134,7 +137,11 @@ fn test_vec_macro_still_generates_vec() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_vec_macro_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_vec_macro_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -204,7 +211,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

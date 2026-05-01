@@ -47,7 +47,10 @@ impl Node {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_for_loop_owned_{}",
         std::time::SystemTime::now()
@@ -111,8 +114,6 @@ impl Node {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -135,7 +136,10 @@ fn increment_all(counters: Vec<Counter>) {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2.path();
+
     let test_id = format!(
         "wj_for_loop_mut_{}",
         std::time::SystemTime::now()
@@ -183,6 +187,4 @@ fn increment_all(counters: Vec<Counter>) {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }

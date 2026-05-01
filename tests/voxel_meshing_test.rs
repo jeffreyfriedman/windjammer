@@ -10,7 +10,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_face_extraction_single_voxel() {
     // RED: Test face extraction for isolated voxel
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_face_extract_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -18,6 +19,7 @@ fn test_face_extraction_single_voxel() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -147,15 +149,14 @@ fn main() {
     assert!(rust_code.contains("enum Direction"));
     assert!(rust_code.contains("struct VoxelFace"));
     assert!(rust_code.contains("fn extract_visible_faces"));
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_quad_structure() {
     // RED: Test quad mesh output structure
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_quad_mesh_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -163,6 +164,7 @@ fn test_quad_structure() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -260,15 +262,14 @@ fn main() {
     assert!(rust_code.contains("struct Quad"));
     assert!(rust_code.contains("struct VoxelMesh"));
     assert!(rust_code.contains("fn triangle_count("));
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_greedy_meshing_basic() {
     // RED: Test basic greedy meshing (merge adjacent faces)
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp3.path().join(format!(
         "wj_greedy_mesh_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -276,6 +277,7 @@ fn test_greedy_meshing_basic() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -390,6 +392,4 @@ fn main() {
     assert!(rust_code.contains("fn greedy_mesh_x_axis"));
     assert!(rust_code.contains("struct Quad"));
     assert!(rust_code.contains("while"));
-
-    fs::remove_dir_all(test_dir).ok();
 }

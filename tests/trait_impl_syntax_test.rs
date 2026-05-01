@@ -13,7 +13,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_parameter_basic() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_trait_param_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -73,13 +74,13 @@ pub fn render(item: trait Drawable) {
     );
 
     // Cleanup
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_real_world_shader_effect_pattern() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_shader_effect_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -172,5 +173,4 @@ impl EffectManager {
     assert!(rust_code.contains("Vec"), "Should handle collections");
 
     // Cleanup
-    fs::remove_dir_all(&test_dir).ok();
 }

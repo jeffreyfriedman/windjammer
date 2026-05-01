@@ -9,7 +9,9 @@ use std::process::Command;
 /// Helper to compile a Windjammer snippet and get the generated Rust
 fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
     // Write source to temp file with unique name
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let wj_path = temp_dir.join(format!("{}.wj", test_name));
     let out_dir = temp_dir.join(format!("{}_out", test_name));
 
