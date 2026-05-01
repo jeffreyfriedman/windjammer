@@ -18,7 +18,10 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let unique_id = format!("test_{}_{}", std::process::id(), test_id);
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_file = temp_dir.join(format!("{}.wj", unique_id));
     fs::write(&test_file, source).expect("Failed to write temp file");
 
@@ -44,7 +47,6 @@ fn compile_wj_test(source: &str) -> (bool, String, String) {
 
     // Cleanup
     let _ = fs::remove_file(&test_file);
-    let _ = fs::remove_dir_all(&output_dir);
 
     (success, rust_code, stderr)
 }
@@ -156,7 +158,9 @@ fn main() {
     // Verify the generated Rust compiles (the real correctness check).
     // The codegen may or may not add * for &String iteration vars — either way,
     // the comparison must compile (String==&str, &String==&String both work).
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2.path();
+
     let rs_file = temp_dir.join(format!(
         "verify_deref_loop_{}_{}.rs",
         std::process::id(),

@@ -9,20 +9,14 @@
 //! Actual:   `GameEvent::ItemPickup("Health Potion")`
 
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn unique_dir(prefix: &str) -> std::path::PathBuf {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let pid = std::process::id();
-    std::env::temp_dir().join(format!("wj-test-enum-str-{}-{}-{}", prefix, pid, id))
-}
-
-fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
-    let input_dir = unique_dir(test_name);
-    let output_dir = unique_dir(&format!("{}-out", test_name));
+fn compile_wj_to_rust(wj_source: &str, _test_name: &str) -> (String, bool) {
+    let _root = tempfile::tempdir().unwrap();
+    let root = _root.path();
+    let input_dir = root.join("in");
+    let output_dir = root.join("out");
     std::fs::create_dir_all(&input_dir).unwrap();
+    std::fs::create_dir_all(&output_dir).unwrap();
 
     let wj_file = input_dir.join("test.wj");
     std::fs::write(&wj_file, wj_source).unwrap();
@@ -67,10 +61,6 @@ fn compile_wj_to_rust(wj_source: &str, test_name: &str) -> (String, bool) {
     } else {
         false
     };
-
-    // Cleanup
-    let _ = std::fs::remove_dir_all(&input_dir);
-    let _ = std::fs::remove_dir_all(&output_dir);
 
     (rust_code, compiles)
 }

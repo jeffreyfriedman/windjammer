@@ -48,7 +48,11 @@ fn test_no_super_glob_when_explicit_glob_imports_present() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_glob_ambiguity_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_glob_ambiguity_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create two modules that both export a type with the same name
@@ -198,7 +202,6 @@ version = "0.1.0"
     let has_super_glob = gizmo_ui_content.contains("use super::*;");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         !has_super_glob,
@@ -218,7 +221,11 @@ fn test_super_glob_still_added_without_explicit_glob_imports() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_super_glob_kept_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_super_glob_kept_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Module with sibling files that need `use super::*`
@@ -308,7 +315,6 @@ version = "0.1.0"
     let has_super_glob = manager_content.contains("use super::*;");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         has_super_glob,

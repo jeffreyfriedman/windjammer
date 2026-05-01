@@ -15,7 +15,8 @@ fn wj_path() -> std::path::PathBuf {
 }
 
 fn compile_wj(source: &str, test_name: &str) -> String {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_test_{}_{}",
         test_name,
         std::time::SystemTime::now()
@@ -23,7 +24,7 @@ fn compile_wj(source: &str, test_name: &str) -> String {
             .unwrap()
             .as_nanos()
     ));
-    let _ = fs::remove_dir_all(&test_dir);
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let source_file = test_dir.join(format!("{}.wj", test_name));
@@ -53,7 +54,6 @@ fn compile_wj(source: &str, test_name: &str) -> String {
     let generated = fs::read_to_string(output_dir.join(format!("{}.rs", test_name)))
         .expect("Generated .rs file not found");
 
-    let _ = fs::remove_dir_all(&test_dir);
     generated
 }
 

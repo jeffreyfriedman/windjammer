@@ -10,7 +10,9 @@ fn setup_test_project() -> (PathBuf, PathBuf) {
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let project_dir = temp_dir.join(format!("type_reg_test_{}", test_id));
     let src_dir = project_dir.join("src");
 
@@ -127,8 +129,6 @@ fn test_type_registry_fixes_import_paths() {
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&project_dir);
-    let _ = fs::remove_dir_all(&output_dir);
 
     println!("✓ TypeRegistry correctly generates import paths");
 }

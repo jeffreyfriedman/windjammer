@@ -29,7 +29,9 @@ fn test_intermediate_statements_get_semicolons_in_match_arms() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_semicolon_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_semicolon_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -111,7 +113,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -123,7 +124,11 @@ fn test_if_else_expression_preserves_return_value() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ifelse_expr_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_ifelse_expr_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -191,7 +196,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

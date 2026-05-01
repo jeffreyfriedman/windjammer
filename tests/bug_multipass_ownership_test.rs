@@ -22,7 +22,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -81,8 +84,6 @@ fn main() {
         "leaf_fn should have borrowed param. Generated:\n{}",
         generated
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -120,7 +121,10 @@ fn check(merchant: Merchant) -> bool {
 fn main() {}
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2.path();
+
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -178,8 +182,6 @@ fn main() {}
         "Inventory::has should have borrowed param. Generated:\n{}",
         generated
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -207,7 +209,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp3 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp3.path();
+
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -276,6 +281,4 @@ fn main() {
         "bar should have borrowed param after convergence. Generated:\n{}",
         generated
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

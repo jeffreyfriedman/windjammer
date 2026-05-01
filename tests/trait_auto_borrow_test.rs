@@ -15,7 +15,10 @@ fn compile_wj_to_rust(source: &str) -> (bool, String, String) {
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let unique_id = format!("trait_auto_borrow_{}_{}", std::process::id(), test_id);
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_file = temp_dir.join(format!("{}.wj", unique_id));
     fs::write(&test_file, source).expect("Failed to write temp file");
 
@@ -41,7 +44,6 @@ fn compile_wj_to_rust(source: &str) -> (bool, String, String) {
 
     // Cleanup
     let _ = fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
 
     (success, rust_code, stderr)
 }

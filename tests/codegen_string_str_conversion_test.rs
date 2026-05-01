@@ -58,7 +58,10 @@ fn check_condition(cond: Cond, inventory: Inventory) -> bool {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_string_conversion_{}",
         std::time::SystemTime::now()
@@ -106,8 +109,6 @@ fn check_condition(cond: Cond, inventory: Inventory) -> bool {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -128,7 +129,10 @@ impl GameState {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2.path();
+
     let test_id = format!(
         "wj_string_literal_{}",
         std::time::SystemTime::now()
@@ -176,6 +180,4 @@ impl GameState {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }

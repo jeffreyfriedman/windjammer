@@ -35,7 +35,9 @@ fn test_len_eq_zero_becomes_is_empty() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_len_zero_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_len_zero_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -106,7 +108,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -118,7 +119,11 @@ fn test_len_ne_zero_becomes_not_is_empty() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_len_ne_zero_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_len_ne_zero_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -185,7 +190,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -197,7 +201,11 @@ fn test_len_gt_zero_becomes_not_is_empty() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_len_gt_zero_test_{}", timestamp));
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp3
+        .path()
+        .join(format!("wj_len_gt_zero_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -264,7 +272,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

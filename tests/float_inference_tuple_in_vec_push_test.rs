@@ -8,7 +8,9 @@
 use windjammer::{build_project, CompilationTarget};
 
 fn compile_and_get_rust(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_name = format!("tuple_push_f32_{}", std::process::id());
     let output_dir = temp_dir.join(&test_name);
     let test_file = output_dir.join("test.wj");

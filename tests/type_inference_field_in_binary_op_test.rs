@@ -136,7 +136,9 @@ impl Point {
 
 // Helper function to compile Windjammer source and get generated Rust
 fn compile_and_get_rust(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     // process::id() is identical across parallel test threads — unique per thread
     // so `cargo test` does not clobber the same .wj / output dir.
     let test_name = format!(
@@ -171,7 +173,6 @@ fn compile_and_get_rust(source: &str) -> String {
 
     // Cleanup
     let _ = std::fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
 
     rust_code
 }

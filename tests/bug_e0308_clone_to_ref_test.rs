@@ -47,7 +47,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -103,6 +106,4 @@ fn main() {
         generated.contains("has_item(&item.id)") || generated.contains("has_item(item.id)"),
         "Should pass owned field as reference, not clone"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

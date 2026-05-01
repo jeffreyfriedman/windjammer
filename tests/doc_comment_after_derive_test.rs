@@ -30,7 +30,12 @@ impl Prefab {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join(format!("wj_doc_derive_test_{}", std::process::id()));
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_doc_derive_test_{}", std::process::id()));
+
     fs::create_dir_all(&temp_dir).unwrap();
     let temp_file = temp_dir.join("test.wj");
     let output_dir = temp_dir.join("out");
@@ -74,7 +79,12 @@ impl Prefab {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir().join(format!("wj_doc_derive_test2_{}", std::process::id()));
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_doc_derive_test2_{}", std::process::id()));
+
     fs::create_dir_all(&temp_dir).unwrap();
     let temp_file = temp_dir.join("test.wj");
     let output_dir = temp_dir.join("out");

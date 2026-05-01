@@ -38,7 +38,11 @@ fn test_sibling_module_import() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_sibling_import_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_sibling_import_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj/rendering directory
@@ -145,7 +149,6 @@ version = "0.1.0"
         && !sprite_rs_content.contains("crate::rendering::texture::Texture");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         !has_bare_import,

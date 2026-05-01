@@ -9,7 +9,9 @@ use std::process::Command;
 #[test]
 fn test_string_literal_enum_auto_convert() {
     // Use cross-platform temp directory
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_enum_{}_{}",
         std::time::SystemTime::now()
@@ -43,7 +45,7 @@ fn test_string_literal_enum_auto_convert() {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let _ = fs::remove_dir_all(&output_dir);
+
         panic!("wj build failed:\nSTDERR:\n{}\nSTDOUT:\n{}", stderr, stdout);
     }
 
@@ -65,5 +67,4 @@ fn test_string_literal_enum_auto_convert() {
     );
 
     // Clean up temp directory
-    let _ = fs::remove_dir_all(&output_dir);
 }

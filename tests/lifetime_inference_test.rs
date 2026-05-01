@@ -20,9 +20,11 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_wj(source: &str) -> String {
     let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp_dir =
-        std::env::temp_dir().join(format!("wj_lifetime_test_{}_{}", std::process::id(), id));
-    let _ = std::fs::remove_dir_all(&tmp_dir);
+    let _tmp = tempfile::tempdir().unwrap();
+    let tmp_dir = _tmp
+        .path()
+        .join(format!("wj_lifetime_test_{}_{}", std::process::id(), id));
+
     std::fs::create_dir_all(&tmp_dir).unwrap();
 
     let source_path = tmp_dir.join("test.wj");
@@ -46,7 +48,6 @@ fn compile_wj(source: &str) -> String {
     let generated = std::fs::read_to_string(&rs_path)
         .unwrap_or_else(|_| panic!("Failed to read generated Rust at {:?}", rs_path));
 
-    let _ = std::fs::remove_dir_all(&tmp_dir);
     generated
 }
 
