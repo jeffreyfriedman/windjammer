@@ -44,9 +44,8 @@ fn compile_wj(source: &str) -> String {
         .expect("Failed to run wj");
 
     let rust_file = dir.join("build").join("test.rs");
-    let content = std::fs::read_to_string(&rust_file).unwrap_or_default();
 
-    content
+    std::fs::read_to_string(&rust_file).unwrap_or_default()
 }
 
 #[test]
