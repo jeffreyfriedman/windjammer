@@ -2553,11 +2553,14 @@ fn create_cargo_toml_with_deps(
                                     let abs_path = abs_path.canonicalize().unwrap_or(abs_path);
 
                                     // Replace the relative path with absolute path
-                                    // Note: We don't use {:?} because path is already inside quotes
                                     let before = &trimmed[..after_quote];
                                     let after = &trimmed[after_quote + path_end..];
-                                    let new_line =
-                                        format!("{}{}{}", before, abs_path.display(), after);
+                                    let new_line = format!(
+                                        "{}{}{}",
+                                        before,
+                                        path_to_toml_string(&abs_path),
+                                        after
+                                    );
                                     new_line
                                 } else {
                                     // Already absolute or not a path pattern we handle
@@ -2751,8 +2754,8 @@ fn create_cargo_toml_with_deps(
                 let game_path = PathBuf::from(game_path);
                 if game_path.exists() {
                     external_deps.push(format!(
-                        "windjammer-game = {{ path = {:?} }}",
-                        game_path.to_str().unwrap()
+                        "windjammer-game = {{ path = \"{}\" }}",
+                        path_to_toml_string(&game_path)
                     ));
                     continue; // Skip the crates.io fallback
                 }
@@ -2847,9 +2850,9 @@ fn create_cargo_toml_with_deps(
                 };
 
                 external_deps.push(format!(
-                    "{} = {{ path = {:?} }}",
+                    "{} = {{ path = \"{}\" }}",
                     crate_name_normalized,
-                    final_path.to_str().unwrap()
+                    path_to_toml_string(&final_path)
                 ));
                 continue; // Skip the crates.io fallback
             }
@@ -4565,7 +4568,7 @@ fn detect_and_compile_library(
                                         let abs_path = project_root.join(p);
                                         deps_section.push_str(&format!(
                                             "path = \"{}\", ",
-                                            abs_path.display()
+                                            path_to_toml_string(&abs_path)
                                         ));
                                     }
                                     // Add desktop feature for windjammer-ui

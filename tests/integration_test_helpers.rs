@@ -204,13 +204,15 @@ fn write_flat_lib_rs(build_dir: &Path) -> io::Result<()> {
     fs::write(build_dir.join("lib.rs"), body)
 }
 
+fn path_to_toml_string(path: &Path) -> String {
+    let s = path.display().to_string();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.replace('\\', "/")
+}
+
 fn write_verify_cargo_toml(build_dir: &Path) -> io::Result<()> {
     let runtime = windjammer_runtime_path_for_integration_tests();
-    let runtime_display = runtime
-        .canonicalize()
-        .unwrap_or(runtime)
-        .display()
-        .to_string();
+    let runtime_display = path_to_toml_string(&runtime.canonicalize().unwrap_or(runtime));
     let cargo = format!(
         r#"[package]
 name = "wj_multi_file_integration_verify"
