@@ -50,7 +50,10 @@ impl Condition {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_dialog_pattern_{}",
         std::time::SystemTime::now()
@@ -106,6 +109,4 @@ impl Condition {
             stderr, stdout, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }

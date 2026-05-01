@@ -7,12 +7,13 @@
 use std::process::Command;
 
 fn compile_wj_to_rust(source: &str, test_name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let dir = _tmp.path().join(format!(
         "wj_vec_string_ctx_{}_{}",
         test_name,
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&dir);
+
     std::fs::create_dir_all(&dir).unwrap();
 
     let wj_file = dir.join("test.wj");

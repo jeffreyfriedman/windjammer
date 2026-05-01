@@ -26,7 +26,8 @@ fn test_qualified_struct_init_simple() {
     "#;
 
     // Create temporary test directory
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_test_qualified_struct_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -34,6 +35,7 @@ fn test_qualified_struct_init_simple() {
             .as_nanos(),
         std::process::id()
     ));
+
     std::fs::create_dir_all(&test_dir).unwrap();
 
     // Write test file
@@ -57,7 +59,6 @@ fn test_qualified_struct_init_simple() {
         .expect("Failed to read generated code");
 
     // Cleanup
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     if !output.status.success() {
         panic!(
@@ -117,7 +118,8 @@ fn test_qualified_struct_init_in_loop() {
     "#;
 
     // Create temporary test directory
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_test_qualified_loop_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -125,6 +127,7 @@ fn test_qualified_struct_init_in_loop() {
             .as_nanos(),
         std::process::id()
     ));
+
     std::fs::create_dir_all(&test_dir).unwrap();
 
     // Write test file
@@ -148,7 +151,6 @@ fn test_qualified_struct_init_in_loop() {
         .expect("Failed to read generated code");
 
     // Cleanup
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     if !output.status.success() {
         panic!(

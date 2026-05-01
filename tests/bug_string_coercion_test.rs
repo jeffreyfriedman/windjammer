@@ -12,7 +12,9 @@ use std::path::PathBuf;
 fn test_format_as_function_argument_extracts_to_variable() {
     // RED: This test should fail until we implement the fix
 
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp.path().join(format!(
         "wj_format_fix_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -20,6 +22,7 @@ fn test_format_as_function_argument_extracts_to_variable() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -76,7 +79,6 @@ fn render(score: i32) {
     );
 
     // Cleanup
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
@@ -84,7 +86,9 @@ fn render(score: i32) {
 fn test_format_in_method_call_extracts_to_variable() {
     // RED: This test should also fail
 
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp2.path().join(format!(
         "wj_format_method_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -92,6 +96,7 @@ fn test_format_in_method_call_extracts_to_variable() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -143,7 +148,6 @@ fn render(ctx: Context, lives: i32) {
     );
 
     // Cleanup
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
@@ -151,7 +155,9 @@ fn render(ctx: Context, lives: i32) {
 fn test_format_as_variable_assignment_unchanged() {
     // This should already work - format! assigned to variable is fine
 
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp3.path().join(format!(
         "wj_format_var_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -159,6 +165,7 @@ fn test_format_as_variable_assignment_unchanged() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -202,7 +209,6 @@ fn render(score: i32) {
     );
 
     // Cleanup
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
@@ -210,7 +216,9 @@ fn render(score: i32) {
 fn test_multiple_format_calls_in_same_function() {
     // Edge case: multiple format!() in same function need unique names
 
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp4 = tempfile::tempdir().unwrap();
+
+    let test_dir = _tmp4.path().join(format!(
         "wj_format_multi_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -218,6 +226,7 @@ fn test_multiple_format_calls_in_same_function() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -258,5 +267,4 @@ fn render(score: i32, lives: i32) {
     );
 
     // Cleanup
-    fs::remove_dir_all(test_dir).ok();
 }

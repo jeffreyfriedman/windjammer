@@ -9,7 +9,9 @@ fn compile_wj(source: &str) -> (String, bool) {
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_file = format!("test_extern_{}.wj", test_id);
     let temp_file = temp_dir.join(&test_file);
     fs::write(&temp_file, source).expect("Failed to write temp file");
@@ -46,7 +48,6 @@ fn compile_wj(source: &str) -> (String, bool) {
 
     // Cleanup
     let _ = fs::remove_file(&temp_file);
-    let _ = fs::remove_dir_all(&output_dir);
 
     (rust_code, success)
 }

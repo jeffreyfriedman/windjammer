@@ -16,7 +16,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_mut_on_field_mutation() {
     // Create a test file where a struct field is mutated
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_auto_mut_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -64,7 +65,6 @@ fn main() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that `mut` was automatically added
     assert!(
@@ -86,7 +86,8 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_no_mut_when_not_mutated() {
     // Create a test file where no mutation occurs
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_no_mut_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -127,7 +128,6 @@ fn main() {
     let rust_code = fs::read_to_string(&rust_file).unwrap_or_default();
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that `mut` was NOT added (no mutation occurred)
     assert!(

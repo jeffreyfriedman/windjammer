@@ -12,7 +12,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_test_cases_decorator_parses() {
     // Create a minimal test file with @test_cases decorator
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_test_cases_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -47,7 +48,6 @@ fn test_capacity(capacity: i32, expected: i32) {
         .expect("Failed to run wj build");
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert no "Expected pattern, got Assign" error
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -70,7 +70,8 @@ fn test_capacity(capacity: i32, expected: i32) {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_simple_test_decorator_works() {
     // Create a minimal test file with @test decorator (should work)
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_simple_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -103,7 +104,6 @@ fn test_basic() {
         .expect("Failed to run wj build");
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert no parser errors
     let stderr = String::from_utf8_lossy(&output.stderr);

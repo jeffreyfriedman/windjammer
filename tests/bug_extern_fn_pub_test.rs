@@ -10,7 +10,9 @@ use std::fs;
 use std::process::Command;
 
 fn transpile_wj(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}_{}",
         std::time::SystemTime::now()
@@ -50,8 +52,6 @@ fn transpile_wj(source: &str) -> String {
 
     let rust_file = out_dir.join("test.rs");
     let content = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    let _ = fs::remove_dir_all(&test_dir);
 
     content
 }

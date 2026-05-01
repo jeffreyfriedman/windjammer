@@ -51,7 +51,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_trait_mut_{}",
         std::time::SystemTime::now()
@@ -109,7 +112,6 @@ fn main() {
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -135,7 +137,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp2 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp2.path();
+
     let test_id = format!(
         "wj_trait_ref_{}",
         std::time::SystemTime::now()
@@ -177,8 +182,6 @@ fn main() {
         "Trait method should infer &self for readonly, got:\n{}",
         rust_code
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -211,7 +214,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp3 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp3.path();
+
     let test_id = format!(
         "wj_trait_mixed_{}",
         std::time::SystemTime::now()
@@ -259,8 +265,6 @@ fn main() {
         "write() should infer &mut self, got:\n{}",
         rust_code
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -299,7 +303,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp4 = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp4.path();
+
     let test_id = format!(
         "wj_render_port_{}",
         std::time::SystemTime::now()
@@ -348,6 +355,4 @@ fn main() {
         "get_output should infer &self, got:\n{}",
         rust_code
     );
-
-    let _ = fs::remove_dir_all(&test_dir);
 }

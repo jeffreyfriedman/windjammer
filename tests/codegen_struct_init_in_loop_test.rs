@@ -57,7 +57,8 @@ fn test_struct_init_in_for_loop() {
     "#;
 
     // Create temporary test directory
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_test_struct_loop_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -65,6 +66,7 @@ fn test_struct_init_in_for_loop() {
             .as_nanos(),
         std::process::id()
     ));
+
     std::fs::create_dir_all(&test_dir).unwrap();
 
     // Write test file
@@ -88,7 +90,6 @@ fn test_struct_init_in_for_loop() {
         .expect("Failed to read generated code");
 
     // Cleanup
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     if !output.status.success() {
         panic!(

@@ -8,7 +8,9 @@ fn compile_and_check(code: &str) -> (bool, String) {
     // Use unique temp directory per test to avoid parallel test conflicts
     // Use thread ID to ensure uniqueness even within same test binary
     let thread_id = format!("{:?}", std::thread::current().id());
-    let temp_dir = std::env::temp_dir().join(format!("trait_test_{}", thread_id));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("trait_test_{}", thread_id));
+
     let test_file = temp_dir.join("test.wj");
     let output_dir = temp_dir.join("output");
 
@@ -30,7 +32,6 @@ fn compile_and_check(code: &str) -> (bool, String) {
     let generated = std::fs::read_to_string(&generated_file).unwrap_or_default();
 
     // Clean up
-    std::fs::remove_dir_all(&temp_dir).ok();
 
     (output.status.success(), generated)
 }

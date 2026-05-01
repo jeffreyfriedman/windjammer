@@ -15,7 +15,8 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn compile_wj_to_rust(source: &str) -> (String, bool) {
     let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let dir = _tmp.path().join(format!(
         "wj_e0614_entity_{}_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -24,7 +25,7 @@ fn compile_wj_to_rust(source: &str) -> (String, bool) {
             .as_millis(),
         id
     ));
-    let _ = std::fs::remove_dir_all(&dir);
+
     std::fs::create_dir_all(&dir).unwrap();
 
     let wj_file = dir.join("test.wj");

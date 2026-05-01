@@ -12,10 +12,8 @@ fn test_type_registry_generates_correct_imports() {
     let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     // Create a temporary directory structure
-    let temp_dir =
-        std::env::temp_dir().join(format!("wj_test_type_registry_{}", std::process::id()));
-    let _ = fs::remove_dir_all(&temp_dir);
-    fs::create_dir_all(&temp_dir).unwrap();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().to_path_buf();
 
     let math_dir = temp_dir.join("math");
     fs::create_dir_all(&math_dir).unwrap();
@@ -87,7 +85,4 @@ pub fn main() {
         "Raw platform import should be rewritten, got:\n{}",
         main_rs
     );
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }

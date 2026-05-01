@@ -24,7 +24,10 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
             .as_nanos()
     );
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_file = format!("test_{}.wj", unique_id);
     let temp_file = temp_dir.join(&test_file);
     fs::write(&temp_file, source).expect("Failed to write temp file");
@@ -77,7 +80,6 @@ fn compile_and_check(source: &str, expected_patterns: &[&str]) -> String {
 
     // Cleanup temp files
     let _ = fs::remove_file(&temp_file);
-    let _ = fs::remove_dir_all(&output_dir);
 
     generated
 }

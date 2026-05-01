@@ -31,7 +31,9 @@ fn compile_and_get_rust(source: &str) -> String {
 }
 
 fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "f32_f64_explosion_{}",
         std::time::SystemTime::now()
@@ -55,7 +57,6 @@ fn run_rustc(rs_code: &str) -> (bool, String) {
         .expect("Failed to run rustc");
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     (output.status.success(), stderr)
 }

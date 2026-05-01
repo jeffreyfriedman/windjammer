@@ -11,7 +11,11 @@ fn compile_and_verify_rust(source: &str) -> (String, bool) {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(".tmpEnumEq_{}_{}", std::process::id(), id));
+    let _tmp = tempfile::tempdir().unwrap();
+    let dir = _tmp
+        .path()
+        .join(format!(".tmpEnumEq_{}_{}", std::process::id(), id));
+
     let _ = std::fs::create_dir_all(&dir);
 
     let wj_file = dir.join("test.wj");
@@ -37,7 +41,6 @@ fn compile_and_verify_rust(source: &str) -> (String, bool) {
     let content = std::fs::read_to_string(&rust_file).unwrap_or_default();
 
     if content.is_empty() {
-        let _ = std::fs::remove_dir_all(&dir);
         return (String::from_utf8_lossy(&output.stderr).to_string(), false);
     }
 
@@ -51,7 +54,6 @@ fn compile_and_verify_rust(source: &str) -> (String, bool) {
         .expect("Failed to run rustc");
 
     let rustc_ok = rustc_output.status.success();
-    let _ = std::fs::remove_dir_all(&dir);
 
     if !rustc_ok {
         let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();

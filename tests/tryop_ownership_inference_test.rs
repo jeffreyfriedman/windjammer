@@ -30,7 +30,9 @@ fn compile_wj_to_rust(source: &str) -> Result<String> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_tryop_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_tryop_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -62,8 +64,6 @@ fn compile_wj_to_rust(source: &str) -> Result<String> {
 
     let main_rs = output_dir.join("main.rs");
     let content = fs::read_to_string(&main_rs)?;
-
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(content)
 }
