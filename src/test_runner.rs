@@ -951,7 +951,9 @@ fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
 }
 
 fn path_to_toml_string(path: &Path) -> String {
-    path.display().to_string().replace('\\', "/")
+    let s = path.display().to_string();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.replace('\\', "/")
 }
 
 fn find_windjammer_runtime_path() -> Result<PathBuf> {
