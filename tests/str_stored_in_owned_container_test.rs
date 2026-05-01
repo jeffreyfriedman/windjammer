@@ -49,9 +49,7 @@ fn compile_wj_to_rust(source: &str, test_name: &str) -> String {
         dir.join("test.rs")
     };
 
-    let result = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    result
+    std::fs::read_to_string(&main_rs).unwrap_or_default()
 }
 
 #[test]

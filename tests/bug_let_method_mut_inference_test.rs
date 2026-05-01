@@ -54,9 +54,8 @@ fn transpile_wj(source: &str) -> String {
     }
 
     let rust_file = out_dir.join("test.rs");
-    let content = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
-    content
+    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
 }
 
 #[test]
