@@ -1,8 +1,42 @@
 /// TDD test: WGSL entry points and GPU attributes
 ///
 /// Tests @compute, @vertex, @fragment attributes and workgroup size parsing
-#[path = "test_utils.rs"]
-mod test_utils;
+use std::fs;
+use std::process::Command;
+use tempfile::tempdir;
+
+fn transpile_wj_to_wgsl(source: &str) -> String {
+    let test_dir = tempdir().expect("tempdir for wgsl entry test");
+
+    let wj_file = test_dir.path().join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+
+    let out_dir = test_dir.path().join("out");
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("wgsl")
+        .arg("--output")
+        .arg(&out_dir)
+        .arg("--no-cargo")
+        .output()
+        .expect("Failed to run wj compiler");
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        panic!(
+            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
+            stderr, stdout
+        );
+    }
+
+    let wgsl_file = out_dir.join("test.wgsl");
+    fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file")
+}
 
 #[test]
 fn test_compute_attribute_basic() {
@@ -13,7 +47,7 @@ pub fn raymarch(id: vec3<uint>) {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check for @compute attribute
@@ -41,7 +75,7 @@ pub fn simple() {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("@compute"));
@@ -60,7 +94,7 @@ pub fn large_workgroup() {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("@compute"));
@@ -79,7 +113,7 @@ pub fn shader(@builtin(global_invocation_id) id: vec3<uint>) {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check for builtin attribute
@@ -99,7 +133,7 @@ pub fn shader(@builtin(local_invocation_id) local_id: vec3<uint>) {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(
@@ -118,7 +152,7 @@ pub fn shader(id: vec3<uint>) -> vec4<float> {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("@compute"));
@@ -139,7 +173,7 @@ pub fn shader2() {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Should have both shaders
@@ -168,7 +202,7 @@ pub fn shader(
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("@builtin(global_invocation_id)"));
