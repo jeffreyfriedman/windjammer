@@ -7,8 +7,42 @@
 /// - Structs: 16-byte alignment
 ///
 /// The compiler must automatically insert padding to match GPU requirements.
-#[path = "test_utils.rs"]
-mod test_utils;
+use std::fs;
+use std::process::Command;
+use tempfile::tempdir;
+
+fn transpile_wj_to_wgsl(source: &str) -> String {
+    let test_dir = tempdir().expect("tempdir for wgsl struct test");
+
+    let wj_file = test_dir.path().join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+
+    let out_dir = test_dir.path().join("out");
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let output = Command::new(wj_binary)
+        .arg("build")
+        .arg(&wj_file)
+        .arg("--target")
+        .arg("wgsl")
+        .arg("--output")
+        .arg(&out_dir)
+        .arg("--no-cargo")
+        .output()
+        .expect("Failed to run wj compiler");
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        panic!(
+            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
+            stderr, stdout
+        );
+    }
+
+    let wgsl_file = out_dir.join("test.wgsl");
+    fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file")
+}
 
 // ============================================================================
 // PRIMITIVE TYPE TESTS
@@ -25,7 +59,7 @@ pub struct Primitives {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct Primitives"));
@@ -50,7 +84,7 @@ pub struct Layout1 {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Should NOT have padding between count and position
@@ -69,7 +103,7 @@ pub struct Layout2 {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("pos: vec2<f32>"));
@@ -91,7 +125,7 @@ pub struct CameraUniforms {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // vec3 is 12 bytes, but next field must be 16-byte aligned
@@ -114,7 +148,7 @@ pub struct Layout3 {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(
@@ -134,7 +168,7 @@ pub struct Dual {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // First vec3 needs padding before second vec3
@@ -158,7 +192,7 @@ pub struct Color {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // vec4 is 16 bytes, perfectly aligned
@@ -178,7 +212,7 @@ pub struct Layout4 {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(
@@ -202,7 +236,7 @@ pub struct Transform {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("matrix: mat4x4<f32>"));
@@ -227,7 +261,7 @@ pub struct CameraUniforms {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct CameraUniforms"));
@@ -246,7 +280,7 @@ pub struct Light {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Both vec3 fields need padding
@@ -264,7 +298,7 @@ pub struct Particle {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct Particle"));
@@ -282,7 +316,7 @@ pub struct Single {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("value: f32"));
@@ -300,7 +334,7 @@ pub struct Counters {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // No padding needed
@@ -320,7 +354,7 @@ pub struct Mixed {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct Mixed"));
@@ -339,7 +373,7 @@ pub struct Points {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Arrays in WGSL have special stride requirements
@@ -360,7 +394,7 @@ pub struct Vec2Types {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("vec2<f32>"));
@@ -378,7 +412,7 @@ pub struct Vec3Types {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("vec3<f32>"));
@@ -396,7 +430,7 @@ pub struct Vec4Types {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("vec4<f32>"));
@@ -419,7 +453,7 @@ pub struct Flags {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("enabled: bool"));
@@ -439,7 +473,7 @@ pub struct SmallStruct {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     // May need padding at end to reach 16-byte alignment
@@ -463,7 +497,7 @@ pub struct Data {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct Vec3Wrapper"));
