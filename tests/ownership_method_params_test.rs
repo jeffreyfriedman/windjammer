@@ -5,7 +5,7 @@ mod test_utils;
 
 #[test]
 fn test_method_param_inferred_as_mut_ref_when_field_mutated() {
-    let _source = r#"
+    let source = r#"
 struct Grid {
     data: i32,
 }
@@ -21,8 +21,7 @@ fn modify_grid(self, grid: Grid) {
 }
     "#;
 
-    let rust_code =
-        test_utils::compile_single_result("mut_param_test").expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Should generate `&mut grid` parameter
     assert!(
@@ -34,7 +33,7 @@ fn modify_grid(self, grid: Grid) {
 
 #[test]
 fn test_string_param_comparison_no_deref() {
-    let _source = r#"
+    let source = r#"
 pub fn check_topic(topic: string) -> bool {
     if topic == "test" {
         return true
@@ -43,8 +42,7 @@ pub fn check_topic(topic: string) -> bool {
 }
     "#;
 
-    let rust_code =
-        test_utils::compile_single_result("string_cmp_test").expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // `*topic == "..."` is valid Rust for `&str` (deref to str for comparison)
     let cmp_ok = rust_code.contains("topic ==") || rust_code.contains("*topic ==");
@@ -57,7 +55,7 @@ pub fn check_topic(topic: string) -> bool {
 
 #[test]
 fn test_string_param_comparison_in_method_no_deref() {
-    let _source = r#"
+    let source = r#"
 struct Companion {
     name: string,
 }
@@ -72,8 +70,7 @@ impl Companion {
 }
     "#;
 
-    let rust_code = test_utils::compile_single_result("string_method_cmp_test")
-        .expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     let cmp_ok = rust_code.contains("topic ==") || rust_code.contains("*topic ==");
     assert!(
@@ -85,7 +82,7 @@ impl Companion {
 
 #[test]
 fn test_param_inferred_as_mut_ref_when_method_called() {
-    let _source = r#"
+    let source = r#"
 struct VoxelGrid {
     data: Vec<i32>,
 }
@@ -115,8 +112,7 @@ impl Environment {
 }
     "#;
 
-    let rust_code =
-        test_utils::compile_single_result("voxel_mut_test").expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Should infer &mut for grid parameters (used in mutating method calls)
     assert!(
