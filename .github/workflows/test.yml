@@ -199,9 +199,7 @@ jobs:
       
       - name: Clean debug artifacts before running tests
         shell: bash
-        run: |
-          rm -rf target/debug || true
-          rm -rf target/release/build/*/out || true
+        run: rm -rf target/debug || true
       
       - name: Run tests
         shell: bash
