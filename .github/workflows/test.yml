@@ -126,9 +126,8 @@ jobs:
           fi
           echo "✅ Cargo.lock is up-to-date"
 
-  # Cross-platform tests with sccache and optimized build pipeline
   test:
-    name: Test (${{ matrix.os }}, ${{ matrix.rust }}, ${{ matrix.partition }})
+    name: Test on ${{ matrix.os }} with Rust ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     needs: [quality-checks, version-check, lockfile-check]
     strategy:
@@ -136,14 +135,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
-        partition: [1, 2, 3]
         include:
           - os: ubuntu-latest
             rust: beta
-            partition: 1
           - os: ubuntu-latest
             rust: nightly
-            partition: 1
     
     steps:
       - name: Checkout code
@@ -184,27 +180,23 @@ jobs:
       
       - name: Build tests (release mode)
         shell: bash
-        run: |
-          cargo test --release --all-features --no-run
-          echo "Build complete. Test binaries ready."
+        run: cargo test --release --all-features --no-run
       
-      - name: Run tests (partition ${{ matrix.partition }}/3)
+      - name: Run tests
         shell: bash
         run: |
           export PATH="$PWD/target/release:$PATH"
           cargo nextest run --release --all-features \
             --profile ci \
-            --partition count:${{ matrix.partition }}/3 \
             --failure-output immediate-final \
             --success-output never
       
       - name: Run doctests
-        if: matrix.partition == 1
         shell: bash
         run: cargo test --release --doc
       
       - name: Test examples (Unix)
-        if: matrix.rust == 'stable' && runner.os != 'Windows' && matrix.partition == 3
+        if: matrix.rust == 'stable' && runner.os != 'Windows'
         run: |
           ./target/release/wj build --target=rust examples/01_basics --output /tmp/test_01 || true
           ./target/release/wj build --target=rust examples/18_stdlib_math_test --output /tmp/test_math || true
@@ -330,7 +322,7 @@ jobs:
         run: docker build -t windjammer:test .
 
   publish-dryrun:
-    name: Publish Dry-Run
+    name: Publish Dry-Run (Pre-merge Validation)
     runs-on: ubuntu-latest
     needs: [quality-checks, version-check, lockfile-check]
     steps:
