@@ -1,8 +1,40 @@
 // Advanced WGSL feature tests
 // Testing features needed for real production shaders
 
-#[path = "test_utils.rs"]
-mod test_utils;
+use std::fs;
+use std::process::Command;
+use tempfile::TempDir;
+
+fn transpile_wj_to_wgsl(source: &str) -> String {
+    let tmp = TempDir::new().unwrap();
+    let input_file = tmp.path().join("test.wj");
+    let output_dir = tmp.path().join("out");
+
+    fs::write(&input_file, source).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            input_file.to_str().unwrap(),
+            "--target",
+            "wgsl",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to compile");
+
+    if !output.status.success() {
+        panic!(
+            "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+
+    let wgsl_file = output_dir.join("test.wgsl");
+    fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
+}
 
 // ============================================================================
 // ARRAY INDEXING
@@ -16,7 +48,7 @@ pub fn get_value(arr: [uint; 10], idx: uint) -> uint {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains("arr[idx]"), "Generated:\n{}", generated);
 }
@@ -31,7 +63,7 @@ pub fn update(@builtin(global_invocation_id) id: vec3<uint>) {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(
         generated.contains("data[id.x] = 42"),
@@ -54,7 +86,7 @@ pub fn counter() -> uint {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     // WGSL uses 'var' for mutable locals
     assert!(generated.contains("var count"), "Generated:\n{}", generated);
@@ -75,7 +107,7 @@ pub fn test_var() -> uint {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(
         generated.contains("var x: u32 = 10"),
@@ -97,7 +129,7 @@ pub fn accumulate() {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(
         generated.contains("sum += 10") || generated.contains("sum = sum + 10"),
@@ -116,7 +148,7 @@ pub fn set_flags() {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(
         generated.contains("flags |= ") || generated.contains("flags = flags |"),
@@ -137,7 +169,7 @@ pub fn extract(v: vec4<float>) -> vec3<float> {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains(".xyz"), "Generated:\n{}", generated);
 }
@@ -150,7 +182,7 @@ pub fn get_x(v: vec3<float>) -> float {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains(".x"), "Generated:\n{}", generated);
 }
@@ -167,7 +199,7 @@ pub fn clamp_value(x: float, lo: float, hi: float) -> float {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains("max("), "Generated:\n{}", generated);
     assert!(generated.contains("min("), "Generated:\n{}", generated);
@@ -181,7 +213,7 @@ pub fn out_of_bounds(pos: vec3<float>, bounds: vec3<float>) -> bool {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains("any("), "Generated:\n{}", generated);
 }
@@ -194,7 +226,7 @@ pub fn unit_vector(v: vec3<float>) -> vec3<float> {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(
         generated.contains("normalize("),
@@ -215,7 +247,7 @@ pub fn convert(x: uint) -> float {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains("f32("), "Generated:\n{}", generated);
 }
@@ -228,7 +260,7 @@ pub fn convert(x: float) -> uint {
 }
 "#;
 
-    let generated = test_utils::compile_single(source);
+    let generated = transpile_wj_to_wgsl(source);
 
     assert!(generated.contains("u32("), "Generated:\n{}", generated);
 }
