@@ -8,47 +8,8 @@
 //
 // This causes E0423: expected value, found builtin type `u64`
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj_test(source: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-
-    let source_file = temp_dir.path().join("test.wj");
-    fs::write(&source_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .args(["build", source_file.to_str().unwrap()])
-        .args(["--output", output_dir.to_str().unwrap()])
-        .args(["--target", "rust"])
-        .args(["--no-cargo"])
-        .output()
-        .expect("Failed to run wj");
-
-    let _success = output.status.success();
-
-    // Read generated Rust code
-    let rust_file = output_dir.join("test.rs");
-    let rust_code =
-        fs::read_to_string(&rust_file).unwrap_or_else(|_| String::from("(file not generated)"));
-
-    // Try to compile with rustc to check for errors
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&rust_file)
-        .arg("--out-dir")
-        .arg(temp_dir.path())
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-
-    (rustc_output.status.success(), rust_code, stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -66,7 +27,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -118,7 +80,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -155,7 +118,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(

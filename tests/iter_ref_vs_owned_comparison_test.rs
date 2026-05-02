@@ -8,95 +8,8 @@
 // Root cause: The codegen doesn't add * dereference when comparing
 // a borrowed iteration variable with an owned value.
 
-use std::fs;
-use std::process::Command;
-
-fn compile_wj_test(source: &str) -> (bool, String, String) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_id = format!("test_{}_{}", std::process::id(), test_id);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let test_file = temp_dir.join(format!("{}.wj", unique_id));
-    fs::write(&test_file, source).expect("Failed to write temp file");
-
-    let output_dir = temp_dir.join(format!("output_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            test_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rs_file = output_dir.join(format!("{}.rs", unique_id));
-    let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    let _ = fs::remove_file(&test_file);
-
-    (success, rust_code, stderr)
-}
-
-fn compile_wj_and_verify(source: &str) -> String {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static VERIFY_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let (success, rust_code, stderr) = compile_wj_test(source);
-
-    if !success {
-        panic!(
-            "WJ compilation failed:\n{}\n\nGenerated:\n{}",
-            stderr, rust_code
-        );
-    }
-
-    let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp2 = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp2.path();
-
-    let rs_file = temp_dir.join(format!(
-        "verify_iter_ref_{}_{}.rs",
-        std::process::id(),
-        verify_id
-    ));
-    fs::write(&rs_file, &rust_code).expect("Failed to write rs file");
-
-    let verify = Command::new("rustc")
-        .args([
-            "--edition",
-            "2021",
-            "--crate-type",
-            "lib",
-            rs_file.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    let _ = fs::remove_file(&rs_file);
-
-    if !verify.status.success() {
-        let verify_stderr = String::from_utf8_lossy(&verify.stderr);
-        panic!(
-            "Generated Rust doesn't compile:\n{}\n\nGenerated code:\n{}",
-            verify_stderr, rust_code
-        );
-    }
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -141,7 +54,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_and_verify(source);
+    let rust_code = test_utils::compile_single(source);
 
     // The generated Rust must compile. The comparison between
     // an iteration variable (possibly &String) and an owned field (String)
@@ -178,7 +91,7 @@ fn main() {
 }
 "#;
 
-    compile_wj_and_verify(source);
+    test_utils::compile_single(source);
 }
 
 #[test]
@@ -228,7 +141,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_and_verify(source);
+    let rust_code = test_utils::compile_single(source);
 
     // Verify the generated code doesn't have &String == String comparison
     assert!(

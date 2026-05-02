@@ -1,23 +1,5 @@
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec3_variable_plus_vec3_no_cast() {
@@ -48,7 +30,7 @@ fn test_vec3_variable_plus_vec3_no_cast() {
         }
     }
     "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     eprintln!("Generated:\n{}", output);
 
     assert!(
@@ -78,7 +60,7 @@ fn test_vec3_param_minus_vec3_no_cast() {
         0
     }
     "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     eprintln!("Generated:\n{}", output);
 
     assert!(

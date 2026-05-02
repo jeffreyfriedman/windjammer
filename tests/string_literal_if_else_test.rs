@@ -3,22 +3,8 @@
 //! When one branch is owned `String` (e.g. `.clone()`) and the other is a literal,
 //! the literal arm must become `String::from(...)` / `.to_string()`.
 
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_else_string_clone_vs_literal_tail_return() {
@@ -31,7 +17,7 @@ pub fn pick(parts: Vec<string>, cond: bool) -> string {
     }
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     let ok_from = rust.contains("String::from(\"0\")");
     let ok_to_string = rust.contains("\"0\".to_string()");
     assert!(
@@ -53,7 +39,7 @@ pub fn two_literals(cond: bool) -> str {
     }
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     // Codegen may emit `String` with `.to_string()` for both arms or keep `&str`; both compile.
     let as_str_arms =
         !rust.contains("\"hello\".to_string()") && !rust.contains("\"world\".to_string()");
@@ -84,7 +70,7 @@ pub fn pick(parts: Vec<string>, cond: bool) -> string {
     "done"
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("\"0\".to_string()") || rust.contains("String::from(\"0\")"),
         "when if/else is not the last stmt, else literal must still be String if then is String. Got:\n{}",
@@ -107,7 +93,7 @@ pub fn pick(cond: bool) -> string {
     }
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("\"0\".to_string()") || rust.contains("String::from(\"0\")"),
         "else literal must be String when other arm is a call returning String. Got:\n{}",
@@ -127,7 +113,7 @@ pub fn pick(parts: Vec<string>, cond: bool) -> string {
     x
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("\"0\".to_string()") || rust.contains("String::from(\"0\")"),
         "untyped let RHS if/else must coerce literal when other arm is owned String. Got:\n{}",
@@ -148,7 +134,7 @@ fn split(s: string, delim: string) -> Vec<string> {
     Vec::new()
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("\"0\".to_string()") || rust.contains("String::from(\"0\")"),
         "let binding if/else in non-string function must coerce literal when other arm is String. Got:\n{}",
@@ -168,7 +154,7 @@ pub fn f(cond: bool, s: string) -> string {
     x
 }
 "#;
-    let rust = compile_to_rust(source);
+    let rust = test_utils::compile_single(source);
     let ok = rust.contains("\"default\".to_string()") || rust.contains("String::from(\"default\")");
     assert!(
         ok,

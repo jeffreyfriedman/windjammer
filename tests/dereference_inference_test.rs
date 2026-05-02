@@ -13,66 +13,8 @@
 //! Fix: In expression_generation.rs, only add dereference when the expression's
 //! inferred type is actually Type::Reference or Type::MutableReference.
 
-use std::fs;
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-use tempfile::TempDir;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let _id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (stderr, false);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            temp_dir.path().join("test.rlib").to_str().unwrap(),
-        ])
-        .arg(&generated_path)
-        .output();
-
-    let compiles = rustc_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !compiles {
-        if let Ok(ref out) = rustc_output {
-            eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&out.stderr));
-        }
-    }
-
-    (generated, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // === Pattern 1: Tuple destructuring from Vec index (astar_grid pattern) ===
 
@@ -93,7 +35,7 @@ pub fn pathfind() -> f32 {
     tentative_g
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("*move_cost"),
@@ -121,7 +63,7 @@ pub fn lookup(map: HashMap<(i32, i32), f32>, neighbors: Vec<(i32, i32, f32)>) ->
     }
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("(*nx, *ny)"),
@@ -143,7 +85,7 @@ pub fn pathfind() -> f32 {
     f
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("*tentative_g"),
@@ -178,7 +120,7 @@ impl State {
     }
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("*self.alert_level"),
@@ -208,7 +150,7 @@ pub fn sum_path() -> f32 {
     total
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("*move_cost"),
@@ -233,7 +175,7 @@ pub fn add_coords(items: Vec<(i32, i32)>) -> i32 {
     x + y
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         !result.contains("*x") && !result.contains("*y"),

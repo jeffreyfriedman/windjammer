@@ -7,36 +7,8 @@
 //! 3. Works for stdlib methods (HashMap::remove, String::contains, etc.)
 //! 4. Works for custom methods with proper signature lookup
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -50,7 +22,7 @@ fn test_hashmap_remove_adds_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // After multi-pass ownership inference, key is inferred as &String (Borrowed).
     // &String auto-derefs to &str for HashMap::remove, so no extra & needed.
@@ -73,7 +45,7 @@ fn test_hashmap_get_adds_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // After multi-pass ownership inference, key is inferred as &String (Borrowed).
     // &String auto-derefs to &str for HashMap::get, so no extra & needed.
@@ -97,7 +69,7 @@ fn test_string_contains_adds_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Analyzer may infer search as &str (borrowed), making text.contains(search) valid.
     // OR search may be owned String, requiring &search or search.as_str().
@@ -117,7 +89,8 @@ fn test_string_contains_adds_ref() {
     }
     "#;
 
-    let generated_owned = compile_code(code_owned).expect("Compilation failed");
+    let generated_owned =
+        test_utils::compile_single_result(code_owned).expect("Compilation failed");
 
     assert!(
         generated_owned.contains("text.contains(&search)")
@@ -138,7 +111,7 @@ fn test_vec_remove_no_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Vec::remove expects usize by value, should NOT add &
     assert!(
@@ -160,7 +133,7 @@ fn test_vec_contains_adds_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Vec::contains expects &T, should add & when search is owned
     assert!(
@@ -181,7 +154,7 @@ fn test_string_literal_no_ref() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // String literal is already &str, should NOT add another &
     assert!(
@@ -205,7 +178,7 @@ fn test_mixed_owned_and_literal() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // insert takes owned key, no & needed (already implemented)
     // Note: Integer inference may add _i32 or _i64 suffix based on HashMap value type
@@ -249,7 +222,7 @@ fn test_custom_method_with_ref_param() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Analyzer may infer text as &str (borrowed), making validator.check(text) valid.
     // OR text may be owned String, requiring &text or text.as_str().
@@ -278,7 +251,8 @@ fn test_custom_method_with_ref_param() {
     }
     "#;
 
-    let generated_owned = compile_code(code_owned).expect("Compilation failed");
+    let generated_owned =
+        test_utils::compile_single_result(code_owned).expect("Compilation failed");
 
     assert!(
         generated_owned.contains("validator.check(&text)")

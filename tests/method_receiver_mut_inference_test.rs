@@ -4,41 +4,8 @@
 //! 2. `self.vec[i].other_type_method()` must infer `&mut self` when callee's method is `&mut self`
 //!    (qualified registry lookup on the element type).
 
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("write wj");
-    std::fs::create_dir_all(&out_dir).expect("mkdir");
-
-    let output = std::process::Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let test_rs = out_dir.join("test.rs");
-    let src_main = out_dir.join("src").join("main.rs");
-    if src_main.exists() {
-        Ok(std::fs::read_to_string(src_main).unwrap())
-    } else {
-        Ok(std::fs::read_to_string(test_rs).unwrap())
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_match_arm_parameter_mut_when_callee_mutates() {
@@ -68,7 +35,7 @@ impl Tag {
 }
 "#;
 
-    let rust = compile_to_rust(src).unwrap_or_else(|e| panic!("compile: {}", e));
+    let rust = test_utils::compile_single_result(src).unwrap_or_else(|e| panic!("compile: {}", e));
     assert!(
         rust.contains("pub fn run(&self, c: &mut Cell)"),
         "expected `c: &mut Cell` for mutating calls inside match arms; got:\n{}",
@@ -103,7 +70,7 @@ impl Grid {
 }
 "#;
 
-    let rust = compile_to_rust(src).unwrap_or_else(|e| panic!("compile: {}", e));
+    let rust = test_utils::compile_single_result(src).unwrap_or_else(|e| panic!("compile: {}", e));
     assert!(
         rust.contains("pub fn run(&mut self,") || rust.contains("pub fn run(&mut self ,"),
         "expected &mut self when return ... self.cells[i].touch() in branch; got:\n{}",
@@ -135,7 +102,7 @@ impl Outer {
 }
 "#;
 
-    let rust = compile_to_rust(src).unwrap_or_else(|e| panic!("compile: {}", e));
+    let rust = test_utils::compile_single_result(src).unwrap_or_else(|e| panic!("compile: {}", e));
     assert!(
         rust.contains("pub fn tick(&mut self)"),
         "expected `&mut self` when calling mutating method on indexed field element; got:\n{}",

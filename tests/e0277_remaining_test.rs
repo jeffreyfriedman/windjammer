@@ -5,30 +5,12 @@
 //! 2. `Vec::with_capacity` + `u8` indexing → must not emit `&mask[i]` when element is Copy-in-practice
 //! 3. Mixed f32/f64: f64 literal × `as f32` and f32 chain + f64 literal
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_and_get_rust(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 fn rustc_check(rs: &str) -> (bool, String) {
     let dir = tempdir().expect("tempdir for rustc");
@@ -71,7 +53,7 @@ impl DialogueState {
     }
 }
 "#;
-    let rs = compile_and_get_rust(src);
+    let rs = test_utils::compile_single(src);
     let (ok, err) = rustc_check(&rs);
     assert!(ok, "E0277 or other rustc error:\n{}\n\n{}", err, rs);
     // Valid patterns for String/&str comparison:
@@ -121,7 +103,7 @@ pub fn fill_mask(width: i32, height: i32) -> i32 {
     return 0
 }
 "#;
-    let rs = compile_and_get_rust(src);
+    let rs = test_utils::compile_single(src);
     assert!(
         !rs.contains("&mask["),
         "Copy u8 slice must not use &mask[idx] when vec element type unknown; got:\n{}",
@@ -139,7 +121,7 @@ pub fn sphere_phi(ring: i32, rings: i32) -> f32 {
     return phi
 }
 "#;
-    let rs = compile_and_get_rust(src);
+    let rs = test_utils::compile_single(src);
     let (ok, err) = rustc_check(&rs);
     assert!(ok, "mixed float E0277:\n{}\n\n{}", err, rs);
 }
@@ -152,7 +134,7 @@ pub fn wave(seed: i32) -> f32 {
     return s
 }
 "#;
-    let rs = compile_and_get_rust(src);
+    let rs = test_utils::compile_single(src);
     let (ok, err) = rustc_check(&rs);
     assert!(ok, "f32 + f64 literal:\n{}\n\n{}", err, rs);
 }

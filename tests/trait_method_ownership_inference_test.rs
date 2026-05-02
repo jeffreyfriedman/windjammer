@@ -4,10 +4,8 @@
 /// Root Cause: Analyzer doesn't infer self parameter for trait methods
 /// Expected: fn initialize() → fn initialize(&mut self)
 ///          fn get_name() → fn get_name(&self)
-use std::sync::atomic::{AtomicU64, Ordering};
-use tempfile::TempDir;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_trait_method_infers_mut_self() {
@@ -18,7 +16,7 @@ pub trait Counter {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -46,7 +44,7 @@ pub trait Readable {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -71,7 +69,7 @@ pub trait Renderer {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -106,7 +104,7 @@ impl Incrementable for Counter {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -130,7 +128,7 @@ pub trait Factory {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -143,20 +141,3 @@ pub trait Factory {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = TempDir::new().expect("tempdir");
-    let source_file = test_dir.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        test_dir.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to compile Windjammer code");
-
-    let rust_file = test_dir.path().join("test.rs");
-    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}

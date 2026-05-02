@@ -1,68 +1,10 @@
-/// TDD: Integer/Float arithmetic E0277 elimination (Phase 10 regression fix)
-///
-/// Tests for patterns that caused "cannot add i32 to f32", "cannot multiply f32 by i32", etc.
-/// Phase 10 added int*f32 casts but only for multiplication and only one direction.
-/// This fix handles ALL arithmetic operators (+, -, *, /, %) in BOTH directions.
-///
-/// Error categories fixed:
-/// - f32 + i32, i32 + f32 (add)
-/// - f32 - i32, i32 - f32 (subtract)
-/// - f32 * i32, i32 * f32 (multiply)
-/// - f32 / i32, i32 / f32 (divide)
-/// - f32 % i32 (modulo)
-/// - f32 op {integer} (integer literals)
-/// - f32 op i64 (i64 variables)
-use std::process::Command;
-use windjammer::*;
+// Current codegen often emits `ident as f32` (and sometimes `(ident as f32) as f32`), not `(ident) as f32`.
 
-/// Current codegen often emits `ident as f32` (and sometimes `(ident as f32) as f32`), not `(ident) as f32`.
+#[path = "test_utils.rs"]
+mod test_utils;
+
 fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
     generated.contains(&format!("{ident} as f32"))
-}
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let test_dir = temp.path();
-    let out_lib = test_dir.join("out.rlib");
-    std::fs::write(test_dir.join("lib.rs"), rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .current_dir(test_dir)
-        .arg("lib.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(&out_lib)
-        .output()
-        .expect("Failed to run rustc");
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
 }
 
 /// f32 + i32: (dx) as f32 + dy (pathfinding pattern)
@@ -74,7 +16,7 @@ pub fn add(x: f32, y: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("y as f32")
             || output.contains("x as f32")
@@ -84,7 +26,9 @@ pub fn add(x: f32, y: i32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot add"),
         "E0277 f32+i32:\nstderr: {}\n\nGenerated:\n{}",
@@ -102,14 +46,16 @@ pub fn multiply(count: i32, scale: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "i32 * f32 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot multiply"),
         "E0277 i32*f32:\nstderr: {}\n\nGenerated:\n{}",
@@ -127,14 +73,16 @@ pub fn subtract(value: f32, offset: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "offset"),
         "f32 - i32 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot subtract"),
         "E0277 f32-i32:\nstderr: {}\n\nGenerated:\n{}",
@@ -152,14 +100,16 @@ pub fn divide(total: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("count as f32") || output.contains("(count) as f32"),
         "f32 / i32 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot divide"),
         "E0277 f32/i32:\nstderr: {}\n\nGenerated:\n{}",
@@ -177,14 +127,16 @@ pub fn scale_by_count(scale: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 * i32 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot multiply"),
         "E0277 f32*i32:\nstderr: {}\n\nGenerated:\n{}",
@@ -202,14 +154,16 @@ pub fn add_two(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "f32 + int literal should cast. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot add"),
         "E0277 f32+literal:\nstderr: {}\n\nGenerated:\n{}",
@@ -227,14 +181,16 @@ pub fn half(value: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "f32 / int literal should cast. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot divide"),
         "E0277 f32/literal:\nstderr: {}\n\nGenerated:\n{}",
@@ -252,14 +208,16 @@ pub fn distance(dx: i32, dy: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "dy") || cast_ident_to_f32(&output, "dx"),
         "Cast chain (dx) as f32 + dy should cast dy. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot add"),
         "E0277 cast chain:\nstderr: {}\n\nGenerated:\n{}",
@@ -277,14 +235,16 @@ pub fn offset_center(offset: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "f32 - int literal should cast. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot subtract"),
         "E0277 f32-literal:\nstderr: {}\n\nGenerated:\n{}",
@@ -302,14 +262,16 @@ pub fn add_reverse(x: i32, y: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "x"),
         "i32 + f32 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot add"),
         "E0277 i32+f32:\nstderr: {}\n\nGenerated:\n{}",

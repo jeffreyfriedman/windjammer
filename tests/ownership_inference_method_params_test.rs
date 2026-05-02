@@ -4,42 +4,8 @@
 /// Bug discovered during Breach Protocol dogfooding:
 /// When a parameter is passed to a method that requires &mut, the compiler
 /// should infer that the parameter itself needs &mut.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn get_wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(rust_file).expect("Failed to read generated Rust");
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_infer_mut_from_method_call() {
@@ -59,7 +25,7 @@ fn fill_grid(grid: Grid) {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -99,7 +65,7 @@ impl Game {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -143,7 +109,7 @@ impl Game {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -201,7 +167,7 @@ impl SkillTree {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -241,7 +207,7 @@ fn modify_nested(outer: Outer) {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };

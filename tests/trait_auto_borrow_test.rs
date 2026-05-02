@@ -5,66 +5,8 @@
 ///
 /// Fix: Automatically insert borrows/derefs to satisfy trait bounds, like Rust does.
 /// Philosophy: "Safety Without Ceremony" - trait operations should "just work".
-use std::fs;
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str) -> (bool, String, String) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_id = format!("trait_auto_borrow_{}_{}", std::process::id(), test_id);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let test_file = temp_dir.join(format!("{}.wj", unique_id));
-    fs::write(&test_file, source).expect("Failed to write temp file");
-
-    let output_dir = temp_dir.join(format!("output_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            test_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rs_file = output_dir.join(format!("{}.rs", unique_id));
-    let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    // Cleanup
-    let _ = fs::remove_file(&test_file);
-
-    (success, rust_code, stderr)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let test_dir = tempfile::tempdir().expect("tempdir for rustc");
-    let rs_file = test_dir.path().join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-    let rlib = test_dir.path().join("out.rlib");
-    let output = Command::new("rustc")
-        .arg(&rs_file)
-        .arg("--crate-type=lib")
-        .arg("--edition=2021")
-        .arg("-o")
-        .arg(&rlib)
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// String/str comparison: member.field == param where field: String, param: &str
 /// Must NOT produce *member.field (str) - need &member.field for &str coercion
@@ -91,7 +33,8 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { &rust_code as &str } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
@@ -105,7 +48,9 @@ pub fn main() {
         rust_code
     );
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0277 trait):\n{}\n\nGenerated:\n{}",
@@ -139,14 +84,17 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { &rust_code as &str } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
         stderr, rust_code
     );
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed:\n{}\n\nGenerated:\n{}",
@@ -172,7 +120,8 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { &rust_code as &str } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
@@ -183,7 +132,9 @@ pub fn main() {
     let has_cast = rust_code.contains("as f32") || rust_code.contains("_f32");
     assert!(has_cast, "f32 * i32 should have cast. Got:\n{}", rust_code);
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0277 Mul):\n{}\n\nGenerated:\n{}",
@@ -204,14 +155,17 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { &rust_code as &str } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
         stderr, rust_code
     );
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0277 Sub):\n{}\n\nGenerated:\n{}",
@@ -238,7 +192,8 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { &rust_code as &str } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
@@ -252,7 +207,9 @@ pub fn main() {
         rust_code
     );
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0277 PartialEq):\n{}\n\nGenerated:\n{}",
@@ -273,14 +230,17 @@ pub fn main() {
 }
 "#;
 
-    let (compile_ok, rust_code, stderr) = compile_wj_to_rust(source);
+    let (rust_code, compile_ok) = test_utils::compile_single_check(source);
+    let stderr = if !compile_ok { rust_code.as_str() } else { "" };
     assert!(
         compile_ok,
         "Windjammer compile failed:\n{}\n\nGenerated:\n{}",
         stderr, rust_code
     );
 
-    let (rustc_ok, rustc_stderr) = run_rustc(&rust_code);
+    let __result = test_utils::verify_rust_compiles(&rust_code);
+    let rustc_ok = __result.is_ok();
+    let rustc_stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0277 Add):\n{}\n\nGenerated:\n{}",

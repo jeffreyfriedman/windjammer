@@ -7,50 +7,8 @@
 //! Architecture: copy_structs_registry (PASS 0) collects types with @derive(Copy)
 //! or all-Copy fields. is_known_copy_type is ONLY for external crate types.
 
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let dir = tempfile::tempdir().expect("failed to create temp dir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.path().join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.path().join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.path().join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    (rs_content, rustc.status.success())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Custom struct with @derive(Copy) - should NOT generate *(data)
 #[test]
@@ -68,7 +26,7 @@ pub fn main() {
     let _ = process(d);
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(data)"),
@@ -89,7 +47,7 @@ pub fn process(data: &MyData) -> usize {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -108,7 +66,7 @@ pub fn main() {
     let _ = distance(p);
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -134,7 +92,7 @@ impl Container {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(s)"),
@@ -159,7 +117,7 @@ pub fn get_x(t: Transform) -> f32 {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -178,6 +136,6 @@ pub fn is_north(d: Direction) -> bool {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }

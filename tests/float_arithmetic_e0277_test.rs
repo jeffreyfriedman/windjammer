@@ -1,60 +1,9 @@
-/// TDD: Float arithmetic E0277 elimination
-///
-/// Tests for patterns that caused "cannot multiply f32 by f64" / "cannot divide f64 by f32":
-/// 1. Const PI: f32_var * PI where const PI: f64
-/// 2. Cast chains: (value as f32 * 0.5).sin() * 6.28
-/// 3. Nested division: 6.28318 / count as f32
-/// 4. Method result * literals: (seed * 1234.567).sin() * 3.14159265 * 2.0
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::*;
+// Pattern: f32 method/let * float literal — must NOT mis-label literal as f64 and cast the f32 side
+// to f64 (perception.wj: `dot.acos() * (180.0 / PI)` style). Regression: E0308/E0277.
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let test_dir = tempdir().expect("tempdir");
-    let test_path = test_dir.path();
-    let rs_file = test_path.join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .current_dir(test_path)
-        .arg("test.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
-
-/// Pattern: f32 method/let * float literal — must NOT mis-label literal as f64 and cast the f32 side
-/// to f64 (perception.wj: `dot.acos() * (180.0 / PI)` style). Regression: E0308/E0277.
 #[test]
 fn test_f32_value_mul_float_literal_no_bogus_left_f64_cast() {
     let source = r#"
@@ -64,14 +13,16 @@ pub fn degrees_from_sin(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains("sin() as f64") && !output.contains("sin() as f64 "),
         "must not promote f32 sin() to f64 when multiplying by a float literal; got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "rustc failed (E0308/E0277):\nstderr: {}\n\nGenerated:\n{}",
@@ -79,8 +30,8 @@ pub fn degrees_from_sin(x: f32) -> f32 {
     );
 }
 
-/// Const PI in a fully f32 chain (f64 const `PI` + f32 `deg` currently fails float inference).
-/// This regression still guards literal/const typing in f32 return context.
+// Const PI in a fully f32 chain (f64 const `PI` + f32 `deg` currently fails float inference).
+// This regression still guards literal/const typing in f32 return context.
 #[test]
 fn test_const_pi_f32_context() {
     let source = r#"
@@ -91,7 +42,7 @@ pub fn to_radians(deg: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("as f32") || output.contains("_f32");
     assert!(
         has_f32_safety,
@@ -99,7 +50,9 @@ pub fn to_radians(deg: f32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot divide")) {
         panic!(
             "E0277 in generated code:\nstderr: {}\n\nGenerated:\n{}",
@@ -108,7 +61,7 @@ pub fn to_radians(deg: f32) -> f32 {
     }
 }
 
-/// Pattern: (seed * 1234.567).sin() * 3.14159265 * 2.0 - particles/emitter.wj
+// Pattern: (seed * 1234.567).sin() * 3.14159265 * 2.0 - particles/emitter.wj
 #[test]
 fn test_emitter_angle_pattern() {
     let source = r#"
@@ -117,7 +70,7 @@ pub fn emit_angle(seed: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("as f32") || output.contains("_f32");
     assert!(
         has_f32_safety,
@@ -125,7 +78,9 @@ pub fn emit_angle(seed: f32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot add")) {
         panic!(
             "E0277 in emitter pattern:\nstderr: {}\n\nGenerated:\n{}",
@@ -134,7 +89,7 @@ pub fn emit_angle(seed: f32) -> f32 {
     }
 }
 
-/// Pattern: (member_index as f32) * (6.28318 / count as f32) - ai/squad_tactics.wj
+// Pattern: (member_index as f32) * (6.28318 / count as f32) - ai/squad_tactics.wj
 #[test]
 fn test_squad_tactics_angle_pattern() {
     let source = r#"
@@ -143,11 +98,13 @@ pub fn formation_angle(member_index: i32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("6.28318_f32") || output.contains("as f32");
     assert!(has_f32_safety, "6.28318 in f32 context. Got:\n{}", output);
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && stderr.contains("cannot multiply") {
         panic!(
             "E0277 in squad tactics pattern:\nstderr: {}\n\nGenerated:\n{}",
@@ -156,7 +113,7 @@ pub fn formation_angle(member_index: i32, count: i32) -> f32 {
     }
 }
 
-/// Pattern: mesh3d create_sphere - let pi = 3.14159; phi = pi * (stack as f32) / (stacks as f32)
+// Pattern: mesh3d create_sphere - let pi = 3.14159; phi = pi * (stack as f32) / (stacks as f32)
 #[test]
 fn test_mesh3d_sphere_pi_f32_context() {
     let source = r#"
@@ -177,7 +134,7 @@ pub fn create_sphere(radius: f32, slices: i32, stacks: i32) {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("as f32") || output.contains("_f32");
     assert!(
         has_f32_safety,
@@ -185,7 +142,9 @@ pub fn create_sphere(radius: f32, slices: i32, stacks: i32) {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && (stderr.contains("cannot multiply") || stderr.contains("cannot divide")) {
         panic!(
             "E0277 in mesh3d sphere:\nstderr: {}\n\nGenerated:\n{}",
@@ -194,7 +153,7 @@ pub fn create_sphere(radius: f32, slices: i32, stacks: i32) {
     }
 }
 
-/// Pattern: assert_eq(bounds.min.x, 0.0) - literal must match LHS f32
+// Pattern: assert_eq(bounds.min.x, 0.0) - literal must match LHS f32
 #[test]
 fn test_assert_eq_f32_field_literal() {
     let source = r#"
@@ -209,7 +168,7 @@ pub fn test_bounds() {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("0.0_f32") || output.contains("8.0_f32");
     assert!(
         has_f32_safety,
@@ -217,7 +176,9 @@ pub fn test_bounds() {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && stderr.contains("can't compare") {
         panic!(
             "E0277 in assert_eq:\nstderr: {}\n\nGenerated:\n{}",
@@ -226,7 +187,7 @@ pub fn test_bounds() {
     }
 }
 
-/// Pattern: terrain smooth - sum / count as f32 where sum starts as 0.0
+// Pattern: terrain smooth - sum / count as f32 where sum starts as 0.0
 #[test]
 fn test_terrain_smooth_sum_f32() {
     let source = r#"
@@ -243,7 +204,7 @@ pub fn smooth(scale: f32) {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_f32_safety = output.contains("as f32") || output.contains("_f32");
     assert!(
         has_f32_safety,
@@ -251,7 +212,9 @@ pub fn smooth(scale: f32) {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && stderr.contains("cannot divide") {
         panic!(
             "E0277 in terrain smooth:\nstderr: {}\n\nGenerated:\n{}",
@@ -260,7 +223,7 @@ pub fn smooth(scale: f32) {
     }
 }
 
-/// Pattern: integer * f32 - base * (multiplier) as f32 where base: i32 (character_stats.wj)
+// Pattern: integer * f32 - base * (multiplier) as f32 where base: i32 (character_stats.wj)
 #[test]
 fn test_integer_multiply_f32() {
     let source = r#"
@@ -269,7 +232,7 @@ pub fn scale_by_int(base: i32, scale: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_cast = output.contains("as f32");
     assert!(
         has_cast,
@@ -277,7 +240,9 @@ pub fn scale_by_int(base: i32, scale: f32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && stderr.contains("cannot multiply") {
         panic!(
             "E0277 integer*f32:\nstderr: {}\n\nGenerated:\n{}",
@@ -286,7 +251,7 @@ pub fn scale_by_int(base: i32, scale: f32) -> f32 {
     }
 }
 
-/// Pattern: integer literal * f32 - 10 * scale where scale: f32
+// Pattern: integer literal * f32 - 10 * scale where scale: f32
 #[test]
 fn test_int_literal_multiply_f32() {
     let source = r#"
@@ -295,7 +260,7 @@ pub fn scale_by_ten(scale: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let has_cast = output.contains("as f32");
     assert!(
         has_cast,
@@ -303,7 +268,9 @@ pub fn scale_by_ten(scale: f32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && stderr.contains("cannot multiply") {
         panic!(
             "E0277 int literal*f32:\nstderr: {}\n\nGenerated:\n{}",
@@ -312,8 +279,8 @@ pub fn scale_by_ten(scale: f32) -> f32 {
     }
 }
 
-/// Compound assignment: `f32` LHS with multiply-assign (f32*=f32).
-/// f32 *= f64 is blocked by float inference until the analyzer unifies that form; f32/f32 is the supported shape.
+// Compound assignment: `f32` LHS with multiply-assign (f32*=f32).
+// f32 *= f64 is blocked by float inference until the analyzer unifies that form; f32/f32 is the supported shape.
 #[test]
 fn test_compound_assignment_f32_f64() {
     let source = r#"
@@ -324,8 +291,10 @@ pub fn adjust_price(price: f32, rep_modifier: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let output = test_utils::compile_single(source);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "compound f32 assign should compile:\nstderr: {}\n\nGenerated:\n{}",

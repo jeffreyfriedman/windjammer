@@ -1,6 +1,5 @@
 use std::io::Write;
 use std::process::Command;
-
 #[test]
 fn test_binary_op_float_type_propagation() {
     // TDD: Reproduce binary operation type propagation bug

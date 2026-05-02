@@ -4,54 +4,8 @@
 //! CRITICAL: Int/float logic preserved (both_int prevents casting in division).
 //! Replaces ad-hoc XOR deref with systematic Copy semantics.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Copy refs in binary ops - auto-copy, no explicit deref
@@ -65,7 +19,8 @@ pub fn add(a: &i32, b: &i32) -> i32 {
     a + b
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("a + b"),
@@ -87,7 +42,7 @@ pub fn sub(a: &i32, b: &i32) -> i32 {
     a - b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a - b"));
 }
@@ -100,7 +55,7 @@ pub fn mul(a: &i32, b: &i32) -> i32 {
     a * b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a * b"));
 }
@@ -117,7 +72,8 @@ pub fn half(x: i32) -> i32 {
     x / 2
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("x / 2"),
@@ -139,7 +95,7 @@ pub fn remainder(x: i32, y: i32) -> i32 {
     x % y
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("x % y"));
 }
@@ -165,7 +121,8 @@ pub fn compute(x: f32, y: i32) -> f32 {
     x + y
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("(y) as f32") || result.contains("y as f32"),
@@ -185,7 +142,7 @@ pub fn scale(x: f32) -> f32 {
     x * 2
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(
         result.contains("as f32") || result.contains("2.0"),
@@ -206,7 +163,8 @@ pub fn compare(a: &i32, b: &i32) -> bool {
     a == b
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("a == b"),
@@ -226,7 +184,7 @@ pub fn greater(a: &i32, b: &i32) -> bool {
     a > b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a < b"));
     assert!(result.contains("a > b"));
@@ -244,7 +202,7 @@ pub fn expr(a: &i32, b: &i32, c: &i32) -> i32 {
     a + b * c
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(
         result.contains("a + b * c") || result.contains("a + (b * c)"),
@@ -265,7 +223,7 @@ pub fn band(a: &i32, b: &i32) -> i32 {
     a & b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a & b"));
 }
@@ -278,7 +236,7 @@ pub fn bor(a: &i32, b: &i32) -> i32 {
     a | b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a | b"));
 }
@@ -295,7 +253,7 @@ pub fn land(a: bool, b: bool) -> bool {
     a && b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a && b"));
 }
@@ -308,7 +266,7 @@ pub fn lor(a: bool, b: bool) -> bool {
     a || b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a || b"));
 }
@@ -328,7 +286,7 @@ pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
     a + b + c
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a + b + c"));
 }
@@ -345,7 +303,8 @@ pub fn calc(a: i32, b: i32) -> i32 {
     (a + b) / 2
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("(a + b) / 2") || (result.contains("a + b") && result.contains("/ 2")),
@@ -371,7 +330,7 @@ pub fn has_items(items: &Vec<i32>) -> bool {
     items.len() > 0
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     // Accept either: len() > 0 (direct) or !.is_empty() (Clippy optimization)
     assert!(
@@ -394,7 +353,7 @@ pub fn sum(p: &Point) -> i32 {
     p.x + p.y
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(
         result.contains("p.x") && result.contains("p.y") && result.contains("+"),
@@ -415,7 +374,7 @@ pub fn shl(x: i32, n: i32) -> i32 {
     x << n
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("<<"));
 }
@@ -432,7 +391,7 @@ pub fn xor(a: &i32, b: &i32) -> i32 {
     a ^ b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a ^ b"));
 }
@@ -452,7 +411,7 @@ pub fn mix(a: i32, b: &i32) -> i32 {
     a + b
 }
 "#;
-    let (success, result, _) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
     assert!(success);
     assert!(result.contains("a + b"));
 }

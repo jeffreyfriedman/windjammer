@@ -5,29 +5,8 @@
 //
 // Fix: Infer literals as usize when compared with .len()
 
-use std::fs;
-use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_len_comparison_with_zero() {
@@ -40,7 +19,7 @@ fn has_items(items: Vec<i32>) -> bool {
 }
 "#;
 
-    let rust_code = compile_single_file(test_wj);
+    let rust_code = test_utils::compile_single(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -63,7 +42,7 @@ fn is_valid_team(team: Vec<String>) -> bool {
 }
 "#;
 
-    let rust_code = compile_single_file(test_wj);
+    let rust_code = test_utils::compile_single(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -91,7 +70,7 @@ impl Animation {
 }
 "#;
 
-    let rust_code = compile_single_file(test_wj);
+    let rust_code = test_utils::compile_single(test_wj);
 
     println!("Generated Rust:\n{}", rust_code);
 

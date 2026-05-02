@@ -4,9 +4,8 @@
 /// Example: angle * 57.295827908797776 (radians→degrees) generates _f64
 /// Root Cause: High-precision constants not constrained by context
 /// Expected: If used with f32, constant should be f32
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_radians_to_degrees_constant() {
@@ -16,7 +15,7 @@ pub fn radians_to_degrees(radians: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -41,7 +40,7 @@ pub fn degrees_to_radians(degrees: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -60,7 +59,7 @@ pub fn circle_circumference(radius: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -90,7 +89,7 @@ impl Physics {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -110,7 +109,7 @@ pub fn clamp_angle(angle: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -123,19 +122,3 @@ pub fn clamp_angle(angle: f32) -> f32 {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj compiler");
-
-    std::fs::read_to_string(tmp.path().join("test.rs")).expect("Failed to read generated Rust file")
-}

@@ -6,66 +6,8 @@
 ///
 /// Root Cause: Analyzer checks direct field mutation (self.field = ...)
 /// but doesn't properly check method calls on fields that require &mut
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, code).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    let generated =
-        std::fs::read_to_string(&generated_file).expect("Failed to read generated file");
-    Ok(generated)
-}
-
-fn verify_rust_compiles(rust_code: &str) -> Result<(), String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let rust_file = test_dir.join("test.rs");
-    std::fs::write(&rust_file, rust_code).expect("Failed to write Rust file");
-
-    let check = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            rust_file.to_str().unwrap(),
-            "-o",
-            test_dir.join("test.rlib").to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    if check.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&check.stderr).to_string())
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_calling_field_mutating_method() {
@@ -92,7 +34,7 @@ impl FactionManager {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Calling mutating method on field should compile:\n{}",
@@ -107,7 +49,7 @@ impl FactionManager {
     );
 
     // Verify generated Rust compiles
-    let verify = verify_rust_compiles(&rust);
+    let verify = test_utils::verify_rust_compiles(&rust);
     assert!(
         verify.is_ok(),
         "Generated Rust should compile:\n{}",
@@ -139,7 +81,7 @@ impl Game {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Nested field method call should compile:\n{}",
@@ -168,7 +110,7 @@ impl EventLog {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Vec::push on field should compile:\n{}",
@@ -227,7 +169,7 @@ impl FactionSystem {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Breach-protocol faction pattern should compile:\n{}",

@@ -3,34 +3,12 @@
 // `impl RenderPort for VoxelGPURenderer { fn set_lighting(..., LightingData) }`;
 // codegen matched the first analyzed function and emitted E0053.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_windjammer_to_rust(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("temp dir");
-    let test_file = temp_dir.path().join("collision.wj");
-    let output_dir = temp_dir.path().join("out");
-    fs::create_dir_all(&output_dir).expect("out dir");
-
-    fs::write(&test_file, code).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            test_file.to_str().unwrap(),
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("wj build");
-
-    let rs = output_dir.join("collision.rs");
-    let generated = fs::read_to_string(&rs).unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), generated, stderr)
-}
 
 fn rustc_check_lib(rs: &str) -> (bool, String) {
     let temp_dir = TempDir::new().expect("temp dir");
@@ -80,8 +58,8 @@ impl Port for Worker {
 }
 "#;
 
-    let (ok, gen, err) = compile_windjammer_to_rust(code);
-    assert!(ok, "wj build failed: {}\n{}", err, gen);
+    let (gen, ok) = test_utils::compile_single_check(code);
+    assert!(ok, "wj build failed:\n{}", gen);
 
     let start = gen
         .find("impl Port for Worker")

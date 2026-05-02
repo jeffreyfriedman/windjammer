@@ -4,41 +4,8 @@
 /// 1. Vec<String> index in struct literal needs .clone() (owned String field)
 /// 2. String → &str auto-borrow for extern fn params
 /// 3. String concatenation with Vec elements (result += parts[j])
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str, test_name: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_vec_string_ctx_{}_{}",
-        test_name,
-        std::process::id()
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    std::fs::read_to_string(&main_rs).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_string_index_in_struct_needs_clone() {
@@ -59,7 +26,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "struct_clone");
+    let rust = test_utils::compile_single(source);
 
     // Struct field expects String, so need .clone()
     assert!(
@@ -85,7 +52,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "extern_borrow");
+    let rust = test_utils::compile_single(source);
 
     // Extern fn string args go through FFI conversion (string_to_ffi)
     assert!(
@@ -118,7 +85,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "string_concat");
+    let rust = test_utils::compile_single(source);
 
     // Should handle String + &str correctly: need & for Rust's String + &str
     // Accept: result + &parts[j], result + &parts[j].clone(), or result += &parts[j]

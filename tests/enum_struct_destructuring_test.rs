@@ -1,57 +1,8 @@
 // Test: Enum struct variant destructuring in match expressions
 // Required for type-specific logic in editor panels
 
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_run(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    // Compile
-    let output = Command::new(&wj_binary)
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .output()
-        .map_err(|e| format!("Failed to run wj: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Run the compiled binary (it's in target/debug/ after cargo build)
-    let binary = out_dir.join("target").join("debug").join("test");
-    let run_output = Command::new(&binary)
-        .output()
-        .map_err(|e| format!("Failed to run binary: {}", e))?;
-
-    if !run_output.status.success() {
-        return Err(format!(
-            "Execution failed:\n{}",
-            String::from_utf8_lossy(&run_output.stderr)
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&run_output.stdout).to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -77,7 +28,7 @@ fn test_enum_struct_wildcard() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
@@ -117,7 +68,7 @@ fn test_enum_struct_extract_fields() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
@@ -157,7 +108,7 @@ fn test_enum_struct_partial_extract() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
@@ -193,7 +144,7 @@ fn test_enum_mixed_variants() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();

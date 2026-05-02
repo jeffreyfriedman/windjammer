@@ -1,4 +1,6 @@
-use std::fs;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 /// TDD Test: Comprehensive dialog.wj pattern reproduction
 ///
 /// This test reproduces ALL the compilation errors found in dialog.wj:
@@ -6,60 +8,6 @@ use std::fs;
 /// 2. E0614: Cannot dereference primitive in match pattern
 /// 3. E0507: Ownership inference for methods returning Option
 /// 4. E0594: Mutability inference for mutable references in loops
-use std::path::PathBuf;
-
-fn get_compiler_path() -> PathBuf {
-    // Use CARGO_BIN_EXE_wj to get the correct binary path
-    // This is set by cargo test and points to the built wj binary
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_and_check(wj_code: &str, should_succeed: bool) -> (String, String) {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let wj_file = temp_dir.path().join("test.wj");
-    fs::write(&wj_file, wj_code).unwrap();
-
-    let compiler = get_compiler_path();
-    let output = std::process::Command::new(compiler)
-        .arg("build")
-        .arg(&wj_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    // Try to compile the generated Rust
-    let build_dir = temp_dir.path().join("build");
-    if build_dir.exists() {
-        let cargo_output = std::process::Command::new("cargo")
-            .arg("build")
-            .current_dir(&build_dir)
-            .output()
-            .unwrap();
-
-        let cargo_stderr = String::from_utf8_lossy(&cargo_output.stderr).to_string();
-
-        if should_succeed {
-            if !cargo_output.status.success() {
-                panic!(
-                    "Expected successful Rust compilation but got errors:\n{}",
-                    cargo_stderr
-                );
-            }
-        } else {
-            if cargo_output.status.success() {
-                panic!("Expected Rust compilation errors but it succeeded!");
-            }
-        }
-
-        (stdout + &stderr, cargo_stderr)
-    } else {
-        panic!("Build directory not created");
-    }
-}
-
 #[test]
 fn test_dialog_pattern_string_to_str_match_arms() {
     // Issue 1: E0308 - String in match arm binding passed to &str parameter
@@ -100,7 +48,7 @@ pub fn main() {
 }
 "#;
 
-    let (_, cargo_stderr) = compile_and_check(code, true);
+    let (_, cargo_stderr) = test_utils::compile_via_cli_with_stderr(code);
 
     // Verify no E0308 errors
     assert!(
@@ -139,7 +87,7 @@ pub fn main() {
 }
 "#;
 
-    let (_, cargo_stderr) = compile_and_check(code, true);
+    let (_, cargo_stderr) = test_utils::compile_via_cli_with_stderr(code);
 
     // Verify no E0614 errors
     assert!(
@@ -188,7 +136,7 @@ pub fn main() {
 }
 "#;
 
-    let (_, cargo_stderr) = compile_and_check(code, true);
+    let (_, cargo_stderr) = test_utils::compile_via_cli_with_stderr(code);
 
     // Verify no E0507 errors
     assert!(
@@ -224,7 +172,7 @@ pub fn main() {
 }
 "#;
 
-    let (_, cargo_stderr) = compile_and_check(code, true);
+    let (_, cargo_stderr) = test_utils::compile_via_cli_with_stderr(code);
 
     // Verify no E0594 errors
     assert!(
@@ -297,7 +245,7 @@ pub fn main() {
 }
 "#;
 
-    let (_, cargo_stderr) = compile_and_check(code, true);
+    let (_, cargo_stderr) = test_utils::compile_via_cli_with_stderr(code);
 
     // Verify no compilation errors
     assert!(

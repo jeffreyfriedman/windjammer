@@ -5,36 +5,8 @@
 //! methods like tree traversals that only read self.field, this produces `&mut self`
 //! when `&self` is correct. The cascade then contaminates callers.
 
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("write wj");
-    std::fs::create_dir_all(&out_dir).expect("mkdir");
-
-    let output = std::process::Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let test_rs = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(test_rs).expect("read"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 fn compile_project_to_rust(
     files: &[(&str, &str)],
@@ -53,7 +25,7 @@ fn compile_project_to_rust(
         std::fs::write(&path, content).expect("write");
     }
 
-    let output = std::process::Command::new(get_wj_binary())
+    let output = std::process::Command::new(test_utils::wj_binary())
         .arg("build")
         .arg(&src_dir)
         .arg("--output")
@@ -106,7 +78,7 @@ impl Tree {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
     assert!(
         result.is_ok(),
         "Should compile: {:?}",
@@ -143,7 +115,7 @@ impl Evaluator {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
     assert!(
         result.is_ok(),
         "Should compile: {:?}",
@@ -180,7 +152,7 @@ impl Counter {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
     assert!(
         result.is_ok(),
         "Should compile: {:?}",

@@ -4,22 +4,8 @@
 //! `a;` / `b;` inside branches when `in_expression_context` was false and the enclosing
 //! function returns `()`, so Rust saw `()` from each branch (E0308).
 
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_let_binding_if_else_branch_values_no_semicolon() {
@@ -40,7 +26,7 @@ impl Hud {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     // Regression: missing in_expression_context on `let name: T = rhs` used to emit:
     //   self.notification_timer;
@@ -68,7 +54,7 @@ fn pick(t: f32) -> f32 {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
     assert!(
         code.contains("if t < "),
         "expected comparison if in generated Rust:\n{code}"
@@ -97,7 +83,7 @@ fn foo() {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     assert!(
         code.contains("bar();"),

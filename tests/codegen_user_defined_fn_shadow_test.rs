@@ -14,45 +14,14 @@
 ///
 /// Fix: Check if a function is user-defined (in signature_registry, not extern)
 /// before applying any special-case redirects.
-fn compile_to_rust(source: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    std::fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    std::fs::create_dir_all(&output_dir).unwrap();
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated = output_dir.join("test.rs");
-    std::fs::read_to_string(&generated).unwrap_or_else(|_| {
-        panic!(
-            "No test.rs generated. stderr:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_user_defined_assert_approx_not_redirected() {
     // User defines their own assert_approx — it should NOT be redirected
     // to windjammer_runtime::test::assert_approx
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn assert_approx(name: &str, actual: f32, expected: f32, epsilon: f32) {
     if (actual - expected).abs() < epsilon {
@@ -96,7 +65,7 @@ fn main() {
 #[test]
 fn test_user_defined_assert_gt_not_redirected() {
     // Same bug applies to all test_functions: assert_gt, assert_lt, etc.
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn assert_gt(a: f32, b: f32) {
     if a > b {
@@ -129,7 +98,7 @@ fn main() {
 fn test_builtin_assert_approx_still_redirected_when_not_user_defined() {
     // When there's NO user-defined assert_approx, it should still redirect
     // to windjammer_runtime::test::assert_approx (existing behavior)
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     assert_approx(1.0, 1.0, 0.001)

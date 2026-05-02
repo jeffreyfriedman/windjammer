@@ -1,40 +1,8 @@
 // WGSL Vertex + Fragment Shader Tests
 // Testing vertex/fragment entry points and struct returns
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn transpile_wj_to_wgsl(source: &str) -> String {
-    let tmp = TempDir::new().unwrap();
-    let input_file = tmp.path().join("test.wj");
-    let output_dir = tmp.path().join("out");
-
-    fs::write(&input_file, source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--target",
-            "wgsl",
-            "--output",
-            output_dir.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to compile");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
-            String::from_utf8_lossy(&output.stderr),
-            String::from_utf8_lossy(&output.stdout)
-        );
-    }
-
-    let wgsl_file = output_dir.join("test.wgsl");
-    fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vertex_shader_basic() {
@@ -53,7 +21,7 @@ pub fn vs_main(@location(0) pos: vec2<float>) -> VertexOutput {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("@vertex"), "Generated:\n{}", generated);
     assert!(generated.contains("vs_main"), "Generated:\n{}", generated);
@@ -73,7 +41,7 @@ pub fn fs_main(@location(0) color: vec4<float>) -> @location(0) vec4<float> {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("@fragment"), "Generated:\n{}", generated);
     assert!(generated.contains("fs_main"), "Generated:\n{}", generated);
@@ -101,7 +69,7 @@ pub fn vs_main() -> VertexOutput {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("@vertex"), "Generated:\n{}", generated);
     assert!(
@@ -127,7 +95,7 @@ pub fn create_output() -> Output {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("Output("), "Generated:\n{}", generated);
     assert!(generated.contains("vec4(0"), "Generated:\n{}", generated);

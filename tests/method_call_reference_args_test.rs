@@ -6,54 +6,8 @@
 //! Root cause: Codegen adds & to arguments that are already references.
 //! Fix: Don't add & when arg type is already a reference (&str, &String, etc.)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Case 1: hashmap.get(key) where key: str → generates hashmap.get(key) (no extra &)
 /// str param becomes &str in Rust, so key is already a reference
@@ -71,7 +25,8 @@ pub fn get_data_int(map: HashMap<string, i32>, key: str) -> Option<i32> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {
@@ -107,7 +62,8 @@ pub fn lookup(map: HashMap<string, i32>, key: string) -> Option<i32> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {
@@ -135,7 +91,8 @@ pub fn add_items() {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(success, "Vec::push should compile. Error:\n{}", err);
     assert!(
@@ -172,7 +129,8 @@ impl Event {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {
@@ -209,7 +167,8 @@ pub fn has_key(map: HashMap<string, i32>, key: str) -> bool {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         !generated.contains("contains_key(&key)"),
@@ -233,7 +192,8 @@ pub fn lookup(map: HashMap<string, i32>, key: str) -> Option<i32> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     // User wrote &key but key is str (→ &str). Must generate get(key) not get(&key)
     assert!(

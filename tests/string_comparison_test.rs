@@ -7,93 +7,8 @@
 // Rust natively handles all String/&str/&String comparison combinations
 // via PartialEq impls — the compiler should not add spurious `&`, `*`, or `.clone()`.
 
-use std::fs;
-use std::process::Command;
-
-fn compile_wj_test(source: &str) -> (bool, String, String) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_id = format!("test_{}_{}", std::process::id(), test_id);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let test_file = temp_dir.join(format!("{}.wj", unique_id));
-    fs::write(&test_file, source).expect("Failed to write temp file");
-
-    let output_dir = temp_dir.join(format!("output_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            test_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rs_file = output_dir.join(format!("{}.rs", unique_id));
-    let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    let _ = fs::remove_file(&test_file);
-
-    (success, rust_code, stderr)
-}
-
-fn compile_and_verify_rustc(source: &str) -> String {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static VERIFY_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let (success, rust_code, stderr) = compile_wj_test(source);
-    assert!(
-        success,
-        "WJ compilation failed:\n{}\n\nGenerated:\n{}",
-        stderr, rust_code
-    );
-
-    let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp2 = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp2.path();
-
-    let rs_file = temp_dir.join(format!(
-        "verify_str_cmp_{}_{}.rs",
-        std::process::id(),
-        verify_id
-    ));
-    fs::write(&rs_file, &rust_code).expect("Failed to write rs file");
-
-    let verify = Command::new("rustc")
-        .args([
-            "--edition",
-            "2021",
-            "--crate-type",
-            "lib",
-            rs_file.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    let _ = fs::remove_file(&rs_file);
-
-    if !verify.status.success() {
-        let verify_stderr = String::from_utf8_lossy(&verify.stderr);
-        panic!(
-            "Generated Rust doesn't compile (E0277 or similar):\n{}\n\nGenerated code:\n{}",
-            verify_stderr, rust_code
-        );
-    }
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ── Idiomatic Windjammer tests (using `string`) ─────────────────────────────
 
@@ -109,7 +24,7 @@ fn main() {
     let _ = compare("foo", "bar")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("a == b"),
         "Should generate clean comparison: {}",
@@ -129,7 +44,7 @@ fn main() {
     let _ = check("hello")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("s == \"hello\""),
         "Should generate clean literal comparison: {}",
@@ -154,7 +69,7 @@ fn main() {
     let _ = check(u, "alice")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("user.name == target") || generated.contains("user.name == *target"),
         "Should generate clean field comparison: {}",
@@ -174,7 +89,7 @@ fn main() {
     let _ = different("x", "y")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("a != b"),
         "Should generate clean ne comparison: {}",
@@ -197,7 +112,7 @@ fn main() {
     let _ = process("run")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("cmd == \"quit\""),
         "Should generate clean condition comparison: {}",
@@ -217,7 +132,7 @@ fn main() {
     let _ = all_eq("x", "x", "x")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         !generated.contains("E0277"),
         "Should not have E0277:\n{}",
@@ -237,7 +152,7 @@ fn main() {
     let _ = is_hello("hello")
 }
 "#;
-    compile_and_verify_rustc(source);
+    test_utils::compile_single(source);
 }
 
 #[test]
@@ -252,7 +167,7 @@ fn main() {
     let _ = before("a", "b")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("a < b"),
         "Should generate clean lt comparison: {}",
@@ -272,7 +187,7 @@ fn main() {
     let _ = gte("z", "a")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("a >= b"),
         "Should generate clean ge comparison: {}",
@@ -292,7 +207,7 @@ fn main() {
     let _ = check("x", "y")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         !generated.contains("*a"),
         "Should not deref &str params: {}",
@@ -318,7 +233,7 @@ fn main() {
     let _ = check(x)
 }
 "#;
-    compile_and_verify_rustc(source);
+    test_utils::compile_single(source);
 }
 
 // ── Vec iteration with string comparison ─────────────────────────────────────
@@ -341,7 +256,7 @@ fn main() {
     let _ = has_match(items, "a")
 }
 "#;
-    compile_and_verify_rustc(source);
+    test_utils::compile_single(source);
 }
 
 #[test]
@@ -366,7 +281,7 @@ fn main() {
     let _ = find_member(members, "a")
 }
 "#;
-    compile_and_verify_rustc(source);
+    test_utils::compile_single(source);
 }
 
 // ── Explicit Rust type tests (defense in depth) ──────────────────────────────
@@ -386,7 +301,7 @@ fn main() {
     let _ = compare(s, "world")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("a == b"),
         "Should generate clean comparison for explicit types: {}",
@@ -411,7 +326,7 @@ fn main() {
     let _ = check("hello")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("s == \"hello\""),
         "Should generate clean literal comparison for explicit &str: {}",
@@ -436,7 +351,7 @@ fn main() {
     let _ = check(&u, "alice")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("user.name == target") || generated.contains("user.name == *target"),
         "Should generate clean field comparison: {}",
@@ -459,7 +374,7 @@ fn main() {
     let _ = process("run")
 }
 "#;
-    let generated = compile_and_verify_rustc(source);
+    let generated = test_utils::compile_single(source);
     assert!(
         generated.contains("cmd == \"quit\""),
         "Should generate clean condition for explicit &str: {}",

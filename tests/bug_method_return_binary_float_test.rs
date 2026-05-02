@@ -1,43 +1,8 @@
-/// TDD: Method return type in binary operations (E0308 bug)
-///
-/// **Bug**: Context inference doesn't propagate through method call return types.
-///
-/// **Pattern (from ai/astar_grid.wj):**
-/// ```windjammer
-/// fn get_cost() -> f32 { ... }
-/// let x = self.get_cost(1, 2) * 1.414  // 1.414 should be f32, gets f64!
-/// ```
-///
-/// **Root cause**: Binary operation inference doesn't check method call return types.
-///
-/// **Proper fix**: Extend context inference to handle method_call * literal.
-use windjammer::*;
+// method_call() -> f32, then method_call() * literal should infer literal as f32
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// method_call() -> f32, then method_call() * literal should infer literal as f32
 #[test]
 fn test_method_return_f32_in_binary_op() {
     let source = r#"
@@ -56,7 +21,7 @@ impl Grid {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     // 1.414 should be inferred as f32 from get_cost() return type
     assert!(
@@ -85,7 +50,7 @@ pub fn compute() -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     // 3.14 should be f32 from get_value() return type
     assert!(
@@ -130,7 +95,7 @@ impl AStarGrid {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     // Exact bug: self.get_cost(x+1, y+1) * 1.414 must generate 1.414_f32
     assert!(
@@ -164,7 +129,7 @@ impl State {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     // Both 1.0 and 2.0 should be f32
     assert!(

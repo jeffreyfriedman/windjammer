@@ -13,8 +13,8 @@
 ///     }
 /// }
 /// ```
-use std::path::PathBuf;
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_field_access_times_literal() {
@@ -29,7 +29,7 @@ impl Grid {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -59,7 +59,7 @@ impl Entity {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -83,7 +83,7 @@ impl Formation {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -94,39 +94,3 @@ impl Formation {
 }
 
 // Helper function
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("field_binary_test_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code =
-        std::fs::read_to_string(&output_file).expect("Failed to read generated Rust file");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}

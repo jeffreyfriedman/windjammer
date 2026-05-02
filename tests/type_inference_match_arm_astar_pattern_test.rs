@@ -6,56 +6,8 @@
 //! Root cause: get_known_float_type_from_expr didn't handle Unary Deref (*v),
 //! and match pattern variables (v) weren't populated for Some(v) over Option<&f32>.
 
-use std::fs;
-use std::path::Path;
-use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn gather_generated_rust(output_dir: &Path) -> String {
-    fn walk(dir: &Path, buf: &mut Vec<String>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                walk(&p, buf);
-            } else if p.extension().and_then(|s| s.to_str()) == Some("rs") {
-                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                if name == "mod.rs" || name == "lib.rs" {
-                    continue;
-                }
-                if let Ok(s) = fs::read_to_string(&p) {
-                    buf.push(s);
-                }
-            }
-        }
-    }
-    let mut parts = Vec::new();
-    walk(output_dir, &mut parts);
-    parts
-        .join("\n")
-        .lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        false,
-        &[],
-    )
-    .expect("build_project_ext");
-    gather_generated_rust(out.path())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_match_hashmap_get_none_arm_infers_f32() {
@@ -74,7 +26,7 @@ pub fn pathfind(grid: (i32, i32), start: (i32, i32), goal: (i32, i32)) -> f32 {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     // The literal 999999.0 should be f32 (from *v in other arm)
     assert!(

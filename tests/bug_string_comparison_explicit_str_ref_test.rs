@@ -9,37 +9,12 @@
 /// ROOT CAUSE: balance_eq_operands_for_rust doesn't distinguish between:
 /// 1. Explicit &str type (Type::Reference(Custom("str"))) - NO deref needed
 /// 2. Inferred borrowed string (Type::String with inferred borrow) - might need deref
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
-
-fn compile_wj_test(source: &str) -> (bool, String, String) {
-    let dir = tempdir().expect("tempdir for compile_wj_test");
-    let test_file = dir.path().join("test.wj");
-    fs::write(&test_file, source).expect("Failed to write temp file");
-
-    let output_dir = dir.path().join("output");
-    fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            test_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rs_file = output_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    (success, rust_code, stderr)
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -60,7 +35,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -143,7 +119,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(

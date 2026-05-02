@@ -1,14 +1,14 @@
-/// Windjammerscript Interpreter Tests (TDD)
-///
-/// Proves the interpreter produces identical output to compiled backends.
-/// Same .wj source → interpreted output == compiled output.
-/// This is the key guarantee: quick iteration with interpreter,
-/// then export to Rust for production.
+// Windjammerscript Interpreter Tests (TDD)
+//
+// Proves the interpreter produces identical output to compiled backends.
+// Same .wj source → interpreted output == compiled output.
+// This is the key guarantee: quick iteration with interpreter,
+// then export to Rust for production.
 // We use the parser directly + interpreter, without going through the CLI.
 // This tests the interpreter engine in isolation.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Parse source and run through the interpreter, capturing output
 fn interpret(source: &str) -> Result<String, String> {
@@ -31,56 +31,11 @@ fn interpret(source: &str) -> Result<String, String> {
 }
 
 /// Compile to Rust and run, returning stdout
-fn compile_and_run_rust(source: &str) -> String {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj");
-
-    assert!(
-        wj.status.success(),
-        "wj failed: {}",
-        String::from_utf8_lossy(&wj.stderr)
-    );
-
-    let rs_file = output_dir.join("test.rs");
-    let bin_path = temp_dir.path().join("test_bin");
-    let rustc = Command::new("rustc")
-        .arg(&rs_file)
-        .arg("-o")
-        .arg(&bin_path)
-        .arg("--edition")
-        .arg("2021")
-        .output()
-        .expect("Failed to execute rustc");
-
-    assert!(
-        rustc.status.success(),
-        "rustc failed: {}",
-        String::from_utf8_lossy(&rustc.stderr)
-    );
-
-    let run = Command::new(&bin_path).output().expect("Failed to run");
-    String::from_utf8(run.stdout).unwrap()
-}
-
 /// Assert interpreter output matches compiled Rust output
 fn assert_interpreter_matches_compiled(test_name: &str, source: &str) {
     let interp_output =
         interpret(source).unwrap_or_else(|e| panic!("[{}] Interpreter error: {}", test_name, e));
-    let compiled_output = compile_and_run_rust(source);
+    let compiled_output = test_utils::compile_single(source);
 
     assert_eq!(
         interp_output, compiled_output,

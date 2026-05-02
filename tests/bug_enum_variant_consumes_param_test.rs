@@ -1,5 +1,5 @@
-use std::fs;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// TDD test: Parameters passed to enum variant constructors should stay Owned
 ///
@@ -13,50 +13,6 @@ use tempfile::TempDir;
 ///
 /// Fix: Add recursive scanning in `is_stored` to detect enum variant constructors
 /// that consume the parameter.
-use std::process::Command;
-
-fn transpile_wj(source: &str) -> String {
-    // tempfile::TempDir: unique path per call (parallel-safe). The old
-    // nanos+pid scheme can collide across threads in the same process (same PID),
-    // and one test's remove_dir_all can delete another test's directory → ENOENT.
-    let temp_dir = TempDir::new().expect("failed to create temp dir for wj test");
-    let test_dir = temp_dir.path();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-    fs::create_dir_all(&out_dir).unwrap();
-
-    // Use CARGO_BIN_EXE_wj for cross-platform compatibility (Windows CI fix)
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .current_dir(test_dir)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    // Check compilation status
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
-    }
-
-    let rust_file = out_dir.join("test.rs");
-
-    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
-
 #[test]
 fn test_enum_variant_constructor_consumes_param() {
     let source = r#"
@@ -70,7 +26,7 @@ pub fn make_named(name: String) -> Shape {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // `name` should stay owned (String) since Shape::Named consumes it
@@ -105,7 +61,7 @@ pub fn create_kill(enemy_type: String, count: i32) -> Objective {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // `enemy_type` should stay owned since it's consumed by Kill variant
@@ -172,7 +128,7 @@ pub fn create_kill_quest(
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // enemy_type should stay owned because it's consumed by Kill variant
@@ -232,7 +188,7 @@ pub fn create_delivery_quest(item_id: String, recipient: String) -> Objective {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // enemy_type should stay owned - consumed by Kill variant

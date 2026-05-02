@@ -1,43 +1,10 @@
 // TDD: Trait impl methods must inherit receiver (&self / &mut self) from trait analysis,
 // not from impl body alone (empty bodies and missing self in AST must still match trait).
 
-use std::fs;
-use std::process::Command;
-use std::sync::Mutex;
-
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // `wj build` is not safe to invoke concurrently from multiple tests (shared cwd / temp paths).
-static WJ_BUILD_LOCK: Mutex<()> = Mutex::new(());
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let _lock = WJ_BUILD_LOCK.lock().expect("wj build lock poisoned");
-    let temp = TempDir::new().expect("temp dir");
-    let test_dir = temp.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file)
-        .unwrap_or_else(|_| String::from_utf8_lossy(&output.stdout).to_string());
-
-    if output.status.success() {
-        Ok(generated)
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -58,7 +25,7 @@ impl Reader for FileReader {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
     assert!(
@@ -87,7 +54,7 @@ impl Counter for SimpleCounter {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
     assert!(
@@ -116,7 +83,7 @@ impl Factory for Thing {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
     // In Rust, trait definition uses `-> Self`, impl may use `-> Self` or `-> Thing`
@@ -150,7 +117,7 @@ impl Port for Renderer {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
     assert!(

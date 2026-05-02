@@ -9,44 +9,13 @@
 /// `.into_iter()`, skip adding the extra `.iter()` prefix.
 ///
 /// Discovered via: codegen_loops_comprehensive_tests::test_enumerate_basic
-fn compile_to_rust(source: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    std::fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    std::fs::create_dir_all(&output_dir).unwrap();
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated = output_dir.join("test.rs");
-    std::fs::read_to_string(&generated).unwrap_or_else(|_| {
-        panic!(
-            "No test.rs generated. stderr:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_iter_enumerate_no_double_iter() {
     // items.iter().enumerate() should NOT produce items.iter().iter().enumerate()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     let items = vec![10, 20, 30]
@@ -75,7 +44,7 @@ fn main() {
 #[test]
 fn test_vec_enumerate_adds_single_iter() {
     // items.enumerate() (no explicit .iter()) should produce items.iter().enumerate()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     let items = vec![10, 20, 30]

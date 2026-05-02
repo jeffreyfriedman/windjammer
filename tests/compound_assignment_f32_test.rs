@@ -1,53 +1,5 @@
-/// TDD: Compound assignment (`+=`, `-=`, `*=`, `/=`) must not insert spurious `as f64` on f32 RHS
-/// when both sides are f32 (E0277: cannot multiply-assign f32 by f64).
-use std::process::Command;
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let test_dir = tempfile::tempdir().expect("failed to create temp dir");
-
-    let rs_file = test_dir.path().join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-
-    let out_file = test_dir.path().join("output.rlib");
-    let output = Command::new("rustc")
-        .arg(&rs_file)
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(&out_file)
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_compound_mul_assign_f32_fields_no_rhs_f64_cast() {
@@ -63,14 +15,16 @@ pub fn apply(mut s: State) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains("crouch_modifier as f64") && !output.contains(" as f64"),
         "f32 *= f32 must not cast RHS to f64; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",
@@ -96,14 +50,16 @@ pub fn run(mut t: T) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains(" as f64"),
         "f32 compound assigns must not use as f64 on f32 fields; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",
@@ -126,14 +82,16 @@ pub fn apply(mut s: State) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains(" as f64"),
         "f32 * f32 folded to compound must not insert as f64; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",
@@ -153,14 +111,16 @@ pub fn tick(mut d: Demo) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains(" as f64"),
         "f32 field assignment must not introduce f64 promotion; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",

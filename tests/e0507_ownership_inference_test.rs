@@ -10,49 +10,10 @@
 //! 7. Moving from &self (method takes owned self) → infer &mut self or clone
 //! 8. Struct literal field from Vec index → .clone()
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-    std::fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let src_main = out_dir.join("src").join("main.rs");
-    let test_rs = out_dir.join("test.rs");
-    let content = if src_main.exists() {
-        std::fs::read_to_string(src_main)
-    } else if test_rs.exists() {
-        std::fs::read_to_string(test_rs)
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No generated Rust file found",
-        ))
-    };
-    content.map_err(|e| e.to_string())
-}
 
 fn rust_compiles(rust_code: &str) -> bool {
     let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -82,7 +43,7 @@ pub fn get_line(lines: Vec<string>, index: i32) -> string {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("&lines[") || rust.contains("& lines["),
         "Vec<String> index needs &: {}",
@@ -116,7 +77,7 @@ impl Clip {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains(".clone().sample")
             && (rust.contains("tracks[i") || rust.contains("tracks[i as usize]")),
@@ -142,7 +103,7 @@ impl Equipment {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("pub fn get_damage(&self)"),
         "read-only method should use &self: {}",
@@ -169,7 +130,7 @@ impl Node {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains(".as_ref().map("),
         "Option::map needs .as_ref(): {}",
@@ -192,7 +153,7 @@ impl Editor {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     // Need & for vec[index] - can't move out of index
     assert!(
         rust.contains("&self.presets[") || rust.contains("& self.presets["),
@@ -217,7 +178,7 @@ impl Entity {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("pub fn has_health(&self)"),
         "read-only method should use &self: {}",
@@ -242,7 +203,7 @@ pub fn get_x(points: Vec<Point>, i: i32) -> f32 {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Field access through Vec index must compile: {}",
@@ -273,7 +234,7 @@ pub fn matches(required: Vec<string>, excluded: Vec<string>, entity_components: 
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("&entity_components") || rust.contains("& entity_components"),
         "Param used in multiple for-loops needs &: {}",
@@ -295,7 +256,7 @@ pub fn get_children(node: OctreeNode) -> Option<Vec<OctreeNode>> {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     // When node is passed by value, no borrow needed. When by ref, need &node.children.
     // The analyzer infers from usage - if we pass &node, we need the fix.
     assert!(
@@ -316,7 +277,7 @@ pub fn wrap(items: Vec<Item>, i: i32) -> Wrapper {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains(".clone()"),
         "Struct literal field from Vec index needs .clone(): {}",
@@ -347,7 +308,7 @@ impl World {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Option match on iterator var field must compile: {}",
@@ -372,7 +333,7 @@ impl Npc {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Option if let with &mut self must compile: {}",
@@ -406,7 +367,7 @@ impl Npc {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     // Must generate &self.search or &mut self.search to avoid E0507 (cannot move out of borrowed)
     assert!(
         rust.contains("&self.search") || rust.contains("&mut self.search"),
@@ -430,7 +391,7 @@ impl Builder {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     // When self is &self, self.bindings needs .clone() for struct literal
     assert!(
         rust_compiles(&rust),
@@ -462,7 +423,7 @@ pub fn matches(required: Vec<string>, excluded: Vec<string>, entity_components: 
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("&entity_components") || rust.contains("& entity_components"),
         "Param in multiple nested loops needs &: {}",
@@ -485,7 +446,7 @@ impl Editor {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust.contains("&self.presets[") || rust.contains("& self.presets["),
         "Vec<Preset> index in let needs borrow: {}",
@@ -514,7 +475,7 @@ impl World {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Option if let on iterator var field must compile: {}",
@@ -539,7 +500,7 @@ pub fn create_pass() -> i32 {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Builder pattern must compile: {}",
@@ -560,7 +521,7 @@ pub fn get_children(node: OctreeNode) -> Option<Vec<OctreeNode>> {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Option match param returning owned must compile: {}",
@@ -583,7 +544,7 @@ impl Builder {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Struct literal nested field must compile: {}",
@@ -607,7 +568,7 @@ impl Builder {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
         rust_compiles(&rust),
         "Let binding from self.graph.passes must compile (clone when &self, move when owned self): {}",

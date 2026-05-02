@@ -1,42 +1,8 @@
 /// TDD test: Basic WGSL compilation
 ///
 /// Tests that the WGSL backend can compile a simple function to WGSL.
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn transpile_wj_to_wgsl(source: &str) -> String {
-    let test_dir = tempdir().expect("tempdir for wgsl test");
-
-    let wj_file = test_dir.path().join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.path().join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("wgsl")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
-    }
-
-    let wgsl_file = out_dir.join("test.wgsl");
-    fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_simple_add_function() {
@@ -46,7 +12,7 @@ pub fn add(x: uint, y: uint) -> uint {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check that the function was generated
@@ -86,7 +52,7 @@ pub fn test_types(a: uint, b: int32, c: float, d: bool) -> float {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check type mappings
@@ -109,7 +75,7 @@ pub fn test_ops(x: uint, y: uint) -> uint {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check operations are generated
@@ -137,7 +103,7 @@ pub fn max(x: uint, y: uint) -> uint {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check if/else structure
@@ -158,7 +124,7 @@ pub fn count(n: uint) -> uint {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Check while loop

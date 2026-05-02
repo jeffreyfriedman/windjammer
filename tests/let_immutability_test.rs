@@ -7,34 +7,8 @@
 ///
 /// Intended philosophy (Rust/Swift-style explicit `let mut` at the source level) is not fully
 /// enforced in the driver yet.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj(source: &str) -> (String, String) {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    let generated_file = temp_dir.path().join("build").join("test.rs");
-    let generated = fs::read_to_string(&generated_file).unwrap_or_else(|_| {
-        panic!(
-            "Failed to read generated file. Compiler output:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        )
-    });
-
-    let stderr = String::from_utf8_lossy(&wj_output.stderr).to_string();
-    (generated, stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // TEST 1: `let` generates `let` (no mut) in Rust output
@@ -52,7 +26,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // Should generate `let x = 5` (not `let mut x`)
     assert!(
@@ -83,7 +57,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // Should generate `let mut count`
     assert!(
@@ -109,7 +83,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         generated.contains("let mut items"),
         "Current codegen should infer `let mut` for mutated Vec binding. Got:\n{}",
@@ -134,7 +108,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // Should generate `let mut items`
     assert!(
@@ -157,7 +131,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         generated.contains("let mut count"),
         "Current codegen should infer `let mut` for compound assignment. Got:\n{}",
@@ -179,7 +153,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     assert!(
         generated.contains("let mut count"),
@@ -203,7 +177,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // name should be immutable
     assert!(
@@ -246,7 +220,7 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = compile_wj(source);
+    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // The `self` parameter should still be auto-inferred as `&mut self`
     assert!(

@@ -7,43 +7,8 @@
 /// Root cause: Codegen always emits `field: binding` even when field == binding.
 ///
 /// Fix: When field name equals binding name, use shorthand syntax.
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_wj_source(test_name: &str, source: &str) -> String {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-
-    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join(format!("test_{}", test_name));
-
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let test_file = test_dir.join(format!("{}.wj", test_name));
-    fs::write(&test_file, source).unwrap();
-
-    let output = Command::new(&wj_binary)
-        .current_dir(&test_dir)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to execute wj build");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    println!("STDOUT:\n{}", stdout);
-    println!("STDERR:\n{}", stderr);
-
-    let rust_file = test_dir.join("build").join(format!("{}.rs", test_name));
-    fs::read_to_string(&rust_file)
-        .unwrap_or_else(|e| panic!("Failed to read generated Rust file {:?}: {}", rust_file, e))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -69,7 +34,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("struct_pattern_shorthand", source);
+    let rust_code = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", rust_code);
 
     // Should use shorthand: `Shape::Triangle { base, height }`
@@ -116,7 +81,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("struct_pattern_verbose", source);
+    let rust_code = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", rust_code);
 
     // When names differ, should keep verbose: `width: w, height: h`

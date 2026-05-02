@@ -1,59 +1,8 @@
-/// TDD: Mixed numeric type arithmetic - auto-cast integers to floats
-///
-/// Problem: `f32 % i32` and similar mixed-type ops fail with E0277.
-/// Solution: Compiler auto-casts integer operands to float when other operand is float.
-///
-/// Philosophy: "Compiler does the hard work" - users shouldn't manually cast in obvious cases.
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::*;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
     generated.contains(&format!("{ident} as f32"))
-}
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp = tempdir().expect("tempdir");
-    let test_dir = temp.path();
-    let rs_file = test_dir.join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .current_dir(test_dir)
-        .arg("test.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
 }
 
 /// True if stderr indicates E0277 (trait/type) - our codegen bug.
@@ -76,14 +25,16 @@ pub fn wrap(value: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 % i32 should cast count to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
@@ -101,14 +52,16 @@ pub fn add(value: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 + i32 should cast count to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
@@ -126,14 +79,16 @@ pub fn scale(value: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 * i32 should cast count to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
@@ -157,7 +112,7 @@ pub fn uv_coord(tile: Tile, tiles_per_row: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     // Must have (sprite_index % tiles_per_row) as f32, NOT (sprite_index) as f32 % tiles_per_row
     assert!(
         output.contains("sprite_index % tiles_per_row) as f32"),
@@ -170,7 +125,9 @@ pub fn uv_coord(tile: Tile, tiles_per_row: i32) -> f32 {
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
@@ -188,14 +145,16 @@ pub fn divide(value: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 / i32 should cast count to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",
@@ -213,14 +172,16 @@ pub fn subtract(value: f32, count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "f32 - i32 should cast count to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     if !rustc_ok && is_e0277_codegen_error(&stderr) {
         panic!(
             "Should compile (E0277 mixed arithmetic). stderr: {}\n\nGenerated:\n{}",

@@ -11,76 +11,8 @@
 /// - Literals: never refs
 /// - Index with Copy element: Rust auto-derefs arr[0] → f32, NOT &f32
 /// - Index with non-Copy element: vec[i] yields &T → deref
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_auto_deref_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        id
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !wj_output.status.success() {
-        eprintln!("wj compilation failed!");
-        eprintln!("stdout: {}", String::from_utf8_lossy(&wj_output.stdout));
-        eprintln!("stderr: {}", String::from_utf8_lossy(&wj_output.stderr));
-    }
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_literal_arg_no_deref() {
@@ -94,7 +26,7 @@ pub fn test() -> int {
     take_int(42)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(!rs.contains("*(42)"), "Should NOT add * to literal");
     assert!(rs.contains("take_int(42)") || rs.contains("take_int(42_i64)"));
@@ -112,7 +44,7 @@ pub fn test() -> f32 {
     take_float(1.0)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(1.0") && !rs.contains("*(1.0_f32)"),
@@ -140,7 +72,7 @@ impl Vec2 {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])") && !rs.contains("*(arr[1])"),
@@ -174,7 +106,7 @@ impl Vec3 {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])") && !rs.contains("*(arr[1])") && !rs.contains("*(arr[2])"),
@@ -203,7 +135,7 @@ impl Vec4 {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])"),
@@ -232,7 +164,7 @@ pub fn test(point_x: f32, planes: [Plane; 6]) -> bool {
         && point_in_front_of_plane(point_x, planes[1])
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(planes[0])") && !rs.contains("*(planes[1])"),
@@ -257,7 +189,7 @@ pub fn test(grid: bool, path: Path, current_idx: usize, i: usize) -> bool {
     has_line_of_sight(grid, path.nodes[current_idx], path.nodes[i])
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     // Vec index returns &T. For (i32, i32) which is Copy, Rust might auto-deref.
     // The key is we shouldn't get E0614. Let's just verify it compiles.
@@ -276,7 +208,7 @@ pub fn test(r: int) -> int {
     add_one(r)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     // r is owned (not borrowed) in this case - param is int
     // So we shouldn't add *. Just verify compiles.
@@ -303,7 +235,7 @@ impl Color {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])"),
@@ -332,7 +264,7 @@ impl Quat {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])"),
@@ -358,6 +290,6 @@ pub fn test(entities: Vec<Entity>) -> Vec<Entity> {
     result
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }

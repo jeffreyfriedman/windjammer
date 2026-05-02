@@ -4,23 +4,8 @@
 //! reference, not the value. Fix: infer enum pattern field types, track `&T` in `local_var_types`,
 //! emit `*` for Copy pointees; dedupe `match &&expr` when index already borrowed.
 
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_match_vec_index_enum_struct_copy_fields_use_star_not_ref_clone() {
@@ -48,7 +33,7 @@ impl BlendTree {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     // Codegen uses `*(node_a)` so the deref applies to the binding, not a longer chain.
     assert!(
         rust.contains("*(node_a)") && rust.contains("*(node_b)"),
@@ -69,7 +54,7 @@ pub fn push_u32_from_vec(mask: Vec<u32>) {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("acc.push(mask[0_usize])") || rust.contains("acc.push(mask[0 as usize])"),
         "expected push without leading & on Copy vec index; got:\n{rust}"
@@ -95,7 +80,7 @@ impl S {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         !rust.contains("(x).clone()"),
         "Copy binding from match should not use .clone(); got:\n{rust}"

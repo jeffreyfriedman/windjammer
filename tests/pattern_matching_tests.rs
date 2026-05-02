@@ -1,39 +1,15 @@
 // Pattern Matching Tests
 // Automated tests for pattern matching features
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    // TDD FIX: Use pre-compiled test binary to avoid race conditions
-    // The env!("CARGO_BIN_EXE_wj") macro provides the path to the binary
-    // built for tests, which avoids parallel compilation issues.
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    let tmp = TempDir::new().map_err(|e| e.to_string())?;
-    let temp_path = tmp.path().join("test.wj");
-    fs::write(&temp_path, code).map_err(|e| e.to_string())?;
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", temp_path.to_str().unwrap(), "--no-cargo"])
-        .output()
-        .expect("Failed to execute compiler");
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("{}{}", stdout, stderr))
-    }
-}
 
 fn compile_should_succeed(code: &str, test_name: &str) {
-    match compile_wj_code(code) {
+    match test_utils::compile_single_result(code) {
         Ok(_) => println!("✓ {} passed", test_name),
         Err(e) => panic!("✗ {} failed: {}", test_name, e),
     }
@@ -45,7 +21,7 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
         .join(wj_file);
 
     // First, compile the Windjammer code
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
@@ -92,7 +68,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
         .join("tests")
         .join(wj_file);
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
@@ -123,7 +99,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
 }
 
 fn compile_should_fail(code: &str, expected_error: &str, test_name: &str) {
-    match compile_wj_code(code) {
+    match test_utils::compile_single_result(code) {
         Ok(_) => panic!("✗ {} should have failed but succeeded", test_name),
         Err(e) => {
             if e.contains(expected_error) {

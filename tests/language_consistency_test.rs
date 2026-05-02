@@ -7,41 +7,12 @@
 //!
 //! Philosophy: "Infer what doesn't matter, explicit where it does"
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-
-    let output = Command::new(wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-    Ok(generated)
-}
 
 fn compile_expect_error(code: &str) -> (bool, String) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -78,7 +49,8 @@ fn foo() {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile with inferred mut");
+    let generated =
+        test_utils::compile_single_result(code).expect("Should compile with inferred mut");
     assert!(
         generated.contains("let mut x"),
         "Should infer `let mut x` in generated Rust. Got:\n{}",
@@ -95,7 +67,7 @@ fn foo() {
 }
 "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {}", result.unwrap_err());
 }
 
@@ -116,7 +88,7 @@ fn update(item: Item) {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         generated.contains("fn update(item: &mut Item)")
             || generated.contains("fn update(item: &mut Item )"),
@@ -140,7 +112,7 @@ impl Item {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         generated.contains("fn get(&self)"),
         "Should infer &self for read-only method, got:\n{}",
@@ -163,7 +135,7 @@ impl Item {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         generated.contains("fn set(&mut self"),
         "Should infer &mut self for mutation, got:\n{}",
@@ -186,7 +158,7 @@ impl Buffer {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         generated.contains("fn add(&mut self"),
         "Should infer &mut self for push(), got:\n{}",
@@ -240,7 +212,7 @@ impl Grid {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         generated.contains("&mut Grid") || generated.contains("grid: &mut Grid"),
         "Should infer &mut for mutated param, got:\n{}",
@@ -264,7 +236,7 @@ fn read(data: Data) -> int {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Should compile");
+    let generated = test_utils::compile_single_result(code).expect("Should compile");
     // Read-only by-value field access: analyzer may pass `Data` (Copy-style) or `&Data`.
     let ok =
         generated.contains("fn read(data: &Data)") || generated.contains("fn read(data: Data)");

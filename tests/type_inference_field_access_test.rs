@@ -1,6 +1,5 @@
 use std::io::Write;
 use std::process::Command;
-
 #[test]
 fn test_field_access_constrains_binary_op() {
     // TDD: Reproduce field access + binary op type inference bug

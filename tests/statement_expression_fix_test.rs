@@ -9,62 +9,8 @@
 //! Fix: Wrap object in parentheses when it starts with & or &mut for instance method calls:
 //! (&mut obj).push(args) instead of &mut obj.push(args)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (stderr, false);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            temp_dir.path().join("test.rlib").to_str().unwrap(),
-        ])
-        .arg(&generated_path)
-        .output();
-
-    let compiles = rustc_output
-        .as_ref()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !compiles {
-        if let Ok(ref out) = rustc_output {
-            eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&out.stderr));
-        }
-    }
-
-    (generated, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_push_in_if_block_no_borrow() {
@@ -78,7 +24,7 @@ pub fn collect_items() -> Vec<i32> {
     items
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "Should compile. Generated:\n{}\n\nrustc error above",
@@ -112,7 +58,7 @@ pub fn process(x: i32) -> Vec<i32> {
     result
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "Should compile. Generated:\n{}\n\nrustc error above",
@@ -135,7 +81,7 @@ pub fn clear_vec() {
     v.clear()
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(source);
+    let (result, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "Should compile. Generated:\n{}\n\nrustc error above",

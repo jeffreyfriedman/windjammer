@@ -3,9 +3,8 @@
 /// Bug: self.current_wait > 0.0 generates 0.0_f64 instead of 0.0_f32
 /// Root Cause: Field type not propagating through comparison operators
 /// Expected: Comparison operands should match field type
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_field_in_comparison_gt() {
@@ -21,7 +20,7 @@ impl Timer {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -53,7 +52,7 @@ impl Position {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -78,7 +77,7 @@ impl Health {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -107,7 +106,7 @@ impl Cooldown {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -125,19 +124,3 @@ impl Cooldown {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj compiler");
-
-    std::fs::read_to_string(tmp.path().join("test.rs")).expect("Failed to read generated Rust file")
-}

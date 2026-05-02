@@ -14,36 +14,13 @@
 ///
 /// Expected: `for entity in &mut self.entities { ... }`
 /// Actual (broken): `for entity in &self.entities { ... }`
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    let generated_file = temp_dir.path().join("build").join("test.rs");
-    fs::read_to_string(&generated_file).unwrap_or_else(|_| {
-        panic!(
-            "Failed to read generated file. Compiler stderr:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop_mut_borrow_when_mutation_inside_if_let() {
-    let generated = compile_and_get_rust(
+    let generated = test_utils::compile_single(
         r#"
 @derive(Clone)
 pub struct Velocity {
@@ -91,7 +68,7 @@ impl World {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop_mut_borrow_when_mutation_inside_match() {
-    let generated = compile_and_get_rust(
+    let generated = test_utils::compile_single(
         r#"
 @derive(Clone)
 pub struct Item {
@@ -129,7 +106,7 @@ impl Inventory {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop_immutable_borrow_when_no_mutation_in_match() {
-    let generated = compile_and_get_rust(
+    let generated = test_utils::compile_single(
         r#"
 @derive(Clone)
 pub struct Item {

@@ -10,56 +10,12 @@
 /// - Return: return {unknown} where fn -> f32 → {unknown} = f32
 ///
 /// GOAL: Windjammer errors for mixing (not Rust errors)
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::Path;
 use tempfile::tempdir;
 use windjammer::{build_project_ext, CompilationTarget};
-
-fn gather_generated_rust(output_dir: &Path) -> String {
-    fn walk(dir: &Path, buf: &mut Vec<String>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                walk(&p, buf);
-            } else if p.extension().and_then(|s| s.to_str()) == Some("rs") {
-                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                if name == "mod.rs" || name == "lib.rs" {
-                    continue;
-                }
-                if let Ok(s) = fs::read_to_string(&p) {
-                    buf.push(s);
-                }
-            }
-        }
-    }
-    let mut parts = Vec::new();
-    walk(output_dir, &mut parts);
-    parts
-        .join("\n")
-        .lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        false,
-        &[],
-    )
-    .expect("build_project_ext");
-    gather_generated_rust(out.path())
-}
 
 #[test]
 fn test_binary_op_propagation() {
@@ -76,7 +32,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     // All literals should be f32 (propagated from x: f32)
     assert!(
@@ -110,7 +66,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     // All literals should be f32 (propagated through function parameters)
     let has_consistent_types = rust_code.contains("0.5_f32")
@@ -192,7 +148,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     // All literals should consistently be f32 throughout the call chain
     assert!(
@@ -219,7 +175,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     // All literals should have same type (unified)
     let f32_count = rust_code.matches("_f32").count();
@@ -260,7 +216,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(wj_source);
+    let rust_code = test_utils::compile_single(wj_source);
 
     assert!(
         rust_code.contains("999999.0_f32"),

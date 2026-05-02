@@ -1,37 +1,8 @@
-/// TDD: Remaining float arithmetic patterns (E0277 fix)
-///
-/// **Patterns from game build errors:**
-/// 1. Cast / literal: `current_g as f32 / 10.0` → 10.0 should be f32
-/// 2. Struct field / literal: `self.size.x / 2.0` → 2.0 should be f32 (nested FieldAccess)
-/// 3. Nested division: `(member_index as f32) * (6.28318 / self.members.len() as f32)` → 6.28318 f32
-/// 4. Method result * literal: `(seed * 1234.567).sin() * 3.14159265 * 2.0` → all f32
-use windjammer::*;
+// Pattern 1: Cast / literal - pathfinder.wj: current_g as f32 / 10.0
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// Pattern 1: Cast / literal - pathfinder.wj: current_g as f32 / 10.0
 #[test]
 fn test_cast_div_literal_infers_f32() {
     let source = r#"
@@ -40,7 +11,7 @@ pub fn path_cost(current_g: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("10.0_f32") || output.contains("10_f32"),
         "10.0 in 'cast / literal' should be f32:\n{}",
@@ -77,7 +48,7 @@ impl PhysicsBody {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     // self.size.x / 2.0 - 2.0 must be f32 to match self.size.x (f32)
     assert!(
         output.contains("2.0_f32") || output.contains("2_f32"),
@@ -112,7 +83,7 @@ impl Formation {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     // 6.28318 in division with f32 divisor should be f32
     assert!(
         output.contains("6.28318_f32"),
@@ -135,7 +106,7 @@ pub fn circle_theta(seg: i32, segments: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     // Result is f32 (return type). Literal 6.28318... must match operands.
     // seg as f32 is f32, segments as f32 is f32. So 6.28318 should be f32.
     assert!(
@@ -166,7 +137,7 @@ impl PhysicsBody {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32") || output.contains("0_f32"),
         "0.0 in comparison with f32 field should be f32:\n{}",
@@ -183,7 +154,7 @@ pub fn half_element(arr: Vec<f32>, i: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.0_f32") || output.contains("2_f32"),
         "2.0 in arr[i] / 2.0 should be f32 (Index yields Vec element type):\n{}",
@@ -200,7 +171,7 @@ pub fn half_width(width: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.0_f32") || output.contains("2_f32"),
         "2.0 in width / 2.0 should be f32 when width is f32 param:\n{}",

@@ -7,41 +7,8 @@
 ///
 /// Uses wj CLI (integration) rather than compile_and_get_rust (unit) to ensure
 /// full pipeline correctness.
-use std::fs;
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("write");
-    fs::create_dir_all(&out_dir).expect("create dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let src_dir = out_dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        out_dir.join("test.rs")
-    };
-
-    fs::read_to_string(&main_rs).map_err(|e| e.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // 1. Int division then cast: ((len as i32) / 2) as f32 - 2 should NOT be cast
 #[test]
@@ -52,7 +19,7 @@ pub fn compute(len: usize) -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("/ 2") || generated.contains("/ (2)"),
         "The 2 should NOT be cast to f32 (both_int=true). Got:\n{}",
@@ -74,7 +41,7 @@ pub fn compute(count: i32) -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("count / 2") || generated.contains("count / (2)"),
         "Should have integer division. Got:\n{}",
@@ -96,7 +63,7 @@ pub fn compute(x: f32, y: i32) -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("(y) as f32") || generated.contains("y as f32"),
         "y should be cast to f32 (mixed int/float). Got:\n{}",
@@ -115,7 +82,7 @@ pub fn accumulate() -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("as f32"),
         "price += 1 should cast 1 to f32. Got:\n{}",
@@ -132,7 +99,7 @@ pub fn compute(a: i32, b: i32) -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         !generated.contains(") as f32 / 2") && !generated.contains("as f32 / 2"),
         "b/2 should stay int. Got:\n{}",
@@ -152,7 +119,7 @@ impl Stats {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         !generated.contains(" as f32") && !generated.contains(" as f64"),
         "self.count * 2 should stay int. Got:\n{}",
@@ -169,7 +136,7 @@ pub fn is_even(x: i32) -> i32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         !generated.contains(" as f32") && !generated.contains(" as f64"),
         "i32 % 2 should stay int. Got:\n{}",
@@ -186,7 +153,7 @@ pub fn compute(x: usize, y: f32) -> f32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("as f32"),
         "usize + f32 should cast x. Got:\n{}",
@@ -202,7 +169,7 @@ pub const SCALE: f32 = 1.0 + 1
 pub fn get_scale() -> f32 { SCALE }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         generated.contains("as f32")
             || generated.contains("1.0_f32 + 1")
@@ -221,7 +188,7 @@ pub fn last_index(items: Vec<u32>) -> i32 {
 }
 pub fn main() {}
 "#;
-    let generated = compile_wj_to_rust(source).expect("compile");
+    let generated = test_utils::compile_single_result(source).expect("compile");
     assert!(
         !generated.contains(" as f32") && !generated.contains(" as f64"),
         "Int - int should stay int. Got:\n{}",

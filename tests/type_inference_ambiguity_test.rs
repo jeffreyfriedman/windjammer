@@ -6,27 +6,8 @@
 /// Fix: Infer Vec<T> from first .push() in body and emit `let mut x: Vec<T> = Vec::new()`.
 ///
 /// Philosophy: "Fix inference when context exists" - don't guess when ambiguous.
-use std::fs;
-use std::sync::atomic::{AtomicU64, Ordering};
-use tempfile::TempDir;
-
-fn compile_and_get_rust(source: &str) -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let _ = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj");
-
-    fs::read_to_string(tmp.path().join("test.rs")).expect("Generated Rust file not found")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// E0282 Phase 9: Parser produces Call{function: Identifier("Vec::new")} not MethodCall.
 /// This test verifies we handle the qualified-path Identifier in the Call branch.
@@ -40,7 +21,7 @@ pub fn test_method_call_inference() -> Vec<i32> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Call+Identifier fix: Vec::new() parsed as Identifier("Vec::new") must infer from push
     assert!(
@@ -74,7 +55,7 @@ pub fn test_walls() {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // E0282 FIX: Should emit Vec<AABB> so Rust doesn't need type annotation
     assert!(
@@ -93,7 +74,7 @@ pub fn test_parts() {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should infer Vec<String> from format! return type (avoids E0282)
     assert!(
@@ -115,7 +96,7 @@ pub fn get_empty_u32_vec() -> Vec<u32> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     assert!(
         rust.contains("Vec::<u32>::new()") || rust.contains("return Vec::<u32>::new()"),
@@ -136,7 +117,7 @@ pub fn collect_ids() {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     assert!(
         rust.contains("HashSet<u32>"),
@@ -170,7 +151,7 @@ pub fn create_pool() {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     assert!(
         rust.contains("let mut particles: Vec<Particle> = Vec::new()"),
@@ -190,7 +171,7 @@ pub fn get_empty_int_vec() -> Vec<int> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should emit Vec<i64> (int) or type annotation from return type when variable is returned
     assert!(
@@ -231,7 +212,7 @@ pub fn get_unlocked(achievements: HashMap<u32, Achievement>) -> Vec<&Achievement
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should infer Vec<&Achievement> from push(ach) where ach comes from values()
     assert!(
@@ -249,7 +230,7 @@ pub fn test_empty() {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // User provided explicit type - should be preserved (unused binding may get _ prefix)
     assert!(
@@ -304,7 +285,7 @@ impl Foo {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // &mut T where T: Copy must use deref, not T::clone on the mut ref (E0282)
     assert!(
@@ -363,7 +344,7 @@ impl Foo {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Prefer owned Vec3: pass `*pos` or `pos` (move) — not `*pos.clone()` (invalid on &mut).
     let ok = rust.contains("InvestigationState::new(*pos)")
@@ -404,7 +385,7 @@ pub fn get_text(node: Option<Node>) -> Option<String> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Turbofish is optional when return type is Option<String> (Rust often infers).
     assert!(
@@ -449,7 +430,7 @@ impl Inventory {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should emit type ascription for stack or clone works
     assert!(
@@ -469,7 +450,7 @@ pub fn get_evens(numbers: Vec<i32>) -> Vec<i32> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should infer collect::<Vec<i32>>() or collect::<Vec<_>>() from return type
     assert!(
@@ -488,7 +469,7 @@ pub fn get_ids(items: Vec<i32>) -> Vec<i32> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     // Should emit collect::<Vec<i64>>() or collect::<Vec<_>>() from return type
     assert!(

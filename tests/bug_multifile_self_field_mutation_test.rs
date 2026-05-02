@@ -10,6 +10,9 @@
 /// - NpcBehavior::update_patrol calls self.patrol.update_wait(dt) → needs &mut self
 ///
 /// Works in single file (both structs together), breaks in multi-file compilation.
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
@@ -65,38 +68,6 @@ fn compile_windjammer_directory(
     Ok(results)
 }
 
-fn compile_windjammer_single(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, code).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    std::fs::read_to_string(&generated_file)
-        .map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
 #[test]
 fn test_single_file_self_field_stdlib_remove_infers_mut() {
     let code = r#"
@@ -120,7 +91,7 @@ impl World {
 fn main() {}
 "#;
 
-    let generated = compile_windjammer_single(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
     assert!(
         generated.contains("fn remove_transform(&mut self"),
         "remove_transform should infer &mut self because self.transforms.remove() mutates.\nGenerated:\n{}",

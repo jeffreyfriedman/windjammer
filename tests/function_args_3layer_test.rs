@@ -7,54 +7,8 @@
 //! Layer 2: Apply Copy semantics (effective_ownership)
 //! Layer 3: Determine required coercion (RustCoercionRules)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Auto-borrow: Owned → Borrowed param
@@ -69,7 +23,8 @@ pub fn caller(s: string) {
     takes_ref(s)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // Ownership inference may infer s as &str; either takes_ref(&s) or takes_ref(s) is correct
     assert!(
@@ -88,7 +43,8 @@ pub fn caller(mut n: i32) {
     takes_mut(n)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("takes_mut(&mut n)"),
@@ -110,7 +66,8 @@ pub fn caller(x: &i32) {
     takes_owned(x)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // &i32 to i32: may deref, clone (Copy), or pass through — all valid
     assert!(
@@ -136,7 +93,8 @@ pub fn caller(s: &string) {
     takes_owned(s)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // May use .clone() or ownership inference may change param to &str
     assert!(
@@ -159,7 +117,8 @@ pub fn caller() {
     takes_string("hello")
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // String literal: may add .to_string() or pass directly; &"hello" also valid
     assert!(
@@ -178,7 +137,8 @@ pub fn caller() {
     takes_ref("hello")
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // String literal to &str: takes_ref("hello") or takes_ref(&"hello") both work
     assert!(
@@ -201,7 +161,8 @@ pub fn caller() {
     foo(1.0)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("1.0_f32") || result.contains("1_f32"),
@@ -223,7 +184,8 @@ pub fn caller(n: i32) -> i32 {
     takes_int(n)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains("takes_int(n)") && !result.contains("takes_int(&n)"),
@@ -246,7 +208,7 @@ pub fn caller(items: &Vec<Item>) {
     takes_id(items[0].id)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -261,7 +223,7 @@ pub fn caller(items: &Vec<Item>) {
     takes_name(&items[0].name)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -278,7 +240,7 @@ pub fn caller(x: &i32, y: i32, z: &string) {
     mixed(x, y, z)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -295,7 +257,7 @@ pub fn caller(x: i32, s: string) {
     unknown(x, s)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -313,7 +275,7 @@ pub fn caller() {
     let w = new("test")
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -334,7 +296,7 @@ pub fn caller(items: &Vec<Item>) {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -353,7 +315,8 @@ pub fn caller(name: string) {
     greet(s)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // format! expands to write! in generated Rust
     assert!(
@@ -375,7 +338,7 @@ pub fn caller() {
     let v: Vec<i32> = Vec::new()
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -394,7 +357,7 @@ pub fn caller() {
     let e = Event::Message("hi")
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -412,7 +375,7 @@ pub fn caller(n: i32) {
     outer(inner(n))
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -430,7 +393,8 @@ pub fn caller(name: &string) {
     takes_string(msg)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // Temp from format!() - pass to takes_string
     assert!(

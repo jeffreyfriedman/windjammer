@@ -7,54 +7,8 @@
 //! Layer 2: Apply Copy semantics (effective_ownership)
 //! Layer 3: Determine required coercion (RustCoercionRules)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Struct Literal - Target: Owned
@@ -69,7 +23,8 @@ pub fn make(x: &i32, y: &i32) -> Point {
     Point { x: x, y: y }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // x, y are &i32 params inferred as Borrowed. Struct literal fields require
     // owned values, so deref is needed: Point { x: *x, y: *y } or Point { x: *(x), y: *(y) }.
@@ -97,7 +52,8 @@ pub fn copy_name(d: &Data) -> string {
     d.name
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // d.name is &String (Borrowed). String is non-Copy, needs .clone()
     assert!(
@@ -116,7 +72,8 @@ pub fn wrap(v: i32) -> Wrapper {
     Wrapper { val: v }
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(result.contains("Wrapper { val: v }") || result.contains("Wrapper { val, .. }"));
 }
@@ -134,7 +91,8 @@ pub fn caller(s: string) {
     takes_ref(s)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // s is Owned, param needs Borrowed. Should add &
     assert!(
@@ -153,7 +111,8 @@ pub fn caller(r: &i32) -> i32 {
     takes_int(r)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // r is &i32 (Borrowed). i32 is Copy. Valid outputs: takes_int(r), takes_int(*r),
     // or takes_int(r.clone()) — all compile since i32 is Copy.
@@ -175,7 +134,8 @@ pub fn caller(r: &string) -> usize {
     takes_string(r)
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // Phase 2 string optimization converts both `s: string` and `r: &string` params
     // to `&str`, so no clone is needed — takes_string(r) is valid since both are &str.
@@ -199,7 +159,8 @@ pub fn compare(x: &i32, y: &i32) -> bool {
     x == y
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // x, y are &i32. Comparison auto-derefs. No explicit * needed.
     assert!(
@@ -217,7 +178,7 @@ pub fn cmp(a: i32, b: &i32) -> bool {
     a == b
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -233,7 +194,8 @@ pub fn add(x: &i32, y: &i32) -> i32 {
     x + y
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // x, y are &i32. i32 is Copy. Binary op auto-copies.
     assert!(
@@ -251,7 +213,7 @@ pub fn sum(a: &i32, b: &i32) -> i32 {
     a + b + 1
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -271,7 +233,8 @@ pub fn use_counter(c: &Counter) -> i32 {
     c.get()
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // c is &Counter. get() takes owned self. Need .clone() or pass by ref.
     // Counter may need Clone. Check for clone or ref.
@@ -292,7 +255,8 @@ pub fn len(s: string) -> usize {
     s.len()
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(result.contains("s.len()"));
 }
@@ -314,7 +278,8 @@ pub fn sum_ids(items: &Vec<Item>) -> i32 {
     sum
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // item is &Item from iter. item.id is Copy. No clone needed.
     assert!(
@@ -337,7 +302,8 @@ pub fn collect_names(items: &Vec<Item>) -> Vec<string> {
     names
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     assert!(
         result.contains(".clone()"),
@@ -361,7 +327,7 @@ pub fn get_val(opt: &Option<i32>) -> i32 {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -377,7 +343,7 @@ pub fn check(opt: &Option<i32>) -> bool {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -395,7 +361,7 @@ pub fn make(x: &i32) -> Outer {
     Outer { inner: Inner { x: x } }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -409,7 +375,7 @@ pub fn get(a: &A) -> i32 {
     a.b.c
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -421,7 +387,7 @@ pub fn first(items: &Vec<i32>) -> i32 {
     items[0]
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -433,7 +399,7 @@ pub fn double(opt: &Option<i32>) -> Option<i32> {
     opt.map(|x| x * 2)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -445,7 +411,7 @@ pub fn greet(name: &string) -> string {
     "Hello, " + name
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -457,7 +423,8 @@ pub fn dup(s: &string) -> string {
     s.clone()
 }
 "#;
-    let (success, result, err) = compile_and_verify(src);
+    let (result, success) = test_utils::compile_single_check(src);
+    let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // Phase 2 string optimization converts `s: &string` to `s: &str`.
     // `.clone()` on `&str` returns `&str` (not `String`), so the compiler
@@ -478,7 +445,7 @@ pub fn read_mut(n: &mut i32) -> i32 {
     x
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -491,7 +458,7 @@ pub fn make_pair(x: &i32, y: &i32) -> Point {
     Point(x, y)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -504,7 +471,7 @@ pub fn get_x(d: &Data) -> i32 {
     d.x
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -517,7 +484,7 @@ pub fn assign(r: &i32) -> i32 {
     x
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -529,7 +496,7 @@ pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
     a + b + c
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -541,7 +508,7 @@ pub fn len(s: &string) -> usize {
     s.len()
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -554,7 +521,7 @@ pub fn apply(r: &i32) -> i32 {
     double(r)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -571,7 +538,7 @@ pub fn get(e: &E) -> i32 {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -588,7 +555,7 @@ impl S {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -600,7 +567,7 @@ pub fn msg(name: &string) -> string {
     format!("Hello {}", name)
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -616,7 +583,7 @@ pub fn check(r: &bool) -> bool {
     }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -628,7 +595,7 @@ pub fn and(a: &bool, b: &bool) -> bool {
     a && b
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -640,7 +607,7 @@ pub fn first(arr: &[i32; 3]) -> i32 {
     arr[0]
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }
 
@@ -654,6 +621,6 @@ pub fn add(a: &Vec2, b: &Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
 }
 "#;
-    let (success, _result, err) = compile_and_verify(src);
+    let (success, _result, err) = test_utils::compile_via_cli(src);
     assert!(success, "Must compile. Error:\n{}", err);
 }

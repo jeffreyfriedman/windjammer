@@ -4,69 +4,8 @@
 //!
 //! Philosophy: "Safety Without Ceremony" - automatic ref/ref mut, correct by construction.
 
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile(src: &str) -> String {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, src).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let wj_binary = if wj_binary.exists() {
-        wj_binary
-    } else {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj")
-    };
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    std::fs::read_to_string(&generated_file).expect("Failed to read generated file")
-}
-
-fn compile_and_rustc(src: &str) -> (String, bool) {
-    let rs = compile(src);
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let main_rs = test_dir.join("main.rs");
-    std::fs::write(&main_rs, &rs).expect("Failed to write Rust");
-    let output = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            test_dir.join("test.rlib").to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-    if !output.status.success() {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-    }
-    (rs, output.status.success())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Shared borrow (&T) → ref only, never ref mut
@@ -85,7 +24,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     // Either `Some(ref val)` or `if let Some(val) = r` with `*val` (auto-deref to value)
     let ok_pattern = result.contains("Some(ref val)")
@@ -115,7 +54,7 @@ pub fn read(opt: Option<i32>) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     let ok = result.contains("Some(ref v)")
         || (result.contains("if let Some(v) = r") && result.contains("*v"));
@@ -143,7 +82,7 @@ pub fn increment(opt: Option<Counter>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     let ok = result.contains("Some(ref mut c)")
         || (result.contains("let mut o = opt")
@@ -171,7 +110,7 @@ impl Container {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     // Known limitation: WJ can emit &self with `&mut self.slots[i]` in if-let (rustc E0596).
     // Still document generated shape when it exists.
     assert!(
@@ -207,7 +146,7 @@ pub fn process(mut opt: Option<i32>) -> Option<i32> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     assert!(
         !result.contains("ref mut"),
@@ -228,7 +167,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     assert!(
         !result.contains("ref mut"),
@@ -265,7 +204,7 @@ impl Inv {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     assert!(
         result.contains("Some(ref mut stack)")
@@ -296,7 +235,7 @@ impl Container {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(
         result.contains("if let Some(stack)") || result.contains("if let Some(ref mut stack)"),
         "Expected if-let Some(stack) or Some(ref mut stack). Got:\n{}",
@@ -327,7 +266,7 @@ pub fn read(slots: Vec<Option<Slot>>, i: usize) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     assert!(
         result.contains("Some(ref s)")
@@ -353,7 +292,7 @@ pub fn try_mutate(opt: Option<i32>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_and_rustc(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     assert!(
         !result.contains("ref mut v"),

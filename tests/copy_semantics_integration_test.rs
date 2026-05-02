@@ -4,46 +4,8 @@
 //! producing effective ownership for code generation. Key rule: &Copy → Owned
 //! (Rust auto-copies, so no explicit * needed).
 
-use std::fs;
-use std::process::Command;
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, wj_source).expect("write");
-    fs::create_dir_all(&out_dir).expect("create dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let src_main = out_dir.join("src").join("main.rs");
-    let test_rs = out_dir.join("test.rs");
-    let content = if src_main.exists() {
-        fs::read_to_string(src_main)
-    } else if test_rs.exists() {
-        fs::read_to_string(test_rs)
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No generated Rust file",
-        ))
-    };
-    content.map_err(|e| e.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // 1. Borrowed Copy param: x + 1 not *x + 1 when x is &i32
 #[test]
@@ -56,7 +18,7 @@ pub fn process(x: i32) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // When x is inferred borrowed (&i32), i32 is Copy so effective: Owned
     // Should use x + 1, not *x + 1
     assert!(
@@ -82,7 +44,7 @@ pub fn process(s: string) -> usize {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // s is string (may be borrowed), .len() auto-derefs
     assert!(
         result.contains("s.len()"),
@@ -103,7 +65,7 @@ pub fn process(items: Vec<(i32, i32)>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // items[0] yields &(i32, i32), Copy so destructured x, y are Owned
     assert!(
         result.contains("x + y") || result.contains("x + (y)"),
@@ -133,7 +95,7 @@ pub fn process(e: Entity) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // e may be &Entity (borrowed), Entity is Copy so effective: Owned
     assert!(
         result.contains("e.id"),
@@ -158,7 +120,7 @@ pub fn process(p: Point) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // p.x yields i32 (Copy), effective: Owned
     assert!(
         result.contains("p.x") && result.contains("p.y"),
@@ -178,7 +140,7 @@ pub fn process() -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("42"),
         "Should have literal. Got:\n{}",
@@ -197,7 +159,7 @@ pub fn add(a: i32, b: i32) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("a + b") || result.contains("a + (b)"),
         "Should use a + b. Got:\n{}",
@@ -227,7 +189,7 @@ pub fn process(id: Id) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("id.value()"),
         "Should use id.value(). Got:\n{}",
@@ -249,7 +211,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("Some(x)") || result.contains("Some(ref x)"),
         "Should handle Option. Got:\n{}",
@@ -272,7 +234,7 @@ pub fn sum(items: Vec<i32>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("total += item") || result.contains("total = total + item"),
         "Should use item in loop. Got:\n{}",
@@ -299,7 +261,7 @@ pub fn process(o: Outer) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("o.inner.val") || result.contains("o.inner .val"),
         "Should access nested field. Got:\n{}",
@@ -318,7 +280,7 @@ pub fn eq(a: i32, b: i32) -> bool {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("a == b"),
         "Should compare a == b. Got:\n{}",
@@ -336,7 +298,7 @@ pub fn first(arr: Vec<i32>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("arr[0]") || result.contains("arr [0]"),
         "Should index array. Got:\n{}",
@@ -355,7 +317,7 @@ pub fn add_f32(a: f32, b: f32) -> f32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("a + b") || result.contains("a + (b)"),
         "Should add f32. Got:\n{}",
@@ -374,7 +336,7 @@ pub fn and(a: bool, b: bool) -> bool {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("a && b"),
         "Should use a && b. Got:\n{}",
@@ -396,7 +358,7 @@ pub fn get_val(opt: Option<i32>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("Some") && result.contains("=>"),
         "Should match Option. Got:\n{}",
@@ -420,7 +382,7 @@ pub fn origin() -> Point {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("Point {") && result.contains("x: 0") && result.contains("y: 0"),
         "Should create struct literal. Got:\n{}",
@@ -440,7 +402,7 @@ pub fn swap(p: (i32, i32)) -> (i32, i32) {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("(b, a)") || result.contains("(b , a)"),
         "Should return swapped tuple. Got:\n{}",
@@ -459,7 +421,7 @@ pub fn double(n: usize) -> usize {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("n + n") || result.contains("n + (n)"),
         "Should use n + n. Got:\n{}",
@@ -482,7 +444,7 @@ pub fn max(a: i32, b: i32) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("a > b") && result.contains("a") && result.contains("b"),
         "Should use a and b in branches. Got:\n{}",
@@ -505,7 +467,7 @@ pub fn sum(items: Vec<i32>) -> i32 {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         !result.contains("&item"),
         "Copy type i32 in for-loop should NOT be borrowed in compound assignment. Got:\n{}",
@@ -533,7 +495,7 @@ pub fn concat(parts: Vec<String>) -> String {
 pub fn main() {}
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("&part") || result.contains("&(part)"),
         "Owned String in for-loop += SHOULD be borrowed. Got:\n{}",

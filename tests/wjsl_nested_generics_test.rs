@@ -7,7 +7,6 @@
 /// Fix: In Parser::expect(), when expecting RAngle and finding Shr,
 /// split it: consume Shr as one RAngle and set current to RAngle
 /// for the outer generic's closing bracket.
-
 #[test]
 fn test_array_of_vec4_f32() {
     let source = r#"

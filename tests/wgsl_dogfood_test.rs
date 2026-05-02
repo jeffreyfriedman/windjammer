@@ -1,42 +1,8 @@
 /// Dogfooding test: Real-world shader compilation
 ///
 /// Tests that realistic shader code compiles to valid WGSL
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn transpile_wj_to_wgsl(source: &str) -> String {
-    let test_dir = tempdir().expect("tempdir for wgsl test");
-
-    let wj_file = test_dir.path().join("shader.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.path().join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("wgsl")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
-    }
-
-    let wgsl_file = out_dir.join("shader.wgsl");
-    fs::read_to_string(&wgsl_file).expect("Failed to read generated WGSL file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_camera_uniforms_struct() {
@@ -54,7 +20,7 @@ pub struct CameraUniforms {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Verify struct is generated
@@ -86,7 +52,7 @@ pub fn ray_aabb(
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Verify function signature
@@ -129,7 +95,7 @@ pub fn sphere_intersect(ray: Ray, center: vec3<float>, radius: float) -> float {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Verify structs
@@ -157,7 +123,7 @@ pub struct GBufferPixel {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     assert!(generated.contains("struct GBufferPixel"));
@@ -197,7 +163,7 @@ pub fn get_octant(p: vec3<float>, center: vec3<float>) -> uint {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated WGSL:\n{}", generated);
 
     // Verify all functions generated

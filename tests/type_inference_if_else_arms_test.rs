@@ -4,9 +4,8 @@
 /// Pattern: if condition { f32_expr } else { 0.0 } generates 0.0_f64
 /// Root Cause: Else branch literal not constrained by if branch type
 /// Expected: All arms should infer to same type
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_else_with_literal_in_else() {
@@ -20,7 +19,7 @@ pub fn normalize(len: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -51,7 +50,7 @@ pub fn clamp_zero_one(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -75,7 +74,7 @@ pub fn safe_divide(a: f32, b: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -103,7 +102,7 @@ pub fn compute(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -127,7 +126,7 @@ pub fn maybe_zero(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -140,19 +139,3 @@ pub fn maybe_zero(x: f32) -> f32 {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj compiler");
-
-    std::fs::read_to_string(tmp.path().join("test.rs")).expect("Failed to read generated Rust file")
-}

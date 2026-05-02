@@ -5,7 +5,6 @@
 /// when calling methods that expect &str.
 ///
 /// Current bug: The & is NOT added, causing E0308 errors.
-
 #[test]
 fn test_dialog_borrowed_game_state_pattern() {
     use std::fs;

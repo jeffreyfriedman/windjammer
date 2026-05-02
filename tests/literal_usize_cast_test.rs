@@ -11,42 +11,8 @@
 ///
 /// Fix: Skip `as usize` when the expression is an integer literal (non-negative),
 /// since Rust will infer it as `usize` from context.
-use std::io::Write;
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = dir.path().join("test.wj");
-    let out_dir = dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    let mut file = std::fs::File::create(&wj_path).unwrap();
-    file.write_all(source.as_bytes()).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "--no-cargo",
-            "-o",
-            out_dir.to_str().unwrap(),
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let rs_path = out_dir.join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "No output file generated.\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        );
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_no_usize_cast_on_integer_literal_index() {
@@ -61,7 +27,7 @@ pub fn third_element(arr: Vec<i32>) -> i32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(
@@ -91,7 +57,7 @@ pub fn last_index(items: Vec<i32>) -> usize {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(
@@ -110,7 +76,7 @@ pub fn element_at(arr: Vec<i32>, idx: i32) -> i32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(

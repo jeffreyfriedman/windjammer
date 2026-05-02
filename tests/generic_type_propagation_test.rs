@@ -5,79 +5,34 @@
 //!
 //! Philosophy: "Compiler does hard work" - type parameter propagation is mechanical
 
-use std::path::PathBuf;
-use std::process::Command;
-
-/// Helper to compile a test fixture and return the generated Rust code
-/// Uses windjammer::build_project (library API) instead of invoking wj binary
-fn compile_fixture(fixture_name: &str) -> Result<String, String> {
-    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(format!("{}.wj", fixture_name));
-
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("test_output")
-        .join(fixture_name);
-    std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
-
-    windjammer::build_project(
-        &fixture_path,
-        &output_dir,
-        windjammer::CompilationTarget::Rust,
-        true,
-    )
-    .map_err(|e| format!("Compiler failed: {}", e))?;
-
-    let rust_file = output_dir.join(format!("{}.rs", fixture_name));
-    std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_generic_function_preserves_type_parameter() {
-    let generated = compile_fixture("generic_type_propagation").expect("Compilation failed");
+    let generated =
+        test_utils::compile_fixture("generic_type_propagation").expect("Compilation failed");
 
-    // Verify generated Rust has <T> preserved in function signature
     assert!(
         generated.contains("fn identity<T>") || generated.contains("pub fn identity<T>"),
         "Generic function should preserve <T> in signature. Generated:\n{}",
         generated
     );
 
-    // Verify parameter and return type use T
     assert!(
         generated.contains("value: T") || generated.contains("value: T)"),
         "Parameter type T should be preserved. Generated:\n{}",
         generated
     );
 
-    // Verify rustc compiles it
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("test_output")
-        .join("generic_type_propagation");
-    let rs_file = output_dir.join("generic_type_propagation.rs");
-
-    let rustc_output = Command::new("rustc")
-        .args([
-            rs_file.to_str().unwrap(),
-            "--crate-type=lib",
-            "--edition=2021",
-        ])
-        .output()
-        .expect("rustc failed");
-
-    assert!(
-        rustc_output.status.success(),
-        "Generated Rust should compile. rustc stderr:\n{}",
-        String::from_utf8_lossy(&rustc_output.stderr)
-    );
+    test_utils::verify_rust_compiles(&generated).expect("Generated Rust should compile");
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_generic_struct_preserves_type_parameter() {
-    let generated = compile_fixture("generic_struct_impl").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("generic_struct_impl").expect("Compilation failed");
 
     // Verify struct has <T>
     assert!(
@@ -104,7 +59,7 @@ fn test_generic_struct_preserves_type_parameter() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_generic_impl_method_preserves_type_parameter() {
-    let generated = compile_fixture("generic_method").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("generic_method").expect("Compilation failed");
 
     // Method add_entity has its own <T> (not from impl - Scene has no type params)
     assert!(
@@ -125,7 +80,7 @@ fn test_generic_impl_method_preserves_type_parameter() {
 fn test_generic_function_with_wrapping_decorator_preserves_type_parameter() {
     // When a generic function has @timeout, @bench, etc., it goes through
     // generate_function_with_wrapping - that path must also emit <T>
-    let generated = compile_fixture("generic_with_test").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("generic_with_test").expect("Compilation failed");
 
     assert!(
         generated.contains("fn identity<T>") || generated.contains("pub fn identity<T>"),

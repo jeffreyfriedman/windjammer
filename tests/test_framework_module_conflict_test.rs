@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Test framework should not create module conflicts
 ///
@@ -12,13 +15,8 @@ use anyhow::Result;
 /// named "lib" when generating the library entry point, as "lib" is a reserved
 /// name for the library itself.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -63,7 +61,7 @@ fn add(a: i32, b: i32) -> i32 {
     )?;
 
     // Compile the library directly (skip test framework for now)
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -172,7 +170,7 @@ version = "0.1.0"
     )?;
 
     // Run wj test
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let output = Command::new(&wj_compiler)
         .arg("test")
         .arg(&test_wj)

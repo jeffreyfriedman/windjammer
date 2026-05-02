@@ -1,53 +1,8 @@
 /// TDD: Vec.push with Index expressions — Copy elements use plain `vec[idx]` (no `&`, no `*`).
 ///
 /// Non-Copy elements still use `&vec[idx]` or `.clone()` per ownership analysis.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    let output_dir = test_dir.join("build");
-    fs::write(&input_file, source).expect("Failed to write source file");
-
-    let compile_result = windjammer::build_project(
-        &input_file,
-        &output_dir,
-        windjammer::CompilationTarget::Rust,
-        true,
-    );
-
-    let rs_content = if let Err(e) = compile_result {
-        panic!("Windjammer compilation failed: {}", e);
-    } else {
-        let generated_file = output_dir.join("test.rs");
-        fs::read_to_string(&generated_file).expect("Failed to read generated file")
-    };
-
-    let main_rs = output_dir.join("test.rs");
-    let rlib_output = test_dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_push_index_tuple_copy_type() {
@@ -66,7 +21,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     // Must NOT generate &path[0] - that would be wrong (double ref, E0308)
     assert!(
@@ -107,7 +62,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     assert!(compiles, "Generated Rust must compile:\n{}", rust);
 }
@@ -132,7 +87,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     assert!(compiles, "Generated Rust must compile:\n{}", rust);
 }

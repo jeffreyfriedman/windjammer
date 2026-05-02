@@ -1,30 +1,5 @@
-use std::path::Path;
-use windjammer::compiler::build_project;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(code: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_str_coerce_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("test.wj"), code).unwrap();
-    let out = dir.join("build");
-    build_project(
-        Path::new(&dir.join("test.wj")),
-        &out,
-        CompilationTarget::Rust,
-        false,
-    )
-    .unwrap();
-    std::fs::read_to_string(out.join("test.rs")).unwrap()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_literal_to_owned_param_in_field_access_call() {
@@ -44,7 +19,7 @@ fn main() {
     c.set_name("hello")
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains(r#""hello".to_string()"#) || rust.contains(r#"String::from("hello")"#),
@@ -78,7 +53,7 @@ fn main() {
     let _result = b.bind_auto_uniforms()
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains(r#""screen_width".to_string()"#),
@@ -112,7 +87,7 @@ fn main() {
     b.configure("name", "value")
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains(r#""name".to_string()"#),

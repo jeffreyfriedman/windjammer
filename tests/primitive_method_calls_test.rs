@@ -9,39 +9,8 @@
 /// - x.abs() - Absolute value
 /// - x.powf(y) - Power function
 /// - etc.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    let temp_dir = tempdir().map_err(|e| e.to_string())?;
-    let test_file = temp_dir.path().join("test.wj");
-
-    fs::write(&test_file, code).map_err(|e| e.to_string())?;
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", "--no-cargo"])
-        .arg(&test_file)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstderr: {}\nstdout: {}",
-            stderr, stdout
-        ));
-    }
-
-    Ok(stdout.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
@@ -52,7 +21,7 @@ pub fn chunk_coord(x: i32, chunk_size: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "div_euclid should compile. Error: {:?}",
@@ -69,7 +38,7 @@ pub fn local_coord(x: i32, chunk_size: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "rem_euclid should compile. Error: {:?}",
@@ -86,7 +55,7 @@ pub fn distance(x: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "abs() should compile. Error: {:?}",
@@ -103,7 +72,7 @@ pub fn square(x: f32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "powf() should compile. Error: {:?}",
@@ -120,7 +89,7 @@ pub fn clamp_min(x: i32, min: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "max() should compile. Error: {:?}",
@@ -137,7 +106,7 @@ pub fn clamp_max(x: i32, max: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "min() should compile. Error: {:?}",
@@ -154,7 +123,7 @@ pub fn clamp(x: i32, min: i32, max: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "clamp() should compile. Error: {:?}",
@@ -172,7 +141,7 @@ pub fn magnitude(x: f32, y: f32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "sqrt() should compile. Error: {:?}",
@@ -189,7 +158,7 @@ pub fn floor_value(x: f32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "floor() should compile. Error: {:?}",
@@ -206,7 +175,7 @@ pub fn ceil_value(x: f32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "ceil() should compile. Error: {:?}",
@@ -242,7 +211,7 @@ impl VoxelWorld {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Voxel coordinate conversion should compile. Error: {:?}",
@@ -259,7 +228,7 @@ pub fn complex_math(x: f32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Chained method calls should compile. Error: {:?}",
@@ -276,7 +245,7 @@ pub fn compute(x: i32, y: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Method calls in expressions should compile. Error: {:?}",
@@ -293,7 +262,7 @@ pub fn convert(x: i32) -> f32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Method call with as cast should compile. Error: {:?}",

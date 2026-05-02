@@ -6,70 +6,8 @@
 //!
 //! Fix: For Index on &mut self.field, check base (self) in inferred_mut_borrowed_params.
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_e0596_inv_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        id
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// E0596 fix: if let Some(stack) = self.slots[i] { stack.add(q) } → ref mut + &mut type ascription
 #[test]
@@ -129,7 +67,7 @@ impl Inventory {
 pub fn main() {}
 "#;
 
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
     // Two valid patterns: `Some(ref mut stack)` or `Some(stack) = &mut expr`
     let has_ref_mut_pattern = rs.contains("Some(ref mut stack)");
@@ -190,7 +128,7 @@ impl Inventory {
 pub fn main() {}
 "#;
 
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
     let has_ref_mut_pattern = rs.contains("Some(ref mut stack)");
     let has_mut_scrutinee = rs.contains("&mut self.slots[");
@@ -262,7 +200,7 @@ impl Inventory {
 pub fn main() {}
 "#;
 
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "Should compile without E0596 (to_stack.add). Generated:\n{}",
@@ -310,7 +248,7 @@ impl Inventory {
 pub fn main() {}
 "#;
 
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     // Codegen may use `Some(ref stack)` or `Some(stack) = &expr` — both give &ItemStack
     assert!(
@@ -344,6 +282,6 @@ impl Equipment {
 pub fn main() {}
 "#;
 
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }

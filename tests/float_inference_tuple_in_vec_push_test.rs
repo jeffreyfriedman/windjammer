@@ -5,24 +5,8 @@
 //
 // Pattern from game: result.push((x + 1, y + 1, self.get_cost(x, y) * 1.414))
 
-use windjammer::{build_project, CompilationTarget};
-
-fn compile_and_get_rust(source: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let test_name = format!("tuple_push_f32_{}", std::process::id());
-    let output_dir = temp_dir.join(&test_name);
-    let test_file = output_dir.join("test.wj");
-
-    std::fs::create_dir_all(&output_dir).unwrap();
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    build_project(&test_file, &output_dir, CompilationTarget::Rust, true)
-        .expect("Compilation failed");
-
-    std::fs::read_to_string(output_dir.join("test.rs")).expect("Generated Rust file not found")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_tuple_in_vec_push_f32() {
@@ -37,7 +21,7 @@ fn test() -> Vec<(i32, i32, f32)> {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     // The literal 1.5 in tuple should be f32 (from Vec<(i32, i32, f32)>)
     assert!(

@@ -1,30 +1,5 @@
-use std::path::Path;
-use windjammer::compiler::build_project;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(code: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_extern_unsafe_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("test.wj"), code).unwrap();
-    let out = dir.join("build");
-    build_project(
-        Path::new(&dir.join("test.wj")),
-        &out,
-        CompilationTarget::Rust,
-        false,
-    )
-    .unwrap();
-    std::fs::read_to_string(out.join("test.rs")).unwrap()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_extern_fn_call_wrapped_in_unsafe() {
@@ -35,7 +10,7 @@ fn clear_screen() {
     renderer_clear(0, 0.0, 0.0, 0.0, 1.0)
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains("unsafe"),
@@ -55,7 +30,7 @@ fn clear_screen() {
     ffi::renderer_clear(0, 0.0, 0.0, 0.0, 1.0)
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains("unsafe"),
@@ -73,7 +48,7 @@ fn render() -> bool {
     gpu_render(1, 2, 3)
 }
 "#;
-    let rust = compile_to_rust(code);
+    let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
         rust.contains("unsafe"),

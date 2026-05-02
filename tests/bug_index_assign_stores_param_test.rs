@@ -1,4 +1,6 @@
-use std::fs;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 /// TDD test: Parameters stored via index assignment with nested constructors
 ///
 /// Bug: `self.slots[i] = Some(ItemStack::new(item, qty))` doesn't detect
@@ -9,54 +11,6 @@ use std::fs;
 /// `matches!(value, Expression::Identifier { ... })`, missing nested storage.
 ///
 /// Fix: Use `expression_stores_identifier` for index assignment values.
-use std::process::Command;
-
-fn transpile_wj(source: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let test_id = format!(
-        "wj_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
-    }
-
-    let rust_file = out_dir.join("test.rs");
-
-    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
-
 #[test]
 fn test_index_assign_with_some_constructor() {
     let source = r#"
@@ -94,7 +48,7 @@ impl Inventory {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // item should be Owned because it's stored via index assignment

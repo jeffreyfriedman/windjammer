@@ -17,18 +17,8 @@ use windjammer::metadata::infer_copy_from_metadata_structs_pub;
 use windjammer::parser::Parser;
 use windjammer::CompilationTarget;
 
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-
-    let mut analyzer = Analyzer::new();
-    let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("Analysis failed");
-
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 fn compile_with_copy_structs(source: &str, copy_structs: &[&str]) -> String {
     let mut lexer = Lexer::new(source);
@@ -69,7 +59,7 @@ impl Player {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     assert!(
         code.contains("fn get_position(&self)"),
@@ -95,7 +85,7 @@ impl Player {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     assert!(
         code.contains("fn get_name(&self)"),
@@ -164,7 +154,7 @@ impl Game {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     assert!(
         code.contains("fn get_player_spawn(&self)"),

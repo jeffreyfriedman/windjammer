@@ -4,37 +4,8 @@
 // the generated Rust signature uses `FfiString`. String literal arguments
 // should be automatically wrapped with `string_to_ffi()`.
 
-use std::io::Write;
-
-fn compile_wj(code: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let wj_path = temp_dir.path().join("test.wj");
-    let mut f = std::fs::File::create(&wj_path).unwrap();
-    write!(f, "{}", code).unwrap();
-
-    let wj_bin = env!("CARGO_BIN_EXE_wj");
-    let output = std::process::Command::new(wj_bin)
-        .arg("build")
-        .arg(wj_path.to_str().unwrap())
-        .arg("-o")
-        .arg(temp_dir.path().to_str().unwrap())
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        panic!(
-            "WJ compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-    }
-
-    let rs_path = temp_dir.path().join("test.rs");
-    std::fs::read_to_string(&rs_path).unwrap_or_else(|_| {
-        panic!("Generated .rs file not found at {:?}", rs_path);
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_literal_to_extern_fn_is_wrapped() {
@@ -45,7 +16,7 @@ pub fn do_save() {
     save_file("fixture_output.txt", 42)
 }
 "#;
-    let rust_code = compile_wj(code);
+    let rust_code = test_utils::compile_single(code);
 
     assert!(
         rust_code.contains("string_to_ffi") || rust_code.contains("FfiString"),

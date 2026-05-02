@@ -7,7 +7,6 @@
 /// - No string prefix/suffix matching for method behavior detection
 /// - No game-specific hardcoded method names ("damage", "smooth_follow")
 /// - One canonical registry, not 6 divergent copies
-
 #[test]
 fn test_known_mutating_methods_are_registered() {
     use windjammer::method_registry;

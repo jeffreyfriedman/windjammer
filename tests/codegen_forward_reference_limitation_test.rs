@@ -7,7 +7,6 @@
 /// **Expected Behavior** (after two-pass analysis): Should work regardless of order
 ///
 /// **Status**: KNOWN LIMITATION - tracked for future enhancement
-
 #[test]
 fn test_forward_reference_limitation() {
     use std::fs;

@@ -3,55 +3,8 @@
 //! TDD for ownership tracker migration. Replaces borrowed_iterator_vars guessing
 //! with systematic ownership-based decisions. Fixes E0614 permanently.
 
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let dir = tempfile::tempdir().expect("failed to create temp dir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.path().join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.path().join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.path().join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // === Struct Literal Field Tests ===
 
@@ -65,7 +18,7 @@ pub fn make() -> Point {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("x: x") || result.contains("x: 5") || result.contains("{ x,"),
@@ -83,7 +36,7 @@ pub fn copy_point(p: &Point) -> Point {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     // p.x on &Point yields i32 (Copy) - may or may not need *
     assert!(!result.contains("**p"), "No double deref");
@@ -97,7 +50,7 @@ pub fn process(values: &Vec<i32>, i: usize) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("**values"), "No double deref");
 }
@@ -111,7 +64,7 @@ pub fn make(d: &Data) -> Data {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("d.value.clone()"));
     assert!(
@@ -135,7 +88,7 @@ pub fn run(ids: Vec<Id>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("*(id)"), "Owned loop var, no *");
 }
@@ -151,7 +104,7 @@ pub fn run(nums: &Vec<i32>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     // x from &Vec<i32> is &i32, need * for process(i32)
     assert!(
@@ -176,7 +129,7 @@ pub fn compute() -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("a + b") || result.contains("5 + 10"));
 }
@@ -189,7 +142,7 @@ pub fn add_one(r: &i32, y: i32) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -205,7 +158,7 @@ pub fn call() {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("take(x)") || result.contains("take(42)"));
 }
@@ -219,7 +172,7 @@ pub fn call(r: &i32) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("take(*") || result.contains("take(r)") || result.contains("r.clone()"),
@@ -240,7 +193,7 @@ pub fn call() {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -258,7 +211,7 @@ pub fn run(opt: Option<i32>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("*(x)"), "x from Some(x) is owned");
 }
@@ -282,7 +235,7 @@ pub fn run(nodes: Vec<Node>) -> Vec<Node> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -299,7 +252,7 @@ pub fn build() -> Vec<i32> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -315,7 +268,7 @@ pub fn build(items: &Vec<String>) -> Vec<String> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains(".clone()"), "Borrowed needs clone for push");
 }
@@ -331,7 +284,7 @@ pub fn length(v: &Vec2) -> f32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -344,7 +297,7 @@ pub fn get_name(d: &Data) -> String {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains(".clone()") || result.contains("d.name"),
@@ -367,7 +320,7 @@ pub fn run(entities: Vec<Entity>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("*(entity)"), "E0614: no * for owned Copy");
 }
@@ -385,7 +338,7 @@ pub fn run(pairs: Vec<(Id, i32)>) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("*(id)"), "Tuple pattern Copy, no *");
 }
@@ -404,7 +357,7 @@ pub fn main() {
     get(c)
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -420,7 +373,7 @@ pub fn main() {
     get(c)
 }
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -432,7 +385,7 @@ pub fn wrap(x: i32) -> Option<i32> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -444,7 +397,7 @@ pub fn wrap(s: &String) -> Option<String> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains(".clone()") || result.contains(".to_string()"),
@@ -460,7 +413,7 @@ pub fn first(nums: &Vec<i32>) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -474,7 +427,7 @@ pub fn check() {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -486,7 +439,7 @@ pub fn check(r: &i32, y: i32) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -500,7 +453,7 @@ pub fn make() -> (i32, i32) {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -514,7 +467,7 @@ pub fn get_x(o: &Outer) -> i32 {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
 }
 
@@ -532,7 +485,7 @@ pub fn collect(ids: Vec<Id>) -> Vec<Id> {
 }
 pub fn main() {}
 "#;
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(!result.contains("push(*id)"), "Strip * for owned Copy");
 }

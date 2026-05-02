@@ -4,9 +4,8 @@
 /// Pattern: match x { Some(y) => y, _ => 0.0 } generates 0.0_f64
 /// Root Cause: Wildcard pattern not included in arm unification
 /// Expected: All match arms (including _) should infer to same type
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_match_option_with_wildcard_literal() {
@@ -19,7 +18,7 @@ pub fn get_value(opt: Option<f32>) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -47,7 +46,7 @@ pub fn unwrap_or_zero(res: Result<f32, String>) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -76,7 +75,7 @@ pub fn get_factor(node: Node) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -98,7 +97,7 @@ pub fn get_value_or_one(opt: Option<f32>) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -127,7 +126,7 @@ pub fn wildcard_none(opt: Option<f32>) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -140,19 +139,3 @@ pub fn wildcard_none(opt: Option<f32>) -> f32 {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj compiler");
-
-    std::fs::read_to_string(tmp.path().join("test.rs")).expect("Failed to read generated Rust file")
-}

@@ -4,45 +4,10 @@
 //! for every abstract single-`self` method, so Rust emitted `fn is_enabled(self)`, breaking `dyn Trait`
 //! (E0161/E0507). Getter-style methods must stay inferable as `&self`.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("write .wj");
-    std::fs::create_dir_all(&out_dir).expect("out dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj build");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let test_rs = out_dir.join("test.rs");
-    let src_main = out_dir.join("src").join("main.rs");
-    if test_rs.exists() {
-        Ok(std::fs::read_to_string(test_rs).map_err(|e| e.to_string())?)
-    } else if src_main.exists() {
-        Ok(std::fs::read_to_string(src_main).map_err(|e| e.to_string())?)
-    } else {
-        Err("no generated Rust file".to_string())
-    }
-}
 
 fn rust_lib_compiles(rust_code: &str) -> bool {
     let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -88,7 +53,7 @@ pub fn read_enabled(s: Box<dyn System>) -> bool {
 fn main() {}
 "#;
 
-    let rust = compile_to_rust(source).expect("wj compile");
+    let rust = test_utils::compile_single_result(source).expect("wj compile");
     assert!(
         rust.contains("fn is_enabled(&self)"),
         "Trait getter must be &self for Box<dyn System>; got:\n{}",
@@ -135,7 +100,7 @@ impl Manager {
 fn main() {}
 "#;
 
-    let rust = compile_to_rust(source).expect("wj compile");
+    let rust = test_utils::compile_single_result(source).expect("wj compile");
     // Ideal: `for` over `&mut self.systems` so `system` is `&mut Box<dyn System>`.
     // Current compiler may move `self.systems` by value; still assert the output builds.
     let _uses_mut_iter = rust.contains("&mut self.systems");
@@ -168,7 +133,7 @@ impl IntoCopy for N {
 fn main() {}
 "#;
 
-    let rust = compile_to_rust(source).expect("wj compile");
+    let rust = test_utils::compile_single_result(source).expect("wj compile");
     assert!(
         rust.contains("fn into_copy(self)") || rust.contains("fn into_copy(&self)"),
         "Should declare into_copy for trait; got:\n{}",

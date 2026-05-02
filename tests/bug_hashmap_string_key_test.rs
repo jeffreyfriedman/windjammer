@@ -4,52 +4,8 @@
 /// creates &&String which doesn't satisfy Borrow trait
 ///
 /// Solution: Strip explicit & for borrowed String params passed to HashMap key methods
-use std::fs;
-use std::process::Command;
-
-fn run_wj_test(source: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let test_id = format!(
-        "wj_test_{}_{:?}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::thread::current().id()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "wj build failed:\n{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-    }
-
-    let rust_file = out_dir.join("test.rs");
-
-    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_hashmap_string_key_contains() {
@@ -68,7 +24,7 @@ fn main() {
 }
 "#;
 
-    let generated = run_wj_test(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated code:\n{}", generated);
 
     // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods
@@ -103,7 +59,7 @@ fn main() {
 }
 "#;
 
-    let generated = run_wj_test(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated code:\n{}", generated);
 
     // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods

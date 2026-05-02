@@ -4,35 +4,8 @@
 //! Regression: `Type::Custom` in `type_contents_trait_object` returned false, so only the
 //! inner struct skipped derives while the outer struct still got `#[derive(Debug, Clone)]`.
 
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_to_rust(source: &str) -> String {
-    let dir = tempdir().expect("tempdir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    assert!(
-        output.status.success(),
-        "wj build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let test_rs = dir.path().join("test.rs");
-    std::fs::read_to_string(&test_rs).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Last `#[derive(...)]` attribute whose start appears before `byte_idx` in `rust`.
 fn last_derive_before(rust: &str, byte_idx: usize) -> Option<&str> {
@@ -74,7 +47,7 @@ pub struct VoxelGPURenderer {
     manager: RenderSystemManager,
 }
 "#;
-    let output = compile_wj_to_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(!output.is_empty(), "expected generated Rust");
 
     assert_no_debug_clone_derive_immediately_before_struct(&output, "RenderSystemManager");
@@ -89,7 +62,7 @@ pub struct Point {
     y: f32,
 }
 "#;
-    let output = compile_wj_to_rust(source);
+    let output = test_utils::compile_single(source);
     let needle = "pub struct Point";
     let idx = output.find(needle).expect("Point struct");
     let attr = last_derive_before(&output, idx).expect("derive before Point");

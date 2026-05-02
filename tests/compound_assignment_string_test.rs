@@ -1,15 +1,5 @@
-/// TDD Test: Compound Assignment with String-returning expressions
-///
-/// Bug: User writes `result += func()` where func() -> String
-/// Problem: Generated `result += func()` doesn't compile (String += String invalid)
-/// Solution: Either add & prefix OR convert to regular assignment
-///
-/// This is different from the binary expression case (result = result + func())
-/// because it's parsed as a CompoundAssignment statement, not Binary expression.
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_compound_assignment_function_call() {
@@ -26,7 +16,7 @@ pub fn build_greetings() -> string {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -64,7 +54,7 @@ pub fn render_all(r: Renderer) -> string {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -82,7 +72,7 @@ pub fn build_report(name: string, score: i32) -> string {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -105,7 +95,7 @@ pub fn build_mixed() -> string {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -113,35 +103,3 @@ pub fn build_mixed() -> string {
 }
 
 // Helper function
-fn compile_and_verify_rust(source: &str) -> (bool, String) {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    if let Err(e) = windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    ) {
-        return (false, format!("Compilation failed: {}", e));
-    }
-
-    let rust_file = tmp.path().join("test.rs");
-    let rust_code =
-        std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    let rmeta = tmp.path().join("verify.rmeta");
-    let rustc = Command::new("rustc")
-        .arg("--edition=2021")
-        .arg("--crate-type=lib")
-        .arg("--emit=metadata")
-        .arg("-o")
-        .arg(rmeta.to_str().unwrap())
-        .arg(rust_file.to_str().unwrap())
-        .output()
-        .expect("Failed to run rustc");
-
-    (rustc.status.success(), rust_code)
-}

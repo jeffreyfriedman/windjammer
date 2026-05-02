@@ -4,84 +4,10 @@
 //! for generic type parameters by compiling Windjammer source and
 //! checking the generated Rust code.
 
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Helper to compile a Windjammer snippet and get the generated Rust
-fn compile_wj(source: &str, test_name: &str) -> Result<String, String> {
-    // Write source to temp file with unique name
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let wj_path = temp_dir.join(format!("{}.wj", test_name));
-    let out_dir = temp_dir.join(format!("{}_out", test_name));
-
-    std::fs::write(&wj_path, source).map_err(|e| e.to_string())?;
-
-    // Determine the correct wj binary path based on test mode
-    let wj_binary = if cfg!(debug_assertions) {
-        // In debug mode, look for debug binary
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("target")
-            .join("debug")
-            .join("wj")
-    } else {
-        // In release mode, look for release binary
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("target")
-            .join("release")
-            .join("wj")
-    };
-
-    // If binary doesn't exist, build it first
-    if !wj_binary.exists() {
-        let build_mode = if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        };
-        let build_args = if cfg!(debug_assertions) {
-            vec!["build", "--bin", "wj"]
-        } else {
-            vec!["build", "--release", "--bin", "wj"]
-        };
-
-        let build_output = Command::new("cargo")
-            .args(&build_args)
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .output()
-            .map_err(|e| format!("Failed to build wj binary ({}): {}", build_mode, e))?;
-
-        if !build_output.status.success() {
-            return Err(format!(
-                "Failed to build wj binary ({}):\n{}",
-                build_mode,
-                String::from_utf8_lossy(&build_output.stderr)
-            ));
-        }
-    }
-
-    // Compile with wj using the binary directly
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .map_err(|e| format!("Failed to execute wj: {}", e))?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    // Read generated Rust
-    let rs_path = out_dir.join(format!("{}.rs", test_name));
-    std::fs::read_to_string(&rs_path).map_err(|e| e.to_string())
-}
-
 #[test]
 fn test_display_trait_inferred() {
     let source = r#"
@@ -94,7 +20,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_wj(source, "display_test").expect("Compilation failed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
     // Check that Display bound is inferred
     assert!(
@@ -116,7 +42,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_wj(source, "debug_test").expect("Compilation failed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
     // Check that Debug bound is inferred
     assert!(
@@ -139,7 +65,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_wj(source, "clone_test").expect("Compilation failed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
     // Check that Clone bound is inferred
     assert!(
@@ -162,7 +88,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_wj(source, "multi_bounds_test").expect("Compilation failed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
     // Check that both Clone and Debug bounds are inferred
     assert!(
@@ -184,7 +110,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_wj(source, "add_operator_test").expect("Compilation failed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
     // Check that Add bound is inferred (with Output = T for same-type operands)
     assert!(

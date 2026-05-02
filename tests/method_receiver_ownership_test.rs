@@ -3,36 +3,8 @@
 //! Tests for infer_method_receiver_ownership + generate_expression_with_target_ownership.
 //! Verifies correct receiver generation (owned, borrowed, mut borrowed) for method calls.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj_to_rust(src: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&test_file, src).unwrap();
-    fs::create_dir_all(&out_dir).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            test_file.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .unwrap();
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rs_file = out_dir.join("test.rs");
-    Ok(fs::read_to_string(&rs_file).unwrap())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_owned_receiver() {
@@ -46,7 +18,7 @@ fn test_method_owned_receiver() {
         }
     "#;
 
-    let result = compile_wj_to_rust(src).expect("Should compile");
+    let result = test_utils::compile_single_result(src).expect("Should compile");
     // t is Owned, id() takes Owned -> t.id() (no clone)
     assert!(result.contains("t.id()"));
 }
@@ -59,7 +31,7 @@ fn test_method_borrowed_receiver() {
         }
     "#;
 
-    let result = compile_wj_to_rust(src).expect("Should compile");
+    let result = test_utils::compile_single_result(src).expect("Should compile");
     // s is Owned, len() takes &self -> s.len() (auto-borrow)
     assert!(result.contains("s.len()"));
 }
@@ -78,7 +50,7 @@ fn test_method_builder_pattern() {
         }
     "#;
 
-    let result = compile_wj_to_rust(src).expect("Should compile");
+    let result = test_utils::compile_single_result(src).expect("Should compile");
     // b is Owned, with_value() — literals may be suffixed (42_i32)
     assert!(result.contains("b.with_value(42"));
 }
@@ -91,7 +63,7 @@ fn test_method_mutating_receiver() {
         }
     "#;
 
-    let result = compile_wj_to_rust(src).expect("Should compile");
+    let result = test_utils::compile_single_result(src).expect("Should compile");
     // items + push: literal may be `5_i32`
     assert!(result.contains("push(5"));
 }

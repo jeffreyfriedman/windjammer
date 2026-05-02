@@ -10,15 +10,8 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
-fn get_wj_binary() -> std::path::PathBuf {
-    std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_shader_files_excluded_from_rust_pipeline_by_content() {
@@ -61,7 +54,7 @@ pub fn vs_main(@location(0) pos: vec3<float>) -> vec4<float> {
     )
     .unwrap();
 
-    let output = Command::new(get_wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.join("mod.wj").to_str().unwrap(),
@@ -137,7 +130,7 @@ pub struct GlowEffect {
     )
     .unwrap();
 
-    let output = Command::new(get_wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.join("mod.wj").to_str().unwrap(),
@@ -187,7 +180,7 @@ pub struct ShaderConfig {
     )
     .unwrap();
 
-    let output = Command::new(get_wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.join("mod.wj").to_str().unwrap(),
