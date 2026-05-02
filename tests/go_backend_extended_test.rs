@@ -2,9 +2,6 @@
 ///
 /// Tests enum generation, match statements, trait→interface,
 /// closures, variable shadowing, and constants.
-#[path = "test_utils.rs"]
-mod test_utils;
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -20,6 +17,40 @@ fn go_is_available() -> bool {
 }
 
 /// Compile .wj source to Go and return the generated Go code
+fn compile_to_go(source: &str) -> String {
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.wj");
+    fs::write(&test_file, source).unwrap();
+
+    let output_dir = temp_dir.path().join("build");
+    fs::create_dir_all(&output_dir).unwrap();
+
+    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .arg("build")
+        .arg("--target")
+        .arg("go")
+        .arg("--no-cargo")
+        .arg(&test_file)
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to execute wj compiler");
+
+    if !wj_output.status.success() {
+        panic!(
+            "Go compilation failed:\n{}",
+            String::from_utf8_lossy(&wj_output.stderr)
+        );
+    }
+
+    let generated_file = output_dir.join("main.go");
+    fs::read_to_string(&generated_file).unwrap_or_else(|_| {
+        panic!(
+            "Failed to read generated Go file. Compiler stderr:\n{}",
+            String::from_utf8_lossy(&wj_output.stderr)
+        )
+    })
+}
+
 /// Compile .wj to Go, build with `go build`, and run the binary.
 /// Returns `Some(stdout)` on success, or `None` if `go` is not installed.
 fn compile_and_run_go(source: &str) -> Option<String> {
@@ -81,7 +112,7 @@ fn compile_and_run_go(source: &str) -> Option<String> {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_enum_unit_variants() {
     // Enums with unit variants should become an interface + empty structs
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 enum Color {
     Red,
@@ -127,7 +158,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_enum_tuple_variants() {
     // Enums with tuple data should become structs with Field0, Field1, etc.
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 enum Shape {
     Circle(float),
@@ -195,7 +226,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_match_generates_switch() {
     // Verify the generated Go code uses switch
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 fn check(x: int) -> int {
     match x {
@@ -235,7 +266,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_trait_generates_interface() {
     // Traits should become Go interfaces
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 trait Drawable {
     fn draw(self)
@@ -268,7 +299,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_trait_with_params() {
     // Trait methods with parameters should have typed params in the interface
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 trait Resizable {
     fn resize(self, width: float, height: float) -> bool
@@ -304,7 +335,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_closure_generates_func_literal() {
     // Closures should become Go function literals
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 fn main() {
     let add = |a, b| a + b
@@ -347,7 +378,7 @@ fn main() {
 fn test_go_shadowing_generates_reassignment() {
     // Second declaration of same variable should use `=` (assignment) to avoid Go's
     // "no new variables on left side of :=" error
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 fn main() {
     let x = 5
@@ -386,7 +417,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_constant() {
     // Windjammer constants should become Go const declarations
-    let code = test_utils::compile_single(
+    let code = compile_to_go(
         r#"
 const MAX_SIZE: int = 100
 
