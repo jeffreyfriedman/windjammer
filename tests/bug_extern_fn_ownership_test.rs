@@ -1,4 +1,6 @@
-use std::fs;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 /// TDD test: extern fn calls should NOT apply ownership inference
 ///
 /// Bug: When calling extern fn with owned String argument, codegen adds `&`
@@ -12,78 +14,6 @@ use std::fs;
 /// codegen applies `&`/`&mut` wrapping without checking if the function is extern.
 ///
 /// Fix: Skip ownership inference for extern function call arguments.
-use std::process::Command;
-
-fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    if !dir.exists() {
-        return None;
-    }
-    for entry in fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-        if path.is_file() && path.extension().is_some_and(|e| e == "rs") {
-            return Some(path);
-        }
-        if path.is_dir() {
-            if let Some(found) = find_rs_file(&path) {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
-fn transpile_wj(source: &str) -> String {
-    let test_dir = tempfile::tempdir().expect("tempdir for extern fn ownership test");
-    let wj_file = test_dir.path().join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.path().join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
-            stderr, stdout
-        );
-    }
-
-    let rust_file = find_rs_file(&out_dir).unwrap_or_else(|| {
-        let mut all_files = Vec::new();
-        fn collect_files(dir: &std::path::Path, files: &mut Vec<String>) {
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.is_dir() {
-                        collect_files(&p, files);
-                    } else {
-                        files.push(p.display().to_string());
-                    }
-                }
-            }
-        }
-        collect_files(&out_dir, &mut all_files);
-        panic!(
-            "No .rs file found in output directory: {}\nFiles present: {:?}",
-            out_dir.display(),
-            all_files
-        );
-    });
-    fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
 
 #[test]
 fn test_extern_fn_call_no_ownership_inference() {
@@ -95,7 +25,7 @@ pub fn draw_text(label: &str, x: f32, y: f32) {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // The call should NOT have & wrapping the argument
@@ -123,7 +53,7 @@ pub fn move_to(pos_x: f32, pos_y: f32) {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // Should NOT add &mut to arguments for extern functions
@@ -153,7 +83,7 @@ pub fn draw_text(label: &str, x: f32, y: f32) {
 }
 "#;
 
-    let generated = transpile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // Should NOT have double .to_string().to_string()

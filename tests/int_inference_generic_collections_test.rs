@@ -5,24 +5,8 @@
 //
 // Tests: HashMap::insert, BTreeMap::insert, Vec::push, custom struct fields
 
-use std::fs;
-use tempfile::TempDir;
-
-fn compile_and_get_rust(wj_source: &str, _test_name: &str) -> String {
-    let tmp = TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    fs::write(&source_file, wj_source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to compile Windjammer code");
-
-    fs::read_to_string(tmp.path().join("test.rs")).expect("Generated Rust file not found")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_push_i64_literal() {
@@ -36,7 +20,7 @@ fn init_ids() -> Vec<int> {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "vec_push_i64");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -60,7 +44,7 @@ fn init_map() -> HashMap<string, int> {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "hashmap_insert_i64");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -84,7 +68,7 @@ fn init_map() -> BTreeMap<string, int> {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "btreemap_insert_i64");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -108,7 +92,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "struct_option_vec");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -131,7 +115,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "struct_vec_option");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -154,7 +138,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "struct_option_option");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
@@ -187,7 +171,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(wj_source, "struct_field_hashmap");
+    let rust_code = test_utils::compile_single(wj_source);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(

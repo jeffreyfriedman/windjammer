@@ -1,90 +1,13 @@
-/// TDD: CircleCollider/AABB f32 type consistency
-///
-/// Bug: CircleCollider used f64 while AABB used f32, causing type errors in
-/// intersects_aabb (self.x < aabb.x etc - f64 vs f32 comparison).
-///
-/// Fix: CircleCollider uses f32 throughout for consistency with AABB.
-///
-/// Verifies: Code with CircleCollider + AABB compiles without f32/f64 mismatch.
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("circle_aabb_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::create_dir_all(&output_dir).ok();
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}
-
-fn verify_rust_compiles(rust_code: &str) {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp2 = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp2.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("circle_aabb_rust_{}_{}", std::process::id(), unique_id);
-    let rust_file = temp_dir.join(format!("{}.rs", test_name));
-
-    std::fs::write(&rust_file, rust_code).expect("Failed to write Rust file");
-
-    let output = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            rust_file.to_str().unwrap(),
-            "-o",
-            temp_dir
-                .join(format!("{}.rlib", test_name))
-                .to_str()
-                .unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    let _ = std::fs::remove_file(&rust_file);
-    let _ = std::fs::remove_file(temp_dir.join(format!("{}.rlib", test_name)));
-
-    assert!(
-        output.status.success(),
-        "Generated Rust should compile (no f32/f64 type error):\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+// TDD: CircleCollider/AABB f32 type consistency
+//
+// Bug: CircleCollider used f64 while AABB used f32, causing type errors in
+// intersects_aabb (self.x < aabb.x etc - f64 vs f32 comparison).
+//
+// Fix: CircleCollider uses f32 throughout for consistency with AABB.
+//
+// Verifies: Code with CircleCollider + AABB compiles without f32/f64 mismatch.
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_circle_aabb_intersection_compiles_without_type_error() {
@@ -141,6 +64,6 @@ pub fn test_intersection() -> bool {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(source);
-    verify_rust_compiles(&rust_code);
+    let rust_code = test_utils::compile_single(source);
+    test_utils::verify_rust_compiles(&rust_code).expect("Generated Rust should compile");
 }

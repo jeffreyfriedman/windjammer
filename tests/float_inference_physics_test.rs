@@ -8,45 +8,8 @@
 ///
 /// Solution: Add infer_type_from_expression for Binary (arithmetic) and fallback for
 /// primitive methods (sqrt, etc.) to return object type when not in function_signatures.
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_physics_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::create_dir_all(&output_dir).ok();
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_float_inference_in_comparison_with_zero() {
@@ -62,7 +25,7 @@ pub fn normalize(x: f32, y: f32) -> (f32, f32) {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     // 0.0 in "len > 0.0" and "return (0.0, 0.0)" should all be f32 (return type is (f32, f32))
     assert!(
@@ -87,7 +50,7 @@ pub fn check_positive(value: f32) -> bool {
 }
 "#;
 
-    let rust_code = compile_and_get_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("0.0_f32"),

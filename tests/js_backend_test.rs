@@ -2,146 +2,11 @@
 ///
 /// Tests impl block → class method generation, match expressions,
 /// and ensures the JS backend produces valid Node.js-executable code.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Compile .wj source to JavaScript and return the generated JS code
-fn compile_to_js(source: &str) -> String {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("javascript")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !wj_output.status.success() {
-        panic!(
-            "JS compilation failed:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        );
-    }
-
-    // Find the generated JS file (the backend names it output.js)
-    for name in &["output.js", "main.js", "test.js"] {
-        let generated_file = output_dir.join(name);
-        if generated_file.exists() {
-            return fs::read_to_string(&generated_file).unwrap();
-        }
-    }
-
-    // List what's in the output directory
-    let entries: Vec<String> = fs::read_dir(&output_dir)
-        .map(|dir| {
-            dir.filter_map(|e| e.ok())
-                .map(|e| e.file_name().to_string_lossy().to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    panic!(
-        "No JS file found in output dir. Files: {:?}\nStderr:\n{}",
-        entries,
-        String::from_utf8_lossy(&wj_output.stderr)
-    );
-}
-
 /// Compile .wj to JS and run with Node.js. Returns stdout.
-fn compile_and_run_js(source: &str) -> String {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("javascript")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !wj_output.status.success() {
-        panic!(
-            "JS codegen failed:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        );
-    }
-
-    // Find JS file (the backend names it output.js)
-    let js_file = ["output.js", "main.js", "test.js"]
-        .iter()
-        .map(|n| output_dir.join(n))
-        .find(|p| p.exists())
-        .unwrap_or_else(|| {
-            let entries: Vec<String> = fs::read_dir(&output_dir)
-                .map(|dir| {
-                    dir.filter_map(|e| e.ok())
-                        .map(|e| e.file_name().to_string_lossy().to_string())
-                        .collect()
-                })
-                .unwrap_or_default();
-            panic!(
-                "No JS file found. Files: {:?}\nStderr:\n{}",
-                entries,
-                String::from_utf8_lossy(&wj_output.stderr)
-            );
-        });
-
-    // The generated JS has an auto-run guard (`import.meta.url` check) that may
-    // or may not fire depending on the Node.js version and how the file is invoked.
-    // To avoid double-execution, we strip the auto-run block and add our own call.
-    let js_code = fs::read_to_string(&js_file).unwrap();
-    // Remove `export` keyword so it works as a standalone script
-    let mut cleaned = js_code
-        .replace("export function", "function")
-        .replace("export class", "class")
-        .replace("export const", "const")
-        .replace("export let", "let");
-    // Remove the auto-run block to prevent double main() calls
-    if let Some(pos) = cleaned.find("// Auto-run main") {
-        cleaned.truncate(pos);
-    }
-    // Write a .mjs file with the code + single unconditional main() call
-    let test_js = output_dir.join("_test.mjs");
-    let test_code = format!(
-        "{}\n\n// Test runner: unconditional main() call\nif (typeof main === 'function') main();\n",
-        cleaned.trim()
-    );
-    fs::write(&test_js, &test_code).unwrap();
-
-    let node_output = Command::new("node")
-        .arg(&test_js)
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to execute node");
-
-    if !node_output.status.success() {
-        let generated = fs::read_to_string(&js_file).unwrap_or_default();
-        panic!(
-            "Node.js execution failed:\n{}\n\nGenerated code:\n{}",
-            String::from_utf8_lossy(&node_output.stderr),
-            generated
-        );
-    }
-
-    String::from_utf8(node_output.stdout).unwrap()
-}
-
 // ==========================================
 // Basic JS generation tests
 // ==========================================
@@ -149,7 +14,7 @@ fn compile_and_run_js(source: &str) -> String {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_hello_world() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     println("Hello from JS!")
@@ -162,7 +27,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_arithmetic() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let a = 2 + 3
@@ -182,7 +47,7 @@ fn main() {
 fn test_js_impl_generates_methods() {
     // Impl blocks should add methods to the corresponding class.
     // Currently they are dropped entirely — this test should FAIL (RED phase).
-    let code = compile_to_js(
+    let code = test_utils::compile_single(
         r#"
 struct Point {
     x: int,
@@ -211,7 +76,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_impl_methods_callable() {
     // Methods should be callable on instances
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 struct Point {
     x: int,
@@ -237,7 +102,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_impl_multiple_methods() {
     // Multiple methods in an impl block should all be generated
-    let code = compile_to_js(
+    let code = test_utils::compile_single(
         r#"
 struct Rect {
     w: float,
@@ -279,7 +144,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_match_as_expression() {
     // Match used as an expression should work in JS
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn describe(x: int) -> string {
     match x {
@@ -305,7 +170,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_struct_generates_class() {
-    let code = compile_to_js(
+    let code = test_utils::compile_single(
         r#"
 struct Player {
     name: string,
@@ -336,7 +201,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_if_else() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let x = 10
@@ -354,7 +219,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_while_loop() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let mut i = 0
@@ -375,7 +240,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_function_with_return() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn double(n: int) -> int {
     n * 2
@@ -397,7 +262,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_enum_generation() {
     // Enums should generate Object.freeze or similar construct
-    let code = compile_to_js(
+    let code = test_utils::compile_single(
         r#"
 enum Direction {
     Up,
@@ -425,7 +290,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_recursion() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn fibonacci(n: int) -> int {
     if n <= 1 {
@@ -449,7 +314,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_struct_mutation() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 struct Counter {
     value: int
@@ -485,7 +350,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_for_range() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let mut sum = 0
@@ -506,7 +371,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_continue() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let mut i = 0
@@ -530,7 +395,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_js_loop_break() {
-    let output = compile_and_run_js(
+    let output = test_utils::compile_single(
         r#"
 fn main() {
     let mut count = 0

@@ -12,42 +12,8 @@
 /// through references for nested field access.
 ///
 /// Expected: `stack.item.stats.armor` (no .clone() on intermediate object)
-use std::io::Write;
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = dir.path().join("test.wj");
-    let out_dir = dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    let mut file = std::fs::File::create(&wj_path).unwrap();
-    file.write_all(source.as_bytes()).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "--no-cargo",
-            "-o",
-            out_dir.to_str().unwrap(),
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let rs_path = out_dir.join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "No output file generated.\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        );
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_no_clone_on_intermediate_for_nested_copy_field() {
@@ -91,7 +57,7 @@ impl Equipment {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // stack.item.clone().stats.armor is wasteful — should be stack.item.stats.armor
@@ -130,7 +96,7 @@ pub fn sum_armor(stacks: Vec<ItemStack>) -> f32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // Should not clone the intermediate item for nested Copy field access
@@ -164,7 +130,7 @@ pub fn collect_names(stacks: Vec<ItemStack>) -> Vec<string> {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // When the final field is String (non-Copy), clone IS needed

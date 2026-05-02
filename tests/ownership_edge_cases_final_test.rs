@@ -1,40 +1,8 @@
 //! TDD: Dogfooding E0382 fixes — string return type must not force Owned when the param is not returned,
 //! and passthrough must not apply unrelated `contains`/`len` registry overloads to `str` parameters.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
 
-fn get_wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    fs::read_to_string(rust_file).map_err(|e| e.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_lookup_helper_and_get_no_e0382() {
@@ -76,7 +44,8 @@ impl Table {
 }
 "#;
 
-    let rust = compile_to_rust(source).unwrap_or_else(|e| panic!("compile failed: {}", e));
+    let rust = test_utils::compile_single_result(source)
+        .unwrap_or_else(|e| panic!("compile failed: {}", e));
 
     assert!(
         rust.contains("fn find_value(&self, key: &str)")
@@ -117,7 +86,8 @@ impl Scenes {
 }
 "#;
 
-    let rust = compile_to_rust(source).unwrap_or_else(|e| panic!("compile failed: {}", e));
+    let rust = test_utils::compile_single_result(source)
+        .unwrap_or_else(|e| panic!("compile failed: {}", e));
 
     // HashSet::contains accepts &str or &String; compiler may emit &String
     let sig_ok = rust.contains("fn is_registered(&self, name: &str)")

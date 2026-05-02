@@ -1,63 +1,8 @@
-/// Integration tests: Int/float fix + ownership tracking coexist
-///
-/// Verifies that the `both_int` fix (expression_generation.rs) works correctly
-/// alongside ownership inference. These systems are INDEPENDENT:
-/// - Int/float: TYPE compatibility (i32 vs f32) in binary expressions
-/// - Ownership: BORROW semantics (&T vs T) across all expressions
-///
-/// Philosophy: "Build on Success" - preserve int/float fix while adding ownership.
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp = tempdir().expect("tempdir");
-    let test_dir = temp.path();
-    let rs_file = test_dir.join("lib.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-    let out_lib = test_dir.join("out.rlib");
-
-    let output = Command::new("rustc")
-        .current_dir(test_dir)
-        .arg("lib.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(&out_lib)
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
-
 // 1. Owned param: count / 2 - int division stays int, no spurious float cast
+
+#[path = "test_utils.rs"]
+mod test_utils;
+
 #[test]
 fn test_int_float_owned_param_int_division() {
     let source = r#"
@@ -65,7 +10,7 @@ pub fn compute(count: i32) -> f32 {
     (count / 2) as f32
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     // Int/float fix: count/2 stays integer division, cast only on outer result
     assert!(
         result.contains("count / 2") || result.contains("count / (2)"),
@@ -77,7 +22,9 @@ pub fn compute(count: i32) -> f32 {
         "Should NOT cast 2 to f32 in int division. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
@@ -95,7 +42,7 @@ impl Squad {
     }
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     // Ownership: self.members is borrowed; int/float: len/2 stays int
     assert!(
         result.contains("len()") && (result.contains("/ 2") || result.contains("/ (2)")),
@@ -107,7 +54,9 @@ impl Squad {
         "Int division must stay int. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
@@ -119,13 +68,15 @@ pub fn compute(a: i32, b: i32, c: f32) -> f32 {
     (a + b / 2) as f32 * c
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     assert!(
         !result.contains(") as f32 / 2") && !result.contains("as f32 / 2"),
         "b/2 should stay int. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
@@ -137,7 +88,7 @@ pub fn compute(x: f32, y: i32) -> f32 {
     x + (y / 2)
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     // y/2 produces i32, so (y/2) must be cast to f32 for x + ...
     assert!(
         result.contains(" as f32"),
@@ -150,7 +101,9 @@ pub fn compute(x: f32, y: i32) -> f32 {
         "y/2 should stay int. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
@@ -162,13 +115,15 @@ pub fn last_index(items: Vec<u32>) -> i32 {
     items.len() as i32 - 1
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     assert!(
         !result.contains(" as f32") && !result.contains(" as f64"),
         "Int - int should stay int. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }
 
@@ -180,12 +135,14 @@ pub fn midpoint(a: i32, b: i32) -> i32 {
     (a + b) / 2
 }
 "#;
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     assert!(
         !result.contains(" as f32") && !result.contains(" as f64"),
         "All-int arithmetic should have no float casts. Got:\n{}",
         result
     );
-    let (ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(ok, "Should compile. stderr: {}", stderr);
 }

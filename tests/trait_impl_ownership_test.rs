@@ -6,30 +6,12 @@
 //!
 //! Philosophy: "Automatic ownership inference" - compiler matches impl to trait
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = TempDir::new().expect("tempdir");
-    let source_file = test_dir.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        test_dir.path(),
-        windjammer::CompilationTarget::Rust,
-        true,
-    )
-    .expect("Failed to compile Windjammer code");
-
-    let rust_file = test_dir.path().join("test.rs");
-    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
 
 #[test]
 fn test_trait_impl_infers_mut_self_from_trait() {
@@ -56,7 +38,7 @@ impl Renderer for MyRenderer {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -105,7 +87,7 @@ impl Consumable for Data {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust (owned) ===\n{}\n", output);
 
@@ -158,7 +140,7 @@ impl Port for Real {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust (multi-impl) ===\n{}\n", output);
 

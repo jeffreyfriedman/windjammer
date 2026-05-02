@@ -4,39 +4,8 @@
 /// the parser fails with "Expected field or method name"
 ///
 /// This is essential for destructuring and accessing tuple elements.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    let temp_dir = tempdir().map_err(|e| e.to_string())?;
-    let test_file = temp_dir.path().join("test.wj");
-
-    fs::write(&test_file, code).map_err(|e| e.to_string())?;
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", "--no-cargo"])
-        .arg(&test_file)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstderr: {}\nstdout: {}",
-            stderr, stdout
-        ));
-    }
-
-    Ok(stdout.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
@@ -48,7 +17,7 @@ pub fn get_first() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple .0 access should compile. Error: {:?}",
@@ -66,7 +35,7 @@ pub fn get_second() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple .1 access should compile. Error: {:?}",
@@ -84,7 +53,7 @@ pub fn get_third() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple .2 access should compile. Error: {:?}",
@@ -101,7 +70,7 @@ pub fn sum_tuple(tuple: (i32, i32, i32)) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multiple tuple accesses should compile. Error: {:?}",
@@ -123,7 +92,7 @@ pub fn use_coords() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple from function return should compile. Error: {:?}",
@@ -141,7 +110,7 @@ pub fn nested() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Nested tuple access should compile. Error: {:?}",
@@ -160,7 +129,7 @@ pub fn nested() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Nested tuple access with parens should compile. Error: {:?}",
@@ -177,7 +146,7 @@ pub fn process(data: (i32, i32, i32)) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple parameter access should compile. Error: {:?}",
@@ -220,7 +189,7 @@ impl VoxelWorld {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Voxel coordinate pattern should compile. Error: {:?}",
@@ -251,7 +220,7 @@ impl Point {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple field on struct should compile. Error: {:?}",
@@ -270,7 +239,7 @@ pub fn destructure() -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Tuple destructuring should compile. Error: {:?}",

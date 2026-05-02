@@ -4,34 +4,12 @@
 // 1. `for e in self.items { e.field = ... }` — loop variable mutations require `&mut self` iterator.
 // 2. `self.inner.m()` — resolve `Inner::m` in the registry, not an unrelated `m` on the outer impl.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-    fs::create_dir_all(&out_dir).expect("out dir");
-    fs::write(&wj_path, wj_source).expect("write wj");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "--output",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    Ok(fs::read_to_string(out_dir.join("test.rs")).expect("read rs"))
-}
 
 fn rustc_compile(rust_code: &str) -> Result<(), String> {
     let test_dir = TempDir::new().expect("temp");
@@ -77,7 +55,7 @@ impl World {
     }
 }
 "#;
-    let rs = compile_to_rust(src).expect("wj compile");
+    let rs = test_utils::compile_single_result(src).expect("wj compile");
     assert!(
         rs.contains("cleanup(&mut self)"),
         "expected &mut self for mutating for-loop over self.entities; got:\n{}",
@@ -112,7 +90,7 @@ impl Outer {
     }
 }
 "#;
-    let rs = compile_to_rust(src).expect("wj compile");
+    let rs = test_utils::compile_single_result(src).expect("wj compile");
     assert!(
         rs.contains("step(&mut self)"),
         "negated `!self.field.m()` must still infer &mut self; got:\n{}",
@@ -148,7 +126,7 @@ impl Outer {
     }
 }
 "#;
-    let rs = compile_to_rust(src).expect("wj compile");
+    let rs = test_utils::compile_single_result(src).expect("wj compile");
     assert!(
         rs.contains("run(&mut self)"),
         "Outer::run should be &mut self when Inner::touch mutates; got:\n{}",

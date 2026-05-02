@@ -9,70 +9,8 @@
 //! Fix: Extend ownership inference to detect transitive mutation through fields.
 //! Philosophy: "Safety Without Ceremony" - infer ownership correctly.
 
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, code).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let wj_binary = if wj_binary.exists() {
-        wj_binary
-    } else {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj")
-    };
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    let generated =
-        std::fs::read_to_string(&generated_file).expect("Failed to read generated file");
-    Ok(generated)
-}
-
-fn verify_rust_compiles(rust_code: &str) -> Result<(), String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let rust_file = temp_dir.path().join("test.rs");
-    std::fs::write(&rust_file, rust_code).expect("Failed to write Rust file");
-
-    let check = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            rust_file.to_str().unwrap(),
-            "-o",
-            temp_dir.path().join("test.rlib").to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    if check.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&check.stderr).to_string())
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_self_field_mutating_method() {
@@ -99,13 +37,13 @@ impl Mixer {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn mute_channel(&mut self"),
         "mute_channel should infer &mut self from self.channels[i].mute(). Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -140,7 +78,7 @@ impl Tactics {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn cleanup(&mut self")
             || (rust.contains("pub fn cleanup(self") && rust.contains("for mut squad")),
@@ -154,7 +92,7 @@ impl Tactics {
         "For loop should support mutable iteration. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -183,13 +121,13 @@ impl Mixer {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn mute_channel(&mut self"),
         "mute_channel should infer &mut self. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -225,7 +163,7 @@ impl Demo {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     // Current ownership inference may still emit &self for this call pattern; both are accepted if
     // output compiles. Prefer &mut self when the analyzer is tightened.
     assert!(
@@ -233,7 +171,7 @@ impl Demo {
         "render should use &self or &mut self. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -266,14 +204,14 @@ impl Tactics {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn broadcast(&mut self")
             || (rust.contains("pub fn broadcast(self") && rust.contains("for mut squad")),
         "broadcast should take self with mutable iteration. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -295,7 +233,7 @@ impl Container {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn total_len(&self)")
             || rust.contains("total_len(&self")
@@ -320,7 +258,7 @@ impl Counter {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn set(&mut self"),
         "set should infer &mut self. Generated:\n{}",
@@ -343,7 +281,7 @@ impl List {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn add(&mut self"),
         "add should infer &mut self. Generated:\n{}",
@@ -379,13 +317,13 @@ impl NPCAI {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn update_patrol(&mut self"),
         "update_patrol should infer &mut self from self.patrol.update_wait(). Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -416,7 +354,7 @@ pub fn process_opt(opt: Option<InvestigationState>, dt: f32) {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("if let Some(mut inv)") || rust.contains("if let Some(inv) = opt"),
         "Option if-let should bind inner value. Generated:\n{}",
@@ -454,7 +392,7 @@ impl QuestLog {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn start_quest(&mut self"),
         "start_quest should infer &mut self from self.active_quests[i].start(). Generated:\n{}",
@@ -501,13 +439,13 @@ impl Game {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn tick(&mut self"),
         "tick should infer &mut self from self.renderer.pipeline.shader.reload(). Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -533,13 +471,13 @@ impl State {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn process(&mut self"),
         "process should infer &mut self from match arm field assignment. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -570,7 +508,7 @@ impl QuerySystem {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn update_positions(&mut self"),
         "update_positions should infer &mut self from for-loop assigning to entity fields. Generated:\n{}",
@@ -604,7 +542,7 @@ fn process_mesh(mesh: Mesh) {
     mesh.add_quad(v0, v1, v0, v1)
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("mesh: &mut Mesh") || rust.contains("mesh: & mut Mesh"),
         "mesh param should infer &mut Mesh when add_quad called. Generated:\n{}",
@@ -645,13 +583,13 @@ fn generate_merged_quad_x(mesh: Mesh, x: i32, direction: FaceDirection) {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("mesh: &mut Mesh") || rust.contains("mesh: & mut Mesh"),
         "mesh param should infer &mut Mesh when add_quad is called in match arm. Generated:\n{}",
         rust
     );
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -682,7 +620,7 @@ impl HotReloader {
 }
 "#;
 
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn reload_script(&mut self"),
         "reload_script should infer &mut self from self.scripts[i].reload(). Generated:\n{}",
@@ -708,7 +646,7 @@ pub fn mark_dirty_if_present(opt: Option<Dirty>) {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("Some(mut dirty)")
             || rust.contains("Some(ref mut dirty)")
@@ -742,7 +680,7 @@ impl PrefabSystem {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn sync_all_instances(&mut self"),
         "sync_all_instances should infer &mut self from self.instances[i].sync_from_prefab(). Generated:\n{}",
@@ -777,7 +715,7 @@ impl DialogTree {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn select_choice(&mut self"),
         "select_choice should infer &mut self from recursive self.advance_to() call. Generated:\n{}",
@@ -814,7 +752,7 @@ impl SceneBuilder {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn with_material(mut self"),
         "with_material should infer mut self from self.materials.set() (builder pattern). Generated:\n{}",
@@ -844,7 +782,7 @@ impl ScriptSystem {
     }
 }
 "#;
-    let rust = compile_windjammer_code(code).expect("Should compile");
+    let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
         rust.contains("pub fn initialize_all(&mut self"),
         "initialize_all should infer &mut self from self.components[i].initialize(). Generated:\n{}",

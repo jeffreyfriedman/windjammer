@@ -8,66 +8,10 @@
 //! - copy_structs_registry: Populated from PASS 0, passed to CodeGenerator
 //! - is_known_copy_type: Returns false for ALL types (no hardcoded application types)
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use windjammer::codegen::rust::type_analysis::is_known_copy_type;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_derive_copy_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        id
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    (rs_content, rustc.status.success())
-}
 
 // =============================================================================
 // is_known_copy_type: Must return false for ALL application types
@@ -117,7 +61,7 @@ pub fn main() {
     let _ = process(t);
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(x)"),
@@ -137,7 +81,7 @@ pub fn process(x: &MyType) -> usize {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -155,7 +99,7 @@ pub fn main() {
     let _ = distance(p);
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -175,7 +119,7 @@ pub fn process_all(entities: Vec<Entity>) {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(entity)"),
@@ -203,7 +147,7 @@ pub fn run_rendering(entities: Vec<(Entity, Mesh, Transform)>) {
 
 pub fn main() {}
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(entity)"),
@@ -226,7 +170,7 @@ fn main() {
     let _ = get_position(positions, 0);
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("&positions[") && !rs.contains("& positions["),

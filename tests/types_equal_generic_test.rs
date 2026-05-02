@@ -1,25 +1,11 @@
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_passthrough_ownership_inferred_owned() {
     // When a Vec<i32> param is passed to a function that takes owned Vec<i32>,
     // passthrough inference should detect the match and infer Owned.
-    let output = compile_to_rust(
+    let output = test_utils::compile_single(
         r#"
 fn consume_vec(items: Vec<i32>) -> i32 {
     let mut sum = 0
@@ -49,7 +35,7 @@ fn process(data: Vec<i32>) -> i32 {
 
 #[test]
 fn test_option_passthrough_ownership_inferred_owned() {
-    let output = compile_to_rust(
+    let output = test_utils::compile_single(
         r#"
 fn unwrap_option(opt: Option<i32>) -> i32 {
     match opt {
@@ -73,7 +59,7 @@ fn check(value: Option<i32>) -> i32 {
 
 #[test]
 fn test_vec_of_string_passthrough_ownership() {
-    let output = compile_to_rust(
+    let output = test_utils::compile_single(
         r#"
 fn join_strings(parts: Vec<String>) -> String {
     let mut result = String::new()

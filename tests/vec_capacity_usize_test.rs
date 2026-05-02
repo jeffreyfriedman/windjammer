@@ -1,44 +1,7 @@
 // TDD: Vec::with_capacity / push literal typing (usize, f64 unification)
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
 
-fn wj_to_rs(test_wj: &str) -> (String, String) {
-    let temp = tempdir().expect("tempdir");
-    let wj = temp.path().join("cap.wj");
-    fs::write(&wj, test_wj).expect("write .wj");
-    let out = temp.path().join("out");
-    fs::create_dir_all(&out).expect("out");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj.to_str().unwrap(),
-            "-o",
-            out.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("wj build");
-
-    if !output.status.success() {
-        return (
-            String::new(),
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        );
-    }
-
-    let rs = fs::read_dir(&out)
-        .expect("read out")
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .find(|p| {
-            p.extension() == Some(std::ffi::OsStr::new("rs"))
-                && p.file_stem().and_then(|s| s.to_str()) != Some("lib")
-        });
-    let rs = rs.expect("one .rs in out");
-    (fs::read_to_string(&rs).expect("read rs"), String::new())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_with_capacity_literal() {
@@ -49,7 +12,7 @@ fn test() {
 }
 "#;
 
-    let (rust_code, err) = wj_to_rs(test_wj);
+    let (rust_code, err) = test_utils::compile_via_cli_with_stderr(test_wj);
     assert!(
         err.is_empty() && !rust_code.is_empty(),
         "Compilation failed: {err}"
@@ -75,7 +38,7 @@ fn test() {
 }
 "#;
 
-    let (rust_code, err) = wj_to_rs(test_wj);
+    let (rust_code, err) = test_utils::compile_via_cli_with_stderr(test_wj);
     assert!(
         err.is_empty() && !rust_code.is_empty(),
         "Compilation failed: {err}"
@@ -95,7 +58,7 @@ fn test(alpha: f64) {
 }
 "#;
 
-    let (rust_code, err) = wj_to_rs(test_wj);
+    let (rust_code, err) = test_utils::compile_via_cli_with_stderr(test_wj);
     assert!(
         err.is_empty() && !rust_code.is_empty(),
         "Compilation failed: {err}"

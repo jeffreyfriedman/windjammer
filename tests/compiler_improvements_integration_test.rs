@@ -3,27 +3,8 @@
 //! Validates that generic type propagation, trait ownership inference,
 //! and extended mutation detection work correctly in combination.
 
-use std::fs;
-use tempfile::TempDir;
-
-fn compile_windjammer(source: &str) -> Result<String, String> {
-    let temp = TempDir::new().map_err(|e| e.to_string())?;
-    let source_file = temp.path().join("test.wj");
-    let output_dir = temp.path().join("build");
-    fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
-    fs::write(&source_file, source).map_err(|e| e.to_string())?;
-
-    windjammer::build_project(
-        &source_file,
-        &output_dir,
-        windjammer::CompilationTarget::Rust,
-        true,
-    )
-    .map_err(|e| format!("Compilation failed: {}", e))?;
-
-    let rust_file = output_dir.join("test.rs");
-    fs::read_to_string(&rust_file).map_err(|e| format!("Failed to read: {}", e))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_all_compiler_improvements_work_together() {
@@ -66,7 +47,7 @@ pub fn test_all() {
 }
 "#;
 
-    let generated = compile_windjammer(source).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Check improvement 1: Generic preserved
     assert!(

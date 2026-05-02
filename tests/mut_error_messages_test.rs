@@ -3,37 +3,8 @@
 /// **Current `wj` behavior:** Reassignment to a `let` without `let mut` is handled by inferring
 /// `let mut` in generated Rust, so the driver often succeeds. Tests below document that behavior;
 /// when native immutability errors are implemented, they should expect `Err` and stderr text again.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let wj_file = temp_dir.path().join("test.wj");
-
-    fs::write(&wj_file, code).map_err(|e| format!("Failed to write test file: {}", e))?;
-
-    // Same layout as `let_immutability_test`: CWD = project root, default `build/test.rs`
-    let result = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--no-cargo")
-        .arg(&wj_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .map_err(|e| format!("Failed to execute compiler: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&result.stdout);
-    let stderr = String::from_utf8_lossy(&result.stderr);
-
-    if result.status.success() {
-        let generated_path = temp_dir.path().join("build").join("test.rs");
-        let generated = fs::read_to_string(&generated_path)
-            .map_err(|e| format!("read generated {}: {}", generated_path.display(), e))?;
-        Ok(generated)
-    } else {
-        Err(format!("{}\n{}", stdout, stderr))
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -45,7 +16,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     let generated = result.expect("wj build");
     assert!(
         generated.contains("let mut x"),
@@ -65,7 +36,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Should compile successfully with explicit let mut, got error:\n{:?}",
@@ -89,7 +60,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Should compile successfully with explicit let mut, got error:\n{:?}",
@@ -109,7 +80,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Should compile successfully with explicit let mut, got error:\n{:?}",
@@ -129,7 +100,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Should compile successfully when mut is declared, got error:\n{:?}",
@@ -150,7 +121,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     let generated = result.expect("wj build");
     assert!(
         generated.contains("let mut x") && generated.contains("let mut y"),
@@ -169,7 +140,7 @@ fn main() {
 }
 "#;
 
-    let result = compile_wj(code);
+    let result = test_utils::compile_single_result(code);
     let generated = result.expect("wj build");
     assert!(
         generated.contains("let mut x"),

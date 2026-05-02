@@ -7,37 +7,8 @@
 //! - If-let bindings
 //! - Function parameters (verified in function_generation)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_to_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(stderr.to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| e.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -51,7 +22,7 @@ pub fn process() -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("let x = 5"), "Expected let x = 5 in output");
     assert!(
         result.contains("let y = x + 1"),
@@ -70,7 +41,7 @@ pub fn process(data: str) -> int {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("let x = data"), "Expected let binding");
 }
 
@@ -88,7 +59,7 @@ pub fn sum_items() -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("for "), "Expected for loop");
     assert!(result.contains("item"), "Expected loop variable");
 }
@@ -105,7 +76,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("Some(x)"),
         "Expected match arm with binding"
@@ -125,7 +96,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("if let Some(x)"),
         "Expected if let with binding"
@@ -143,7 +114,7 @@ pub fn process() -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("let (a, b, c)"),
         "Expected tuple destructuring"

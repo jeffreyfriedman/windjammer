@@ -1,30 +1,12 @@
 // TDD Test: Struct field (owned String) auto-borrow when passed to methods expecting &String
 // Reproduces E0308 error in dialog.wj line 238 (line 212 in generated code)
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 fn verify_with_rustc(rust_code: &str) {
     let dir = tempdir().expect("tempdir for rustc");
@@ -78,7 +60,7 @@ impl StatCheck {
 }
 "#;
 
-    let generated = compile_single_file(code);
+    let generated = test_utils::compile_single(code);
 
     assert!(
         generated.contains("player.get_attribute(&self.stat_name)")
@@ -105,7 +87,7 @@ impl Config {
 }
 "#;
 
-    let generated = compile_single_file(code);
+    let generated = test_utils::compile_single(code);
 
     assert!(
         generated.contains("health <= self.max_health"),

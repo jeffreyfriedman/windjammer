@@ -1,56 +1,8 @@
 // TDD Test: Analyzer should infer &mut self when needed
 // THE WINDJAMMER WAY: Compiler infers mutability, developer writes clean code
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-
-fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_and_check_rust(code: &str, test_name: &str) -> Result<String, String> {
-    let test_dir = format!("tests/generated/self_mutability_{}", test_name);
-    fs::create_dir_all(&test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    // Compile with Windjammer (use pre-built binary for fast test execution)
-    let output = Command::new(wj_binary())
-        .args(["build", &input_file, "--output", &test_dir, "--no-cargo"])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        fs::remove_dir_all(&test_dir).ok();
-        return Err(format!(
-            "Windjammer compilation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Check generated Rust compiles
-    let rust_check = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            &format!("{}/test.rs", test_dir),
-            "-o",
-            &format!("{}/test.rlib", test_dir),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&rust_check.stderr).to_string();
-
-    fs::remove_dir_all(&test_dir).ok();
-
-    if rust_check.status.success() {
-        Ok(String::new())
-    } else {
-        Err(stderr)
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -71,7 +23,7 @@ fn test_method_returning_mut_ref_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "returns_mut_ref");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -96,7 +48,7 @@ fn test_method_mutating_field_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "mutates_field");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -127,7 +79,7 @@ fn test_method_calling_mutating_method_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "calls_mutating");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -153,7 +105,7 @@ fn test_read_only_method_uses_ref_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "read_only");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -178,7 +130,7 @@ fn test_compound_assignment_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "compound_assign");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -203,7 +155,7 @@ fn test_method_mutating_vec_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "vec_push");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -230,7 +182,7 @@ fn test_method_mutating_hashmap_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "hashmap_insert");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),
@@ -264,7 +216,7 @@ fn test_nested_field_mutation_needs_mut_self() {
     }
     "#;
 
-    let result = compile_and_check_rust(code, "nested_field_mutation");
+    let result = test_utils::compile_single_result(code);
 
     assert!(
         result.is_ok(),

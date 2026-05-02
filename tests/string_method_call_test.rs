@@ -4,10 +4,8 @@
 /// Pattern: html.push_str(self.class.as_str()) - .as_str() shouldn't be needed
 /// Root Cause: Compiler not inferring &str conversion for push_str parameter
 /// Expected: html.push_str(self.class) should compile (auto-convert)
-use std::sync::atomic::{AtomicU64, Ordering};
-use tempfile::TempDir;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_push_str_with_string_field() {
@@ -27,7 +25,7 @@ impl Menu {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -57,7 +55,7 @@ pub fn concat(a: String, b: String) -> String {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -79,7 +77,7 @@ pub fn format_message(name: String, age: i32) -> String {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -91,20 +89,3 @@ pub fn format_message(name: String, age: i32) -> String {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = TempDir::new().expect("tempdir");
-    let source_file = test_dir.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        test_dir.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    )
-    .expect("Failed to run wj compiler");
-
-    std::fs::read_to_string(test_dir.path().join("test.rs"))
-        .expect("Failed to read generated Rust file")
-}

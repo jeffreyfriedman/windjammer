@@ -1,63 +1,12 @@
 use windjammer::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use windjammer::parser::ast::Type;
-/// TDD: Auto-borrow must be skipped when a signature collision is detected.
-///
-/// Bug: When two modules define `draw_text(text: string, ...)`, the analyzer
-/// may infer different ownership modes (Borrowed in one, Owned in another).
-/// If the signature registry has a collision for `draw_text`, the codegen
-/// should NOT blindly apply `&` based on the potentially-wrong signature.
-///
-/// Root cause: The auto-borrow logic at the function-call argument processing
-/// checks `OwnershipMode::Borrowed` and adds `&`, but does not consult
-/// `has_collision()` — unlike the int→float auto-cast which already does.
-///
-/// Fix: Guard auto-borrow with `!has_collision` check, mirroring the
-/// existing guard on int→float auto-cast.
-use windjammer::*;
 
-fn compile_to_rust_with_global_sigs(source: &str, global_sigs: &SignatureRegistry) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+// Core bug: When `draw_text` has a signature collision (one module says Borrowed,
+// another says Owned), the codegen should NOT add `&` to arguments.
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut analyzer_instance = analyzer::Analyzer::new();
-    let (analyzed, local_sigs, _trait_methods) = analyzer_instance
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut per_file_registry = global_sigs.clone();
-    per_file_registry.merge(&local_sigs);
-
-    let mut generator = codegen::CodeGenerator::new(per_file_registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// Core bug: When `draw_text` has a signature collision (one module says Borrowed,
-/// another says Owned), the codegen should NOT add `&` to arguments.
 #[test]
 fn test_auto_borrow_skipped_on_signature_collision() {
     // Module A's "draw_text" expects Borrowed (analyzer inferred &str)
@@ -114,7 +63,7 @@ fn render_hud() {
 }
 "#;
 
-    let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
+    let rust_code = test_utils::compile_single(source);
 
     // The call should NOT have `&text` — collision means we can't trust
     // the Borrowed inference from the potentially-wrong module's signature.
@@ -127,7 +76,7 @@ fn render_hud() {
     );
 }
 
-/// Positive test: When there is NO collision, auto-borrow should still work.
+// Positive test: When there is NO collision, auto-borrow should still work.
 #[test]
 fn test_auto_borrow_still_works_without_collision() {
     // Single definition, no collision
@@ -142,7 +91,7 @@ fn caller() {
 }
 "#;
 
-    let rust_code = compile_to_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     // With no collision, auto-borrow should apply (process reads data → Borrowed)
     // The important thing is this compiles; whether it adds & depends on analysis.
@@ -154,8 +103,8 @@ fn caller() {
     );
 }
 
-/// Collision with module-qualified calls:
-/// `hud_render::draw_text` should also be guarded.
+// Collision with module-qualified calls:
+// `hud_render::draw_text` should also be guarded.
 #[test]
 fn test_module_qualified_call_auto_borrow_skipped_on_collision() {
     let mut global_sigs = SignatureRegistry::new();
@@ -197,7 +146,7 @@ fn show_message() {
 }
 "#;
 
-    let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
+    let rust_code = test_utils::compile_single(source);
 
     // Module-qualified call should also skip auto-borrow on collision
     assert!(
@@ -208,7 +157,7 @@ fn show_message() {
     );
 }
 
-/// MutBorrowed should also be guarded by collision check.
+// MutBorrowed should also be guarded by collision check.
 #[test]
 fn test_mut_borrow_skipped_on_collision() {
     let mut global_sigs = SignatureRegistry::new();
@@ -250,7 +199,7 @@ fn do_update() {
 }
 "#;
 
-    let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         !rust_code.contains("&mut data"),
@@ -259,8 +208,8 @@ fn do_update() {
     );
 }
 
-/// Regression: The collision detection should compare param_ownership, not just param_types.
-/// Two signatures with the same param types but different ownership should be collisions.
+// Regression: The collision detection should compare param_ownership, not just param_types.
+// Two signatures with the same param types but different ownership should be collisions.
 #[test]
 fn test_collision_detected_for_different_ownership_same_types() {
     let mut registry = SignatureRegistry::new();

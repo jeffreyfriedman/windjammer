@@ -9,56 +9,12 @@
 //!
 //! Success: All tests pass, generated Rust compiles with rustc.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    if !wj_binary.exists() {
-        let debug = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj");
-        if debug.exists() {
-            return compile_with_binary(&debug, &wj_path, &out_dir);
-        }
-    }
-
-    compile_with_binary(&wj_binary, &wj_path, &out_dir)
-}
-
-fn compile_with_binary(
-    wj_binary: &PathBuf,
-    wj_path: &std::path::Path,
-    out_dir: &std::path::Path,
-) -> Result<String, String> {
-    let output = Command::new(wj_binary)
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "--output",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust"))
-}
 
 fn rustc_compile(rust_code: &str, _test_name: &str) -> Result<(), String> {
     let test_dir = TempDir::new().expect("Failed to create temp dir");
@@ -97,7 +53,8 @@ impl Container {
 }
 "#;
 
-    let result = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let result =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
     assert!(
         result.contains("fn add(&mut self"),
         "Should infer &mut self for self.items.push. Got:\n{}",
@@ -126,7 +83,8 @@ impl Counter {
 }
 "#;
 
-    let result = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let result =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
     assert!(
         result.contains("fn increment(&mut self") || result.contains("&mut self"),
         "Should infer &mut self for self.count = value. Got:\n{}",
@@ -165,7 +123,8 @@ impl Outer {
 }
 "#;
 
-    let result = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let result =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
     assert!(
         result.contains("fn add(&mut self") || result.contains("&mut self"),
         "Should infer &mut self for self.inner.add (nested mutation). Got:\n{}",
@@ -198,7 +157,8 @@ impl Outer {
 }
 "#;
 
-    let result = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let result =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
     assert!(
         result.contains("fn add(&mut self") || result.contains("&mut self"),
         "Should infer &mut self for self.inner.items.push (nested field). Got:\n{}",
@@ -227,7 +187,8 @@ impl Container {
 }
 "#;
 
-    let result = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let result =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
     assert!(
         result.contains("fn len(&self") && !result.contains("fn len(&mut self"),
         "Read-only method should infer &self. Got:\n{}",

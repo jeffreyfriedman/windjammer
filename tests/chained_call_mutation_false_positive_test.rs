@@ -14,7 +14,6 @@ use tempfile::TempDir;
 ///
 /// Fix: Use `is_in_receiver_chain` which only follows the object path,
 /// not arguments of nested method calls.
-
 #[test]
 fn test_copy_param_as_argument_in_chained_call_stays_owned() {
     let temp_dir = TempDir::new().unwrap();

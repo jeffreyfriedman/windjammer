@@ -2,6 +2,9 @@
 ///
 /// Verifies that the Go backend generates valid, executable Go code
 /// that produces the same output as the Rust backend.
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -16,40 +19,6 @@ fn go_is_available() -> bool {
 }
 
 /// Compile .wj source to Go and return the generated Go code
-fn compile_to_go(source: &str) -> String {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("go")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !wj_output.status.success() {
-        panic!(
-            "Go compilation failed:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        );
-    }
-
-    let generated_file = output_dir.join("main.go");
-    fs::read_to_string(&generated_file).unwrap_or_else(|_| {
-        panic!(
-            "Failed to read generated Go file. Compiler stderr:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        )
-    })
-}
-
 /// Compile .wj to Go, build with `go build`, and run the binary.
 /// Returns `Some(stdout)` on success, or `None` if `go` is not installed.
 fn compile_and_run_go(source: &str) -> Option<String> {
@@ -235,7 +204,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_go_generates_package_main() {
-    let code = compile_to_go(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     println("test")

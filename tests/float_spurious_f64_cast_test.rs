@@ -2,49 +2,8 @@
 ///
 /// When float inference says f32 on one side but `infer_expression_type` only knows `Type::Float`,
 /// codegen must not treat that as f64 and promote the other operand.
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let dir = tempdir().expect("tempdir for rustc");
-    let rs_file = dir.path().join("test.rs");
-    fs::write(&rs_file, rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .current_dir(dir.path())
-        .arg("test.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_f32_acos_mul_float_literal_no_as_f64_on_left() {
@@ -55,14 +14,16 @@ pub fn angle_deg(value: f32) -> f32 {
 }
 "#;
 
-    let output = compile_single_file(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains("acos() as f64") && !output.contains(".acos() as f64"),
         "must not cast f32 acos() to f64 when multiplying by float literal in f32 context; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",
@@ -79,14 +40,16 @@ pub fn scaled(dist: f32) -> f32 {
 }
 "#;
 
-    let output = compile_single_file(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains(" as f64"),
         "must not insert f64 promotion in f32 * (f32 - f32); got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",
@@ -105,14 +68,16 @@ pub fn combine(v: Vis) -> f32 {
 }
 "#;
 
-    let output = compile_single_file(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains(" as f64"),
         "f32 field * f32 field must not insert as f64; got:\n{}",
         output
     );
 
-    let (ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "rustc failed:\nstderr: {}\n\nGenerated:\n{}",

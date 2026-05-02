@@ -6,43 +6,10 @@
 //! - Match arm type consistency
 //! - String concatenation in returns
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Helper to compile and verify generated Rust code
-fn compile_and_verify_rust(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    (true, generated, String::new())
-}
-
 // ============================================================================
 // Test: Mutable String Variables
 // ============================================================================
@@ -59,7 +26,8 @@ pub fn build_html() -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // Mutable string should be initialized as String
@@ -82,7 +50,8 @@ pub fn greet(name: string) -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // Mutable string should have .to_string()
@@ -104,7 +73,7 @@ pub fn get_message() -> &'static str {
 "#;
 
     // This tests that immutable strings don't unnecessarily get .to_string()
-    let (success, _generated, _err) = compile_and_verify_rust(code);
+    let (success, _generated, _err) = test_utils::compile_via_cli(code);
     // Note: This may or may not compile depending on return type handling
     // The important thing is that we test the behavior
     let _ = success;
@@ -134,7 +103,8 @@ pub fn create() -> Container {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // String literal passed to stored param should have .to_string()
@@ -155,7 +125,8 @@ pub fn has_word(text: string) -> bool {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // contains() takes &str, should NOT have .to_string()
@@ -184,7 +155,8 @@ pub fn status_message(code: i32) -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // All arms should be converted to String since return type is string
@@ -210,7 +182,8 @@ pub fn format_value(opt: Option<string>) -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // The None arm should be .to_string() to match Some(s)
@@ -234,7 +207,8 @@ pub fn get_name() -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // Return should have .to_string()
@@ -254,7 +228,8 @@ pub fn get_version() -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // Implicit return should have .to_string()
@@ -278,7 +253,8 @@ pub fn escape_html(text: string) -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // replace() takes &str, should NOT have .to_string() on arguments
@@ -307,7 +283,8 @@ pub fn get_parts(text: string) -> Vec<string> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // split() takes &str
@@ -339,7 +316,8 @@ pub fn create_person() -> Person {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // String fields should have .to_string()
@@ -367,7 +345,8 @@ pub fn get_colors() -> Vec<string> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // push() to Vec<String> should have .to_string()
@@ -397,7 +376,8 @@ pub fn classify(n: i32) -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify_rust(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
     // All branches should be .to_string()

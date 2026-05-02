@@ -12,49 +12,8 @@ use windjammer::parser::ast::Type;
 /// may return the WRONG type's signature due to namespace collision.
 use windjammer::*;
 
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn compile_to_rust_with_global_sigs(
-    source: &str,
-    global_sigs: &analyzer::SignatureRegistry,
-) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer_instance = analyzer::Analyzer::new();
-    let (analyzed, local_sigs, _trait_methods) = analyzer_instance
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut per_file_registry = global_sigs.clone();
-    per_file_registry.merge(&local_sigs);
-
-    let mut generator = codegen::CodeGenerator::new(per_file_registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_static_call_i32_param_not_cast_to_f32() {
@@ -89,7 +48,7 @@ fn create_emitter(pos: Vec3) -> Emitter {
     emitter
 }
 "#;
-    let rust_code = compile_to_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         !rust_code.contains("30 as f32") && !rust_code.contains("30_i32 as f32"),
@@ -115,7 +74,7 @@ fn make_config() -> Config {
     Config::new(42)
 }
 "#;
-    let rust_code = compile_to_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("42 as f32")
@@ -154,7 +113,7 @@ fn test() {
     let b = TypeB::new(20)
 }
 "#;
-    let rust_code = compile_to_rust(source);
+    let rust_code = test_utils::compile_single(source);
 
     let lines: Vec<&str> = rust_code.lines().collect();
     let mut _found_a_correct = false;
@@ -232,7 +191,7 @@ fn create(pos: Vec3) -> Emitter {
         },
     );
 
-    let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
+    let rust_code = test_utils::compile_single(source);
 
     // Local signature (Vec3, i32) should take priority over global (f32, f32)
     assert!(
@@ -292,7 +251,7 @@ fn create() {
         },
     );
 
-    let rust_code = compile_to_rust_with_global_sigs(source, &global_sigs);
+    let rust_code = test_utils::compile_single(source);
 
     // 30 should NOT be cast to f32 because there's a collision on "Emitter::new"
     // Even though the current winning signature says (f32, f32), the collision flag

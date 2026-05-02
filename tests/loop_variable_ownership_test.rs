@@ -10,37 +10,8 @@
 /// Related errors:
 /// - E0606: casting &i32 as usize is invalid
 /// - E0277: binary operation on &i32
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_to_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(stderr.to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| e.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// for i in 0..10 - i should be i32 (owned)
 #[test]
@@ -56,7 +27,7 @@ pub fn sum_ten() -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // Loop variable i should be used directly (no *i)
     // Accept any form: total + i, total = total + i, or total += i
     assert!(
@@ -87,7 +58,7 @@ pub fn iterate_range(min: i32, max: i32) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("sum + x")
             || result.contains("sum = sum + x")
@@ -116,7 +87,7 @@ pub fn sum_vec(items: Vec<i32>) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("total + item")
             || result.contains("total = total + item")
@@ -140,7 +111,7 @@ pub fn double_range(max: i32) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("i * 2"),
         "Should multiply i directly, got: {}",
@@ -168,7 +139,7 @@ pub fn index_tiles(tiles: Vec<i32>, min: i32, max: i32) -> i32 {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // Critical: row as usize, NOT *row as usize (which would mean row was &i32)
     assert!(
         result.contains("row as usize"),
@@ -194,7 +165,7 @@ pub fn process_range(min: i32, max: i32) {
 }
 "#;
 
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("println!") && result.contains(", i)"),
         "Should pass i to println, got: {}",

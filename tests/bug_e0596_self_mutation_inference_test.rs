@@ -8,57 +8,12 @@
 //
 // Success: Generated Rust compiles with rustc (no E0596).
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    if !wj_binary.exists() {
-        // Fallback to debug build
-        let debug = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj");
-        if debug.exists() {
-            return compile_with_binary(&debug, &wj_path, &out_dir);
-        }
-    }
-
-    compile_with_binary(&wj_binary, &wj_path, &out_dir)
-}
-
-fn compile_with_binary(
-    wj_binary: &PathBuf,
-    wj_path: &std::path::Path,
-    out_dir: &std::path::Path,
-) -> Result<String, String> {
-    let output = Command::new(wj_binary)
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "--output",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust"))
-}
 
 fn rustc_compile(rust_code: &str, _test_name: &str) -> Result<(), String> {
     let test_dir = TempDir::new().expect("Failed to create temp dir");
@@ -102,7 +57,8 @@ impl Counter {
 }
 "#;
 
-    let rust_code = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let rust_code =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
 
     assert!(
         rust_code.contains("increment(&mut self)") || rust_code.contains("&mut self"),
@@ -137,7 +93,8 @@ impl Score {
 }
 "#;
 
-    let rust_code = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let rust_code =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
 
     assert!(
         rust_code.contains("add_points(&mut self)") || rust_code.contains("&mut self"),
@@ -172,7 +129,8 @@ impl List {
 }
 "#;
 
-    let rust_code = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let rust_code =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
 
     assert!(
         rust_code.contains("add(&mut self)") || rust_code.contains("&mut self"),
@@ -208,7 +166,8 @@ impl Buffer {
 }
 "#;
 
-    let rust_code = compile_to_rust(source).expect("Windjammer compilation should succeed");
+    let rust_code =
+        test_utils::compile_single_result(source).expect("Windjammer compilation should succeed");
 
     assert!(
         rust_code.contains("set(&mut self)") || rust_code.contains("&mut self"),

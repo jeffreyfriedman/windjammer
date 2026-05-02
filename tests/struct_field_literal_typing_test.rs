@@ -3,41 +3,8 @@
 //! Root cause fixed: struct definitions inside `mod { }` were never registered in
 //! `IntInference::struct_field_types`, so literals defaulted to i32 in generated Rust.
 
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut int_inference = type_inference::IntInference::new();
-    int_inference.infer_program(&program);
-    assert!(
-        int_inference.errors.is_empty(),
-        "Int inference errors: {:?}",
-        int_inference.errors
-    );
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-    assert!(
-        float_inference.errors.is_empty(),
-        "Float inference errors: {:?}",
-        float_inference.errors
-    );
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_int_inference(int_inference);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_u32_fields_top_level_struct() {
@@ -51,7 +18,7 @@ pub fn sample() -> DialogueChoice {
     DialogueChoice { id: 1, next_id: 2 }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("id: 1_u32") && rust.contains("next_id: 2_u32"),
         "Expected u32 suffixes for u32 fields. Got:\n{}",
@@ -78,7 +45,7 @@ pub mod dialogue {
     }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("id: 1_u32") && rust.contains("next_id: 2_u32"),
         "Nested mod: struct field literals should use u32. Got:\n{}",
@@ -103,7 +70,7 @@ pub fn empty() -> Buf {
     Buf { len: 0, cap: 16 }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     // usize field literals may be unsuffixed: Rust infers from field type (avoids E0308 elsewhere).
     assert!(
         (rust.contains("len: 0_usize") || rust.contains("len: 0,"))
@@ -133,7 +100,7 @@ pub fn choices() -> Vec<Choice> {
     ]
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("id: 1_u32") && rust.contains("id: 2_u32"),
         "vec! elements should keep u32 field literals. Got:\n{}",
@@ -157,7 +124,7 @@ pub mod color {
     }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("r: 255_u8") && rust.contains("g: 0_u8") && rust.contains("b: 0_u8"),
         "u8 fields in mod should use _u8 literals. Got:\n{}",

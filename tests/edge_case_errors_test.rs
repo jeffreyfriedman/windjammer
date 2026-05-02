@@ -3,30 +3,12 @@
 //! Rust requires trait impl signatures and bodies to come from the trait impl block, not the
 //! inherent method with the same name.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_and_get_rust(source: &str) -> String {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = TempDir::new().expect("tempdir");
-    let source_file = test_dir.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    windjammer::build_project(
-        &source_file,
-        test_dir.path(),
-        windjammer::CompilationTarget::Rust,
-        true,
-    )
-    .expect("Failed to compile Windjammer code");
-
-    let rust_file = test_dir.path().join("test.rs");
-    std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file")
-}
 
 fn assert_rustc_lib_ok(rust: &str) {
     let temp_dir = TempDir::new().unwrap();
@@ -81,7 +63,7 @@ impl Port for Gpu {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     let port_impl = output
         .find("impl Port for Gpu")
         .expect("trait impl present");

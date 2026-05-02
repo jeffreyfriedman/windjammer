@@ -16,41 +16,8 @@
 ///
 /// Fix: Use `string` (owned) type in .wj source when the value will be stored.
 /// Future compiler improvement: auto-insert .to_string() when `str` is stored.
-use std::process::Command;
-
-fn compile_wj_to_rust(source: &str, test_name: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_str_owned_container_{}_{}",
-        test_name,
-        std::process::id()
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    std::fs::read_to_string(&main_rs).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_param_stored_in_vec_push() {
@@ -75,7 +42,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "vec_push_owned");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),
@@ -112,7 +79,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "hashmap_insert_owned");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),
@@ -144,7 +111,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "option_store_owned");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),
@@ -175,7 +142,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "return_string_clone");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),
@@ -211,7 +178,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "struct_field_init_owned");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),
@@ -256,7 +223,7 @@ fn main() {
 }
 "#;
 
-    let rust = compile_wj_to_rust(source, "trait_string_return");
+    let rust = test_utils::compile_single(source);
 
     assert!(
         !rust.is_empty(),

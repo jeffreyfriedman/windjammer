@@ -5,45 +5,8 @@
 //! patterns that `rustc` can accept. Reassignment in branches without `let mut` is a known gap: see
 //! `test_let_mut_for_reassigned_var`.
 
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile(src: &str) -> String {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, src).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let wj_binary = if wj_binary.exists() {
-        wj_binary
-    } else {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/wj")
-    };
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    std::fs::read_to_string(&generated_file).expect("Failed to read generated file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_let_some_ref_mut_for_assignment() {
@@ -58,7 +21,7 @@ pub fn transfer(slots: Vec<Option<Slot>>, i: usize, amount: i32) {
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     let ok = result.contains("Some(ref mut stack)")
         || (result.contains("if let Some(stack) = &slots") && result.contains("stack.quantity"));
     assert!(
@@ -81,7 +44,7 @@ pub fn merge(slots: Vec<Option<ItemStack>>, to_slot: usize, from_quantity: i32) 
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     let ok = result.contains("Some(ref mut to_stack)")
         || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.add"));
     assert!(
@@ -103,7 +66,7 @@ pub fn read_quantity(slots: Vec<Option<Slot>>, i: usize) -> i32 {
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         !result.contains("ref mut stack"),
         "Should NOT add ref mut when only reading. Got:\n{}",
@@ -122,7 +85,7 @@ pub fn check(condition: bool) -> bool {
     dirty
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         result.contains("let mut dirty"),
         "Should infer mut when variable is reassigned. Got:\n{}",
@@ -139,7 +102,7 @@ pub fn update_point() {
     p.x = 1.0
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         result.contains("let mut p"),
         "Should infer mut when field is mutated. Got:\n{}",
@@ -157,7 +120,7 @@ pub fn counter() -> i32 {
     count
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         result.contains("let mut count"),
         "Should infer mut for compound assignment. Got:\n{}",
@@ -173,7 +136,7 @@ pub fn read_only() -> i32 {
     x
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         !result.contains("let mut x"),
         "Should NOT add mut when variable is never mutated. Got:\n{}",
@@ -194,7 +157,7 @@ pub fn transfer_partial(slots: Vec<Option<Slot>>, from_slot: usize, to_slot: usi
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     let to_ok = result.contains("Some(ref mut to_stack)")
         || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.add"));
     assert!(
@@ -229,7 +192,7 @@ impl World {
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         result.contains("for entity in &mut self.entities")
             || result.contains("for mut entity in self.entities"),
@@ -251,7 +214,7 @@ pub fn add_to_stack(slots: Vec<Option<ItemStack>>, slot: usize, amount: i32) {
     }
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     let ok = result.contains("Some(ref mut stack)")
         || (result.contains("if let Some(stack) = &slots") && result.contains("stack.add"));
     assert!(
@@ -269,7 +232,7 @@ pub fn explicit_mut() {
     x = 1
 }
 "#;
-    let result = compile(src);
+    let result = test_utils::compile_single(src);
     assert!(
         result.contains("let mut x"),
         "Should preserve explicit mut. Got:\n{}",

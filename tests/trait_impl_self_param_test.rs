@@ -6,38 +6,8 @@
 // Expected: When implementing a trait method, use the trait's
 // self parameter type, not the inferred type.
 
-use std::fs;
-use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    // Use unique directory for each test to avoid conflicts
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_dir = format!("tests/generated/trait_impl_test_{}", test_id);
-    fs::create_dir_all(&test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", &input_file, "--output", &test_dir, "--no-cargo"])
-        .output()
-        .expect("Failed to run compiler");
-
-    let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file)
-        .unwrap_or_else(|_| String::from_utf8_lossy(&output.stdout).to_string());
-
-    // Clean up test directory
-    fs::remove_dir_all(&test_dir).ok();
-
-    if output.status.success() {
-        Ok(generated)
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -60,7 +30,7 @@ fn test_trait_impl_self_param_owned() {
         }
     "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
 
     // Should compile successfully
     assert!(
@@ -104,7 +74,7 @@ fn test_trait_impl_self_param_borrowed() {
         }
     "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
 
     // Should compile successfully
     assert!(
@@ -144,7 +114,7 @@ fn test_trait_impl_self_param_mutable() {
         }
     "#;
 
-    let result = compile_windjammer_code(code);
+    let result = test_utils::compile_single_result(code);
 
     // Should compile successfully
     assert!(

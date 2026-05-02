@@ -1,34 +1,5 @@
-/// TDD: Auto-generate to_bytes() for structs with numeric fields
-///
-/// Problem: GPU uniform buffers accept raw bytes. When uploading mixed-type structs
-/// (f32 + u32 fields), using Vec<f32> silently VALUE-converts u32→f32, corrupting
-/// the bit pattern. f32(1.0) = 0x3F800000, but u32(1) = 0x00000001.
-///
-/// Fix: The compiler auto-generates a `to_bytes()` method for structs where all
-/// fields are numeric primitives (f32, u32, i32, bool). Each field is serialized
-/// via `to_ne_bytes()`, preserving correct bit patterns for all types.
-///
-/// This enables type-safe GPU uniform upload without manual byte management.
-use windjammer::*;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_struct_with_mixed_numeric_fields_generates_to_bytes() {
@@ -40,7 +11,7 @@ fn test_struct_with_mixed_numeric_fields_generates_to_bytes() {
             frame_count: u32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     // Should generate a to_bytes() method
     assert!(
@@ -70,7 +41,7 @@ fn test_all_f32_struct_generates_to_bytes() {
             falloff: f32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),
@@ -87,7 +58,7 @@ fn test_all_u32_struct_generates_to_bytes() {
             height: u32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),
@@ -104,7 +75,7 @@ fn test_struct_with_string_does_not_generate_to_bytes() {
             age: u32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         !output.contains("fn to_bytes"),
@@ -121,7 +92,7 @@ fn test_struct_with_vec_does_not_generate_to_bytes() {
             items: Vec<f32>,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         !output.contains("fn to_bytes"),
@@ -138,7 +109,7 @@ fn test_struct_with_bool_generates_to_bytes() {
             count: u32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),
@@ -162,7 +133,7 @@ fn test_struct_with_i32_generates_to_bytes() {
             scale: f32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),
@@ -184,7 +155,7 @@ fn test_struct_with_fixed_array_generates_to_bytes() {
             position: f32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),
@@ -206,7 +177,7 @@ fn test_to_bytes_returns_vec_u8() {
             value: f32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("-> Vec<u8>"),
@@ -220,7 +191,7 @@ fn test_empty_struct_does_not_generate_to_bytes() {
     let source = r#"
         struct Empty {}
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         !output.contains("fn to_bytes"),
@@ -237,7 +208,7 @@ fn test_to_bytes_with_extend_from_slice() {
             y: u32,
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("extend_from_slice"),
@@ -262,7 +233,7 @@ fn test_generated_to_bytes_compiles_with_rustc() {
             assert_eq!(bytes.len(), 16);
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     let _tmp = tempfile::tempdir().unwrap();
 
@@ -319,7 +290,7 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
                 "f32(1.0) and u32(1) must have different byte representations!");
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     let _tmp2 = tempfile::tempdir().unwrap();
 
@@ -365,7 +336,7 @@ fn test_struct_with_user_impl_still_gets_to_bytes() {
             }
         }
     "#;
-    let output = compile_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("fn to_bytes"),

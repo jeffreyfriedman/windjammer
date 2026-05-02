@@ -11,98 +11,8 @@
 /// whether we're generating an assignment target or inside a reference expression.
 ///
 /// Discovered via dogfooding: ecs/components.wj (ComponentArray<T>)
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_source_named(source: &str, _name: &str) -> String {
-    let dir = tempdir().expect("tempdir for compile_wj_source_named");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let out = dir.path().join("out");
-    std::fs::create_dir_all(&out).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            out.to_str().unwrap(),
-            "--no-cargo",
-            "--library",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let mut rs_content = String::new();
-    for search_dir in [&out, &dir.path().join("src")] {
-        if let Ok(entries) = std::fs::read_dir(search_dir) {
-            for entry in entries.flatten() {
-                if entry.path().extension().is_some_and(|e| e == "rs") {
-                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        rs_content.push_str(&content);
-                        rs_content.push('\n');
-                    }
-                }
-            }
-        }
-    }
-
-    rs_content
-}
-
-fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
-    let dir = tempdir().expect("tempdir for compile_wj_to_rust_and_check");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let out = dir.path().join("out");
-    std::fs::create_dir_all(&out).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            out.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = out.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        out.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--emit",
-            "metadata",
-            "--edition",
-            "2021",
-            "-o",
-        ])
-        .arg(dir.path().join("verify.rmeta"))
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_index_no_clone_on_assignment_target() {
@@ -136,7 +46,7 @@ fn main() {
 }
 "#;
 
-    let (rust_code, compiles) = compile_wj_to_rust_and_check(source);
+    let (rust_code, compiles) = test_utils::compile_single_check(source);
 
     // The assignment target must NOT have .clone()
     // Bad: self.items[index as usize].clone() = item
@@ -184,7 +94,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source_named(source, "borrow");
+    let rust_code = test_utils::compile_single(source);
 
     // Borrow context must NOT have .clone()
     // Bad: &self.items[index as usize].clone()
@@ -226,7 +136,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source_named(source, "mut_borrow");
+    let rust_code = test_utils::compile_single(source);
 
     // Mutable borrow context must NOT have .clone()
     // Bad: &mut self.items[index as usize].clone()

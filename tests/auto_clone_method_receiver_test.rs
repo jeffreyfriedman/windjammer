@@ -1,23 +1,5 @@
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_no_clone_on_method_receiver_in_ref_self() {
@@ -31,7 +13,7 @@ fn test_no_clone_on_method_receiver_in_ref_self() {
         }
     }
     "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     eprintln!("Generated:\n{}", output);
     assert!(
         !output.contains("self.available.clone()"),
@@ -60,7 +42,7 @@ fn test_no_clone_on_for_loop_iterable_in_ref_self() {
         }
     }
     "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     eprintln!("Generated:\n{}", output);
     assert!(
         !output.contains("self.systems.clone()"),
@@ -85,7 +67,7 @@ fn test_no_clone_on_generic_vec_in_ref_self() {
         }
     }
     "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     eprintln!("Generated:\n{}", output);
     assert!(
         !output.contains("self.available.clone()"),

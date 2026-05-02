@@ -3,33 +3,11 @@
 //! Bug: `MyStruct { cost: 1.0 }` generates `1.0_f64` when field type is f32, causing E0308.
 //! Goal: Infer float type from struct field definition when literal appears in field initializer.
 
-use windjammer::*;
+// Basic case: Struct with f32 field, bare 1.0 literal → 1.0_f32
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// Basic case: Struct with f32 field, bare 1.0 literal → 1.0_f32
 #[test]
 fn test_f32_field_bare_literal() {
     let source = r#"
@@ -42,7 +20,7 @@ pub fn create() -> MyStruct {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("cost: 1.0_f32") || rust.contains("cost: 1.0f32"),
         "Expected 1.0_f32 when field is f32. Got:\n{}",
@@ -70,7 +48,7 @@ pub fn origin() -> Vec3 {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     for (lit, field) in [("1.0", "x"), ("2.0", "y"), ("3.0", "z")] {
         assert!(
             rust.contains(&format!("{}: {}_f32", field, lit))
@@ -104,7 +82,7 @@ pub fn create_cells() -> Vec<AStarCell> {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("cost: 1.0_f32") || rust.contains("cost: 1.0f32"),
         "Expected 1.0_f32 in Vec::push. Got:\n{}",
@@ -130,7 +108,7 @@ pub fn create() -> Precise {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("value: 3.14159_f64") || rust.contains("value: 3.14159f64"),
         "Expected 3.14159_f64 when field is f64. Got:\n{}",
@@ -152,7 +130,7 @@ pub fn create() -> Mixed {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("low: 0.5_f32") || rust.contains("low: 0.5f32"),
         "low (f32) should get _f32. Got:\n{}",
@@ -183,7 +161,7 @@ pub fn default_keyframe() -> Keyframe {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         !rust.contains("_f64"),
         "Tuple fields (rotation, scale) should infer f32 from struct. Got:\n{}",
@@ -216,7 +194,7 @@ pub fn default_keyframe() -> Keyframe {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         !rust.contains("_f64"),
         "Tuple fields with type alias Quat should infer f32. Got:\n{}",
@@ -238,7 +216,7 @@ pub fn standalone() -> f64 {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("2.718_f64") || rust.contains("2.718f64"),
         "Unconstrained literal should default to f64. Got:\n{}",

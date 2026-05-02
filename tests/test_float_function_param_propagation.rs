@@ -8,26 +8,11 @@
 //! propagation may not be working correctly for impl methods.
 
 use tempfile::TempDir;
-use windjammer::{build_project, CompilationTarget};
+use windjammer::compiler::build_project;
+use windjammer::CompilationTarget;
 
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    let output_dir = test_dir.join("build");
-
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&input_file, source).expect("Failed to write source file");
-
-    build_project(&input_file, &output_dir, CompilationTarget::Rust, true)
-        .map_err(|e| format!("Windjammer compilation failed: {}", e))?;
-
-    let output_file = output_dir.join("test.rs");
-    let rust_code = std::fs::read_to_string(&output_file)
-        .map_err(|e| format!("Failed to read generated file: {}", e))?;
-
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_f32_param_propagates_to_literals() {
@@ -48,7 +33,7 @@ impl PerformanceStats {
 }
 "#;
 
-    let rust = compile_to_rust(source).unwrap();
+    let rust = test_utils::compile_single(source);
 
     // Literals should be inferred as f32 from dt: f32
     assert!(
@@ -76,7 +61,7 @@ pub fn compute(timestamp: f64) {
 }
 "#;
 
-    let rust = compile_to_rust(source).unwrap();
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("1000.0_f64") || rust.contains("1000.0f64"),
         "1000.0 should be f64 when used with timestamp: f64, got:\n{}",

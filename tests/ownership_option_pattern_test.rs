@@ -5,40 +5,8 @@
 //! - E0507: self.field.map(...) with &self → generate self.field.as_ref().map(...)
 //! - E0596: self.nodes.get_mut(id) → infer &mut self
 
-use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-    std::fs::create_dir(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(rust_file).expect("Failed to read generated Rust"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_option_pattern_if_let_borrows_self_field() {
@@ -68,7 +36,7 @@ impl Equipment {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -97,7 +65,7 @@ impl OctreeNode {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -137,7 +105,7 @@ impl SceneGraph {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };

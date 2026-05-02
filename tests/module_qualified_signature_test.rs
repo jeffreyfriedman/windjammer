@@ -17,12 +17,11 @@
 /// Fix: Register module-qualified names (`file_stem::func_name`) alongside
 /// simple names in `build_library_multipass`, and seed the global registry
 /// with dependency crate metadata signatures.
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
-
-fn wj_binary() -> &'static str {
-    env!("CARGO_BIN_EXE_wj")
-}
 
 #[test]
 fn test_multipass_module_qualified_autoborrow() {
@@ -59,7 +58,7 @@ pub fn render() {
 
     let out = dir.path().join("out");
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src.to_str().unwrap())
         .arg("--output")
@@ -138,7 +137,7 @@ pub fn render() {
 
     let out = dir.path().join("out");
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src.to_str().unwrap())
         .arg("--output")

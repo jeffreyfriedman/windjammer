@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 /// TDD: Verify that structs containing String fields do NOT auto-derive Copy.
 ///
@@ -21,34 +24,6 @@ fn find_rs_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         }
     }
     results
-}
-
-fn compile_wj_to_rust(wj_code: &str) -> String {
-    let tmp = TempDir::new().unwrap();
-    let input = tmp.path().join("test.wj");
-    let out_dir = tmp.path().join("out");
-    fs::create_dir_all(&out_dir).unwrap();
-    fs::write(&input, wj_code).unwrap();
-
-    let wj = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj)
-        .arg("build")
-        .arg(&input)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    assert!(
-        output.status.success(),
-        "wj compilation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rs_files = find_rs_files(&out_dir);
-    assert!(!rs_files.is_empty(), "No .rs file generated");
-    fs::read_to_string(&rs_files[0]).unwrap()
 }
 
 fn compile_wj_library(files: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
@@ -100,7 +75,7 @@ pub struct Name {
     pub value: string,
 }
 "#;
-    let rust = compile_wj_to_rust(code);
+    let rust = test_utils::compile_single(code);
     // The struct should derive Debug, Clone, but NOT Copy
     assert!(
         !rust.contains("Copy"),
@@ -121,7 +96,7 @@ pub struct InputBinding {
     pub key_code: i32,
 }
 "#;
-    let rust = compile_wj_to_rust(code);
+    let rust = test_utils::compile_single(code);
 
     // Neither struct should derive Copy
     // InputAction has String, InputBinding has InputAction (which has String)
@@ -415,7 +390,7 @@ pub struct Point {
     pub y: f32,
 }
 "#;
-    let rust = compile_wj_to_rust(code);
+    let rust = test_utils::compile_single(code);
     // All fields are f32 (Copy), so struct should derive Copy
     assert!(
         rust.contains("Copy"),

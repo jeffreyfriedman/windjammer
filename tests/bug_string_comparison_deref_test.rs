@@ -8,48 +8,11 @@
 //
 // This causes E0277 errors: "can't compare `&String` with `String`"
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
-
-fn compile_wj_test(source: &str) -> (bool, String, String) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_id = format!("test_{}_{}", std::process::id(), test_id);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let test_file = temp_dir.join(format!("{}.wj", unique_id));
-    fs::write(&test_file, source).expect("Failed to write temp file");
-
-    let output_dir = temp_dir.join(format!("output_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            test_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let rs_file = output_dir.join(format!("{}.rs", unique_id));
-    let rust_code = fs::read_to_string(&rs_file).unwrap_or_default();
-
-    // Cleanup
-    let _ = fs::remove_file(&test_file);
-
-    (success, rust_code, stderr)
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -72,7 +35,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -134,7 +98,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -205,7 +170,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(
@@ -258,7 +224,8 @@ fn main() {
 }
 "#;
 
-    let (success, rust_code, stderr) = compile_wj_test(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
+    let stderr = if !success { &rust_code } else { "" };
 
     if !success {
         panic!(

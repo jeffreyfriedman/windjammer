@@ -1,21 +1,7 @@
 //! E0596 / ownership: methods that call `&mut self` methods on `self.field` must infer `&mut self`.
 
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_calling_mut_method_on_sub_object() {
@@ -40,7 +26,7 @@ impl Game {
     }
 }
 "#;
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
     assert!(
         code.contains("fn poll_input(&mut self"),
         "poll_input should be &mut self since it calls a mutating method on sub-object. Got:\n{}",
@@ -75,7 +61,7 @@ impl Kestrel {
     }
 }
 "#;
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
     assert!(
         code.contains("fn respond_to_player_choice(&mut self"),
         "respond_to_player_choice should be &mut self (match arms call mutating sub-object methods). Got:\n{}",

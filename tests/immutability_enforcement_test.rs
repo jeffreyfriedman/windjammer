@@ -4,34 +4,10 @@
 ///
 /// Rationale: tests document actual codegen so CI is green; tightening immutability belongs in
 /// the compiler with new diagnostics.
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Compile a .wj file and return (exit_code, stdout, stderr)
-fn compile_wj(source: &str) -> (i32, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path().to_path_buf();
-    let wj_file = output_dir.join("test.wj");
-
-    fs::write(&wj_file, source).expect("Failed to write test file");
-
-    let result = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo") // Don't run cargo, we just want Windjammer errors
-        .output()
-        .expect("Failed to execute compiler");
-
-    let exit_code = result.status.code().unwrap_or(-1);
-    let stdout = String::from_utf8_lossy(&result.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&result.stderr).to_string();
-
-    (exit_code, stdout, stderr)
-}
-
 // ==========================================
 // Direct reassignment errors
 // ==========================================
@@ -39,7 +15,7 @@ fn compile_wj(source: &str) -> (i32, String, String) {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_direct_reassignment_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = compile_wj(
+    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let x = 5
@@ -56,7 +32,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_direct_reassignment_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let mut x = 5
@@ -78,7 +54,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_compound_assignment_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = compile_wj(
+    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let count = 0
@@ -92,7 +68,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_compound_assignment_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let mut count = 0
@@ -114,7 +90,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_field_mutation_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = compile_wj(
+    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
         r#"
 struct Point { x: int, y: int }
 
@@ -130,7 +106,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_field_mutation_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 struct Point { x: int, y: int }
 
@@ -154,7 +130,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_mutating_method_call_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = compile_wj(
+    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let items: Vec<int> = Vec::new()
@@ -168,7 +144,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_mut_mutating_method_call_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let mut items: Vec<int> = Vec::new()
@@ -190,7 +166,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_immutability_in_impl_methods_wj_succeeds() {
-    let (exit_code, _stdout, _stderr) = compile_wj(
+    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
         r#"
 struct Counter { value: int }
 
@@ -212,7 +188,7 @@ impl Counter {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_read_only_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let x = 5
@@ -230,7 +206,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_let_non_mutating_method_is_ok() {
-    let (exit_code, _stdout, stderr) = compile_wj(
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let items: Vec<int> = Vec::new()

@@ -5,46 +5,10 @@
 /// 2. Emit W0010 warning for non-canonical string types
 /// 3. Exempt extern fn declarations from the warning
 /// 4. Generate identical codegen regardless of which spelling was used
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Compile .wj source and return (generated_rust, stderr_output)
-fn compile_wj(source: &str, test_name: &str) -> (String, String) {
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_string_unify_{}_{}",
-        test_name,
-        std::process::id()
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rust_code = std::fs::read_to_string(&main_rs).unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    (rust_code, stderr)
-}
-
 // --- W0010 Warning Tests ---
 
 #[test]
@@ -58,7 +22,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_str_param");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in parameter type\nStderr:\n{}",
@@ -82,7 +46,7 @@ pub fn main() {
     let x = make_name()
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_String_return");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `String` in return type\nStderr:\n{}",
@@ -101,7 +65,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_ref_str_param");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     // Should fire either W0010 or W0001 (explicit reference) -- at minimum one warning
     assert!(
         stderr.contains("W0010") || stderr.contains("W0001"),
@@ -121,7 +85,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_no_fire_string");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         !stderr.contains("W0010"),
         "W0010 should NOT fire for canonical `string` type\nStderr:\n{}",
@@ -139,7 +103,7 @@ pub fn main() {
     let x = 42
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_extern_exempt");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         !stderr.contains("W0010"),
         "W0010 should NOT fire for extern fn declarations\nStderr:\n{}",
@@ -189,8 +153,8 @@ pub fn main() {
     bag.add("apple")
 }
 "#;
-    let (rust_str, _) = compile_wj(source_str, "normalize_str");
-    let (rust_string, _) = compile_wj(source_string, "normalize_string");
+    let (rust_str, _) = test_utils::compile_via_cli_with_stderr(source_str);
+    let (rust_string, _) = test_utils::compile_via_cli_with_stderr(source_string);
 
     assert!(
         !rust_str.is_empty(),
@@ -232,7 +196,7 @@ pub fn main() {
     let p = Person::new("Alice", "Engineer")
 }
 "#;
-    let (rust, _) = compile_wj(source, "struct_field_str");
+    let (rust, _) = test_utils::compile_via_cli_with_stderr(source);
     assert!(!rust.is_empty(), "Should generate code");
     // Struct fields should be String (owned)
     assert!(
@@ -256,7 +220,7 @@ pub fn main() {
     let names = collect_names()
 }
 "#;
-    let (rust, _) = compile_wj(source, "vec_str_codegen");
+    let (rust, _) = test_utils::compile_via_cli_with_stderr(source);
     assert!(!rust.is_empty(), "Should generate code");
     assert!(
         rust.contains("Vec<String>"),
@@ -290,7 +254,7 @@ pub fn main() {
     reg.register("test", 42)
 }
 "#;
-    let (rust, _) = compile_wj(source, "hashmap_string_key");
+    let (rust, _) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         !rust.is_empty(),
         "Should generate code for HashMap<string, i32>"
@@ -323,7 +287,7 @@ pub fn main() {
     let d = Dog { breed: "Labrador" }
 }
 "#;
-    let (rust, _) = compile_wj(source, "trait_string_return");
+    let (rust, _) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         !rust.is_empty(),
         "Should generate code for trait with string return"
@@ -343,7 +307,7 @@ pub fn main() {
     let c = Config { name: "test" }
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_struct_field");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in struct field\nStderr:\n{}",
@@ -362,7 +326,7 @@ pub fn main() {
     let x = get_name()
 }
 "#;
-    let (_rust, stderr) = compile_wj(source, "w0010_return_str");
+    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in return type\nStderr:\n{}",

@@ -9,50 +9,11 @@
 //! - match tuple patterns with Copy/non-Copy elements
 //! - ref mut only when scrutinee is &mut AND binding is mutated
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, wj_source).expect("write");
-    fs::create_dir_all(&out_dir).expect("create dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let src_main = out_dir.join("src").join("main.rs");
-    let test_rs = out_dir.join("test.rs");
-    let content = if src_main.exists() {
-        fs::read_to_string(src_main)
-    } else if test_rs.exists() {
-        fs::read_to_string(test_rs)
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No generated Rust file",
-        ))
-    };
-    content.map_err(|e| e.to_string())
-}
 
 fn rust_compiles(rust_code: &str) -> bool {
     let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -88,7 +49,7 @@ pub fn process(opt: Option<String>) -> usize {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // opt is Option<String> (Owned) - s is owned, no ref mut
     assert!(result.contains("Some(s)") || result.contains("Some(ref s)"));
     assert!(
@@ -110,7 +71,7 @@ pub fn process(opt: Option<String>) -> usize {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -124,7 +85,7 @@ pub fn process(opt: Option<Vec<i32>>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // v is owned Option - arr needs mut for push. Emit Some(mut arr)
     assert!(result.contains("Some(mut arr)") || result.contains("Some(arr)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
@@ -141,7 +102,7 @@ pub fn unwrap_default(opt: Option<String>) -> usize {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(
         result.contains("Some(s)"),
         "Owned scrutinee: no ref. Got: {}",
@@ -163,7 +124,7 @@ pub fn process(opt: Option<Vec<i32>>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(mut v)") || result.contains("Some(v)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -188,7 +149,7 @@ impl Container {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -206,7 +167,7 @@ impl Container {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -224,7 +185,7 @@ pub fn unwrap(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(x)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -239,7 +200,7 @@ pub fn unwrap(opt: Option<String>) -> usize {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(s)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -254,7 +215,7 @@ pub fn process(opt: Option<Vec<i32>>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(mut v)") || result.contains("Some(v)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -276,7 +237,7 @@ pub fn process(items: Vec<(i32, i32)>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // items[0] yields &(i32, i32), (i32, i32) is Copy → x, y owned
     assert!(result.contains("(x, y)") || result.contains("(ref x, ref y)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
@@ -296,7 +257,7 @@ pub fn process(items: Vec<(i32, String)>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // items[0] is &(i32, String), id is Copy→owned, name is non-Copy→ref
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -313,7 +274,7 @@ pub fn process(pair: (i32, String)) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("(a, b)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -332,7 +293,7 @@ pub fn first(items: Vec<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -350,7 +311,7 @@ pub fn process(items: Vec<Option<String>>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -369,7 +330,7 @@ pub fn is_none(opt: Option<i32>) -> bool {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("None"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -384,7 +345,7 @@ pub fn process(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(x)"));
     assert!(result.contains("_"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
@@ -401,7 +362,7 @@ pub fn process(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -416,7 +377,7 @@ pub fn process(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     // Rust doesn't support guards in if-let, so this desugars to match with guard
     assert!(
         result.contains("if let") || result.contains("match"),
@@ -436,7 +397,7 @@ pub fn process(res: Result<i32, String>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -455,7 +416,7 @@ pub fn process(opt: Option<Option<i32>>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -468,7 +429,7 @@ pub fn process(t: (i32, i32, i32)) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("(a, b, c)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -487,7 +448,7 @@ pub fn process(e: E) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -508,7 +469,7 @@ pub fn process(m: Map) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -523,7 +484,7 @@ pub fn process(opt: Option<i32>) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -537,7 +498,7 @@ pub fn ensure_one(opt: Option<Vec<i32>>) {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
 
@@ -550,7 +511,7 @@ pub fn sum(pair: (i32, i32)) -> i32 {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("(a, b)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -565,7 +526,7 @@ pub fn len(opt: Option<String>) -> usize {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(result.contains("Some(s)"));
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }
@@ -581,6 +542,6 @@ pub fn clone_inner(opt: Option<String>) -> Option<String> {
     }
 }
 "#;
-    let result = compile_to_rust(src).expect("compile");
+    let result = test_utils::compile_single_result(src).expect("compile");
     assert!(rust_compiles(&result), "Generated Rust must compile");
 }

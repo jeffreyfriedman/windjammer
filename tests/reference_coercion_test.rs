@@ -8,54 +8,8 @@
 //! 3. Auto-ref for method calls: r.process() when process takes owned self → (*r).process()
 //! 4. Auto-deref for binary ops: let x = &5; x + y → *x + y
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Pattern 1: Auto-borrow for reference parameters
@@ -80,7 +34,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("process_items(&v)"),
@@ -105,7 +60,8 @@ pub fn main() -> usize {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("print_len(&text)") || generated.contains("print_len(text"),
@@ -132,7 +88,8 @@ pub fn main() -> f32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     // Should generate distance(&points[0]) or distance(points[0].clone()) depending on Copy
     // Point has all Copy fields, so points[0] may be auto-cloned. For &Point param we need &.
@@ -164,7 +121,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("double(*r)") || generated.contains("double(r)"),
@@ -197,7 +155,8 @@ pub fn main() -> f32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("scale(*r") || generated.contains("scale(r"),
@@ -231,7 +190,8 @@ pub fn main() -> u32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     // Vec::get returns Option<&T>, so v is &u32. add_one expects u32.
     assert!(
@@ -274,7 +234,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     let ok_pattern = generated.contains("(*r).get()")
         || generated.contains("r.clone().get()")
@@ -310,7 +271,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("*r + y") || generated.contains("r + y"),
@@ -332,7 +294,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("*r * 2") || generated.contains("r * 2"),
@@ -354,7 +317,8 @@ pub fn main() -> bool {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("*r == 42") || generated.contains("r == 42"),
@@ -385,7 +349,8 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     // Ideal: compute(&v, *ri). Until full coercion, generated code may leave
     // rustc to error (E0308) which is still a useful regression snapshot.
@@ -423,7 +388,7 @@ pub fn main() -> i32 {
 }
 "#;
 
-    let (success, _, err) = compile_and_verify(code);
+    let (success, _, err) = test_utils::compile_via_cli(code);
 
     assert!(
         success,
@@ -442,7 +407,8 @@ pub fn has_item(items: Vec<i32>, search: i32) -> bool {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     // Vec::contains expects &T, we pass T. Need &search
     assert!(
@@ -467,7 +433,8 @@ pub fn main() -> bool {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         !generated.contains("check(&\"hello\")"),
@@ -494,7 +461,8 @@ pub fn main() -> string {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     assert!(
         generated.contains("process(&cfg)") || generated.contains("process(cfg"),
@@ -514,7 +482,7 @@ pub fn get_value(opt: &Option<i32>) -> i32 {
 }
 "#;
 
-    let (success, _, err) = compile_and_verify(code);
+    let (success, _, err) = test_utils::compile_via_cli(code);
 
     // Option::unwrap takes self. &Option<T> has .unwrap() that consumes - actually
     // Option impl has unwrap(&self) that returns T when T: Copy. So this might work.

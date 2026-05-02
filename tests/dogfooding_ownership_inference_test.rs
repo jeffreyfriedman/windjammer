@@ -13,34 +13,8 @@
 /// 2. Copy type in match-bound context: stack.remove(to_remove) generates &to_remove
 /// 3. Copy type self.field passed to method: transition.matches(self.current_state) generates &self.current_state
 /// 4. Vec::remove with usize variable: self.dense.remove(idx) generates &idx
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_wj(source: &str) -> (String, String) {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    fs::write(&test_file, source).unwrap();
-
-    let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    let generated_file = temp_dir.path().join("build").join("test.rs");
-    let generated = fs::read_to_string(&generated_file).unwrap_or_else(|_| {
-        panic!(
-            "Failed to read generated file. Compiler output:\n{}",
-            String::from_utf8_lossy(&wj_output.stderr)
-        )
-    });
-
-    let stderr = String::from_utf8_lossy(&wj_output.stderr).to_string();
-    (generated, stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // TEST 1: Factory Pattern - Quest system (narrative/quest.wj)
@@ -82,7 +56,7 @@ impl Quest {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // The factory function should pass String args directly, NOT with &
     assert!(
@@ -139,7 +113,7 @@ pub fn create_fetch_quest(id: string, title: string, item_id: string, quantity: 
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // format! returns owned String - should NOT be &format!(...)
     assert!(
@@ -209,7 +183,7 @@ pub fn remove_items(slots: &mut Vec<Option<ItemStack>>, quantity: u32) -> u32 {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // to_remove is u32 (Copy), should NOT be &to_remove
     assert!(
@@ -261,7 +235,7 @@ impl StateMachine {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // self.current_state is i32 (Copy), should NOT be &self.current_state
     assert!(
@@ -313,7 +287,7 @@ impl SparseSet {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // sparse_idx_usize is usize, Vec::remove takes usize by value
     assert!(
@@ -422,7 +396,7 @@ impl Terrain {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // HeightMap::set mutates self.data[...], so it MUST be &mut self
     assert!(
@@ -520,7 +494,7 @@ impl SceneManager {
 }
 "#;
 
-    let (generated, _) = compile_wj(source);
+    let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
     // The match on self.current_scene_id() should NOT directly appear as the match scrutinee
     // when the arm body mutates self. Instead, the compiler should extract into an owned temp.
@@ -640,7 +614,7 @@ impl System for RenderSystem {
 }
 "#;
 
-    let (generated, stderr) = compile_wj(source);
+    let (generated, stderr) = test_utils::compile_via_cli_with_stderr(source);
     eprintln!("=== Generated Code ===\n{}", generated);
     eprintln!("=== Compiler Stderr ===\n{}", stderr);
 
@@ -740,7 +714,7 @@ pub trait Configurable {
 }
 "#;
 
-    let (generated, stderr) = compile_wj(source);
+    let (generated, stderr) = test_utils::compile_via_cli_with_stderr(source);
     eprintln!("=== Generated Code ===\n{}", generated);
     eprintln!("=== Compiler Stderr ===\n{}", stderr);
 
@@ -841,7 +815,7 @@ impl Inventory {
 }
 "#;
 
-    let (generated, stderr) = compile_wj(source);
+    let (generated, stderr) = test_utils::compile_via_cli_with_stderr(source);
     eprintln!("=== Generated Code ===\n{}", generated);
     eprintln!("=== Compiler Stderr ===\n{}", stderr);
 
@@ -971,7 +945,7 @@ pub fn check_pool(pool: ResourcePool) -> i32 {
 }
 "#;
 
-    let (generated, stderr) = compile_wj(source);
+    let (generated, stderr) = test_utils::compile_via_cli_with_stderr(source);
     eprintln!("=== Generated Code ===\n{}", generated);
     eprintln!("=== Compiler Stderr ===\n{}", stderr);
 

@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Block Expression Semicolons — Intermediate vs Last Statement
 ///
@@ -15,12 +18,7 @@ use anyhow::Result;
 /// (even if not an Expression type, e.g., Statement::If) should preserve expression context
 /// so inner branches retain correct semicolon behavior.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -94,7 +92,7 @@ version = "0.1.0"
 
     // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -178,7 +176,7 @@ version = "0.1.0"
 
     // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")

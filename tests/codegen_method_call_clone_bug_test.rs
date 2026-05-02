@@ -1,15 +1,13 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 /// TDD: Method call results should NEVER get .clone(), even in complex contexts
 ///
 /// Bug: In Pong, `self.left_paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))`
 /// generates `.clone()` on the method call results, which is wrong for Copy types (bool).
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -53,7 +51,7 @@ impl Game {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),

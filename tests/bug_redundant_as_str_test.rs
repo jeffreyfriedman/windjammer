@@ -1,5 +1,7 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 /// TDD Test: Redundant .as_str() on inferred &str parameters
 ///
 /// Bug: When a string parameter is inferred as &str, calling .as_str() on it
@@ -8,10 +10,6 @@ use std::path::PathBuf;
 /// Fix: Reject `.as_str()` at compile time (no-rust-leakage rule). The compiler
 /// emits a helpful error directing users to use `match ext { ... }` instead.
 use std::process::Command;
-
-fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 fn test_as_str_is_rejected_by_wj_cli() {
@@ -46,7 +44,7 @@ impl AssetType {
     fs::create_dir_all(&output_dir).unwrap();
     fs::write(&temp_file, source).unwrap();
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             "--output",
@@ -108,7 +106,7 @@ impl FileType {
     fs::create_dir_all(&output_dir).unwrap();
     fs::write(&temp_file, source).unwrap();
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             "--output",

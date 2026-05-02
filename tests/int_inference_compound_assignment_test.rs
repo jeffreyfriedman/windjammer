@@ -9,30 +9,12 @@
 //! - f32 += literal -> (float inference, not int - skip)
 //! - vec[i] += literal where Vec<u32> -> literal must be u32
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 fn rustc_compile(rust_code: &str) -> (bool, String) {
     let dir = tempdir().expect("tempdir for rustc");
@@ -64,7 +46,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("1_u32"),
@@ -99,7 +81,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("42_i64"),
@@ -129,7 +111,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("1_u32"),
@@ -159,7 +141,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_single_file(source);
+    let rust_code = test_utils::compile_single(source);
 
     assert!(
         rust_code.contains("1_u32"),

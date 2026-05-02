@@ -1,37 +1,8 @@
 // Test: If-else expression context tracking
 // Ensures if-else branches don't get semicolons when used as values
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    // Read the generated file
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -44,7 +15,7 @@ fn test_if_else_in_let_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT have semicolons in branches
     assert!(
@@ -89,7 +60,7 @@ fn test_if_else_with_field_access_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // This is the EXACT bug case from character_controller.rs
     // Should NOT have semicolons in branches
@@ -116,7 +87,7 @@ fn test_if_else_in_return_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Branches should NOT have semicolons
     assert!(
@@ -140,7 +111,7 @@ fn test_if_else_in_function_returning_unit_has_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // This is a statement, not an expression, so semicolons are OK
     // (but Windjammer might optimize this anyway)
@@ -166,7 +137,7 @@ fn test_nested_if_else_in_let_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Inner branches should NOT have semicolons
     assert!(
@@ -190,7 +161,7 @@ fn test_if_else_in_assignment_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Branches should NOT have semicolons when used as RHS of assignment
     assert!(
@@ -217,7 +188,7 @@ fn test_if_else_block_expressions_no_semicolons() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Last expressions in blocks should NOT have semicolons
     assert!(

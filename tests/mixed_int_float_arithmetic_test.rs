@@ -1,57 +1,8 @@
-/// TDD: Mixed integer/float arithmetic auto-casting
-///
-/// Windjammer Philosophy: The compiler should automatically cast integers
-/// to floats in mixed arithmetic expressions. Game code commonly mixes
-/// int and float types (e.g., grid_x + 1 used as f32 parameter).
-///
-/// Common patterns that must compile:
-/// - f32_field + i32_var → i32_var as f32
-/// - i32_var * f32_literal → i32_var as f32
-/// - usize_var + f32_field → usize_var as f32
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::*;
+// Explicit cast + integer literal: `x as f32 + 1` should cast `1` to f32 too
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let mut generator = codegen::CodeGenerator::new(signatures, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp = tempdir().expect("tempdir");
-    let test_dir = temp.path();
-    let rs_file = test_dir.join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .current_dir(test_dir)
-        .arg("test.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
-}
-
-/// Explicit cast + integer literal: `x as f32 + 1` should cast `1` to f32 too
 #[test]
 fn test_explicit_cast_plus_int_literal() {
     let source = r#"
@@ -60,9 +11,11 @@ pub fn compute(x: i32) -> f32 {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "`x as f32 + 1` should auto-cast literal to f32. stderr: {}\n\nGenerated:\n{}",
@@ -85,9 +38,11 @@ impl Camera {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "`usize + f32` should auto-cast usize to f32. stderr: {}\n\nGenerated:\n{}",
@@ -120,9 +75,11 @@ impl Grid {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "Function call should auto-cast i32 args to f32. stderr: {}\n\nGenerated:\n{}",
@@ -146,9 +103,11 @@ impl Physics {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "i32 * f32 should auto-cast. stderr: {}\n\nGenerated:\n{}",
@@ -171,9 +130,11 @@ impl Grid {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "i32 * f32_literal should auto-cast. stderr: {}\n\nGenerated:\n{}",

@@ -7,71 +7,12 @@
 //! - Owned parameters
 //! - Method chaining
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_compiler())
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // &self METHODS
@@ -96,7 +37,7 @@ pub fn use_counter(c: &Counter) -> i32 {
     c.get()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "&self method should compile. Error: {}", err);
 }
 
@@ -119,7 +60,7 @@ impl Counter {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "&self chain should compile. Error: {}", err);
 }
 
@@ -146,7 +87,7 @@ pub fn use_counter(c: &mut Counter) {
     c.increment()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "&mut self method should compile. Error: {}", err);
 }
 
@@ -166,7 +107,7 @@ impl Builder {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "&mut self returning self should compile. Error: {}",
@@ -197,7 +138,7 @@ pub fn use_wrapper(w: Wrapper) -> i32 {
     w.unwrap()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Consuming self should compile. Error: {}", err);
 }
 
@@ -225,7 +166,7 @@ pub fn get_origin() -> Point {
     Point::origin()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Static method should compile. Error: {}", err);
 }
 
@@ -249,7 +190,7 @@ pub fn create_point() -> Point {
     Point::new(10, 20)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Static method with params should compile. Error: {}",
@@ -276,7 +217,7 @@ impl Container {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method with borrowed param should compile. Error: {}",
@@ -308,7 +249,7 @@ impl Container {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method with owned param should compile. Error: {}",
@@ -328,7 +269,7 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
     items.iter().filter(|x| **x > 0).count() as i32
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method chaining on Vec should compile. Error: {}",
@@ -344,7 +285,7 @@ pub fn chain_string(s: &string) -> string {
     s.trim().to_uppercase()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method chaining on String should compile. Error: {}",
@@ -382,7 +323,7 @@ impl Outer {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Method on field should compile. Error: {}", err);
 }
 
@@ -409,7 +350,7 @@ pub fn use_container(c: &Container<i32>) -> i32 {
     c.get()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Generic method call should compile. Error: {}",
@@ -440,7 +381,7 @@ pub fn get_ref(c: &Container) -> i32 {
     *c.value_ref()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method returning ref should compile. Error: {}",
@@ -471,7 +412,7 @@ pub fn use_calc(c: &Calculator) -> i32 {
     c.add_multiply(2, 3)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Method with multiple params should compile. Error: {}",
@@ -491,7 +432,7 @@ pub fn abs_value(n: i32) -> i32 {
     n.abs()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Method on i32 should compile. Error: {}", err);
 }
 
@@ -503,6 +444,6 @@ pub fn string_len(s: &string) -> usize {
     s.len()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Method on string should compile. Error: {}", err);
 }

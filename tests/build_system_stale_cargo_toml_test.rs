@@ -12,16 +12,10 @@
 use std::fs;
 use tempfile::TempDir;
 
-/// Helper: get the wj binary path from the test binary location
-fn get_wj_binary() -> std::path::PathBuf {
-    std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj")
-}
+// Helper: get the wj binary path from the test binary location
+
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -115,7 +109,7 @@ opt-level = 3
     .unwrap();
 
     // Run wj build
-    let wj_binary = get_wj_binary();
+    let wj_binary = test_utils::wj_binary();
     let output = std::process::Command::new(&wj_binary)
         .args([
             "build",
@@ -182,7 +176,7 @@ pub fn add(a: int, b: int) -> int {
     )
     .unwrap();
 
-    let wj_binary = get_wj_binary();
+    let wj_binary = test_utils::wj_binary();
     let output = std::process::Command::new(&wj_binary)
         .args([
             "build",
