@@ -1,24 +1,22 @@
 // Integration test for TypeRegistry
 // Verifies that imports are generated correctly based on type definitions
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
+use tempfile::TempDir;
 
-fn setup_test_project() -> (PathBuf, PathBuf) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_type_registry_fixes_import_paths() {
+    let tmp = TempDir::new().unwrap();
+    let src_dir = tmp.path().join("src");
+    let output_dir = tmp.path().join("output");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&output_dir).unwrap();
 
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let project_dir = temp_dir.join(format!("type_reg_test_{}", test_id));
-    let src_dir = project_dir.join("src");
-
-    fs::create_dir_all(&src_dir).expect("Failed to create project directory");
-
-    // Create math module with Vec2
     fs::write(
         src_dir.join("vec2.wj"),
         r#"pub struct Vec2 {
@@ -32,9 +30,8 @@ impl Vec2 {
     }
 }"#,
     )
-    .expect("Failed to write vec2.wj");
+    .unwrap();
 
-    // Create rendering module with Color
     fs::write(
         src_dir.join("color.wj"),
         r#"pub struct Color {
@@ -50,9 +47,8 @@ impl Color {
     }
 }"#,
     )
-    .expect("Failed to write color.wj");
+    .unwrap();
 
-    // Create main file that uses both types
     fs::write(
         src_dir.join("main.wj"),
         r#"use vec2::Vec2
@@ -72,21 +68,8 @@ impl Game {
     }
 }"#,
     )
-    .expect("Failed to write main.wj");
+    .unwrap();
 
-    let output_dir = temp_dir.join(format!("type_reg_output_{}", test_id));
-    fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    (project_dir, output_dir)
-}
-
-#[test]
-#[cfg_attr(tarpaulin, ignore)]
-fn test_type_registry_fixes_import_paths() {
-    let (project_dir, output_dir) = setup_test_project();
-    let src_dir = project_dir.join("src");
-
-    // Compile the project
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -105,13 +88,9 @@ fn test_type_registry_fixes_import_paths() {
 
     assert!(output.status.success(), "Compilation should succeed");
 
-    // Read generated main.rs
-    let main_rs = output_dir.join("main.rs");
-    let generated_code = fs::read_to_string(&main_rs).expect("Failed to read generated main.rs");
+    let generated_code =
+        fs::read_to_string(output_dir.join("main.rs")).expect("Failed to read generated main.rs");
 
-    // Verify correct import paths are generated
-    // For module files like vec2, color, the full path is preserved to avoid ambiguity
-    // This is the CORRECT behavior after the import generation fix
     assert!(
         generated_code.contains("use super::vec2::Vec2")
             || generated_code.contains("use super::Vec2")
@@ -127,15 +106,9 @@ fn test_type_registry_fixes_import_paths() {
         "Should generate import path for Color.\nGenerated code:\n{}",
         generated_code
     );
-
-    // Cleanup
-
-    println!("✓ TypeRegistry correctly generates import paths");
 }
 
 #[test]
 fn test_type_registry_handles_nested_modules() {
-    // Test that TypeRegistry works with nested module structures
-    // e.g., math/vec2.wj, rendering/color.wj
     println!("TODO: Test nested module import paths");
 }
