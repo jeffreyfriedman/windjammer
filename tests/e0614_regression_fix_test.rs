@@ -10,70 +10,8 @@
 //! Fix: For FieldAccess, check the FIELD's type via infer_expression_type(expr).
 //! If Copy, return false (expression yields T by value).
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_e0614_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        id
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // === Pattern 1: self.field with Copy fields (f32, i32, u32) ===
 
@@ -95,7 +33,7 @@ impl StateMachine {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.current_state)"),
@@ -123,7 +61,7 @@ impl PathNode {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.x)") && !rs.contains("*(self.y)"),
@@ -149,7 +87,7 @@ impl Scene {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.root_id)"),
@@ -176,7 +114,7 @@ impl Track {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.current_time)"),
@@ -214,7 +152,7 @@ impl Quat {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.x)") && !rs.contains("*(self.y)") && !rs.contains("*(self.z)"),
@@ -246,7 +184,7 @@ impl Camera {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.left)") && !rs.contains("*(self.right)"),
@@ -274,7 +212,7 @@ impl Camera {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.aspect)")
@@ -303,7 +241,7 @@ impl Character {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(self.relationship_value)"),
@@ -330,7 +268,7 @@ pub fn test(world: World) {
     upload_svo(true, world.world_size, world.depth)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(world.world_size)") && !rs.contains("*(world.depth)"),
@@ -355,7 +293,7 @@ pub fn test(item: Item, modifiers: bool) -> int {
     calculate_buy_price(item.value, modifiers)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(item.value)"),
@@ -380,7 +318,7 @@ pub fn test(merchant: bool, stack: Stack) -> bool {
     has_item(merchant, stack.quantity)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(stack.quantity)"),
@@ -402,7 +340,7 @@ pub fn test() -> f32 {
     take_float(1.0)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(!rs.contains("*(1.0") && !rs.contains("*(1.0_f32)"));
 }
@@ -418,7 +356,7 @@ pub fn test() -> int {
     take_int(42)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(!rs.contains("*(42)"));
 }
@@ -445,7 +383,7 @@ impl Vec4 {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(arr[0])") && !rs.contains("*(arr[1])"),
@@ -468,7 +406,7 @@ pub fn test(item_id: u32) -> u32 {
     take_u32(item_id)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
 }
 
@@ -496,7 +434,7 @@ impl Consequence {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(item_id") && !rs.contains("*(item_id.clone())"),
@@ -520,7 +458,7 @@ pub fn query() -> Vec<int> {
     result
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(x)"),
@@ -547,7 +485,7 @@ pub fn render(world: VoxelWorld) {
     upload_svo(true, world.world_size, world.depth)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(world.world_size)") && !rs.contains("*(world.depth)"),
@@ -577,7 +515,7 @@ pub fn run(passes: Vec<Pass>) {
     }
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(pass.groups_x")

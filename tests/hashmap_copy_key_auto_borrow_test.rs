@@ -1,13 +1,9 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-
-fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj")
-}
 
 fn compile_and_check(test_name: &str, wj_source: &str, expected_patterns: &[&str]) {
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,7 +16,7 @@ fn compile_and_check(test_name: &str, wj_source: &str, expected_patterns: &[&str
     let test_file = test_dir.join(format!("{}.wj", test_name));
     fs::write(&test_file, wj_source).unwrap();
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .current_dir(&test_dir)
         .arg("build")
         .arg(&test_file)

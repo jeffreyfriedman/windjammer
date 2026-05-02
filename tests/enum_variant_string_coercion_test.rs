@@ -8,62 +8,8 @@
 //! Expected: `GameEvent::ItemPickup("Health Potion".to_string())`
 //! Actual:   `GameEvent::ItemPickup("Health Potion")`
 
-use std::process::Command;
-
-fn compile_wj_to_rust(wj_source: &str, _test_name: &str) -> (String, bool) {
-    let _root = tempfile::tempdir().unwrap();
-    let root = _root.path();
-    let input_dir = root.join("in");
-    let output_dir = root.join("out");
-    std::fs::create_dir_all(&input_dir).unwrap();
-    std::fs::create_dir_all(&output_dir).unwrap();
-
-    let wj_file = input_dir.join("test.wj");
-    std::fs::write(&wj_file, wj_source).unwrap();
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-
-    let _output = Command::new(wj_binary)
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            output_dir.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let rs_file = output_dir.join("test.rs");
-    let rust_code = std::fs::read_to_string(&rs_file).unwrap_or_default();
-
-    // Try to compile with rustc
-    let compiles = if !rust_code.is_empty() {
-        let bin_output = output_dir.join("test_bin");
-        let rustc_output = Command::new("rustc")
-            .args([
-                "--edition",
-                "2021",
-                "--crate-type",
-                "bin",
-                rs_file.to_str().unwrap(),
-                "-o",
-                bin_output.to_str().unwrap(),
-            ])
-            .output()
-            .expect("Failed to run rustc");
-        if !rustc_output.status.success() {
-            eprintln!(
-                "rustc stderr: {}",
-                String::from_utf8_lossy(&rustc_output.stderr)
-            );
-        }
-        rustc_output.status.success()
-    } else {
-        false
-    };
-
-    (rust_code, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_enum_variant_string_literal_gets_to_string() {
@@ -82,7 +28,7 @@ fn main() {
 }
 "#;
 
-    let (rust_code, compiles) = compile_wj_to_rust(source, "enum-str-basic");
+    let (rust_code, compiles) = test_utils::compile_single_check(source);
 
     println!("Generated Rust:\n{}", rust_code);
 
@@ -124,7 +70,7 @@ fn main() {
 }
 "#;
 
-    let (rust_code, compiles) = compile_wj_to_rust(source, "enum-str-mixed");
+    let (rust_code, compiles) = test_utils::compile_single_check(source);
 
     println!("Generated Rust:\n{}", rust_code);
 

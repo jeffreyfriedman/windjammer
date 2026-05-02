@@ -7,55 +7,8 @@
 ///
 /// Expected: None of StructA, StructB, StructC should get #[derive(Debug, Clone)]
 /// because they all transitively contain a trait object.
-use std::fs;
-use std::process::Command;
-
-fn wj_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj(source: &str, test_name: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let test_dir = _tmp.path().join(format!(
-        "wj_test_{}_{}",
-        test_name,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let source_file = test_dir.join(format!("{}.wj", test_name));
-    fs::write(&source_file, source).unwrap();
-
-    let output_dir = test_dir.join("build");
-    fs::create_dir_all(&output_dir).unwrap();
-
-    let output = Command::new(wj_path())
-        .arg("build")
-        .arg("--no-cargo")
-        .arg("--output")
-        .arg(output_dir.to_str().unwrap())
-        .arg(source_file.to_str().unwrap())
-        .output()
-        .expect("failed to run wj");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "wj build failed:\nstdout: {}\nstderr: {}",
-        stdout,
-        stderr
-    );
-
-    let generated = fs::read_to_string(output_dir.join(format!("{}.rs", test_name)))
-        .expect("Generated .rs file not found");
-
-    generated
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_direct_trait_object_field_no_derive() {
@@ -69,7 +22,7 @@ struct Widget {
 }
 "#;
 
-    let generated = compile_wj(source, "direct_trait");
+    let generated = test_utils::compile_single(source);
 
     let widget_derive = extract_derive_for_struct(&generated, "Widget");
     assert!(
@@ -103,7 +56,7 @@ struct Outer {
 }
 "#;
 
-    let generated = compile_wj(source, "one_level_nested");
+    let generated = test_utils::compile_single(source);
 
     let inner_section = extract_derive_for_struct(&generated, "Inner");
     assert!(
@@ -141,7 +94,7 @@ struct App {
 }
 "#;
 
-    let generated = compile_wj(source, "two_level_nested");
+    let generated = test_utils::compile_single(source);
 
     let holder_section = extract_derive_for_struct(&generated, "SystemHolder");
     assert!(
@@ -181,7 +134,7 @@ struct PluginRegistry {
 }
 "#;
 
-    let generated = compile_wj(source, "vec_trait_object");
+    let generated = test_utils::compile_single(source);
 
     let registry_section = extract_derive_for_struct(&generated, "PluginRegistry");
     assert!(
@@ -205,7 +158,7 @@ struct Line {
 }
 "#;
 
-    let generated = compile_wj(source, "normal_struct");
+    let generated = test_utils::compile_single(source);
 
     let point_section = extract_derive_for_struct(&generated, "Point");
     assert!(

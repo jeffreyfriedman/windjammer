@@ -7,28 +7,8 @@
 /// in enum_variant_types, causing infer_match_bound_types to return empty vec
 ///
 /// Compile .wj code and return generated Rust code
-fn compile_to_rust(wj_code: &str) -> String {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let wj_file = temp_dir.path().join("test.wj");
-    std::fs::write(&wj_file, wj_code).unwrap();
-
-    let compiler = env!("CARGO_BIN_EXE_wj");
-
-    let output = std::process::Command::new(compiler)
-        .arg("build")
-        .arg(&wj_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("wj build failed:\n{}", stderr);
-    }
-
-    let rs_file = temp_dir.path().join("build/test.rs");
-    std::fs::read_to_string(rs_file).expect("Failed to read generated Rust")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_single_element_tuple_enum_match() {
@@ -70,7 +50,7 @@ pub fn main() {
 }
 "#;
 
-    let rust_code = compile_to_rust(code);
+    let rust_code = test_utils::compile_single(code);
 
     // Should add & for String → &str conversion
     assert!(
@@ -140,7 +120,7 @@ pub fn main() {
 }
 "#;
 
-    let rust_code = compile_to_rust(code);
+    let rust_code = test_utils::compile_single(code);
 
     // Should add & for String → &str conversion
     assert!(
@@ -199,7 +179,7 @@ pub fn main() {
 }
 "#;
 
-    let rust_code = compile_to_rust(code);
+    let rust_code = test_utils::compile_single(code);
 
     // All should auto-convert String → &str
     assert!(

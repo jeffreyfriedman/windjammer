@@ -11,7 +11,6 @@ use tempfile::TempDir;
 /// - Method signature: `fn intersects(&self, other: AABB) -> bool`
 /// - Generated (wrong): `box.intersects(&wall)`
 /// - Should generate: `box.intersects(wall)`
-
 #[test]
 fn test_copy_type_method_param_no_explicit_ref() {
     let temp_dir = TempDir::new().unwrap();

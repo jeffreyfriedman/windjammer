@@ -13,33 +13,11 @@
 //! - **Nested blocks**: `fn f() -> f32 { { 1.0 } }` - Block expressions get return_type
 //! - **Match without default**: All arms constrained; missing arm is compile error elsewhere
 
-use windjammer::*;
+// Explicit return: `fn foo() -> f32 { return 1.0 }`
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// Explicit return: `fn foo() -> f32 { return 1.0 }`
 #[test]
 fn test_explicit_return_f32() {
     let source = r#"
@@ -47,7 +25,7 @@ pub fn foo() -> f32 {
     return 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Explicit return 1.0 in f32 function should generate _f32, got:\n{}",
@@ -68,7 +46,7 @@ pub fn bar() -> f32 {
     1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Implicit return 1.0 in f32 function should generate _f32, got:\n{}",
@@ -92,7 +70,7 @@ pub fn baz(cond: bool) -> f32 {
     2.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Early return 1.0 should generate _f32, got:\n{}",
@@ -123,7 +101,7 @@ pub fn qux(x: E) -> f32 {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Match arm 1.0 should generate _f32, got:\n{}",
@@ -149,7 +127,7 @@ pub fn foo() -> f64 {
     return 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f64") || output.contains("1.0f64"),
         "Explicit return 1.0 in f64 function should generate _f64, got:\n{}",
@@ -165,7 +143,7 @@ pub fn foo() {
     let x = 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Literal in function with no return type: expect current float default (f32), got:\n{}",
@@ -181,7 +159,7 @@ pub fn opt() -> Option<f32> {
     Some(1.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Literal in Option<f32> return should generate _f32, got:\n{}",
@@ -197,7 +175,7 @@ pub fn res() -> Result<f32, String> {
     Ok(1.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Literal in Result<f32, E> return should generate _f32, got:\n{}",
@@ -213,7 +191,7 @@ pub fn tup() -> (f32, f32) {
     (1.0, 2.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         (output.contains("1.0_f32") || output.contains("1.0f32"))
             && (output.contains("2.0_f32") || output.contains("2.0f32")),

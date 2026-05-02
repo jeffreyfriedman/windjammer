@@ -7,51 +7,8 @@
 //! Root Cause: Inference runs in single pass, doesn't propagate constraints backward
 //! from usage site to initialization.
 
-use tempfile::TempDir;
-use windjammer::{build_project, CompilationTarget};
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    let output_dir = test_dir.join("build");
-
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&input_file, source).expect("Failed to write source file");
-
-    build_project(&input_file, &output_dir, CompilationTarget::Rust, true)
-        .map_err(|e| format!("Windjammer compilation failed: {}", e))?;
-
-    let output_file = output_dir.join("test.rs");
-    let rust_code = std::fs::read_to_string(&output_file)
-        .map_err(|e| format!("Failed to read generated file: {}", e))?;
-
-    Ok(rust_code)
-}
-
-fn verify_rust_compiles(rust_code: &str) -> Result<(), String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let rust_file = test_dir.join("test.rs");
-    std::fs::write(&rust_file, rust_code).expect("Failed to write Rust file");
-
-    let check = std::process::Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            rust_file.to_str().unwrap(),
-            "-o",
-            test_dir.join("test.rlib").to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    if check.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&check.stderr).to_string())
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_variable_used_with_f32_field() {
@@ -83,7 +40,7 @@ impl Camera {
 }
 "#;
 
-    let rust = compile_to_rust(source).unwrap();
+    let rust = test_utils::compile_single(source);
 
     // offset variables should be inferred as f32 (backward propagation from usage)
     assert!(
@@ -103,5 +60,5 @@ impl Camera {
     );
 
     // Verify it compiles
-    verify_rust_compiles(&rust).expect("Generated Rust should compile");
+    test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");
 }

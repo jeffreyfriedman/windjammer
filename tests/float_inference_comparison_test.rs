@@ -5,45 +5,8 @@
 ///
 /// Fix: Extend collect_float_literal_constraints to handle comparison ops (<, >, <=, >=, ==, !=)
 /// with LHS→RHS and RHS→LHS propagation (same as arithmetic ops).
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_compare_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Basic: f32_var < literal
@@ -56,7 +19,7 @@ pub fn check(x: f32) -> bool {
     x < 2.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.0_f32"),
         "x < 2.0 where x: f32 should generate 2.0_f32, got:\n{}",
@@ -80,7 +43,7 @@ pub fn check(x: f64) -> bool {
     x > 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f64"),
         "x > 1.0 where x: f64 should generate 1.0_f64, got:\n{}",
@@ -99,7 +62,7 @@ pub fn in_range(value: f32, min: f32, max: f32) -> bool {
     min < value && value < max
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     // value is f32, so comparisons should use f32
     assert!(
         !output.contains("_f64"),
@@ -119,7 +82,7 @@ pub fn clamp_check(val: f32, lo: f32, hi: f32) -> bool {
     lo < val && val < hi
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains("_f64"),
         "Chained comparisons with f32 should not use f64, got:\n{}",
@@ -142,7 +105,7 @@ pub fn normalize(x: f32, y: f32) -> (f32, f32) {
     return (0.0, 0.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "len > 0.0 where len is f32 should use 0.0_f32, got:\n{}",
@@ -166,7 +129,7 @@ pub fn is_zero(x: f32) -> bool {
     x == 0.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "x == 0.0 where x: f32 should generate 0.0_f32, got:\n{}",
@@ -185,7 +148,7 @@ pub fn not_one(x: f32) -> bool {
     x != 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32"),
         "x != 1.0 where x: f32 should generate 1.0_f32, got:\n{}",
@@ -204,7 +167,7 @@ pub fn in_bounds(x: f32, low: f32, high: f32) -> bool {
     low <= x && x <= high
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         !output.contains("_f64"),
         "All f32 - should not use f64, got:\n{}",
@@ -223,7 +186,7 @@ pub fn is_positive(x: f32) -> bool {
     0.0 < x
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "0.0 < x where x: f32 should infer 0.0 as f32 (RHS→LHS), got:\n{}",
@@ -246,7 +209,7 @@ impl Data {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32"),
         "self.value < 1.0 should generate 1.0_f32, got:\n{}",
@@ -278,7 +241,7 @@ impl PhysicsBody {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "self.velocity.x != 0.0 should generate 0.0_f32 (nested FieldAccess), got:\n{}",
@@ -311,7 +274,7 @@ impl ColorGrading {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32"),
         "self.settings.gamma != 1.0 should generate 1.0_f32, got:\n{}",
@@ -347,7 +310,7 @@ impl Game {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "self.camera.position.x != 0.0 should generate 0.0_f32, got:\n{}",

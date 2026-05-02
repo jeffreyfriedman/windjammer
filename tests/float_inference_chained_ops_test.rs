@@ -12,45 +12,8 @@
 /// - Result: If ANY operand in chain is f32, all literals → f32
 ///
 /// Test cases from game: squad_tactics, particle_emitter3d, emitter, etc.
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_chained_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Case 1: x * 2.0 / y where x, y are f32
@@ -63,7 +26,7 @@ pub fn area(x: f32, y: f32) -> f32 {
     x * 2.0 / y
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.0_f32"),
         "x * 2.0 / y where x,y are f32 should generate 2.0_f32, got:\n{}",
@@ -87,7 +50,7 @@ pub fn wave(t: f32) -> f32 {
     (t * 0.1).sin() * 0.5
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.1_f32") && output.contains("0.5_f32"),
         "(t * 0.1).sin() * 0.5 should generate both literals as f32, got:\n{}",
@@ -107,7 +70,7 @@ pub fn compute_angle(member_index: i32, count: i32) -> f32 {
     angle
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("6.28318_f32"),
         "6.28318 in f32 context should be 6.28318_f32, got:\n{}",
@@ -132,7 +95,7 @@ pub fn sample(seed: i32) -> f32 {
     s
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.1_f32") && output.contains("0.5_f32"),
         "All literals in (seed as f32 * 0.1).sin() * 0.5 + 0.5 should be f32, got:\n{}",
@@ -151,7 +114,7 @@ pub fn to_radians(s: f32) -> f32 {
     s * 6.28318
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("6.28318_f32"),
         "s * 6.28318 where s: f32 should generate 6.28318_f32, got:\n{}",
@@ -170,7 +133,7 @@ pub fn tau_over_count(count: i32) -> f32 {
     6.28318 / count as f32
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("6.28318_f32"),
         "6.28318 / count as f32 should propagate f32 from RHS to literal, got:\n{}",
@@ -189,7 +152,7 @@ pub fn rand_seed(seed: i32) -> f32 {
     (seed as f32 * 12.9898).sin()
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("12.9898_f32"),
         "seed as f32 * 12.9898 should generate 12.9898_f32, got:\n{}",
@@ -208,7 +171,7 @@ pub fn triangle_area(width: f32, height: f32) -> f32 {
     width * height * 0.5
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.5_f32"),
         "width * height * 0.5 should generate 0.5_f32, got:\n{}",
@@ -231,7 +194,7 @@ pub fn sphere_point(seed: i32, radius: f32) -> f32 {
     x
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("6.28318_f32"),
         "s * 6.28318 where s from f32 chain should generate 6.28318_f32, got:\n{}",
@@ -266,7 +229,7 @@ pub fn sphere_point(t: f32, radius: f32) -> Vec3 {
     Vec3::new(x, 0.0, 0.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") && output.contains("radius"),
         "Literals in (1.0 - t * t).sqrt() * radius should be f32, got:\n{}",

@@ -5,28 +5,8 @@
 /// Fix: Add pattern-based detection for common stdlib mutating methods.
 ///
 /// Philosophy: "Compiler does hard work" - automatic &mut self inference
-use std::fs;
-use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    let output_dir = test_dir.join("build");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    windjammer::build_project(
-        &input_file,
-        &output_dir,
-        windjammer::CompilationTarget::Rust,
-        true,
-    )
-    .map_err(|e| format!("Windjammer compilation failed: {}", e))?;
-
-    let generated_file = output_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_take_method_infers_mut_self() {
@@ -43,7 +23,7 @@ impl Container {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     // Should have &mut self (not &self)
     assert!(
@@ -67,7 +47,7 @@ impl Buffer {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("pub fn add_item(&mut self, item: i32)"),
@@ -92,7 +72,7 @@ impl Cache {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("pub fn store(&mut self, key: "),
@@ -115,7 +95,7 @@ impl List {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("pub fn remove_all(&mut self)"),
@@ -138,7 +118,7 @@ impl Stack {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("pub fn pop_item(&mut self)"),
@@ -162,7 +142,7 @@ impl SlotContainer {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("pub fn remove_at(&mut self, index: usize)"),

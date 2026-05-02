@@ -1,11 +1,9 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 /// Test that string literals are automatically converted to String in function calls
 ///
@@ -38,7 +36,7 @@ fn main() {
     let input_path = temp_dir.path().join("test.wj");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(&temp_dir)
         .output()
@@ -91,7 +89,7 @@ fn main() {
     let input_path = temp_dir.path().join("test.wj");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", input_path.to_str().unwrap(), "--no-cargo"])
         .current_dir(&temp_dir)
         .output()

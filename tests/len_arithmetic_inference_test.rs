@@ -2,29 +2,8 @@
 //
 // Bug: items.len() - 1 → 1_i32 → E0277 cannot subtract i32 from usize
 
-use std::fs;
-use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-    let raw = fs::read_to_string(out.path().join("test.rs")).unwrap_or_default();
-    raw.lines()
-        .filter(|l| !l.contains("use super::"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_len_minus_literal_infers_usize() {
@@ -34,7 +13,7 @@ fn last_index(items: Vec<i32>) -> usize {
 }
 "#;
 
-    let rust = compile_single_file(test_wj);
+    let rust = test_utils::compile_single(test_wj);
 
     assert!(
         rust.contains("1_usize"),
@@ -56,7 +35,7 @@ fn capacity_with_buffer(items: Vec<i32>) -> usize {
 }
 "#;
 
-    let rust = compile_single_file(test_wj);
+    let rust = test_utils::compile_single(test_wj);
 
     assert!(
         rust.contains("10_usize"),
@@ -73,7 +52,7 @@ fn check_bounds(items: Vec<i32>, i: usize) -> bool {
 }
 "#;
 
-    let rust = compile_single_file(test_wj);
+    let rust = test_utils::compile_single(test_wj);
 
     assert!(
         rust.contains("1_usize"),
@@ -91,7 +70,7 @@ fn set_last_index(items: Vec<i32>) {
 }
 "#;
 
-    let rust = compile_single_file(test_wj);
+    let rust = test_utils::compile_single(test_wj);
 
     assert!(
         rust.contains("1_usize"),

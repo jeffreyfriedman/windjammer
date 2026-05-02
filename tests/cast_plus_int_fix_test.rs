@@ -1,61 +1,8 @@
-/// TDD: Cast + int arithmetic - auto-cast integer operand when other is Cast to f32
-///
-/// Bug: (grid_x as f32 + dx) generated ((grid_x) as f32 + dx) → E0277 f32 + i32
-/// Root cause: Mixed arithmetic fix doesn't evaluate TYPE of Cast expressions, only base identifiers.
-/// Fix: When one operand is Cast to f32/f64, cast the other (int) operand to match.
-///
-/// Philosophy: "Compiler does the hard work" - auto-cast should work everywhere.
-use std::process::Command;
-use windjammer::*;
+// (x as f32 + offset) - offset must be cast to f32 for f32 + i32
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let rs_file = temp_dir.path().join("test.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-
-    let output = Command::new("rustc")
-        .arg(&rs_file)
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .arg("--out-dir")
-        .arg(temp_dir.path())
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    (output.status.success(), stderr)
-}
-
-/// (x as f32 + offset) - offset must be cast to f32 for f32 + i32
 #[test]
 fn test_cast_plus_int_should_cast_int() {
     let source = r#"
@@ -66,14 +13,16 @@ pub fn test() -> usize {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     assert!(
         result.contains("x as f32") && result.contains("offset as f32"),
         "Cast + int should cast int operand to f32. Got:\n{}",
         result
     );
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",
@@ -92,14 +41,16 @@ pub fn test() -> usize {
 }
 "#;
 
-    let result = compile_and_get_rust(source);
+    let result = test_utils::compile_single(source);
     assert!(
         result.contains("offset as f32") && result.contains("x as f32"),
         "Int + Cast should cast int operand to f32. Got:\n{}",
         result
     );
 
-    let (rustc_ok, stderr) = run_rustc(&result);
+    let __result = test_utils::verify_rust_compiles(&result);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok,
         "Should compile without E0277 mixed arithmetic. stderr: {}\n\nGenerated:\n{}",

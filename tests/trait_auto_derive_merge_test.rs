@@ -4,51 +4,8 @@
 //! and require nested structs to implement `Debug`. Merging explicit derives with inference
 //! fixes E0277 (`T doesn't implement Debug`).
 
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let dir = tempdir().expect("tempdir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.path().join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.path().join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.path().join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    (rs_content, rustc.status.success())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_partial_derive_clone_merges_debug_for_nested_enum() {
@@ -68,7 +25,7 @@ pub fn main() {
     println!("{:?}", o)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "Nested enum Debug requires Inner: Debug. rustc failed. Generated:\n{}",
@@ -94,7 +51,7 @@ pub fn main() {
     println!("{:?}", i)
 }
 "#;
-    let (rs, compiles) = compile_wj_to_rust(source);
+    let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(
         compiles,
         "println! Debug requires Inner: Debug. rustc failed. Generated:\n{}",

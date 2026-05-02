@@ -4,45 +4,8 @@
 /// - physics_body: self.velocity.x = 0.0, self.velocity.x != 0.0 (assignment + comparison)
 /// - quick_start/game: self.camera.position.x != 0.0 (3-level nested)
 /// - post_processing: self.settings.gamma != 1.0 (2-level nested)
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let _tmp = tempfile::tempdir().unwrap();
-
-    let temp_dir = _tmp.path();
-
-    let unique_id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let test_name = format!("float_final_{}_{}", std::process::id(), unique_id);
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // =============================================================================
 // Assignment: self.velocity.x = 0.0 (physics_body pattern)
@@ -68,7 +31,7 @@ impl PhysicsBody {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "self.velocity.x = 0.0 should generate 0.0_f32 (assignment LHS→RHS), got:\n{}",
@@ -104,7 +67,7 @@ impl ColorGrading {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32"),
         "self.settings.gamma != 1.0 should generate 1.0_f32, got:\n{}",
@@ -146,7 +109,7 @@ impl QuickStartGame {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.0_f32"),
         "self.camera.position.x != 0.0 should generate 0.0_f32 (3-level nested), got:\n{}",
@@ -182,7 +145,7 @@ impl ColorGrading {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32"),
         "1.0 / self.settings.gamma should infer 1.0 as f32 (RHS→LHS), got:\n{}",

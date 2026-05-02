@@ -2,33 +2,8 @@
 //! Reproduces a pre-existing bug where the compiler incorrectly casts one operand
 //! of an i32 subtraction to u32, causing type mismatches in downstream usage.
 
-use std::process::Command;
-
-fn compile_single(code: &str) -> String {
-    let dir = tempfile::TempDir::new().unwrap();
-    let src = dir.path().join("src_wj");
-    std::fs::create_dir_all(&src).unwrap();
-    std::fs::write(src.join("inventory.wj"), code).unwrap();
-
-    let wj = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let output = Command::new(&wj)
-        .arg("build")
-        .arg(src.join("inventory.wj").to_str().unwrap())
-        .arg("--no-cargo")
-        .current_dir(dir.path())
-        .output()
-        .expect("wj build failed");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("wj build failed: {}", stderr);
-    }
-
-    let rs_path = dir.path().join("build").join("inventory.rs");
-    std::fs::read_to_string(&rs_path).unwrap_or_else(|e| {
-        panic!("Could not read generated Rust: {}", e);
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_i32_minus_i32_no_u32_cast() {
@@ -48,7 +23,7 @@ pub fn compute_space(stack: Stack) -> i32 {
 }
 "#;
 
-    let output = compile_single(code);
+    let output = test_utils::compile_single(code);
 
     assert!(
         !output.contains("as u32"),
@@ -66,7 +41,7 @@ pub fn check(a: i32, b: i32) -> bool {
 }
 "#;
 
-    let output = compile_single(code);
+    let output = test_utils::compile_single(code);
 
     assert!(
         !output.contains("as u32"),
@@ -89,7 +64,7 @@ impl Counter {
 }
 "#;
 
-    let output = compile_single(code);
+    let output = test_utils::compile_single(code);
 
     assert!(
         !output.contains("as u32"),

@@ -14,7 +14,6 @@ use tempfile::TempDir;
 /// - Call: future_box.intersects_aabb(wall)
 /// - Generated (WRONG): future_box.intersects_aabb(&wall)
 /// - Should generate: future_box.intersects_aabb(wall)
-
 #[test]
 fn test_external_crate_copy_type_owned_param() {
     let temp_dir = TempDir::new().unwrap();

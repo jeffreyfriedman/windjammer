@@ -7,31 +7,8 @@
 //! Root cause: Struct literal codegen only auto-converts direct Expression::Literal
 //! to `.to_string()`, but doesn't propagate coercion into if-else branch bodies.
 
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut int_inference = type_inference::IntInference::new();
-    int_inference.infer_program(&program);
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_int_inference(int_inference);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_else_string_literal_in_struct_field() {
@@ -48,7 +25,7 @@ pub fn boolean_prop(name: string, value: bool) -> Property {
     }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     assert!(
         rust.contains(r#""true".to_string()"#),
@@ -75,7 +52,7 @@ pub fn make_item(cond: bool) -> Item {
     }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
 
     assert!(
         rust.contains(r#""hello".to_string()"#),

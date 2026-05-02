@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Suppress unneeded explicit return statements
 ///
@@ -28,12 +31,7 @@ use anyhow::Result;
 /// }
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -92,7 +90,7 @@ version = "0.1.0"
 
     // Compile with --no-cargo to just generate Rust
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -190,7 +188,7 @@ version = "0.1.0"
 
     // Compile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -268,7 +266,7 @@ version = "0.1.0"
 
     // Compile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")

@@ -3,37 +3,8 @@
 //! match self.nodes[i] { BlendNode::Lerp { node_a, node_b } => BlendNode::Lerp { node_a, node_b } }
 //! should emit *node_a, *node_b when struct expects u32
 
-use std::process::Command;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let out_dir = temp_dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-    let input = temp_dir.path().join("test.wj");
-    std::fs::write(&input, source).expect("write test file");
-
-    let wj_bin = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_bin)
-        .args([
-            "build",
-            input.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("wj build");
-
-    let rust_file = out_dir.join("test.rs");
-    std::fs::read_to_string(&rust_file).unwrap_or_else(|_| {
-        panic!(
-            "Generated .rs file not found at {:?}\nstdout: {}\nstderr: {}",
-            rust_file,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_match_on_index_bindings_get_deref() {
@@ -61,7 +32,7 @@ impl BlendTree {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     // Codegen may produce *node_a or *(node_a) — both are valid deref
     let has_deref_a = rust.contains("*node_a") || rust.contains("*(node_a)");
     let has_deref_b = rust.contains("*node_b") || rust.contains("*(node_b)");

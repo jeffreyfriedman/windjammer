@@ -6,70 +6,8 @@
 //! Fix: infer_match_bound_types returns owned types for Copy tuple elements when
 //! destructuring from Index (which yields &T). Also add * to RHS for Copy tuples.
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj_to_rust(source: &str) -> (String, bool) {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp.path().join(format!(
-        "wj_copy_tuple_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis(),
-        id
-    ));
-
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let rlib_output = dir.join("test.rlib");
-    let rustc = Command::new("rustc")
-        .args([
-            "--crate-type",
-            "lib",
-            "--edition",
-            "2021",
-            "-o",
-            rlib_output.to_str().unwrap(),
-        ])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_tuple_destructure_all_copy_from_ref() {
@@ -80,7 +18,7 @@ pub fn process(items: Vec<(i32, i32, f32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("nx + ny"),
@@ -103,7 +41,7 @@ pub fn process(items: Vec<(i32, String)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("id") && (result.contains("let (id, name)") || result.contains("clone()")),
@@ -126,7 +64,7 @@ pub fn process() -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("x + y"), "Expected x + y. Got:\n{}", result);
     assert!(
@@ -150,7 +88,7 @@ pub fn lookup(map: HashMap<(i32, i32), f32>, neighbors: Vec<(i32, i32, f32)>) ->
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("(x, y)"),
@@ -173,7 +111,7 @@ pub fn process(items: Vec<(i32, i32, i32, i32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("a + b + c + d"),
@@ -191,7 +129,7 @@ pub fn process(items: Vec<((i32, i32), f32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("x + y"), "Expected x + y. Got:\n{}", result);
 }
@@ -206,7 +144,7 @@ pub fn process() -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("x + y"), "Expected x + y. Got:\n{}", result);
 }
@@ -220,7 +158,7 @@ pub fn process(items: Vec<(i32, bool)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("if active"),
@@ -243,7 +181,7 @@ pub fn process(items: Vec<(i32, f64)>) -> f64 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("value"), "Expected value. Got:\n{}", result);
     assert!(
@@ -262,7 +200,7 @@ pub fn process(items: Vec<(i32,)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("x"), "Expected x. Got:\n{}", result);
 }
@@ -282,7 +220,7 @@ pub fn sum_all(items: Vec<(i32, i32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("a + b"),
@@ -300,7 +238,7 @@ pub fn process(items: Vec<(usize, i32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(result.contains("val"), "Expected val. Got:\n{}", result);
 }
@@ -314,7 +252,7 @@ pub fn process(items: Vec<(f32, f32)>) -> f32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("x * x") || result.contains("y * y"),
@@ -336,7 +274,7 @@ pub fn process(items: Vec<(i32, i32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("add(x, y)") || result.contains("add(x,y)"),
@@ -357,7 +295,7 @@ pub fn process(items: Vec<(i32, i32)>) -> i32 {
 }
 "#;
 
-    let (result, compiles) = compile_wj_to_rust(src);
+    let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
         result.contains("x + y") || result.contains("y"),

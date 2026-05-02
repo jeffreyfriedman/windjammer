@@ -6,48 +6,8 @@
 ///      Generate vec[idx].clone() only when owned value needed (e.g. struct literal)
 ///
 /// Discovered via dogfooding: breach-protocol save_manager.wj (split returns Vec<String>)
-use std::process::Command;
-
-fn compile_wj_to_rust_and_check(source: &str) -> (String, bool) {
-    let dir = tempfile::tempdir().expect("failed to create temp dir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let src_dir = dir.path().join("src");
-    let main_rs = if src_dir.join("main.rs").exists() {
-        src_dir.join("main.rs")
-    } else {
-        dir.path().join("test.rs")
-    };
-
-    let rs_content = std::fs::read_to_string(&main_rs).unwrap_or_default();
-
-    let bin_output = dir.path().join("test_bin");
-    let rustc = Command::new("rustc")
-        .args(["--edition", "2021", "-o", bin_output.to_str().unwrap()])
-        .arg(&main_rs)
-        .output()
-        .expect("Failed to run rustc");
-
-    let compiles = rustc.status.success();
-    if !compiles {
-        eprintln!("rustc stderr:\n{}", String::from_utf8_lossy(&rustc.stderr));
-    }
-
-    (rs_content, compiles)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_string_index_generates_borrow() {
@@ -65,7 +25,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust_and_check(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     // Should generate &lines[index] (auto-borrow) - NOT raw lines[index] (E0507)
     assert!(
@@ -91,7 +51,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust_and_check(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     // i32 is Copy - get_int body should have numbers[index] without .clone()
     let get_int_body = rust
@@ -127,7 +87,7 @@ pub fn parse_first(text: string) -> string {
 fn main() {}
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust_and_check(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     // parts[0] where parts: Vec<String> needs & (auto-borrow) to avoid E0507
     assert!(
@@ -165,7 +125,7 @@ fn main() {
 }
 "#;
 
-    let (rust, compiles) = compile_wj_to_rust_and_check(source);
+    let (rust, compiles) = test_utils::compile_single_check(source);
 
     // The generated Rust MUST compile. The exact mechanism (clone or borrow) is
     // an implementation detail — what matters is no E0507 move-out-of-Vec error.

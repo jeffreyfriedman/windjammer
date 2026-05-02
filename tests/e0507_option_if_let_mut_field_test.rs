@@ -6,49 +6,10 @@
 //!
 //! Correct: &mut self.slots[i] (strip leading & before adding &mut).
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-    std::fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let src_main = out_dir.join("src").join("main.rs");
-    let test_rs = out_dir.join("test.rs");
-    let content = if src_main.exists() {
-        std::fs::read_to_string(src_main)
-    } else if test_rs.exists() {
-        std::fs::read_to_string(test_rs)
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No generated Rust file found",
-        ))
-    };
-    content.map_err(|e| e.to_string())
-}
 
 fn rust_compiles(rust_code: &str) -> bool {
     let temp_dir = tempfile::tempdir().expect("temp dir");
@@ -106,7 +67,7 @@ impl Inventory {
 }
 fn main() {}
 "#;
-    let rust = compile_to_rust(source).expect("compile");
+    let rust = test_utils::compile_single_result(source).expect("compile");
     // Must NOT contain double ref (E0507: cannot move out of mutable reference)
     assert!(
         !rust.contains("&mut &self"),

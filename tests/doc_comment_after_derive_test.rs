@@ -1,5 +1,7 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 /// TDD Test: DocComment after @derive should parse
 ///
 /// Bug: Parser rejected `@derive(Clone)\n/// doc\npub struct S` with
@@ -8,10 +10,6 @@ use std::path::PathBuf;
 ///
 /// Source: prefab_system.wj, crafting.wj in windjammer-game-core
 use std::process::Command;
-
-fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 fn test_doc_comment_after_derive_parses() {
@@ -42,7 +40,7 @@ impl Prefab {
     fs::create_dir_all(&output_dir).unwrap();
     fs::write(&temp_file, source).unwrap();
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             "--output",
@@ -91,7 +89,7 @@ impl Prefab {
     fs::create_dir_all(&output_dir).unwrap();
     fs::write(&temp_file, source).unwrap();
 
-    let output = Command::new(wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             "--output",

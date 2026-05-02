@@ -5,67 +5,12 @@
 //! The compiler infers &, &mut, or owned for parameters based on usage.
 //! This is a core Windjammer philosophy: "The compiler does the work, not the developer."
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    // Use pre-built wj binary (avoids cargo run ambiguity in workspace with multiple binaries)
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // READ-ONLY PARAMETER (INFER &)
@@ -85,7 +30,8 @@ pub fn print_point(p: Point) {
     println!("{}, {}", p.x, p.y)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Read-only params may be borrowed or kept owned (both are valid)
     // The important thing is that the code compiles
@@ -110,7 +56,8 @@ pub fn area(rect: Rectangle) -> i32 {
     rect.width * rect.height
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Field reads may keep owned or borrow - both are valid
     // The key is that the code compiles
@@ -140,7 +87,7 @@ pub fn read_counter(c: Counter) -> i32 {
     c.get()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // read_counter should take &Counter since it only calls a read method
     assert!(success, "Error: {}", err);
@@ -163,7 +110,8 @@ pub fn increment(c: Counter) {
     c.value = c.value + 1
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&mut Counter"),
@@ -195,7 +143,8 @@ pub fn bump(c: &mut Counter) {
     c.increment()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // With explicit &mut, should compile
     assert!(
@@ -219,7 +168,8 @@ pub fn add_points(s: Stats, points: i32) {
     s.score += points
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&mut Stats"),
@@ -253,7 +203,8 @@ impl Container {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // add should take Item by value since it's stored (pushed)
     // Should NOT be &Item
@@ -279,7 +230,7 @@ pub fn identity(p: Point) -> Point {
     p
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // identity should take Point by value since it's returned
     assert!(success, "Error: {}", err);
@@ -293,7 +244,8 @@ pub fn add(x: i32, y: i32) -> i32 {
     x + y
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Primitive types should remain owned (no &i32)
     assert!(
@@ -321,7 +273,8 @@ pub fn process(d: &Data) -> i32 {
     d.value
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&Data"),
@@ -344,7 +297,8 @@ pub fn modify(d: &mut Data) {
     d.value = 42
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&mut Data"),
@@ -374,7 +328,7 @@ impl Point {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Without explicit &self, should infer &self for read-only
     assert!(success, "Error: {}", err);
@@ -396,7 +350,8 @@ impl Point {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Should infer &mut self for mutation
     assert!(
@@ -429,7 +384,8 @@ pub fn copy_data(src: Source, dst: Target) {
     dst.data = src.data
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // dst must be &mut since it's mutated
     assert!(
@@ -462,7 +418,8 @@ pub fn set_inner_value(o: Outer, v: i32) {
     o.inner.value = v
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&mut Outer"),
@@ -487,7 +444,8 @@ pub fn maybe_increment(c: Counter, do_it: bool) {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Even if mutation is conditional, should still be &mut
     assert!(
@@ -515,7 +473,8 @@ pub fn increment_n_times(c: Counter, n: i32) {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     assert!(
         generated.contains("&mut Counter"),
@@ -546,7 +505,7 @@ pub fn sum_items(c: Container) -> i32 {
     total
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Should borrow container for iteration
     assert!(success, "Error: {}", err);
@@ -567,7 +526,8 @@ pub fn double_items(c: Container) {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { "compilation failed" } else { "" };
 
     // Should use &mut for item modification
     // This may or may not compile depending on how iter_mut is inferred
@@ -598,7 +558,7 @@ impl Printable for MyType {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Trait impl should match trait signature exactly
     assert!(success, "Error: {}", err);
@@ -621,7 +581,7 @@ pub fn get_value<T: Clone>(c: Container<T>) -> T {
     c.value.clone()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Generic containers should have sensible inference
     assert!(success, "Error: {}", err);
@@ -635,7 +595,7 @@ pub fn clone_item<T: Clone>(item: T) -> T {
     item.clone()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Should work with T: Clone bound
     assert!(success, "Error: {}", err);
@@ -694,7 +654,7 @@ fn main() {
     println("{}", thing.name())
 }
 "#;
-    let result = compile_and_get_rust(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Codegen failed: {:?}", result.err());
     let generated = result.unwrap();
 
@@ -719,7 +679,7 @@ fn main() {
     );
 
     // Verify the full program compiles (no E0382 "use of moved value")
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Should compile without E0382. Error: {}", err);
 }
 
@@ -759,7 +719,7 @@ fn main() {
     println("{}", pool.has_space())
 }
 "#;
-    let result = compile_and_get_rust(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Codegen failed: {:?}", result.err());
     let generated = result.unwrap();
 
@@ -773,6 +733,6 @@ fn main() {
     );
 
     // Verify the full program compiles (no E0308 "mismatched types")
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Should compile without E0308. Error: {}", err);
 }

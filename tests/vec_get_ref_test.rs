@@ -8,46 +8,8 @@
 /// as HashMap::get(&K), but Vec::get(usize) takes index by value.
 ///
 /// Discovered via dogfooding: windjammer-ui/curve_editor.wj
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_source_named(source: &str, _name: &str) -> String {
-    let dir = tempdir().expect("tempdir for compile_wj_source_named");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let out = dir.path().join("out");
-    std::fs::create_dir_all(&out).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            out.to_str().unwrap(),
-            "--no-cargo",
-            "--library",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let mut rs_content = String::new();
-    for search_dir in [&out, &dir.path().join("src")] {
-        if let Ok(entries) = std::fs::read_dir(search_dir) {
-            for entry in entries.flatten() {
-                if entry.path().extension().is_some_and(|e| e == "rs") {
-                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        rs_content.push_str(&content);
-                        rs_content.push('\n');
-                    }
-                }
-            }
-        }
-    }
-
-    rs_content
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_get_no_ref_on_index() {
@@ -74,7 +36,7 @@ impl Path {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_no_ref");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get(&
@@ -123,7 +85,7 @@ impl Inventory {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_loop");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get(&i) or .get(&
@@ -161,7 +123,7 @@ impl Layout {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_mut_no_ref");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get_mut(&

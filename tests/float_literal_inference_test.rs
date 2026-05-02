@@ -9,36 +9,8 @@
 /// - Struct field: Vec3 { x: 1.0 } where x: f32
 /// - Binary operation: f32_var + 2.0
 /// - Assignment: f32_field = 0.0
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let temp = tempdir().expect("tempdir");
-    let test_name = "float_literal_inf";
-    let test_file = temp.path().join(format!("{test_name}.wj"));
-    let output_dir = temp.path().join("out");
-    let output_file = output_dir.join(format!("{test_name}.rs"));
-
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    let status = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    let rust_code = std::fs::read_to_string(&output_file).expect("Failed to read generated Rust");
-
-    let _ = std::fs::remove_file(&test_file);
-    let _ = std::fs::remove_dir_all(&output_dir);
-
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_float_literal_infers_from_variable_type() {
@@ -48,7 +20,7 @@ fn test() {
     let y: f64 = 2.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1_f32"),
         "let x: f32 = 1.0 should generate _f32, got:\n{}",
@@ -69,7 +41,7 @@ fn main() {
     takes_f32(1.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("takes_f32(1.0_f32)"),
         "takes_f32(1.0) should generate 1.0_f32, got:\n{}",
@@ -85,7 +57,7 @@ fn test() {
     let v = Vec3 { x: 1.0, y: 2.0, z: 3.0 }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32"),
         "Vec3 literals should be f32, got:\n{}",
@@ -101,7 +73,7 @@ fn test() {
     let result = x + 2.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.0_f32"),
         "2.0 in x + 2.0 should infer f32 from x, got:\n{}",
@@ -116,7 +88,7 @@ fn test() {
     let x = 1.0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "Unconstrained 1.0: compiler currently uses f32, got:\n{}",
@@ -140,7 +112,7 @@ impl Point {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("0.5_f32") && output.contains("2.0_f32"),
         "Field * literal should infer f32, got:\n{}",
@@ -164,7 +136,7 @@ pub fn test() {
     assert_eq!(p.y, 20.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("10.0_f32"),
         "assert_eq!(p.x, 10.0) should generate 10.0_f32, got:\n{}",

@@ -1,69 +1,8 @@
-/// TDD: Comprehensive int/float arithmetic E0277 elimination
-///
-/// Phase 11 fix: Cast integers to floats for ALL arithmetic operators in BOTH
-/// binary expressions AND compound assignments.
-///
-/// Error categories fixed:
-/// - f32 + i32, i32 + f32 (add)
-/// - f32 - i32, i32 - f32 (subtract)
-/// - f32 * i32, i32 * f32 (multiply)
-/// - f32 / i32, i32 / f32 (divide)
-/// - f32 % i32 (modulo)
-/// - f32 op {integer} (integer literals)
-/// - Compound: price += 1, scale *= count
-use std::process::Command;
-use tempfile::tempdir;
-use windjammer::*;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 fn cast_ident_to_f32(generated: &str, ident: &str) -> bool {
     generated.contains(&format!("{ident} as f32"))
-}
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-fn run_rustc(rs_code: &str) -> (bool, String) {
-    let temp = tempdir().expect("tempdir");
-    let test_dir = temp.path();
-    let rs_file = test_dir.join("lib.rs");
-    std::fs::write(&rs_file, rs_code).unwrap();
-    let out_lib = test_dir.join("out.rlib");
-
-    let output = Command::new("rustc")
-        .current_dir(test_dir)
-        .arg("lib.rs")
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--edition")
-        .arg("2021")
-        .arg("-o")
-        .arg(&out_lib)
-        .output()
-        .expect("Failed to run rustc");
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stderr)
 }
 
 /// All arithmetic ops: +, -, *, /, %
@@ -79,14 +18,14 @@ pub fn test_ops(x: f32, y: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "y"),
         "f32 op i32 should cast y. Got:\n{}",
         output
     );
     assert!(
-        !output.contains("cannot add") || run_rustc(&output).0,
+        !output.contains("cannot add") || test_utils::verify_rust_compiles(&output).is_ok(),
         "Should compile without E0277"
     );
 }
@@ -103,14 +42,16 @@ pub fn accumulate() -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "price += 1 should cast int to f32. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot add"),
         "E0277 compound assignment:\nstderr: {}\n\nGenerated:\n{}",
@@ -130,14 +71,16 @@ pub fn scale_by(count: i32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32"),
         "scale *= count should cast. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot multiply"),
         "E0277:\nstderr: {}\n\nGenerated:\n{}",
@@ -161,14 +104,16 @@ impl Stats {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("as f32") || output.contains("_f32"),
         "self.count * 0.5 should have float cast. Got:\n{}",
         output
     );
 
-    let (rustc_ok, stderr) = run_rustc(&output);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let rustc_ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         rustc_ok || !stderr.contains("cannot multiply"),
         "E0277 self.count * 0.5:\nstderr: {}\n\nGenerated:\n{}",
@@ -186,8 +131,10 @@ pub fn add_one(x: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
-    let (ok, stderr) = run_rustc(&output);
+    let output = test_utils::compile_single(source);
+    let __result = test_utils::verify_rust_compiles(&output);
+    let ok = __result.is_ok();
+    let stderr = __result.err().unwrap_or_default();
     assert!(
         ok,
         "f32 + literal should compile. stderr: {}\n{}",
@@ -204,7 +151,7 @@ pub fn mul(count: i32, scale: f32) -> f32 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         cast_ident_to_f32(&output, "count"),
         "count * scale should cast count. Got:\n{}",

@@ -3,23 +3,8 @@
 //! Rust binds `BlendNode::Blend1D { clips, parameter }` as `&Vec<_>` and `&f32`; struct literals need
 //! `clips.clone()` and `*(parameter)` (Copy peel).
 
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_let_vec_index_enum_struct_copy_and_clone_fields() {
@@ -58,7 +43,7 @@ impl Tree {
 }
 "#;
 
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("clips.clone()") || rust.contains("new_clips = clips.clone()"),
         "non-Copy Vec binding should clone for owned use; got:\n{rust}"

@@ -4,29 +4,8 @@
 //! but `type_contains_trait_object` only checks `Type::TraitObject`, not `Type::ImplTrait`.
 //! This causes Debug/Clone to be incorrectly derived for structs with trait object fields.
 
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_to_rust(source: &str) -> String {
-    let dir = tempdir().expect("tempdir");
-
-    let wj_file = dir.path().join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.path().to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let test_rs = dir.path().join("test.rs");
-    std::fs::read_to_string(&test_rs).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_struct_with_vec_impl_trait_field_skips_debug_clone_derive() {
@@ -40,7 +19,7 @@ pub struct App {
     count: i32,
 }
 "#;
-    let output = compile_wj_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(!output.is_empty(), "Compilation should produce output");
     assert!(
@@ -63,7 +42,7 @@ pub struct Scene {
     renderer: trait Renderer,
 }
 "#;
-    let output = compile_wj_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(!output.is_empty(), "Compilation should produce output");
     assert!(
@@ -82,7 +61,7 @@ pub struct Point {
     y: f32,
 }
 "#;
-    let output = compile_wj_to_rust(source);
+    let output = test_utils::compile_single(source);
 
     assert!(
         output.contains("Debug") && output.contains("Clone"),

@@ -1,39 +1,5 @@
-use std::process::Command;
-
-fn compile_wj_to_rust(input: &str) -> String {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let input_path = temp_dir.path().join("test.wj");
-    std::fs::write(&input_path, input).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", "--target", "rust", "--no-cargo"])
-        .arg(input_path.to_str().unwrap())
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to run wj");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    eprintln!("wj stderr: {}", stderr);
-
-    // Search for generated .rs files
-    for dir_name in ["build", "src", "."] {
-        let dir = temp_dir.path().join(dir_name);
-        if dir.exists() {
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().is_some_and(|e| e == "rs") {
-                        if let Ok(content) = std::fs::read_to_string(&path) {
-                            return content;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    format!("No .rs file found in temp dir {:?}", temp_dir.path())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_let_void_block_adds_semicolon() {
@@ -62,7 +28,7 @@ impl Manager {
 }
 "#;
 
-    let rust_code = compile_wj_to_rust(input);
+    let rust_code = test_utils::compile_single(input);
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(

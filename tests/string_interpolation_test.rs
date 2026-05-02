@@ -1,61 +1,7 @@
 /// TDD: String interpolation is the idiomatic Windjammer way to build strings.
 /// format!() is Rust leakage and should emit a deprecation warning.
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn find_rs_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    if !dir.exists() {
-        return None;
-    }
-    for entry in fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-        if path.is_file() && path.extension().is_some_and(|e| e == "rs") {
-            return Some(path);
-        }
-        if path.is_dir() {
-            if let Some(found) = find_rs_file(&path) {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
-fn compile_wj(source: &str) -> (String, String, String) {
-    let test_dir = tempdir().expect("tempdir for interpolation test");
-
-    let wj_file = test_dir.path().join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.path().join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let generated = if output.status.success() {
-        find_rs_file(&out_dir)
-            .and_then(|p| fs::read_to_string(&p).ok())
-            .unwrap_or_default()
-    } else {
-        String::new()
-    };
-
-    (generated, stdout, stderr)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_interpolation_compiles_to_format() {
@@ -65,7 +11,7 @@ pub fn greet(name: String) -> String {
 }
 "#;
 
-    let (generated, _stdout, _stderr) = compile_wj(source);
+    let (generated, _stdout, _stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !generated.is_empty(),
         "String interpolation should compile successfully"
@@ -85,7 +31,7 @@ pub fn greet(name: String) -> String {
 }
 "#;
 
-    let (_generated, _stdout, stderr) = compile_wj(source);
+    let (_generated, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         stderr.contains("format!() is Rust syntax"),
         "format!() should emit a deprecation warning. Stderr:\n{}",
@@ -106,7 +52,7 @@ pub fn greet(name: String) -> String {
 }
 "#;
 
-    let (_generated, _stdout, stderr) = compile_wj(source);
+    let (_generated, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !stderr.contains("format!() is Rust syntax"),
         "String interpolation should NOT emit format deprecation warning. Stderr:\n{}",
@@ -122,7 +68,7 @@ pub fn describe(x: i32, y: i32) -> String {
 }
 "#;
 
-    let (generated, _stdout, _stderr) = compile_wj(source);
+    let (generated, _stdout, _stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !generated.is_empty(),
         "Interpolation with multiple expressions should compile"
@@ -146,7 +92,7 @@ pub fn status(p: Player) -> String {
 }
 "#;
 
-    let (generated, _stdout, _stderr) = compile_wj(source);
+    let (generated, _stdout, _stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !generated.is_empty(),
         "Interpolation with field access should compile"

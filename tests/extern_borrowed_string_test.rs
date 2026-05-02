@@ -11,42 +11,8 @@
 ///
 /// Fix: Always use .to_string() for string args to extern functions.
 /// Works for both &str and String (String::to_string() returns clone).
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn get_wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(rust_file).expect("Failed to read generated Rust");
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_extern_borrowed_string_param() {
@@ -61,7 +27,7 @@ pub fn verify(data: string, expected: string) -> bool {
 }
 "#;
 
-    let result = compile_to_rust(source);
+    let result = test_utils::compile_single_result(source);
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     let rust = result.unwrap();
@@ -85,7 +51,7 @@ pub fn verify(data: string) -> string {
 }
 "#;
 
-    let result = compile_to_rust(source);
+    let result = test_utils::compile_single_result(source);
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     let rust = result.unwrap();

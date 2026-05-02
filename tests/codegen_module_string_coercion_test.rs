@@ -1,35 +1,5 @@
-use std::io::Write;
-
-fn compile_wj_to_rs(wj_code: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let dir = temp_dir.path().to_path_buf();
-
-    let wj_path = dir.join("test.wj");
-    let mut f = std::fs::File::create(&wj_path).unwrap();
-    f.write_all(wj_code.as_bytes()).unwrap();
-
-    let wj_bin = env!("CARGO_BIN_EXE_wj");
-    let output = std::process::Command::new(wj_bin)
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("failed to run wj");
-
-    let rs_path = dir.join("test.rs");
-    let content = std::fs::read_to_string(&rs_path).unwrap_or_else(|_| {
-        panic!(
-            "Generated .rs file not found at {:?}\nstdout: {}\nstderr: {}",
-            rs_path,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        )
-    });
-    drop(temp_dir);
-    content
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_inline_module_qualified_call_guard() {
@@ -52,7 +22,7 @@ pub fn main() {
 }
 "#;
 
-    let rs = compile_wj_to_rs(code);
+    let rs = test_utils::compile_single(code);
     // In single-file mode, the fallback guard prevents .to_string().
     // This is conservative but safe. The real game build uses multi-file
     // compilation where alias resolution bypasses this guard entirely.
@@ -84,7 +54,7 @@ pub fn main() {
 }
 "#;
 
-    let rs = compile_wj_to_rs(code);
+    let rs = test_utils::compile_single(code);
     // The function is compiled and callable. Whether .to_string() is added
     // depends on whether the qualified lookup succeeds via alias resolution.
     // In single-file mode, gpu_safe::load_shader may or may not be in the
@@ -115,7 +85,7 @@ pub fn main() {
 }
 "#;
 
-    let rs = compile_wj_to_rs(code);
+    let rs = test_utils::compile_single(code);
     let has_collision_guard = !rs.contains(r#""shaders/test.wgsl".to_string()"#)
         || rs.contains(r#""shaders/test.wgsl".to_string()"#);
 

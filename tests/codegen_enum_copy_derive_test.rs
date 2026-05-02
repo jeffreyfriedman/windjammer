@@ -14,39 +14,8 @@
 ///       Message { text: String },
 ///   }
 ///   // Should NOT derive Copy because String is not Copy
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let dir = _tmp
-        .path()
-        .join(format!(".tmpEnumCopy_{}_{}", std::process::id(), id));
-
-    let _ = std::fs::create_dir_all(&dir);
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "--target",
-            "rust",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj");
-
-    let rust_file = dir.join("build").join("test.rs");
-
-    std::fs::read_to_string(&rust_file).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_enum_all_copy_fields_gets_copy_derive() {
@@ -62,7 +31,7 @@ fn main() {
     println!("ok")
 }
 "#;
-    let rust = compile_wj(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("Copy"),
         "Enum with only f32 fields should derive Copy.\nGenerated:\n{}",
@@ -84,7 +53,7 @@ fn main() {
     println!("ok")
 }
 "#;
-    let rust = compile_wj(source);
+    let rust = test_utils::compile_single(source);
     // Should NOT have Copy because String is not Copy
     // But should still have Clone
     assert!(
@@ -116,7 +85,7 @@ fn main() {
     println!("ok")
 }
 "#;
-    let rust = compile_wj(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("Copy"),
         "Enum mixing unit and data variants with only i32/f32 fields should derive Copy.\nGenerated:\n{}",
@@ -137,7 +106,7 @@ fn main() {
     println!("ok")
 }
 "#;
-    let rust = compile_wj(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         !rust.contains("Copy"),
         "Enum with Vec field should NOT derive Copy.\nGenerated:\n{}",
@@ -160,7 +129,7 @@ fn main() {
     println!("ok")
 }
 "#;
-    let rust = compile_wj(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("Copy"),
         "Unit-only enum should still derive Copy.\nGenerated:\n{}",

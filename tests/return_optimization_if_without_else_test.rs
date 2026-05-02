@@ -30,36 +30,8 @@
 //!
 //! Fix: Preserve explicit `return` when inside if/if-let without corresponding else.
 
-use anyhow::Result;
-use std::fs;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn compile_wj_source(source: &str) -> Result<String> {
-    let temp_dir = tempdir()?;
-
-    let source_file = temp_dir.path().join("test.wj");
-    fs::write(&source_file, source)?;
-
-    let output_dir = temp_dir.path().join("output");
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&source_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Compilation failed:\n{}", stderr);
-    }
-
-    let rust_code = fs::read_to_string(output_dir.join("test.rs"))?;
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -74,7 +46,7 @@ pub fn check_condition(x: i32) -> bool {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return true", not just "true"
     assert!(
@@ -97,7 +69,7 @@ pub fn get_first(items: Vec<i32>) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return first", not just "first"
     assert!(
@@ -122,7 +94,7 @@ pub fn nested_check(a: bool, b: bool) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return 1", not just "1"
     assert!(
@@ -146,7 +118,7 @@ pub fn with_else(x: i32) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: This could either have "return" or implicit returns
     // As long as it compiles to valid Rust, we're good
@@ -168,7 +140,7 @@ pub fn early_return(x: i32) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: This test just checks compilation succeeds
     // (Whether return is optimized away or not doesn't matter for correctness)
@@ -203,7 +175,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return frame.index", not just "frame.index"
     assert!(

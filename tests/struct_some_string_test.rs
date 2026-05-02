@@ -1,42 +1,7 @@
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Helper to compile Windjammer code and return the generated Rust code
-fn compile_code(code: &str) -> Result<String, String> {
-    use std::fs;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to run wj: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = out_dir.join("test.rs");
-    fs::read_to_string(&generated_file).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_struct_field_some_string_literal() {
@@ -54,7 +19,7 @@ fn test_struct_field_some_string_literal() {
         }
     }
     "#;
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
     // Some("root") should convert to Some("root".to_string()) (codegen may emit an extra .to_string())
     assert!(
         generated.contains(r#"Some("root".to_string()"#),
@@ -83,7 +48,7 @@ fn test_struct_field_ok_string_literal() {
         }
     }
     "#;
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
     // Ok("success") may have an extra .to_string() in expansion
     assert!(
         generated.contains(r#"Ok("success".to_string()"#),

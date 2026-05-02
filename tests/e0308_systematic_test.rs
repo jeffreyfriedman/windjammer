@@ -3,33 +3,11 @@
 //! TDD tests for high-frequency E0308 patterns to verify compiler fixes.
 //! Goal: Reduce E0308 from 188 to <160 through pattern-based fixes.
 
-use windjammer::*;
+// Pattern A: Tuple fields in struct literal - Keyframe { rotation: (0.0, 0.0, 0.0, 1.0) }
 
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
+#[path = "test_utils.rs"]
+mod test_utils;
 
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    if !float_inference.errors.is_empty() {
-        panic!("Float inference errors: {:?}", float_inference.errors);
-    }
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
-
-/// Pattern A: Tuple fields in struct literal - Keyframe { rotation: (0.0, 0.0, 0.0, 1.0) }
 #[test]
 fn test_pattern_a_tuple_fields_f32() {
     let source = r#"
@@ -41,7 +19,7 @@ pub fn make() -> Keyframe {
     Keyframe { rotation: (0.0, 0.0, 0.0, 1.0) }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         !rust.contains("_f64"),
         "Tuple fields should be f32. Got:\n{}",
@@ -63,7 +41,7 @@ pub fn call_it() -> f32 {
     process(0.5)
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("0.5_f32") || rust.contains("0.5f32"),
         "Arg should be f32. Got:\n{}",
@@ -79,7 +57,7 @@ pub fn get_value() -> f32 {
     0.0
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("0.0_f32") || rust.contains("0.0f32"),
         "Return should be f32. Got:\n{}",
@@ -100,7 +78,7 @@ pub fn get_score(scores: HashMap<i32, f32>, key: i32) -> f32 {
     }
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("999999.0_f32") || rust.contains("999999.0f32"),
         "None arm should be f32 to match Some arm. Got:\n{}",
@@ -119,7 +97,7 @@ pub fn make_floats() -> Vec<f32> {
     items
 }
 "#;
-    let rust = compile_and_get_rust(source);
+    let rust = test_utils::compile_single(source);
     assert!(
         rust.contains("0.0_f32") || rust.contains("0.0f32"),
         "push(0.0) should be f32. Got:\n{}",

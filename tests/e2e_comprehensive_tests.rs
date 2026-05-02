@@ -3,67 +3,12 @@
 //! These tests verify complete Windjammer programs compile to valid Rust,
 //! testing realistic scenarios that exercise multiple compiler features.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    // Use the pre-built wj binary directly (much faster than cargo run, especially under tarpaulin)
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // COMPLETE PROGRAMS
@@ -109,7 +54,7 @@ pub fn test_counter() -> i32 {
     c.get()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Counter program should compile. Error: {}", err);
 }
 
@@ -148,7 +93,7 @@ impl Stack {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Stack program should compile. Error: {}", err);
 }
 
@@ -182,7 +127,7 @@ impl Point {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Point operations should compile. Error: {}", err);
 }
 
@@ -207,7 +152,7 @@ impl Node {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Node should compile. Error: {}", err);
 }
 
@@ -237,7 +182,7 @@ pub fn calculate(a: i32, b: i32, op: Operation) -> Option<i32> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Calculator should compile. Error: {}", err);
 }
 
@@ -272,7 +217,7 @@ impl EventHandler {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Event handler should compile. Error: {}", err);
 }
 
@@ -325,7 +270,7 @@ impl StateMachine {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "State machine should compile. Error: {}", err);
 }
 
@@ -349,7 +294,7 @@ pub fn count_positive(numbers: &Vec<i32>) -> usize {
     numbers.iter().filter(|n| **n > 0).count()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iterator pipeline should compile. Error: {}", err);
 }
 
@@ -373,7 +318,7 @@ pub fn factorial(n: i32) -> i32 {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Recursive functions should compile. Error: {}",
@@ -414,7 +359,7 @@ impl Config {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Builder pattern should compile. Error: {}", err);
 }
 
@@ -448,7 +393,7 @@ impl<T: Clone> Pair<T> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Generic container should compile. Error: {}", err);
 }
 
@@ -487,6 +432,6 @@ impl Entity {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Game entity should compile. Error: {}", err);
 }

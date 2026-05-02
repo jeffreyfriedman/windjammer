@@ -5,28 +5,8 @@
 /// .clone() which returns &str, not String, causing E0308 type mismatch.
 ///
 /// Fix: Detect when .clone() result needs to be String and generate .to_string() instead.
-use std::fs;
-use tempfile::tempdir;
-use windjammer::{build_project_ext, CompilationTarget};
-
-fn compile_single_file(source: &str) -> String {
-    let src = tempdir().expect("tempdir for src");
-    let out = tempdir().expect("tempdir for out");
-
-    fs::write(src.path().join("test.wj"), source).expect("write test.wj");
-
-    build_project_ext(
-        src.path(),
-        out.path(),
-        CompilationTarget::Rust,
-        false,
-        true,
-        &[],
-    )
-    .expect("build_project_ext");
-
-    fs::read_to_string(out.path().join("test.rs")).unwrap_or_default()
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_string_clone_generates_to_string() {
@@ -46,7 +26,7 @@ pub fn create_dialog(id: string) -> DialogTree {
 }
 "#;
 
-    let generated = compile_single_file(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     if generated.contains("id: &str") {
@@ -76,7 +56,7 @@ pub fn create_dialog(id: string, suffix: string) -> DialogTree {
 }
 "#;
 
-    let generated = compile_single_file(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     assert!(!generated.is_empty(), "Should generate valid Rust code");

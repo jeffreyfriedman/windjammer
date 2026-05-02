@@ -6,36 +6,8 @@
 //! 2. Method expects &str -> do NOT add .to_string()
 //! 3. Works for Vec::push(), custom methods, any method expecting String
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -50,7 +22,7 @@ fn test_vec_push_string_literal() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should automatically add .to_string() for string literals
     assert!(
@@ -78,7 +50,7 @@ fn test_vec_push_string_variable_no_conversion() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT add .to_string() for variables (already String)
     assert!(
@@ -109,7 +81,7 @@ fn test_custom_method_string_param() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should add .to_string() when calling log() with a string literal
     assert!(
@@ -139,7 +111,7 @@ fn test_str_param_no_conversion() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT add .to_string() for &str parameters
     assert!(
@@ -163,7 +135,7 @@ fn test_multiple_string_params() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // PHASE 2 OPTIMIZATION: Borrowed string params → &str, literals passed directly
     // a: Owned (used in addition) → needs .to_string()
@@ -189,7 +161,7 @@ fn test_mixed_str_and_string_params() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // First param (String) should convert, second (&str) should not
     assert!(
@@ -228,7 +200,7 @@ fn test_chained_method_calls() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should convert the string literal in the chained call
     assert!(
@@ -253,7 +225,7 @@ fn test_hashmap_insert_string_keys() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should convert string literal keys for HashMap<String, _>
     // Integer inference may add suffixes like _i32

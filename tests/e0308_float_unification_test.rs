@@ -6,33 +6,8 @@
 //! - `if` / `else` with `8.0` vs `x as f32` — cast result was not constrained as f32 for branch unification.
 //! - Unknown float literals defaulted to `_f64` in codegen.
 
-use windjammer::*;
-
-fn compile_and_get_rust(source: &str) -> String {
-    let mut lexer = lexer::Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = parser::Parser::new(tokens);
-    let program = parser.parse().expect("Failed to parse");
-
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.infer_program(&program);
-
-    assert!(
-        float_inference.errors.is_empty(),
-        "Float inference errors: {:?}",
-        float_inference.errors
-    );
-
-    let mut analyzer = analyzer::Analyzer::new();
-    let (analyzed, _signatures, _trait_methods) = analyzer
-        .analyze_program(&program)
-        .expect("Failed to analyze");
-
-    let registry = analyzer::SignatureRegistry::new();
-    let mut generator = codegen::CodeGenerator::new(registry, CompilationTarget::Rust);
-    generator.set_float_inference(float_inference);
-    generator.generate_program(&program, &analyzed)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_nested_mod_call_registers_signature_and_literals_are_f32() {
@@ -56,7 +31,7 @@ pub fn demo() -> bool {
     ffi::api::tilemap_check_collision(0u32, 0.0, 0.0, 1.0, 1.0, 1.0)
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("1.0_f32") || output.contains("1.0f32"),
         "unsuffixed 1.0 args to f32 params should be f32, got:\n{}",
@@ -84,7 +59,7 @@ pub fn primitive_scale(node_type: i32) -> f32 {
     }
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("8.0_f32") || output.contains("8.0f32"),
         "then-branch literal should unify to f32 with as f32 else arms, got:\n{}",
@@ -105,7 +80,7 @@ pub fn bare() -> i32 {
     0
 }
 "#;
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
     assert!(
         output.contains("2.5_f32") || output.contains("2.5f32"),
         "unconstrained literal should default to f32, got:\n{}",

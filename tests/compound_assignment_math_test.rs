@@ -1,22 +1,5 @@
-/// TDD Test: Compound Assignment Operators for Math
-///
-/// Verify that all compound assignment operators work correctly:
-/// - += (addition)
-/// - -= (subtraction)
-/// - *= (multiplication)
-/// - /= (division)
-/// - %= (modulo)
-/// - &= (bitwise AND)
-/// - |= (bitwise OR)
-/// - ^= (bitwise XOR)
-/// - <<= (left shift)
-/// - >>= (right shift)
-///
-/// Expected: All operators should work naturally with numeric types
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_compound_add_integers() {
@@ -29,7 +12,7 @@ pub fn add_values() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -51,7 +34,7 @@ pub fn add_floats() -> f32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -73,7 +56,7 @@ pub fn subtract_values() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -92,7 +75,7 @@ pub fn multiply_values() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -111,7 +94,7 @@ pub fn divide_values() -> f32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -129,7 +112,7 @@ pub fn modulo_value() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -147,7 +130,7 @@ pub fn bitwise_and() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -166,7 +149,7 @@ pub fn bitwise_or() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -184,7 +167,7 @@ pub fn bitwise_xor() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -202,7 +185,7 @@ pub fn left_shift() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -220,7 +203,7 @@ pub fn right_shift() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -241,7 +224,7 @@ pub fn mixed_ops() -> f32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -264,7 +247,7 @@ pub fn compound_with_expr() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -290,7 +273,7 @@ pub fn compute() -> i32 {
 }
 "#;
 
-    let (success, output) = compile_and_verify_rust(source);
+    let (output, success) = test_utils::compile_single_check(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -304,35 +287,3 @@ pub fn compute() -> i32 {
 }
 
 // Helper function
-fn compile_and_verify_rust(source: &str) -> (bool, String) {
-    let _ = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let source_file = tmp.path().join("test.wj");
-    std::fs::write(&source_file, source).unwrap();
-
-    if let Err(e) = windjammer::build_project(
-        &source_file,
-        tmp.path(),
-        windjammer::CompilationTarget::Rust,
-        false,
-    ) {
-        return (false, format!("Compilation failed: {}", e));
-    }
-
-    let rust_file = tmp.path().join("test.rs");
-    let rust_code =
-        std::fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    let rmeta = tmp.path().join("verify.rmeta");
-    let rustc = Command::new("rustc")
-        .arg("--edition=2021")
-        .arg("--crate-type=lib")
-        .arg("--emit=metadata")
-        .arg("-o")
-        .arg(rmeta.to_str().unwrap())
-        .arg(rust_file.to_str().unwrap())
-        .output()
-        .expect("Failed to run rustc");
-
-    (rustc.status.success(), rust_code)
-}

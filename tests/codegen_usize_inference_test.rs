@@ -10,67 +10,13 @@
 //             for methods, only self.field for field access, and ignores parameters.
 // Fix: Use infer_expression_type() as fallback to check if expression is usize.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_check(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return (
-            false,
-            String::new(),
-            format!(
-                "Compiler failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated =
-        fs::read_to_string(&generated_path).unwrap_or_else(|e| format!("Read error: {}", e));
-
-    // Compile the generated Rust with rustc
-    let rustc = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg("--edition=2021")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc {
-        Ok(rustc_output) => {
-            let err = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-            (rustc_output.status.success(), generated, err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // Test 1: usize parameter compared with usize field
 #[test]
 fn test_usize_param_compared_with_usize_field() {
-    let (ok, generated, err) = compile_and_check(
+    let (generated, ok) = test_utils::compile_single_check(
         r#"
 struct Config {
     max_size: usize,
@@ -87,6 +33,7 @@ impl Loader {
 }
 "#,
     );
+    let err = if !ok { generated.as_str() } else { "" };
 
     println!("Generated:\n{}", generated);
     if !ok {
@@ -105,7 +52,7 @@ impl Loader {
 // Test 2: usize method return compared with usize variable
 #[test]
 fn test_usize_method_return_compared_with_usize_var() {
-    let (ok, generated, err) = compile_and_check(
+    let (generated, ok) = test_utils::compile_single_check(
         r#"
 struct Animation {
     frames: Vec<int>,
@@ -129,6 +76,7 @@ impl Controller {
 }
 "#,
     );
+    let err = if !ok { generated.as_str() } else { "" };
 
     println!("Generated:\n{}", generated);
     if !ok {
@@ -141,7 +89,7 @@ impl Controller {
 // Test 3: non-self field access with usize type
 #[test]
 fn test_non_self_usize_field_in_comparison() {
-    let (ok, generated, err) = compile_and_check(
+    let (generated, ok) = test_utils::compile_single_check(
         r#"
 struct Asset {
     data_size: usize,
@@ -164,6 +112,7 @@ impl AssetManager {
 }
 "#,
     );
+    let err = if !ok { generated.as_str() } else { "" };
 
     println!("Generated:\n{}", generated);
     if !ok {
@@ -176,7 +125,7 @@ impl AssetManager {
 // Test 4: usize from method call compared with usize variable
 #[test]
 fn test_usize_method_result_in_comparison() {
-    let (ok, generated, err) = compile_and_check(
+    let (generated, ok) = test_utils::compile_single_check(
         r#"
 struct Inventory {
     slots: Vec<int>,
@@ -200,6 +149,7 @@ impl Inventory {
 }
 "#,
     );
+    let err = if !ok { generated.as_str() } else { "" };
 
     println!("Generated:\n{}", generated);
     if !ok {

@@ -3,23 +3,10 @@
 /// Bug: grid.set(x, y, z, material) calls VoxelGrid::set(&mut self, ...)
 /// but the compiler doesn't recognize "set" as a mutating method name.
 /// Result: grid parameter inferred as & instead of &mut.
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
 use windjammer::method_registry;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
 
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_set_is_mutating_method() {
@@ -61,7 +48,7 @@ pub fn stamp_voxel(grid: VoxelGrid, x: i32, y: i32, z: i32, material: u8) {
     grid.set(x, y, z, material)
 }
 "#;
-    let compiled = compile_to_rust(source);
+    let compiled = test_utils::compile_single(source);
     assert!(
         compiled.contains("grid: &mut VoxelGrid"),
         "grid parameter should be &mut VoxelGrid since grid.set() mutates. Got:\n{}",
@@ -89,7 +76,7 @@ pub fn read_voxel(grid: VoxelGrid, x: i32, y: i32, z: i32) -> u8 {
     grid.get(x, y, z)
 }
 "#;
-    let compiled = compile_to_rust(source);
+    let compiled = test_utils::compile_single(source);
     assert!(
         compiled.contains("grid: &VoxelGrid"),
         "grid parameter should be &VoxelGrid since grid.get() only reads. Got:\n{}",
@@ -126,7 +113,7 @@ pub fn fill_cube_free(grid: Grid, size: i32, material: u8) {
     }
 }
 "#;
-    let compiled = compile_to_rust(source);
+    let compiled = test_utils::compile_single(source);
     assert!(
         compiled.contains("grid: &mut Grid"),
         "grid parameter in nested while loops calling .set() should be &mut. Got:\n{}",
@@ -159,7 +146,7 @@ impl Renderer {
     }
 }
 "#;
-    let compiled = compile_to_rust(source);
+    let compiled = test_utils::compile_single(source);
     assert!(
         compiled.contains("grid: &mut Grid"),
         "grid param in impl-associated function calling .set() should be &mut. Got:\n{}",

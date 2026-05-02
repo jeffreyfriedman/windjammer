@@ -1,9 +1,8 @@
 use std::fs;
 use std::process::Command;
 
-fn get_wj_binary() -> &'static str {
-    env!("CARGO_BIN_EXE_wj")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_lib_rs_regenerated_when_mod_wj_adds_module() {
@@ -18,7 +17,7 @@ fn test_lib_rs_regenerated_when_mod_wj_adds_module() {
     fs::write(src.join("alpha.wj"), "pub fn hello() -> i32 {\n    42\n}\n").unwrap();
 
     // First build
-    let status = Command::new(get_wj_binary())
+    let status = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.to_str().unwrap(),
@@ -48,7 +47,7 @@ fn test_lib_rs_regenerated_when_mod_wj_adds_module() {
     fs::write(src.join("beta.wj"), "pub fn world() -> i32 {\n    99\n}\n").unwrap();
 
     // Rebuild (lib.rs already exists)
-    let status = Command::new(get_wj_binary())
+    let status = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.to_str().unwrap(),
@@ -85,7 +84,7 @@ fn test_lib_rs_strips_use_super() {
     fs::write(src.join("mod.wj"), "pub mod alpha\n").unwrap();
     fs::write(src.join("alpha.wj"), "pub fn hello() -> i32 {\n    42\n}\n").unwrap();
 
-    let status = Command::new(get_wj_binary())
+    let status = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.to_str().unwrap(),
@@ -119,7 +118,7 @@ fn test_lib_rs_updated_when_module_removed() {
     fs::write(src.join("alpha.wj"), "pub fn a() -> i32 { 1 }\n").unwrap();
     fs::write(src.join("beta.wj"), "pub fn b() -> i32 { 2 }\n").unwrap();
 
-    let status = Command::new(get_wj_binary())
+    let status = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.to_str().unwrap(),
@@ -140,7 +139,7 @@ fn test_lib_rs_updated_when_module_removed() {
     // Remove beta from mod.wj
     fs::write(src.join("mod.wj"), "pub mod alpha\n").unwrap();
 
-    let status = Command::new(get_wj_binary())
+    let status = Command::new(test_utils::wj_binary())
         .args([
             "build",
             src.to_str().unwrap(),

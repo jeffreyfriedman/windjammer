@@ -6,36 +6,8 @@
 //!   `function_modifies_self_fields_recursive` breaks the cycle (conservative: treat as mutating).
 //! - `return self.cells[i].touch()` where `touch` is only known mutating via registry / same-file `impl`.
 
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("write wj");
-    std::fs::create_dir_all(&out_dir).expect("mkdir");
-
-    let output = std::process::Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let test_rs = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(test_rs).expect("read"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_self_field_mutation_in_nested_match() {
@@ -61,7 +33,7 @@ impl Game {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
 
     // Should NOT stack overflow
     assert!(result.is_ok(), "Should compile without stack overflow");
@@ -98,7 +70,7 @@ impl Player {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
 
     assert!(result.is_ok(), "Should compile without stack overflow");
 
@@ -131,7 +103,7 @@ impl State {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
 
     assert!(result.is_ok(), "Should compile without stack overflow");
 
@@ -156,7 +128,7 @@ impl Node {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
     assert!(
         result.is_ok(),
         "mutual recursion in self-call analysis must not stack overflow: {:?}",
@@ -192,7 +164,7 @@ impl Grid {
 }
 "#;
 
-    let result = compile_to_rust(src);
+    let result = test_utils::compile_single_result(src);
     assert!(result.is_ok(), "compile: {:?}", result.as_ref().err());
     let rust = result.unwrap();
     assert!(

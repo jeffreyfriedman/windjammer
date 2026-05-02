@@ -15,8 +15,8 @@
 ///     }
 /// }
 /// ```
-use std::path::PathBuf;
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_field_in_binary_op_simple() {
@@ -31,7 +31,7 @@ impl Controller {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -69,7 +69,7 @@ impl Vec3 {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -108,7 +108,7 @@ impl Point {
 }
 "#;
 
-    let output = compile_and_get_rust(source);
+    let output = test_utils::compile_single(source);
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
@@ -135,44 +135,3 @@ impl Point {
 }
 
 // Helper function to compile Windjammer source and get generated Rust
-fn compile_and_get_rust(source: &str) -> String {
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    // process::id() is identical across parallel test threads — unique per thread
-    // so `cargo test` does not clobber the same .wj / output dir.
-    let test_name = format!(
-        "field_binary_test_{}_{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    );
-    let test_file = temp_dir.join(format!("{}.wj", test_name));
-    let output_dir = temp_dir.join(&test_name);
-    let output_file = output_dir.join(format!("{}.rs", test_name));
-
-    // Write source to temporary file
-    std::fs::write(&test_file, source).expect("Failed to write test file");
-
-    // Compile with wj (use local build)
-    let wj_path = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let status = Command::new(&wj_path)
-        .arg("build")
-        .arg(&test_file)
-        .arg("-o")
-        .arg(&output_dir)
-        .arg("--no-cargo") // Skip cargo build to avoid dependency issues
-        .status()
-        .expect("Failed to execute wj compiler");
-
-    assert!(status.success(), "Compilation failed");
-
-    // Read generated Rust
-    let rust_code =
-        std::fs::read_to_string(&output_file).expect("Failed to read generated Rust file");
-
-    // Cleanup
-    let _ = std::fs::remove_file(&test_file);
-
-    rust_code
-}

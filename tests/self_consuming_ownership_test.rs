@@ -1,19 +1,5 @@
-use windjammer::analyzer::Analyzer;
-use windjammer::codegen::rust::CodeGenerator;
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
-use windjammer::CompilationTarget;
-
-fn compile_to_rust(source: &str) -> String {
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.tokenize_with_locations();
-    let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
-    let mut analyzer = Analyzer::new();
-    let (analyzed_fns, registry, _) = analyzer.analyze_program(&program).unwrap();
-    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
-    codegen.generate_program(&program, &analyzed_fns)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_calling_self_consuming_method_inferred_owned() {
@@ -43,7 +29,7 @@ impl PassBuilder {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     // input_uniform takes owned self (builder pattern) - may be `self` or `mut self`
     assert!(
@@ -98,7 +84,7 @@ impl Builder {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     // build() moves self.bindings into a struct literal, so it needs owned self
     assert!(
@@ -141,7 +127,7 @@ impl Chain {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     assert!(
         code.contains("fn do_both(self") || code.contains("fn do_both(mut self"),
@@ -171,7 +157,7 @@ impl Data {
 }
 "#;
 
-    let code = compile_to_rust(source);
+    let code = test_utils::compile_single(source);
 
     // get_count reads a Copy field - should be &self
     assert!(

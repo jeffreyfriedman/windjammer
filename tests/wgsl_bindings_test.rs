@@ -1,40 +1,8 @@
 // Tests for WGSL buffer bindings and storage qualifiers
 // Following TDD approach as per windjammer-development.mdc
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn transpile_wj_to_wgsl(source: &str) -> String {
-    let tmp = TempDir::new().unwrap();
-    let input_file = tmp.path().join("test.wj");
-    let output_dir = tmp.path().join("out");
-
-    fs::write(&input_file, source).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--target",
-            "wgsl",
-            "--output",
-            output_dir.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to compile");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\nSTDERR:\n{}\n\nSTDOUT:\n{}",
-            String::from_utf8_lossy(&output.stderr),
-            String::from_utf8_lossy(&output.stdout)
-        );
-    }
-
-    let wgsl_file = output_dir.join("test.wgsl");
-    fs::read_to_string(&wgsl_file).expect("Should generate WGSL file")
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // UNIFORM BUFFER TESTS
@@ -49,7 +17,7 @@ pub struct CameraUniforms {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     // WGSL uses @group, @binding on the variable declaration, not the struct field
     // But we can verify the struct is generated correctly
@@ -71,7 +39,7 @@ pub struct Particle {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("struct ParticleBuffer"));
     assert!(generated.contains("struct Particle"));
@@ -87,7 +55,7 @@ pub struct MeshData {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("struct MeshData"));
     assert!(generated.contains("vertices: array<vec3<f32>>"));
@@ -118,7 +86,7 @@ pub struct LightData {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("struct Bindings"));
     assert!(generated.contains("camera: CameraUniforms"));
@@ -152,7 +120,7 @@ pub struct ObjectData {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("struct Resources"));
     assert!(generated.contains("per_frame: FrameData"));
@@ -180,7 +148,7 @@ pub fn main_cs(id: vec3<uint>) {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     println!("Generated WGSL:\n{}", generated);
 
@@ -213,7 +181,7 @@ pub fn update_particles(@builtin(global_invocation_id) id: vec3<uint>) {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(generated.contains("@group(0)"), "Generated:\n{}", generated);
     assert!(
@@ -252,7 +220,7 @@ pub fn main_fs() -> vec4<float> {
 }
 "#;
 
-    let generated = transpile_wj_to_wgsl(source);
+    let generated = test_utils::compile_single(source);
 
     assert!(
         generated.contains("albedo_texture: texture_2d<f32>"),

@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: FFI Dependencies in Test Framework
 ///
@@ -7,13 +10,8 @@ use anyhow::Result;
 /// SOLUTION: When copying FFI files to test library, also copy their dependencies
 /// from the project's Cargo.toml to the test library's Cargo.toml.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -105,7 +103,7 @@ fn test_simple() {
     )?;
 
     // Run wj test
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let output = Command::new(&wj_compiler)
         .arg("test")
         .arg(&test_wj)

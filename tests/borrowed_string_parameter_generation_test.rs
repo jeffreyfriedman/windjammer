@@ -5,54 +5,8 @@
 ///
 /// While `&str` is more idiomatic Rust, &String is CORRECT when interfacing with
 /// generic stdlib code like Vec<String>. We can add a lint later to suggest &str.
-use std::fs;
-
-fn compile_to_rust(wj_code: &str) -> String {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let wj_file = temp_dir.path().join("test.wj");
-    fs::write(&wj_file, wj_code).unwrap();
-
-    let compiler = env!("CARGO_BIN_EXE_wj");
-
-    let output = std::process::Command::new(compiler)
-        .arg("build")
-        .arg(&wj_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("wj build failed:\n{}", stderr);
-    }
-
-    let rs_file = temp_dir.path().join("build/test.rs");
-    fs::read_to_string(rs_file).expect("Failed to read generated Rust")
-}
-
-fn compile_and_check_rust(wj_code: &str) -> Result<String, String> {
-    let rust_code = compile_to_rust(wj_code);
-
-    let temp_dir = tempfile::tempdir().unwrap();
-    let rs_file = temp_dir.path().join("test.rs");
-    fs::write(&rs_file, &rust_code).unwrap();
-
-    let rustc_output = std::process::Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&rs_file)
-        .arg("--out-dir")
-        .arg(temp_dir.path())
-        .output()
-        .unwrap();
-
-    let stderr = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-
-    if rustc_output.status.success() {
-        Ok(rust_code)
-    } else {
-        Err(stderr)
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_borrowed_string_param_generates_ampersand_string() {
@@ -74,7 +28,7 @@ pub fn main() {
 }
 "#;
 
-    let result = compile_and_check_rust(code);
+    let result = test_utils::compile_single_result(code);
     match &result {
         Ok(rust_code) => {
             // Check that the parameter is generated as &String, not &str
@@ -114,7 +68,7 @@ pub fn main() {
 }
 "#;
 
-    let result = compile_and_check_rust(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Owned string parameter should work:\n{:?}",

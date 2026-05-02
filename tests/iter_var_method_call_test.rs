@@ -4,87 +4,8 @@
 // and comparisons without needing Rust-specific .as_str() calls.
 // Windjammer infers string types and comparisons automatically.
 
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    use std::fs;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-
-    let output = Command::new(&wj_binary)
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to run wj: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = out_dir.join("test.rs");
-    fs::read_to_string(&generated_file).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify_rustc(code: &str) -> String {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static VERIFY_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let generated = compile_code(code).expect("WJ compilation failed");
-
-    let verify_id = VERIFY_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let _tmp = tempfile::tempdir().unwrap();
-    let temp_dir = _tmp.path();
-
-    let rs_file = temp_dir.join(format!(
-        "verify_iter_method_{}_{}.rs",
-        std::process::id(),
-        verify_id
-    ));
-    std::fs::write(&rs_file, &generated).expect("Failed to write rs file");
-
-    let verify = Command::new("rustc")
-        .args([
-            "--edition",
-            "2021",
-            "--crate-type",
-            "lib",
-            rs_file.to_str().unwrap(),
-        ])
-        .output()
-        .expect("Failed to run rustc");
-
-    let _ = std::fs::remove_file(&rs_file);
-
-    if !verify.status.success() {
-        let verify_stderr = String::from_utf8_lossy(&verify.stderr);
-        panic!(
-            "Generated Rust doesn't compile:\n{}\n\nGenerated code:\n{}",
-            verify_stderr, generated
-        );
-    }
-
-    generated
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -100,7 +21,7 @@ fn test_iter_var_string_comparison() {
         return results
     }
     "#;
-    let generated = compile_and_verify_rustc(code);
+    let generated = test_utils::compile_single(code);
     // The comparison should be clean, no .as_str() needed
     assert!(
         !generated.contains(".as_str()"),
@@ -129,7 +50,7 @@ fn test_iter_var_comparison_with_struct_field() {
         }
     }
     "#;
-    let generated = compile_and_verify_rustc(code);
+    let generated = test_utils::compile_single(code);
     // No .as_str(), no type mismatch errors
     assert!(
         !generated.contains(".as_str()"),
@@ -153,7 +74,7 @@ fn test_iter_var_method_call_on_string() {
         return count
     }
     "#;
-    let generated = compile_and_verify_rustc(code);
+    let generated = test_utils::compile_single(code);
     assert!(
         generated.contains(".len()"),
         "Should generate .len() method call on iteration variable: {}",

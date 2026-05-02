@@ -1,13 +1,11 @@
-use std::path::PathBuf;
 /// TDD Test: Single-file binary compilation
 ///
 /// This test ensures single-file Windjammer programs compile to executables
 /// with correct Cargo.toml [[bin]] sections.
 use std::process::Command;
 
-fn get_wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -28,7 +26,7 @@ fn main() {
     println!("🔨 Compiling hello.wj...");
 
     // Compile with --no-cargo to see what files are generated
-    let output = Command::new(get_wj_binary())
+    let output = Command::new(test_utils::wj_binary())
         .arg("build")
         .arg(&input_file)
         .arg("--output")
