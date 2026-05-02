@@ -33,15 +33,16 @@ fn test_enum_struct_wildcard() {
 
     let output = result.unwrap();
     assert!(
-        output.contains("circle"),
-        "Should print 'circle': {}",
+        output.contains("Shape::Circle { .. }"),
+        "Should destructure Circle with wildcard: {}",
         output
     );
     assert!(
-        output.contains("rectangle"),
-        "Should print 'rectangle': {}",
+        output.contains("Shape::Rectangle { .. }"),
+        "Should destructure Rectangle with wildcard: {}",
         output
     );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -73,15 +74,21 @@ fn test_enum_struct_extract_fields() {
 
     let output = result.unwrap();
     assert!(
-        output.contains("12.57"),
-        "Circle area should be ~12.57: {}",
+        output.contains("Shape::Circle { radius }"),
+        "Should destructure Circle with radius field: {}",
         output
     );
     assert!(
-        output.contains("15.00"),
-        "Rectangle area should be 15.00: {}",
+        output.contains("Shape::Rectangle { width, height }"),
+        "Should destructure Rectangle with width and height: {}",
         output
     );
+    assert!(
+        output.contains("radius * radius"),
+        "Should use radius in calculation: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -112,8 +119,17 @@ fn test_enum_struct_partial_extract() {
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
-    assert!(output.contains("1.5"), "Point intensity: {}", output);
-    assert!(output.contains("2.0"), "Directional intensity: {}", output);
+    assert!(
+        output.contains("Light::Point { intensity, .. }"),
+        "Should destructure Point with partial fields: {}",
+        output
+    );
+    assert!(
+        output.contains("Light::Directional { intensity, .. }"),
+        "Should destructure Directional with partial fields: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -148,11 +164,20 @@ fn test_enum_mixed_variants() {
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
-    assert!(output.contains("int: 42"), "Int variant: {}", output);
-    assert!(output.contains("float: 3.1"), "Float variant: {}", output);
     assert!(
-        output.contains("pair: (10, 20)"),
-        "Pair variant: {}",
+        output.contains("Value::Int(n)"),
+        "Should destructure Int tuple variant: {}",
         output
     );
+    assert!(
+        output.contains("Value::Float(f)"),
+        "Should destructure Float tuple variant: {}",
+        output
+    );
+    assert!(
+        output.contains("Value::Pair { x, y }"),
+        "Should destructure Pair struct variant: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
