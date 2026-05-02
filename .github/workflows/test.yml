@@ -181,12 +181,32 @@ jobs:
         with:
           node-version: '20'
       
+      - name: Free disk space (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "Disk space before cleanup:"
+          df -h /
+          rm -rf /c/Users/runneradmin/.dotnet || true
+          rm -rf /c/Users/runneradmin/.cargo/registry/cache || true
+          rm -rf "$ANDROID_HOME" || true
+          echo "Disk space after cleanup:"
+          df -h /
+      
       - name: Build tests (release mode)
         shell: bash
         run: cargo test --release --all-features --no-run
       
+      - name: Clean debug artifacts before running tests
+        shell: bash
+        run: |
+          rm -rf target/debug || true
+          rm -rf target/release/build/*/out || true
+      
       - name: Run tests
         shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: |
           export PATH="$PWD/target/release:$PATH"
           cargo nextest run --release --all-features \
