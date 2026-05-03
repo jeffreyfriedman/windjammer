@@ -492,9 +492,15 @@ impl<'ast> CodeGenerator<'ast> {
                             .needs_clone(name, self.current_statement_idx)
                             .is_some()
                         {
+                            // Borrowed/mut-borrowed params don't need cloning:
+                            // &T is Copy (reborrow is free), &mut T can be reborrowed.
+                            let is_ref_param = self.inferred_borrowed_params.contains(name)
+                                || self.inferred_mut_borrowed_params.contains(name);
+
                             // Skip .clone() for Copy types — they are implicitly copied,
                             // so .clone() is unnecessary noise.
-                            let is_copy_type = analysis.string_literal_vars.contains(name)
+                            let is_copy_type = is_ref_param
+                                || analysis.string_literal_vars.contains(name)
                                 || self.usize_variables.contains(name)
                                 || self
                                     .infer_expression_type(expr_to_generate)
@@ -4563,8 +4569,39 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Tuple {
                 elements: exprs, ..
             } => {
-                let expr_strs: Vec<String> =
-                    exprs.iter().map(|e| self.generate_expression(e)).collect();
+                let expr_strs: Vec<String> = exprs
+                    .iter()
+                    .map(|e| {
+                        let mut s = self.generate_expression(e);
+                        if !s.ends_with(".clone()") && !s.ends_with(".to_string()") {
+                            let ty = self.infer_expression_type(e);
+                            let needs_clone = ty.as_ref().is_some_and(|t| match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    !self.is_type_copy(inner)
+                                }
+                                _ => false,
+                            });
+                            if !needs_clone {
+                                // Also clone non-Copy field accesses through references
+                                // (e.g. from_stack.item.id where from_stack is behind &)
+                                if let Expression::FieldAccess { object, .. } = e {
+                                    let root_is_ref =
+                                        self.field_access_root_is_behind_reference(object);
+                                    if root_is_ref {
+                                        let is_copy =
+                                            ty.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                        if !is_copy {
+                                            s = format!("{}.clone()", s);
+                                        }
+                                    }
+                                }
+                            } else {
+                                s = format!("{}.clone()", s);
+                            }
+                        }
+                        s
+                    })
+                    .collect();
                 format!("({})", expr_strs.join(", "))
             }
             Expression::Array {
@@ -6419,6 +6456,25 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.codegen_expression_traces_to_self(object)
             }
             Expression::Index { object, .. } => self.codegen_expression_traces_to_self(object),
+            _ => false,
+        }
+    }
+
+    /// Check whether the root of a field-access chain is behind a reference.
+    /// Walks up through nested FieldAccess nodes until it finds the root
+    /// Identifier, then checks if that variable is a borrowed or match-bound ref.
+    fn field_access_root_is_behind_reference(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                self.field_access_root_is_behind_reference(object)
+            }
+            Expression::Identifier { name, .. } => {
+                self.inferred_borrowed_params.contains(name.as_str())
+                    || self.borrowed_iterator_vars.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    })
+            }
             _ => false,
         }
     }
