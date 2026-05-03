@@ -2908,6 +2908,34 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // E0507: `borrowed_var.method(args)` when the method consumes `self` (owned receiver)
+                // and the variable is a borrowed iterator variable (from `for x in &collection`).
+                // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.borrowed_iterator_vars.contains(name) && method != "clone" {
+                        if let Some(recv_ty) = self.infer_expression_type(object) {
+                            if !self.is_type_copy(&recv_ty) {
+                                if let Some(tn) = Self::type_to_name(&recv_ty) {
+                                    let qualified = format!("{}::{}", tn, method);
+                                    let sig_opt = self
+                                        .signature_registry
+                                        .get_signature(&qualified)
+                                        .or_else(|| self.signature_registry.get_signature(method));
+                                    if let Some(sig) = sig_opt {
+                                        if sig.has_self_receiver
+                                            && sig.param_ownership.first()
+                                                == Some(&crate::analyzer::OwnershipMode::Owned)
+                                            && !obj_str.ends_with(".clone()")
+                                        {
+                                            obj_str = format!("{}.clone()", obj_str);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
                 // handler and this IS a .clone() call, strip the redundant auto-clone.
                 // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
@@ -2960,9 +2988,38 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_name = self.infer_type_name(object);
                 let method_signature = if let Some(ref type_name) = type_name {
                     let qualified_name = format!("{}::{}", type_name, method);
-                    self.signature_registry
+                    let mut sig = self.signature_registry
                         .get_signature(&qualified_name)
-                        .cloned()
+                        .cloned();
+                    // Validate: if the signature's param count doesn't match the call's
+                    // argument count, it's a name collision (e.g., two different types
+                    // both named Ability with different activate methods). In that case,
+                    // try module-qualified alternatives from the registry.
+                    if let Some(ref found_sig) = sig {
+                        let expected_args = if found_sig.has_self_receiver {
+                            found_sig.param_ownership.len().saturating_sub(1)
+                        } else {
+                            found_sig.param_ownership.len()
+                        };
+                        if expected_args != arguments.len() {
+                            // Wrong signature due to name collision; try alternatives
+                            sig = None;
+                            for (key, alt_sig) in &self.signature_registry.signatures {
+                                if key.ends_with(&format!("::{}", qualified_name)) && key != &qualified_name {
+                                    let alt_args = if alt_sig.has_self_receiver {
+                                        alt_sig.param_ownership.len().saturating_sub(1)
+                                    } else {
+                                        alt_sig.param_ownership.len()
+                                    };
+                                    if alt_args == arguments.len() {
+                                        sig = Some(alt_sig.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    sig
                     // CRITICAL: Do NOT fall back to unqualified method name lookup!
                     // Unqualified lookup for common names like "get", "remove", "contains"
                     // can match WRONG user-defined methods (e.g., ComponentArray::get when
@@ -3404,9 +3461,30 @@ impl<'ast> CodeGenerator<'ast> {
                         // AUTO-BORROW: Methods that take &T or &[T] should auto-borrow
                         // when given owned values. Eliminates Rust leakage in .wj files.
                         let auto_borrow_methods = ["push_str", "extend_from_slice"];
-                        if auto_borrow_methods.contains(&method.as_str()) && i == 0 {
+                        let map_key_methods = ["remove", "get", "contains_key", "entry"];
+                        let is_map_method = map_key_methods.contains(&method.as_str())
+                            && i == 0
+                            && {
+                                let obj_ty = self.infer_expression_type(object);
+                                obj_ty.as_ref().is_some_and(|t| matches!(t,
+                                    Type::Parameterized(base, _) if base == "HashMap" || base == "BTreeMap" || base == "Map"
+                                ))
+                            };
+                        if (auto_borrow_methods.contains(&method.as_str()) || is_map_method) && i == 0 {
                             let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
-                            if !is_string_literal && !arg_str.starts_with('&') {
+                            let arg_already_ref = {
+                                let arg_ty = self.infer_expression_type(arg);
+                                let ty_is_ref = arg_ty.as_ref().is_some_and(|t| matches!(t,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                ) || matches!(t, Type::Custom(n) if n == "&str"));
+                                let param_is_borrowed = match arg {
+                                    Expression::Identifier { name, .. } =>
+                                        self.inferred_borrowed_params.contains(&name.to_string()),
+                                    _ => false,
+                                };
+                                ty_is_ref || param_is_borrowed
+                            };
+                            if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                                 let needs_borrow = matches!(arg,
                                     Expression::Identifier { .. } |
                                     Expression::FieldAccess { .. } |
@@ -3468,7 +3546,9 @@ impl<'ast> CodeGenerator<'ast> {
                         types.iter().map(|t| self.type_to_rust(t)).collect();
                     format!("::<{}>", type_strs.join(", "))
                 } else if method == "collect" {
-                    if let Some(ret_ty) = &self.current_function_return_type {
+                    if let Some(target_ty) = &self.collect_target_type {
+                        format!("::<{}>", self.type_to_rust(target_ty))
+                    } else if let Some(ret_ty) = &self.current_function_return_type {
                         format!("::<{}>", self.type_to_rust(ret_ty))
                     } else {
                         String::new()

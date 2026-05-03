@@ -296,6 +296,7 @@ pub fn has_super_star_glob_import<'ast>(program: &Program<'ast>) -> bool {
 
 /// Simple type names already brought in by explicit `use` items (last path segment, uppercase).
 /// Globs (`::*`) are ignored because we cannot know which symbols they provide.
+/// Braced imports (`use foo::{A, B}`) are parsed to extract individual type names.
 fn explicitly_imported_unqualified_type_names<'ast>(program: &Program<'ast>) -> HashSet<String> {
     let mut names = HashSet::new();
     for item in &program.items {
@@ -308,7 +309,45 @@ fn explicitly_imported_unqualified_type_names<'ast>(program: &Program<'ast>) -> 
         let Some(last) = path.last() else {
             continue;
         };
-        if last == "*" || last.contains("::{") {
+        if last == "*" {
+            continue;
+        }
+        // Extract individual type names from braced imports: `use foo::{TypeA, TypeB}`
+        // The parser may store `{TypeA, TypeB}` as the last segment (`.{` format)
+        // or embed it in a segment containing `::{` (e.g. `module::{TypeA, TypeB}`).
+        let braced_inner = if last.contains("::{") {
+            last.find("::{")
+                .and_then(|open| last.rfind('}').map(|close| &last[open + 3..close]))
+        } else if last.starts_with('{') && last.ends_with('}') {
+            Some(&last[1..last.len() - 1])
+        } else {
+            None
+        };
+        if let Some(inner) = braced_inner {
+            for part in inner.split(',') {
+                let name = part.trim();
+                if !name.is_empty()
+                    && name
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase())
+                {
+                    names.insert(name.to_string());
+                }
+            }
+            // Also check full path segments before the braces
+            let full = path.join(".");
+            for seg in full.split('.') {
+                let seg = seg.trim();
+                if seg
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                    && !seg.contains('{')
+                {
+                    names.insert(seg.to_string());
+                }
+            }
             continue;
         }
         if last.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
