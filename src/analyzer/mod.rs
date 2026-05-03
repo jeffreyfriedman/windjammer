@@ -1220,9 +1220,13 @@ impl<'ast> Analyzer<'ast> {
                     // Process all analyzed functions (after fixed-point convergence)
                     let is_trait_impl = impl_block.trait_name.is_some();
                     for func in &impl_block.functions {
-                        let mut analyzed_func = analyzed_funcs
-                            .remove(&func.name)
-                            .expect("Function should have been analyzed");
+                        let analyzed_func_opt = analyzed_funcs.remove(&func.name);
+                        if analyzed_func_opt.is_none() {
+                            // Duplicate function name in impl block -- skip the second
+                            // occurrence. The first definition wins (already processed).
+                            continue;
+                        }
+                        let mut analyzed_func = analyzed_func_opt.unwrap();
 
                         // PHASE 7: Detect const/static optimizations
                         analyzed_func.const_static_optimizations =

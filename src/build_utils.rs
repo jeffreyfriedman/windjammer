@@ -27,6 +27,11 @@ fn copy_project_src_tree_into_output(output_dir: &Path) -> std::io::Result<()> {
     let Some(root) = output_dir.parent() else {
         return Ok(());
     };
+    let root = if root.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        root
+    };
     let src_dir = root.join("src");
     if !src_dir.is_dir() {
         return Ok(());
@@ -88,6 +93,11 @@ fn copy_sibling_rs_from_parent(output_dir: &Path) -> std::io::Result<()> {
     use std::fs;
     let Some(parent) = output_dir.parent() else {
         return Ok(());
+    };
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
     };
     for entry in fs::read_dir(parent)? {
         let entry = entry?;

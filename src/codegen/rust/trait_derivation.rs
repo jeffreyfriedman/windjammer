@@ -64,8 +64,9 @@ impl CodeGenerator<'_> {
             vec!["Debug".to_string(), "Clone".to_string()]
         };
 
+        let has_drop = self.types_with_drop.contains(&struct_.name);
         let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
-        if !has_trait_object_field && all_copy {
+        if !has_trait_object_field && all_copy && !has_drop {
             traits.push("Copy".to_string());
         }
 
