@@ -1748,9 +1748,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             let arg_ty = self.infer_expression_type(arg);
                                             let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                                 matches!(t, Type::Int)
-                                                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                    ))
+                                                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                             });
                                             if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                                 let target = if param_is_f32 { "f32" } else { "f64" };
@@ -2756,9 +2754,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         let arg_ty = self.infer_expression_type(arg);
                                         let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                             matches!(t, Type::Int)
-                                                || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                    "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                ))
+                                                || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                         });
                                         if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                             let target = if param_is_f32 { "f32" } else { "f64" };
@@ -3047,41 +3043,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // receivers, arguments should use the same float type as the receiver.
                 let prev_float_target = self.assignment_float_target_type.clone();
                 let receiver_float_type = self.infer_expression_type(object);
-                let is_float_method = matches!(
-                    method.as_str(),
-                    "clamp"
-                        | "max"
-                        | "min"
-                        | "abs"
-                        | "copysign"
-                        | "recip"
-                        | "to_degrees"
-                        | "to_radians"
-                        | "signum"
-                        | "powf"
-                        | "powi"
-                        | "sqrt"
-                        | "cbrt"
-                        | "hypot"
-                        | "sin"
-                        | "cos"
-                        | "tan"
-                        | "asin"
-                        | "acos"
-                        | "atan"
-                        | "atan2"
-                        | "exp"
-                        | "exp2"
-                        | "ln"
-                        | "log"
-                        | "log2"
-                        | "log10"
-                        | "round"
-                        | "floor"
-                        | "ceil"
-                        | "trunc"
-                        | "fract"
-                );
+                let is_float_method = crate::type_classification::is_float_receiver_method(method);
                 if is_float_method {
                     if let Some(ref rft) = receiver_float_type {
                         match rft {
@@ -3521,9 +3483,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             let arg_ty = self.infer_expression_type(arg);
                                             let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                                 matches!(t, Type::Int)
-                                                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                    ))
+                                                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                             });
                                             if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                                 let target = if param_is_f32 { "f32" } else { "f64" };
@@ -3811,66 +3771,9 @@ impl<'ast> CodeGenerator<'ast> {
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
-                // FIELD CHAIN OPTIMIZATION: If we're accessing a likely-Copy sub-field
-                // (e.g., .x, .y, .width, .speed), suppress borrowed-iterator cloning
-                // on the intermediate object. In Rust, (&enemy).velocity.y works fine
-                // through auto-deref — no need to clone the intermediate Vec2.
-                let field_is_likely_copy = matches!(
-                    field.as_str(),
-                    "x" | "y"
-                        | "z"
-                        | "w"
-                        | "width"
-                        | "height"
-                        | "depth"
-                        | "r"
-                        | "g"
-                        | "b"
-                        | "a"
-                        | "left"
-                        | "right"
-                        | "top"
-                        | "bottom"
-                        | "min"
-                        | "max"
-                        | "start"
-                        | "end"
-                        | "offset"
-                        | "scale"
-                        | "speed"
-                        | "time"
-                        | "delta"
-                        | "angle"
-                        | "radius"
-                        | "distance"
-                        | "visible"
-                        | "enabled"
-                        | "active"
-                        | "selected"
-                        | "focused"
-                        | "id"
-                        | "type"
-                        | "kind"
-                        | "priority"
-                        | "level"
-                        | "len"
-                        | "count"
-                        | "size"
-                        | "index"
-                        | "idx"
-                        | "vx"
-                        | "vy"
-                        | "vz"
-                        | "dx"
-                        | "dy"
-                        | "dz"
-                        | "health"
-                        | "damage"
-                        | "score"
-                        | "lives"
-                        | "frame"
-                );
-                // Also check via type inference if the outer expression (self.obj.field) is Copy
+                // FIELD CHAIN OPTIMIZATION: If we're accessing a Copy sub-field,
+                // suppress borrowed-iterator cloning on the intermediate object.
+                // In Rust, (&enemy).velocity.y works fine through auto-deref.
                 let field_is_copy_by_type = self
                     .infer_expression_type(expr_to_generate)
                     .as_ref()
@@ -3878,7 +3781,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_suppress = self.suppress_borrowed_clone;
                 let prev_field_access = self.in_field_access_object;
-                if field_is_likely_copy || field_is_copy_by_type {
+                if field_is_copy_by_type {
                     self.suppress_borrowed_clone = true;
                 }
                 // Suppress Vec index clone when we're just accessing a field
@@ -4031,23 +3934,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 .as_ref()
                                 .is_some_and(|t| self.is_type_copy(t));
 
-                            if !is_copy {
-                                // Fall back to name-based heuristics for fields we KNOW are Copy
-                                let is_likely_copy_field = matches!(
-                                    field.as_str(),
-                                    "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
-                                    "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
-                                    "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
-                                    "min" | "max" | "start" | "end" | "offset" | "scale" |
-                                    "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
-                                    "visible" | "enabled" | "active" | "selected" | "focused" |
-                                    "id" | "type" | "kind" | "priority" | "level" |
-                                    // Method-like names that should NOT be cloned
-                                    "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
-                                );
-                                if !is_likely_copy_field && !base_expr.ends_with(".clone()") {
-                                    return format!("{}.clone()", base_expr);
-                                }
+                            if !is_copy && !base_expr.ends_with(".clone()") {
+                                return format!("{}.clone()", base_expr);
                             }
                         }
                     }
@@ -4100,7 +3988,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(&**object, Expression::FieldAccess { object: inner, .. }
                             if matches!(&**inner, Expression::Index { .. }));
 
-                    if object_has_index && !(field_is_likely_copy || field_is_copy_by_type) {
+                    if object_has_index && !field_is_copy_by_type {
                         return format!("{}.clone()", base_expr);
                     }
                 }
@@ -5627,9 +5515,7 @@ impl<'ast> CodeGenerator<'ast> {
             let rt_actual = self.infer_expression_type(right);
             let is_int_type = |t: &Type| {
                 matches!(t, Type::Int)
-                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                    ))
+                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
             };
             let left_is_int = lt_actual.as_ref().is_some_and(&is_int_type);
             let right_is_int = rt_actual.as_ref().is_some_and(is_int_type);
@@ -5905,10 +5791,7 @@ impl<'ast> CodeGenerator<'ast> {
         fn is_integer_type(t: &Type) -> bool {
             match t {
                 Type::Int | Type::Int32 | Type::Uint => true,
-                Type::Custom(n) => matches!(
-                    n.as_str(),
-                    "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                ),
+                Type::Custom(n) => crate::type_classification::is_integer_type(n),
                 _ => false,
             }
         }

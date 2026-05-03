@@ -71,13 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
-        // Check if the function body modifies self (specifically for self parameters)
-        for stmt in &func.body {
-            if self.statement_modifies_self(stmt) {
-                return true;
-            }
-        }
-        false
+        super::self_analysis::function_modifies_self(func, Some(&self.signature_registry))
     }
 
     /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
@@ -133,43 +127,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .map(|i| &trait_name[i + 2..])
                     .unwrap_or(trait_name);
                 return Some(
-                    if matches!(
-                        base_trait,
-                        "Add"
-                            | "Sub"
-                            | "Mul"
-                            | "Div"
-                            | "Rem"
-                            | "Neg"
-                            | "Not"
-                            | "BitAnd"
-                            | "BitOr"
-                            | "BitXor"
-                            | "Shl"
-                            | "Shr"
-                            | "Into"
-                            | "From"
-                            | "TryInto"
-                            | "TryFrom"
-                    ) {
+                    if crate::type_classification::is_owned_self_trait(base_trait) {
                         OwnershipMode::Owned
-                    } else if matches!(
-                        base_trait,
-                        "Display"
-                            | "Debug"
-                            | "Hash"
-                            | "PartialEq"
-                            | "Eq"
-                            | "PartialOrd"
-                            | "Ord"
-                            | "Clone"
-                            | "Copy"
-                            | "Default"
-                            | "Iterator"
-                            | "IntoIterator"
-                            | "AsRef"
-                            | "Deref"
-                    ) {
+                    } else if crate::type_classification::is_ref_receiver_trait(base_trait) {
                         OwnershipMode::Borrowed
                     } else {
                         // For custom cross-file traits, use body analysis first.
@@ -194,50 +154,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         analyzed.inferred_ownership.get("self").copied()
-    }
-
-    fn statement_modifies_self(&self, stmt: &Statement) -> bool {
-        match stmt {
-            Statement::Assignment { target, .. } => {
-                // Check if target is self.field
-                self.expression_is_self_field_modification(target)
-            }
-            Statement::Expression { expr, .. } => {
-                // Check for mutating method calls like self.field.push()
-                self.expression_modifies_self(expr)
-            }
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                then_block.iter().any(|s| self.statement_modifies_self(s))
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|block| block.iter().any(|s| self.statement_modifies_self(s)))
-            }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
-                body.iter().any(|s| self.statement_modifies_self(s))
-            }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                // Match arms have a body expression, check if it contains modifications
-                self.expression_modifies_self(arm.body)
-            }),
-            _ => false,
-        }
-    }
-
-    fn expression_is_self_field_modification(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::FieldAccess { object, .. } => {
-                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-            }
-            _ => false,
-        }
-    }
-
-    fn expression_modifies_self(&self, expr: &Expression) -> bool {
-        super::self_analysis::expression_modifies_self(expr)
     }
 
     /// Generate extern "C" function declaration for FFI

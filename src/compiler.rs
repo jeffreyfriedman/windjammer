@@ -49,25 +49,7 @@ fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
         Type::Vec(_) => false, // Vec is never Copy
         Type::Array(inner, _) => is_type_copy_for_single_file_build(inner, analyzer),
         Type::Custom(name) | Type::Generic(name) => {
-            // Check if it's a primitive or a Copy struct
-            matches!(
-                name.as_str(),
-                "i8" | "i16"
-                    | "i32"
-                    | "i64"
-                    | "i128"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "u128"
-                    | "usize"
-                    | "isize"
-                    | "f32"
-                    | "f64"
-                    | "bool"
-                    | "char"
-            ) || analyzer.is_copy_struct(name)
+            crate::type_classification::is_copy_primitive(name) || analyzer.is_copy_struct(name)
         }
         Type::Option(inner) => is_type_copy_for_single_file_build(inner, analyzer),
         Type::Result(ok, err) => {
@@ -591,24 +573,7 @@ fn is_type_copy_quick_for_library(
         Type::Custom(name) => {
             copy_structs.contains(name)
                 || copy_enums.contains(name)
-                || matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
+                || crate::type_classification::is_copy_primitive(name)
         }
         _ => false,
     }
