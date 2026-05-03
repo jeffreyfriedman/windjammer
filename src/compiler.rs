@@ -620,7 +620,9 @@ fn is_type_copy_quick_for_library(
 /// Returns (copy_structs, all_local_struct_names).
 /// The second set contains every struct name defined in the current crate,
 /// used to filter dep_copy_structs that collide with local non-Copy structs.
-fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> (HashSet<String>, HashSet<String>) {
+fn collect_global_copy_structs_for_library(
+    sources: &[(PathBuf, String)],
+) -> (HashSet<String>, HashSet<String>) {
     use crate::parser::ast::EnumVariantData;
     use crate::parser::{Expression, Item};
 
@@ -893,7 +895,8 @@ fn build_library_multipass(
         std::fs::canonicalize(&raw).unwrap_or(raw)
     };
 
-    let (mut global_copy_structs, local_struct_names) = collect_global_copy_structs_for_library(&sources);
+    let (mut global_copy_structs, local_struct_names) =
+        collect_global_copy_structs_for_library(&sources);
 
     // Load Copy structs AND function signatures from dependency crate metadata.
     // Function signatures provide ownership info for cross-crate calls (e.g.,
@@ -1169,8 +1172,9 @@ fn build_library_multipass(
             // tick=Borrowed would overwrite it because state.wj analyzed with the same stale
             // global_registry.
             let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-                .unwrap_or_default();
+            let file_module =
+                crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
+                    .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
                 match global_registry.signatures.get(name) {
@@ -1190,13 +1194,8 @@ fn build_library_multipass(
                             // must also be updated. Without this, the codegen's collision
                             // fallback finds the stale step 2 entry.
                             if !file_stem.is_empty() {
-                                if !name.contains("::") {
-                                    let qualified = format!("{}::{}", file_stem, name);
-                                    new_registry.signatures.insert(qualified, sig.clone());
-                                } else {
-                                    let qualified = format!("{}::{}", file_stem, name);
-                                    new_registry.signatures.insert(qualified, sig.clone());
-                                }
+                                let qualified = format!("{}::{}", file_stem, name);
+                                new_registry.signatures.insert(qualified, sig.clone());
                                 if !module_path.is_empty() {
                                     let full_qualified = format!("{}::{}", module_path, name);
                                     new_registry.signatures.insert(full_qualified, sig.clone());

@@ -326,12 +326,7 @@ fn explicitly_imported_unqualified_type_names<'ast>(program: &Program<'ast>) -> 
         if let Some(inner) = braced_inner {
             for part in inner.split(',') {
                 let name = part.trim();
-                if !name.is_empty()
-                    && name
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase())
-                {
+                if !name.is_empty() && name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
                     names.insert(name.to_string());
                 }
             }
@@ -339,11 +334,7 @@ fn explicitly_imported_unqualified_type_names<'ast>(program: &Program<'ast>) -> 
             let full = path.join(".");
             for seg in full.split('.') {
                 let seg = seg.trim();
-                if seg
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                    && !seg.contains('{')
+                if seg.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && !seg.contains('{')
                 {
                     names.insert(seg.to_string());
                 }

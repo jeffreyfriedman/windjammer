@@ -11,7 +11,6 @@
 /// Step 3 re-analysis corrects the definition but may not update all
 /// registry entries (especially module-qualified fallback entries).
 /// The codegen's fallback lookup finds stale step 2 entries.
-
 #[path = "test_utils.rs"]
 mod test_utils;
 
@@ -217,9 +216,7 @@ impl Game {
     );
 
     // Check the game.rs call site - this is the critical test
-    let game_rs = results
-        .get("game.rs")
-        .expect("game.rs should be generated");
+    let game_rs = results.get("game.rs").expect("game.rs should be generated");
     assert!(
         game_rs.contains("&mut self.player"),
         "Call site should pass &mut self.player (not &self.player).\n\

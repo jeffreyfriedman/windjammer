@@ -7,7 +7,6 @@
 ///
 /// Fix: Nested field chains (self.a.b) are borrows, only direct `self.field`
 /// used standalone is a potential move.
-
 use std::process::Command;
 
 fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
