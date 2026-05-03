@@ -98,12 +98,11 @@ fn collect_strings_from_expression(expr: &Expression, frequency: &mut HashMap<St
         Expression::Literal {
             value: Literal::String(s),
             ..
-        } => {
+        }
             // Only intern strings >= 10 characters
-            if s.len() >= 10 {
+            if s.len() >= 10 => {
                 *frequency.entry(s.clone()).or_insert(0) += 1;
             }
-        }
         Expression::Binary { left, right, .. } => {
             collect_strings_from_expression(left, frequency);
             collect_strings_from_expression(right, frequency);
@@ -686,6 +685,7 @@ fn replace_strings_in_item<'ast>(
                     name: decl.name.clone(),
                     parameters: decl.parameters.clone(),
                     return_type: decl.return_type.clone(),
+                    return_decorators: decl.return_decorators.clone(),
                     body: new_body,
                     is_pub: decl.is_pub,
                     is_async: decl.is_async,
@@ -694,6 +694,7 @@ fn replace_strings_in_item<'ast>(
                     type_params: decl.type_params.clone(),
                     where_clause: decl.where_clause.clone(),
                     parent_type: decl.parent_type.clone(),
+                    impl_trait: decl.impl_trait.clone(),
                     doc_comment: decl.doc_comment.clone(),
                 },
                 location: location.clone(),
@@ -713,6 +714,7 @@ fn replace_strings_in_item<'ast>(
                         name: func.name.clone(),
                         parameters: func.parameters.clone(),
                         return_type: func.return_type.clone(),
+                        return_decorators: func.return_decorators.clone(),
                         body: new_body,
                         is_pub: func.is_pub,
                         is_async: func.is_async,
@@ -721,6 +723,7 @@ fn replace_strings_in_item<'ast>(
                         type_params: func.type_params.clone(),
                         where_clause: func.where_clause.clone(),
                         parent_type: func.parent_type.clone(),
+                        impl_trait: func.impl_trait.clone(),
                         doc_comment: func.doc_comment.clone(),
                     }
                 })
@@ -735,6 +738,7 @@ fn replace_strings_in_item<'ast>(
                     associated_types: block.associated_types.clone(),
                     functions: new_functions,
                     decorators: block.decorators.clone(),
+                    is_extern: block.is_extern,
                 },
                 location: location.clone(),
             }
@@ -756,11 +760,13 @@ fn replace_strings_in_item<'ast>(
             name,
             type_,
             value,
+            is_pub,
             location,
         } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: replace_strings_in_expression(value, pool_map, optimizer),
+            is_pub: *is_pub,
             location: location.clone(),
         },
         _ => item.clone(),
@@ -849,8 +855,10 @@ mod tests {
                 is_async: false,
                 parameters: vec![],
                 return_type: None,
+                return_decorators: vec![],
                 body: body_stmts,
                 parent_type: None,
+                impl_trait: None,
                 doc_comment: None,
             },
             location: None,

@@ -2,39 +2,8 @@
 //! WINDJAMMER PHILOSOPHY: Support zero-field structs with semicolon syntax
 //! Unit structs are useful for marker types, singleton patterns, and FFI
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -44,7 +13,7 @@ fn test_unit_struct_simple() {
     pub struct Marker;
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate Rust unit struct with semicolon
     assert!(
@@ -68,7 +37,7 @@ fn test_unit_struct_with_impl() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct Logger;"),
@@ -93,7 +62,7 @@ fn test_unit_struct_multiple() {
     pub struct TypeC;
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct TypeA;"),
@@ -130,7 +99,7 @@ fn test_unit_struct_with_trait_impl() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct SimpleProcessor;"),
@@ -157,7 +126,7 @@ fn test_unit_struct_instantiation() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct Token;"),
@@ -182,7 +151,7 @@ fn test_unit_struct_with_visibility() {
     struct Private;
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct Public;"),
@@ -206,7 +175,7 @@ fn test_unit_struct_with_decorators() {
     pub struct Marker;
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
         generated.contains("pub struct Marker;"),
@@ -215,8 +184,8 @@ fn test_unit_struct_with_decorators() {
     );
 
     assert!(
-        generated.contains("#[derive(Debug, Clone, Copy)]"),
-        "Derive decorators should be generated. Generated:\n{}",
+        generated.contains("Debug, Clone, Copy"),
+        "@derive(Debug, Clone, Copy) must appear in merged #[derive(...)]. Generated:\n{}",
         generated
     );
 }

@@ -8,45 +8,8 @@
 /// as HashMap::get(&K), but Vec::get(usize) takes index by value.
 ///
 /// Discovered via dogfooding: windjammer-ui/curve_editor.wj
-use std::process::Command;
-
-fn compile_wj_source_named(source: &str, name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("wj_vec_get_ref_{}", name));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-
-    let wj_file = dir.join("test.wj");
-    std::fs::write(&wj_file, source).unwrap();
-
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_file.to_str().unwrap(),
-            "--output",
-            dir.to_str().unwrap(),
-            "--no-cargo",
-            "--library",
-        ])
-        .output()
-        .expect("Failed to run wj compiler");
-
-    // Find the generated .rs file
-    let mut rs_content = String::new();
-    for entry in std::fs::read_dir(&dir)
-        .unwrap()
-        .chain(std::fs::read_dir(dir.join("src")).into_iter().flatten())
-        .flatten()
-    {
-        if entry.path().extension().is_some_and(|e| e == "rs") {
-            if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                rs_content.push_str(&content);
-                rs_content.push('\n');
-            }
-        }
-    }
-
-    rs_content
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_vec_get_no_ref_on_index() {
@@ -73,7 +36,7 @@ impl Path {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_no_ref");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get(&
@@ -122,7 +85,7 @@ impl Inventory {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_loop");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get(&i) or .get(&
@@ -160,7 +123,7 @@ impl Layout {
 }
 "#;
 
-    let generated = compile_wj_source_named(source, "vec_get_mut_no_ref");
+    let generated = test_utils::compile_single(source);
     println!("Generated Rust:\n{}", generated);
 
     // Must NOT contain .get_mut(&

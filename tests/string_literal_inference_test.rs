@@ -1,46 +1,10 @@
 // Test: String literal inference in various contexts
 // The compiler should automatically convert "literal" to String when context expects String
 
-use std::path::PathBuf;
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 /// Helper to compile Windjammer code and return the generated Rust code
-fn compile_code(code: &str) -> Result<String, String> {
-    use std::fs;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let output = Command::new(&wj_binary)
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to execute wj: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Compilation failed:\n{}", stderr));
-    }
-
-    let generated_file = out_dir.join("test.rs");
-    fs::read_to_string(&generated_file).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_string_inference() {
@@ -53,7 +17,7 @@ fn test_match_arm_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Match arms should infer .to_string() for string literals"
@@ -84,7 +48,7 @@ fn test_nested_match_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Nested if-else in match should infer .to_string()"
@@ -104,7 +68,7 @@ fn test_if_else_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "If-else should infer .to_string() when returning string"
@@ -132,7 +96,7 @@ fn test_struct_field_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Struct fields should infer .to_string() for string literals"
@@ -140,7 +104,7 @@ fn test_struct_field_string_inference() {
 
     let generated = result.unwrap();
     assert!(generated.contains("name: \"default\".to_string()"));
-    assert!(generated.contains("Some(\"root\".to_string())"));
+    assert!(generated.contains("Some(\"root\".to_string()"));
 }
 
 #[test]
@@ -156,7 +120,7 @@ fn test_option_some_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Option::Some should infer .to_string()");
 
     let generated = result.unwrap();
@@ -176,7 +140,7 @@ fn test_result_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Result Ok/Err should infer .to_string()");
 
     let generated = result.unwrap();
@@ -193,7 +157,7 @@ fn test_ternary_like_match_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Ternary-like if-else should infer .to_string()"
@@ -222,7 +186,7 @@ fn test_match_with_blocks_string_inference() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Match arms with blocks should infer .to_string()"
@@ -243,7 +207,7 @@ fn test_no_inference_for_str_return() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Should NOT infer .to_string() when returning &str"

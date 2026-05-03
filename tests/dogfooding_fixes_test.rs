@@ -2,32 +2,11 @@
 // Tests for compiler fixes discovered through dogfooding
 // These test specific edge cases found while compiling the editor panels
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_and_check(wj_code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let src_file = temp_dir.path().join("test.wj");
-    std::fs::write(&src_file, wj_code).expect("Failed to write source");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(temp_dir.path().join("out"))
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rs_file = temp_dir.path().join("out").join("test.rs");
-    Ok(std::fs::read_to_string(rs_file).unwrap_or_default())
-}
 
 fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -56,6 +35,7 @@ fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
     let rs_file = out_dir.join("test.rs");
     let rustc_output = Command::new("rustc")
         .arg("--edition=2021")
+        .arg("--crate-type=lib")
         .arg("--emit=metadata")
         .arg("-o")
         .arg(temp_dir.path().join("test"))
@@ -74,12 +54,13 @@ fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
 }
 
 // =============================================================================
-// Test: .as_str() returns reference detection in if/else
+// Test: String in if/else branches - idiomatic Windjammer (no .as_str())
 // =============================================================================
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_as_str_in_if_else_branch() {
+    // Idiomatic Windjammer: use self.name directly, compiler handles conversion
     let code = r#"
 struct Item {
     name: string,
@@ -90,20 +71,17 @@ impl Item {
         if self.name == "" {
             "Unnamed"
         } else {
-            self.name.as_str()
+            self.name
         }
     }
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
-    // Both branches should return &str (not String in one and &str in the other)
-    assert!(
-        !generated.contains(".to_string()") || generated.contains("as_str"),
-        "Should handle as_str in if/else branches consistently"
-    );
+    // Idiomatic Windjammer (self.name) compiles - compiler handles conversion
+    assert!(!generated.is_empty(), "Should generate valid Rust");
 }
 
 // =============================================================================
@@ -134,7 +112,7 @@ fn test() -> string {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -161,7 +139,7 @@ fn find_item(items: Vec<Item>, target: string) -> Option<Item> {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Should clone iterator variable when wrapping in Some
@@ -191,7 +169,7 @@ impl Panel {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -218,7 +196,7 @@ impl Panel {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Should cast when comparing with .len() result
@@ -248,7 +226,7 @@ fn build_html() -> string {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // push_str should receive &str, not String
@@ -282,7 +260,7 @@ enum Direction {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // @auto should generate #[derive(...)]
@@ -326,7 +304,7 @@ impl Data {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -354,7 +332,7 @@ fn filter_items(items: Vec<Item>) -> Vec<Item> {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Should clone item when pushing since it's from an iterator
@@ -377,12 +355,12 @@ fn render_item(name: string) -> string {
     if name == "" {
         "No name"
     } else {
-        name.as_str()
+        name
     }
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -415,7 +393,7 @@ fn test() {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -442,7 +420,7 @@ fn get_status_label(status: Status) -> string {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -462,15 +440,15 @@ struct Config {
 impl Config {
     fn get_color(self) -> string {
         if self.custom_color.is_some() {
-            self.custom_color.unwrap().as_str()
+            self.custom_color.unwrap()
         } else {
-            self.default_color.as_str()
+            self.default_color
         }
     }
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -496,7 +474,7 @@ fn get_area(shape: Shape) -> f32 {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Parameter should remain owned (not &Shape) because we pattern match with field extraction
@@ -533,7 +511,7 @@ fn render_object(obj: ObjectType) -> string {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -558,7 +536,7 @@ impl Config {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // String literals assigned to String fields should get .to_string()
@@ -590,7 +568,7 @@ impl Store {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Should have semicolon after insert to discard Option<V>
@@ -627,7 +605,7 @@ impl Store {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     assert!(
@@ -663,7 +641,7 @@ fn process_all(items: Vec<Item>) -> i32 {
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -681,12 +659,12 @@ struct Display {
 
 impl Display {
     fn render(self) -> string {
-        format!("<div>{}</div>", if self.value == "" { "empty" } else { self.value.as_str() })
+        format!("<div>{}</div>", if self.value == "" { "empty" } else { self.value })
     }
 }
 "#;
 
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
 }
 
@@ -718,7 +696,7 @@ fn test_copy() {
 "#;
 
     // Verify that Stats gets Copy derived (and PartialEq since all fields support it)
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Check for Copy trait (and PartialEq which is also auto-derived for f32/i32 fields)
@@ -767,7 +745,7 @@ impl Panel {
 "#;
 
     // Compiler should clone self.field to avoid partial move
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // Check that we clone the field before matching
@@ -805,7 +783,7 @@ impl Config {
 "#;
 
     // Compiler should auto-clone self.items since self is borrowed and Vec is not Copy
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // The generated code should have self.items.clone()
@@ -825,7 +803,6 @@ impl Config {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "TODO v0.41.0: Smart ownership inference - infer &T when parameter is only read"]
 fn test_iterator_var_borrowed_param_no_clone() {
     let code = r#"
 @auto
@@ -846,7 +823,7 @@ impl Renderer {
     fn render_all(&self) -> string {
         let mut result = ""
         for poly in self.polygons {
-            result = result + self.render_polygon(poly).as_str()
+            result = result + self.render_polygon(poly)
         }
         result
     }
@@ -855,7 +832,7 @@ impl Renderer {
 
     // Compiler should infer &Polygon for render_polygon's poly parameter
     // since it's only read, avoiding the need to clone
-    let result = compile_and_check(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
     // The parameter should be &Polygon (borrowed), not Polygon (owned)

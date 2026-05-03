@@ -117,6 +117,7 @@ fn test_get_item_location_function() {
 
     let item = Item::Function {
         decl: windjammer::parser::FunctionDecl {
+            return_decorators: Vec::new(),
             name: "test".to_string(),
             parameters: vec![],
             return_type: Some(Type::Int),
@@ -128,6 +129,7 @@ fn test_get_item_location_function() {
             is_async: false,
             is_extern: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         },
         location: location.clone(),
@@ -148,10 +150,12 @@ fn test_get_item_location_struct() {
         decl: windjammer::parser::StructDecl {
             name: "Point".to_string(),
             fields: vec![],
+            tuple_fields: None,
             type_params: vec![],
             decorators: vec![],
             where_clause: vec![],
             is_pub: false,
+            is_extern: false,
             doc_comment: None,
         },
         location: location.clone(),
@@ -164,6 +168,7 @@ fn test_get_item_location_struct() {
 fn test_get_item_location_none() {
     let item = Item::Function {
         decl: windjammer::parser::FunctionDecl {
+            return_decorators: Vec::new(),
             name: "test".to_string(),
             parameters: vec![],
             return_type: Some(Type::Int),
@@ -175,6 +180,7 @@ fn test_get_item_location_none() {
             is_async: false,
             is_extern: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         },
         location: None,

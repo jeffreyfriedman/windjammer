@@ -12,7 +12,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_decorator_with_keyword_args_parses() {
     // Create a minimal test file with keyword decorator arguments
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_decorator_kwargs_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -45,7 +46,6 @@ fn test_random_property(x: i32) {
         .expect("Failed to run wj build");
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert no "Expected pattern, got Assign" error
     let stderr = String::from_utf8_lossy(&output.stderr);

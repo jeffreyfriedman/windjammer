@@ -11,8 +11,11 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    # Run at 6 AM UTC every Monday
     - cron: '0 6 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:

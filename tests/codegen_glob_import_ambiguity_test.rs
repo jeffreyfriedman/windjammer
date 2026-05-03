@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Glob Import Ambiguity Prevention (E0659)
 ///
@@ -34,12 +37,7 @@ use anyhow::Result;
 /// use crate::scene::*;
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -48,7 +46,11 @@ fn test_no_super_glob_when_explicit_glob_imports_present() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_glob_ambiguity_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_glob_ambiguity_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create two modules that both export a type with the same name
@@ -159,7 +161,7 @@ version = "0.1.0"
     )?;
 
     // Build the library
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -198,7 +200,6 @@ version = "0.1.0"
     let has_super_glob = gizmo_ui_content.contains("use super::*;");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         !has_super_glob,
@@ -218,7 +219,11 @@ fn test_super_glob_still_added_without_explicit_glob_imports() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_super_glob_kept_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_super_glob_kept_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Module with sibling files that need `use super::*`
@@ -278,7 +283,7 @@ version = "0.1.0"
 "#,
     )?;
 
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -308,7 +313,6 @@ version = "0.1.0"
     let has_super_glob = manager_content.contains("use super::*;");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         has_super_glob,

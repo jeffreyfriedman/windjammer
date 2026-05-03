@@ -6,70 +6,12 @@
 //! - Extern block syntax
 //! - FFI-safe types
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // BASIC EXTERN FN
@@ -87,7 +29,7 @@ pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Extern-compatible fn should compile. Error: {}",
@@ -111,7 +53,7 @@ pub fn use_ffi_types(
     c
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "FFI primitives should compile. Error: {}", err);
 }
 
@@ -125,7 +67,7 @@ pub fn use_references(a: &i32, b: &mut i32) -> i32 {
     *a
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "FFI references should compile. Error: {}", err);
 }
 
@@ -150,7 +92,7 @@ impl FfiSafe {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Rust interop types should compile. Error: {}", err);
 }
 
@@ -168,7 +110,7 @@ pub struct CStruct {
     y: i32,
 }
 "#;
-    let (success, generated, _err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
     // Should generate #[repr(C)]
     if success {
         assert!(
@@ -190,7 +132,8 @@ pub struct Wrapper {
     value: i32,
 }
 "#;
-    let (_success, generated, _err) = compile_and_verify(code);
+    let (generated, _success) = test_utils::compile_single_check(code);
+    let _err = if !_success { generated.as_str() } else { "" };
     println!("Generated:\n{}", generated);
     // May not be implemented yet
 }
@@ -211,7 +154,7 @@ pub fn maybe_ref(p: Option<&i32>) -> bool {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Option ref should compile. Error: {}", err);
 }
 
@@ -231,6 +174,6 @@ pub fn ffi_result(success: bool) -> Result<i32, string> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Result for FFI should compile. Error: {}", err);
 }

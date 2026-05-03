@@ -7,6 +7,34 @@ use crate::lexer::Token;
 use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
+fn type_structurally_contains_self(ty: &Type) -> bool {
+    match ty {
+        Type::Custom(name) if name == "Self" => true,
+        Type::Associated(base, _) if base == "Self" => true,
+        Type::Option(inner)
+        | Type::Vec(inner)
+        | Type::Reference(inner)
+        | Type::MutableReference(inner) => type_structurally_contains_self(inner),
+        Type::Result(ok, err) => {
+            type_structurally_contains_self(ok) || type_structurally_contains_self(err)
+        }
+        Type::Tuple(types) => types.iter().any(type_structurally_contains_self),
+        Type::Parameterized(_, args) => args.iter().any(type_structurally_contains_self),
+        Type::Array(inner, _) => type_structurally_contains_self(inner),
+        Type::FunctionPointer {
+            params,
+            return_type,
+        } => {
+            params.iter().any(type_structurally_contains_self)
+                || return_type
+                    .as_ref()
+                    .is_some_and(|t| type_structurally_contains_self(t))
+        }
+        Type::RawPointer { pointee, .. } => type_structurally_contains_self(pointee),
+        _ => false,
+    }
+}
+
 impl Parser {
     /// Collect all consecutive doc comments into a single string
     fn collect_doc_comments(&mut self) -> Option<String> {
@@ -23,7 +51,10 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_impl(&mut self) -> Result<ImplBlock<'static>, String> {
+    pub(crate) fn parse_impl(
+        &mut self,
+        is_extern_block: bool,
+    ) -> Result<ImplBlock<'static>, String> {
         // Parse: impl<T> Type { } or impl Trait for Type { } or impl Trait<TypeArgs> for Type { }
 
         // Parse type parameters: impl<T, U> Box<T, U> { ... }
@@ -72,76 +103,77 @@ impl Parser {
         };
 
         // Check if this is "impl Trait for Type" or just "impl Type"
-        let (trait_name, trait_type_args, type_name) = if self.current_token() == &Token::For {
-            self.advance(); // consume "for"
+        let (trait_name, trait_type_args, type_name): (_, _, String) =
+            if self.current_token() == &Token::For {
+                self.advance(); // consume "for"
 
-            // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
-            let base_type_name = match self.current_token() {
-                Token::Ident(name) => {
-                    let n = name.clone();
-                    self.advance();
-                    n
-                }
-                Token::Int => {
-                    self.advance();
-                    "int".to_string()
-                }
-                Token::Int32 => {
-                    self.advance();
-                    "i32".to_string()
-                }
-                Token::Uint => {
-                    self.advance();
-                    "uint".to_string()
-                }
-                Token::Float => {
-                    self.advance();
-                    "float".to_string()
-                }
-                Token::Bool => {
-                    self.advance();
-                    "bool".to_string()
-                }
-                Token::String => {
-                    self.advance();
-                    "string".to_string()
-                }
-                _ => {
-                    return Err("Expected type name after 'for'".to_string());
-                }
-            };
-
-            let mut type_name = base_type_name;
-
-            // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
-            if self.current_token() == &Token::Lt {
-                type_name.push('<');
-                self.advance();
-
-                loop {
-                    // Parse full type to handle both generic params and concrete types
-                    let type_arg = self.parse_type()?;
-                    type_name.push_str(&self.type_to_string(&type_arg));
-
-                    if self.current_token() == &Token::Comma {
-                        type_name.push_str(", ");
+                // Parse the type name after 'for' - could be primitive (int, string) or custom (MyType)
+                let base_type_name = match self.current_token() {
+                    Token::Ident(name) => {
+                        let n = name.clone();
                         self.advance();
-                    } else if self.current_token() == &Token::Gt {
-                        type_name.push('>');
+                        n
+                    }
+                    Token::Int => {
                         self.advance();
-                        break;
-                    } else {
-                        return Err(
-                            "Expected ',' or '>' in type parameters after 'for'".to_string()
-                        );
+                        "int".to_string()
+                    }
+                    Token::Int32 => {
+                        self.advance();
+                        "i32".to_string()
+                    }
+                    Token::Uint => {
+                        self.advance();
+                        "uint".to_string()
+                    }
+                    Token::Float => {
+                        self.advance();
+                        "float".to_string()
+                    }
+                    Token::Bool => {
+                        self.advance();
+                        "bool".to_string()
+                    }
+                    Token::String => {
+                        self.advance();
+                        "string".to_string()
+                    }
+                    _ => {
+                        return Err("Expected type name after 'for'".to_string());
+                    }
+                };
+
+                let mut type_name = base_type_name;
+
+                // Handle parameterized type name after 'for': impl<T> Trait for Box<T>
+                if self.current_token() == &Token::Lt {
+                    type_name.push('<');
+                    self.advance();
+
+                    loop {
+                        // Parse full type to handle both generic params and concrete types
+                        let type_arg = self.parse_type()?;
+                        type_name.push_str(&self.type_to_string(&type_arg));
+
+                        if self.current_token() == &Token::Comma {
+                            type_name.push_str(", ");
+                            self.advance();
+                        } else if self.current_token() == &Token::Gt {
+                            type_name.push('>');
+                            self.advance();
+                            break;
+                        } else {
+                            return Err(
+                                "Expected ',' or '>' in type parameters after 'for'".to_string()
+                            );
+                        }
                     }
                 }
-            }
 
-            (Some(first_name), first_type_args, type_name)
-        } else {
-            (None, None, first_name_with_args)
-        };
+                (Some(first_name), first_type_args, type_name)
+            } else {
+                (None, None, first_name_with_args)
+            };
 
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
@@ -207,11 +239,13 @@ impl Parser {
 
             self.expect(Token::Fn)?;
             let mut func = self.parse_function()?;
+            func.is_extern = is_extern_block;
             func.is_pub = is_pub;
             func.is_async = is_async;
             func.decorators = decorators;
             func.doc_comment = doc_comment; // Doc comment from before the method
             func.parent_type = Some(type_name.clone()); // Track which impl block this function belongs to
+            func.impl_trait = trait_name.clone();
             functions.push(func);
         }
 
@@ -226,6 +260,7 @@ impl Parser {
             associated_types,
             functions,
             decorators: Vec::new(),
+            is_extern: is_extern_block,
         })
     }
 
@@ -366,6 +401,27 @@ impl Parser {
                 None
             };
 
+            // Abstract trait methods: only force by-value `self` when the return type mentions
+            // `Self` (e.g. `fn into_inner(self) -> Self`). A bare `self` with a non-Self return
+            // (e.g. `fn is_enabled(self) -> bool`) must stay `Inferred` so the analyzer emits
+            // `&self` and `dyn Trait` / `Box<dyn Trait>` method calls compile.
+            let mut parameters = parameters;
+            if body.is_none()
+                && parameters.len() == 1
+                && parameters[0].name == "self"
+                && parameters[0].ownership == OwnershipHint::Inferred
+                && return_type
+                    .as_ref()
+                    .is_some_and(type_structurally_contains_self)
+            {
+                parameters[0].ownership = OwnershipHint::Owned;
+            }
+
+            // Non-Self returns with abstract trait methods: keep Inferred.
+            // The analyzer will determine &self, &mut self, or self based on
+            // the implementation bodies. This avoids object-safety issues
+            // (bare `self` prevents dyn Trait usage).
+
             methods.push(TraitMethod {
                 name: method_name,
                 parameters,
@@ -491,7 +547,7 @@ impl Parser {
         loop {
             // THE WINDJAMMER WAY: Support Rust-style path keywords (self, super, crate)
             // Allow keywords as identifiers in module paths
-            let name_opt = match self.current_token() {
+            let name_opt: Option<String> = match self.current_token() {
                 Token::Ident(n) => Some(n.clone()), // Includes "super" and "crate" (not reserved)
                 Token::Thread => Some("thread".to_string()),
                 Token::Async => Some("async".to_string()),
@@ -673,11 +729,19 @@ impl Parser {
         let parameters = self.parse_parameters()?;
         self.expect(Token::RParen)?;
 
-        let return_type = if self.current_token() == &Token::Arrow {
+        // Parse return type with optional decorators: -> @location(0) vec4<float>
+        let (return_type, return_decorators) = if self.current_token() == &Token::Arrow {
             self.advance();
-            Some(self.parse_type()?)
+
+            // Collect decorators on return type
+            let mut ret_decorators = Vec::new();
+            while matches!(self.current_token(), Token::At | Token::Decorator(_)) {
+                ret_decorators.push(self.parse_decorator()?);
+            }
+
+            (Some(self.parse_type()?), ret_decorators)
         } else {
-            None
+            (None, Vec::new())
         };
 
         // Parse where clause (optional): where T: Display, U: Debug
@@ -708,8 +772,10 @@ impl Parser {
             is_async: false,        // Set by parse_item
             parameters,
             return_type,
+            return_decorators, // Decorators on return type
             body,
             parent_type: None, // Set by parse_impl for methods
+            impl_trait: None,
             doc_comment: None, // Set by parse_item if doc comments present
         })
     }
@@ -718,6 +784,12 @@ impl Parser {
         let mut params = Vec::new();
 
         while self.current_token() != &Token::RParen {
+            // Parse parameter decorators (@builtin, etc.)
+            let mut decorators = Vec::new();
+            while let Token::Decorator(_) = self.current_token() {
+                decorators.push(self.parse_decorator()?);
+            }
+
             // Check for self parameters
             if self.current_token() == &Token::Ampersand {
                 self.advance();
@@ -730,6 +802,7 @@ impl Parser {
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Mut,
                         is_mutable: false,
+                        decorators: decorators.clone(),
                     });
                 } else {
                     self.expect(Token::Self_)?;
@@ -739,6 +812,7 @@ impl Parser {
                         type_: Type::Custom("Self".to_string()),
                         ownership: OwnershipHint::Ref,
                         is_mutable: false,
+                        decorators: decorators.clone(),
                     });
                 }
             } else if self.current_token() == &Token::Self_ {
@@ -751,18 +825,22 @@ impl Parser {
                     // based on whether the method reads or writes fields!
                     ownership: OwnershipHint::Inferred,
                     is_mutable: false,
+                    decorators: decorators.clone(),
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
-                // mut self (owned mutable) - only if next token is Self_
-                self.advance(); // consume mut
-                self.advance(); // consume self
-                params.push(Parameter {
-                    name: "self".to_string(),
-                    pattern: None,
-                    type_: Type::Custom("Self".to_string()),
-                    ownership: OwnershipHint::Owned,
-                    is_mutable: true,
-                });
+                // WINDJAMMER PHILOSOPHY: Reject `mut self` - ownership is inferred automatically
+                let (file, line, col) = self
+                    .current_location()
+                    .map(|loc| (format!("{}", loc.file.display()), loc.line, loc.column))
+                    .unwrap_or(("unknown".to_string(), 0, 0));
+                return Err(format!(
+                    "error: `mut` is not needed for method parameters\n \
+                     --> {}:{}:{}\n  |\n \
+                     {} | fn ...(mut self) {{\n  |           ^^^ help: remove `mut`, ownership is inferred automatically\n  |\n \
+                     = note: Windjammer infers `&self`, `&mut self`, or owned based on usage\n \
+                     = note: Use `let mut x` for local variable mutability",
+                    file, line, col, line
+                ));
             } else {
                 // Regular parameter - could be a simple name or a pattern
                 // Check if this is a pattern parameter (starts with '(')
@@ -790,6 +868,7 @@ impl Parser {
                         type_,
                         ownership,
                         is_mutable: false,
+                        decorators: decorators.clone(),
                     });
                 } else {
                     // Simple identifier parameter
@@ -831,6 +910,7 @@ impl Parser {
                         type_,
                         ownership,
                         is_mutable,
+                        decorators: decorators.clone(),
                     });
                 }
             }
@@ -849,7 +929,7 @@ impl Parser {
     // TYPE PARSING (used by multiple sections above)
     // ------------------------------------------------------------------------
 
-    pub(crate) fn parse_struct(&mut self) -> Result<StructDecl<'static>, String> {
+    pub(crate) fn parse_struct(&mut self, is_extern: bool) -> Result<StructDecl<'static>, String> {
         // Token::Struct already consumed in parse_item
 
         let name = if let Token::Ident(n) = self.current_token() {
@@ -865,6 +945,38 @@ impl Parser {
 
         // Parse where clause (optional): where T: Clone, U: Debug
         let where_clause = self.parse_where_clause()?;
+
+        // Check for tuple struct: struct Name(T1, T2)
+        if self.current_token() == &Token::LParen {
+            self.advance(); // consume '('
+            let mut tuple_types = Vec::new();
+            while self.current_token() != &Token::RParen {
+                let is_pub = if self.current_token() == &Token::Pub {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
+                let _ = is_pub; // visibility tracked but not used in tuple field types
+                let field_type = self.parse_type()?;
+                tuple_types.push(field_type);
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                }
+            }
+            self.expect(Token::RParen)?;
+            return Ok(StructDecl {
+                name,
+                is_pub: false,
+                is_extern,
+                type_params,
+                where_clause,
+                fields: Vec::new(),
+                tuple_fields: Some(tuple_types),
+                decorators: Vec::new(),
+                doc_comment: None,
+            });
+        }
 
         // Check for unit struct: struct Name;
         let fields = if self.current_token() == &Token::Semicolon {
@@ -932,9 +1044,11 @@ impl Parser {
         Ok(StructDecl {
             name,
             is_pub: false, // Will be set by parse_item() if pub keyword present
+            is_extern,
             type_params,
             where_clause,
             fields,
+            tuple_fields: None,
             decorators: Vec::new(),
             doc_comment: None, // Set by parse_item if doc comments present
         })

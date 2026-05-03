@@ -7,71 +7,12 @@
 //! - loop with break/continue
 //! - Iterator method chaining
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_compiler())
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // BASIC FOR LOOPS
@@ -89,7 +30,7 @@ pub fn sum_to_n(n: i32) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "For range should compile. Error: {}", err);
 }
 
@@ -105,7 +46,7 @@ pub fn sum_to_n_inclusive(n: i32) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "For range inclusive should compile. Error: {}",
@@ -125,7 +66,7 @@ pub fn sum_vec(items: Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
 
     // Should auto-infer .iter() or iterate properly
     assert!(success, "For vec iter should compile. Error: {}", err);
@@ -143,7 +84,7 @@ pub fn process_owned(items: Vec<i32>) -> Vec<i32> {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "For vec owned should compile. Error: {}", err);
 }
 
@@ -162,7 +103,8 @@ pub fn double_all(items: &mut Vec<i32>) {
     }
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(
         success,
         "For iter_mut should compile. Generated:\n{}\nError: {}",
@@ -183,7 +125,7 @@ pub fn increment_all(items: Vec<i32>) -> Vec<i32> {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "For loop var mutation should compile. Error: {}",
@@ -209,7 +151,7 @@ pub fn countdown(n: i32) -> i32 {
     count
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "While basic should compile. Error: {}", err);
 }
 
@@ -226,7 +168,7 @@ pub fn sum_optional(items: Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "While let should compile. Error: {}", err);
 }
 
@@ -249,7 +191,7 @@ pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
     index
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Loop with break should compile. Error: {}", err);
 }
 
@@ -268,7 +210,7 @@ pub fn sum_positive(items: &Vec<i32>) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Loop with continue should compile. Error: {}", err);
 }
 
@@ -287,7 +229,7 @@ pub fn find_value() -> i32 {
     n
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Infinite loop with break should compile. Error: {}",
@@ -314,7 +256,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Nested for should compile. Error: {}", err);
 }
 
@@ -336,7 +278,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Nested while should compile. Error: {}", err);
 }
 
@@ -352,7 +294,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
     items.iter().map(|x| x * 2).collect()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iter map should compile. Error: {}", err);
 }
 
@@ -365,7 +307,7 @@ pub fn only_positive(items: Vec<i32>) -> Vec<i32> {
     items.iter().filter(|x| **x > 0).cloned().collect()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iter filter should compile. Error: {}", err);
 }
 
@@ -377,7 +319,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
     items.iter().fold(0, |acc, x| acc + x)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iter fold should compile. Error: {}", err);
 }
 
@@ -392,7 +334,7 @@ pub fn double_filter_sum(items: Vec<i32>) -> i32 {
         .sum()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iter chain should compile. Error: {}", err);
 }
 
@@ -413,7 +355,7 @@ pub fn find_index(items: Vec<i32>, target: i32) -> i32 {
     -1
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Enumerate basic should compile. Error: {}", err);
 }
 
@@ -438,7 +380,7 @@ pub fn sum_items(items: Vec<Item>) -> i32 {
     sum
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iterate struct vec should compile. Error: {}", err);
 }
 
@@ -459,6 +401,6 @@ pub fn copy_all(items: &Vec<Item>) -> Vec<Item> {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iterate and clone should compile. Error: {}", err);
 }

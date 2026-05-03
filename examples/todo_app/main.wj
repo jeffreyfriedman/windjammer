@@ -36,15 +36,15 @@ struct TodoState {
 impl TodoState {
     fn new() -> TodoState {
         let initial_todos = vec![
-            Todo::new(1, "Learn Windjammer".to_string()),
-            Todo::new(2, "Build amazing UIs".to_string()),
-            Todo::new(3, "Deploy to production".to_string()),
+            Todo::new(1, "Learn Windjammer"),
+            Todo::new(2, "Build amazing UIs"),
+            Todo::new(3, "Deploy to production"),
         ]
         
         TodoState {
             todos: Signal::new(initial_todos),
-            input: Signal::new("".to_string()),
-            filter: Signal::new("all".to_string()),
+            input: Signal::new(""),
+            filter: Signal::new("all"),
             next_id: Signal::new(4),
         }
     }
@@ -57,7 +57,7 @@ impl TodoState {
             todos.push(Todo::new(id, text))
             self.todos.set(todos)
             self.next_id.set(id + 1)
-            self.input.set("".to_string())
+            self.input.set("")
         }
     }
     
@@ -133,7 +133,7 @@ impl TodoState {
 fn render_todo_app(state: TodoState) -> Container {
     Container::new()
         .max_width("600px")
-        .child(Panel::new("Todo App".to_string())
+        .child(Panel::new("Todo App")
             .child(
                 Flex::new()
                     .direction(FlexDirection::Column)
@@ -148,7 +148,7 @@ fn render_todo_app(state: TodoState) -> Container {
 }
 
 fn render_header() -> Text {
-    Text::new("📝 Windjammer Todo App".to_string())
+    Text::new("📝 Windjammer Todo App")
         .size(TextSize::XLarge)
 }
 
@@ -159,11 +159,11 @@ fn render_input(state: TodoState) -> Flex {
     Flex::new()
         .direction(FlexDirection::Row)
         .gap("10px")
-        .child(Input::new("Add a new todo...".to_string(), state.input.clone())
+        .child(Input::new("Add a new todo...", state.input.clone())
             .on_change(move |value| {
                 state_input.input.set(value)
             }))
-        .child(Button::new("Add".to_string())
+        .child(Button::new("Add")
             .variant(ButtonVariant::Primary)
             .on_click(move || {
                 state_add.add_todo()
@@ -179,20 +179,20 @@ fn render_filters(state: TodoState) -> Flex {
     Flex::new()
         .direction(FlexDirection::Row)
         .gap("10px")
-        .child(Button::new("All".to_string())
+        .child(Button::new("All")
             .variant(if current_filter == "all" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
             .on_click(move || {
-                state_all.filter.set("all".to_string())
+                state_all.filter.set("all")
             }))
-        .child(Button::new("Active".to_string())
+        .child(Button::new("Active")
             .variant(if current_filter == "active" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
             .on_click(move || {
-                state_active.filter.set("active".to_string())
+                state_active.filter.set("active")
             }))
-        .child(Button::new("Completed".to_string())
+        .child(Button::new("Completed")
             .variant(if current_filter == "completed" { ButtonVariant::Primary } else { ButtonVariant::Secondary })
             .on_click(move || {
-                state_completed.filter.set("completed".to_string())
+                state_completed.filter.set("completed")
             }))
 }
 
@@ -203,7 +203,7 @@ fn render_todo_list(state: TodoState) -> Flex {
         .gap("10px")
     
     if todos.len() == 0 {
-        list.child(Text::new("No todos to show!".to_string()))
+        list.child(Text::new("No todos to show!"))
     } else {
         let mut i = 0
         let mut result = list
@@ -227,13 +227,13 @@ fn render_todo_item(state: TodoState, todo: Todo) -> Flex {
     Flex::new()
         .direction(FlexDirection::Row)
         .gap("10px")
-        .child(Button::new(checkbox_text.to_string())
+        .child(Button::new(checkbox_text)
             .variant(if todo.completed { ButtonVariant::Primary } else { ButtonVariant::Ghost })
             .on_click(move || {
                 state_toggle.toggle_todo(todo_id)
             }))
         .child(Text::new(todo.text))
-        .child(Button::new("Delete".to_string())
+        .child(Button::new("Delete")
             .variant(ButtonVariant::Danger)
             .size(ButtonSize::Small)
             .on_click(move || {
@@ -244,7 +244,7 @@ fn render_todo_item(state: TodoState, todo: Todo) -> Flex {
 fn render_footer(state: TodoState) -> Text {
     let active_count = state.count_active()
     let text = if active_count == 1 {
-        "1 item left".to_string()
+        "1 item left"
     } else {
         format!("{} items left", active_count)
     }
@@ -261,7 +261,7 @@ fn start() {
         render_todo_app(state.clone()).to_vnode()
     }
     
-    ReactiveApp::new("Todo App".to_string(), render).run()
+    ReactiveApp::new("Todo App", render).run()
 }
 
 fn main() {

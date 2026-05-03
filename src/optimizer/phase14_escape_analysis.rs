@@ -459,23 +459,22 @@ fn try_optimize_vec_to_smallvec<'ast>(
     optimizer: &crate::optimizer::Optimizer,
 ) -> Option<&'ast Expression<'ast>> {
     match expr {
-        Expression::MacroInvocation { name, args, .. } if name == "vec" => {
+        Expression::MacroInvocation { name, args, .. }
+            if name == "vec"
             // Only optimize if the vec has a small number of elements (< 8)
-            if args.len() < 8 && !args.is_empty() {
-                // Transform vec![...] to smallvec![...]
-                // This is a marker that codegen will handle
-                return Some(optimizer.alloc_expr(unsafe {
-                    std::mem::transmute::<Expression<'_>, Expression<'_>>(
-                        Expression::MacroInvocation {
-                            name: "smallvec".to_string(),
-                            args: args.clone(),
-                            delimiter: MacroDelimiter::Brackets,
-                            is_repeat: false, // smallvec optimization doesn't use repeat syntax
-                            location: None,
-                        },
-                    )
-                }));
-            }
+            && args.len() < 8 && !args.is_empty() =>
+        {
+            // Transform vec![...] to smallvec![...]
+            // This is a marker that codegen will handle
+            return Some(optimizer.alloc_expr(unsafe {
+                std::mem::transmute::<Expression<'_>, Expression<'_>>(Expression::MacroInvocation {
+                    name: "smallvec".to_string(),
+                    args: args.clone(),
+                    delimiter: MacroDelimiter::Brackets,
+                    is_repeat: false, // smallvec optimization doesn't use repeat syntax
+                    location: None,
+                })
+            }));
         }
         _ => {}
     }
@@ -498,6 +497,7 @@ mod tests {
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::Let {
                         pattern: Pattern::Identifier("temp".to_string()),
                         mutable: false,
@@ -530,6 +530,7 @@ mod tests {
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                 },
                 location: None,
@@ -563,6 +564,7 @@ mod tests {
                     name: "test".to_string(),
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![
                         test_alloc_stmt(Statement::Let {
                             pattern: Pattern::Identifier("temp".to_string()),
@@ -594,6 +596,7 @@ mod tests {
                     is_async: false,
                     decorators: vec![],
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                 },
                 location: None,

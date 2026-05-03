@@ -8,58 +8,8 @@
 //!   Generated:  `map.get(&key)` which is `&&String` ❌
 //!   Should be:  `map.get(key)` which is `&String` ✅
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return (false, String::new(), stderr);
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_path)
-        .unwrap_or_else(|_| "Failed to read generated file".to_string());
-
-    let rustc_output = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc_output {
-        Ok(output) => {
-            let rustc_success = output.status.success();
-            let rustc_err = String::from_utf8_lossy(&output.stderr).to_string();
-            (rustc_success, generated, rustc_err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -83,7 +33,8 @@ pub fn get_values(map: &HashMap<string, i32>) -> Vec<i32> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {
@@ -111,7 +62,6 @@ pub fn get_values(map: &HashMap<string, i32>) -> Vec<i32> {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Pre-existing bug - owned String parameters don't get & added
 fn test_hashmap_get_with_owned_key() {
     // Test Case 2: HashMap.get() with owned String key
     let code = r#"
@@ -125,7 +75,8 @@ pub fn lookup(map: &HashMap<string, i32>, key: string) -> Option<i32> {
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {
@@ -160,7 +111,8 @@ pub fn lookup_borrowed(map: &HashMap<string, i32>, key: &string) -> Option<i32> 
 }
 "#;
 
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
 
     println!("Generated:\n{}", generated);
     if !success {

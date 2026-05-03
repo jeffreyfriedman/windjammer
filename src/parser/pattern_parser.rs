@@ -69,6 +69,21 @@ impl Parser {
             }
         }
 
+        // Check for `mut x` pattern (mutable binding in destructuring)
+        if self.current_token() == &Token::Mut {
+            self.advance();
+            if let Token::Ident(var_name) = self.current_token() {
+                let var = var_name.clone();
+                self.advance();
+                return Ok(Pattern::MutBinding(var));
+            } else {
+                return Err(format!(
+                    "Expected identifier after 'mut', got {:?}",
+                    self.current_token()
+                ));
+            }
+        }
+
         match self.current_token() {
             Token::Underscore => {
                 self.advance();
@@ -102,6 +117,12 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Literal(Literal::Int(n)))
             }
+            Token::IntLiteralSuffixed(n, ref suffix) => {
+                let n = *n;
+                let suffix = suffix.clone();
+                self.advance();
+                Ok(Pattern::Literal(Literal::IntSuffixed(n, suffix)))
+            }
             Token::StringLiteral(s) => {
                 let s = s.clone();
                 self.advance();
@@ -111,6 +132,12 @@ impl Parser {
                 let c = *c;
                 self.advance();
                 Ok(Pattern::Literal(Literal::Char(c)))
+            }
+            Token::FloatLiteral(f) => {
+                // TDD: Support float literal patterns in match (0.0 => ...)
+                let f = *f;
+                self.advance();
+                Ok(Pattern::Literal(Literal::Float(f)))
             }
             Token::Ident(name) => {
                 let mut qualified_path = name.clone();
@@ -439,6 +466,7 @@ impl Parser {
                 }
             }
             Pattern::Ref(name) | Pattern::RefMut(name) => name.clone(),
+            Pattern::MutBinding(name) => name.clone(),
         }
     }
 
@@ -446,6 +474,7 @@ impl Parser {
     pub fn pattern_to_string(pattern: &Pattern) -> String {
         match pattern {
             Pattern::Identifier(name) => name.clone(),
+            Pattern::MutBinding(name) => format!("mut {}", name),
             Pattern::Wildcard => "_".to_string(),
             Pattern::Tuple(patterns) => {
                 let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
@@ -499,7 +528,7 @@ impl Parser {
         match pattern {
             // Irrefutable patterns
             Pattern::Wildcard => false,
-            Pattern::Identifier(_) => false,
+            Pattern::Identifier(_) | Pattern::MutBinding(_) => false,
             Pattern::Tuple(patterns) => {
                 // Tuple is refutable if any element is refutable
                 patterns.iter().any(Self::is_pattern_refutable)

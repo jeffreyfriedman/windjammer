@@ -3,12 +3,10 @@
 // Root Cause: Both game_loop::GameLoop (trait) and game::GameLoop (struct) exist
 // Fix: Rename game::GameLoop struct to FrameTimer to avoid conflict
 
-use std::path::PathBuf;
-use std::process::Command;
+#[path = "test_utils.rs"]
+mod test_utils;
 
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+use std::process::Command;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -38,7 +36,8 @@ fn test_gameloop_no_ambiguity() {
     "#;
 
     // Create temporary test directory
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_test_gameloop_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -46,13 +45,14 @@ fn test_gameloop_no_ambiguity() {
             .as_nanos(),
         std::process::id()
     ));
+
     std::fs::create_dir_all(&test_dir).unwrap();
 
     // Write test file
     std::fs::write(test_dir.join("main.wj"), code).unwrap();
 
     // Compile
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .arg("build")
         .arg("main.wj")
         .arg("--no-cargo") // Skip cargo build to avoid devise_core dependency issue
@@ -68,7 +68,6 @@ fn test_gameloop_no_ambiguity() {
         .expect("Failed to read generated code");
 
     // Cleanup
-    let _ = std::fs::remove_dir_all(&test_dir);
 
     if !output.status.success() {
         panic!(

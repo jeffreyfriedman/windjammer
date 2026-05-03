@@ -1,67 +1,11 @@
 // Integration test for module declarations
 // Verifies that module declarations parse and generate correct Rust code
 
-use std::fs;
-use std::process::Command;
-
-fn compile_wj(source: &str) -> (String, bool) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let process_id = std::process::id();
-    let unique_id = format!("{}_{}", process_id, test_id);
-
-    let temp_dir = std::env::temp_dir();
-    let test_file = format!("test_mod_{}.wj", unique_id);
-    let temp_file = temp_dir.join(&test_file);
-    fs::write(&temp_file, source).expect("Failed to write temp file");
-
-    let output_dir = temp_dir.join(format!("output_mod_{}", unique_id));
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
-            "build",
-            "--output",
-            output_dir.to_str().unwrap(),
-            temp_file.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    let success = output.status.success();
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if !success {
-        eprintln!("Compilation failed:");
-        eprintln!("STDERR: {}", stderr);
-    }
-
-    // Read generated Rust code
-    let rust_file = output_dir.join(format!("{}.rs", test_file.replace(".wj", "")));
-    let rust_code = if rust_file.exists() {
-        fs::read_to_string(&rust_file).unwrap_or_default()
-    } else {
-        String::new()
-    };
-
-    // Cleanup
-    let _ = fs::remove_file(&temp_file);
-    let _ = fs::remove_dir_all(&output_dir);
-
-    (rust_code, success)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Implement module declaration code generation
 fn test_module_declarations() {
     let source = r#"
 // Simple module declaration
@@ -81,7 +25,7 @@ mod internal;
 mod helpers;
 "#;
 
-    let (rust_code, success) = compile_wj(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
 
     assert!(success, "Module declarations should parse successfully");
 
@@ -125,7 +69,6 @@ mod helpers;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Inline modules require recursive analysis - tracked in TODO_MODULE_DECLARATIONS.md
 fn test_inline_module() {
     let source = r#"
 pub mod utils {
@@ -135,7 +78,7 @@ pub mod utils {
 }
 "#;
 
-    let (rust_code, success) = compile_wj(source);
+    let (rust_code, success) = test_utils::compile_single_check(source);
 
     assert!(success, "Inline modules should parse successfully");
 

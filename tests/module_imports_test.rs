@@ -70,8 +70,12 @@ pub mod world
 
     // Compile the project
     let output_dir = temp_dir.path().join("build");
-    let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust);
+    let result = windjammer::build_project(
+        &src_dir,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
 
     // Should compile successfully
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
@@ -154,8 +158,12 @@ pub use crate::math::vec2::Vec2
 
     // Compile
     let output_dir = temp_dir.path().join("build");
-    let result =
-        windjammer::build_project(&src_dir, &output_dir, windjammer::CompilationTarget::Rust);
+    let result = windjammer::build_project(
+        &src_dir,
+        &output_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
     assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
 
     // Check prelude.rs has correct re-export

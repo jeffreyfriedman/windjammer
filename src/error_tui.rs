@@ -85,25 +85,19 @@ impl ErrorTui {
                         KeyCode::Char('?') | KeyCode::F(1) => self.show_help = !self.show_help,
                         KeyCode::Down | KeyCode::Char('j') => self.next(),
                         KeyCode::Up | KeyCode::Char('k') => self.previous(),
-                        KeyCode::Enter | KeyCode::Char(' ') => {
-                            if !self.diagnostics.is_empty() {
-                                return Ok(Some(TuiAction::ViewError(self.selected)));
+                        KeyCode::Enter | KeyCode::Char(' ') if !self.diagnostics.is_empty() => {
+                            return Ok(Some(TuiAction::ViewError(self.selected)));
+                        }
+                        KeyCode::Char('f') if !self.diagnostics.is_empty() => {
+                            let diagnostic = &self.diagnostics[self.selected];
+                            if diagnostic.is_fixable() {
+                                return Ok(Some(TuiAction::FixError(self.selected)));
                             }
                         }
-                        KeyCode::Char('f') => {
-                            if !self.diagnostics.is_empty() {
-                                let diagnostic = &self.diagnostics[self.selected];
-                                if diagnostic.is_fixable() {
-                                    return Ok(Some(TuiAction::FixError(self.selected)));
-                                }
-                            }
-                        }
-                        KeyCode::Char('e') => {
-                            if !self.diagnostics.is_empty() {
-                                let diagnostic = &self.diagnostics[self.selected];
-                                if let Some(code) = &diagnostic.code {
-                                    return Ok(Some(TuiAction::ExplainError(code.clone())));
-                                }
+                        KeyCode::Char('e') if !self.diagnostics.is_empty() => {
+                            let diagnostic = &self.diagnostics[self.selected];
+                            if let Some(code) = &diagnostic.code {
+                                return Ok(Some(TuiAction::ExplainError(code.clone())));
                             }
                         }
                         KeyCode::Char('a') => {

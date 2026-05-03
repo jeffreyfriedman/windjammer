@@ -8,45 +8,8 @@
 //!
 //! This affects: match expr on method calls, method calls in for loops over &Vec
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj(source: &str) -> String {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp_dir = std::env::temp_dir().join(format!(
-        "wj_method_clone_test_{}_{}",
-        std::process::id(),
-        id
-    ));
-    let _ = std::fs::remove_dir_all(&tmp_dir);
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-
-    let source_path = tmp_dir.join("test.wj");
-    std::fs::write(&source_path, source).unwrap();
-
-    let output_dir = tmp_dir.join("output");
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_path.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("failed to run wj");
-
-    let rs_path = output_dir.join("test.rs");
-    let generated = std::fs::read_to_string(&rs_path)
-        .unwrap_or_else(|_| panic!("Failed to read generated Rust at {:?}", rs_path));
-
-    let _ = std::fs::remove_dir_all(&tmp_dir);
-    generated
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_call_on_borrowed_ref_in_for_loop() {
@@ -77,7 +40,7 @@ fn main() {
     }
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Should NOT have .clone() between method name and parentheses
     assert!(
@@ -130,7 +93,7 @@ fn main() {
     }
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Should NOT have .clone() between method name and parentheses
     assert!(

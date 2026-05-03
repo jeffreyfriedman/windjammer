@@ -4,70 +4,12 @@
 //! when a parameter is "stored" (requiring owned ownership) vs "used"
 //! (allowing borrowed). This is critical for automatic ownership inference.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // PUSH TO VEC (STORED)
@@ -93,7 +35,7 @@ impl Container {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     // item should be owned because it's pushed
     assert!(success, "Push to vec should compile. Error: {}", err);
 }
@@ -113,7 +55,7 @@ pub fn collect_item(item: Item) -> Vec<Item> {
     items
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Push to local vec should compile. Error: {}", err);
 }
 
@@ -135,7 +77,7 @@ pub fn create_map() -> HashMap<i32, i32> {
     map
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "HashMap basic should compile. Error: {}", err);
 }
 
@@ -163,7 +105,7 @@ impl Outer {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Assign to field should compile. Error: {}", err);
 }
 
@@ -187,7 +129,7 @@ pub fn make_line(start: Point, end: Point) -> Line {
     Line { start: start, end: end }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Assign in struct literal should compile. Error: {}",
@@ -212,7 +154,7 @@ pub fn identity(item: Item) -> Item {
     item
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     // item should be owned because it's returned
     assert!(success, "Return value should compile. Error: {}", err);
 }
@@ -233,7 +175,7 @@ pub fn maybe_return(item: Item, flag: bool) -> Option<Item> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Return in match should compile. Error: {}", err);
 }
 
@@ -254,7 +196,7 @@ pub fn get_value(item: Item) -> i32 {
     item.value
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     // Reading a Copy field doesn't require ownership of item
     assert!(success, "Read field should compile. Error: {}", err);
 }
@@ -272,7 +214,7 @@ pub fn print_item(item: Item) {
     println!("{:?}", item)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Print debug should compile. Error: {}", err);
 }
 
@@ -295,7 +237,7 @@ pub fn maybe_store(item: Item, items: &mut Vec<Item>, flag: bool) {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     // Even if push is conditional, item must be owned
     assert!(success, "Conditional push should compile. Error: {}", err);
 }
@@ -317,7 +259,7 @@ pub fn conditional_return(item: Item, flag: bool) -> Option<Item> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Conditional return should compile. Error: {}", err);
 }
 
@@ -342,7 +284,7 @@ pub fn collect_items(items: &Vec<Item>) -> Vec<Item> {
     result
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Push in loop should compile. Error: {}", err);
 }
 
@@ -364,7 +306,7 @@ pub fn get_value(item: Item) -> i32 {
     item.value
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Consuming function should compile. Error: {}", err);
 }
 
@@ -385,7 +327,7 @@ pub fn forward(item: Item) -> i32 {
     borrow(&item)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Pass to borrowing function should compile. Error: {}",
@@ -410,7 +352,7 @@ pub fn clone_and_store(item: &Item, items: &mut Vec<Item>) {
     items.push(item.clone())
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Clone then push should compile. Error: {}", err);
 }
 
@@ -439,7 +381,7 @@ impl Container {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Nested struct storage should compile. Error: {}",
@@ -464,7 +406,8 @@ pub fn wrap_in_tuple(item: Item) -> (i32, Item) {
     (item.value, item)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(
         success,
         "Tuple storage should compile. Generated:\n{}\nError: {}",
@@ -489,7 +432,7 @@ pub fn wrap_some(item: Item) -> Option<Item> {
     Some(item)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Wrap in Some should compile. Error: {}", err);
 }
 
@@ -506,6 +449,6 @@ pub fn wrap_ok(item: Item) -> Result<Item, string> {
     Ok(item)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Wrap in Ok should compile. Error: {}", err);
 }

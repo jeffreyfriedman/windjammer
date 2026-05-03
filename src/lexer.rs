@@ -53,7 +53,8 @@ pub enum Token {
     String,
 
     // Literals
-    IntLiteral(i64),
+    IntLiteral(i64),                 // No suffix: 42
+    IntLiteralSuffixed(i64, String), // With suffix: 42u32, 0usize
     FloatLiteral(f64),
     StringLiteral(String),
     InterpolatedString(Vec<StringPart>), // For strings with ${expr}
@@ -92,6 +93,11 @@ pub enum Token {
     StarAssign,    // *=
     SlashAssign,   // /=
     PercentAssign, // %=
+    AndAssign,     // &=
+    OrAssign,      // |=
+    XorAssign,     // ^=
+    ShlAssign,     // <<=
+    ShrAssign,     // >>=
     Arrow,         // ->
     LeftArrow,     // <-
     FatArrow,      // =>
@@ -135,6 +141,7 @@ impl fmt::Display for Token {
         match self {
             Token::Ident(s) => write!(f, "Ident({})", s),
             Token::IntLiteral(n) => write!(f, "Int({})", n),
+            Token::IntLiteralSuffixed(n, ref s) => write!(f, "Int({}{})", n, s),
             Token::StringLiteral(s) => write!(f, "String(\"{}\")", s),
             _ => write!(f, "{:?}", self),
         }
@@ -150,6 +157,10 @@ impl std::hash::Hash for Token {
         std::mem::discriminant(self).hash(state);
         match self {
             Token::IntLiteral(n) => n.hash(state),
+            Token::IntLiteralSuffixed(n, ref s) => {
+                n.hash(state);
+                s.hash(state);
+            }
             Token::FloatLiteral(f) => f.to_bits().hash(state), // Hash bits of f64
             Token::StringLiteral(s) => s.hash(state),
             Token::InterpolatedString(parts) => parts.hash(state),
@@ -177,6 +188,9 @@ pub struct Lexer {
     current_char: Option<char>,
     line: usize,
     column: usize,
+    /// After a `.` token, the next numeric literal is a tuple/field index: do not merge `0.0` into
+    /// one float (so `outer.0.0` tokenizes as `0` `.` `0`, not `0.0`).
+    numeric_field_index_after_dot: bool,
 }
 
 impl Lexer {
@@ -190,6 +204,7 @@ impl Lexer {
             current_char,
             line: 1,
             column: 1,
+            numeric_field_index_after_dot: false,
         }
     }
 
@@ -231,6 +246,9 @@ impl Lexer {
     }
 
     fn read_number(&mut self) -> Token {
+        let int_only_after_field_dot = self.numeric_field_index_after_dot;
+        self.numeric_field_index_after_dot = false;
+
         let mut num_str = String::new();
         let mut is_float = false;
 
@@ -315,13 +333,38 @@ impl Lexer {
             } else if ch == '_' {
                 // Skip underscores in numeric literals (e.g., 1_000_000)
                 self.advance();
-            } else if ch == '.' && !is_float && self.peek(1).is_some_and(|c| c.is_ascii_digit()) {
+            } else if ch == '.'
+                && !is_float
+                && !int_only_after_field_dot
+                && self.peek(1).is_some_and(|c| c.is_ascii_digit())
+            {
                 is_float = true;
                 num_str.push(ch);
                 self.advance();
             } else {
                 break;
             }
+        }
+
+        // Scientific notation: e.g. 1e10, 2.5e-3, 3E+2
+        if !int_only_after_field_dot
+            && (self.current_char == Some('e') || self.current_char == Some('E'))
+        {
+            num_str.push(self.current_char.unwrap());
+            self.advance();
+            if self.current_char == Some('-') || self.current_char == Some('+') {
+                num_str.push(self.current_char.unwrap());
+                self.advance();
+            }
+            while let Some(ch) = self.current_char {
+                if ch.is_ascii_digit() {
+                    num_str.push(ch);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            is_float = true;
         }
 
         // TDD FIX: Handle type suffixes for integer literals (0u64, 0i32, 0u32, etc.)
@@ -363,10 +406,11 @@ impl Lexer {
                 None
             };
 
-            // For now, just parse the number and discard the type suffix
-            // The type system will infer the correct type from context
-            // TODO: Store type suffix in Token for better type checking
-            Token::IntLiteral(num_str.parse().unwrap())
+            if let Some(suffix) = _type_suffix {
+                Token::IntLiteralSuffixed(num_str.parse().unwrap(), suffix)
+            } else {
+                Token::IntLiteral(num_str.parse().unwrap())
+            }
         } else {
             Token::FloatLiteral(num_str.parse().unwrap())
         }
@@ -396,6 +440,11 @@ impl Lexer {
                     current_literal.push(unescaped);
                     self.advance();
                 }
+            } else if ch == '$' && self.peek(1) == Some('$') {
+                // Escaped dollar: $$ → literal $
+                current_literal.push('$');
+                self.advance();
+                self.advance();
             } else if ch == '$' && self.peek(1) == Some('{') {
                 // Found interpolation: ${expr}
                 has_interpolation = true;
@@ -590,6 +639,13 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
+        // Pending "numeric field index after ." only applies if the next token is a number
+        if self.numeric_field_index_after_dot
+            && !matches!(self.current_char, Some(c) if c.is_ascii_digit())
+        {
+            self.numeric_field_index_after_dot = false;
+        }
+
         let token = match self.current_char {
             None => Token::Eof,
             Some('\n') => {
@@ -707,6 +763,11 @@ impl Lexer {
                 self.advance();
                 Token::Percent
             }
+            Some('^') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::XorAssign
+            }
             Some('^') => {
                 self.advance();
                 Token::Caret
@@ -739,6 +800,12 @@ impl Lexer {
                 self.advance();
                 Token::LeftArrow
             }
+            Some('<') if self.peek(1) == Some('<') && self.peek(2) == Some('=') => {
+                self.advance();
+                self.advance();
+                self.advance();
+                Token::ShlAssign
+            }
             Some('<') if self.peek(1) == Some('<') => {
                 self.advance();
                 self.advance();
@@ -752,6 +819,12 @@ impl Lexer {
             Some('<') => {
                 self.advance();
                 Token::Lt
+            }
+            Some('>') if self.peek(1) == Some('>') && self.peek(2) == Some('=') => {
+                self.advance();
+                self.advance();
+                self.advance();
+                Token::ShrAssign
             }
             Some('>') if self.peek(1) == Some('>') => {
                 self.advance();
@@ -772,6 +845,11 @@ impl Lexer {
                 self.advance();
                 Token::And
             }
+            Some('&') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::AndAssign
+            }
             Some('&') => {
                 self.advance();
                 Token::Ampersand
@@ -780,6 +858,11 @@ impl Lexer {
                 self.advance();
                 self.advance();
                 Token::Or
+            }
+            Some('|') if self.peek(1) == Some('=') => {
+                self.advance();
+                self.advance();
+                Token::OrAssign
             }
             Some('|') if self.peek(1) == Some('>') => {
                 self.advance();
@@ -831,6 +914,7 @@ impl Lexer {
             }
             Some('.') => {
                 self.advance();
+                self.numeric_field_index_after_dot = true;
                 Token::Dot
             }
             Some(':') => {

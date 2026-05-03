@@ -17,7 +17,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_requires_decorator_with_expression() {
     // Create a test file with @requires containing an expression
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_requires_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -54,7 +55,6 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Should NOT have "Expected pattern, got Assign" error
     assert!(
@@ -76,7 +76,8 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ensures_decorator_with_expression() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_ensures_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -113,7 +114,6 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     assert!(
         !stderr.contains("Expected pattern") && !stdout.contains("Expected pattern"),

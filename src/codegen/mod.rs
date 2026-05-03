@@ -24,6 +24,7 @@ pub mod javascript;
 pub mod rust;
 pub mod wasm;
 pub mod wasm_component_generator;
+pub mod wgsl;
 
 // Re-export the CodeGenerator from the rust module
 pub use rust::CodeGenerator;

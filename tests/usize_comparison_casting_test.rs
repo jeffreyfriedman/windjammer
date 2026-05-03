@@ -1,45 +1,8 @@
 // TDD Test: Compiler incorrectly adds 'as i32' casts to .len() in comparisons
 // This test should FAIL until the bug is fixed
 
-use std::fs;
-use std::process::Command;
-
-fn compile_and_check_casts(code: &str) -> Result<String, String> {
-    // Use unique temp directory per test to avoid parallel test conflicts
-    let thread_id = format!("{:?}", std::thread::current().id());
-    let temp_dir = std::env::temp_dir().join(format!("usize_cast_test_{}", thread_id));
-    let test_dir = temp_dir.to_str().unwrap();
-    fs::create_dir_all(test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            &input_file,
-            "--output",
-            test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    // Read generated file
-    let generated_file = format!("{}/test.rs", test_dir);
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    fs::remove_dir_all(&temp_dir).ok();
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -51,7 +14,7 @@ fn test_vec_len_comparison_should_not_cast_to_i32() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT cast .len() to i32 when comparing with usize
     assert!(
@@ -88,7 +51,7 @@ fn test_sparse_vec_len_comparison_with_usize() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT cast .len() to i32
     assert!(
@@ -113,7 +76,7 @@ fn test_usize_variable_in_comparison_keeps_type() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT add any i32 casts to usize comparisons
     assert!(
@@ -136,7 +99,7 @@ fn test_len_in_while_loop_condition() {
     }
     "#;
 
-    let generated = compile_and_check_casts(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT cast .len() to i32 when comparing with usize
     assert!(

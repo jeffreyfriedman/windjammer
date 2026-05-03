@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Strip explicit & when method parameter expects owned value
 ///
@@ -25,12 +28,7 @@ use anyhow::Result;
 /// let result = self.render_transform(&object.transform);  // ❌ E0308!
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -39,7 +37,9 @@ fn test_strip_ref_when_method_param_is_owned() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ref_strip_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_ref_strip_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -91,7 +91,7 @@ version = "0.1.0"
 
     // Compile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -123,7 +123,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -135,7 +134,11 @@ fn test_ref_strip_compiles_with_rustc() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ref_strip_compile_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_ref_strip_compile_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -191,7 +194,7 @@ version = "0.1.0"
 
     // Compile WITH cargo to verify the generated Rust actually compiles
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -210,7 +213,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

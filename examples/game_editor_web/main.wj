@@ -40,18 +40,18 @@ fn start() {
                 .child(Button::new("Save")
                     .variant(ButtonVariant::Secondary)
                     .on_click(move || {
-                        let msg = "File saved: ".to_string() + &save_file.get()
+                        let msg = "File saved: " + save_file.get()
                         save_console.set(msg)
                     }))
                 .child(Button::new("Run")
                     .variant(ButtonVariant::Primary)
                     .on_click(move || {
-                        let output = "Compiling...\n\n".to_string() + &run_code.get() + "\n\n✓ Compilation complete!"
+                        let output = "Compiling...\n\n" + run_code.get() + "\n\n✓ Compilation complete!"
                         run_console.set(output)
                     })))
             .child(Panel::new()
                 .title("Editor")
-                .child(Text::new("File: ".to_string() + &display_file.get()))
+                .child(Text::new("File: " + display_file.get()))
                 .child(CodeEditor::new(display_code.clone())
                     .placeholder("Write your game code here...")))
             .child(Panel::new()
@@ -60,7 +60,7 @@ fn start() {
             .to_vnode()
     }
     
-    ReactiveApp::new("Game Editor (Web)".to_string(), render).run()
+    ReactiveApp::new("Game Editor (Web)", render).run()
 }
 
 fn main() {

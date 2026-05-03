@@ -20,7 +20,7 @@ fn start() {
     // Build UI
     let ui = Container::new()
         .max_width("600px")
-        .child(Panel::new("Interactive Counter".to_string())
+        .child(Panel::new("Interactive Counter")
             .child(
                 Flex::new()
                     .direction(FlexDirection::Column)
@@ -33,7 +33,7 @@ fn start() {
                         Flex::new()
                             .direction(FlexDirection::Row)
                             .gap("10px")
-                            .child(Button::new("- Decrement".to_string())
+                            .child(Button::new("- Decrement")
                                 .variant(ButtonVariant::Secondary)
                                 .on_click(move || {
                                     let current = count_dec.get()
@@ -41,14 +41,14 @@ fn start() {
                                     println!("Decremented to: {}", current - 1)
                                     update_count_display(current - 1)
                                 }))
-                            .child(Button::new("Reset".to_string())
+                            .child(Button::new("Reset")
                                 .variant(ButtonVariant::Danger)
                                 .on_click(move || {
                                     count_reset.set(0)
                                     println!("Reset to 0")
                                     update_count_display(0)
                                 }))
-                            .child(Button::new("+ Increment".to_string())
+                            .child(Button::new("+ Increment")
                                 .variant(ButtonVariant::Primary)
                                 .on_click(move || {
                                     let current = count_inc.get()
@@ -57,11 +57,11 @@ fn start() {
                                     update_count_display(current + 1)
                                 }))
                     )
-                    .child(Alert::info("Click the buttons to see the count change!".to_string()))
+                    .child(Alert::info("Click the buttons to see the count change!"))
             )
         )
     
-    App::new("Interactive Counter".to_string(), ui.to_vnode()).run()
+    App::new("Interactive Counter", ui.to_vnode()).run()
 }
 
 // Helper function to update the DOM directly (temporary solution)

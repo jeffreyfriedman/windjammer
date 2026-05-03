@@ -10,7 +10,7 @@ fn main() {
     let x = identity::<int>(42)
     println!("Identity int: {}", x)
     
-    let s = identity::<string>("Hello".to_string())
+    let s = identity::<string>("Hello")
     println!("Identity string: {}", s)
     
     // Example 2: Method with turbofish

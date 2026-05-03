@@ -7,12 +7,12 @@
 struct Window {
     width: i32,
     height: i32,
-    title: String,
+    title: string,
     is_open: bool,
 }
 
 impl Window {
-    fn new(width: i32, height: i32, title: String) -> Window {
+    fn new(width: i32, height: i32, title: string) -> Window {
         println("Creating window: {} ({}x{})", title, width, height)
         Window {
             width: width,
@@ -45,7 +45,7 @@ pub fn main() {
     println("=== WINDJAMMER RENDERING DEMO ===")
     println("")
     
-    let mut window = Window::new(800, 600, "Windjammer Game".to_string())
+    let mut window = Window::new(800, 600, "Windjammer Game")
     
     println("Entering render loop...")
     let mut frame = 0

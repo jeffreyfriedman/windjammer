@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Test framework should not create module conflicts
 ///
@@ -12,22 +15,13 @@ use anyhow::Result;
 /// named "lib" when generating the library entry point, as "lib" is a reserved
 /// name for the library itself.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_lib_module_no_conflict() -> Result<()> {
-    // Create temp directory with unique name
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_lib_conflict_test_{}", timestamp));
+    let temp_dir = tempdir().expect("tempdir").path().to_path_buf();
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj directory with a lib.wj file
@@ -67,7 +61,7 @@ fn add(a: i32, b: i32) -> i32 {
     )?;
 
     // Compile the library directly (skip test framework for now)
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -77,6 +71,7 @@ fn add(a: i32, b: i32) -> i32 {
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")
+        .arg("--no-cargo")
         .output()?;
 
     let _stderr = String::from_utf8_lossy(&output.stderr);
@@ -107,15 +102,11 @@ fn add(a: i32, b: i32) -> i32 {
     Ok(())
 }
 
+/// `window.wj` + `window/manager.wj` must not produce `window.rs` and `window/mod.rs` for the same module.
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_window_module_no_conflict() -> Result<()> {
-    // Create temp directory with unique name
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_window_conflict_test_{}", timestamp));
+    let temp_dir = tempdir().expect("tempdir").path().to_path_buf();
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj directory with both window.wj and window/ directory
@@ -179,7 +170,7 @@ version = "0.1.0"
     )?;
 
     // Run wj test
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let output = Command::new(&wj_compiler)
         .arg("test")
         .arg(&test_wj)

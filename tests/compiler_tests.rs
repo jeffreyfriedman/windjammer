@@ -1,47 +1,13 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::path::PathBuf;
-use std::process::Command;
 
 /// Helper to compile a test fixture and return the generated Rust code
-fn compile_fixture(fixture_name: &str) -> Result<String, String> {
-    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(format!("{}.wj", fixture_name));
-
-    // Use unique output dir per fixture to avoid race conditions in parallel tests
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("test_output")
-        .join(fixture_name);
-    std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
-
-    // Run the compiler (--no-cargo to avoid file lock conflicts in parallel tests)
-    let compiler_output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            fixture_path.to_str().unwrap(),
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo", // Skip cargo build in tests
-        ])
-        .output()
-        .map_err(|e| format!("Failed to run compiler: {}", e))?;
-
-    if !compiler_output.status.success() {
-        return Err(format!(
-            "Compiler failed: {}",
-            String::from_utf8_lossy(&compiler_output.stderr)
-        ));
-    }
-
-    // Read generated Rust code
-    let rust_file = output_dir.join(format!("{}.rs", fixture_name));
-    std::fs::read_to_string(rust_file).map_err(|e| format!("Failed to read generated code: {}", e))
-}
-
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_automatic_reference_insertion() {
-    let generated = compile_fixture("auto_reference").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("auto_reference").expect("Compilation failed");
 
     // Check that Copy types are passed by value (no mut if not mutated)
     assert!(
@@ -75,7 +41,8 @@ fn test_automatic_reference_insertion() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_interpolation() {
-    let generated = compile_fixture("string_interpolation").expect("Compilation failed");
+    let generated =
+        test_utils::compile_fixture("string_interpolation").expect("Compilation failed");
 
     // Check that interpolated strings are converted to println! with format args
     assert!(
@@ -95,13 +62,13 @@ fn test_string_interpolation() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_pipe_operator() {
-    let generated = compile_fixture("pipe_operator").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("pipe_operator").expect("Compilation failed");
 
     // Check that pipe operator is transformed to nested calls
-    // 5 |> double |> add_ten becomes add_ten(double(5))
+    // 5 |> double |> add_ten becomes add_ten(double(5_i64)) (int literals get i64 suffix in Rust)
     // No & needed because int/i64 is a Copy type
     assert!(
-        generated.contains("add_ten(double(5))"),
+        generated.contains("add_ten(double(5_i64))"),
         "Pipe operator should transform to nested calls (no & for Copy types)"
     );
 
@@ -111,7 +78,7 @@ fn test_pipe_operator() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_structs_and_impl() {
-    let generated = compile_fixture("structs_and_impl").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("structs_and_impl").expect("Compilation failed");
 
     // Check struct definition
     assert!(
@@ -159,12 +126,12 @@ fn main() {
         .join("temp_combined.wj");
     std::fs::write(&temp_path, fixture).expect("Failed to write temp fixture");
 
-    let generated = compile_fixture("temp_combined").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("temp_combined").expect("Compilation failed");
 
     // Check that both features work together
-    // int/i64 is a Copy type, so no & is inserted
+    // int/i64 is a Copy type, so no & is inserted (literal emitted as 5_i64)
     assert!(
-        generated.contains("double(5)"),
+        generated.contains("double(5_i64)"),
         "Pipe operator should work correctly (no & for Copy types)"
     );
     assert!(
@@ -199,7 +166,7 @@ fn main() {
         .join("temp_borrowed.wj");
     std::fs::write(&temp_path, fixture).expect("Failed to write temp fixture");
 
-    let generated = compile_fixture("temp_borrowed").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("temp_borrowed").expect("Compilation failed");
 
     // Copy types are passed by value (no mut if not mutated)
     assert!(
@@ -207,7 +174,7 @@ fn main() {
         "Copy types should be passed by value without mut if read-only"
     );
     assert!(
-        generated.contains("print_twice(42)"),
+        generated.contains("print_twice(42_i64)"),
         "Copy types should be passed by value at call site"
     );
 
@@ -220,7 +187,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ternary_operator() {
-    let generated = compile_fixture("ternary_operator").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("ternary_operator").expect("Compilation failed");
 
     // Check that if/else expressions work correctly
     assert!(
@@ -248,7 +215,7 @@ fn test_ternary_operator() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_smart_auto_derive() {
-    let generated = compile_fixture("smart_auto_derive").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("smart_auto_derive").expect("Compilation failed");
 
     // Check Point: all fields are Copy (int, int)
     // Should derive: Debug, Clone, Copy, PartialEq, Eq, Hash, Default
@@ -261,25 +228,29 @@ fn test_smart_auto_derive() {
     // Check User: name is String (not Copy), age is int (Copy)
     // Should derive: Debug, Clone, PartialEq, Eq, Hash, Default (NO Copy)
     // String is hashable and comparable, so we get those
-    assert!(generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]\nstruct User"),
-        "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy");
+    assert!(
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]")
+            && generated.contains("struct User"),
+        "User with String field should derive Debug, Clone, PartialEq, Eq, Hash, Default but NOT Copy"
+    );
 
     // Check Container: Vec<int> implements Clone, Debug, Default, PartialEq, and Eq
     // Should derive: Debug, Clone, PartialEq, Eq, Default (NO Copy, NO Hash)
     // Vec<T> is PartialEq and Eq if T is PartialEq/Eq, but NOT Hash (even if T: Hash)
-    let has_container_derive =
-        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]\nstruct Container");
     assert!(
-        has_container_derive,
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]")
+            && generated.contains("struct Container"),
         "Container with Vec should derive Debug, Clone, PartialEq, Eq, Default (no Hash, no Copy)"
     );
 
-    // Check Config: explicit traits specified
-    // Should derive exactly: Debug, Clone, Serialize, Deserialize
+    // Check Config: explicit @auto traits are merged with inferred standard traits
+    // (see merge_standard_derive_traits — partial lists must not drop Debug/Clone/Eq/etc.)
+    // Serde traits sort after the standard block.
     assert!(
-        generated.contains("#[derive(Debug, Clone, Serialize, Deserialize)]")
-            && generated.contains("struct Config"),
-        "Config with explicit traits should derive only those traits"
+        generated.contains(
+            "#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize, Serialize)]"
+        ) && generated.contains("struct Config"),
+        "Config should list explicit Serde derives plus inferred standard derives"
     );
 
     println!("✓ Smart @auto derive works");
@@ -288,7 +259,7 @@ fn test_smart_auto_derive() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ownership_inference_mut_borrowed() {
-    let generated = compile_fixture("mut_borrowed").expect("Compilation failed");
+    let generated = test_utils::compile_fixture("mut_borrowed").expect("Compilation failed");
 
     // Should infer &mut since x is mutated and mutation needs to be visible to caller
     // Currently broken: generates `mut x: i64` instead of `x: &mut i64`

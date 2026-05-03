@@ -4,14 +4,14 @@
 @component
 struct ContactForm {
     // Form fields
-    name: Signal<String>,
-    email: Signal<String>,
-    message: Signal<String>,
+    name: Signal<string>,
+    email: Signal<string>,
+    message: Signal<string>,
     
     // Validation state
-    name_error: Signal<String>,
-    email_error: Signal<String>,
-    message_error: Signal<String>,
+    name_error: Signal<string>,
+    email_error: Signal<string>,
+    message_error: Signal<string>,
     
     // Form state
     submitted: Signal<bool>,
@@ -32,7 +32,7 @@ impl ContactForm {
         }
     }
     
-    fn validate_name(name: String) -> String {
+    fn validate_name(name: string) -> string {
         if name.len() == 0 {
             return "Name is required"
         }
@@ -42,7 +42,7 @@ impl ContactForm {
         ""
     }
     
-    fn validate_email(email: String) -> String {
+    fn validate_email(email: string) -> string {
         if email.len() == 0 {
             return "Email is required"
         }
@@ -52,7 +52,7 @@ impl ContactForm {
         ""
     }
     
-    fn validate_message(message: String) -> String {
+    fn validate_message(message: string) -> string {
         if message.len() == 0 {
             return "Message is required"
         }
@@ -74,19 +74,19 @@ impl ContactForm {
         name_err.len() == 0 && email_err.len() == 0 && message_err.len() == 0
     }
     
-    fn handle_name_change(value: String) {
+    fn handle_name_change(value: string) {
         self.name.set(value)
         let error = ContactForm::validate_name(value)
         self.name_error.set(error)
     }
     
-    fn handle_email_change(value: String) {
+    fn handle_email_change(value: string) {
         self.email.set(value)
         let error = ContactForm::validate_email(value)
         self.email_error.set(error)
     }
     
-    fn handle_message_change(value: String) {
+    fn handle_message_change(value: string) {
         self.message.set(value)
         let error = ContactForm::validate_message(value)
         self.message_error.set(error)

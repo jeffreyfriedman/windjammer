@@ -61,7 +61,7 @@ async fn index() -> Html<string> {
 </body>
 </html>
     "#
-    Html(html.to_string())
+    Html(html)
 }
 
 @get("/:filename")

@@ -31,7 +31,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -82,24 +85,20 @@ fn main() {
         );
     }
 
-    // WINDJAMMER DESIGN: String params infer to &str (not String!)
+    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
     // When assigning borrowed param to owned field:
-    // - value: &str (borrowed parameter, read-only inference)
+    // - value: &String (borrowed parameter, Phase 1 baseline)
     // - self.data.value: String (owned field)
     // - Must clone: self.data.value = value.clone() or value.to_string()
-    //
-    // This is CORRECT! Converting &str to String requires allocation.
     assert!(
-        generated.contains("value: &str"),
-        "Should generate &str parameter. Got:\n{}",
+        generated.contains("value: &String"),
+        "Should generate &String parameter (Phase 1 baseline). Got:\n{}",
         generated
     );
     assert!(
         generated.contains("self.data.value = value.clone()")
             || generated.contains("self.data.value = value.to_string()"),
-        "Should clone/convert &str to String for owned field. Got:\n{}",
+        "Should clone/convert &String to String for owned field. Got:\n{}",
         generated
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

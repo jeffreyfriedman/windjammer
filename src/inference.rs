@@ -112,6 +112,54 @@ impl Default for InferredBounds {
     }
 }
 
+/// Registry entry mapping a method name to the trait it belongs to.
+/// This drives trait inference from method calls (e.g., `.clone()` → `Clone`).
+struct TraitMethodEntry {
+    method: &'static str,
+    trait_name: &'static str,
+}
+
+/// Known trait methods — extend this table to add new method→trait mappings
+/// without modifying any match arms.
+static TRAIT_METHOD_REGISTRY: &[TraitMethodEntry] = &[
+    TraitMethodEntry {
+        method: "clone",
+        trait_name: "Clone",
+    },
+    TraitMethodEntry {
+        method: "to_string",
+        trait_name: "ToString",
+    },
+    TraitMethodEntry {
+        method: "fmt",
+        trait_name: "Display",
+    },
+    TraitMethodEntry {
+        method: "eq",
+        trait_name: "PartialEq",
+    },
+    TraitMethodEntry {
+        method: "cmp",
+        trait_name: "Ord",
+    },
+    TraitMethodEntry {
+        method: "partial_cmp",
+        trait_name: "PartialOrd",
+    },
+    TraitMethodEntry {
+        method: "hash",
+        trait_name: "Hash",
+    },
+    TraitMethodEntry {
+        method: "default",
+        trait_name: "Default",
+    },
+    TraitMethodEntry {
+        method: "into",
+        trait_name: "Into",
+    },
+];
+
 /// The trait bound inference engine
 pub struct InferenceEngine {
     /// Current function's type parameters
@@ -280,24 +328,15 @@ impl InferenceEngine {
                 self.collect_constraints_from_expression(right, bounds);
             }
 
-            // Method calls
+            // Method calls — look up in the trait method registry
             Expression::MethodCall {
                 object,
                 method,
                 arguments,
                 ..
             } => {
-                // Common trait methods
-                match method.as_str() {
-                    "clone" => {
-                        self.infer_trait_for_expression(object, "Clone", bounds);
-                    }
-                    "to_string" => {
-                        self.infer_trait_for_expression(object, "ToString", bounds);
-                    }
-                    _ => {
-                        // Custom methods - can't infer trait (would need type information)
-                    }
+                if let Some(entry) = TRAIT_METHOD_REGISTRY.iter().find(|e| e.method == method) {
+                    self.infer_trait_for_expression(object, entry.trait_name, bounds);
                 }
 
                 // Recurse
@@ -308,19 +347,14 @@ impl InferenceEngine {
             }
 
             // Macro invocations (println!, format!, etc.)
-            Expression::MacroInvocation { name, args, .. } => {
-                if name == "println" || name == "format" {
-                    // Analyze format string for Display vs Debug
-                    if let Some(Expression::Literal {
-                        value: crate::parser::Literal::String(fmt),
-                        ..
-                    }) = args.first()
-                    {
-                        // Convert Vec<&Expression> to Vec<(Option<String>, &Expression)>
-                        let labeled_args: Vec<(Option<String>, &Expression)> =
-                            args[1..].iter().map(|e| (None, *e)).collect();
-                        self.analyze_format_string(fmt, &labeled_args, bounds);
-                    }
+            Expression::MacroInvocation { args, .. } => {
+                // Structural format-string detection: if the first argument is a string
+                // literal containing format placeholders, infer Display/Debug for the
+                // subsequent arguments. Works for any macro, not just specific names.
+                if args.len() >= 2 {
+                    let labeled_args: Vec<(Option<String>, &Expression)> =
+                        args.iter().map(|e| (None, *e)).collect();
+                    self.detect_format_string_call(&labeled_args, bounds);
                 }
 
                 // Recurse into macro arguments
@@ -331,10 +365,17 @@ impl InferenceEngine {
 
             // Function calls
             Expression::Call {
-                function,
                 arguments,
+                function,
                 ..
             } => {
+                // Structural format-string detection: if the first argument is a string
+                // literal containing format placeholders ({} or {:?}) and there are
+                // subsequent arguments, infer Display/Debug for those arguments.
+                // This works for ANY function that takes a format string, not just
+                // specific hard-coded names.
+                self.detect_format_string_call(arguments, bounds);
+
                 // Recurse
                 self.collect_constraints_from_expression(function, bounds);
                 for (_, arg) in arguments {
@@ -448,6 +489,61 @@ impl InferenceEngine {
             _ => None,
         }
     }
+
+    /// Structural format-string detection for function calls.
+    ///
+    /// If the first argument is a string literal containing Rust-style format placeholders
+    /// (`{}` for Display, `{:?}` / `{:#?}` for Debug) and there are subsequent arguments,
+    /// infer the appropriate trait bounds on those arguments.
+    ///
+    /// This is structural, not name-based: it works for `println`, `format`, `log::info`,
+    /// or any user-defined function that takes a format string.
+    fn detect_format_string_call<'ast>(
+        &self,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        bounds: &mut InferredBounds,
+    ) {
+        if arguments.len() < 2 {
+            return;
+        }
+
+        let fmt_str = match &arguments[0].1 {
+            Expression::Literal {
+                value: crate::parser::Literal::String(s),
+                ..
+            } => s.as_str(),
+            _ => return,
+        };
+
+        if !Self::contains_format_placeholder(fmt_str) {
+            return;
+        }
+
+        let rest: Vec<(Option<String>, &Expression)> = arguments[1..]
+            .iter()
+            .map(|(l, e)| (l.clone(), *e))
+            .collect();
+        self.analyze_format_string(fmt_str, &rest, bounds);
+    }
+
+    /// Check if a string contains Rust-style format placeholders.
+    fn contains_format_placeholder(s: &str) -> bool {
+        let mut chars = s.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '{' {
+                match chars.peek() {
+                    Some('{') => {
+                        // Escaped brace `{{` — skip
+                        chars.next();
+                    }
+                    Some('}') | Some(':') => return true,
+                    Some(c) if c.is_alphanumeric() => return true,
+                    _ => {}
+                }
+            }
+        }
+        false
+    }
 }
 
 impl Default for InferenceEngine {
@@ -481,8 +577,10 @@ mod tests {
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             }],
             return_type: None,
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::MacroInvocation {
@@ -505,6 +603,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 
@@ -534,8 +633,10 @@ mod tests {
                 type_: Type::Generic("T".to_string()),
                 ownership: OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             }],
             return_type: Some(Type::Generic("T".to_string())),
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::MethodCall {
@@ -552,6 +653,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 
@@ -582,6 +684,7 @@ mod tests {
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
                     is_mutable: false,
+                    decorators: Vec::new(),
                 },
                 Parameter {
                     name: "y".to_string(),
@@ -589,9 +692,11 @@ mod tests {
                     type_: Type::Generic("T".to_string()),
                     ownership: OwnershipHint::Inferred,
                     is_mutable: false,
+                    decorators: Vec::new(),
                 },
             ],
             return_type: Some(Type::Generic("T".to_string())),
+            return_decorators: Vec::new(),
             is_async: false,
             body: vec![test_alloc_stmt(Statement::Expression {
                 expr: test_alloc_expr(Expression::Binary {
@@ -610,6 +715,7 @@ mod tests {
             })],
             where_clause: vec![],
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         };
 
@@ -621,6 +727,261 @@ mod tests {
         assert!(
             t_bounds.iter().any(|b| b.starts_with("Add")),
             "Expected Add bound, got: {:?}",
+            t_bounds
+        );
+    }
+
+    /// Structural format-string detection: any call with a format string ("{}", x) should
+    /// infer Display, regardless of the function name. This is NOT hard-coded to println.
+    #[test]
+    fn test_infer_display_from_call_with_format_string() {
+        let mut engine = InferenceEngine::new();
+
+        // fn log_value<T>(item: T) { custom_logger("{}", item) }
+        let func = FunctionDecl {
+            name: "log_value".to_string(),
+            is_pub: false,
+            is_extern: false,
+            decorators: vec![],
+            type_params: vec![TypeParam {
+                name: "T".to_string(),
+                bounds: vec![],
+            }],
+            parameters: vec![Parameter {
+                name: "item".to_string(),
+                pattern: None,
+                type_: Type::Generic("T".to_string()),
+                ownership: OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: Vec::new(),
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            is_async: false,
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::Call {
+                    function: test_alloc_expr(Expression::Identifier {
+                        name: "custom_logger".to_string(),
+                        location: None,
+                    }),
+                    arguments: vec![
+                        (
+                            None,
+                            test_alloc_expr(Expression::Literal {
+                                value: Literal::String("{} logged".to_string()),
+                                location: None,
+                            }),
+                        ),
+                        (
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "item".to_string(),
+                                location: None,
+                            }),
+                        ),
+                    ],
+                    location: None,
+                }),
+                location: None,
+            })],
+            where_clause: vec![],
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+        };
+
+        let bounds = engine.infer_function_bounds(&func);
+        let t_bounds = bounds.get_bounds("T");
+        assert!(
+            t_bounds.contains(&"Display".to_string()),
+            "Format string '{{}} logged' + arg should infer Display via structure, got: {:?}",
+            t_bounds
+        );
+    }
+
+    /// {:?} in any call should infer Debug, not Display.
+    #[test]
+    fn test_infer_debug_from_call_with_debug_format_string() {
+        let mut engine = InferenceEngine::new();
+
+        let func = FunctionDecl {
+            name: "debug_it".to_string(),
+            is_pub: false,
+            is_extern: false,
+            decorators: vec![],
+            type_params: vec![TypeParam {
+                name: "T".to_string(),
+                bounds: vec![],
+            }],
+            parameters: vec![Parameter {
+                name: "val".to_string(),
+                pattern: None,
+                type_: Type::Generic("T".to_string()),
+                ownership: OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: Vec::new(),
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            is_async: false,
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::Call {
+                    function: test_alloc_expr(Expression::Identifier {
+                        name: "write_log".to_string(),
+                        location: None,
+                    }),
+                    arguments: vec![
+                        (
+                            None,
+                            test_alloc_expr(Expression::Literal {
+                                value: Literal::String("debug: {:?}".to_string()),
+                                location: None,
+                            }),
+                        ),
+                        (
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "val".to_string(),
+                                location: None,
+                            }),
+                        ),
+                    ],
+                    location: None,
+                }),
+                location: None,
+            })],
+            where_clause: vec![],
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+        };
+
+        let bounds = engine.infer_function_bounds(&func);
+        let t_bounds = bounds.get_bounds("T");
+        assert!(
+            t_bounds.contains(&"Debug".to_string()),
+            "Format string 'debug: {{:?}}' should infer Debug, got: {:?}",
+            t_bounds
+        );
+    }
+
+    /// A call with a plain string (no placeholders) should NOT infer Display.
+    #[test]
+    fn test_no_spurious_display_from_plain_string_arg() {
+        let mut engine = InferenceEngine::new();
+
+        // fn foo<T>(item: T) { some_fn("hello", item) }
+        // "hello" has no {} — no Display inference
+        let func = FunctionDecl {
+            name: "foo".to_string(),
+            is_pub: false,
+            is_extern: false,
+            decorators: vec![],
+            type_params: vec![TypeParam {
+                name: "T".to_string(),
+                bounds: vec![],
+            }],
+            parameters: vec![Parameter {
+                name: "item".to_string(),
+                pattern: None,
+                type_: Type::Generic("T".to_string()),
+                ownership: OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: Vec::new(),
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            is_async: false,
+            body: vec![test_alloc_stmt(Statement::Expression {
+                expr: test_alloc_expr(Expression::Call {
+                    function: test_alloc_expr(Expression::Identifier {
+                        name: "some_fn".to_string(),
+                        location: None,
+                    }),
+                    arguments: vec![
+                        (
+                            None,
+                            test_alloc_expr(Expression::Literal {
+                                value: Literal::String("hello world".to_string()),
+                                location: None,
+                            }),
+                        ),
+                        (
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "item".to_string(),
+                                location: None,
+                            }),
+                        ),
+                    ],
+                    location: None,
+                }),
+                location: None,
+            })],
+            where_clause: vec![],
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+        };
+
+        let bounds = engine.infer_function_bounds(&func);
+        let t_bounds = bounds.get_bounds("T");
+        assert!(
+            !t_bounds.contains(&"Display".to_string()),
+            "Plain string 'hello world' (no {{}}) should NOT infer Display, got: {:?}",
+            t_bounds
+        );
+    }
+
+    /// Registry-driven: .to_string() on a generic should infer ToString via the registry table.
+    #[test]
+    fn test_infer_tostring_from_method_call_via_registry() {
+        let mut engine = InferenceEngine::new();
+
+        let func = FunctionDecl {
+            name: "stringify".to_string(),
+            is_pub: false,
+            is_extern: false,
+            decorators: vec![],
+            type_params: vec![TypeParam {
+                name: "T".to_string(),
+                bounds: vec![],
+            }],
+            parameters: vec![Parameter {
+                name: "val".to_string(),
+                pattern: None,
+                type_: Type::Generic("T".to_string()),
+                ownership: OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: Vec::new(),
+            }],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            is_async: false,
+            body: vec![test_alloc_stmt(Statement::Return {
+                value: Some(test_alloc_expr(Expression::MethodCall {
+                    object: test_alloc_expr(Expression::Identifier {
+                        name: "val".to_string(),
+                        location: None,
+                    }),
+                    method: "to_string".to_string(),
+                    arguments: vec![],
+                    type_args: None,
+                    location: None,
+                })),
+                location: None,
+            })],
+            where_clause: vec![],
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+        };
+
+        let bounds = engine.infer_function_bounds(&func);
+        let t_bounds = bounds.get_bounds("T");
+        assert!(
+            t_bounds.contains(&"ToString".to_string()),
+            "Expected ToString from .to_string() via registry, got: {:?}",
             t_bounds
         );
     }

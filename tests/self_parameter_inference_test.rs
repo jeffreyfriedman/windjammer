@@ -16,11 +16,8 @@ fn compile_and_check(code: &str) -> (bool, String) {
 
     fs::write(&test_file, code).unwrap();
 
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             test_file.to_str().unwrap(),
             "--output",
@@ -205,7 +202,6 @@ impl Vector {
 }
 
 #[test]
-#[ignore] // TODO: Implement trait method ownership inference from impl bodies (advanced feature)
 fn test_self_inference_trait_methods() {
     let code = r#"
 pub trait Drawable {

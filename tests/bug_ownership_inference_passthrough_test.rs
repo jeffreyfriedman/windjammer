@@ -61,7 +61,10 @@ impl Merchant {
 fn main() {}
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -113,17 +116,16 @@ fn main() {}
         );
     }
 
-    // WINDJAMMER DESIGN: Read-only String params infer to &str (not &String!)
-    // has_item only passes to Inventory::has (read-only) → should be &str
+    // PHASE 2 OPTIMIZATION: String params can be &str for read-only methods
+    // has_item only passes to Inventory::has (read-only) → &str (Phase 2)
+    // Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
         generated.contains("fn has_item(&self, item_id: &str)")
             || generated.contains("fn has_item(&self, _item_id: &str)"),
-        "Expected has_item to have &str parameter (idiomatic Rust). Generated:\n{}",
+        "Expected has_item to have &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
 
     // Verify: check_items should compile (calls has_item with borrowed iterator var)
-    // If has_item incorrectly expects String, this would fail with E0308
-
-    fs::remove_dir_all(&test_dir).ok();
+    // Phase 2 optimization ensures this compiles correctly
 }

@@ -1,44 +1,8 @@
 // Test: Enum PartialEq derivation with f32-containing types
 // The compiler should intelligently skip PartialEq for enums with variants containing f32 fields
 
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    use std::fs;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let output = Command::new(&wj_binary)
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to execute wj: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Compilation failed:\n{}", stderr));
-    }
-
-    let generated_file = out_dir.join("test.rs");
-    fs::read_to_string(&generated_file).map_err(|e| format!("Failed to read generated file: {}", e))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -64,7 +28,7 @@ fn test_enum_conservative_partialeq() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Enum with f32-containing variants should compile"
@@ -78,7 +42,17 @@ fn test_enum_conservative_partialeq() {
         .iter()
         .position(|l| l.contains("struct Vec3"))
         .unwrap();
-    let vec3_derive = lines[vec3_idx - 1];
+    // Search backwards from struct line for #[derive(
+    let vec3_derive = (0..vec3_idx)
+        .rev()
+        .find_map(|i| {
+            if lines[i].contains("#[derive(") {
+                Some(lines[i])
+            } else {
+                None
+            }
+        })
+        .unwrap_or("");
     assert!(
         vec3_derive.contains("PartialEq"),
         "Vec3 should derive PartialEq (f32 implements PartialEq): {}",
@@ -86,12 +60,20 @@ fn test_enum_conservative_partialeq() {
     );
 
     // Command enum is CONSERVATIVE - doesn't derive PartialEq for custom type variants
-    // This is GOOD behavior - safe by default, prevents errors
     let enum_idx = lines
         .iter()
         .position(|l| l.contains("enum Command"))
         .unwrap();
-    let enum_derive = lines[enum_idx - 1];
+    let enum_derive = (0..enum_idx)
+        .rev()
+        .find_map(|i| {
+            if lines[i].contains("#[derive(") {
+                Some(lines[i])
+            } else {
+                None
+            }
+        })
+        .unwrap_or("");
     // Conservative approach: Skip PartialEq when variants contain custom types (even if they support it)
     // This prevents compilation errors and is safer
 
@@ -117,21 +99,28 @@ fn test_enum_without_f32_has_partialeq() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Enum without f32 should compile");
 
     let generated = result.unwrap();
 
     // Point should have PartialEq (only i32 fields)
-    let point_derive = generated
-        .lines()
-        .find(|line| {
-            line.contains("#[derive(")
-                && generated
-                    .lines()
-                    .skip_while(|l| l != line)
-                    .nth(1)
-                    .is_some_and(|l| l.contains("struct Point"))
+    // Search for #[derive( line followed by struct Point within next 3 lines
+    // (there may be #[repr(C)] between them)
+    let lines: Vec<&str> = generated.lines().collect();
+    let point_derive = lines
+        .iter()
+        .enumerate()
+        .find_map(|(i, line)| {
+            if line.contains("#[derive(")
+                && lines[i + 1..std::cmp::min(i + 4, lines.len())]
+                    .iter()
+                    .any(|l| l.contains("struct Point"))
+            {
+                Some(*line)
+            } else {
+                None
+            }
         })
         .unwrap_or("");
     assert!(
@@ -140,15 +129,19 @@ fn test_enum_without_f32_has_partialeq() {
     );
 
     // Shape enum should have PartialEq (all variants support it)
-    let enum_derive = generated
-        .lines()
-        .find(|line| {
-            line.contains("#[derive(")
-                && generated
-                    .lines()
-                    .skip_while(|l| l != line)
-                    .nth(1)
-                    .is_some_and(|l| l.contains("enum Shape"))
+    let enum_derive = lines
+        .iter()
+        .enumerate()
+        .find_map(|(i, line)| {
+            if line.contains("#[derive(")
+                && lines[i + 1..std::cmp::min(i + 4, lines.len())]
+                    .iter()
+                    .any(|l| l.contains("enum Shape"))
+            {
+                Some(*line)
+            } else {
+                None
+            }
         })
         .unwrap_or("");
     assert!(
@@ -169,7 +162,7 @@ fn test_unit_enum_has_copy_and_partialeq() {
         }
     "#;
 
-    let result = compile_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Unit enum should compile");
 
     let generated = result.unwrap();

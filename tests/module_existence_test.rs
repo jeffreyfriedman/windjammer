@@ -259,7 +259,11 @@ fn test_cargo_toml_excluded_from_module_list() {
     assert!(status.success());
 
     // Manually create a Cargo.toml in output (simulating what --library mode does)
-    fs::write(output_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+    fs::write(
+        output_dir.join("Cargo.toml"),
+        "[package]\nname = \"test\"\n\n[workspace]\n",
+    )
+    .unwrap();
 
     let mod_rs = fs::read_to_string(output_dir.join("mod.rs")).expect("mod.rs should be generated");
 

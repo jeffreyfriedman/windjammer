@@ -12,45 +12,8 @@
 ///
 /// Expected: Copy-type fields (i32, f32, bool, usize) should NOT have .clone()
 /// even when accessed through borrowed iterator variables.
-use std::io::Write;
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = dir.path().join("test.wj");
-    let out_dir = dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    let mut file = std::fs::File::create(&wj_path).unwrap();
-    file.write_all(source.as_bytes()).unwrap();
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "--no-cargo",
-            "-o",
-            out_dir.to_str().unwrap(),
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let rs_path = out_dir.join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "No output file generated.\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        );
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_no_clone_on_i32_field_via_borrowed_iter() {
@@ -77,7 +40,7 @@ pub fn total_quantity(stacks: Vec<ItemStack>) -> i32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // stack.quantity is i32 (Copy) — should NOT be cloned
@@ -107,7 +70,7 @@ pub fn total_mass(particles: Vec<Particle>) -> f32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // p.mass is f32 (Copy) — should NOT be cloned
@@ -139,7 +102,7 @@ pub fn count_completed(tasks: Vec<Task>) -> i32 {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // task.completed is bool (Copy) — should NOT be cloned
@@ -174,7 +137,7 @@ pub fn collect_names(stacks: Vec<ItemStack>) -> Vec<string> {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     // stack.item.name is String (NOT Copy) — clone IS expected

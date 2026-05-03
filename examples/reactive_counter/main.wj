@@ -24,7 +24,7 @@ fn start() {
         
         Container::new()
             .max_width("600px")
-            .child(Panel::new("Interactive Counter".to_string())
+            .child(Panel::new("Interactive Counter")
                 .child(
                     Flex::new()
                         .direction(FlexDirection::Column)
@@ -37,20 +37,20 @@ fn start() {
                             Flex::new()
                                 .direction(FlexDirection::Row)
                                 .gap("10px")
-                                .child(Button::new("- Decrement".to_string())
+                                .child(Button::new("- Decrement")
                                     .variant(ButtonVariant::Secondary)
                                     .on_click(move || {
                                         let current = dec_count.get()
                                         dec_count.set(current - 1)
                                         println!("Decremented to: {}", current - 1)
                                     }))
-                                .child(Button::new("Reset".to_string())
+                                .child(Button::new("Reset")
                                     .variant(ButtonVariant::Danger)
                                     .on_click(move || {
                                         reset_count.set(0)
                                         println!("Reset to 0")
                                     }))
-                                .child(Button::new("+ Increment".to_string())
+                                .child(Button::new("+ Increment")
                                     .variant(ButtonVariant::Primary)
                                     .on_click(move || {
                                         let current = inc_count.get()
@@ -60,7 +60,7 @@ fn start() {
                         )
                         .child(
                             Text::new(if text_count.get() == 0 {
-                                "Counter is at zero".to_string()
+                                "Counter is at zero"
                             } else if text_count.get() > 0 {
                                 format!("Positive: {}", text_count.get())
                             } else {
@@ -73,7 +73,7 @@ fn start() {
     }
     
     // Mount with ReactiveApp for automatic updates
-    ReactiveApp::new("Reactive Counter".to_string(), render).run()
+    ReactiveApp::new("Reactive Counter", render).run()
 }
 
 fn main() {

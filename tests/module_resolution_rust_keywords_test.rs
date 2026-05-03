@@ -1,41 +1,8 @@
 // TDD Test: Rust keywords (crate, super, self) should NOT be external dependencies
 // THE WINDJAMMER WAY: Compiler filters out language keywords automatically
 
-use std::fs;
-use std::process::Command;
-
-fn compile_code_to_cargo_toml(code: &str, test_name: &str) -> Result<String, String> {
-    let test_dir = format!("tests/generated/module_keywords_{}", test_name);
-    fs::create_dir_all(&test_dir).expect("Failed to create test dir");
-    let input_file = format!("{}/test.wj", test_dir);
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            &input_file,
-            "--output",
-            &test_dir,
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        fs::remove_dir_all(&test_dir).ok();
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let cargo_toml_path = format!("{}/Cargo.toml", test_dir);
-    let cargo_toml = fs::read_to_string(&cargo_toml_path).expect("Failed to read Cargo.toml");
-
-    fs::remove_dir_all(&test_dir).ok();
-
-    Ok(cargo_toml)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -49,7 +16,7 @@ fn test_crate_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "crate_keyword").expect("Compilation failed");
+    let cargo_toml = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT contain "crate = " in dependencies
     assert!(
@@ -71,7 +38,7 @@ fn test_super_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "super_keyword").expect("Compilation failed");
+    let cargo_toml = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT contain "super = " in dependencies
     assert!(
@@ -93,7 +60,7 @@ fn test_self_keyword_not_in_dependencies() {
     }
     "#;
 
-    let cargo_toml = compile_code_to_cargo_toml(code, "self_keyword").expect("Compilation failed");
+    let cargo_toml = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT contain "self = " in dependencies
     assert!(
@@ -117,8 +84,7 @@ fn test_multiple_rust_keywords_filtered() {
     }
     "#;
 
-    let cargo_toml =
-        compile_code_to_cargo_toml(code, "multiple_keywords").expect("Compilation failed");
+    let cargo_toml = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT contain ANY Rust keywords in dependencies
     assert!(

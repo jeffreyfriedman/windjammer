@@ -302,6 +302,7 @@ mod tests {
                 type_: Type::Custom("int".to_string()),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             },
             Parameter {
                 name: "y".to_string(),
@@ -309,6 +310,7 @@ mod tests {
                 type_: Type::Custom("int".to_string()),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             },
         ];
 

@@ -26,7 +26,7 @@ impl Request {
     pub fn get(url: string) -> Request {
         Request {
             url: url,
-            method: "GET".to_string(),
+            method: "GET",
             headers: vec![],
             body: None,
             timeout: None,
@@ -37,7 +37,7 @@ impl Request {
     pub fn post(url: string, body: string) -> Request {
         Request {
             url: url,
-            method: "POST".to_string(),
+            method: "POST",
             headers: vec![],
             body: Some(body),
             timeout: None,
@@ -59,13 +59,13 @@ impl Request {
     /// Send the request
     pub fn send(self) -> NetResult<Response> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
     
     /// Send the request asynchronously
     pub async fn send_async(self) -> NetResult<Response> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
 }
 
@@ -92,13 +92,13 @@ pub async fn post_async(url: string, body: string) -> NetResult<Response> {
 /// Download a file
 pub fn download(url: string, path: string) -> NetResult<()> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// Upload a file
 pub fn upload(url: string, path: string) -> NetResult<Response> {
     // Compiler will generate platform-specific code
-    Err("Not implemented".to_string())
+    Err("Not implemented")
 }
 
 /// WebSocket connection
@@ -110,25 +110,25 @@ impl WebSocket {
     /// Connect to a WebSocket server
     pub fn connect(url: string) -> NetResult<WebSocket> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
     
     /// Send a message
     pub fn send(&self, message: string) -> NetResult<()> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
     
     /// Receive a message (blocking)
     pub fn receive(&self) -> NetResult<string> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
     
     /// Close the connection
     pub fn close(self) -> NetResult<()> {
         // Compiler will generate platform-specific code
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
 }
 
@@ -165,7 +165,7 @@ impl ServerResponse {
     pub fn html(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type".to_string(), "text/html".to_string())],
+            headers: vec![("Content-Type", "text/html")],
             body: body,
         }
     }
@@ -174,7 +174,7 @@ impl ServerResponse {
     pub fn json(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type".to_string(), "application/json".to_string())],
+            headers: vec![("Content-Type", "application/json")],
             body: body,
         }
     }
@@ -183,7 +183,7 @@ impl ServerResponse {
     pub fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
             status: status,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: vec![("Content-Type", "text/plain")],
             body: message,
         }
     }
@@ -219,7 +219,7 @@ impl Server {
         // Compiler will generate platform-specific code
         // Native: Use std::net::TcpListener
         // Browser: Not supported (servers can't run in browsers)
-        Err("Not implemented".to_string())
+        Err("Not implemented")
     }
 }
 

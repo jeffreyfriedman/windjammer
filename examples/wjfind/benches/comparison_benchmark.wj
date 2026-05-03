@@ -38,7 +38,7 @@ pub fn run_benchmark(config: BenchmarkConfig) -> Result<(), Error> {
     let ripgrep_results = match benchmark_ripgrep(config.clone()) {
         Ok(results) => Some(results),
         Err(e) => {
-            log.warn("ripgrep not available", { "error": e.to_string() })
+            log.warn("ripgrep not available", { "error": format!("{}", e) })
             None
         }
     }
@@ -47,7 +47,7 @@ pub fn run_benchmark(config: BenchmarkConfig) -> Result<(), Error> {
     let grep_results = match benchmark_grep(config.clone()) {
         Ok(results) => Some(results),
         Err(e) => {
-            log.warn("grep not available", { "error": e.to_string() })
+            log.warn("grep not available", { "error": format!("{}", e) })
             None
         }
     }
@@ -67,7 +67,7 @@ fn benchmark_wjfind(config: BenchmarkConfig) -> Result<BenchmarkResults, Error> 
         let output = process.run("wjfind", vec![
             config.pattern.clone(),
             config.test_directory.clone(),
-            "--count".to_string(),
+            "--count",
         ])?
         
         let elapsed_ms = (time.now_unix_nano() - start) as float / 1_000_000.0
@@ -93,7 +93,7 @@ fn benchmark_ripgrep(config: BenchmarkConfig) -> Result<BenchmarkResults, Error>
         let output = process.run("rg", vec![
             config.pattern.clone(),
             config.test_directory.clone(),
-            "--count".to_string(),
+            "--count",
         ])?
         
         let elapsed_ms = (time.now_unix_nano() - start) as float / 1_000_000.0
@@ -114,7 +114,7 @@ fn benchmark_grep(config: BenchmarkConfig) -> Result<BenchmarkResults, Error> {
         let start = time.now_unix_nano()
         
         let output = process.run("grep", vec![
-            "-r".to_string(),
+            "-r",
             config.pattern.clone(),
             config.test_directory.clone(),
         ])?
@@ -261,8 +261,8 @@ fn main() -> Result<(), Error> {
         run_all_benchmarks()?
     } else {
         // Single benchmark with custom parameters
-        let directory = if args.len() > 1 { args[1].clone() } else { ".".to_string() }
-        let pattern = if args.len() > 2 { args[2].clone() } else { "TODO".to_string() }
+        let directory = if args.len() > 1 { args[1].clone() } else { "." }
+        let pattern = if args.len() > 2 { args[2].clone() } else { "TODO" }
         
         run_benchmark(BenchmarkConfig {
             test_directory: directory,

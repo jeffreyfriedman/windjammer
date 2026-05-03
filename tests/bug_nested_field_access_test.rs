@@ -12,6 +12,7 @@
 /// ```
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn test_nested_field_borrowed_param() {
@@ -47,21 +48,11 @@ fn main() {
 "#;
 
     // Generate Rust code
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let out_dir = test_dir.join("out");
+    let out_dir = temp_dir.path().join("out");
 
     // Compile with wj
     let wj_binary = env!("CARGO_BIN_EXE_wj");
@@ -88,8 +79,8 @@ fn main() {
         .arg("bin")
         .arg("--edition")
         .arg("2021")
-        .arg("-o")
-        .arg(test_dir.join("test_bin"))
+        .arg("--out-dir")
+        .arg(temp_dir.path())
         .output()
         .expect("Failed to run rustc");
 
@@ -108,9 +99,6 @@ fn main() {
         generated.contains("&stack.item.id") || generated.contains("stack.item.id.clone()"),
         "Should add & or .clone() for nested field access through borrowed iterator"
     );
-
-    // Clean up
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
@@ -139,21 +127,11 @@ fn process(stacks: Vec<Stack>) {
 fn main() {}
 "#;
 
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let wj_file = temp_dir.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
 
-    let out_dir = test_dir.join("out");
+    let out_dir = temp_dir.path().join("out");
 
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let _output = Command::new(wj_binary)
@@ -178,8 +156,8 @@ fn main() {}
         .arg("bin")
         .arg("--edition")
         .arg("2021")
-        .arg("-o")
-        .arg(test_dir.join("test_bin"))
+        .arg("--out-dir")
+        .arg(temp_dir.path())
         .output()
         .expect("Failed to run rustc");
 
@@ -197,6 +175,4 @@ fn main() {}
         generated.contains("stack.item.id.clone()"),
         "Should add .clone() for nested field when parameter expects owned"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

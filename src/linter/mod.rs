@@ -7,6 +7,8 @@
 //!
 //! This follows the Rust/Clippy model: code compiles, but warnings guide toward better patterns.
 
+pub mod rust_leakage;
+
 use crate::analyzer::AnalyzedFunction;
 use crate::error::SourceLocation;
 use crate::parser::{Expression, Statement};
@@ -94,6 +96,11 @@ impl LintCollector {
 
     pub fn diagnostics(&self) -> &[LintDiagnostic] {
         &self.diagnostics
+    }
+
+    /// Consume the collector and return all diagnostics
+    pub fn into_diagnostics(self) -> Vec<LintDiagnostic> {
+        self.diagnostics
     }
 
     pub fn has_errors(&self) -> bool {
@@ -230,17 +237,15 @@ impl<'ast> Linter<'ast> {
             match stmt {
                 Statement::Return {
                     value: Some(expr), ..
-                } => {
-                    if Self::expression_contains_identifier(expr, param_name) {
+                }
+                    if Self::expression_contains_identifier(expr, param_name) => {
                         return true;
                     }
-                }
-                Statement::Expression { expr, .. } => {
+                Statement::Expression { expr, .. }
                     // Check if last expression returns the parameter
-                    if Self::expression_contains_identifier(expr, param_name) {
+                    if Self::expression_contains_identifier(expr, param_name) => {
                         return true;
                     }
-                }
                 _ => {}
             }
         }
@@ -276,5 +281,80 @@ impl<'ast> Linter<'ast> {
             .iter()
             .filter(|d| d.level == level)
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod owned_but_not_returned_tests {
+    use super::Linter;
+    use crate::analyzer::{AnalyzedFunction, OwnershipMode};
+    use crate::auto_clone::AutoCloneAnalysis;
+    use crate::parser::ast::core::{FunctionDecl, Parameter};
+    use crate::parser::ast::ownership::OwnershipHint;
+    use crate::parser::ast::types::Type;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn lint_fires_for_owned_mutated_not_returned() {
+        let decl = FunctionDecl {
+            name: "fill_pool".to_string(),
+            is_pub: true,
+            is_extern: false,
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parameters: vec![Parameter {
+                name: "pool".to_string(),
+                pattern: None,
+                type_: Type::Custom("ResourcePool".to_string()),
+                ownership: OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: vec![],
+            body: vec![],
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+        };
+
+        let analyzed = AnalyzedFunction {
+            decl,
+            inferred_ownership: {
+                let mut m = HashMap::new();
+                m.insert("pool".to_string(), OwnershipMode::Owned);
+                m
+            },
+            inferred_param_types: vec![Type::Custom("ResourcePool".to_string())],
+            mutated_variables: HashSet::new(),
+            mutated_parameters: {
+                let mut s = HashSet::new();
+                s.insert("pool".to_string());
+                s
+            },
+            auto_clone_analysis: AutoCloneAnalysis::default(),
+            clone_optimizations: vec![],
+            struct_mapping_optimizations: vec![],
+            string_optimizations: vec![],
+            assignment_optimizations: vec![],
+            defer_drop_optimizations: vec![],
+            const_static_optimizations: vec![],
+            smallvec_optimizations: vec![],
+            cow_optimizations: vec![],
+            str_ref_optimizable_params: HashSet::new(),
+        };
+
+        let mut linter = Linter::new();
+        linter.lint_function(&analyzed);
+        let diags = linter.into_diagnostics();
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.lint_name == "owned-but-not-returned"),
+            "expected owned-but-not-returned, got: {:?}",
+            diags
+        );
     }
 }

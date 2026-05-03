@@ -21,7 +21,6 @@ use std::process::Command;
 ///
 /// TODO (TDD): Fix codegen to auto-insert `.clone()` for this case
 #[test]
-#[ignore = "Compiler bug: missing .clone() for borrowed String field → owned String param (TODO: TDD fix)"]
 fn test_struct_field_to_ref_string_method() {
     let source = r#"
 struct Item {
@@ -48,7 +47,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -104,6 +106,4 @@ fn main() {
         generated.contains("has_item(&item.id)") || generated.contains("has_item(item.id)"),
         "Should pass owned field as reference, not clone"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

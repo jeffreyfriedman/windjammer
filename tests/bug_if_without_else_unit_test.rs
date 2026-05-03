@@ -25,12 +25,15 @@ fn count_unique(items: Vec<i32>) -> i32 {
 }
 
 fn main() {
-    let items = vec![1, 2, 3, 2, 1]
+    let items: Vec<i32> = vec![1, 2, 3, 2, 1]
     let count = count_unique(items)
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -80,6 +83,4 @@ fn main() {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }

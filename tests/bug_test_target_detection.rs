@@ -8,22 +8,13 @@
 
 use std::fs;
 use std::path::PathBuf;
+use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_file_with_test_functions_generates_test_target() {
-    // GREEN: Test that .rs files with #[test] generate [[test]] targets
-    // Note: We test with pre-generated .rs files since Windjammer parser
-    // doesn't support #[test] attributes yet (future feature)
-
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_test_target_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
     let build_dir = test_dir.join("build");
     fs::create_dir_all(&build_dir).unwrap();
 
@@ -54,7 +45,7 @@ fn helper() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("dummy.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -86,24 +77,13 @@ fn helper() {
         "Should set test path, got:\n{}",
         cargo_toml
     );
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_executable_file_generates_bin_target() {
-    // RED: This test should fail until we implement bin target generation
-
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_bin_target_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
-    fs::create_dir_all(&test_dir).unwrap();
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
 
     // Executable file with main() function
     let windjammer_code = r#"
@@ -118,7 +98,7 @@ fn main() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("my_game.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -157,24 +137,13 @@ fn main() {
         "Should NOT generate [[test]] for executable files, got:\n{}",
         cargo_toml
     );
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_file_with_main_and_tests_generates_bin_target() {
-    // GREEN: Mixed files (main + tests) should be treated as executables
-    // Tests can live alongside main() in the same file
-
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_mixed_target_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
     let build_dir = test_dir.join("build");
     fs::create_dir_all(&build_dir).unwrap();
 
@@ -200,7 +169,7 @@ fn test_something() {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("dummy.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -227,24 +196,13 @@ fn test_something() {
         "Should set bin name, got:\n{}",
         cargo_toml
     );
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_library_file_generates_no_target() {
-    // Library files (no main, no tests) should not generate [[bin]] or [[test]]
-
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_lib_target_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
-    fs::create_dir_all(&test_dir).unwrap();
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
 
     // Library code (no main, no tests)
     let windjammer_code = r#"
@@ -264,7 +222,7 @@ struct Point {
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
         .arg("math.wj")
-        .arg("--no-cargo")
+        .arg("--no-cargo") // Skip cargo build - we only verify Cargo.toml generation
         .current_dir(&test_dir)
         .output()
         .expect("Failed to run wj build");
@@ -291,6 +249,4 @@ struct Point {
         "Should NOT generate [[test]] for library files, got:\n{}",
         cargo_toml
     );
-
-    fs::remove_dir_all(test_dir).ok();
 }

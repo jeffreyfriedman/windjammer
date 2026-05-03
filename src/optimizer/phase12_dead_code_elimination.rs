@@ -69,8 +69,10 @@ pub fn eliminate_dead_code<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
+                    return_decorators: func.return_decorators.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    impl_trait: func.impl_trait.clone(),
                     doc_comment: func.doc_comment.clone(),
                 };
                 new_items.push(Item::Function {
@@ -110,6 +112,7 @@ pub fn eliminate_dead_code<'ast>(
                 name,
                 type_,
                 value,
+                is_pub,
                 location,
             } => {
                 // Process const initializers
@@ -118,6 +121,7 @@ pub fn eliminate_dead_code<'ast>(
                     name: name.clone(),
                     type_: type_.clone(),
                     value: new_value,
+                    is_pub: *is_pub,
                     location: location.clone(),
                 });
             }
@@ -345,8 +349,10 @@ fn eliminate_dead_code_in_impl<'ast>(
             is_async: func.is_async,
             parameters: func.parameters.clone(),
             return_type: func.return_type.clone(),
+            return_decorators: func.return_decorators.clone(),
             body: new_body,
             parent_type: func.parent_type.clone(),
+            impl_trait: func.impl_trait.clone(),
             doc_comment: func.doc_comment.clone(),
         };
         new_functions.push(new_func);
@@ -361,6 +367,7 @@ fn eliminate_dead_code_in_impl<'ast>(
         associated_types: impl_block.associated_types.clone(),
         functions: new_functions,
         decorators: impl_block.decorators.clone(),
+        is_extern: impl_block.is_extern,
     }
 }
 
@@ -853,8 +860,10 @@ mod tests {
             is_async: false,
             parameters: vec![],
             return_type: Some(Type::Custom("i32".to_string())),
+            return_decorators: vec![],
             body,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         }
     }
@@ -870,8 +879,10 @@ mod tests {
             is_async: false,
             parameters: vec![],
             return_type: None,
+            return_decorators: vec![],
             body,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
         }
     }

@@ -6,7 +6,9 @@ use std::process::Command;
 
 #[test]
 fn test_method_self_by_value_compiles() {
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -77,6 +79,4 @@ fn test_method_self_by_value_compiles() {
     }
 
     println!("✅ Test passed: Method self-by-value works correctly!");
-
-    fs::remove_dir_all(&test_dir).ok();
 }

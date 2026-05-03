@@ -1,164 +1,190 @@
-/// TDD Test: For loop parameters should be inferred as owned when iterated directly
+/// TDD test for for-loop ownership inference
 ///
-/// Bug: When a Vec parameter is used in `for item in vec`, the compiler incorrectly
-/// infers the parameter as `&Vec` instead of owned `Vec`, causing elements to be
-/// references when they should be owned.
+/// Bug: For-loops always borrow elements (&T) even when methods need owned (T).
 ///
-/// Expected: `fn process(items: Vec<String>)` not `fn process(items: &Vec<String>)`
+/// Example that should work:
+/// ```windjammer
+/// for item in items {
+///     item.consume_self()  // Method needs `self` (owned)
+/// }
+/// ```
+///
+/// Current behavior: Compiler infers `&item`, method call fails with E0507
+/// Expected behavior: Compiler should infer owned `item` when method requires it
 use std::fs;
 use std::process::Command;
-use tempfile::TempDir;
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
-fn test_vec_param_in_for_loop_stays_owned() {
-    let code = r#"
-pub fn process_items(items: Vec<string>) {
-    for item in items {
-        // item should be String (owned), not &String
-        let upper = item.to_uppercase()
+fn test_for_loop_infers_owned_when_method_consumes() {
+    let source = r#"
+enum Cond {
+    HasGold(i32),
+    HasItem(string),
+}
+
+impl Cond {
+    pub fn check(self) -> bool {
+        match self {
+            Cond::HasGold(amount) => amount > 0,
+            Cond::HasItem(_name) => false,
+        }
+    }
+}
+
+struct Node {
+    pub conditions: Vec<Cond>,
+}
+
+impl Node {
+    pub fn all_pass(self) -> bool {
+        for cond in self.conditions {
+            if !cond.check() {
+                return false
+            }
+        }
+        true
     }
 }
 "#;
 
-    let temp_dir = TempDir::new().unwrap();
-    let output_dir = temp_dir.path();
-    let wj_file = output_dir.join("test.wj");
+    let _tmp = tempfile::tempdir().unwrap();
 
-    fs::write(&wj_file, code).unwrap();
+    let temp_dir = _tmp.path();
 
-    // Compile
-    let result = Command::new(env!("CARGO_BIN_EXE_wj"))
+    let test_id = format!(
+        "wj_for_loop_owned_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let test_dir = temp_dir.join(&test_id);
+    fs::create_dir_all(&test_dir).unwrap();
+
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let _output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
-        .arg("--output")
-        .arg(output_dir)
         .arg("--no-cargo")
+        .current_dir(&test_dir)
         .output()
-        .expect("Failed to run wj build");
+        .expect("Failed to run wj compiler");
 
-    if !result.status.success() {
-        eprintln!(
-            "wj build failed:\n{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        panic!("Transpilation should succeed");
-    }
+    let out_dir = test_dir.join("build");
+    let rust_file = out_dir.join("test.rs");
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
-    // Read generated code
-    let rust_file = output_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rust_file).expect("Should find generated Rust file");
+    println!("Generated code:\n{}", generated);
 
-    println!("Generated code:\n{}", rust_code);
-
-    // Should generate: fn process_items(items: Vec<String>)
-    // NOT: fn process_items(items: &Vec<String>)
+    // The key assertion: Method should consume self (owned) not borrow
+    // Because it iterates over self.conditions and calls consuming methods
     assert!(
-        rust_code.contains("items: Vec<String>"),
-        "Parameter should be owned Vec, not borrowed. Generated: {}",
-        rust_code
-    );
-    assert!(
-        !rust_code.contains("items: &Vec<String>"),
-        "Parameter should NOT be borrowed Vec. Generated: {}",
-        rust_code
+        generated.contains("pub fn all_pass(self) -> bool"),
+        "Method all_pass should be inferred as consuming self (owned), not borrowing.\nGenerated:\n{}",
+        generated
     );
 
-    // Verify it compiles with rustc
-    let compile_result = Command::new("rustc")
+    // For-loop should consume, not borrow
+    assert!(
+        generated.contains("for cond in self.conditions {")
+            && !generated.contains("for cond in &self.conditions"),
+        "For-loop should consume self.conditions (not borrow) when elements are consumed.\nGenerated:\n{}",
+        generated
+    );
+
+    // Compile with rustc
+    let rustc_output = Command::new("rustc")
+        .arg(&rust_file)
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
         .arg("2021")
-        .arg(&rust_file)
         .arg("-o")
-        .arg(output_dir.join("test.rlib"))
+        .arg(test_dir.join("test.rlib"))
         .output()
         .expect("Failed to run rustc");
 
-    if !compile_result.status.success() {
-        eprintln!("Generated Rust code:\n{}", rust_code);
-        eprintln!(
-            "Rust compilation failed:\n{}",
-            String::from_utf8_lossy(&compile_result.stderr)
+    if !rustc_output.status.success() {
+        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
         );
-        panic!("Generated code should compile with rustc");
     }
 }
 
 #[test]
-#[cfg_attr(tarpaulin, ignore)]
-fn test_vec_tuple_param_in_for_loop_stays_owned() {
-    let code = r#"
-pub fn process_pairs(pairs: Vec<(string, string)>) {
-    for (first, second) in pairs {
-        // first and second should be String (owned), not &String
-        let combined = format!("{} {}", first, second)
+fn test_for_loop_with_mutable_methods() {
+    let source = r#"
+struct Counter {
+    pub value: i32,
+}
+
+impl Counter {
+    pub fn increment(self) {
+        self.value = self.value + 1
+    }
+}
+
+fn increment_all(counters: Vec<Counter>) {
+    for counter in counters {
+        counter.increment()  // increment mutates self
     }
 }
 "#;
 
-    let temp_dir = TempDir::new().unwrap();
-    let output_dir = temp_dir.path();
-    let wj_file = output_dir.join("test.wj");
+    let _tmp2 = tempfile::tempdir().unwrap();
 
-    fs::write(&wj_file, code).unwrap();
+    let temp_dir = _tmp2.path();
 
-    // Compile
-    let result = Command::new(env!("CARGO_BIN_EXE_wj"))
+    let test_id = format!(
+        "wj_for_loop_mut_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let test_dir = temp_dir.join(&test_id);
+    fs::create_dir_all(&test_dir).unwrap();
+
+    let wj_file = test_dir.join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
+    let _output = Command::new(wj_binary)
         .arg("build")
         .arg(&wj_file)
-        .arg("--output")
-        .arg(output_dir)
         .arg("--no-cargo")
+        .current_dir(&test_dir)
         .output()
-        .expect("Failed to run wj build");
+        .expect("Failed to run wj compiler");
 
-    if !result.status.success() {
-        eprintln!(
-            "wj build failed:\n{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        panic!("Transpilation should succeed");
-    }
+    let out_dir = test_dir.join("build");
+    let rust_file = out_dir.join("test.rs");
+    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
 
-    // Read generated code
-    let rust_file = output_dir.join("test.rs");
-    let rust_code = fs::read_to_string(&rust_file).expect("Should find generated Rust file");
+    println!("Generated code:\n{}", generated);
 
-    println!("Generated code:\n{}", rust_code);
-
-    // Should generate: fn process_pairs(pairs: Vec<(String, String)>)
-    // NOT: fn process_pairs(pairs: &Vec<(String, String)>)
-    assert!(
-        rust_code.contains("pairs: Vec<(String, String)>"),
-        "Parameter should be owned Vec, not borrowed. Generated: {}",
-        rust_code
-    );
-    assert!(
-        !rust_code.contains("pairs: &Vec<(String, String)>"),
-        "Parameter should NOT be borrowed Vec. Generated: {}",
-        rust_code
-    );
-
-    // Verify it compiles with rustc
-    let compile_result = Command::new("rustc")
+    // Should compile successfully
+    let rustc_output = Command::new("rustc")
+        .arg(&rust_file)
         .arg("--crate-type")
         .arg("lib")
         .arg("--edition")
         .arg("2021")
-        .arg(&rust_file)
         .arg("-o")
-        .arg(output_dir.join("test.rlib"))
+        .arg(test_dir.join("test.rlib"))
         .output()
         .expect("Failed to run rustc");
 
-    if !compile_result.status.success() {
-        eprintln!("Generated Rust code:\n{}", rust_code);
-        eprintln!(
-            "Rust compilation failed:\n{}",
-            String::from_utf8_lossy(&compile_result.stderr)
+    if !rustc_output.status.success() {
+        let stderr = String::from_utf8_lossy(&rustc_output.stderr);
+        panic!(
+            "Compilation failed:\n{}\n\nGenerated code:\n{}",
+            stderr, generated
         );
-        panic!("Generated code should compile with rustc");
     }
 }

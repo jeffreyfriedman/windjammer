@@ -5,41 +5,10 @@
 /// "Expected Fn, got DocComment(...)"
 ///
 /// This is essential for writing clear, comprehensive documentation.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[allow(dead_code)]
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    let temp_dir = tempdir().map_err(|e| e.to_string())?;
-    let test_file = temp_dir.path().join("test.wj");
-
-    fs::write(&test_file, code).map_err(|e| e.to_string())?;
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", "--no-cargo"])
-        .arg(&test_file)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstderr: {}\nstdout: {}",
-            stderr, stdout
-        ));
-    }
-
-    Ok(stdout.to_string())
-}
-
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
 fn test_two_line_doc_comment() {
@@ -51,7 +20,7 @@ fn test_two_line_doc_comment() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Two-line doc comment should compile. Error: {:?}",
@@ -71,7 +40,7 @@ fn test_three_line_doc_comment() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Three-line doc comment should compile. Error: {:?}",
@@ -90,7 +59,7 @@ fn test_doc_comment_on_struct() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multi-line doc comment on struct should compile. Error: {:?}",
@@ -110,7 +79,7 @@ fn test_doc_comment_on_enum() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multi-line doc comment on enum should compile. Error: {:?}",
@@ -135,7 +104,7 @@ fn test_doc_comment_on_impl_method() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multi-line doc comment on impl method should compile. Error: {:?}",
@@ -163,7 +132,7 @@ fn test_voxel_mesh_pattern() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Voxel mesh pattern (actual bug case) should compile. Error: {:?}",
@@ -183,7 +152,7 @@ fn test_doc_comment_with_empty_line() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Doc comment with empty line should compile. Error: {:?}",
@@ -210,7 +179,7 @@ fn test_many_line_doc_comment() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Many-line doc comment should compile. Error: {:?}",
@@ -229,7 +198,7 @@ fn test_doc_comment_with_special_chars() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Doc comment with special chars should compile. Error: {:?}",
@@ -260,7 +229,7 @@ fn test_multiple_items_with_multiline_docs() {
         }
     "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multiple items with multi-line docs should compile. Error: {:?}",

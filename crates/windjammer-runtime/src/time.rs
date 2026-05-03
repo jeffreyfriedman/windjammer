@@ -5,6 +5,9 @@
 use chrono::{DateTime, Local, Utc};
 use std::time::Instant as StdInstant;
 
+/// Wall-clock timestamps (`std::time::SystemTime` in Windjammer sources).
+pub use std::time::SystemTime;
+
 /// Re-export Duration type for use in Windjammer code
 pub use chrono::Duration;
 
