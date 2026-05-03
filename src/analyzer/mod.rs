@@ -1980,13 +1980,14 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            let returns_non_copy_field =
-                                self.function_returns_non_copy_self_field(func);
+                            // WINDJAMMER FIX: Do NOT make self Owned for returning non-Copy fields.
+                            // Getters like `fn id(self) -> String { self.id }` should be &self
+                            // with the codegen auto-cloning the returned field. This prevents
+                            // cascading E0382 at callsites.
                             let body_moves_fields =
                                 self.function_body_moves_non_copy_self_fields(func);
 
-                            if returns_self || returns_non_copy_field || body_moves_fields {
-                                // Returns self, non-Copy field, or body moves non-Copy self fields
+                            if returns_self || body_moves_fields {
                                 OwnershipMode::Owned
                             } else if self.function_moves_self_into_return(func) {
                                 // self is moved into a struct literal or returned directly
@@ -2412,14 +2413,14 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 2.1. Check if a non-Copy field of the parameter is returned (partial move).
-        // Example: `fn consume(self) -> String { self.value }` — `value: String`
-        // is non-Copy, so returning `self.value` moves out of `self`, requiring owned.
-        if param_name == "self" {
-            if self.self_field_is_returned_non_copy(body) {
-                return Ok(OwnershipMode::Owned);
-            }
-        }
+        // 2.1. Returning a non-Copy self field (e.g. `fn id(self) -> String { self.id }`)
+        // WINDJAMMER FIX: Do NOT make self Owned just because a non-Copy field is returned.
+        // Instead, keep self as Borrowed (&self) and the codegen will auto-clone the
+        // returned field. This prevents cascading E0382 errors at callsites where the
+        // caller uses the object again after calling a getter.
+        // The old behavior (Owned self for getters) was correct Rust semantics but bad
+        // Windjammer ergonomics -- every caller had to .clone() the object before calling
+        // a simple getter.
 
         // 2.3. WINDJAMMER FIX: Check if parameter is used in if/else expression
         // When a parameter appears in an if/else that's assigned or returned,
@@ -2760,74 +2761,6 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
-    /// Returns true when the function body returns a `self.field` whose type
-    /// is non-Copy (e.g. `String`, `Vec`, custom struct). Returning a non-Copy
-    /// field is a partial move from `self`, requiring `self` to be owned.
-    fn self_field_is_returned_non_copy(&self, body: &[&'ast Statement<'ast>]) -> bool {
-        let field_types: HashMap<String, Type> = self
-            .self_impl_context
-            .as_ref()
-            .map(|ctx| {
-                let program = ctx.program();
-                let mut types = HashMap::new();
-                for item in &program.items {
-                    if let Item::Struct { decl, .. } = item {
-                        if decl.name == ctx.impl_type_base {
-                            for field in &decl.fields {
-                                types.insert(field.name.clone(), field.field_type.clone());
-                            }
-                        }
-                    }
-                }
-                types
-            })
-            .unwrap_or_default();
-
-        fn is_trivially_copy(ty: &Type) -> bool {
-            matches!(
-                ty,
-                Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::Infer
-            ) || matches!(ty, Type::Custom(s) if matches!(s.as_str(),
-                "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
-                | "usize" | "isize" | "f32" | "f64" | "bool" | "char"))
-        }
-
-        let check_expr = |expr: &Expression| -> bool {
-            if let Expression::FieldAccess { object, field, .. } = expr {
-                if let Expression::Identifier { name, .. } = &**object {
-                    if name == "self" {
-                        if let Some(ft) = field_types.get(field) {
-                            return !is_trivially_copy(ft);
-                        }
-                        return true;
-                    }
-                }
-            }
-            false
-        };
-
-        let len = body.len();
-        for (i, stmt) in body.iter().enumerate() {
-            let is_last = i == len - 1;
-            match stmt {
-                Statement::Return {
-                    value: Some(expr), ..
-                } => {
-                    if check_expr(expr) {
-                        return true;
-                    }
-                }
-                Statement::Expression { expr, .. } if is_last => {
-                    if check_expr(expr) {
-                        return true;
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
-    }
-
     fn is_returned(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         let len = statements.len();
         for (i, stmt) in statements.iter().enumerate() {

@@ -2814,6 +2814,24 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Auto-clone when assigning one self field from another self field.
+        // In Rust, `self.a = self.b` is E0507 when self is &mut self and b is non-Copy,
+        // because you can't move out of a mutable reference. Clone solves this.
+        if !value_str.ends_with(".clone()") && !value_str.ends_with(".to_string()") {
+            let target_is_self_field = matches!(target, Expression::FieldAccess { object, .. }
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "self"));
+            let value_is_self_field = matches!(value, Expression::FieldAccess { object, .. }
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "self"));
+
+            if target_is_self_field && value_is_self_field {
+                let val_type = self.infer_expression_type(value);
+                let is_copy = val_type.as_ref().is_some_and(|t| self.is_type_copy(t));
+                if !is_copy {
+                    value_str = format!("{}.clone()", value_str);
+                }
+            }
+        }
+
         if self.expression_produces_usize(value) {
             let target_type = self.get_assignment_target_type(target);
 
