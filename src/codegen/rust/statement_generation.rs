@@ -2656,12 +2656,7 @@ impl<'ast> CodeGenerator<'ast> {
                 matches!(
                     t,
                     Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool
-                ) || matches!(t, Type::Custom(name) if matches!(
-                    name.as_str(),
-                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
-                        | "f32" | "f64"
-                ))
+                ) || matches!(t, Type::Custom(name) if crate::type_classification::is_numeric_type(name))
             });
             let is_compound_safe = target_supports_compound_assign && !is_string_addition;
 

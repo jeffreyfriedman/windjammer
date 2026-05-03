@@ -149,9 +149,10 @@ impl OwnershipTracker {
     }
 
     fn get_method_call_ownership(&self, object: &Expression, method: &str) -> OwnershipMode {
-        match method {
-            "clone" | "to_owned" | "to_string" | "into_iter" => OwnershipMode::Owned,
-            _ => self.get_expression_ownership(object),
+        if crate::type_classification::is_ownership_producing_method(method) {
+            OwnershipMode::Owned
+        } else {
+            self.get_expression_ownership(object)
         }
     }
 

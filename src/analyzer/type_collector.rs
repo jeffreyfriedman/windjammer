@@ -10,66 +10,12 @@ use crate::parser::{FunctionDecl, ImplBlock, Program, StructDecl, TraitDecl, Typ
 use std::collections::HashSet;
 use std::path::{Component, Path};
 
-/// Standard library / runtime generic containers — we recurse into type args but never import the base.
 fn is_stdlib_container(base: &str) -> bool {
-    matches!(
-        base,
-        "Vec"
-            | "Option"
-            | "Result"
-            | "HashMap"
-            | "HashSet"
-            | "BTreeMap"
-            | "BTreeSet"
-            | "Box"
-            | "Arc"
-            | "Rc"
-            | "RefCell"
-            | "Cell"
-            | "Mutex"
-            | "RwLock"
-            | "Weak"
-            | "Pin"
-            | "PhantomData"
-            | "NonNull"
-            | "VecDeque"
-            | "BinaryHeap"
-            | "LinkedList"
-            | "SmallVec"
-            | "Cow"
-            | "Iter"
-            | "Slice"
-            | "Signal"
-    )
+    crate::type_classification::is_stdlib_container(base)
 }
 
-/// Types handled without a `use` (prelude, primitives, or synthesized paths in codegen).
 fn skip_standalone_custom_name(name: &str) -> bool {
-    matches!(
-        name,
-        "str"
-            | "string"
-            | "String"
-            | "Self"
-            | "self"
-            | "i8"
-            | "i16"
-            | "i32"
-            | "i64"
-            | "i128"
-            | "isize"
-            | "u8"
-            | "u16"
-            | "u32"
-            | "u64"
-            | "u128"
-            | "usize"
-            | "f32"
-            | "f64"
-            | "bool"
-            | "char"
-            | "()"
-    )
+    crate::type_classification::is_prelude_or_primitive(name)
 }
 
 /// Push a custom path for import (may be `Type` or `module::Type`).

@@ -1758,18 +1758,7 @@ impl<'ast> Analyzer<'ast> {
         // Associated functions (constructors / `fn make() -> MyTrait`): no receiver in Rust.
         // Detect by: common factory names, `-> Self`, or `-> TraitName` for the trait being defined.
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
-        let is_named_constructor = matches!(
-            func.name.as_str(),
-            "new"
-                | "default"
-                | "from"
-                | "from_str"
-                | "from_bytes"
-                | "with_capacity"
-                | "empty"
-                | "zero"
-                | "one"
-        );
+        let is_named_constructor = crate::type_classification::is_constructor_name(&func.name);
         let returns_associated_type = matches!(
             &func.return_type,
             Some(Type::Custom(name))
@@ -2168,23 +2157,8 @@ impl<'ast> Analyzer<'ast> {
             trait_name
         };
 
-        // Check if this is a standard operator trait (std::ops::Add, Sub, Mul, etc.)
-        // These traits use `self` (owned) for Copy types, not `&self`
-        let is_std_operator_trait = matches!(
-            trait_key,
-            "Add"
-                | "Sub"
-                | "Mul"
-                | "Div"
-                | "Rem"
-                | "Neg"
-                | "Not"
-                | "BitAnd"
-                | "BitOr"
-                | "BitXor"
-                | "Shl"
-                | "Shr"
-        );
+        let is_std_operator_trait =
+            crate::type_classification::is_consuming_operator_trait(trait_key);
 
         // For standard operator traits, use `self` (owned) instead of `&self`
         if is_std_operator_trait {
@@ -2986,18 +2960,7 @@ impl<'ast> Analyzer<'ast> {
                         },
                     ..
                 } => {
-                    // Check for method calls on fields: self.field.push(param), self.field.insert(param), etc.
-                    // Only consider storage methods (push, insert, extend) - not lookup methods (contains, get)
-                    let is_storage_method = matches!(
-                        method.as_str(),
-                        "push"
-                            | "insert"
-                            | "extend"
-                            | "append"
-                            | "add"
-                            | "push_back"
-                            | "push_front"
-                    );
+                    let is_storage_method = crate::type_classification::is_storage_method(method);
 
                     if is_storage_method {
                         // Check for storage method calls on ANY object:
@@ -3980,24 +3943,7 @@ impl<'ast> Analyzer<'ast> {
                 if self.copy_structs.contains(name) {
                     return true;
                 }
-                matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
+                crate::type_classification::is_copy_primitive(name)
             }
             _ => false,
         }
