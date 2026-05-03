@@ -8,7 +8,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_simple_type_alias() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_type_alias_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -64,14 +65,13 @@ fn main() {
         "Expected 'u32' in type alias, got: {}",
         result
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_type_alias() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_type_alias_string_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -127,6 +127,4 @@ fn main() {
         "Expected 'String' in type alias, got: {}",
         result
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

@@ -12,12 +12,12 @@ pub fn run(command: string) -> Result<string, string> {
     match output {
         Ok(out) => {
             if out.status.success() {
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                Ok(String::from_utf8_lossy(&out.stdout))
             } else {
-                Err(String::from_utf8_lossy(&out.stderr).to_string())
+                Err(String::from_utf8_lossy(&out.stderr))
             }
         }
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(format!("{}", e))
     }
 }
 
@@ -31,12 +31,12 @@ pub fn run_with_args(program: string, args: Vec<string>) -> Result<string, strin
     match output {
         Ok(out) => {
             if out.status.success() {
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                Ok(String::from_utf8_lossy(&out.stdout))
             } else {
-                Err(String::from_utf8_lossy(&out.stderr).to_string())
+                Err(String::from_utf8_lossy(&out.stderr))
             }
         }
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(format!("{}", e))
     }
 }
 

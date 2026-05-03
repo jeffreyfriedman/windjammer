@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Convert simple match expressions to matches! macro
 ///
@@ -27,12 +30,7 @@ use anyhow::Result;
 /// }
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -41,7 +39,9 @@ fn test_match_true_false_becomes_matches() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_matches_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_matches_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -79,7 +79,7 @@ version = "0.1.0"
 
     // Compile with --no-cargo to just generate Rust
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -122,7 +122,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -134,7 +133,11 @@ fn test_match_false_true_becomes_not_matches() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_not_matches_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_not_matches_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -172,7 +175,7 @@ version = "0.1.0"
 
     // Compile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -198,7 +201,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -210,7 +212,11 @@ fn test_complex_match_not_optimized() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_complex_match_test_{}", timestamp));
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp3
+        .path()
+        .join(format!("wj_complex_match_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -248,7 +254,7 @@ version = "0.1.0"
 
     // Compile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
@@ -280,7 +286,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

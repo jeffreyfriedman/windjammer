@@ -5,12 +5,12 @@
 use std::collections::HashMap
 
 struct Animation {
-    name: String,
+    name: string,
 }
 
 struct Controller {
-    animations: HashMap<String, Animation>,
-    current: Option<String>,
+    animations: HashMap<string, Animation>,
+    current: Option<string>,
     index: usize,
     time: f32,
     playing: bool,

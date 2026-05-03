@@ -3,7 +3,7 @@
 // Expected: Compiler should infer & when param is used multiple times without mutation
 
 struct Config {
-    name: String,    // Non-Copy type!
+    name: string,    // Non-Copy type!
     timeout: i32,
 }
 
@@ -22,7 +22,7 @@ fn is_valid(state: Config) -> bool {
 }
 
 fn main() {
-    let cfg = Config { name: "test".to_string(), timeout: 100 }
+    let cfg = Config { name: "test", timeout: 100 }
     let valid = is_valid(cfg)
     println("Valid: {}", valid)
     println("✅ Multi-use parameter inference works!")

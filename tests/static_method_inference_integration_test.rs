@@ -1,32 +1,27 @@
 // Integration test for static method inference bug
 // Verifies that constructors like new(), from_*(), zero() don't get &self
 
-use std::process::Command;
+use std::path::PathBuf;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_static_method_inference() {
-    // Compile the Windjammer test file
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            "tests/static_method_inference_test.wj",
-            "--output",
-            "/tmp/wj_static_method_test",
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run windjammer compiler");
+    let out_tmp = tempfile::tempdir().expect("tempdir");
+    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("static_method_inference_test.wj");
 
-    assert!(
-        output.status.success(),
-        "Windjammer compilation failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    windjammer::build_project(
+        &wj_path,
+        out_tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Failed to run windjammer compiler");
 
     // Read the generated Rust code
     let generated_code =
-        std::fs::read_to_string("/tmp/wj_static_method_test/static_method_inference_test.rs")
+        std::fs::read_to_string(out_tmp.path().join("static_method_inference_test.rs"))
             .expect("Failed to read generated code");
 
     // Verify static methods do NOT have &self
@@ -60,7 +55,4 @@ fn test_static_method_inference() {
     // Note: Skipping rustc verification because generated code includes test decorators
     // and windjammer_runtime imports that require cargo build environment.
     // The function signature checks above are sufficient to verify correctness.
-
-    // Cleanup
-    let _ = std::fs::remove_dir_all("/tmp/wj_static_method_test");
 }

@@ -8,7 +8,8 @@ use std::path::PathBuf;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_return_in_else_block() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_return_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -57,14 +58,13 @@ fn main() {
         "return statement should be preserved in else block, got: {}",
         result
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_return_in_if_block() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_return_if_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -109,14 +109,13 @@ fn main() {
         result.contains("return true"),
         "return statement should be preserved in if block"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_return_in_nested_block() {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp3.path().join(format!(
         "wj_return_nested_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -169,6 +168,4 @@ fn main() {
         result.contains("return false"),
         "return false should be in generated code"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

@@ -14,44 +14,13 @@
 ///
 /// Fix: Track variable types in the codegen and check is_copy_type() before
 /// emitting .clone().
-fn compile_to_rust(source: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    std::fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    std::fs::create_dir_all(&output_dir).unwrap();
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated = output_dir.join("test.rs");
-    std::fs::read_to_string(&generated).unwrap_or_else(|_| {
-        panic!(
-            "No test.rs generated. stderr:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_i32_variable_reused_no_clone() {
     // i32 is Copy — reusing it should NOT generate .clone()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Grid {
     width: i32,
@@ -94,7 +63,7 @@ fn main() {
 #[test]
 fn test_f32_field_access_no_clone() {
     // Accessing f32 fields through self should NOT generate .clone()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Player {
     x: f32,
@@ -172,7 +141,7 @@ fn main() {
 #[test]
 fn test_bool_variable_no_clone() {
     // bool is Copy — should NOT generate .clone()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn process(active: bool, visible: bool) -> bool {
     if active {
@@ -205,7 +174,7 @@ fn main() {
 fn test_copy_type_in_struct_literal_no_clone() {
     // When Copy-type locals are used in a struct literal after being used
     // in a for-loop range, they should NOT need .clone()
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Level {
     width: i32,
@@ -265,7 +234,7 @@ fn test_self_f32_field_passed_to_method_no_clone() {
     //   if !self.rect_collides(next_x, self.player.y, self.player.width, self.player.height) {
     //       self.player.x = next_x
     //   }
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Player {
     x: f32,
@@ -347,7 +316,7 @@ fn main() {
 fn test_self_f32_field_in_render_no_clone() {
     // DOGFOODING BUG: self.tile_size (f32) used twice in draw_rect call
     // gets .clone() added to the second usage. f32 is Copy, no clone needed.
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Game {
     tile_size: f32,
@@ -405,7 +374,7 @@ fn main() {
 /// Generated Rust produces `self.tiles_solid[index as usize]` — double cast.
 #[test]
 fn test_no_double_as_usize_cast() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Grid {
     width: i32,
@@ -456,7 +425,7 @@ fn main() {
 /// as a function argument.
 #[test]
 fn test_method_call_returning_bool_no_clone() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Input {
     keys: Vec<bool>,
@@ -511,7 +480,7 @@ fn main() {
 /// argument to a method call on `self.field`.
 #[test]
 fn test_borrowed_param_method_call_result_no_clone() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Input {
     dummy: i32,
@@ -581,7 +550,7 @@ fn main() {
 /// be cloned.
 #[test]
 fn test_assignment_target_never_cloned() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Emitter {
     x: f32,
@@ -649,7 +618,7 @@ fn main() {
 /// update_buttons(&self), so auto-clone analysis flags it. But f32 is Copy.
 #[test]
 fn test_self_copy_field_used_multiple_times_no_clone() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Button {
     x: f32,
@@ -705,7 +674,7 @@ fn main() {
 /// The type inference doesn't recognize the if-else as returning f32.
 #[test]
 fn test_local_copy_var_from_if_else_no_clone() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, r: f32, g: f32, b: f32, a: f32)
 
@@ -751,7 +720,7 @@ fn main() {
 /// Discovered via dogfooding: shooter_game.wj lines 95, 100
 #[test]
 fn test_chained_field_access_copy_subfield_no_clone() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Vec2 {
     x: f32,
@@ -797,7 +766,7 @@ fn main() {
 /// Discovered via dogfooding: dialogue_demo.wj, particle_demo.wj, shooter_game.wj
 #[test]
 fn test_len_comparison_optimized_to_is_empty() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     let items: Vec<i32> = Vec::new()
@@ -838,7 +807,7 @@ fn main() {
 /// Discovered via dogfooding: shooter_game.wj lines 132, 137
 #[test]
 fn test_reversed_translates_to_rev() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     let items = [3, 1, 2]
@@ -870,7 +839,7 @@ fn main() {
 /// Discovered via dogfooding: shooter_game.wj lines 107, 112
 #[test]
 fn test_enumerate_adds_iter() {
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Item {
     name: String,

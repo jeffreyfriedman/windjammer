@@ -12,6 +12,48 @@ use super::self_analysis;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    fn collect_derive_trait_identifiers(expr: &Expression<'_>, out: &mut Vec<String>) {
+        match expr {
+            Expression::Identifier { name, .. } => out.push(name.clone()),
+            Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    Self::collect_derive_trait_identifiers(e, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// E0053 / E0599: pick the `AnalyzedFunction` for this exact `impl` method AST node.
+    ///
+    /// `impl Trait for T` and `impl T` can both define `set_lighting` (etc.). Matching only
+    /// `name` + `parent_type` + `impl_trait` can still bind the wrong analysis when trait
+    /// metadata is missing cross-file; parameter names + arity are stable identifiers for the
+    /// syntactic method being codegen'd.
+    fn analyzed_matches_impl_ast(
+        af: &AnalyzedFunction<'ast>,
+        func: &FunctionDecl<'ast>,
+        impl_trait: &Option<String>,
+    ) -> bool {
+        if af.decl.name != func.name {
+            return false;
+        }
+        if af.decl.parent_type != func.parent_type {
+            return false;
+        }
+        if af.decl.impl_trait != *impl_trait {
+            return false;
+        }
+        if af.decl.parameters.len() != func.parameters.len() {
+            return false;
+        }
+        af.decl
+            .parameters
+            .iter()
+            .zip(func.parameters.iter())
+            .all(|(a, b)| a.name == b.name)
+    }
+
     pub(super) fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
@@ -33,9 +75,9 @@ impl<'ast> CodeGenerator<'ast> {
         self.struct_field_types.insert(s.name.clone(), field_types);
 
         // Convert decorators to Rust attributes
+        let decorator_reg = crate::decorator_registry::DecoratorRegistry::new();
         for decorator in &s.decorators {
-            // Skip framework decorators - they're handled separately
-            if decorator.name == "component" || decorator.name == "game" {
+            if decorator_reg.should_skip_for_backend(&decorator.name, self.target) {
                 continue;
             }
 
@@ -63,7 +105,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // Smart inference: no arguments, so infer traits based on field types
                     self.infer_derivable_traits(s)
                 } else {
-                    // Explicit: extract trait names from decorator arguments
+                    // Explicit trait list still merges with inference so @auto(Clone) keeps Debug, etc.
                     let mut explicit_traits = Vec::new();
                     for (_key, expr) in &decorator.arguments {
                         if let Expression::Identifier {
@@ -73,7 +115,10 @@ impl<'ast> CodeGenerator<'ast> {
                             explicit_traits.push(trait_name.clone());
                         }
                     }
-                    explicit_traits
+                    CodeGenerator::merge_standard_derive_traits(
+                        explicit_traits,
+                        self.infer_derivable_traits(s),
+                    )
                 };
 
                 if !traits.is_empty() {
@@ -88,18 +133,17 @@ impl<'ast> CodeGenerator<'ast> {
                 // Special handling for @derive decorator - generates #[derive(Trait1, Trait2)]
                 let mut traits = Vec::new();
                 for (_key, expr) in &decorator.arguments {
-                    if let Expression::Identifier {
-                        name: trait_name, ..
-                    } = expr
-                    {
-                        traits.push(trait_name.clone());
-                    }
+                    Self::collect_derive_trait_identifiers(expr, &mut traits);
                 }
                 if !traits.is_empty() {
-                    output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+                    let merged = CodeGenerator::merge_standard_derive_traits(
+                        traits,
+                        self.infer_derivable_traits(s),
+                    );
+                    output.push_str(&format!("#[derive({})]\n", merged.join(", ")));
 
-                    // TDD FIX: Register this struct as Copy if explicitly derived
-                    if traits.contains(&"Copy".to_string()) {
+                    // TDD FIX: Register this struct as Copy if derived (explicit or inferred)
+                    if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
                     }
                 }
@@ -143,6 +187,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // CRITICAL: All Windjammer structs must use #[repr(C)] to guarantee
+        // field ordering matches declaration order. Without this, Rust may
+        // reorder fields for optimization, corrupting GPU uniform buffers
+        // and any code that depends on memory layout (to_bytes, FFI, etc.).
+        output.push_str("#[repr(C)]\n");
+
         // Add struct declaration with type parameters
         let pub_prefix = if s.is_pub || self.is_module {
             "pub "
@@ -159,6 +209,19 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Add where clause if present
         output.push_str(&codegen_helpers::format_where_clause(&s.where_clause));
+
+        // Check for tuple struct: struct Name(T1, T2);
+        if let Some(tuple_types) = &s.tuple_fields {
+            self.tuple_struct_names.insert(s.name.clone());
+            output.push('(');
+            let fields: Vec<String> = tuple_types
+                .iter()
+                .map(|t| format!("pub {}", self.type_to_rust(t)))
+                .collect();
+            output.push_str(&fields.join(", "));
+            output.push_str(");");
+            return output;
+        }
 
         // Check if this is a unit struct (no fields)
         if s.fields.is_empty() {
@@ -238,10 +301,120 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         output.push('}');
+
+        // WINDJAMMER PHILOSOPHY: Auto-generate to_bytes() for structs with only
+        // GPU-serializable fields (f32, u32, i32, bool, fixed-size arrays of those).
+        // This eliminates manual byte management for GPU uniform uploads and ensures
+        // correct bit patterns for all types. The compiler does the hard work.
+        if !s.fields.is_empty()
+            && s.fields
+                .iter()
+                .all(|f| Self::is_gpu_serializable_type(&f.field_type))
+        {
+            output.push_str(&Self::generate_to_bytes_impl(s));
+        }
+
         output
     }
 
-    pub(super) fn generate_enum(&self, e: &EnumDecl) -> String {
+    /// Returns true if a type can be serialized to fixed-size GPU-compatible bytes.
+    fn is_gpu_serializable_type(ty: &Type) -> bool {
+        matches!(
+            ty,
+            Type::Float    // f64 -> but typically f32 in context
+            | Type::Bool
+            | Type::Int    // i64
+            | Type::Int32  // i32
+            | Type::Uint // u64
+        ) || matches!(ty, Type::Custom(name) if matches!(name.as_str(), "f32" | "u32" | "i32" | "f64" | "u64" | "i64" | "u8" | "i8" | "u16" | "i16" | "usize" | "isize"))
+            || matches!(ty, Type::Array(inner, _) if Self::is_gpu_serializable_type(inner))
+    }
+
+    /// Generates an impl block with `to_bytes(&self) -> Vec<u8>` for GPU-serializable structs.
+    fn generate_to_bytes_impl(s: &StructDecl) -> String {
+        let mut out = String::new();
+        out.push_str(&format!("\nimpl {} {{\n", s.name));
+        out.push_str("    pub fn to_bytes(&self) -> Vec<u8> {\n");
+
+        // Calculate total byte size for capacity hint
+        let cap = s
+            .fields
+            .iter()
+            .map(|f| Self::byte_size_of_type(&f.field_type))
+            .sum::<usize>();
+        out.push_str(&format!(
+            "        let mut __bytes = Vec::with_capacity({});\n",
+            cap
+        ));
+
+        for field in &s.fields {
+            Self::emit_field_serialization(
+                &mut out,
+                &format!("self.{}", field.name),
+                &field.field_type,
+            );
+        }
+
+        out.push_str("        __bytes\n");
+        out.push_str("    }\n");
+        out.push_str("}\n");
+        out
+    }
+
+    fn byte_size_of_type(ty: &Type) -> usize {
+        match ty {
+            Type::Float => 8, // f64
+            Type::Int => 8,   // i64
+            Type::Uint => 8,  // u64
+            Type::Int32 => 4, // i32
+            Type::Bool => 4,  // GPU bools are u32
+            Type::Custom(name) => match name.as_str() {
+                "f32" | "u32" | "i32" => 4,
+                "f64" | "u64" | "i64" => 8,
+                "u8" | "i8" => 1,
+                "u16" | "i16" => 2,
+                "usize" | "isize" => 8,
+                _ => 4,
+            },
+            Type::Array(inner, n) => Self::byte_size_of_type(inner) * n,
+            _ => 4,
+        }
+    }
+
+    fn emit_field_serialization(out: &mut String, expr: &str, ty: &Type) {
+        match ty {
+            Type::Bool => {
+                // GPU bools are 4 bytes (u32): true=1, false=0
+                out.push_str(&format!(
+                    "        __bytes.extend_from_slice(&(if {} {{ 1u32 }} else {{ 0u32 }}).to_ne_bytes());\n",
+                    expr
+                ));
+            }
+            Type::Array(inner, _) => {
+                out.push_str(&format!("        for __el in &{} {{\n", expr));
+                let mut inner_out = String::new();
+                Self::emit_field_serialization(&mut inner_out, "__el", inner);
+                // Indent inner serialization by one extra level
+                for line in inner_out.lines() {
+                    if !line.is_empty() {
+                        out.push_str("    ");
+                    }
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                out.push_str("        }\n");
+            }
+            _ => {
+                // f32, u32, i32, f64, u64, i64, etc. - all have to_ne_bytes()
+                out.push_str(&format!(
+                    "        __bytes.extend_from_slice(&{}.to_ne_bytes());\n",
+                    expr
+                ));
+            }
+        }
+    }
+
+    pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
         // WINDJAMMER PHILOSOPHY: Auto-derive common traits for enums
@@ -263,6 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
         let all_variants_copy = self.all_enum_variants_are_copy(&e.variants);
         if all_variants_copy {
             traits.push("Copy".to_string());
+            self.copy_types_registry.insert(e.name.clone());
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
@@ -409,10 +583,58 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&method.name);
             output.push('(');
 
+            // TDD FIX: Trait Method Ownership Inference
+            // THE WINDJAMMER WAY: If trait method has no explicit self parameter,
+            // infer it automatically based on the method type:
+            // - Associated functions returning Self → No self (constructor)
+            // - All other methods → inferred from impl bodies or default &mut self
+            let has_self_param = method.parameters.iter().any(|p| p.name == "self");
+
+            // Structural detection: a method that returns Self or the trait's type and has no self
+            // parameter is an associated function (constructor), not an instance method.
+            let returns_self = matches!(
+                &method.return_type,
+                Some(Type::Custom(name)) if name == "Self"
+            );
+            let returns_trait_type = matches!(
+                &method.return_type,
+                Some(Type::Custom(name)) if name == &trait_decl.name
+            );
+            let is_associated_fn = !has_self_param && (returns_self || returns_trait_type);
+
+            let mut params: Vec<String> = Vec::new();
+
+            // Add self parameter if missing and not an associated function
+            if !has_self_param && !is_associated_fn {
+                let returns_bare_self = returns_self;
+                // Check if we have analyzed ownership for this method
+                let self_ownership = if let Some(analyzed) = analyzed_method {
+                    analyzed.inferred_ownership.get("self").copied()
+                } else if let Some(trait_methods) =
+                    self.analyzed_trait_methods.get(&trait_decl.name)
+                {
+                    trait_methods
+                        .get(&method.name)
+                        .and_then(|m| m.inferred_ownership.get("self").copied())
+                } else {
+                    None
+                };
+
+                // Associated function: `fn create() -> Self` has no receiver — do not emit &mut self.
+                if !(self_ownership.is_none() && returns_bare_self) {
+                    let self_param = match self_ownership {
+                        Some(OwnershipMode::Borrowed) => "&self",
+                        Some(OwnershipMode::MutBorrowed) | None => "&mut self",
+                        Some(OwnershipMode::Owned) => "self",
+                    };
+                    params.push(self_param.to_string());
+                }
+            }
+
             // Generate parameters
             // NOTE: Trait method signatures cannot have 'mut' keyword in Rust
             // Only implementations can have 'mut self' or 'mut param'
-            let params: Vec<String> = method
+            let method_params: Vec<String> = method
                 .parameters
                 .iter()
                 .map(|param| {
@@ -495,17 +717,19 @@ impl<'ast> CodeGenerator<'ast> {
                             // TRAIT SIGNATURES: Default to &self for trait methods
                             // This prevents E0277 (Self not Sized) errors
                             if param.name == "self" {
-                                "&self".to_string()
-                            } else {
-                                // Owned parameter (no &)
-                                self.type_to_rust(&param.type_)
+                                return "&self".to_string();
                             }
+                            // Owned parameter (no &)
+                            self.type_to_rust(&param.type_)
                         }
                     };
 
                     format!("{}: {}", param.name, type_str)
                 })
                 .collect();
+
+            // Append method parameters to params (which may already have self)
+            params.extend(method_params);
 
             output.push_str(&params.join(", "));
             output.push(')');
@@ -596,6 +820,15 @@ impl<'ast> CodeGenerator<'ast> {
             output.push('<');
             output.push_str(&self.format_type_params(&impl_block.type_params));
             output.push('>');
+        } else if let Some(inferred) =
+            super::codegen_helpers::infer_impl_header_type_params_from_type_name(
+                &impl_block.type_name,
+            )
+        {
+            // Rust requires `impl<T> Foo<T>` when the user wrote `impl Foo<T>` (no `impl<T>`).
+            output.push('<');
+            output.push_str(&inferred.join(", "));
+            output.push('>');
         }
         output.push(' ');
 
@@ -618,10 +851,13 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&impl_block.type_name);
         }
 
-        // Add where clause if present
-        output.push_str(&codegen_helpers::format_where_clause(
-            &impl_block.where_clause,
-        ));
+        // Generic impls that clone `self.dense` / `self.dense[i]` need `T: Clone` for Rust Vec/element Clone.
+        let mut merged_where = impl_block.where_clause.clone();
+        let inferred_clone = codegen_helpers::infer_clone_where_bounds_for_impl(impl_block);
+        if !inferred_clone.is_empty() {
+            merged_where = codegen_helpers::merge_where_clauses(merged_where, inferred_clone);
+        }
+        output.push_str(&codegen_helpers::format_where_clause(&merged_where));
 
         output.push_str(" {\n");
 
@@ -645,8 +881,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Store the wasm export flag and trait impl flag for use in generate_function
         let old_in_wasm_impl = self.in_wasm_bindgen_impl;
         let old_in_trait_impl = self.in_trait_impl;
+        let old_trait_impl_name = self.current_trait_impl_name.take();
         self.in_wasm_bindgen_impl = has_wasm_export;
         self.in_trait_impl = impl_block.trait_name.is_some();
+        // E0053 FIX: Track trait name so impl methods use trait's ownership (not impl's inferred)
+        self.current_trait_impl_name = impl_block.trait_name.clone();
 
         // Pre-classify methods as instance (takes self) vs static for Self:: vs self. dispatch.
         // A method is instance if: it has explicit self, analyzer inferred self, or it accesses fields.
@@ -656,7 +895,7 @@ impl<'ast> CodeGenerator<'ast> {
             let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
             let has_inferred_self = analyzed
                 .iter()
-                .find(|af| af.decl.name == func.name && af.decl.parent_type == func.parent_type)
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
                 .map(|af| af.inferred_ownership.contains_key("self"))
                 .unwrap_or(false);
             let accesses_fields = if !self.current_struct_fields.is_empty() {
@@ -678,7 +917,7 @@ impl<'ast> CodeGenerator<'ast> {
         for func in &impl_block.functions {
             if let Some(analyzed_func) = analyzed
                 .iter()
-                .find(|af| af.decl.name == func.name && af.decl.parent_type == func.parent_type)
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
             {
                 output.push_str(&self.generate_function(analyzed_func));
                 output.push('\n');
@@ -688,6 +927,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_instance_methods.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
+        self.current_trait_impl_name = old_trait_impl_name;
 
         self.indent_level -= 1;
         output.push('}');
@@ -726,7 +966,6 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::String => "String::new()",
                 Type::Vec(_) => "Vec::new()",
                 Type::Custom(name) if name == "String" => "String::new()",
-                Type::Custom(name) if name.starts_with("Vec") => "Vec::new()",
                 _ => "Default::default()",
             };
             output.push_str(&format!("            {}: {},\n", field.name, default_value));

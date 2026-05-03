@@ -16,7 +16,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -73,6 +76,4 @@ fn main() {
             || generated.contains("println!(\"{:?}\", value)"),
         "println should format non-string values"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

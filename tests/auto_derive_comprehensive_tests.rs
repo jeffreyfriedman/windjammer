@@ -6,70 +6,12 @@
 //! - @auto for smart auto-derive
 //! - Clone, Debug, PartialEq, Copy, Default
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // @derive TESTS
@@ -89,7 +31,8 @@ pub fn duplicate(p: &Point) -> Point {
     p.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Clone"), "Should have Clone derive");
     assert!(success, "Derive Clone should compile. Error: {}", err);
 }
@@ -108,7 +51,8 @@ pub fn print_point(p: &Point) {
     println!("{:?}", p)
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Debug"), "Should have Debug derive");
     assert!(success, "Derive Debug should compile. Error: {}", err);
 }
@@ -127,7 +71,8 @@ pub fn are_equal(a: &Point, b: &Point) -> bool {
     a == b
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(
         generated.contains("PartialEq"),
         "Should have PartialEq derive"
@@ -149,7 +94,8 @@ pub fn use_copy(p: Point) -> (Point, Point) {
     (p, p)  // Copy allows using p twice
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Copy"), "Should have Copy derive");
     assert!(success, "Derive Copy should compile. Error: {}", err);
 }
@@ -168,7 +114,8 @@ pub fn default_config() -> Config {
     Config::default()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Default"), "Should have Default derive");
     assert!(success, "Derive Default should compile. Error: {}", err);
 }
@@ -188,7 +135,8 @@ pub fn test_all(a: &Point, b: &Point) -> bool {
     a == b
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Clone"), "Should have Clone");
     assert!(generated.contains("Debug"), "Should have Debug");
     assert!(generated.contains("PartialEq"), "Should have PartialEq");
@@ -209,7 +157,7 @@ pub struct Point {
     y: i32,
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     // @auto should derive common traits
     assert!(
         success,
@@ -233,7 +181,8 @@ pub fn clone_person(p: &Person) -> Person {
     p.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Clone"), "Should derive Clone");
     // Should NOT derive Copy for String fields
     assert!(success, "@auto with String should compile. Error: {}", err);
@@ -253,7 +202,8 @@ pub fn clone_container(c: &Container) -> Container {
     c.clone()
 }
 "#;
-    let (success, generated, err) = compile_and_verify(code);
+    let (generated, success) = test_utils::compile_single_check(code);
+    let err = if !success { &generated } else { "" };
     assert!(generated.contains("Clone"), "Should derive Clone");
     assert!(success, "@auto with Vec should compile. Error: {}", err);
 }
@@ -277,7 +227,7 @@ pub fn is_red(c: &Color) -> bool {
     *c == Color::Red
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Enum derives should compile. Error: {}", err);
 }
 
@@ -295,7 +245,7 @@ pub fn clone_message(m: &Message) -> Message {
     m.clone()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Enum with data derives should compile. Error: {}",
@@ -325,7 +275,7 @@ pub fn clone_outer(o: &Outer) -> Outer {
     o.clone()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Nested struct derives should compile. Error: {}",
@@ -350,7 +300,7 @@ pub fn clone_container<T: Clone>(c: &Container<T>) -> Container<T> {
     c.clone()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Generic struct derives should compile. Error: {}",

@@ -10,20 +10,13 @@ use std::path::PathBuf;
 /// 2. Generates a test library with FFI dependencies
 /// 3. Compiles and runs tests successfully
 use std::process::Command;
+use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "Flaky in CI - temp directory permissions and file locks cause failures"]
 fn test_minimal_game_test_compiles() {
-    // Create a minimal test project with FFI usage
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_game_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
 
     fs::create_dir_all(&test_dir).unwrap();
     fs::create_dir_all(test_dir.join("tests_wj")).unwrap();
@@ -44,7 +37,8 @@ ffi_dir = "ffi"
 "#;
 
     let runtime_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
-    let wj_toml = wj_toml.replace("__RUNTIME_PATH__", &runtime_path.to_string_lossy());
+    let runtime_path_str = runtime_path.to_string_lossy().replace('\\', "/");
+    let wj_toml = wj_toml.replace("__RUNTIME_PATH__", &runtime_path_str);
 
     fs::write(test_dir.join("wj.toml"), wj_toml).unwrap();
 
@@ -79,19 +73,13 @@ fn test_basic() {
         .output()
         .expect("Failed to run wj test");
 
-    // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
-
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Check if tests actually ran and passed (ignore exit code - warnings may cause non-zero)
     if stdout.contains("test result:") && stdout.contains("passed") {
-        // Tests ran successfully - this is what we're checking
         return;
     }
 
-    // If tests didn't run or failed, check the error
     if !output.status.success() {
         panic!("wj test failed:\nSTDOUT:\n{}\nSTDERR:\n{}", stdout, stderr);
     }
@@ -99,19 +87,9 @@ fn test_basic() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "Flaky in CI - temp directory permissions and file locks cause failures"]
 fn test_game_test_with_ffi_dependencies_compiles() {
-    // This test verifies that when a game project has FFI dependencies,
-    // they are correctly included in the generated test library
-
-    let test_dir = std::env::temp_dir().join(format!(
-        "wj_ffi_test_{}_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        std::process::id()
-    ));
+    let _tmp = tempdir().expect("tempdir");
+    let test_dir = _tmp.path().to_path_buf();
 
     fs::create_dir_all(&test_dir).unwrap();
     fs::create_dir_all(test_dir.join("tests_wj")).unwrap();
@@ -135,6 +113,7 @@ ffi_dir = "ffi"
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("crates/windjammer-runtime")
             .to_string_lossy()
+            .replace('\\', "/")
     );
 
     fs::write(test_dir.join("wj.toml"), wj_toml).unwrap();
@@ -175,22 +154,13 @@ fn test_math() {
         return;
     }
 
-    // Check if tests actually ran and passed (ignore exit code - warnings may cause non-zero)
     if stdout.contains("test result:") && stdout.contains("passed") {
-        // Tests ran successfully - this is what we're checking
-        let _ = fs::remove_dir_all(&test_dir);
         return;
     }
 
-    // Windows "Access denied" can happen during cleanup - ignore if tests passed
     if stderr.contains("Access is denied") && stdout.contains("test result:") {
-        let _ = fs::remove_dir_all(&test_dir);
         return;
     }
-
-    // If tests didn't run or had unexpected failure
-    // Try cleanup even on failure (may fail on Windows - that's OK)
-    let _ = fs::remove_dir_all(&test_dir);
 
     if !output.status.success() {
         panic!(

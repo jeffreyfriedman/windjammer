@@ -1,39 +1,8 @@
 // TDD Test: Compiler should auto-cast .len() to i64 when comparing with int variables
 // WINDJAMMER PHILOSOPHY: Compiler handles type compatibility automatically
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -52,7 +21,7 @@ fn test_int_var_compared_with_len_should_cast_len() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should cast .len() to i64 for comparison with int field
     // Accept both `self.items.len() as i64` and `(self.items.len() as i64)` since
@@ -73,7 +42,7 @@ fn test_int_local_var_compared_with_len() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should cast .len() to i64
     assert!(
@@ -93,7 +62,7 @@ fn test_usize_var_compared_with_len_no_cast() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should NOT cast when both are usize
     assert!(
@@ -122,7 +91,7 @@ fn test_int_field_compared_with_len_in_if() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should cast .len() to i64 in if condition (since `int` maps to i64)
     assert!(

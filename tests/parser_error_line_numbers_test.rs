@@ -12,7 +12,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_parser_error_includes_line_number() {
     // Create a test file with a syntax error on a specific line
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_parser_line_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -47,7 +48,6 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // Assert that error message includes line number
     // Should see something like "line 3" or "3:1" or "syntax_error.wj:3"
@@ -77,7 +77,8 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_parser_error_for_assign_in_pattern_context() {
     // Reproduce the specific "Expected pattern, got Assign" error
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_pattern_assign_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -113,7 +114,6 @@ fn test_example() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 
     // If there's an error, it should have a line number
     if stderr.contains("Expected pattern") || stdout.contains("Expected pattern") {

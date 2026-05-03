@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: FFI Dependencies in Test Framework
 ///
@@ -7,22 +10,14 @@ use anyhow::Result;
 /// SOLUTION: When copying FFI files to test library, also copy their dependencies
 /// from the project's Cargo.toml to the test library's Cargo.toml.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
+use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_dependencies_copied_to_test_library() -> Result<()> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ffi_deps_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir)?;
+    let _tmp = tempdir()?;
+    let temp_dir = _tmp.path().to_path_buf();
 
     // Create src_wj with a simple test
     let src_wj_dir = temp_dir.join("src_wj");
@@ -108,7 +103,7 @@ fn test_simple() {
     )?;
 
     // Run wj test
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let output = Command::new(&wj_compiler)
         .arg("test")
         .arg(&test_wj)
@@ -117,9 +112,6 @@ fn test_simple() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     // Should NOT have "no external crate `wgpu`" error
     assert!(

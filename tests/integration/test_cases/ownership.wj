@@ -1,0 +1,44 @@
+// Integration Test: Ownership Inference
+//
+// Covers: copy semantics, mutation, parameter passing
+// EXPECTED: All backends produce identical output ending with PASSED
+
+fn double(x: int) -> int {
+    x * 2
+}
+
+struct Counter {
+    value: int,
+}
+
+impl Counter {
+    fn get(self) -> int {
+        self.value
+    }
+
+    fn increment(self) {
+        self.value += 1
+    }
+}
+
+fn main() {
+    let a = 42
+    let b = a
+    println("[ownership] copy: a=${a}, b=${b}")
+
+    let doubled = double(10)
+    println("[ownership] param: doubled=${doubled}")
+
+    let mut c = Counter { value: 0 }
+    println("[ownership] before: ${c.get()}")
+    c.increment()
+    println("[ownership] after: ${c.get()}")
+    c.increment()
+    println("[ownership] after2: ${c.get()}")
+
+    let mut x = 5
+    x += 3
+    println("[ownership] compound: x=${x}")
+
+    println("PASSED")
+}

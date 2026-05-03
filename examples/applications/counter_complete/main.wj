@@ -53,7 +53,7 @@ impl CounterApp {
         )
     }
     
-    fn mount(self, selector: &str) -> Result<(), String> {
+    fn mount(self, selector: &str) -> Result<(), string> {
         // This will be implemented for WASM target
         print("Mounting to: ${selector}")
         Ok(())

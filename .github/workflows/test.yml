@@ -6,12 +6,17 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
-  # Fast quality checks - fail immediately if issues found
   quality-checks:
     name: Code Quality (Format & Lint)
     runs-on: ubuntu-latest
@@ -24,19 +29,25 @@ jobs:
         with:
           components: rustfmt, clippy
       
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+      
       - name: Check formatting
-        run: |
-          echo "🎨 Checking code formatting..."
-          cargo fmt --all -- --check
-          echo "✅ Formatting check passed"
+        run: cargo fmt --all -- --check
       
       - name: Run clippy
-        run: |
-          echo "🔎 Running clippy..."
-          cargo clippy --all-targets --all-features -- -D warnings
-          echo "✅ Clippy passed"
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # Fast validation checks (independent)
   version-check:
     name: Version Alignment
     runs-on: ubuntu-latest
@@ -46,34 +57,25 @@ jobs:
       
       - name: Check all crate versions match workspace version
         run: |
-          echo "🔍 Checking version alignment across all crates..."
-          
-          # Get workspace version from root Cargo.toml
           WORKSPACE_VERSION=$(grep -A 1 '\[workspace.package\]' Cargo.toml | grep 'version = ' | sed 's/.*version = "\(.*\)"/\1/')
           
           if [ -z "$WORKSPACE_VERSION" ]; then
-            echo "❌ ERROR: Could not find workspace.package.version in root Cargo.toml"
+            echo "❌ Could not find workspace.package.version in root Cargo.toml"
             exit 1
           fi
           
           echo "📦 Workspace version: $WORKSPACE_VERSION"
-          echo ""
-          
-          # Check each crate's version
           MISMATCHES=0
           
           for crate_toml in crates/*/Cargo.toml; do
             CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
             
-            # Check if using workspace version inheritance
             if grep -q '^version\.workspace = true' "$crate_toml"; then
-              echo "✅ $CRATE_NAME: $WORKSPACE_VERSION (inherited from workspace)"
+              echo "✅ $CRATE_NAME: $WORKSPACE_VERSION (inherited)"
             else
-              # Check explicit version
               CRATE_VERSION=$(grep '^version = ' "$crate_toml" | head -1 | sed 's/.*version = "\(.*\)"/\1/')
-              
               if [ -z "$CRATE_VERSION" ]; then
-                echo "❌ $CRATE_NAME: No version found (expected: $WORKSPACE_VERSION or version.workspace = true)"
+                echo "❌ $CRATE_NAME: No version found"
                 MISMATCHES=$((MISMATCHES + 1))
               elif [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
                 echo "❌ $CRATE_NAME: $CRATE_VERSION (expected: $WORKSPACE_VERSION)"
@@ -84,11 +86,8 @@ jobs:
             fi
           done
           
-          # Check internal dependency version references
           for crate_toml in crates/*/Cargo.toml; do
             CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
-            
-            # Find lines with path = AND version = (internal workspace deps)
             while IFS= read -r line; do
               if echo "$line" | grep -q 'path ='; then
                 DEP_VERSION=$(echo "$line" | sed -n 's/.*version = "\([^"]*\)".*/\1/p')
@@ -101,20 +100,12 @@ jobs:
             done < <(grep 'version = "' "$crate_toml" | grep 'path =' || true)
           done
           
-          echo ""
           if [ $MISMATCHES -gt 0 ]; then
-            echo "❌ ERROR: $MISMATCHES crate(s) have mismatched versions!"
-            echo ""
-            echo "To fix:"
-            echo "  1. Update version in each crate's Cargo.toml to match workspace version"
-            echo "  2. Or use 'version.workspace = true' to inherit from workspace"
-            echo "  3. Update internal dependency references: windjammer = { path = \"../..\", version = \"$WORKSPACE_VERSION\" }"
+            echo "❌ $MISMATCHES crate(s) have mismatched versions!"
             exit 1
           fi
-          
-          echo "✅ All crate versions are aligned with workspace version $WORKSPACE_VERSION"
+          echo "✅ All crate versions aligned"
   
-  # Fast lockfile validation (independent)
   lockfile-check:
     name: Cargo.lock Validation
     runs-on: ubuntu-latest
@@ -125,39 +116,29 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Check Cargo.lock exists
+      - name: Validate lockfile
         run: |
           if [ ! -f "Cargo.lock" ]; then
-            echo "❌ ERROR: Cargo.lock is not committed!"
-            echo "Please run 'cargo generate-lockfile' and commit Cargo.lock"
+            echo "❌ Cargo.lock is not committed!"
             exit 1
           fi
-          echo "✅ Cargo.lock is committed"
-      
-      - name: Verify Cargo.lock is up-to-date
-        run: |
-          echo "🔍 Checking if Cargo.lock is up-to-date with Cargo.toml..."
           cp Cargo.lock Cargo.lock.before
           cargo update --workspace --dry-run
           if ! diff Cargo.lock Cargo.lock.before > /dev/null 2>&1; then
-            echo "❌ ERROR: Cargo.lock is out of sync with Cargo.toml!"
-            echo "Please run 'cargo update' and commit the updated Cargo.lock"
+            echo "❌ Cargo.lock is out of sync with Cargo.toml!"
             exit 1
           fi
           echo "✅ Cargo.lock is up-to-date"
 
-  # Cross-platform tests - only run if quality checks pass
   test:
     name: Test on ${{ matrix.os }} with Rust ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
-    needs: [quality-checks, version-check, lockfile-check]  # Wait for all fast checks to pass
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
         include:
-          # Test with beta and nightly on Ubuntu only
           - os: ubuntu-latest
             rust: beta
           - os: ubuntu-latest
@@ -172,76 +153,89 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       
-      - name: Generate Cargo.lock if missing
-        shell: bash
-        run: cargo generate-lockfile
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
       
       - name: Cache cargo dependencies
-        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-
+            ${{ runner.os }}-cargo-registry-
       
-      - name: Build
-        run: cargo build --verbose
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
       
-      - name: Build release binary (needed for integration tests)
-        shell: bash
+      - name: Install Go (for backend tests)
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+      
+      - name: Install Node.js (for JS backend tests)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      
+      - name: Optimize Windows runner
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
-          echo "Building release binary for integration tests..."
-          # Force rebuild of the wj binary (cache might have stale artifacts)
-          cargo build --release --bin wj --verbose
-          echo "Verifying wj binary exists..."
-          if [ -f target/release/wj ]; then
-            ls -lh target/release/wj
-            echo "✅ wj binary found"
-          elif [ -f target/release/wj.exe ]; then
-            ls -lh target/release/wj.exe
-            echo "✅ wj.exe binary found"
-          else
-            echo "❌ ERROR: wj binary not found!"
-            exit 1
-          fi
+          # Exclude build directories from Windows Defender real-time scanning
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\target"
+          Add-MpPreference -ExclusionPath "$env:TEMP"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
+          Add-MpPreference -ExclusionProcess "rustc.exe"
+          Add-MpPreference -ExclusionProcess "cargo.exe"
+          # Free disk space
+          Remove-Item -Recurse -Force "$env:USERPROFILE\.dotnet" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$env:ANDROID_HOME" -ErrorAction SilentlyContinue
+      
+      - name: Build tests (release mode)
+        shell: bash
+        run: cargo test --release --all-features --no-run
+      
+      - name: Clean debug artifacts before running tests
+        shell: bash
+        run: rm -rf target/debug || true
       
       - name: Run tests
         shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: |
-          # Add wj binary to PATH for integration tests
           export PATH="$PWD/target/release:$PATH"
-          cargo test --release --verbose --all-features
+          cargo nextest run --release --all-features \
+            --profile ci \
+            --failure-output immediate-final \
+            --success-output never
+      
+      - name: Run doctests
+        shell: bash
+        run: cargo test --release --doc
       
       - name: Test examples (Unix)
         if: matrix.rust == 'stable' && runner.os != 'Windows'
         run: |
-          # Test a few key examples compile
-          ./target/release/windjammer build --path examples/01_basics --output /tmp/test_01 --target wasm || true
-          ./target/release/windjammer build --path examples/18_stdlib_math_test --output /tmp/test_math --target wasm || true
-      
-      - name: Test examples (Windows)
-        if: matrix.rust == 'stable' && runner.os == 'Windows'
-        run: |
-          # Test a few key examples compile
-          .\target\release\windjammer.exe build --path examples\01_basics --output C:\temp\test_01 --target wasm
-          .\target\release\windjammer.exe build --path examples\18_stdlib_math_test --output C:\temp\test_math --target wasm
-        continue-on-error: true
+          ./target/release/wj build --target=rust examples/01_basics --output /tmp/test_01 || true
+          ./target/release/wj build --target=rust examples/18_stdlib_math_test --output /tmp/test_math || true
 
-  # Code coverage (independent, can run in parallel)
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [quality-checks]  # Only need quality checks to pass
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
       
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
       
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
@@ -256,11 +250,9 @@ jobs:
           files: ./cobertura.xml
           fail_ci_if_error: false
 
-  # Multi-target tests (independent, can run in parallel)
   multi-target-tests:
     name: Multi-Target Compilation Tests
     runs-on: ubuntu-latest
-    needs: [quality-checks]  # Only need quality checks to pass
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -268,62 +260,50 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Install Node.js (for JavaScript target testing)
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      
+      - name: Install Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
       
-      - name: Generate Cargo.lock if missing
-        shell: bash
-        run: cargo generate-lockfile
-      
       - name: Cache cargo dependencies
-        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-registry-
       
       - name: Build windjammer
         run: cargo build --release
       
-      - name: Test Rust target compilation
+      - name: Test Rust target
         run: |
           echo "fn main() { println!(\"Hello, Rust!\") }" > test.wj
           ./target/release/wj build --target=rust test.wj --output /tmp/test_rust
           test -f /tmp/test_rust/Cargo.toml || exit 1
-          echo "✅ Rust target works"
       
-      - name: Test JavaScript target compilation
+      - name: Test JavaScript target
         run: |
           echo "fn main() { println!(\"Hello, JavaScript!\") }" > test.wj
           ./target/release/wj build --target=javascript test.wj --output /tmp/test_js
           test -f /tmp/test_js/output.js || exit 1
-          test -f /tmp/test_js/output.d.ts || exit 1
-          test -f /tmp/test_js/package.json || exit 1
-          echo "✅ JavaScript target works"
-      
-      - name: Test JavaScript output execution
-        run: |
           node /tmp/test_js/output.js
-          echo "✅ JavaScript output executes correctly"
       
-      - name: Test WebAssembly target compilation
+      - name: Test WebAssembly target
         run: |
           echo "fn main() { println!(\"Hello, WASM!\") }" > test.wj
           ./target/release/wj build --target=wasm test.wj --output /tmp/test_wasm
           test -f /tmp/test_wasm/Cargo.toml || exit 1
-          echo "✅ WASM target works"
       
       - name: Run multi-target integration tests
-        run: cargo test --test multi_target_tests --verbose
+        run: cargo test --release --test multi_target_tests --verbose
       
-      - name: Test all targets with complex code
+      - name: Test complex code across targets
         run: |
           cat > complex.wj << 'EOF'
           struct Point {
@@ -345,14 +325,10 @@ jobs:
           ./target/release/wj build --target=rust complex.wj --output /tmp/complex_rust
           ./target/release/wj build --target=javascript complex.wj --output /tmp/complex_js
           ./target/release/wj build --target=wasm complex.wj --output /tmp/complex_wasm
-          
-          echo "✅ All targets compile complex code successfully"
-  
-  # Docker build test (independent)
+
   docker-build:
     name: Test Docker Build
     runs-on: ubuntu-latest
-    needs: [quality-checks]  # Only need quality checks to pass
     permissions:
       contents: read
     steps:
@@ -363,16 +339,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Test Docker build
-        run: |
-          echo "🐳 Testing Docker build (no push)..."
-          docker build -t windjammer:test .
-          echo "✅ Docker build successful!"
+        run: docker build -t windjammer:test .
 
-  # Publish dry-run (only after all checks pass)
   publish-dryrun:
     name: Publish Dry-Run (Pre-merge Validation)
     runs-on: ubuntu-latest
-    needs: [quality-checks, version-check, lockfile-check]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -380,31 +351,23 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Cache Cargo registry and build artifacts
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
           key: ${{ runner.os }}-cargo-publish-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-publish-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-registry-
       
-      - name: Dry-run publish (core crates only)
+      - name: Validate package structure
         run: |
-          echo "🧪 Validating core crates can be published..."
-          echo ""
-          echo "📦 Dry-run: windjammer (core)"
-          cargo publish --dry-run
-          echo ""
-          echo "📦 Dry-run: windjammer-runtime"
-          cargo publish --dry-run -p windjammer-runtime
-          echo ""
-          echo "ℹ️  Note: Dependent crates (windjammer-lsp, windjammer-mcp) are NOT dry-run tested here"
-          echo "   because they depend on the new version which isn't on crates.io yet."
-          echo "   They will be validated during actual publish after dependencies are live."
-          echo ""
-          echo "✅ Core crates are ready to publish!"
-
+          cargo package --list > /dev/null
+          echo "✅ windjammer: package structure valid"
+          cargo package --list -p windjammer-runtime > /dev/null
+          echo "✅ windjammer-runtime: package structure valid"

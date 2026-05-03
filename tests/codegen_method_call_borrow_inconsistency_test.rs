@@ -8,14 +8,12 @@
 ///   Generated:  particle.update(delta, &gx, gy)  // WRONG! Inconsistent borrowing
 ///
 /// Expected:   particle.update(delta, gx, gy)     // All Copy types, no borrowing
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -47,7 +45,7 @@ fn main() {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),
@@ -109,7 +107,7 @@ fn main() {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),
@@ -174,7 +172,7 @@ fn simulate() {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),

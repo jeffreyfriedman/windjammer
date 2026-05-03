@@ -35,7 +35,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -67,12 +70,12 @@ fn main() {
 
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&name` → we generate `contains_key(name)` (already &str, no extra &)
+    // PHASE 2 OPTIMIZATION: String params generate &str for PERFORMANCE
+    // - Borrowed string param → &str (works with HashMap::contains_key via Borrow trait)
+    // - User wrote `&name` → we generate `contains_key(name)` (already &str, works)
     assert!(
         generated.contains("name: &str"),
-        "Should generate &str parameter. Got:\n{}",
+        "Should generate &str parameter (Phase 2 optimization). Got:\n{}",
         generated
     );
     assert!(
@@ -99,6 +102,4 @@ fn main() {
             stderr, generated
         );
     }
-
-    fs::remove_dir_all(&test_dir).ok();
 }

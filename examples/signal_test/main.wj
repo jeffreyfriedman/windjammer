@@ -10,7 +10,7 @@ struct AppState {
 fn main() {
     // Test Signal with different types
     let count: Signal<i32> = Signal::new(0)
-    let name: Signal<string> = Signal::new("Hello".to_string())
+    let name: Signal<string> = Signal::new("Hello")
     let active: Signal<bool> = Signal::new(true)
     
     // Test Signal methods
@@ -23,7 +23,7 @@ fn main() {
     // Test Signal in struct
     let state = AppState {
         counter: Signal::new(42),
-        message: Signal::new("Test".to_string()),
+        message: Signal::new("Test"),
     }
     
     println!("State counter: {}", state.counter.get())

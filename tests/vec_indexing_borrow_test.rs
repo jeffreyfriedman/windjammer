@@ -120,3 +120,27 @@ impl Sprite {
         output
     );
 }
+
+/// E0507 TDD: `let x = items[i]` when the element is non-Copy and `x` is used as owned (e.g. returned)
+/// must not emit a plain `items[i]` move — expect `items[i].clone()` (after stripping a leading `&` from index codegen).
+#[test]
+fn test_vec_index_let_noncopy_owned_binding_uses_clone() {
+    let source = r#"
+struct Heavy {
+    data: Vec<int>
+}
+
+fn take(items: Vec<Heavy>) -> Heavy {
+    let x = items[0 as usize]
+    return x
+}
+"#;
+
+    let output = parse_and_generate(source);
+
+    assert!(
+        output.contains("items[") && output.contains(".clone()"),
+        "non-Copy vec index in let + return should use .clone(), got:\n{}",
+        output
+    );
+}

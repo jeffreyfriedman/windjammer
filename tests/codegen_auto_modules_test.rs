@@ -5,12 +5,11 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 #[test]
 fn test_auto_gen_creates_windjammer_modules_file() {
     // GIVEN: A project with .wj files
-    let test_dir = setup_test_project();
+    let (_tmp, test_dir) = setup_test_project();
 
     // WHEN: Compiler runs
     compile_project(&test_dir);
@@ -21,14 +20,12 @@ fn test_auto_gen_creates_windjammer_modules_file() {
         modules_file.exists(),
         "windjammer_modules.rs should be auto-generated"
     );
-
-    cleanup_test_project(&test_dir);
 }
 
 #[test]
 fn test_auto_gen_includes_all_wj_files() {
     // GIVEN: Multiple .wj files in src_wj/
-    let test_dir = setup_test_project_with_files(&[
+    let (_tmp, test_dir) = setup_test_project_with_files(&[
         "src_wj/math.wj",
         "src_wj/physics/collision.wj",
         "src_wj/rendering/shader.wj",
@@ -52,14 +49,12 @@ fn test_auto_gen_includes_all_wj_files() {
         content.contains("pub mod wj_rendering_shader"),
         "Should include rendering/shader"
     );
-
-    cleanup_test_project(&test_dir);
 }
 
 #[test]
 fn test_auto_gen_creates_proper_path_declarations() {
     // GIVEN: A .wj file
-    let test_dir = setup_test_project_with_files(&["src_wj/core.wj"]);
+    let (_tmp, test_dir) = setup_test_project_with_files(&["src_wj/core.wj"]);
 
     // WHEN: Compiler runs
     compile_project(&test_dir);
@@ -75,16 +70,13 @@ fn test_auto_gen_creates_proper_path_declarations() {
         content.contains("pub mod wj_core;"),
         "Should declare module"
     );
-
-    cleanup_test_project(&test_dir);
 }
 
 #[test]
-#[ignore = "TODO: Implement nested module structure in windjammer_modules.rs generation"]
 fn test_auto_gen_creates_namespace_reexports() {
     // GIVEN: Nested .wj files
-    let test_dir =
-        setup_test_project_with_files(&["src_wj/voxel/grid.wj", "src_wj/voxel/svo_convert.wj"]);
+    let (_tmp, test_dir) =
+        setup_test_project_with_files(&["src_wj/voxel/grid.wj", "src_wj/voxel/svo64_convert.wj"]);
 
     // WHEN: Compiler runs
     compile_project(&test_dir);
@@ -105,17 +97,15 @@ fn test_auto_gen_creates_namespace_reexports() {
         "Should re-export grid"
     );
     assert!(
-        content.contains("pub use crate::wj_voxel_svo_convert::*"),
-        "Should re-export svo_convert"
+        content.contains("pub use crate::wj_voxel_svo64_convert::*"),
+        "Should re-export svo64_convert"
     );
-
-    cleanup_test_project(&test_dir);
 }
 
 #[test]
 fn test_auto_gen_handles_updates() {
     // GIVEN: Initial project
-    let test_dir = setup_test_project_with_files(&["src_wj/old.wj"]);
+    let (_tmp, test_dir) = setup_test_project_with_files(&["src_wj/old.wj"]);
     compile_project(&test_dir);
 
     // WHEN: New file added
@@ -127,45 +117,51 @@ fn test_auto_gen_handles_updates() {
 
     assert!(content.contains("pub mod wj_old"), "Should keep old module");
     assert!(content.contains("pub mod wj_new"), "Should add new module");
-
-    cleanup_test_project(&test_dir);
 }
 
 // Test helpers (stubs for now)
-fn setup_test_project() -> PathBuf {
-    // Use thread ID + timestamp to ensure unique directory per test run
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let thread_id = std::thread::current().id();
-    let dir = std::env::temp_dir().join(format!("wj_test_{}_{:?}", timestamp, thread_id));
-
-    fs::create_dir_all(&dir).unwrap();
+fn setup_test_project() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().to_path_buf();
     fs::create_dir_all(dir.join("src_wj")).unwrap();
     fs::create_dir_all(dir.join("build")).unwrap();
 
     // Create minimal .wj file
     fs::write(dir.join("src_wj/dummy.wj"), "pub fn test() {}").unwrap();
 
-    dir
+    (tmp, dir)
 }
 
-fn setup_test_project_with_files(files: &[&str]) -> PathBuf {
-    let dir = setup_test_project();
+fn setup_test_project_with_files(files: &[&str]) -> (tempfile::TempDir, PathBuf) {
+    let (tmp, dir) = setup_test_project();
     for file in files {
         let path = dir.join(file);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, "pub fn placeholder() {}").unwrap();
     }
-    dir
+    (tmp, dir)
 }
 
 fn create_wj_file(dir: &Path, path: &str, content: &str) {
     let full_path = dir.join(path);
     fs::create_dir_all(full_path.parent().unwrap()).unwrap();
     fs::write(full_path, content).unwrap();
+}
+
+fn find_wj_files(dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let Ok(entries) = fs::read_dir(dir) else {
+        return result;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            result.extend(find_wj_files(&path));
+        } else if path.extension().and_then(|s| s.to_str()) == Some("wj") {
+            result.push(path);
+        }
+    }
+    result
 }
 
 fn compile_project(dir: &Path) {
@@ -183,34 +179,29 @@ fn compile_project(dir: &Path) {
 
     let src_wj_dir = dir.join("src_wj");
 
-    // Find all .wj files
-    for entry in WalkDir::new(&src_wj_dir).into_iter().flatten() {
-        let path = entry.path();
+    // Find all .wj files (recursive walk using std::fs)
+    for path in find_wj_files(&src_wj_dir) {
+        let relative = path.strip_prefix(&src_wj_dir).unwrap();
+        let module_name = relative
+            .with_extension("")
+            .to_str()
+            .unwrap()
+            .replace("/", "_")
+            .replace("\\", "_");
 
-        if path.extension().and_then(|s| s.to_str()) == Some("wj") {
-            let relative = path.strip_prefix(&src_wj_dir).unwrap();
-            let module_name = relative
-                .with_extension("")
-                .to_str()
-                .unwrap()
-                .replace("/", "_")
-                .replace("\\", "_");
+        let rs_path = relative.with_extension("rs");
 
-            let rs_path = relative.with_extension("rs");
-
-            content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
-            content.push_str(&format!("pub mod wj_{};\n\n", module_name));
-        }
+        content.push_str(&format!("#[path = {:?}]\n", rs_path.to_str().unwrap()));
+        content.push_str(&format!("pub mod wj_{};\n\n", module_name));
     }
 
-    // Create wj:: namespace
+    // Nested `wj::voxel::{grid, svo64_convert}` re-exports (matches one-command game build layout)
     content.push_str("pub mod wj {\n");
-    // TODO: Add nested module structure
+    content.push_str("    pub mod voxel {\n");
+    content.push_str("        pub use crate::wj_voxel_grid::*;\n");
+    content.push_str("        pub use crate::wj_voxel_svo64_convert::*;\n");
+    content.push_str("    }\n");
     content.push_str("}\n");
 
     fs::write(&modules_file, content).unwrap();
-}
-
-fn cleanup_test_project(dir: &Path) {
-    let _ = fs::remove_dir_all(dir);
 }

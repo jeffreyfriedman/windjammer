@@ -13,7 +13,7 @@ fn get_value(opt: Option<i32>) -> i32 {
     value * 2
 }
 
-fn process_option(opt: Option<String>) -> String {
+fn process_option(opt: Option<string>) -> string {
     match opt {
         Some(s) => s,
         None => return,  // Early return with no value
