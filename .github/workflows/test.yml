@@ -181,17 +181,19 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Free disk space (Windows)
+      - name: Optimize Windows runner
         if: runner.os == 'Windows'
-        shell: bash
+        shell: powershell
         run: |
-          echo "Disk space before cleanup:"
-          df -h /
-          rm -rf /c/Users/runneradmin/.dotnet || true
-          rm -rf /c/Users/runneradmin/.cargo/registry/cache || true
-          rm -rf "$ANDROID_HOME" || true
-          echo "Disk space after cleanup:"
-          df -h /
+          # Exclude build directories from Windows Defender real-time scanning
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\target"
+          Add-MpPreference -ExclusionPath "$env:TEMP"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
+          Add-MpPreference -ExclusionProcess "rustc.exe"
+          Add-MpPreference -ExclusionProcess "cargo.exe"
+          # Free disk space
+          Remove-Item -Recurse -Force "$env:USERPROFILE\.dotnet" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$env:ANDROID_HOME" -ErrorAction SilentlyContinue
       
       - name: Build tests (release mode)
         shell: bash
