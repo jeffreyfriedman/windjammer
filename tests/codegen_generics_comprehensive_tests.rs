@@ -7,69 +7,12 @@
 //! - Where clauses
 //! - Generic structs and functions
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-fn compile_and_get_rust(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    // TDD FIX: Use pre-compiled binary instead of `cargo run` to avoid race conditions
-    // When tests run in parallel, `cargo run` causes multiple processes to compile
-    // the wj binary simultaneously, leading to flaky test failures.
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read generated file: {}", e))
-}
-
-fn compile_and_verify(code: &str) -> (bool, String, String) {
-    match compile_and_get_rust(code) {
-        Ok(generated) => {
-            let temp_dir = TempDir::new().expect("Failed to create temp dir");
-            let rs_path = temp_dir.path().join("test.rs");
-            fs::write(&rs_path, &generated).expect("Failed to write rs file");
-
-            let rustc = Command::new("rustc")
-                .arg("--crate-type=lib")
-                .arg(&rs_path)
-                .arg("-o")
-                .arg(temp_dir.path().join("test.rlib"))
-                .output();
-
-            match rustc {
-                Ok(output) => {
-                    let err = String::from_utf8_lossy(&output.stderr).to_string();
-                    (output.status.success(), generated, err)
-                }
-                Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-            }
-        }
-        Err(e) => (false, String::new(), e),
-    }
-}
 
 // ============================================================================
 // GENERIC FUNCTIONS
@@ -83,7 +26,7 @@ pub fn identity<T>(x: T) -> T {
     x
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Generic function should compile. Error: {}", err);
 }
 
@@ -95,7 +38,7 @@ pub fn pair<A, B>(a: A, b: B) -> (A, B) {
     (a, b)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Multiple generic params should compile. Error: {}",
@@ -126,7 +69,7 @@ impl<T> Container<T> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Generic struct should compile. Error: {}", err);
 }
 
@@ -146,7 +89,7 @@ impl<A, B> Pair<A, B> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(
         success,
         "Generic struct multiple should compile. Error: {}",
@@ -166,7 +109,7 @@ pub fn duplicate<T: Clone>(item: T) -> (T, T) {
     (item.clone(), item)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Clone bound should compile. Error: {}", err);
 }
 
@@ -181,7 +124,7 @@ pub fn clone_twice<T: Clone>(item: T) -> (T, T) {
     (a, b)
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Multiple bounds should compile. Error: {}", err);
 }
 
@@ -193,7 +136,7 @@ pub fn get_default<T: Default>() -> T {
     T::default()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Default bound should compile. Error: {}", err);
 }
 
@@ -218,7 +161,7 @@ pub fn is_just<T>(m: &Maybe<T>) -> bool {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Generic enum should compile. Error: {}", err);
 }
 
@@ -246,7 +189,7 @@ impl Counter {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Simple impl should compile. Error: {}", err);
 }
 
@@ -270,7 +213,7 @@ impl<T: Clone> Container<T> {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Generic method should compile. Error: {}", err);
 }
 
@@ -286,7 +229,7 @@ pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
     items.first().cloned()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Vec generic should compile. Error: {}", err);
 }
 
@@ -302,7 +245,7 @@ pub fn is_some<T>(opt: &Option<T>) -> bool {
     }
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Option generic should compile. Error: {}", err);
 }
 
@@ -319,7 +262,7 @@ pub fn count_items(items: &Vec<i32>) -> usize {
     items.iter().count()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Iterator usage should compile. Error: {}", err);
 }
 
@@ -336,6 +279,6 @@ pub fn get_first(items: &Vec<i32>) -> Option<&i32> {
     items.first()
 }
 "#;
-    let (success, _generated, err) = compile_and_verify(code);
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
     assert!(success, "Reference return should compile. Error: {}", err);
 }

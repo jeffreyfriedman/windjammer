@@ -14,41 +14,8 @@
 // Add Token::Type handling in parse_item for module-level type aliases.
 // Syntax: pub type Name = Type;
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_compiler())
-        .args([
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    fs::read_to_string(&generated_path).map_err(|e| format!("Failed to read: {}", e))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_pub_type_alias_minimal() {
@@ -61,7 +28,7 @@ pub struct Objective {
 pub type QuestObjective = Objective
 "#;
 
-    let result = compile_to_rust(source);
+    let result = test_utils::compile_single_result(source);
     assert!(
         result.is_ok(),
         "pub type alias should compile. Error: {:?}",
@@ -87,7 +54,7 @@ pub struct Foo {
 type Bar = Foo
 "#;
 
-    let result = compile_to_rust(source);
+    let result = test_utils::compile_single_result(source);
     assert!(
         result.is_ok(),
         "type alias without pub should compile. Error: {:?}",
@@ -124,7 +91,7 @@ impl Objective {
 pub type QuestObjective = Objective
 "#;
 
-    let result = compile_to_rust(source);
+    let result = test_utils::compile_single_result(source);
     assert!(
         result.is_ok(),
         "quest/objective.wj pattern should compile. Error: {:?}",

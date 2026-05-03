@@ -8,15 +8,12 @@ use std::process::Command;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore] // TODO: Fix type registry import generation
 fn test_type_registry_generates_correct_imports() {
-    let wj_compiler = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     // Create a temporary directory structure
-    let temp_dir =
-        std::env::temp_dir().join(format!("wj_test_type_registry_{}", std::process::id()));
-    let _ = fs::remove_dir_all(&temp_dir);
-    fs::create_dir_all(&temp_dir).unwrap();
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().to_path_buf();
 
     let math_dir = temp_dir.join("math");
     fs::create_dir_all(&math_dir).unwrap();
@@ -74,19 +71,18 @@ pub fn main() {
     // Read the generated main.rs
     let main_rs = fs::read_to_string(output_dir.join("main.rs")).unwrap();
 
-    // Verify the import was fixed to use super::vec2::Vec2
+    // TypeRegistry rewrites the module import to a crate path (sibling to math/vec2.wj)
     assert!(
-        main_rs.contains("use super::vec2::Vec2"),
-        "Expected 'use super::vec2::Vec2' but got:\n{}",
+        main_rs.contains("use crate::math::vec2::Vec2;")
+            || main_rs.contains("use crate::math::vec2::Vec2")
+            || main_rs.contains("use super::vec2::Vec2"),
+        "Expected crate:: or super:: path to vec2::Vec2, got:\n{}",
         main_rs
     );
 
-    // Should NOT contain the incorrect import
     assert!(
-        !main_rs.contains("use math::Vec2;") || main_rs.contains("use super::vec2::Vec2"),
-        "Import was not corrected by TypeRegistry"
+        !main_rs.contains("use math::Vec2;"),
+        "Raw platform import should be rewritten, got:\n{}",
+        main_rs
     );
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 }

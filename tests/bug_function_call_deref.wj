@@ -1,12 +1,12 @@
 // TDD: Bug #7 - Function call arguments need auto-deref
 // When calling functions with borrowed enum match bindings
 
-fn process(name: String, value: i32) {
+fn process(name: string, value: i32) {
     println!("Name: {}, Value: {}", name, value);
 }
 
 enum Action {
-    Update(String, i32),
+    Update(string, i32),
 }
 
 impl Action {

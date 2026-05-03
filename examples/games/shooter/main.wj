@@ -379,11 +379,11 @@ impl ShooterGame {
                     if self.player_health > 100 {
                         self.player_health = 100
                     }
-                    println("+ Health! (" + self.player_health.to_string() + "/100)")
+                    println("+ Health! (" + format!("{}", self.player_health) + "/100)")
                 } else if powerup.powerup_type == 1 {
                     // Ammo
                     self.ammo += 10
-                    println("+ Ammo! (" + self.ammo.to_string() + ")")
+                    println("+ Ammo! (" + format!("{}", self.ammo) + ")")
                 } else if powerup.powerup_type == 2 {
                     // Speed boost
                     self.speed_boost_timer = 5.0
@@ -511,7 +511,7 @@ impl ShooterGame {
                     if enemy.health <= 0 {
                         enemy.state = 3  // Dead
                         self.score += 100
-                        println("Enemy killed! Score: " + self.score.to_string())
+                        println("Enemy killed! Score: " + format!("{}", self.score))
                     }
                     hit_enemy = true
                     break
@@ -571,7 +571,7 @@ impl ShooterGame {
             lifetime: 5.0,
         })
         
-        println("BANG! Fired weapon " + self.weapon.to_string())
+        println("BANG! Fired weapon " + format!("{}", self.weapon))
     }
 }
 
@@ -665,7 +665,7 @@ fn update(game: ShooterGame, delta: f32, input: Input) {
     
     // Check win condition
     if game.enemies.len() == 0 {
-        println("YOU WIN! Score: " + game.score.to_string())
+        println("YOU WIN! Score: " + format!("{}", game.score))
         println("Press ESC to exit")
     }
 }
@@ -847,7 +847,7 @@ fn render(game: ShooterGame, renderer: Renderer3D, camera: Camera3D) {
 
 @cleanup
 fn cleanup(game: ShooterGame) {
-    println("Final Score: " + game.score.to_string())
+    println("Final Score: " + format!("{}", game.score))
     println("Thanks for playing!")
 }
 

@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Sibling Module Imports (Nested Import Bug Part 2)
 ///
@@ -23,12 +26,7 @@ use anyhow::Result;
 ///
 /// This is the HARDEST problem - nested module import resolution within subdirectories.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -38,7 +36,11 @@ fn test_sibling_module_import() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_sibling_import_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_sibling_import_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj/rendering directory
@@ -112,7 +114,7 @@ version = "0.1.0"
     )?;
 
     // Build the library
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -145,7 +147,6 @@ version = "0.1.0"
         && !sprite_rs_content.contains("crate::rendering::texture::Texture");
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     assert!(
         !has_bare_import,

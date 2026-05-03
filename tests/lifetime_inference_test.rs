@@ -13,42 +13,8 @@
 //!   Windjammer: fn longest(a: &String, b: &String) -> &String
 //!   Should generate: fn longest<'a>(a: &'a String, b: &'a String) -> &'a String
 
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn compile_wj(source: &str) -> String {
-    let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let tmp_dir =
-        std::env::temp_dir().join(format!("wj_lifetime_test_{}_{}", std::process::id(), id));
-    let _ = std::fs::remove_dir_all(&tmp_dir);
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-
-    let source_path = tmp_dir.join("test.wj");
-    std::fs::write(&source_path, source).unwrap();
-
-    let output_dir = tmp_dir.join("output");
-    let _output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            source_path.to_str().unwrap(),
-            "--target",
-            "rust",
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("failed to run wj");
-
-    let rs_path = output_dir.join("test.rs");
-    let generated = std::fs::read_to_string(&rs_path)
-        .unwrap_or_else(|_| panic!("Failed to read generated Rust at {:?}", rs_path));
-
-    let _ = std::fs::remove_dir_all(&tmp_dir);
-    generated
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_two_ref_params_with_ref_return_gets_lifetime() {
@@ -70,7 +36,7 @@ fn main() {
     println!("{}", result)
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Should have lifetime parameter <'a>
     assert!(
@@ -101,7 +67,7 @@ fn main() {
     println!("{}", c)
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Should NOT have explicit lifetime (Rust elision handles it)
     // Note: it's OK if it does have a lifetime, but it shouldn't be required
@@ -139,7 +105,7 @@ fn main() {
     println!("done")
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Self method: Rust elision should handle it, no explicit lifetime needed
     assert!(
@@ -169,7 +135,7 @@ fn main() {
     }
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // Should have lifetime because of two ref params + ref in return type
     assert!(generated.contains("<'a>"),
@@ -190,7 +156,7 @@ fn main() {
     println!("{}", compare(&a, &b))
 }
 "#;
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
 
     // No reference return: no lifetime needed
     assert!(

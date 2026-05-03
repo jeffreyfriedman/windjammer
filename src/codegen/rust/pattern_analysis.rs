@@ -45,9 +45,9 @@ pub fn pattern_has_string_literal(pattern: &Pattern) -> bool {
 pub fn pattern_extracts_value(pattern: &Pattern) -> bool {
     match pattern {
         Pattern::Wildcard | Pattern::Literal(_) => false,
-        Pattern::Identifier(_) => true, // Binding moves the value
+        Pattern::Identifier(_) | Pattern::MutBinding(_) => true,
         Pattern::Reference(inner) => pattern_extracts_value(inner),
-        Pattern::Ref(_) | Pattern::RefMut(_) => false, // ref/ref mut borrow, don't move
+        Pattern::Ref(_) | Pattern::RefMut(_) => false,
         Pattern::Tuple(patterns) => patterns.iter().any(pattern_extracts_value),
         Pattern::EnumVariant(_, binding) => match binding {
             EnumPatternBinding::None | EnumPatternBinding::Wildcard => false,

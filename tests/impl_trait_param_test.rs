@@ -9,52 +9,8 @@
 /// - Inside Vec/Option: `Vec<trait Foo>` -> `Vec<Box<dyn Foo>>` (dynamic dispatch)
 /// - Behind reference: `&trait Foo` -> `&dyn Foo`
 /// - Inside Box: `Box<trait Foo>` -> `Box<dyn Foo>`
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-
-fn compile_wj_source(test_name: &str, source: &str) -> String {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
-
-    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join(format!("test_{}", test_name));
-
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let test_file = test_dir.join(format!("{}.wj", test_name));
-    fs::write(&test_file, source).unwrap();
-
-    let output = Command::new(&wj_binary)
-        .current_dir(&test_dir)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to execute wj build");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    println!("STDOUT:\n{}", stdout);
-    println!("STDERR:\n{}", stderr);
-
-    assert!(
-        output.status.success(),
-        "Windjammer compilation failed:\nSTDOUT:\n{}\nSTDERR:\n{}",
-        stdout,
-        stderr
-    );
-
-    let rust_file = test_dir.join("build").join(format!("{}.rs", test_name));
-    let rust_code = fs::read_to_string(&rust_file)
-        .unwrap_or_else(|e| panic!("Failed to read generated Rust file {:?}: {}", rust_file, e));
-    println!("Generated Rust:\n{}", rust_code);
-    rust_code
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -87,7 +43,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_param_basic", source);
+    let rust_code = test_utils::compile_single(source);
 
     // Should generate `impl Describable` (static dispatch) in the parameter type
     assert!(
@@ -132,7 +88,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_return", source);
+    let rust_code = test_utils::compile_single(source);
 
     // Return position should generate `-> impl Greeter`
     assert!(
@@ -175,7 +131,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_in_vec", source);
+    let rust_code = test_utils::compile_single(source);
 
     // Vec<trait Describable> -> Vec<Box<dyn Describable>> (dynamic dispatch, boxed)
     assert!(
@@ -211,7 +167,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_behind_ref", source);
+    let rust_code = test_utils::compile_single(source);
 
     // &trait Describable -> &dyn Describable
     assert!(
@@ -247,7 +203,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_in_box", source);
+    let rust_code = test_utils::compile_single(source);
 
     // Box<trait Describable> -> Box<dyn Describable>
     assert!(
@@ -286,7 +242,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source("trait_kw_ownership", source);
+    let rust_code = test_utils::compile_single(source);
 
     // reset() mutates self, so item should be &mut impl Resettable
     assert!(

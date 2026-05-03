@@ -1,4 +1,6 @@
-use anyhow::Result;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 /// TDD Test: TryOp (?) Ownership Inference
 ///
 /// PROBLEM: When a parameter is used inside a `?` (try/error propagation) expression,
@@ -21,55 +23,8 @@ use anyhow::Result;
 ///
 /// FIX: Add TryOp handling to all walking functions in the analyzer so that
 /// expressions wrapped in `?` are still analyzed for ownership inference.
-fn compile_wj_to_rust(source: &str) -> Result<String> {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::process::Command;
-
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_tryop_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir)?;
-
-    let src_dir = temp_dir.join("src_wj");
-    fs::create_dir_all(&src_dir)?;
-
-    fs::write(src_dir.join("main.wj"), source)?;
-
-    fs::write(
-        temp_dir.join("wj.toml"),
-        "[package]\nname = \"tryop_test\"\nversion = \"0.1.0\"\n",
-    )?;
-
-    let wj_compiler = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
-    let output_dir = temp_dir.join("out");
-    fs::create_dir_all(&output_dir)?;
-
-    let output = Command::new(&wj_compiler)
-        .arg("build")
-        .arg(&src_dir)
-        .arg("-o")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Compilation failed:\n{}", stderr);
-    }
-
-    let main_rs = output_dir.join("main.rs");
-    let content = fs::read_to_string(&main_rs)?;
-
-    let _ = fs::remove_dir_all(&temp_dir);
-
-    Ok(content)
-}
-
 #[test]
-fn test_tryop_method_call_keeps_param_owned() -> Result<()> {
+fn test_tryop_method_call_keeps_param_owned() {
     // loader.load(...)? — .load() is potentially mutating, so loader should stay Owned
     let source = r#"
 struct AssetLoader {
@@ -92,7 +47,7 @@ fn load_game(loader: AssetLoader) -> Result<String, String> {
 }
 "#;
 
-    let rust_code = compile_wj_to_rust(source)?;
+    let rust_code = test_utils::compile_single(source);
 
     // The parameter should NOT be borrowed because .load() is potentially mutating
     // and it's inside a TryOp expression
@@ -114,12 +69,10 @@ fn load_game(loader: AssetLoader) -> Result<String, String> {
          Generated:\n{}",
         rust_code
     );
-
-    Ok(())
 }
 
 #[test]
-fn test_tryop_passed_as_argument_keeps_param_owned() -> Result<()> {
+fn test_tryop_passed_as_argument_keeps_param_owned() {
     // process(data)? — data is passed as argument to a function that returns Result
     // Use a non-String, non-Copy custom type to properly test TryOp handling
     // Payload has a Vec<i32> field so it's definitely not Copy
@@ -138,7 +91,7 @@ fn run(data: Payload) -> Result<i32, String> {
 }
 "#;
 
-    let rust_code = compile_wj_to_rust(source)?;
+    let rust_code = test_utils::compile_single(source);
 
     // data is passed as an argument to process() inside a TryOp,
     // so it should stay owned (consumed by the call)
@@ -148,6 +101,4 @@ fn run(data: Payload) -> Result<i32, String> {
          Generated:\n{}",
         rust_code
     );
-
-    Ok(())
 }

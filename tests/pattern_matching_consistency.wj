@@ -32,7 +32,7 @@ enum Color {
     Green,
     Blue,
     Rgb(i32, i32, i32),
-    Named(String),
+    Named(string),
 }
 
 fn test_match_patterns(color: Color) -> i32 {
@@ -82,7 +82,7 @@ enum Result<T, E> {
     Err(E),
 }
 
-fn test_nested_patterns(result: Result<Option<i32>, String>) -> i32 {
+fn test_nested_patterns(result: Result<Option<i32>, string>) -> i32 {
     match result {
         Result::Ok(Some(value)) => {
             return value
@@ -184,7 +184,7 @@ fn main() {
     
     // Test 5: Nested patterns
     let result7 = test_nested_patterns(Result::Ok(Some(42)))
-    let result8 = test_nested_patterns(Result::Err("error".to_string()))
+    let result8 = test_nested_patterns(Result::Err("error"))
     
     // Test 7: Struct patterns
     let point = Point { x: 10, y: 20 }

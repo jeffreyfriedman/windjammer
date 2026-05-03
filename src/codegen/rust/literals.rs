@@ -9,13 +9,16 @@ use crate::parser::Literal;
 pub fn generate_literal(lit: &Literal) -> String {
     match lit {
         Literal::Int(i) => i.to_string(),
+        Literal::IntSuffixed(i, suffix) => format!("{}_{}", i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();
-            // Ensure float literals have a decimal point
+            // Windjammer convention: unconstrained float literals default to f32
+            // (game/graphics standard — most APIs use f32).
+            // Context-sensitive inference in expression_generation.rs may override this.
             if !s.contains('.') && !s.contains('e') && !s.contains('E') {
-                format!("{}.0", s)
+                format!("{}.0_f32", s)
             } else {
-                s
+                format!("{}_f32", s)
             }
         }
         Literal::String(s) => format!("\"{}\"", escape_string(s)),
@@ -65,13 +68,12 @@ mod tests {
 
     #[test]
     fn test_float_literal() {
-        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5");
-        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0");
-        // Integer-like floats should have .0
+        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5_f32");
+        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0_f32");
         let result = generate_literal(&Literal::Float(10.0));
         assert!(
-            result.contains('.'),
-            "Float literal should have decimal point: {}",
+            result.contains('.') && result.contains("f32"),
+            "Float literal should have decimal point and f32 suffix: {}",
             result
         );
     }

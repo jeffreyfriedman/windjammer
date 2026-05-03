@@ -2,7 +2,7 @@
 
 // Define a trait for types that can be displayed
 trait Display {
-    fn display(&self) -> String
+    fn display(&self) -> string
 }
 
 // Define a trait for types that can be compared
@@ -12,12 +12,12 @@ trait Comparable {
 
 // A struct that implements both traits
 struct Person {
-    name: String,
+    name: string,
     age: int
 }
 
 impl Display for Person {
-    fn display(&self) -> String {
+    fn display(&self) -> string {
         "Person { name: ${self.name}, age: ${self.age} }"
     }
 }
@@ -49,8 +49,8 @@ fn print_and_compare<T: Display + Comparable>(a: &T, b: &T) {
 }
 
 fn main() {
-    let alice = Person { name: "Alice".to_string(), age: 30 }
-    let bob = Person { name: "Bob".to_string(), age: 25 }
+    let alice = Person { name: "Alice", age: 30 }
+    let bob = Person { name: "Bob", age: 25 }
     
     // Use trait methods directly
     println!("Alice: ${alice.display()}")

@@ -1,15 +1,13 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 /// TDD: Test that format! macro is passed through correctly to Rust
 ///
 /// The format! macro is a Rust macro that should be passed through as-is.
 /// Windjammer doesn't need to parse or understand it, just pass it to rustc.
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -26,7 +24,7 @@ fn test_format() -> String {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),
@@ -76,7 +74,7 @@ fn test_format_in_call() {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),

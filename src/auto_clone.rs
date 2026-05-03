@@ -399,12 +399,11 @@ impl AutoCloneAnalysis {
                     pattern: Pattern::Identifier(var_name),
                     value,
                     ..
-                } => {
+                }
                     // Check if value is a string literal or a match/if that returns string literals
-                    if Self::expr_returns_string_literal(value) {
+                    if Self::expr_returns_string_literal(value) => {
                         self.string_literal_vars.insert(var_name.clone());
                     }
-                }
                 Statement::Let { .. } => {
                     // Non-identifier patterns (tuple, wildcard, etc.)
                 }
@@ -485,11 +484,13 @@ mod tests {
             is_extern: false,
             parameters: vec![],
             return_type: None,
+            return_decorators: Vec::new(),
             type_params: vec![],
             where_clause: vec![],
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
             body: vec![
                 test_alloc_stmt(Statement::Let {
@@ -570,11 +571,13 @@ mod tests {
             is_extern: false,
             parameters: vec![],
             return_type: None,
+            return_decorators: Vec::new(),
             type_params: vec![],
             where_clause: vec![],
             decorators: vec![],
             is_async: false,
             parent_type: None,
+            impl_trait: None,
             doc_comment: None,
             body: vec![
                 test_alloc_stmt(Statement::Let {

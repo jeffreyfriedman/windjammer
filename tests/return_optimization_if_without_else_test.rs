@@ -30,47 +30,8 @@
 //!
 //! Fix: Preserve explicit `return` when inside if/if-let without corresponding else.
 
-use anyhow::Result;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_source(source: &str) -> Result<String> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_test_{}", timestamp));
-    fs::create_dir_all(&temp_dir)?;
-
-    let source_file = temp_dir.join("test.wj");
-    fs::write(&source_file, source)?;
-
-    let output_dir = temp_dir.join("output");
-    let wj = get_wj_compiler();
-    let output = Command::new(wj)
-        .arg("build")
-        .arg(&source_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo") // Skip cargo build to avoid manifest issues
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Compilation failed:\n{}", stderr);
-    }
-
-    let rust_code = fs::read_to_string(output_dir.join("test.rs"))?;
-    fs::remove_dir_all(&temp_dir).ok();
-
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -85,7 +46,7 @@ pub fn check_condition(x: i32) -> bool {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return true", not just "true"
     assert!(
@@ -108,7 +69,7 @@ pub fn get_first(items: Vec<i32>) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return first", not just "first"
     assert!(
@@ -133,7 +94,7 @@ pub fn nested_check(a: bool, b: bool) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return 1", not just "1"
     assert!(
@@ -157,7 +118,7 @@ pub fn with_else(x: i32) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: This could either have "return" or implicit returns
     // As long as it compiles to valid Rust, we're good
@@ -179,7 +140,7 @@ pub fn early_return(x: i32) -> i32 {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: This test just checks compilation succeeds
     // (Whether return is optimized away or not doesn't matter for correctness)
@@ -214,7 +175,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = compile_wj_source(source).expect("Compilation should succeed");
+    let rust_code = test_utils::compile_single_result(source).expect("Compilation should succeed");
 
     // Verify: Generated Rust should have "return frame.index", not just "frame.index"
     assert!(

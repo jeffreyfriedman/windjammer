@@ -55,14 +55,19 @@ fn main() {
     println!("Generated Rust:\n{}", rust_code);
 
     // Should NOT have semicolons after the values (expression context)
+    // Float/int inference may add suffixes like 42_i32
+    let has_value_without_semicolon = rust_code.contains("42\n")
+        || rust_code.contains("42 }")
+        || rust_code.contains("42_i32\n")
+        || rust_code.contains("42_i32\n")
+        || rust_code.contains("        },");
     assert!(
-        rust_code.contains("42\n")
-            || rust_code.contains("42 }")
-            || rust_code.contains("        },"),
-        "Match arm in expression context should not have semicolon after 42"
+        has_value_without_semicolon,
+        "Match arm in expression context should not have semicolon after 42. Got:\n{}",
+        rust_code
     );
     assert!(
-        !rust_code.contains("42;\n"),
+        !rust_code.contains("42;") && !rust_code.contains("42_i32;"),
         "Match arm in expression context should NOT have semicolon:\n{}",
         rust_code
     );
@@ -120,9 +125,11 @@ fn main() {
     println!("Generated Rust:\n{}", rust_code);
 
     // SHOULD have semicolons (statement context, void return)
+    // Int inference may add _i32 suffix
     assert!(
-        rust_code.contains("do_something(42);"),
-        "Match arm in statement context should have semicolon"
+        rust_code.contains("do_something(42);") || rust_code.contains("do_something(42_i32);"),
+        "Match arm in statement context should have semicolon. Got:\n{}",
+        rust_code
     );
 
     println!("✅ Match arms in statement context have semicolons");

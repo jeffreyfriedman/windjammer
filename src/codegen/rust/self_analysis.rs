@@ -183,8 +183,10 @@ pub fn statement_accesses_fields(ctx: &AnalysisContext, stmt: &Statement) -> boo
 pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool {
     match stmt {
         Statement::Assignment { target, .. } => {
-            // Check if we're assigning to a field: self.field = ...
+            // Check if we're assigning to a field: self.field = ..., self.field[i] = ..., self.a.b = ...
+            // Compound assignment (+=, -=, etc.) also mutates the target
             expression_is_field_access(ctx, target)
+                || expression_is_self_field_index_access(ctx, target)
         }
         Statement::Expression { expr, .. } => {
             // Check for mutating method calls on fields: self.field.push(...)
@@ -237,9 +239,20 @@ pub fn statement_modifies_variable(stmt: &Statement, var_name: &str) -> bool {
                         .any(|s| statement_modifies_variable(s, var_name))
                 })
         }
-        Statement::While { body, .. } | Statement::For { body, .. } => body
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
             .iter()
             .any(|s| statement_modifies_variable(s, var_name)),
+        Statement::Match { arms, .. } => arms.iter().any(|arm| {
+            if let Expression::Block { statements, .. } = arm.body {
+                statements
+                    .iter()
+                    .any(|s| statement_modifies_variable(s, var_name))
+            } else {
+                false
+            }
+        }),
         _ => false,
     }
 }
@@ -265,35 +278,7 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
             statements.iter().any(|s| statement_modifies_self(s))
         }
         Expression::MethodCall { object, method, .. } => {
-            // Check if this is a mutating method call on self.field
-            // Common mutating methods: push, pop, remove, insert, clear, etc.
-            // THE WINDJAMMER WAY: Comprehensive mutation detection
-            // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
-            let is_mutating_method = method.ends_with("_mut")
-                || matches!(
-                    method.as_str(),
-                    "push"
-                        | "pop"
-                        | "remove"
-                        | "insert"
-                        | "clear"
-                        | "append"
-                        | "extend"
-                        | "drain"
-                        | "truncate"
-                        | "resize"
-                        | "swap_remove"
-                        | "retain"
-                        | "sort"
-                        | "sort_by"
-                        | "sort_by_key"
-                        | "sort_unstable"
-                        | "sort_unstable_by"
-                        | "dedup"
-                        | "reverse"
-                        | "swap"
-                        | "update"
-                );
+            let is_mutating_method = super::stdlib_method_traits::method_mutates_receiver(method);
 
             if is_mutating_method {
                 // Check if the object is self.field
@@ -383,16 +368,29 @@ pub fn expression_accesses_fields(ctx: &AnalysisContext, expr: &Expression) -> b
     }
 }
 
-/// Check if an expression is a field access (self.field or just field)
+/// Check if an expression is a field access (self.field, self.field.subfield, or bare field)
 pub fn expression_is_field_access(ctx: &AnalysisContext, expr: &Expression) -> bool {
     match expr {
         Expression::Identifier { name, .. } => ctx.current_struct_fields.contains(name),
         Expression::FieldAccess { object, .. } => {
-            if let Expression::Identifier { name: obj_name, .. } = &**object {
-                obj_name == "self"
-            } else {
-                false
+            match &**object {
+                Expression::Identifier { name: obj_name, .. } => obj_name == "self",
+                // Nested: self.field.subfield or self.field[i].subfield
+                Expression::FieldAccess { .. } => expression_is_field_access(ctx, object),
+                Expression::Index { .. } => expression_is_self_field_index_access(ctx, object),
+                _ => false,
             }
+        }
+        _ => false,
+    }
+}
+
+/// Check if an expression is an index access on a self field (self.field[i] or self.field[i][j])
+fn expression_is_self_field_index_access(ctx: &AnalysisContext, expr: &Expression) -> bool {
+    match expr {
+        Expression::Index { object, .. } => {
+            expression_is_field_access(ctx, object)
+                || expression_is_self_field_index_access(ctx, object)
         }
         _ => false,
     }
@@ -406,36 +404,11 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
             statements.iter().any(|s| statement_mutates_fields(ctx, s))
         }
         Expression::MethodCall { object, method, .. } => {
-            // Check if this is a mutating method call on a field: self.field.push(...)
-            if expression_is_field_access(ctx, object) {
-                // Methods ending in _mut are always mutating (values_mut, iter_mut, etc.)
-                method.ends_with("_mut")
-                    || matches!(
-                        method.as_str(),
-                        "push"
-                            | "pop"
-                            | "insert"
-                            | "remove"
-                            | "clear"
-                            | "append"
-                            | "extend"
-                            | "push_str"
-                            | "truncate"
-                            | "drain"
-                            | "retain"
-                            | "sort"
-                            | "sort_by"
-                            | "sort_by_key"
-                            | "sort_unstable"
-                            | "sort_unstable_by"
-                            | "reverse"
-                            | "dedup"
-                            | "swap"
-                            | "fill"
-                            | "rotate_left"
-                            | "rotate_right"
-                            | "update"
-                    )
+            // Check if this is a mutating method call on a field: self.field.push(...) or self.field[i].push(...)
+            if expression_is_field_access(ctx, object)
+                || expression_is_self_field_index_access(ctx, object)
+            {
+                super::stdlib_method_traits::method_mutates_receiver(method)
             } else {
                 false
             }
@@ -456,6 +429,13 @@ pub fn expression_references_variable_or_field(expr: &Expression, var_name: &str
                 expression_references_variable_or_field(object, var_name)
             }
         }
+        // TDD FIX: Dereference expressions (*val = ...) also reference the variable
+        // For: *val = value, need to detect that 'val' is being mutated
+        Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } => expression_references_variable_or_field(operand, var_name),
         _ => false,
     }
 }

@@ -53,7 +53,7 @@ fn main() {
     }
     
     // String interpolation
-    println!("\n=== String Interpolation ===")
+    println!("\n=== string Interpolation ===")
     let name = "World"
     let count = 42
     println!("Hello, ${name}! Count: ${count}")
