@@ -44,6 +44,7 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_utils; // Syntax highlighting for error snippets
+pub mod type_classification;
 pub mod type_inference; // Expression-level float type inference
 pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
@@ -377,24 +378,7 @@ fn is_type_copy_quick(
         Type::Custom(name) => {
             copy_structs.contains(name)
                 || copy_enums.contains(name)
-                || matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
+                || windjammer::type_classification::is_copy_primitive(name.as_str())
         }
         _ => false,
     }

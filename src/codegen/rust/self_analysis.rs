@@ -11,6 +11,7 @@
 //
 // These functions are used by the ownership inference system to determine
 // whether methods need `&self`, `&mut self`, or `self` parameters.
+use crate::analyzer::{OwnershipMode, SignatureRegistry};
 use crate::parser::{Expression, FunctionDecl, Statement};
 use std::collections::HashSet;
 
@@ -87,10 +88,13 @@ pub fn function_returns_self_type(func: &FunctionDecl) -> bool {
     }
 }
 
-/// Check if a function modifies self (for self parameter inference)
-pub fn function_modifies_self(func: &FunctionDecl) -> bool {
+/// Check if a function modifies self (for self parameter inference).
+///
+/// Uses the `SignatureRegistry` to look up method signatures instead of
+/// maintaining a hardcoded list of known readonly methods.
+pub fn function_modifies_self(func: &FunctionDecl, registry: Option<&SignatureRegistry>) -> bool {
     for stmt in &func.body {
-        if statement_modifies_self(stmt) {
+        if statement_modifies_self(stmt, registry) {
             return true;
         }
     }
@@ -102,36 +106,33 @@ pub fn function_modifies_self(func: &FunctionDecl) -> bool {
 // =============================================================================
 
 /// Check if a statement modifies self
-pub fn statement_modifies_self(stmt: &Statement) -> bool {
+pub fn statement_modifies_self(stmt: &Statement, registry: Option<&SignatureRegistry>) -> bool {
     match stmt {
         Statement::Assignment { target, .. } => {
             // Check if target is self.field
             expression_is_self_field_modification(target)
         }
-        Statement::Expression { expr, .. } => {
-            // Check for mutating method calls like self.field.push()
-            expression_modifies_self(expr)
-        }
+        Statement::Expression { expr, .. } => expression_modifies_self(expr, registry),
         Statement::If {
             then_block,
             else_block,
             ..
         } => {
-            then_block.iter().any(|s| statement_modifies_self(s))
+            then_block
+                .iter()
+                .any(|s| statement_modifies_self(s, registry))
                 || else_block
                     .as_ref()
-                    .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s)))
+                    .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s, registry)))
         }
-        Statement::While { body, .. } => body.iter().any(|s| statement_modifies_self(s)),
+        Statement::While { body, .. } => body.iter().any(|s| statement_modifies_self(s, registry)),
         Statement::For { iterable, body, .. } => {
-            // Check BOTH iterable and body for self mutations
-            // e.g., `for x in self.field.values_mut()` requires &mut self
-            expression_modifies_self(iterable) || body.iter().any(|s| statement_modifies_self(s))
+            expression_modifies_self(iterable, registry)
+                || body.iter().any(|s| statement_modifies_self(s, registry))
         }
-        Statement::Match { arms, .. } => arms.iter().any(|arm| {
-            // Match arms have a body expression, check if it contains modifications
-            expression_modifies_self(arm.body)
-        }),
+        Statement::Match { arms, .. } => arms
+            .iter()
+            .any(|arm| expression_modifies_self(arm.body, registry)),
         _ => false,
     }
 }
@@ -271,45 +272,79 @@ pub fn expression_is_self_field_modification(expr: &Expression) -> bool {
     }
 }
 
-/// Check if an expression modifies self
-pub fn expression_modifies_self(expr: &Expression) -> bool {
+/// Check if an expression modifies self.
+///
+/// Uses the `SignatureRegistry` to determine whether method calls on self.field
+/// are mutating. This replaces the old hardcoded `is_known_readonly_method` list
+/// with proper signature lookup:
+///
+/// 1. Check stdlib `method_mutates_receiver` (covers Vec::push, HashMap::insert, etc.)
+/// 2. Look up the method in the `SignatureRegistry` — if it has a `&self` receiver,
+///    it's readonly. If `&mut self` or owned, it's mutating.
+/// 3. For unknown methods (not in stdlib and not in registry), default to **not mutating**.
+///    The assignment-level check (`self.field = ...`) already catches actual field
+///    mutations, so method calls that aren't known-mutating are safe to assume readonly.
+pub fn expression_modifies_self(expr: &Expression, registry: Option<&SignatureRegistry>) -> bool {
     match expr {
-        Expression::Block { statements, .. } => {
-            statements.iter().any(|s| statement_modifies_self(s))
-        }
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_modifies_self(s, registry)),
         Expression::MethodCall {
             object,
             method,
             arguments,
             ..
         } => {
-            // Check if the object is self.field (or self.field.subfield, etc.)
-            let is_on_self_field = is_self_field_chain(object);
-
-            if is_on_self_field {
-                let is_known_mutating =
-                    super::stdlib_method_traits::method_mutates_receiver(method);
-                let is_known_readonly = is_known_readonly_method(method);
-
-                // Known mutating → yes
-                // Known readonly → no
-                // Unknown method on self.field → conservatively assume mutating
-                // (cross-crate methods like renderer.render_frame() are usually &mut self)
-                if is_known_mutating || !is_known_readonly {
+            if is_self_field_chain(object) {
+                if method_is_mutating(method, registry) {
                     return true;
                 }
             }
 
-            // Recursively check arguments for nested self.field mutations
             arguments
                 .iter()
-                .any(|(_, arg)| expression_modifies_self(arg))
+                .any(|(_, arg)| expression_modifies_self(arg, registry))
         }
         Expression::Call { arguments, .. } => arguments
             .iter()
-            .any(|(_, arg)| expression_modifies_self(arg)),
+            .any(|(_, arg)| expression_modifies_self(arg, registry)),
         _ => false,
     }
+}
+
+/// Determine if a method call is mutating by consulting the stdlib method registry
+/// and the user's SignatureRegistry.
+///
+/// Priority:
+/// 1. stdlib `method_mutates_receiver` → definitively mutating (push, insert, clear, etc.)
+/// 2. SignatureRegistry lookup → use the analyzed ownership of the self receiver
+/// 3. Unknown → default to not-mutating (assignment detection covers actual field writes)
+fn method_is_mutating(method: &str, registry: Option<&SignatureRegistry>) -> bool {
+    if super::stdlib_method_traits::method_mutates_receiver(method) {
+        return true;
+    }
+
+    if let Some(reg) = registry {
+        if let Some(sig) = lookup_method_in_registry(reg, method) {
+            return sig.has_self_receiver
+                && sig
+                    .param_ownership
+                    .first()
+                    .is_some_and(|o| *o == OwnershipMode::MutBorrowed);
+        }
+    }
+
+    false
+}
+
+/// Look up a method in the signature registry. Methods are registered under
+/// multiple keys (e.g., "TypeName::method", "method"), so we try the
+/// unqualified name which matches any type's method.
+fn lookup_method_in_registry<'a>(
+    registry: &'a SignatureRegistry,
+    method: &str,
+) -> Option<&'a crate::analyzer::FunctionSignature> {
+    registry.get_signature(method)
 }
 
 fn is_self_field_chain(expr: &Expression) -> bool {
@@ -320,87 +355,6 @@ fn is_self_field_chain(expr: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-fn is_known_readonly_method(method: &str) -> bool {
-    matches!(
-        method,
-        "len"
-            | "is_empty"
-            | "is_none"
-            | "is_some"
-            | "is_ok"
-            | "is_err"
-            | "contains"
-            | "contains_key"
-            | "get"
-            | "has"
-            | "has_item"
-            | "passes"
-            | "evaluate"
-            | "find"
-            | "position"
-            | "count"
-            | "any"
-            | "all"
-            | "sum"
-            | "iter"
-            | "keys"
-            | "values"
-            | "first"
-            | "last"
-            | "as_str"
-            | "as_slice"
-            | "to_string"
-            | "clone"
-            | "to_owned"
-            | "to_vec"
-            | "starts_with"
-            | "ends_with"
-            | "trim"
-            | "chars"
-            | "bytes"
-            | "lines"
-            | "split"
-            | "as_ref"
-            | "as_deref"
-            | "map"
-            | "and_then"
-            | "or_else"
-            | "or"
-            | "filter"
-            | "unwrap_or"
-            | "unwrap_or_default"
-            | "unwrap_or_else"
-            | "map_or"
-            | "map_or_else"
-            | "borrow"
-            | "eq"
-            | "ne"
-            | "cmp"
-            | "partial_cmp"
-            | "hash"
-            | "fmt"
-            | "display"
-            | "min"
-            | "max"
-            | "abs"
-            | "floor"
-            | "ceil"
-            | "round"
-            | "sqrt"
-            | "sin"
-            | "cos"
-            | "tan"
-            | "atan2"
-            | "powi"
-            | "powf"
-            | "log"
-            | "log2"
-            | "log10"
-            | "exp"
-            | "clamp"
-    )
 }
 
 /// Check if an expression accesses struct fields

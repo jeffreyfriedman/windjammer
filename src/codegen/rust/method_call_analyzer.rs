@@ -179,24 +179,7 @@ impl MethodCallAnalyzer {
                         // Copy types don't need &
                         let is_copy = match ty {
                             Type::Int | Type::Float | Type::Bool => true,
-                            Type::Custom(s) => matches!(
-                                s.as_str(),
-                                "i8" | "i16"
-                                    | "i32"
-                                    | "i64"
-                                    | "i128"
-                                    | "u8"
-                                    | "u16"
-                                    | "u32"
-                                    | "u64"
-                                    | "u128"
-                                    | "f32"
-                                    | "f64"
-                                    | "bool"
-                                    | "char"
-                                    | "usize"
-                                    | "isize"
-                            ),
+                            Type::Custom(s) => crate::type_classification::is_copy_primitive(s),
                             _ => false,
                         };
                         if is_copy {
@@ -338,13 +321,11 @@ impl MethodCallAnalyzer {
         // Exception 2: HashMap/BTreeMap key methods ALWAYS need &key, even for method call results.
         // e.g., self.animations.contains_key(state.animation_name()) needs &state.animation_name()
         if matches!(arg, Expression::MethodCall { .. }) {
-            let is_map_key_method = matches!(
-                method,
-                "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
-            ) && param_idx == 0;
+            let is_map_key_method =
+                crate::method_registry::is_map_key_method(method) && param_idx == 0;
             let is_known_map = receiver_type_name.is_some_and(|n| {
                 let base = n.split('<').next().unwrap_or(n);
-                matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
+                crate::type_classification::is_map_type(base)
             });
             if is_map_key_method && is_known_map {
                 return true;
@@ -567,18 +548,7 @@ impl MethodCallAnalyzer {
             }
         }
 
-        // No signature available - fall back to stdlib heuristics
-        let is_stdlib_method = matches!(
-            method,
-            "remove"
-                | "get"
-                | "contains_key"
-                | "get_mut"
-                | "contains"
-                | "binary_search"
-                | "starts_with"
-                | "ends_with"
-        );
+        let is_stdlib_method = crate::method_registry::is_known_stdlib_method(method);
 
         if is_stdlib_method {
             let ctx = MethodCallContext {
@@ -817,39 +787,10 @@ impl MethodCallAnalyzer {
                     return true;
                 }
 
-                // Heuristics for Copy type variable names
-                // IMPORTANT: Only use heuristics for clearly numeric types
-                // DO NOT assume "entity" is Copy - Entity structs are usually NOT Copy!
-                if name.contains("usize") || name.contains("index") {
-                    return true;
-                }
-
-                if matches!(name.as_str(), "i" | "j" | "k" | "idx" | "pos" | "position") {
-                    return true;
-                }
-
-                // Check if parameter has a Copy type (integers, floats, bool, char)
                 if current_function_params.iter().any(|p| {
                     if &p.name == name {
                         if let Type::Custom(t) = &p.type_ {
-                            return matches!(
-                                t.as_str(),
-                                "i8" | "i16"
-                                    | "i32"
-                                    | "i64"
-                                    | "i128"
-                                    | "isize"
-                                    | "u8"
-                                    | "u16"
-                                    | "u32"
-                                    | "u64"
-                                    | "u128"
-                                    | "usize"
-                                    | "f32"
-                                    | "f64"
-                                    | "bool"
-                                    | "char"
-                            );
+                            return crate::type_classification::is_copy_primitive(t);
                         }
                     }
                     false
@@ -859,28 +800,7 @@ impl MethodCallAnalyzer {
 
                 false
             }
-            Expression::FieldAccess { field, .. } => {
-                // Field access like entity.id or (*entity_ref).id
-                // Heuristics for Copy type field names
-                matches!(
-                    field.as_str(),
-                    "id" | "idx"
-                        | "index"
-                        | "count"
-                        | "size"
-                        | "len"
-                        | "width"
-                        | "height"
-                        | "x"
-                        | "y"
-                        | "z"
-                        | "w"
-                        | "r"
-                        | "g"
-                        | "b"
-                        | "a"
-                )
-            }
+            Expression::FieldAccess { .. } => false,
             _ => false,
         }
     }
@@ -896,26 +816,7 @@ impl MethodCallAnalyzer {
     fn is_copy_type_annotation(type_: &Type) -> bool {
         match type_ {
             Type::Custom(name) => {
-                // Primitive Copy types
-                matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "isize"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                        | "int" // Windjammer's int type maps to i64
-                )
+                crate::type_classification::is_copy_primitive(name) || name == "int"
             }
             // References are also Copy, but we don't add & to them anyway
             Type::Reference(_) | Type::MutableReference(_) => true,
@@ -1085,18 +986,16 @@ mod tests {
         let usize_vars = HashSet::new();
         let params = vec![];
 
-        // Test usize variable detection
+        // Without name-based heuristics, unknown identifiers are NOT assumed Copy
         let expr = Expression::Identifier {
             name: "sparse_idx_usize".to_string(),
             location: Default::default(),
         };
         assert!(
-            MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params),
-            "should detect usize variable"
+            !MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params),
+            "should NOT assume variable is Copy based on name alone"
         );
 
-        // Test that "entity" is NOT assumed to be Copy
-        // Entity structs are usually NOT Copy!
         let expr = Expression::Identifier {
             name: "entity".to_string(),
             location: Default::default(),
@@ -1106,14 +1005,33 @@ mod tests {
             "should NOT assume entity is Copy"
         );
 
-        // Test index variable detection
+        // Variables registered as usize ARE Copy
+        let mut usize_vars_with = HashSet::new();
+        usize_vars_with.insert("my_index".to_string());
         let expr = Expression::Identifier {
-            name: "index".to_string(),
+            name: "my_index".to_string(),
             location: Default::default(),
         };
         assert!(
-            MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params),
-            "should detect index variable"
+            MethodCallAnalyzer::is_copy_type(&expr, &usize_vars_with, &params),
+            "registered usize variables should be Copy"
+        );
+
+        let params_with_type = vec![crate::parser::Parameter {
+            name: "count".to_string(),
+            pattern: None,
+            type_: crate::parser::Type::Custom("i32".to_string()),
+            ownership: crate::parser::ast::ownership::OwnershipHint::Inferred,
+            is_mutable: false,
+            decorators: vec![],
+        }];
+        let expr = Expression::Identifier {
+            name: "count".to_string(),
+            location: Default::default(),
+        };
+        assert!(
+            MethodCallAnalyzer::is_copy_type(&expr, &usize_vars, &params_with_type),
+            "typed i32 parameters should be Copy"
         );
     }
 }
