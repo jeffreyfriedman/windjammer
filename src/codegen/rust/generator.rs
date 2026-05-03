@@ -6,12 +6,54 @@ use crate::analyzer::*;
 use crate::codegen::rust::expression_helpers;
 use crate::parser::*;
 use crate::CompilationTarget;
+use std::cell::Cell;
+
+/// Method signature for type-based parameter resolution
+/// Stores the full signature of a method including parameter types and ownership
+#[derive(Debug, Clone)]
+pub struct MethodSignature {
+    /// Name of the receiver type (e.g., "Vec", "String", "Inventory")
+    pub receiver_type: String,
+    /// Method name (e.g., "push", "contains", "has_item")
+    pub method_name: String,
+    /// Parameter types (in order, excluding self)
+    pub param_types: Vec<Type>,
+    /// Parameter ownership modes (Borrowed, MutBorrowed, Owned)
+    pub param_ownership: Vec<OwnershipMode>,
+    /// Return type (if any)
+    pub return_type: Option<Type>,
+    /// Whether method has a self receiver (vs. static method)
+    pub has_self_receiver: bool,
+}
+
+impl MethodSignature {
+    /// Create a new method signature
+    pub fn new(
+        receiver_type: impl Into<String>,
+        method_name: impl Into<String>,
+        param_types: Vec<Type>,
+        param_ownership: Vec<OwnershipMode>,
+        return_type: Option<Type>,
+        has_self_receiver: bool,
+    ) -> Self {
+        Self {
+            receiver_type: receiver_type.into(),
+            method_name: method_name.into(),
+            param_types,
+            param_ownership,
+            return_type,
+            has_self_receiver,
+        }
+    }
+}
 
 pub struct CodeGenerator<'ast> {
     pub(crate) indent_level: usize,
     pub(crate) signature_registry: SignatureRegistry,
     pub(crate) in_wasm_bindgen_impl: bool,
     pub(crate) in_trait_impl: bool, // true if currently generating code for a trait implementation
+    /// When in a trait impl, the trait name (for looking up analyzed_trait_methods)
+    pub(crate) current_trait_impl_name: Option<String>,
     needs_wasm_imports: bool,
     needs_web_imports: bool,
     needs_js_imports: bool,
@@ -64,8 +106,8 @@ pub struct CodeGenerator<'ast> {
     // Maps method name -> return type. Used by infer_expression_type for MethodCall.
     pub(crate) method_return_types: std::collections::HashMap<String, Type>,
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
-    pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>, // Parameters of the current function
-    // FUNCTION CONTEXT: Track current function return type for string literal conversion
+    pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
+    pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
     pub(crate) analyzed_trait_methods: std::collections::HashMap<
@@ -77,19 +119,27 @@ pub struct CodeGenerator<'ast> {
     // Workspace root for source maps
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
-    pub(crate) suppress_string_conversion: bool,
+    // Cell for interior mutability (needed for call-site optimization in immutable context)
+    pub(crate) suppress_string_conversion: Cell<bool>,
+    /// When true, string literals emit `"...".to_string()` (owned String contexts: match arms, returns, if values, etc.)
+    pub(crate) coerce_string_literals_to_owned: bool,
     // LOCAL VARIABLE TRACKING: Stack of scopes, each scope contains local variable names
     // Enables proper variable shadowing of field names
     pub(crate) local_variable_scopes: Vec<std::collections::HashSet<String>>,
     // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
     // Prevents adding semicolons to final expressions in if-else/match when used as values
     pub(crate) in_expression_context: bool,
+    // Suppress Vec::<T>::new() turbofish when let binding already has type ascription
+    pub(crate) suppress_collection_turbofish: bool,
     // TDD: Track if we're generating the top-level function body (enables return optimization)
     pub(crate) in_function_body: bool,
     // TDD: Track if the current statement being generated is the last in its block
     pub(crate) current_is_last_statement: bool,
     // TRAIT TRACKING: Track which custom types support PartialEq
     pub(crate) partial_eq_types: std::collections::HashSet<String>,
+    /// Struct (and struct-only) names that transitively contain a trait object (`dyn` / `trait X` field).
+    /// Used by `type_contains_trait_object` for `Type::Custom` so outer structs skip `Debug`/`Clone`.
+    pub(crate) trait_object_types: std::collections::HashSet<String>,
     // MATCH ARM CONTEXT: Force string conversion in match arm blocks
     pub(crate) in_match_arm_needing_string: bool,
     // MATCH STATEMENT CONTEXT: Track if we're in a match used as a statement (not expression)
@@ -101,9 +151,15 @@ pub struct CodeGenerator<'ast> {
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     pub(crate) borrowed_iterator_vars: std::collections::HashSet<String>,
+    // Track variables bound in for-loops with &mut iteration (need * for compound assignments)
+    pub(crate) mut_borrowed_iterator_vars: std::collections::HashSet<String>,
     // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
     // These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
+    // MATCH ARM BINDINGS: Track variables bound in match arm patterns (EnumVariant bindings)
+    // These are OWNED values extracted from enums, NOT references (even with .clone())
+    // TDD FIX for E0614: prevent adding * to Copy type match bindings in comparisons
+    pub(crate) match_arm_bindings: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     pub(crate) usize_variables: std::collections::HashSet<String>,
     // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
@@ -114,12 +170,18 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_borrowed_params: std::collections::HashSet<String>,
     // INFERRED MUT BORROWED PARAMS: Parameters inferred to be &mut (for avoiding double &mut in passthrough)
     pub(crate) inferred_mut_borrowed_params: std::collections::HashSet<String>,
+    // PHASE 2 STRING OPTIMIZATION: Track string parameters optimized to &str
+    // These need .to_string() when passed to methods expecting owned String
+    pub(crate) str_ref_optimized_params: std::collections::HashSet<String>,
     // USER-WRITTEN CLOSURE: When true, suppress auto-borrowing transformations (preserve user intent)
     pub(crate) in_user_written_closure: bool,
     // USER CLOSURE PARAMS: Track parameters of current user-written closure
     pub(crate) user_closure_params: std::collections::HashSet<String>,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     pub(crate) generating_assignment_target: bool,
+    /// While generating an assignment RHS, use this LHS type for float literal suffixes when
+    /// FloatInference returns Unknown (multipass ExprId mismatch, etc.).
+    pub(crate) assignment_float_target_type: Option<Type>,
     // VOID BLOCK: When true, last expression in a block gets a semicolon (if-without-else bodies)
     pub(crate) in_void_block: bool,
     // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
@@ -140,6 +202,10 @@ pub struct CodeGenerator<'ast> {
     // auto-clone since we want a reference to the original, not a reference to a clone.
     // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
     pub(crate) in_borrow_context: bool,
+    // STRING COMPARISON CONTEXT: Track when generating operands of string comparisons
+    // Used to skip explicit * deref of &String (which becomes &str, breaking comparisons)
+    // e.g., *id == flag_id → id == flag_id (both &String)
+    pub(crate) in_string_comparison: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     pub(crate) generating_traits: std::collections::HashSet<String>,
     // RECURSION DEPTH: Track recursion depth to prevent stack overflow
@@ -153,6 +219,9 @@ pub struct CodeGenerator<'ast> {
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     pub(crate) struct_field_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
+    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    pub(crate) tuple_struct_names: std::collections::HashSet<String>,
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
@@ -160,9 +229,62 @@ pub struct CodeGenerator<'ast> {
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
     pub(crate) in_struct_literal_field: bool,
+    pub(crate) in_owned_value_context: bool,
+    pub(crate) in_unsafe_block: bool,
+    // STRUCT LITERAL CONTEXT: Track which struct we're currently constructing
+    // Enables context-sensitive float type inference (f32 vs f64) for struct fields
+    pub(crate) current_struct_literal_name: Option<String>,
+    // STRUCT LITERAL CONTEXT: Track which field we're currently generating
+    // Enables lookup of field type from struct_field_types for literal inference
+    pub(crate) current_struct_field_name: Option<String>,
+    // METHOD PARAM OWNERSHIP: Track analyzed ownership of each method's parameters.
+    // Populated during function generation; used at call sites to auto-borrow arguments.
+    // Key: method_name, Value: vec of (param_name, OwnershipMode).
+    pub(crate) method_param_ownership:
+        std::collections::HashMap<String, Vec<(String, OwnershipMode)>>,
+    // METHOD SIGNATURES BY TYPE: Enhanced type-based method resolution
+    // Maps ReceiverType → MethodName → Full Signature (params, return type, ownership)
+    // Enables proper type-based decisions without hard-coded method name heuristics
+    // Example: "Inventory" → "has_item" → MethodSignature { params: [("item_id", &str), ("qty", i32)], ... }
+    pub(crate) method_signatures_by_type:
+        std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
+    // STDLIB METHOD SIGNATURES: Preloaded signatures for Vec, String, HashMap, etc.
+    // Enables correct parameter type checking for stdlib methods without hard-coding method names
+    pub(crate) stdlib_method_signatures:
+        std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
     // Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
+    /// Struct-like enum variants: same key as `enum_variant_types`, preserves field names for
+    /// `infer_match_bound_types` when matching on `&vec[i]` (Rust binds `&T` per field).
+    pub(crate) enum_variant_struct_fields: std::collections::HashMap<String, Vec<(String, Type)>>,
+    // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
+    // Maps expression locations to inferred float types (f32 vs f64)
+    // Enables accurate float literal suffix generation without mixing errors
+    pub(crate) float_inference: Option<crate::type_inference::FloatInference>,
+    // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub(crate) int_inference: Option<crate::type_inference::IntInference>,
+    /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
+    pub(crate) library_source_root: Option<std::path::PathBuf>,
+    /// Maps locally defined type names to Rust module paths (multiple entries when names collide).
+    pub(crate) type_defining_modules: std::collections::HashMap<String, Vec<Vec<String>>>,
+    /// `(parent_module, symbol)` → child module segment defining that symbol (multipass FFI layout).
+    pub(crate) extern_submodule_qualifiers: std::collections::HashMap<(String, String), String>,
+    /// Import aliases: maps alias name → original path.
+    /// e.g., `use std::collections::HashMap as Map` → { "Map": "std::collections::HashMap" }
+    /// Prevents stdlib type mappings from overriding user-defined aliases.
+    pub(crate) import_aliases: std::collections::HashSet<String>,
+    /// Module alias map: alias → last segment of the original module path.
+    /// e.g., `use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }
+    /// Used to resolve qualified calls through aliases for signature lookup.
+    pub(crate) module_alias_map: std::collections::HashMap<String, String>,
+    /// Simple names of all extern (FFI) functions across all modules.
+    /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
+    pub(crate) extern_function_names: std::collections::HashSet<String>,
+    /// Names of inline modules declared in the current program (Item::Mod).
+    /// Used by generate_use to add `self::` prefix for `pub use` re-exports
+    /// of items from inline sibling modules (Rust requires `self::` for these).
+    pub(crate) inline_module_names: std::collections::HashSet<String>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -202,11 +324,18 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
+        let extern_fn_names: std::collections::HashSet<String> = registry
+            .signatures
+            .iter()
+            .filter(|(_, sig)| sig.is_extern)
+            .map(|(name, _)| name.rsplit("::").next().unwrap_or(name).to_string())
+            .collect();
         CodeGenerator {
             indent_level: 0,
             signature_registry: registry,
             in_wasm_bindgen_impl: false,
             in_trait_impl: false,
+            current_trait_impl_name: None, // Set when generating trait impl methods
             needs_wasm_imports: false,
             needs_web_imports: false,
             needs_js_imports: false,
@@ -242,31 +371,40 @@ impl<'ast> CodeGenerator<'ast> {
             usize_struct_fields: std::collections::HashMap::new(),
             method_return_types: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
+            current_function_type_bounds: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),
             workspace_root: None,
-            suppress_string_conversion: false,
+            suppress_string_conversion: Cell::new(false),
+            coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
+            mut_borrowed_iterator_vars: std::collections::HashSet::new(),
+            match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             inferred_mut_borrowed_params: std::collections::HashSet::new(),
+            str_ref_optimized_params: std::collections::HashSet::new(),
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
+            assignment_float_target_type: None,
             in_void_block: false,
             in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
             in_call_argument_generation: false,
             in_borrow_context: false,
+            in_string_comparison: false,
             partial_eq_types: std::collections::HashSet::new(),
+            trait_object_types: std::collections::HashSet::new(),
             in_match_arm_needing_string: false,
             in_statement_match: false,
             local_variable_scopes: Vec::new(),
             in_expression_context: false,
+            suppress_collection_turbofish: false,
             in_function_body: false,
             current_is_last_statement: false,
             analyzed_trait_methods: std::collections::HashMap::new(),
@@ -274,10 +412,174 @@ impl<'ast> CodeGenerator<'ast> {
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
             in_struct_literal_field: false,
+            in_owned_value_context: false,
+            in_unsafe_block: false,
+            current_struct_literal_name: None,
+            current_struct_field_name: None,
+            float_inference: None,
+            int_inference: None,
+            method_param_ownership: std::collections::HashMap::new(),
+            method_signatures_by_type: std::collections::HashMap::new(),
+            stdlib_method_signatures: Self::init_stdlib_signatures(),
             enum_variant_types: std::collections::HashMap::new(),
+            enum_variant_struct_fields: std::collections::HashMap::new(),
+            library_source_root: None,
+            type_defining_modules: std::collections::HashMap::new(),
+            extern_submodule_qualifiers: std::collections::HashMap::new(),
+            import_aliases: std::collections::HashSet::new(),
+            module_alias_map: std::collections::HashMap::new(),
+            extern_function_names: extern_fn_names,
+            inline_module_names: std::collections::HashSet::new(),
         }
+    }
+
+    /// Initialize stdlib method signatures (Vec, String, HashMap, etc.)
+    /// This replaces ALL hard-coded method name heuristics with proper type-based lookup
+    fn init_stdlib_signatures(
+    ) -> std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>> {
+        let mut map = std::collections::HashMap::new();
+
+        // Vec<T> methods
+        let mut vec_methods = std::collections::HashMap::new();
+        vec_methods.insert(
+            "push".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "push",
+                vec![Type::Custom("T".to_string())], // Owned T
+                vec![OwnershipMode::Owned],
+                None,
+                true,
+            ),
+        );
+        vec_methods.insert(
+            "contains".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "contains",
+                vec![Type::Reference(Box::new(Type::Custom("T".to_string())))], // &T
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        vec_methods.insert(
+            "insert".to_string(),
+            MethodSignature::new(
+                "Vec",
+                "insert",
+                vec![Type::Uint, Type::Custom("T".to_string())], // index: usize, element: T
+                vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                None,
+                true,
+            ),
+        );
+        map.insert("Vec".to_string(), vec_methods);
+
+        // String methods
+        let mut string_methods = std::collections::HashMap::new();
+        string_methods.insert(
+            "contains".to_string(),
+            MethodSignature::new(
+                "String",
+                "contains",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        string_methods.insert(
+            "push_str".to_string(),
+            MethodSignature::new(
+                "String",
+                "push_str",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                None,
+                true,
+            ),
+        );
+        string_methods.insert(
+            "starts_with".to_string(),
+            MethodSignature::new(
+                "String",
+                "starts_with",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        string_methods.insert(
+            "ends_with".to_string(),
+            MethodSignature::new(
+                "String",
+                "ends_with",
+                vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        map.insert("String".to_string(), string_methods);
+
+        // HashMap<K, V> methods
+        let mut hashmap_methods = std::collections::HashMap::new();
+        hashmap_methods.insert(
+            "get".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "get",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Option(Box::new(Type::Reference(Box::new(
+                    Type::Custom("V".to_string()),
+                ))))),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "insert".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "insert",
+                vec![Type::Custom("K".to_string()), Type::Custom("V".to_string())], // K, V (both owned)
+                vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                Some(Type::Option(Box::new(Type::Custom("V".to_string())))),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "contains_key".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "contains_key",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Bool),
+                true,
+            ),
+        );
+        hashmap_methods.insert(
+            "remove".to_string(),
+            MethodSignature::new(
+                "HashMap",
+                "remove",
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
+                vec![OwnershipMode::Borrowed],
+                Some(Type::Option(Box::new(Type::Custom("V".to_string())))),
+                true,
+            ),
+        );
+        map.insert("HashMap".to_string(), hashmap_methods);
+
+        // TODO: Add more stdlib types (BTreeMap, HashSet, VecDeque, etc.)
+
+        map
     }
 
     /// Pre-populate struct field types from cross-module definitions.
@@ -290,12 +592,52 @@ impl<'ast> CodeGenerator<'ast> {
             std::collections::HashMap<String, crate::parser::Type>,
         >,
     ) {
-        // Merge global types into local (local takes priority if there's overlap)
-        for (struct_name, fields) in field_types {
+        // Track simple names → all qualified sources for disambiguation.
+        // When two structs share a simple name (e.g., rpg::item::ItemStack vs
+        // inventory::item_stack::ItemStack), we only store field types under the
+        // simple name when ALL sources agree on a given field's type.
+        let mut simple_name_fields: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Vec<crate::parser::Type>>,
+        > = std::collections::HashMap::new();
+
+        for (struct_name, fields) in &field_types {
+            // Always insert under qualified name
             self.struct_field_types
-                .entry(struct_name)
+                .entry(struct_name.clone())
                 .or_default()
-                .extend(fields);
+                .extend(fields.clone());
+
+            if let Some(base) = struct_name.rsplit("::").next() {
+                if base != struct_name.as_str() {
+                    let entry = simple_name_fields.entry(base.to_string()).or_default();
+                    for (field_name, field_type) in fields {
+                        entry
+                            .entry(field_name.clone())
+                            .or_default()
+                            .push(field_type.clone());
+                    }
+                }
+            }
+        }
+
+        // For simple name entries, only store fields where ALL sources agree on the type.
+        // This prevents e.g. ItemStack.quantity being incorrectly resolved as u32 when
+        // one definition has i32 and another has u32.
+        for (base_name, field_sources) in simple_name_fields {
+            let mut safe_fields = std::collections::HashMap::new();
+            for (field_name, types) in field_sources {
+                if types.len() == 1 || types.windows(2).all(|w| w[0] == w[1]) {
+                    safe_fields.insert(field_name, types.into_iter().next().unwrap());
+                }
+                // If types disagree for this field, skip it (ambiguous)
+            }
+            if !safe_fields.is_empty() {
+                self.struct_field_types
+                    .entry(base_name)
+                    .or_default()
+                    .extend(safe_fields);
+            }
         }
     }
 
@@ -304,6 +646,104 @@ impl<'ast> CodeGenerator<'ast> {
     /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
     pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.copy_types_registry = registry;
+    }
+
+    /// Look up a method signature by receiver type and method name
+    /// This is the PROPER way to determine parameter types/ownership
+    /// REPLACES all hard-coded method name heuristics ("push", "has_item", etc.)
+    pub fn lookup_method_signature(
+        &self,
+        receiver_type: &str,
+        method_name: &str,
+    ) -> Option<&MethodSignature> {
+        // First check user-defined methods (populated during function generation)
+        if let Some(methods) = self.method_signatures_by_type.get(receiver_type) {
+            if let Some(sig) = methods.get(method_name) {
+                return Some(sig);
+            }
+        }
+
+        // Then check stdlib methods (Vec, String, HashMap, etc.)
+        if let Some(methods) = self.stdlib_method_signatures.get(receiver_type) {
+            if let Some(sig) = methods.get(method_name) {
+                return Some(sig);
+            }
+        }
+
+        // Check with generic type parameters stripped (Vec<T> → Vec)
+        if let Some(base) = receiver_type.split('<').next() {
+            if base != receiver_type {
+                // Try again with just the base type
+                if let Some(methods) = self.stdlib_method_signatures.get(base) {
+                    if let Some(sig) = methods.get(method_name) {
+                        return Some(sig);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Register a user-defined method signature
+    /// Called during function generation to build the method registry
+    pub fn register_method_signature(&mut self, sig: MethodSignature) {
+        self.method_signatures_by_type
+            .entry(sig.receiver_type.clone())
+            .or_default()
+            .insert(sig.method_name.clone(), sig);
+    }
+
+    /// Resolve the type of a receiver expression for method calls
+    /// Example: `self.inventory.has_item(...)` → resolve type of `self.inventory`
+    /// This enables looking up the correct method signature
+    #[allow(dead_code)] // Reserved for future type resolution
+    pub(crate) fn resolve_receiver_type(&self, receiver: &Expression) -> Option<String> {
+        match receiver {
+            Expression::Identifier { name, .. } => {
+                // Check local variables
+                if let Some(ty) = self.local_var_types.get(name.as_str()) {
+                    return Some(self.type_to_simple_name(ty));
+                }
+
+                // Check function parameters
+                for param in &self.current_function_params {
+                    if param.name == *name {
+                        return Some(self.type_to_simple_name(&param.type_));
+                    }
+                }
+
+                None
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                // Recursively resolve object type, then look up field type
+                let object_type = self.resolve_receiver_type(object)?;
+
+                // Look up field type in struct_field_types
+                let field_types = self.struct_field_types.get(&object_type)?;
+                let field_type = field_types.get(field.as_str())?;
+
+                Some(self.type_to_simple_name(field_type))
+            }
+            _ => None,
+        }
+    }
+
+    /// Convert a Type to a simple name for signature lookup
+    /// Example: Type::Custom("Vec") → "Vec", Type::Reference(Box(Custom("String"))) → "String"
+    #[allow(dead_code)] // Reserved for future type conversion
+    fn type_to_simple_name(&self, ty: &Type) -> String {
+        match ty {
+            Type::Custom(name) => name.clone(),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.type_to_simple_name(inner)
+            }
+            Type::Vec(_) => "Vec".to_string(),
+            Type::Option(_) => "Option".to_string(),
+            Type::Result(_, _) => "Result".to_string(),
+            Type::Parameterized(base, _) => base.clone(),
+            _ => "Unknown".to_string(),
+        }
     }
 
     /// Set analyzed trait methods (used for trait signature inference from impls)
@@ -330,6 +770,49 @@ impl<'ast> CodeGenerator<'ast> {
         bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     ) {
         self.inferred_bounds = bounds;
+    }
+
+    /// Set expression-level float type inference results
+    /// Enables accurate f32/f64 suffix generation based on constraint solving
+    pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
+        self.float_inference = Some(inference);
+    }
+
+    /// Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
+    pub fn set_int_inference(&mut self, inference: crate::type_inference::IntInference) {
+        self.int_inference = Some(inference);
+    }
+
+    /// Used with multipass library builds to resolve `use super::...::Type` across sibling `.wj` modules.
+    pub fn set_library_source_root(&mut self, root: std::path::PathBuf) {
+        self.library_source_root = Some(root);
+    }
+
+    pub fn set_type_defining_modules(
+        &mut self,
+        map: std::collections::HashMap<String, Vec<Vec<String>>>,
+    ) {
+        self.type_defining_modules = map;
+    }
+
+    /// Multipass: parent-module `use` + `parent::symbol` call sites when `symbol` is defined in
+    /// `parent/child/*.wj` (e.g. `ffi/api.wj`).
+    pub fn set_extern_submodule_qualifiers(
+        &mut self,
+        map: std::collections::HashMap<(String, String), String>,
+    ) {
+        self.extern_submodule_qualifiers = map;
+    }
+
+    pub(crate) fn qualify_external_path_identifier(&self, name: &str) -> String {
+        if self.extern_submodule_qualifiers.is_empty() || !name.contains("::") {
+            return name.to_string();
+        }
+        let normalized = name.replace('.', "::");
+        crate::codegen::rust::codegen_helpers::qualify_parent_child_external_path(
+            &self.extern_submodule_qualifiers,
+            &normalized,
+        )
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -513,6 +996,81 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// E0252: remove redundant `use` lines that import the same final type name again
+    /// (common when `use super::*` / auto `super::` imports overlap explicit `crate::...` uses).
+    fn dedupe_rust_import_lines(block: &str) -> String {
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut out_lines: Vec<String> = Vec::new();
+        for line in block.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("//") {
+                out_lines.push(line.to_string());
+                continue;
+            }
+            if trimmed.starts_with("#[") {
+                out_lines.push(line.to_string());
+                continue;
+            }
+            let (is_pub, after_use) = if let Some(r) = trimmed.strip_prefix("pub use ") {
+                (true, r)
+            } else if let Some(r) = trimmed.strip_prefix("use ") {
+                (false, r)
+            } else {
+                out_lines.push(line.to_string());
+                continue;
+            };
+            let rest = after_use.trim().trim_end_matches(';').trim();
+            if rest.contains("::*") {
+                out_lines.push(line.to_string());
+                continue;
+            }
+            if let Some(open) = rest.find("::{") {
+                if let Some(close) = rest.rfind('}') {
+                    let path_part = rest[..open].trim();
+                    let inner = &rest[open + 3..close];
+                    let mut kept: Vec<String> = Vec::new();
+                    for part in inner.split(',') {
+                        let p = part.trim();
+                        if p.is_empty() {
+                            continue;
+                        }
+                        let name = p.split(" as ").next().unwrap_or("").trim();
+                        if name.is_empty() {
+                            continue;
+                        }
+                        if seen.insert(name.to_string()) {
+                            kept.push(p.to_string());
+                        }
+                    }
+                    if kept.is_empty() {
+                        continue;
+                    }
+                    let stmt = format!(
+                        "{}use {}::{{{}}};",
+                        if is_pub { "pub " } else { "" },
+                        path_part,
+                        kept.join(", ")
+                    );
+                    out_lines.push(stmt);
+                    continue;
+                }
+            }
+            if let Some(last) = rest.rsplit("::").next() {
+                let name = last.trim();
+                if name.is_empty() {
+                    out_lines.push(line.to_string());
+                    continue;
+                }
+                if seen.insert(name.to_string()) {
+                    out_lines.push(line.to_string());
+                }
+                continue;
+            }
+            out_lines.push(line.to_string());
+        }
+        out_lines.join("\n")
+    }
+
     pub fn generate_program(
         &mut self,
         program: &Program<'ast>,
@@ -520,6 +1078,10 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let mut imports = String::new();
         let mut body = String::new();
+
+        // PRE-PASS: Structs that transitively contain trait objects must not auto-derive Debug/Clone.
+        // Must run before `collect_partial_eq_types` (which calls `infer_derivable_traits`).
+        self.collect_trait_object_types(program);
 
         // PRE-PASS: Collect which custom types support PartialEq
         // This enables smart enum derive that only adds PartialEq if all variants support it
@@ -545,6 +1107,23 @@ impl<'ast> CodeGenerator<'ast> {
         // Track explicitly imported traits to avoid duplication with auto-imports
         let mut explicitly_imported_traits: std::collections::HashSet<String> =
             std::collections::HashSet::new();
+
+        // PRE-PASS: Collect import aliases so type_to_rust skips stdlib mappings
+        // when the user has defined their own alias (e.g., `use std::collections::HashMap as Map`)
+        for item in &program.items {
+            if let Item::Use {
+                alias: Some(alias_name),
+                path,
+                ..
+            } = item
+            {
+                self.import_aliases.insert(alias_name.clone());
+                if let Some(last_segment) = path.last() {
+                    self.module_alias_map
+                        .insert(alias_name.clone(), last_segment.clone());
+                }
+            }
+        }
 
         // Check for stdlib modules that need special imports
         for item in &program.items {
@@ -582,7 +1161,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Walk the AST properly to find HashMap/HashSet usage in types and expressions
         // (NOT debug text, which includes comments and causes false positives)
         {
-            if !self.needs_hashmap_import && Self::program_references_collection(program, "HashMap")
+            if !self.needs_hashmap_import
+                && (Self::program_references_collection(program, "HashMap")
+                    || Self::program_references_collection(program, "Map"))
             {
                 self.needs_hashmap_import = true;
             }
@@ -615,7 +1196,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Collect inline module names for self:: prefix generation in pub use
+        self.inline_module_names.clear();
+        for item in &program.items {
+            if let Item::Mod { name, .. } = item {
+                self.inline_module_names.insert(name.clone());
+            }
+        }
+
         // Generate explicit use statements
+        let mut has_explicit_pub_use = false;
         for item in &program.items {
             if let Item::Use {
                 path,
@@ -624,6 +1214,9 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } = item
             {
+                if *is_pub {
+                    has_explicit_pub_use = true;
+                }
                 let use_stmt = self.generate_use(path, alias.as_deref());
                 if !use_stmt.trim().is_empty() {
                     if *is_pub {
@@ -631,7 +1224,22 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     imports.push_str(&use_stmt);
                 }
-                // Don't add extra newline - generate_use already includes it
+            }
+        }
+
+        // Auto-generate pub use re-exports for mod.rs files without explicit pub use.
+        // When a mod.wj declares `pub mod submod` but no `pub use submod::Type`,
+        // users expect `use crate::mymod::Type` to work. This requires re-exports.
+        if self.is_output_mod_rs() && !has_explicit_pub_use {
+            for item in &program.items {
+                if let Item::Mod {
+                    name,
+                    is_public: true,
+                    ..
+                } = item
+                {
+                    imports.push_str(&format!("pub use self::{}::*;\n", name));
+                }
             }
         }
 
@@ -639,9 +1247,17 @@ impl<'ast> CodeGenerator<'ast> {
         for item in &program.items {
             match item {
                 Item::Const {
-                    name, type_, value, ..
+                    name,
+                    is_pub,
+                    type_,
+                    value,
+                    ..
                 } => {
-                    let pub_prefix = if self.is_module { "pub " } else { "" };
+                    let pub_prefix = if *is_pub || self.is_module {
+                        "pub "
+                    } else {
+                        ""
+                    };
 
                     // Special case: string constants should use &'static str, not String
                     let rust_type = if matches!(type_, Type::String)
@@ -899,6 +1515,25 @@ impl<'ast> CodeGenerator<'ast> {
         // Inject implicit imports if needed
         let mut implicit_imports = String::new();
 
+        // Cross-module type references: only when we do NOT inject `use super::*` below.
+        // Injected `use super::*` already pulls in sibling types re-exported from the parent `mod.rs`;
+        // extra `use super::Type` lines are often wrong (Type lives in `super::other_module::Type`)
+        // and duplicate globs (E0252). If the user already wrote `use super::*`, we also skip (see
+        // `auto_super_type_import_paths`).
+        let has_explicit_glob_imports = imports.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed.ends_with("::*;") && !trimmed.starts_with("//")
+        });
+        let will_inject_super_glob = self.is_module && !has_explicit_glob_imports;
+        let auto_super_type_imports = if will_inject_super_glob {
+            String::new()
+        } else {
+            self.format_auto_super_type_imports(program)
+        };
+        if !auto_super_type_imports.is_empty() {
+            implicit_imports.push_str(&auto_super_type_imports);
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();
@@ -969,14 +1604,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Rust error E0659 ("ambiguous name"). For example, if mod.rs re-exports GizmoMode
         // from scene_view, and the file also has `use crate::gizmos::*` which exports its own
         // GizmoMode, both globs would bring GizmoMode into scope, making it ambiguous.
-        if self.is_module {
-            let has_explicit_glob_imports = imports.lines().any(|line| {
-                let trimmed = line.trim();
-                trimmed.ends_with("::*;") && !trimmed.starts_with("//")
-            });
-            if !has_explicit_glob_imports {
-                implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
-            }
+        if self.is_module && !has_explicit_glob_imports {
+            implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
         }
 
         // TDD FIX: Auto-import test runtime for files with test functions
@@ -1023,15 +1652,21 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         // Combine: implicit imports + explicit imports + tauri helper + body
-        let mut output = String::new();
+        let mut combined_imports = String::new();
         if !implicit_imports.is_empty() {
-            output.push_str(&implicit_imports);
-            if !imports.is_empty() {
-                output.push('\n');
-            }
+            combined_imports.push_str(&implicit_imports);
         }
         if !imports.is_empty() {
-            output.push_str(&imports);
+            if !combined_imports.is_empty() {
+                combined_imports.push('\n');
+            }
+            combined_imports.push_str(&imports);
+        }
+        let combined_imports = Self::dedupe_rust_import_lines(&combined_imports);
+
+        let mut output = String::new();
+        if !combined_imports.is_empty() {
+            output.push_str(&combined_imports);
         }
         if !tauri_helper.is_empty() {
             output.push('\n');
@@ -1045,16 +1680,130 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         output
     }
 
-    pub(crate) fn type_to_rust(&self, type_: &Type) -> String {
-        crate::codegen::rust::type_to_rust(type_)
+    /// Generate `use super::...` lines for types referenced in this file but defined elsewhere.
+    pub(crate) fn format_auto_super_type_imports(&self, program: &Program<'ast>) -> String {
+        if !self.is_module {
+            return String::new();
+        }
+        let paths = crate::analyzer::type_collector::auto_super_type_import_paths(program);
+        if paths.is_empty() {
+            return String::new();
+        }
+
+        let current_module = self.library_source_root.as_ref().and_then(|base| {
+            crate::analyzer::type_collector::wj_file_to_module_path(base, &self.current_wj_file)
+        });
+
+        let mut out = String::from("#[allow(unused_imports)]\n");
+        for path in paths {
+            let (_, type_name) = crate::analyzer::type_collector::split_qualified_type_path(&path);
+            let key = if type_name.is_empty() {
+                path.as_str()
+            } else {
+                type_name
+            };
+
+            let resolved = if let Some(ref cur) = current_module {
+                if !self.type_defining_modules.is_empty() {
+                    self.type_defining_modules.get(key).and_then(|candidates| {
+                        if candidates.is_empty() {
+                            return None;
+                        }
+                        let best_lcp = candidates
+                            .iter()
+                            .map(|def_mod| {
+                                crate::analyzer::type_collector::longest_common_prefix_len(
+                                    cur, def_mod,
+                                )
+                            })
+                            .max()?;
+                        let tied: Vec<&Vec<String>> = candidates
+                            .iter()
+                            .filter(|def_mod| {
+                                crate::analyzer::type_collector::longest_common_prefix_len(
+                                    cur, def_mod,
+                                ) == best_lcp
+                            })
+                            .collect();
+                        let best = tied.iter().min_by_key(|def_mod| {
+                            let tail = &def_mod[best_lcp..];
+                            (tail.len(), tail.iter().map(|s| s.len()).sum::<usize>())
+                        })?;
+                        crate::analyzer::type_collector::rust_use_path_from_module_to_type(
+                            cur, best, key,
+                        )
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // `rust_use_path_from_module_to_type` already emits the correct `super::` depth for the
+            // Rust module tree; do not prepend filesystem nesting again (would double `super::`).
+            let rust_path = if let Some(r) = resolved {
+                r
+            } else {
+                let p = path.replace('.', "::");
+                let chain = self
+                    .get_import_prefix_for_nested_output()
+                    .map(|n| "super::".repeat(n))
+                    .unwrap_or_else(|| "super::".to_string());
+                format!("{}{}", chain, p)
+            };
+            out.push_str(&format!("use {};\n", rust_path));
+        }
+        out
     }
 
-    pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
-        crate::codegen::rust::type_analysis::is_copy_type(ty)
-            || match ty {
-                Type::Custom(name) => self.copy_types_registry.contains(name.as_str()),
-                _ => false,
+    pub(crate) fn type_to_rust(&self, type_: &Type) -> String {
+        // When the user has import aliases (e.g., `use std::collections::HashMap as Map`),
+        // skip stdlib type mappings for those alias names so the alias is preserved in output.
+        let aliases = &self.import_aliases;
+        let map = &self.extern_submodule_qualifiers;
+        if map.is_empty() && aliases.is_empty() {
+            return crate::codegen::rust::types::type_to_rust(type_);
+        }
+        let qualify = move |s: &str| {
+            let dotted = s.replace('.', "::");
+            if !map.is_empty() {
+                crate::codegen::rust::codegen_helpers::qualify_parent_child_external_path(
+                    map, &dotted,
+                )
+            } else {
+                dotted
             }
+        };
+        if aliases.is_empty() {
+            crate::codegen::rust::types::type_to_rust_mapped(type_, &qualify)
+        } else {
+            crate::codegen::rust::types::type_to_rust_mapped_with_aliases(type_, &qualify, aliases)
+        }
+    }
+
+    /// Check if a type implements Copy.
+    ///
+    /// Handles:
+    /// 1. Primitives (via type_analysis::is_copy_type)
+    /// 2. Option<T> when T is Copy (Option<f32>, Option<AABB>, etc.)
+    /// 3. User structs with @derive(Copy) (copy_types_registry)
+    /// 4. Structs with all-Copy fields (struct_field_types recursive check)
+    /// 5. Known game engine types from external crates (Vec3, AABB, etc.)
+    pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
+        if crate::codegen::rust::type_analysis::is_copy_type(ty) {
+            return true;
+        }
+        match ty {
+            Type::Option(inner) => self.is_type_copy(inner),
+            Type::Custom(name) => {
+                if self.copy_types_registry.contains(name.as_str()) {
+                    return true;
+                }
+                crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())
+            }
+            _ => false,
+        }
     }
 
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"

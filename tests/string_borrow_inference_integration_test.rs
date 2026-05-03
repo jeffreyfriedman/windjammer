@@ -1,12 +1,11 @@
 // Integration test: String → &str borrow inference
 // Verifies that String parameters are automatically inferred as &str when only read
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -24,7 +23,7 @@ fn test_string_borrow_inference() {
     std::fs::create_dir_all(&output_dir).unwrap();
 
     // Compile the test file
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(&test_file)
         .arg("--output")

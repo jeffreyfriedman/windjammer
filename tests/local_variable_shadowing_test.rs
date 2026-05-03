@@ -1,10 +1,8 @@
 // Test for local variable shadowing of field names
 // Compiler bug fix: Local variables should shadow struct fields
 
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -25,7 +23,7 @@ fn test_local_variable_shadows_field() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate: required.push(component_name)
     assert!(
@@ -60,7 +58,7 @@ fn test_nested_shadowing() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should use local variables x and y, not self.x and self.y
     assert!(
@@ -85,7 +83,7 @@ fn test_parameter_does_not_shadow() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should still generate self.count for field access
     assert!(
@@ -112,7 +110,7 @@ fn test_local_var_method_call() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should use local variable items
     assert!(
@@ -128,39 +126,3 @@ fn test_local_var_method_call() {
 }
 
 // Helper function to compile Windjammer code and return generated Rust
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let input_file = temp_dir.path().join("test.wj");
-    let output_dir = temp_dir.path().join("output");
-
-    fs::write(&input_file, code).map_err(|e| format!("Failed to write input file: {}", e))?;
-
-    fs::create_dir(&output_dir).map_err(|e| format!("Failed to create output dir: {}", e))?;
-
-    // Find the wj binary (should be in target/release/wj)
-    let mut wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wj_path.push("target");
-    wj_path.push("release");
-    wj_path.push("wj");
-
-    let output = Command::new(&wj_path)
-        .arg("build")
-        .arg(&input_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to run wj compiler: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Read generated Rust file
-    let rust_file = output_dir.join("test.rs");
-    fs::read_to_string(&rust_file).map_err(|e| format!("Failed to read generated file: {}", e))
-}

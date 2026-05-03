@@ -4,39 +4,8 @@
 /// the parser fails with "Unexpected token: Semicolon"
 ///
 /// This is a common pattern in Rust for guard clauses and error handling.
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::tempdir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    let temp_dir = tempdir().map_err(|e| e.to_string())?;
-    let test_file = temp_dir.path().join("test.wj");
-
-    fs::write(&test_file, code).map_err(|e| e.to_string())?;
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", "--no-cargo"])
-        .arg(&test_file)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstderr: {}\nstdout: {}",
-            stderr, stdout
-        ));
-    }
-
-    Ok(stdout.to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[cfg_attr(tarpaulin, ignore)]
 #[test]
@@ -53,7 +22,7 @@ pub fn check_positive(x: i32) -> bool {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early return with subsequent statements should compile. Error: {:?}",
@@ -78,7 +47,7 @@ pub fn classify(x: i32) -> String {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Multiple early returns should compile. Error: {:?}",
@@ -102,7 +71,7 @@ pub fn validate(x: i32, y: i32) -> bool {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early returns in nested blocks should compile. Error: {:?}",
@@ -124,7 +93,7 @@ pub fn compute(x: i32) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early return followed by variable assignment should compile. Error: {:?}",
@@ -149,7 +118,7 @@ pub fn handle(x: Option<i32>) -> i32 {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early return in match arm should compile. Error: {:?}",
@@ -171,7 +140,7 @@ pub fn find_first_positive(nums: Vec<i32>) -> Option<i32> {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early return in loop should compile. Error: {:?}",
@@ -198,7 +167,7 @@ impl Data {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Early return in method should compile. Error: {:?}",
@@ -229,7 +198,7 @@ impl VoxelChunk {
 }
 "#;
 
-    let result = compile_wj_code(code);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Voxel bounds check pattern should compile. Error: {:?}",

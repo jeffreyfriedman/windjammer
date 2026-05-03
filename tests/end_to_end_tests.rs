@@ -90,7 +90,8 @@ fn main() {
 }
 "#,
         expected_js_contains: &["if (", "} else {", "return"],
-        expected_rust_contains: &["if x > 0", "else"],
+        // Codegen may cast the condition (e.g. `if (x as i64) > 0_i64`) — match structure, not exact text.
+        expected_rust_contains: &["if (", "> 0", "else"],
     },
     TestCase {
         name: "async_function",
@@ -116,11 +117,7 @@ fn compile_to_target(source: &str, target: &str, temp_dir: &TempDir) -> Result<P
 
     fs::write(&source_file, source).map_err(|e| format!("Failed to write source: {}", e))?;
 
-    let output = Command::new("cargo")
-        .arg("run")
-        .arg("--bin")
-        .arg("wj")
-        .arg("--")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg("--target")
         .arg(target)
@@ -337,7 +334,6 @@ fn calculate(x: int, y: int, z: float) -> float {
 }
 
 #[test]
-#[ignore] // TODO: Fix TypeScript definitions quality test
 fn test_typescript_definitions_quality() {
     // Acquire mutex to serialize this test
     let _lock = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());

@@ -6,43 +6,8 @@
 ///
 /// This is critical for game engines where Vec2, Vec3, etc. are Copy types
 /// and implement arithmetic operators.
-use std::path::PathBuf;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    std::fs::write(&test_file, code).unwrap();
-
-    let output_dir = temp_dir.path().join("output");
-    std::fs::create_dir(&output_dir).unwrap();
-
-    let compiler_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let wj_binary = compiler_path.join("target/release/wj");
-
-    let output = std::process::Command::new(&wj_binary)
-        .arg("build")
-        .arg(&test_file)
-        .arg("--output")
-        .arg(&output_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = output_dir.join("test.rs");
-    let generated_code =
-        std::fs::read_to_string(&generated_file).expect("Failed to read generated code");
-
-    Ok(generated_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -64,7 +29,7 @@ fn test_add_trait_copy_type_uses_owned_self() {
         }
     "#;
 
-    let generated = compile_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     // For operator traits on Copy types, should use `self` (owned), not `&self`
     assert!(
@@ -94,7 +59,7 @@ fn test_sub_trait_copy_type_uses_owned_self() {
         }
     "#;
 
-    let generated = compile_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("fn sub(self, other: Vec2) -> Vec2"),
@@ -123,7 +88,7 @@ fn test_mul_trait_copy_type_uses_owned_self() {
         }
     "#;
 
-    let generated = compile_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("fn mul(self, scalar: f32) -> Vec2"),
@@ -152,7 +117,7 @@ fn test_neg_trait_copy_type_uses_owned_self() {
         }
     "#;
 
-    let generated = compile_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("fn neg(self) -> Vec2"),

@@ -8,7 +8,7 @@ pub mod math {
 
 pub mod utils {
     pub fn greet(name: string) -> string {
-        "Hello, ".to_string() + name
+        "Hello, " + name
     }
 }
 

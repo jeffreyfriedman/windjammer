@@ -1,5 +1,5 @@
 .PHONY: help test test-all test-stdlib test-ui test-game test-integration \
-        test-quick test-verbose clippy fmt check build build-all \
+        test-quick test-verbose clippy fmt check build build-all install \
         example-ui example-game example-http example-physics example-audio \
         test-examples clean doc setup-hooks check-versions
 
@@ -204,6 +204,11 @@ clippy-game:
 build:
 	@echo "🔨 Building compiler..."
 	cargo build --release
+
+# Build and install wj + plugins to ~/.wj/bin/
+install: build
+	@echo "📦 Installing wj to ~/.wj/bin/..."
+	@./target/release/wj self-install
 
 # Build all crates
 build-all:

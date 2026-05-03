@@ -4,45 +4,16 @@
 /// - Enum variant definitions
 /// - Struct field definitions
 /// - Function/method definitions (already working)
-use std::path::PathBuf;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str, output_dir: &PathBuf) -> Result<String, String> {
-    use std::fs;
-    use std::process::Command;
-
-    let wj_file = output_dir.join("test.wj");
-    fs::write(&wj_file, code).map_err(|e| format!("Failed to write test file: {}", e))?;
-
-    let result = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--output")
-        .arg(output_dir)
-        .arg("--no-cargo")
-        .output()
-        .map_err(|e| format!("Failed to execute compiler: {}", e))?;
-
-    if result.status.success() {
-        let rs_file = output_dir.join("test.rs");
-        let generated = fs::read_to_string(&rs_file)
-            .map_err(|e| format!("Failed to read generated Rust: {}", e))?;
-        Ok(generated)
-    } else {
-        let stderr = String::from_utf8_lossy(&result.stderr);
-        let stdout = String::from_utf8_lossy(&result.stdout);
-        Err(format!(
-            "Compilation failed:\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        ))
-    }
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_enum_variants() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path().to_path_buf();
+    let _output_dir = temp_dir.path().to_path_buf();
 
     let code = r#"
 /// A mode enumeration
@@ -56,7 +27,7 @@ pub enum Mode {
 }
 "#;
 
-    let result = compile_windjammer_code(code, &output_dir);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Doc comments on enum variants should compile successfully. Error: {:?}",
@@ -80,7 +51,7 @@ pub enum Mode {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_struct_fields() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path().to_path_buf();
+    let _output_dir = temp_dir.path().to_path_buf();
 
     let code = r#"
 /// A player structure
@@ -94,7 +65,7 @@ pub struct Player {
 }
 "#;
 
-    let result = compile_windjammer_code(code, &output_dir);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Doc comments on struct fields should compile successfully. Error: {:?}",
@@ -118,7 +89,7 @@ pub struct Player {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_doc_comments_on_functions() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path().to_path_buf();
+    let _output_dir = temp_dir.path().to_path_buf();
 
     let code = r#"
 /// Calculate the sum of two numbers
@@ -127,7 +98,7 @@ pub fn add(a: i64, b: i64) -> i64 {
 }
 "#;
 
-    let result = compile_windjammer_code(code, &output_dir);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Doc comments on functions should compile successfully. Error: {:?}",
@@ -147,7 +118,7 @@ pub fn add(a: i64, b: i64) -> i64 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_doc_comments_and_regular_comments() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path().to_path_buf();
+    let _output_dir = temp_dir.path().to_path_buf();
 
     let code = r#"
 /// Camera follow modes
@@ -171,7 +142,7 @@ pub struct Camera2D {
 }
 "#;
 
-    let result = compile_windjammer_code(code, &output_dir);
+    let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
         "Mixed doc comments and regular comments should compile. Error: {:?}",

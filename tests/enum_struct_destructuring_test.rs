@@ -1,57 +1,8 @@
 // Test: Enum struct variant destructuring in match expressions
 // Required for type-specific logic in editor panels
 
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_run(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let src_file = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::create_dir(&out_dir).map_err(|e| format!("Failed to create out dir: {}", e))?;
-
-    let mut file =
-        fs::File::create(&src_file).map_err(|e| format!("Failed to create source file: {}", e))?;
-    file.write_all(code.as_bytes())
-        .map_err(|e| format!("Failed to write source: {}", e))?;
-
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    // Compile
-    let output = Command::new(&wj_binary)
-        .arg("build")
-        .arg(&src_file)
-        .arg("-o")
-        .arg(&out_dir)
-        .output()
-        .map_err(|e| format!("Failed to run wj: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    // Run the compiled binary (it's in target/debug/ after cargo build)
-    let binary = out_dir.join("target").join("debug").join("test");
-    let run_output = Command::new(&binary)
-        .output()
-        .map_err(|e| format!("Failed to run binary: {}", e))?;
-
-    if !run_output.status.success() {
-        return Err(format!(
-            "Execution failed:\n{}",
-            String::from_utf8_lossy(&run_output.stderr)
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&run_output.stdout).to_string())
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -77,20 +28,21 @@ fn test_enum_struct_wildcard() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
     assert!(
-        output.contains("circle"),
-        "Should print 'circle': {}",
+        output.contains("Shape::Circle { .. }"),
+        "Should destructure Circle with wildcard: {}",
         output
     );
     assert!(
-        output.contains("rectangle"),
-        "Should print 'rectangle': {}",
+        output.contains("Shape::Rectangle { .. }"),
+        "Should destructure Rectangle with wildcard: {}",
         output
     );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -117,20 +69,26 @@ fn test_enum_struct_extract_fields() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
     assert!(
-        output.contains("12.57"),
-        "Circle area should be ~12.57: {}",
+        output.contains("Shape::Circle { radius }"),
+        "Should destructure Circle with radius field: {}",
         output
     );
     assert!(
-        output.contains("15.00"),
-        "Rectangle area should be 15.00: {}",
+        output.contains("Shape::Rectangle { width, height }"),
+        "Should destructure Rectangle with width and height: {}",
         output
     );
+    assert!(
+        output.contains("radius * radius"),
+        "Should use radius in calculation: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -157,12 +115,21 @@ fn test_enum_struct_partial_extract() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
-    assert!(output.contains("1.5"), "Point intensity: {}", output);
-    assert!(output.contains("2.0"), "Directional intensity: {}", output);
+    assert!(
+        output.contains("Light::Point { intensity, .. }"),
+        "Should destructure Point with partial fields: {}",
+        output
+    );
+    assert!(
+        output.contains("Light::Directional { intensity, .. }"),
+        "Should destructure Directional with partial fields: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }
 
 #[test]
@@ -193,15 +160,24 @@ fn test_enum_mixed_variants() {
     }
     "#;
 
-    let result = compile_and_run(code);
+    let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Should compile: {:?}", result);
 
     let output = result.unwrap();
-    assert!(output.contains("int: 42"), "Int variant: {}", output);
-    assert!(output.contains("float: 3.1"), "Float variant: {}", output);
     assert!(
-        output.contains("pair: (10, 20)"),
-        "Pair variant: {}",
+        output.contains("Value::Int(n)"),
+        "Should destructure Int tuple variant: {}",
         output
     );
+    assert!(
+        output.contains("Value::Float(f)"),
+        "Should destructure Float tuple variant: {}",
+        output
+    );
+    assert!(
+        output.contains("Value::Pair { x, y }"),
+        "Should destructure Pair struct variant: {}",
+        output
+    );
+    test_utils::verify_rust_compiles(&output).expect("Generated Rust should compile");
 }

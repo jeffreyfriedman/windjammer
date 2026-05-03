@@ -1,7 +1,7 @@
 // TDD: Test Vec<String> element comparison with borrowed param
 // This should reproduce the exact Bug #5 scenario
 
-fn find_in_vec(items: Vec<String>, target: String) -> bool {
+fn find_in_vec(items: Vec<string>, target: string) -> bool {
     let mut i = 0;
     while i < items.len() {
         if items[i] == target {  // Vec element (String) == borrowed param (&String)

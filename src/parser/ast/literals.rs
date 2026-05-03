@@ -3,6 +3,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Int(i64),
+    IntSuffixed(i64, std::string::String), // 0u32, 100_000usize
     Float(f64),
     String(String),
     Char(char),

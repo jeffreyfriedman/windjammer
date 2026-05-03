@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Block Expression Semicolons — Intermediate vs Last Statement
 ///
@@ -15,12 +18,7 @@ use anyhow::Result;
 /// (even if not an Expression type, e.g., Statement::If) should preserve expression context
 /// so inner branches retain correct semicolon behavior.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -29,7 +27,9 @@ fn test_intermediate_statements_get_semicolons_in_match_arms() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_semicolon_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp.path().join(format!("wj_semicolon_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -90,13 +90,14 @@ version = "0.1.0"
 "#,
     )?;
 
-    // Compile with cargo to verify the generated Rust compiles
+    // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
         .arg(output_dir.to_str().unwrap())
+        .arg("--no-cargo")
         .output()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -110,7 +111,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }
@@ -122,7 +122,11 @@ fn test_if_else_expression_preserves_return_value() -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_ifelse_expr_test_{}", timestamp));
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp2
+        .path()
+        .join(format!("wj_ifelse_expr_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     let src_dir = temp_dir.join("src_wj");
@@ -139,7 +143,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn update_selection(mut self) {
+    pub fn update_selection(self) {
         self.last_selected = if self.selected.is_empty() {
             None
         } else {
@@ -170,13 +174,14 @@ version = "0.1.0"
 "#,
     )?;
 
-    // Compile with cargo to verify it compiles
+    // Compile with --no-cargo to only transpile
     let output_dir = temp_dir.join("src");
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
         .arg(output_dir.to_str().unwrap())
+        .arg("--no-cargo")
         .output()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -189,7 +194,6 @@ version = "0.1.0"
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
 
     Ok(())
 }

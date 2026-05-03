@@ -4,7 +4,7 @@
 //   1. extern fn generates without body
 //   2. Call site adds & when it shouldn't
 
-use std::process::Command;
+use std::path::PathBuf;
 
 // Skip in coverage runs - subprocess spawning is very slow under tarpaulin instrumentation
 // The tarpaulin cfg is declared in Cargo.toml [lints.rust] section
@@ -12,32 +12,22 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_generic_owned_param_inference() {
-    // Compile the Windjammer test file
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--bin",
-            "wj",
-            "--",
-            "build",
-            "tests/generic_owned_param_test.wj",
-            "--output",
-            "/tmp/wj_generic_owned_test",
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run windjammer compiler");
+    let out_tmp = tempfile::tempdir().expect("tempdir");
+    let wj_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("generic_owned_param_test.wj");
 
-    assert!(
-        output.status.success(),
-        "Windjammer compilation failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    windjammer::build_project(
+        &wj_path,
+        out_tmp.path(),
+        windjammer::CompilationTarget::Rust,
+        false,
+    )
+    .expect("Windjammer compilation failed");
 
     // Read the generated Rust code
     let generated_code =
-        std::fs::read_to_string("/tmp/wj_generic_owned_test/generic_owned_param_test.rs")
+        std::fs::read_to_string(out_tmp.path().join("generic_owned_param_test.rs"))
             .expect("Failed to read generated code");
 
     // Print for debugging
@@ -54,7 +44,4 @@ fn test_generic_owned_param_inference() {
     // KNOWN ISSUE: Call site still generates `run_game(&game)` instead of `run_game(game)`
     // This is tracked separately and will be fixed in a future PR
     // For now, we just verify the function signature is correct
-
-    // Cleanup
-    let _ = std::fs::remove_dir_all("/tmp/wj_generic_owned_test");
 }

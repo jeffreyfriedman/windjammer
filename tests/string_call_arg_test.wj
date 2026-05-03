@@ -1,0 +1,24 @@
+// Test: string literal in QUALIFIED function call (cross-module)
+// Simulates draw::draw_text() where signature is unknown at compile time
+
+use crate::ui::draw
+
+struct Game {
+    active: bool,
+    selected: i32,
+}
+
+impl Game {
+    fn render(self) {
+        let r = if self.active { 1.0 } else { 0.6 }
+        let prefix = if self.active { ">> " } else { "   " }
+        
+        draw::draw_text("HELLO WORLD", 100.0, 200.0)
+        draw::draw_text(prefix, 50.0, 50.0)
+    }
+}
+
+fn main() {
+    let game = Game { active: true, selected: 0 }
+    game.render()
+}

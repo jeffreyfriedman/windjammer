@@ -4,7 +4,7 @@ fn test_string_length() {
     let text = "Hello, World!"
     let len = text.len()
     assert(len == 13, "Length should be 13")
-    println!("✓ String length works")
+    println!("✓ string length works")
 }
 
 fn test_string_slicing() {
@@ -21,21 +21,21 @@ fn test_string_contains() {
     
     assert(has_hello, "Should contain Hello")
     assert(!has_goodbye, "Should not contain Goodbye")
-    println!("✓ String contains works")
+    println!("✓ string contains works")
 }
 
 fn test_string_starts_with() {
     let text = "Hello, World!"
     assert(text.starts_with("Hello"), "Should start with Hello")
     assert(!text.starts_with("World"), "Should not start with World")
-    println!("✓ String starts_with works")
+    println!("✓ string starts_with works")
 }
 
 fn test_string_ends_with() {
     let text = "Hello, World!"
     assert(text.ends_with("World!"), "Should end with World!")
     assert(!text.ends_with("Hello"), "Should not end with Hello")
-    println!("✓ String ends_with works")
+    println!("✓ string ends_with works")
 }
 
 fn test_string_uppercase() {

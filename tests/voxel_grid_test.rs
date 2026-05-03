@@ -10,7 +10,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_voxel_grid_creation() {
     // RED: Test creation of voxel grid
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_voxel_grid_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -18,6 +19,7 @@ fn test_voxel_grid_creation() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -89,15 +91,14 @@ fn main() {
     assert!(rust_code.contains("width: i32"));
     assert!(rust_code.contains("fn new("));
     assert!(rust_code.contains("fn width("));
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_voxel_set_get() {
     // RED: Test setting and getting voxel values
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_voxel_setget_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -105,6 +106,7 @@ fn test_voxel_set_get() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -194,15 +196,14 @@ fn main() {
     assert!(rust_code.contains("fn get("));
     assert!(rust_code.contains("fn set("));
     assert!(rust_code.contains("fn is_valid("));
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_voxel_color() {
     // RED: Test voxel color structure
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp3.path().join(format!(
         "wj_voxel_color_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -210,6 +211,7 @@ fn test_voxel_color() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -284,6 +286,4 @@ fn main() {
     assert!(rust_code.contains("struct VoxelColor"));
     assert!(rust_code.contains("fn from_hex("));
     assert!(rust_code.contains("fn to_hex("));
-
-    fs::remove_dir_all(test_dir).ok();
 }

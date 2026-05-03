@@ -108,6 +108,7 @@ impl<'a> ExtractFunction<'a> {
                 ),
                 ownership: windjammer::parser::OwnershipHint::Inferred,
                 is_mutable: false,
+                decorators: Vec::new(),
             })
             .collect();
 

@@ -4,7 +4,7 @@
 // Using Windjammer's native @test framework
 
 use windjammer_app::voxel::VoxelGrid
-use windjammer_app::voxel::svo_convert::voxelgrid_to_svo_flat
+use windjammer_app::voxel::svo64_convert::voxelgrid_to_svo64_flat
 
 const LEAF_FLAG: u32 = 0x100
 
@@ -19,7 +19,7 @@ fn decode_node(node: u32) -> (u8, bool, u32) {
 @test
 fn test_empty_grid_creates_empty_octree() {
     let grid = VoxelGrid::new(8, 8, 8)
-    let svo = voxelgrid_to_svo_flat(grid)
+    let svo = voxelgrid_to_svo64_flat(grid)
     
     assert_eq!(svo.len(), 1, "Empty grid should have 1 node")
     
@@ -33,7 +33,7 @@ fn test_single_voxel_creates_path_to_leaf() {
     let mut grid = VoxelGrid::new(8, 8, 8)
     grid.set(4, 4, 4, 5)  // Single voxel at center
     
-    let svo = voxelgrid_to_svo_flat(grid)
+    let svo = voxelgrid_to_svo64_flat(grid)
     
     // Root should be interior node (not homogeneous)
     let (_, is_leaf, child_ptr) = decode_node(svo[0])
@@ -49,7 +49,7 @@ fn test_octree_respects_octant_ordering() {
     grid.set(0, 0, 0, 1)  // Octant 0: (-x, -y, -z)
     grid.set(4, 0, 0, 2)  // Octant 1: (+x, -y, -z)
     
-    let svo = voxelgrid_to_svo_flat(grid)
+    let svo = voxelgrid_to_svo64_flat(grid)
     
     let (_, is_leaf, _) = decode_node(svo[0])
     assert(!is_leaf, "Root should be interior for multiple voxels")
@@ -70,7 +70,7 @@ fn test_homogeneous_regions_collapse() {
         }
     }
     
-    let svo = voxelgrid_to_svo_flat(grid)
+    let svo = voxelgrid_to_svo64_flat(grid)
     
     // Should be more compact than 8 leaf nodes
     println!("[test] Homogeneous collapse: {} nodes for 8 voxels", svo.len())

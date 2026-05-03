@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use anyhow::Result;
 /// TDD Test: Parent Module Re-export Imports
 ///
@@ -22,22 +25,20 @@ use anyhow::Result;
 /// use super::Texture;  // ✅ Correct! Uses parent's re-export
 /// ```
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "TODO v0.41.0: Fix module path resolution to use super:: instead of crate:: for parent imports"]
 fn test_parent_module_reexport_import() -> Result<()> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("wj_parent_reexport_test_{}", timestamp));
+    let _tmp = tempfile::tempdir().unwrap();
+    let temp_dir = _tmp
+        .path()
+        .join(format!("wj_parent_reexport_test_{}", timestamp));
+
     fs::create_dir_all(&temp_dir)?;
 
     // Create src_wj/rendering directory
@@ -87,7 +88,7 @@ struct Sprite {
     )?;
 
     // Build the library
-    let wj_compiler = get_wj_compiler();
+    let wj_compiler = test_utils::wj_binary();
     let lib_output = temp_dir.join("lib");
     fs::create_dir_all(&lib_output)?;
 
@@ -109,7 +110,6 @@ struct Sprite {
     let sprite_rs_content = fs::read_to_string(&sprite_rs_path)?;
 
     // Clean up
-    let _ = fs::remove_dir_all(&temp_dir);
 
     // Should NOT have super::rendering::Texture (invalid path)
     assert!(

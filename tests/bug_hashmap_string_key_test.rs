@@ -4,51 +4,8 @@
 /// creates &&String which doesn't satisfy Borrow trait
 ///
 /// Solution: Strip explicit & for borrowed String params passed to HashMap key methods
-use std::fs;
-use std::process::Command;
-
-fn run_wj_test(source: &str) -> String {
-    let temp_dir = std::env::temp_dir();
-    let test_id = format!(
-        "wj_test_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
-    let test_dir = temp_dir.join(&test_id);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let wj_file = test_dir.join("test.wj");
-    fs::write(&wj_file, source).unwrap();
-
-    let out_dir = test_dir.join("out");
-
-    let wj_binary = env!("CARGO_BIN_EXE_wj");
-    let output = Command::new(wj_binary)
-        .arg("build")
-        .arg(&wj_file)
-        .arg("--target")
-        .arg("rust")
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "wj build failed:\n{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    let generated = fs::read_to_string(&rust_file).expect("Failed to read generated Rust file");
-
-    fs::remove_dir_all(&test_dir).ok();
-    generated
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_hashmap_string_key_contains() {
@@ -67,20 +24,20 @@ fn main() {
 }
 "#;
 
-    let generated = run_wj_test(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&key` → we generate `contains_key(key)` (already &str, strip redundant &)
+    // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods
+    // - HashMap::contains_key takes &Q where Q: Borrow<K>, so &str works via Borrow trait
+    // - Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
         generated.contains("key: &str"),
-        "Should generate &str parameter. Generated:\n{}",
+        "Should generate &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("contains_key(key)"),
-        "Should pass key directly (already &str, strip &). Generated:\n{}",
+        "Should pass key directly (already &str). Generated:\n{}",
         generated
     );
 }
@@ -102,20 +59,20 @@ fn main() {
 }
 "#;
 
-    let generated = run_wj_test(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated code:\n{}", generated);
 
-    // WINDJAMMER DESIGN: String params infer to &str (not &String!)
-    // - Read-only string param → &str (idiomatic Rust)
-    // - User wrote `&key` → we generate `map.get(key)` (already &str, strip redundant &)
+    // PHASE 2 OPTIMIZATION: String params can be &str for HashMap methods
+    // - HashMap::get takes &Q where Q: Borrow<K>, so &str works via Borrow trait
+    // - Phase 2 optimizer correctly identifies this as a safe &str usage
     assert!(
         generated.contains("key: &str"),
-        "Should generate &str parameter. Generated:\n{}",
+        "Should generate &str parameter (Phase 2 optimization). Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("map.get(key)"),
-        "Should pass key directly (already &str, strip &). Generated:\n{}",
+        "Should pass key directly (already &str). Generated:\n{}",
         generated
     );
 }

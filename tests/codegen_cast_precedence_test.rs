@@ -30,9 +30,11 @@ fn main() {
     let wj_file = output_dir.join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
 
-    // Compile
+    // Transpile only — this test asserts on generated Rust shape, not rustc output.
+    // Skipping cargo avoids flaky failures (disk space, parallel test load) unrelated to cast precedence.
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)
@@ -77,9 +79,10 @@ fn main() {
     let wj_file = output_dir.join("test.wj");
     fs::write(&wj_file, wj_code).unwrap();
 
-    // Compile
+    // Transpile only — see test_cast_followed_by_method.
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)

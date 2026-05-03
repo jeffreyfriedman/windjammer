@@ -2,14 +2,12 @@
 ///
 /// Bug: Transpiler was adding .cloned() to Some(squad) when squad is already &Squad
 /// This caused type mismatches: expected &Squad, found Squad
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -42,7 +40,7 @@ impl Manager {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             wj_path.to_str().unwrap(),
@@ -108,7 +106,7 @@ impl Manager {
     fs::write(&wj_path, source).expect("Failed to write test file");
     fs::create_dir_all(&out_dir).expect("Failed to create output dir");
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             wj_path.to_str().unwrap(),

@@ -1,0 +1,8 @@
+// TDD: Generic function with wrapping decorator (@timeout)
+// Tests: generate_function_with_wrapping path preserves <T>
+// When a generic function has @timeout/@bench, it goes through wrapping path - must emit <T>
+
+@timeout(5000)
+pub fn identity<T>(value: T) -> T {
+    value
+}

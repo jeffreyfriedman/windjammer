@@ -1,48 +1,15 @@
 // Pattern Matching Tests
 // Automated tests for pattern matching features
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-fn get_wj_compiler() -> PathBuf {
-    // TDD FIX: Use pre-compiled test binary to avoid race conditions
-    // The env!("CARGO_BIN_EXE_wj") macro provides the path to the binary
-    // built for tests, which avoids parallel compilation issues.
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn compile_wj_code(code: &str) -> Result<String, String> {
-    // Use unique temp file to avoid test interference
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_file = format!("/tmp/test_pattern_matching_{}.wj", timestamp);
-
-    fs::write(&temp_file, code).expect("Failed to write test file");
-
-    let output = Command::new(get_wj_compiler())
-        .args(["build", &temp_file, "--no-cargo"])
-        .output()
-        .expect("Failed to execute compiler");
-
-    // Clean up temp file
-    let _ = fs::remove_file(&temp_file);
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        // Capture both stdout and stderr for error messages
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("{}{}", stdout, stderr))
-    }
-}
-
 fn compile_should_succeed(code: &str, test_name: &str) {
-    match compile_wj_code(code) {
+    match test_utils::compile_single_result(code) {
         Ok(_) => println!("✓ {} passed", test_name),
         Err(e) => panic!("✗ {} failed: {}", test_name, e),
     }
@@ -54,7 +21,7 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
         .join(wj_file);
 
     // First, compile the Windjammer code
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
@@ -101,7 +68,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
         .join("tests")
         .join(wj_file);
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
         .output()
         .expect("Failed to execute compiler");
@@ -132,7 +99,7 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
 }
 
 fn compile_should_fail(code: &str, expected_error: &str, test_name: &str) {
-    match compile_wj_code(code) {
+    match test_utils::compile_single_result(code) {
         Ok(_) => panic!("✗ {} should have failed but succeeded", test_name),
         Err(e) => {
             if e.contains(expected_error) {
@@ -515,8 +482,8 @@ fn test_module_import_resolution() {
     compile_and_check_generated_rust(
         "module_import_resolution_user.wj",
         &[
-            "use module_import_resolution::RigidBody2D",
-            "use module_import_resolution::Collider2D", // NOT collider2d!
+            "use super::module_import_resolution::RigidBody2D",
+            "use super::module_import_resolution::Collider2D", // NOT collider2d!
         ],
         "module_import_resolution",
     );
@@ -562,7 +529,6 @@ fn test_param_mutability_inference() {
 }
 
 #[test]
-#[ignore] // TODO: Requires windjammer_runtime crate in test environment
 fn test_trait_impl_stdlib() {
     // Test that trait implementations match trait signatures exactly
     // Bug: fn add(self, other: Point) was generating other: &Point
@@ -572,7 +538,6 @@ fn test_trait_impl_stdlib() {
 }
 
 #[test]
-#[ignore] // TODO: Requires windjammer_runtime crate in test environment
 fn test_copy_type_ownership() {
     // Test that Copy types used in operator expressions remain owned
     // Bug: fn distance(a: Vec2, b: Vec2) with a - b generates a: &Vec2, b: &Vec2

@@ -1,0 +1,60 @@
+// Integration Test: Basic Features
+//
+// Covers: variables, functions, structs, enums, control flow
+// EXPECTED: All backends produce identical output ending with PASSED
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+impl Point {
+    fn sum(self) -> int {
+        self.x + self.y
+    }
+}
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn color_name(c: Color) -> string {
+    match c {
+        Color::Red => "red",
+        Color::Green => "green",
+        Color::Blue => "blue",
+    }
+}
+
+fn main() {
+    let a = 42
+    let b = add(10, 20)
+    println("[basic] a=${a}, add=${b}")
+
+    let p = Point { x: 3, y: 4 }
+    println("[basic] point sum=${p.sum()}")
+
+    println("[basic] Red=${color_name(Color::Red)}")
+
+    if a > 0 {
+        println("[basic] positive")
+    }
+
+    let mut i = 0
+    while i < 2 {
+        println("[basic] while ${i}")
+        i += 1
+    }
+
+    for j in 0..2 {
+        println("[basic] for ${j}")
+    }
+
+    println("PASSED")
+}

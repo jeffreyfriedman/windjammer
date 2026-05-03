@@ -117,8 +117,10 @@ fn optimize_loops_in_item<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
+                    return_decorators: func.return_decorators.clone(),
                     body: new_body,
                     parent_type: func.parent_type.clone(),
+                    impl_trait: func.impl_trait.clone(),
                     doc_comment: func.doc_comment.clone(),
                 },
                 location: location.clone(),
@@ -141,8 +143,10 @@ fn optimize_loops_in_item<'ast>(
                     is_async: func.is_async,
                     parameters: func.parameters.clone(),
                     return_type: func.return_type.clone(),
+                    return_decorators: func.return_decorators.clone(),
                     body: optimize_loops_in_statements(&func.body, config, stats, optimizer),
                     parent_type: func.parent_type.clone(),
+                    impl_trait: func.impl_trait.clone(),
                     doc_comment: func.doc_comment.clone(),
                 })
                 .collect();
@@ -157,6 +161,7 @@ fn optimize_loops_in_item<'ast>(
                     associated_types: impl_block.associated_types.clone(),
                     functions: new_functions,
                     decorators: impl_block.decorators.clone(),
+                    is_extern: impl_block.is_extern,
                 },
                 location: location.clone(),
             }
@@ -178,11 +183,13 @@ fn optimize_loops_in_item<'ast>(
             name,
             type_,
             value,
+            is_pub,
             location,
         } => Item::Const {
             name: name.clone(),
             type_: type_.clone(),
             value: optimize_loops_in_expression(value, config, stats, optimizer),
+            is_pub: *is_pub,
             location: location.clone(),
         },
         _ => item.clone(),
@@ -974,9 +981,11 @@ mod tests {
                     }],
                     is_async: false,
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1036,9 +1045,11 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1118,9 +1129,11 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                     parameters: vec![],
                     return_type: Some(Type::Custom("i32".to_string())),
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::Return {
                         value: Some(test_alloc_expr(Expression::Binary {
                             left: test_alloc_expr(Expression::Identifier {
@@ -1160,9 +1173,11 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {
@@ -1217,9 +1232,11 @@ mod tests {
                     decorators: vec![],
                     is_async: false,
                     parent_type: None,
+                    impl_trait: None,
                     doc_comment: None,
                     parameters: vec![],
                     return_type: None,
+                    return_decorators: Vec::new(),
                     body: vec![test_alloc_stmt(Statement::For {
                         pattern: Pattern::Identifier("i".to_string()),
                         iterable: test_alloc_expr(Expression::Range {

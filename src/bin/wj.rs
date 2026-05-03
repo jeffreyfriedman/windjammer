@@ -122,6 +122,10 @@ enum Commands {
         /// Skip cargo build after transpilation (transpile only)
         #[arg(long)]
         no_cargo: bool,
+
+        /// External crate metadata for cross-crate type inference (NAME=PATH, repeatable)
+        #[arg(long, value_name = "NAME=PATH")]
+        metadata: Vec<String>,
     },
 
     /// Compile and run a Windjammer file
@@ -185,11 +189,15 @@ enum Commands {
         check: bool,
     },
 
-    /// Run linter (clippy)
+    /// Run Rust leakage linter on .wj files (W0001-W0004)
     Lint {
-        /// Automatically fix warnings
+        /// File or directory to lint
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Fail on warnings (for CI)
         #[arg(long)]
-        fix: bool,
+        strict: bool,
     },
 
     /// Type check without building
@@ -270,6 +278,35 @@ enum Commands {
         code: String,
     },
 
+    /// Compile .wjsl shader to WGSL (with type checking)
+    ShaderCompile {
+        /// Path to .wjsl file
+        #[arg(value_name = "FILE")]
+        input: PathBuf,
+
+        /// Output path for .wgsl file (default: stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
+    },
+
+    /// Validate WJSL shader files (transpile to WGSL and check for errors)
+    ValidateWjsl {
+        /// Path to directory containing .wjsl files
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+    },
+
+    /// Clean build artifacts and stale temp files
+    Clean {
+        /// Also clean local target/ directories (deep clean)
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
+    #[command(name = "self-install")]
+    SelfInstall,
+
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
@@ -305,6 +342,7 @@ fn main() -> anyhow::Result<()> {
             library,
             module_file,
             no_cargo,
+            metadata,
         } => {
             // TODO: Pass defer_drop config to compiler
             // For now, just ignore these flags - defer drop is always auto
@@ -331,6 +369,7 @@ fn main() -> anyhow::Result<()> {
                 library,
                 module_file,
                 !no_cargo, // run_cargo = !no_cargo
+                &metadata,
             )?;
         }
         Commands::Run {
@@ -371,8 +410,8 @@ fn main() -> anyhow::Result<()> {
         Commands::Fmt { check } => {
             windjammer::cli::fmt::execute(check)?;
         }
-        Commands::Lint { fix } => {
-            windjammer::cli::lint::execute(fix)?;
+        Commands::Lint { path, strict } => {
+            windjammer::cli::lint::execute(&path, strict)?;
         }
         Commands::Check => {
             windjammer::cli::check::execute()?;
@@ -477,6 +516,20 @@ fn main() -> anyhow::Result<()> {
                 println!("  wj explain E0425  (Rust error code)");
             }
         }
+        Commands::ShaderCompile { input, output } => {
+            let source = std::fs::read_to_string(&input)
+                .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", input.display(), e))?;
+            let wgsl = windjammer::shader::compile_shader(&source)?;
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &wgsl)?;
+                    println!("Compiled {} -> {}", input.display(), path.display());
+                }
+                None => {
+                    print!("{}", wgsl);
+                }
+            }
+        }
         Commands::Errors { file, output } => {
             use colored::*;
 
@@ -507,6 +560,7 @@ fn main() -> anyhow::Result<()> {
                 false, // library
                 false, // module_file
                 false, // run_cargo - not needed when check=true
+                &[],   // metadata
             )
             .ok(); // Ignore errors, we'll get them from the TUI
 
@@ -520,6 +574,76 @@ fn main() -> anyhow::Result<()> {
                 "{}",
                 "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed()
             );
+        }
+        Commands::ValidateWjsl { path } => {
+            use colored::*;
+            use std::path::Path;
+
+            println!("{}", "Validating WJSL shaders...".bold());
+
+            let mut errors = 0u32;
+            let mut validated = 0u32;
+
+            fn find_wjsl_files(dir: &Path, files: &mut Vec<std::path::PathBuf>) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_dir() {
+                            find_wjsl_files(&p, files);
+                        } else if p.extension().is_some_and(|e| e == "wjsl") {
+                            files.push(p);
+                        }
+                    }
+                }
+            }
+
+            let mut wjsl_files = Vec::new();
+            find_wjsl_files(&path, &mut wjsl_files);
+            wjsl_files.sort();
+
+            for file in &wjsl_files {
+                let source = match std::fs::read_to_string(file) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("  {} {}: {}", "✗".red(), file.display(), e);
+                        errors += 1;
+                        continue;
+                    }
+                };
+
+                let base_dir = file.parent().unwrap_or(Path::new("."));
+                match windjammer::wjsl::transpile_wjsl_with_includes(&source, base_dir) {
+                    Ok(_) => {
+                        validated += 1;
+                    }
+                    Err(e) => {
+                        eprintln!("  {} {}: {}", "✗".red(), file.display(), e);
+                        errors += 1;
+                    }
+                }
+            }
+
+            if errors > 0 {
+                eprintln!(
+                    "\n{} {} shader(s) validated, {} error(s)",
+                    "WJSL validation failed:".red().bold(),
+                    validated,
+                    errors
+                );
+                std::process::exit(1);
+            } else {
+                println!(
+                    "  {} {} shader(s) validated successfully",
+                    "✓".green(),
+                    validated
+                );
+            }
+        }
+        Commands::Clean { all } => {
+            windjammer::cli::clean::execute(all)?;
+        }
+        Commands::SelfInstall => {
+            windjammer::cli::self_install::execute()?;
         }
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {

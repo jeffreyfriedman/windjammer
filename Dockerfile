@@ -3,6 +3,11 @@ FROM rust:1.90 AS builder
 
 WORKDIR /app
 
+# Install build dependencies (cmake needed for joltc-sys/rolt)
+RUN apt-get update && \
+    apt-get install -y cmake build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy workspace and dependency files first for better caching
 COPY Cargo.toml Cargo.lock ./
 COPY crates/windjammer-lsp/Cargo.toml ./crates/windjammer-lsp/
@@ -12,9 +17,11 @@ COPY rendering_ffi/Cargo.toml ./rendering_ffi/
 
 # Create dummy source files to build dependencies
 RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/benches crates/windjammer-mcp/src crates/windjammer-mcp/benches crates/windjammer-runtime/src rendering_ffi/src && \
+    echo "fn main() {}" > build.rs && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub fn dummy() {}" > src/lib.rs && \
     echo "fn main() {}" > src/bin/wj.rs && \
+    echo "fn main() {}" > src/bin/wj-lint.rs && \
     echo "fn main() {}" > benches/compilation.rs && \
     echo "fn main() {}" > benches/runtime.rs && \
     echo "fn main() {}" > benches/defer_drop_bench.rs && \
@@ -24,6 +31,7 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
     echo "fn main() {}" > benches/incremental_compilation.rs && \
     echo "fn main() {}" > benches/regression_benchmarks.rs && \
     echo "fn main() {}" > benches/arena_performance.rs && \
+    echo "fn main() {}" > benches/string_optimization_bench.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-lsp/src/lib.rs && \
     echo "fn main() {}" > crates/windjammer-lsp/benches/salsa_performance.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \
@@ -40,6 +48,7 @@ COPY rendering_ffi ./rendering_ffi
 COPY benches ./benches
 COPY std ./std
 COPY examples ./examples
+COPY docs ./docs
 
 # Build the actual binary
 RUN cargo build --release --bin wj

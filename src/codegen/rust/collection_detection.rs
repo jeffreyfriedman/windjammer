@@ -65,6 +65,7 @@ impl CodeGenerator<'_> {
                 Self::type_references_name(type_, type_name)
                     || Self::expr_references_collection(value, type_name)
             }
+            Item::ExternLet { type_, .. } => Self::type_references_name(type_, type_name),
             Item::Mod { items, .. } => items
                 .iter()
                 .any(|i| Self::item_references_collection(i, type_name)),

@@ -1,0 +1,13 @@
+// TDD: Method with its own type parameter (not from impl)
+// Tests: impl Scene { pub fn add_entity<T>(self, entity: T) -> i64 }
+// The T is on the METHOD, not the impl block
+
+pub struct Scene {
+    count: i64,
+}
+
+impl Scene {
+    pub fn add_entity<T>(self, entity: T) -> i64 {
+        self.count
+    }
+}

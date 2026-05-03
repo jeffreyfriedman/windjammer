@@ -45,6 +45,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             false, // library
             false, // module_file
             false, // run_cargo - run.rs handles execution itself
+            &[],   // metadata
         )?;
 
         // Run with Node.js
@@ -71,7 +72,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
         ),
     };
 
-    crate::build_project(path, output_dir, target)?;
+    crate::build_project(path, output_dir, target, true)?;
 
     // Run with cargo
     let mut cmd = Command::new("cargo");

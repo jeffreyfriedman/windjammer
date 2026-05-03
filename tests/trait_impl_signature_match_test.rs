@@ -2,35 +2,12 @@
 // Bug: Trait impls apply ownership inference when they should match trait signature
 // Expected: impl fn update(delta: f32) to match trait fn update(delta: f32)
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn compile_windjammer_and_check(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_file = temp_dir.path().join("test.wj");
-    let output_dir = temp_dir.path().join("out");
-    fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-
-    fs::write(&test_file, code).unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            test_file.to_str().unwrap(),
-            "--output",
-            output_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run wj");
-
-    let output_file = output_dir.join("test.rs");
-    let generated = fs::read_to_string(&output_file).unwrap_or_default();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    (output.status.success(), generated, stderr)
-}
 
 fn compile_rust(code: &str) -> (bool, String) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -73,7 +50,7 @@ impl GameLoop for MyGame {
 }
 "#;
 
-    let (success, generated, _stderr) = compile_windjammer_and_check(code);
+    let (generated, success) = test_utils::compile_single_check(code);
     assert!(success, "Windjammer compilation should succeed");
 
     // Verify trait has f32 (not &f32)
@@ -141,7 +118,7 @@ impl GameLoop for MyGame {
 }
 "#;
 
-    let (success, generated, _stderr) = compile_windjammer_and_check(code);
+    let (generated, success) = test_utils::compile_single_check(code);
     assert!(success, "Windjammer compilation should succeed");
 
     // Verify trait signatures are owned (not &Input, &RenderContext)

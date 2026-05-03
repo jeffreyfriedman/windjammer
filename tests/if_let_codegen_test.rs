@@ -11,45 +11,8 @@
 /// Fix: Detect this pattern in Statement::Match codegen and emit `if let`
 /// instead of `match`. When the wildcard arm has a non-empty body, emit
 /// `if let ... { } else { }`.
-use std::io::Write;
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = dir.path().join("test.wj");
-    let out_dir = dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    let mut file = std::fs::File::create(&wj_path).unwrap();
-    file.write_all(source.as_bytes()).unwrap();
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "--no-cargo",
-            "-o",
-            out_dir.to_str().unwrap(),
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let rs_path = out_dir.join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "No output file generated.\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        );
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_if_let_some_generates_if_let() {
@@ -69,7 +32,7 @@ impl Container {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(
@@ -103,7 +66,7 @@ impl Container {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(
@@ -137,7 +100,7 @@ impl Registry {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(
@@ -159,7 +122,7 @@ pub fn describe(opt: Option<i32>) -> String {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
     assert!(

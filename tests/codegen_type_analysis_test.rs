@@ -1,6 +1,6 @@
 // TDD Tests for type_analysis functions (Phase 8 - Retroactive TDD)
 
-use windjammer::codegen::rust::type_analysis::is_copy_type;
+use windjammer::codegen::rust::type_analysis::{is_copy_type, is_known_copy_type};
 use windjammer::parser::Type;
 
 // =============================================================================
@@ -144,4 +144,33 @@ fn test_is_copy_type_result() {
 fn test_is_copy_type_infer() {
     // Type::Infer should be assumed non-Copy (conservative)
     assert!(!is_copy_type(&Type::Infer));
+}
+
+// =============================================================================
+// is_known_copy_type Tests (for external crate types)
+// =============================================================================
+
+#[test]
+fn test_is_known_copy_type_vec3_aabb() {
+    // Game engine types from external crates (windjammer-app)
+    assert!(is_known_copy_type("Vec3"));
+    assert!(is_known_copy_type("Vec2"));
+    assert!(is_known_copy_type("Vec4"));
+    assert!(is_known_copy_type("AABB"));
+}
+
+#[test]
+fn test_is_known_copy_type_other() {
+    assert!(is_known_copy_type("Vec3Save"));
+    assert!(is_known_copy_type("Rect"));
+    assert!(is_known_copy_type("Point"));
+    assert!(is_known_copy_type("Color"));
+}
+
+#[test]
+fn test_is_known_copy_type_non_copy() {
+    // Types with String/other non-Copy fields - NOT in the list
+    assert!(!is_known_copy_type("SaveSlot"));
+    assert!(!is_known_copy_type("SaveSlotInfo"));
+    assert!(!is_known_copy_type("String"));
 }

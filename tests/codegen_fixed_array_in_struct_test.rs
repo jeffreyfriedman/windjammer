@@ -8,44 +8,13 @@
 ///
 /// Exception: Empty `[]` still generates `vec![]` because Rust can't infer
 /// type/size without context. For typed empty arrays, use explicit syntax.
-fn compile_to_rust(source: &str) -> String {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("test.wj");
-    std::fs::write(&test_file, source).unwrap();
-
-    let output_dir = temp_dir.path().join("build");
-    std::fs::create_dir_all(&output_dir).unwrap();
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
-        .arg("build")
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .arg(&test_file)
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("Failed to execute wj compiler");
-
-    if !output.status.success() {
-        panic!(
-            "Compilation failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let generated = output_dir.join("test.rs");
-    std::fs::read_to_string(&generated).unwrap_or_else(|_| {
-        panic!(
-            "No test.rs generated. stderr:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-    })
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_struct_field_array_uses_fixed_syntax() {
     // Array literals in struct fields should generate [...] not vec![...]
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Vertex {
     position: [f32; 3],
@@ -61,16 +30,22 @@ fn main() {
 "#,
     );
 
-    // Should contain fixed-size array syntax [...]
+    // Should use fixed-size array syntax [...] not vec![...]
+    // Float inference correctly adds _f32 suffix for [f32; 3] context
     assert!(
-        code.contains("position: [1.0, 2.0, 3.0]") || code.contains("position: [1.0,2.0,3.0]"),
-        "Struct field should use fixed-size array syntax [...], not vec![...]. Generated:\n{}",
+        code.contains("position: [1.0_f32, 2.0_f32, 3.0_f32]"),
+        "Struct field [f32; 3] should use fixed-size array with correct float suffix. Generated:\n{}",
+        code
+    );
+    assert!(
+        code.contains("color: [1.0_f32, 0.0_f32, 0.0_f32, 1.0_f32]"),
+        "Struct field [f32; 4] should use fixed-size array with correct float suffix. Generated:\n{}",
         code
     );
 
     // Should NOT contain vec![] for struct fields
     assert!(
-        !code.contains("vec![1.0, 2.0, 3.0]"),
+        !code.contains("vec!["),
         "Struct field should NOT use vec![...] for fixed-size arrays. Generated:\n{}",
         code
     );
@@ -79,7 +54,7 @@ fn main() {
 #[test]
 fn test_standalone_array_uses_fixed_syntax() {
     // Array literals everywhere now generate fixed-size syntax [...]
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 fn main() {
     let items = [1, 2, 3]
@@ -105,7 +80,7 @@ fn main() {
 #[test]
 fn test_function_returning_fixed_array_uses_fixed_syntax() {
     // Functions with return type [f32; N] should generate [...] not vec![...]
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Vec3 {
     x: f32,
@@ -144,7 +119,7 @@ fn main() {
 fn test_empty_array_in_struct_uses_vec_syntax() {
     // Empty array literals generate vec![] because Rust can't infer type/size from []
     // TODO: Future enhancement: use type information from struct field to generate []
-    let code = compile_to_rust(
+    let code = test_utils::compile_single(
         r#"
 struct Data {
     values: [i32; 0],

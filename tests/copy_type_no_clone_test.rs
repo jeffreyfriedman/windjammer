@@ -1,4 +1,6 @@
-use std::io::Write;
+#[path = "test_utils.rs"]
+mod test_utils;
+
 /// TDD Test: Compiler should NOT emit .clone() on Copy types
 ///
 /// Bug: When a variable is assigned from a static method call that returns f32/i32,
@@ -11,45 +13,6 @@ use std::io::Write;
 ///   let b = MyMath::lerp(u, x3, x4)   // u is Copy (f32), just copy it
 ///
 /// Expected: generated Rust should use `u` directly, not `u.clone()`
-use std::process::Command;
-
-fn compile_wj(source: &str) -> String {
-    let dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let wj_path = dir.path().join("test.wj");
-    let out_dir = dir.path().join("out");
-    std::fs::create_dir_all(&out_dir).unwrap();
-
-    let mut file = std::fs::File::create(&wj_path).unwrap();
-    file.write_all(source.as_bytes()).unwrap();
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "--no-cargo",
-            "-o",
-            out_dir.to_str().unwrap(),
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run wj");
-
-    let rs_path = out_dir.join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!(
-            "No output file generated.\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        );
-    }
-}
-
 #[test]
 fn test_no_clone_on_f32_from_static_method() {
     let source = r#"
@@ -75,7 +38,7 @@ impl MathHelper {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     // u is f32 (Copy type) - should NOT have .clone()
     assert!(
         !generated.contains("u.clone()"),
@@ -100,7 +63,7 @@ impl Foo {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     // idx is i32 (Copy type) - should NOT have .clone()
     assert!(
         !generated.contains("idx.clone()"),
@@ -127,7 +90,7 @@ impl Game {
 }
 "#;
 
-    let generated = compile_wj(source);
+    let generated = test_utils::compile_single(source);
     // active is bool (Copy type) - should NOT have .clone()
     assert!(
         !generated.contains("active.clone()"),

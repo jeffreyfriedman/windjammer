@@ -68,13 +68,14 @@ fn main() {
     let rust_code = fs::read_to_string(rust_file).unwrap();
 
     // Should have semicolons after take_damage calls
+    // Note: integer literals now correctly get _i32 suffix
     assert!(
-        rust_code.contains("take_damage(amount * 2);"),
-        "Missing semicolon after take_damage in Fire arm"
+        rust_code.contains("take_damage(amount * 2_i32);"),
+        "Missing semicolon after take_damage in Fire arm. Generated:\n{rust_code}"
     );
     assert!(
         rust_code.contains("take_damage(amount);"),
-        "Missing semicolon after take_damage in Ice arm"
+        "Missing semicolon after take_damage in Ice arm. Generated:\n{rust_code}"
     );
 
     println!("✅ Generated Rust has correct semicolons in match arms");

@@ -22,6 +22,7 @@ pub struct Parameter<'ast> {
     pub type_: Type,
     pub ownership: OwnershipHint,
     pub is_mutable: bool, // Whether parameter is declared with 'mut' keyword
+    pub decorators: Vec<Decorator<'ast>>, // GPU builtins, etc.
 }
 
 // ============================================================================
@@ -49,9 +50,12 @@ pub struct FunctionDecl<'ast> {
     pub is_async: bool,
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
-    pub body: Vec<&'ast Statement<'ast>>, // Empty for extern functions
-    pub parent_type: Option<String>,      // The type name if this function is in an impl block
-    pub doc_comment: Option<String>,      // Documentation comment (/// lines)
+    pub return_decorators: Vec<Decorator<'ast>>, // Decorators on return type (e.g., @location(0))
+    pub body: Vec<&'ast Statement<'ast>>,        // Empty for extern functions
+    pub parent_type: Option<String>, // The type name if this function is in an impl block
+    /// `None` for inherent `impl Type`; `Some(trait)` for `impl Trait for Type` (disambiguates codegen).
+    pub impl_trait: Option<String>,
+    pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
 
 // ============================================================================
@@ -71,9 +75,11 @@ pub struct StructField<'ast> {
 pub struct StructDecl<'ast> {
     pub name: String,
     pub is_pub: bool,                // Whether this struct has pub visibility
+    pub is_extern: bool,             // `extern struct` — opaque / linked type
     pub type_params: Vec<TypeParam>, // Generic type parameters with optional bounds: <T: Clone>
     pub where_clause: Vec<(String, Vec<String>)>, // Where clause: [(type_param, [trait_bounds])]
     pub fields: Vec<StructField<'ast>>,
+    pub tuple_fields: Option<Vec<Type>>, // Tuple struct fields: struct Point(i32, i32)
     pub decorators: Vec<Decorator<'ast>>,
     pub doc_comment: Option<String>, // Documentation comment (/// lines)
 }
@@ -255,6 +261,7 @@ pub enum Pattern<'ast> {
     Reference(&'ast Pattern<'ast>), // Reference pattern: &x
     Ref(String),                    // Ref binding: ref x (borrows without moving)
     RefMut(String),                 // RefMut binding: ref mut x (mutable borrow)
+    MutBinding(String),             // Mut binding: mut x (takes ownership, allows mutation)
 }
 
 // ============================================================================
@@ -405,6 +412,11 @@ impl std::hash::Hash for Literal {
                 0u8.hash(state);
                 i.hash(state);
             }
+            Literal::IntSuffixed(i, suffix) => {
+                5u8.hash(state);
+                i.hash(state);
+                suffix.hash(state);
+            }
             Literal::Float(f) => {
                 1u8.hash(state);
                 // Hash the bit representation of the float
@@ -464,6 +476,8 @@ pub struct ImplBlock<'ast> {
     pub associated_types: Vec<AssociatedType>, // Associated type implementations: type Item = i32;
     pub functions: Vec<FunctionDecl<'ast>>,
     pub decorators: Vec<Decorator<'ast>>,
+    /// `extern impl` — signatures for FFI/linked code; same codegen shape as normal impl
+    pub is_extern: bool,
 }
 
 // ============================================================================
@@ -494,6 +508,7 @@ pub enum Item<'ast> {
     },
     Const {
         name: String,
+        is_pub: bool,
         type_: Type,
         value: &'ast Expression<'ast>,
         location: SourceLocation,
@@ -503,6 +518,13 @@ pub enum Item<'ast> {
         mutable: bool,
         type_: Type,
         value: &'ast Expression<'ast>,
+        location: SourceLocation,
+    },
+    ExternLet {
+        name: String,
+        type_: Type,
+        decorators: Vec<Decorator<'ast>>,
+        is_pub: bool,
         location: SourceLocation,
     },
     Use {
@@ -541,6 +563,7 @@ impl<'ast> Item<'ast> {
             Item::Impl { location, .. } => location.clone(),
             Item::Const { location, .. } => location.clone(),
             Item::Static { location, .. } => location.clone(),
+            Item::ExternLet { location, .. } => location.clone(),
             Item::Use { location, .. } => location.clone(),
             Item::Mod { location, .. } => location.clone(),
             Item::BoundAlias { location, .. } => location.clone(),

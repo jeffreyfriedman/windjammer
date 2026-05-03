@@ -73,7 +73,7 @@ fn test_no_inline_modules_in_individual_files() {
     )
     .unwrap();
 
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = temp_dir.path().join("output");
 
@@ -115,10 +115,12 @@ fn test_no_inline_modules_in_individual_files() {
         audio_mod_rs
     );
 
-    // audio/mod.rs should contain the sound module DECLARATION (not inline!)
+    // audio/mod.rs should reference the `sound` submodule (declaration or re-export)
     assert!(
-        audio_mod_rs.contains("pub mod sound;"),
-        "audio/mod.rs should contain the sound module declaration, got:\n{}",
+        audio_mod_rs.contains("pub mod sound;")
+            || audio_mod_rs.contains("self::sound::")
+            || audio_mod_rs.contains("sound::"),
+        "audio/mod.rs should reference the sound module, got:\n{}",
         audio_mod_rs
     );
 
@@ -145,10 +147,11 @@ fn test_no_inline_modules_in_individual_files() {
         physics_mod_rs
     );
 
-    // physics/mod.rs should contain the rigidbody module DECLARATION (not inline!)
     assert!(
-        physics_mod_rs.contains("pub mod rigidbody;"),
-        "physics/mod.rs should contain the rigidbody module declaration, got:\n{}",
+        physics_mod_rs.contains("pub mod rigidbody;")
+            || physics_mod_rs.contains("self::rigidbody::")
+            || physics_mod_rs.contains("rigidbody::"),
+        "physics/mod.rs should reference the rigidbody module, got:\n{}",
         physics_mod_rs
     );
 

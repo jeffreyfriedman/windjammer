@@ -63,8 +63,12 @@ where
     fs::write(project_root.join("ffi.rs"), ffi_rs).unwrap();
 
     // Run the actual build process
-    let result =
-        windjammer::build_project(&src_wj, &build_dir, windjammer::CompilationTarget::Rust);
+    let result = windjammer::build_project(
+        &src_wj,
+        &build_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
 
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
@@ -123,8 +127,12 @@ pub fn test() {
     fs::write(project_root.join("ffi.rs"), ffi_rs).unwrap();
 
     // Build
-    let result =
-        windjammer::build_project(&src_wj, &build_dir, windjammer::CompilationTarget::Rust);
+    let result = windjammer::build_project(
+        &src_wj,
+        &build_dir,
+        windjammer::CompilationTarget::Rust,
+        true,
+    );
     assert!(result.is_ok());
 
     // Check generated file

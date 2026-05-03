@@ -52,7 +52,7 @@ fn test_trace_module_item_creation() {
         .expect("Failed to write mod.wj");
 
     // Compile with debug output
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = temp_dir.path().join("build");
 

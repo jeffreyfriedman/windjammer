@@ -509,7 +509,7 @@ impl<'a> Interpreter<'a> {
             Pattern::Wildcard => {} // Discard
             Pattern::Tuple(patterns) => {
                 if let Value::Tuple(items) = value {
-                    for (pat, val) in patterns.iter().zip(items.into_iter()) {
+                    for (pat, val) in patterns.iter().zip(items) {
                         self.bind_pattern(pat, val);
                     }
                 }
@@ -554,7 +554,7 @@ impl<'a> Interpreter<'a> {
     fn pattern_matches(&self, pattern: &Pattern, value: &Value) -> bool {
         match pattern {
             Pattern::Wildcard => true,
-            Pattern::Identifier(_) => true, // Always matches, binds the value
+            Pattern::Identifier(_) | Pattern::MutBinding(_) => true,
             Pattern::Literal(lit) => {
                 let lit_val = self.literal_to_value(lit);
                 lit_val == *value
@@ -609,13 +609,13 @@ impl<'a> Interpreter<'a> {
             }
             Pattern::Or(patterns) => patterns.iter().any(|p| self.pattern_matches(p, value)),
             Pattern::Reference(inner) => self.pattern_matches(inner, value),
-            Pattern::Ref(_) | Pattern::RefMut(_) => true, // Always matches (creates binding)
+            Pattern::Ref(_) | Pattern::RefMut(_) => true,
         }
     }
 
     fn bind_match_pattern(&mut self, pattern: &Pattern, value: &Value) {
         match pattern {
-            Pattern::Identifier(name) => {
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 self.env.define(name, value.clone());
             }
             Pattern::EnumVariant(_, binding) => {
@@ -1078,7 +1078,7 @@ impl<'a> Interpreter<'a> {
 
     fn literal_to_value(&self, lit: &Literal) -> Value {
         match lit {
-            Literal::Int(n) => Value::Int(*n),
+            Literal::Int(n) | Literal::IntSuffixed(n, _) => Value::Int(*n),
             Literal::Float(f) => Value::Float(*f),
             Literal::Bool(b) => Value::Bool(*b),
             Literal::String(s) => Value::String(s.clone()),

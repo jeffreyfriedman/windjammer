@@ -9,7 +9,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Config {
         Config {
-            host: "localhost".to_string(),
+            host: "localhost",
             port: 8080,
             timeout: 30,
         }

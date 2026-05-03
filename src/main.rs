@@ -5,9 +5,13 @@
 pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
+pub mod build_utils;
+pub mod cargo_toml;
 pub mod cli;
 pub mod codegen;
+pub mod compiler;
 pub mod component_analyzer;
+pub mod decorator_registry;
 pub mod error;
 pub mod errors;
 pub mod plugin; // Plugin discovery and delegation // High-quality error messages (mutability, etc.)
@@ -17,7 +21,8 @@ pub mod config;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
-pub mod module_system; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
+pub mod module_system;
+pub mod project_paths; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
 
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
@@ -27,6 +32,8 @@ pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
+pub mod metadata; // Cross-module type inference metadata
+pub mod method_registry;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
@@ -37,6 +44,8 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_utils; // Syntax highlighting for error snippets
+pub mod type_inference; // Expression-level float type inference
+pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -98,6 +107,10 @@ enum Commands {
         /// Auto-generate mod.rs with pub mod declarations and re-exports
         #[arg(long)]
         module_file: bool,
+
+        /// Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)
+        #[arg(long)]
+        no_lint: bool,
     },
     /// Check a Windjammer project for errors (transpile + cargo check)
     Check {
@@ -240,8 +253,9 @@ pub fn run_main_cli() -> Result<()> {
             raw_errors,
             library,
             module_file,
+            no_lint,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, !no_lint)?;
 
             // Generate mod.rs if requested
             if module_file {
@@ -263,7 +277,7 @@ pub fn run_main_cli() -> Result<()> {
             target,
             raw_errors,
         } => {
-            build_project(&path, &output, target)?;
+            build_project(&path, &output, target, true)?;
             check_with_cargo(&output, raw_errors)?;
         }
         Commands::Lint {
@@ -356,6 +370,10 @@ fn is_type_copy_quick(
         }
         Type::Array(inner, _) => is_type_copy_quick(inner, copy_structs, copy_enums),
         Type::Vec(_) | Type::String => false,
+        Type::RawPointer { pointee, .. } => {
+            is_type_copy_quick(pointee.as_ref(), copy_structs, copy_enums)
+        }
+        Type::FunctionPointer { .. } => true,
         Type::Custom(name) => {
             copy_structs.contains(name)
                 || copy_enums.contains(name)
@@ -382,7 +400,38 @@ fn is_type_copy_quick(
     }
 }
 
-pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> Result<()> {
+/// Extended build with library mode and external crate metadata.
+/// Used by CLI when --library or --metadata is passed.
+/// The full main.rs build_project doesn't yet support these - delegate to compiler for simple builds.
+pub fn build_project_ext(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+) -> Result<()> {
+    // When we have metadata or library, use the compiler's simpler build (handles cross-crate)
+    if !external_metadata.is_empty() || (library && path.is_file()) {
+        return crate::compiler::build_project_ext(
+            path,
+            output,
+            target,
+            enable_lint,
+            library,
+            external_metadata,
+        );
+    }
+    // Full multi-file build
+    build_project(path, output, target, enable_lint)
+}
+
+pub fn build_project(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+) -> Result<()> {
     use colored::*;
 
     println!(
@@ -410,7 +459,7 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     let mut all_external_crates = Vec::new();
 
     // Create a single ModuleCompiler for all files to share trait registry
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, enable_lint);
 
     // Load windjammer.toml if it exists (search up directory tree)
     let mut search_dir = if path.is_file() {
@@ -545,22 +594,39 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         }
     }
 
+    // TDD FIX: When multiple structs share the same name (different modules/files),
+    // be CONSERVATIVE: only mark as Copy if ALL definitions are Copy.
+    // Otherwise one Copy-able GameState in file A poisons non-Copy GameState in file B,
+    // causing E0382 errors when passing game_state to multiple functions.
+    //
+    // Strategy: Group structs by name, check if ALL variants are Copy, only then add to registry.
+    let mut structs_by_name: std::collections::HashMap<String, Vec<&StructInfo>> =
+        std::collections::HashMap::new();
+    for s in &all_structs {
+        structs_by_name.entry(s.name.clone()).or_default().push(s);
+    }
+
     // Fixed-point iteration: keep discovering Copy structs until stable
     loop {
         let mut changed = false;
-        for s in &all_structs {
-            if global_copy_structs.contains(&s.name) {
+        for (name, variants) in &structs_by_name {
+            if global_copy_structs.contains(name) {
                 continue; // Already known Copy
             }
-            if s.field_types.is_empty() {
-                continue; // Skip unit structs (no fields = nothing to copy from)
-            }
-            let all_copy = s
-                .field_types
-                .iter()
-                .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums));
-            if all_copy {
-                global_copy_structs.insert(s.name.clone());
+
+            // Empty structs are Copy in Rust (and codegen derives Copy); include them here
+            // so analyzer/registry match codegen and avoid E0382 from wrong `self` inference.
+            //
+            // Check if ALL variants of this struct name are Copy
+            let all_variants_copy = variants.iter().all(|s| {
+                s.field_types.is_empty()
+                    || s.field_types
+                        .iter()
+                        .all(|ty| is_type_copy_quick(ty, &global_copy_structs, &copy_enums))
+            });
+
+            if all_variants_copy {
+                global_copy_structs.insert(name.clone());
                 changed = true;
             }
         }
@@ -589,6 +655,14 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
         let mut parser = parser_impl::Parser::new(tokens);
 
         if let Ok(program) = parser.parse() {
+            // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+            // Check immediately after parsing, before trait registration
+            let checker_analyzer = analyzer::Analyzer::new();
+            if let Err(e) = checker_analyzer.check_forbidden_rust_patterns(&program) {
+                eprintln!("{}", e);
+                anyhow::bail!("{}", e);
+            }
+
             // Register any trait definitions found
             let mut has_traits = false;
             for item in &program.items {
@@ -610,7 +684,8 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
     // BUGFIX: For nested files like src_wj/ecs/entity.wj, we need to find src_wj,
     // not just the immediate parent (src_wj/ecs)
     let source_root = if path.is_file() {
-        find_source_root(path).unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
+        project_paths::find_source_root(path)
+            .unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
     } else {
         path
     };
@@ -791,9 +866,11 @@ pub fn build_project(path: &Path, output: &Path, target: CompilationTarget) -> R
             }
 
             // Merge filtered_external_crates with rust_code_deps
+            let builtin_skip = ["crate", "super", "windjammer", "windjammer_runtime"];
             let mut combined_external_crates = filtered_external_crates;
             for dep in rust_code_deps {
-                if !combined_external_crates.contains(&dep) && dep != "crate" && dep != "super" {
+                if !combined_external_crates.contains(&dep) && !builtin_skip.contains(&dep.as_str())
+                {
                     combined_external_crates.push(dep);
                 }
             }
@@ -909,7 +986,6 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
-            // Recurse into subdirectories
             find_wj_files_recursive(&path, files)?;
         }
     }
@@ -921,6 +997,7 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
 struct ModuleCompiler {
     compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     target: CompilationTarget,
+    enable_lint: bool, // Run Rust leakage linter (W0001-W0004)
     stdlib_path: PathBuf,
     source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
@@ -947,7 +1024,7 @@ struct ModuleCompiler {
 
 #[allow(dead_code)]
 impl ModuleCompiler {
-    fn new(target: CompilationTarget) -> Self {
+    fn new(target: CompilationTarget, enable_lint: bool) -> Self {
         // Check for WINDJAMMER_STDLIB env var, otherwise use ./std
         let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
             .map(PathBuf::from)
@@ -956,6 +1033,7 @@ impl ModuleCompiler {
         Self {
             compiled_modules: HashMap::new(),
             target,
+            enable_lint,
             stdlib_path,
             source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
@@ -1074,6 +1152,23 @@ impl ModuleCompiler {
             .parse()
             .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", module_path, e))?;
 
+        // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+        // This must happen immediately after parsing, before any other processing
+        {
+            eprintln!(
+                "🔍 LANGUAGE CHECK (compile_module): Scanning {} for .as_str()",
+                module_path
+            );
+            let checker_analyzer = analyzer::Analyzer::new();
+            checker_analyzer
+                .check_forbidden_rust_patterns(&program)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            eprintln!(
+                "✅ LANGUAGE CHECK (compile_module): No .as_str() found in {}",
+                module_path
+            );
+        }
+
         // Mark as "being compiled" to prevent infinite recursion
         // We'll update this with the actual code later
         self.compiled_modules
@@ -1140,7 +1235,9 @@ impl ModuleCompiler {
                     location: parser::SourceLocation::default(),
                 }],
             };
-            self.analyzer.register_traits_from_program(&dummy_program);
+            self.analyzer
+                .register_traits_from_program(&dummy_program)
+                .map_err(|e| anyhow::anyhow!("register_traits_from_program: {}", e))?;
         }
 
         // THE WINDJAMMER WAY: Store this program for cross-file trait inference
@@ -1188,6 +1285,27 @@ impl ModuleCompiler {
             );
         }
 
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.set_global_struct_field_types(&self.global_struct_field_types);
+        float_inference.set_debug_source(&source);
+        float_inference.infer_program(&program);
+
+        if !float_inference.errors.is_empty() {
+            eprintln!(
+                "🚨 Float type inference errors in module {} (file {:?}):",
+                module_path, file_path
+            );
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Create a per-file registry that starts with global signatures (for cross-module lookups)
         // then overlays per-file signatures (for local type priority).
@@ -1197,6 +1315,7 @@ impl ModuleCompiler {
         per_file_registry.merge(&signatures);
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
+        generator.set_float_inference(float_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
@@ -1433,7 +1552,7 @@ fn compile_file(
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
-    let mut module_compiler = ModuleCompiler::new(target);
+    let mut module_compiler = ModuleCompiler::new(target, true);
     // For single-file compilation, use parent directory as source root
     let source_root = input_path.parent().unwrap_or(Path::new("."));
     let is_multi_file = false; // Single file compilation
@@ -1563,6 +1682,10 @@ fn compile_file_impl(
     store_program: bool,
     _path_key: &str,
 ) -> Result<(HashSet<String>, Vec<String>)> {
+    eprintln!(
+        "🚀 ENTERED compile_file_impl for {:?}",
+        input_path.file_name()
+    );
     let target = module_compiler.target;
 
     // Read source file
@@ -1580,6 +1703,58 @@ fn compile_file_impl(
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+
+    // Emit parser warnings (W0010: non-canonical string types, etc.)
+    for w in parser.warnings() {
+        eprintln!(
+            "warning: {} [{}:{}:{}]",
+            w.message,
+            w.file.as_deref().unwrap_or("<unknown>"),
+            w.line.unwrap_or(0),
+            w.column.unwrap_or(0),
+        );
+    }
+
+    // Content-based shader detection: skip files with @vertex/@fragment/@compute
+    // from the Rust pipeline. These should be compiled via the WJSL→WGSL path.
+    if crate::compiler::is_shader_file(&program) {
+        eprintln!(
+            "  Skipping shader file {:?} from Rust pipeline (use WJSL target for GPU shaders)",
+            input_path.file_name()
+        );
+        return Ok((HashSet::new(), Vec::new()));
+    }
+
+    // LANGUAGE DESIGN CHECK: Prohibit Rust-specific patterns (.as_str())
+    // This must happen immediately after parsing, before any other processing
+    {
+        eprintln!(
+            "🔍 LANGUAGE CHECK (file_impl): Scanning for .as_str() in {:?}",
+            input_path.file_name()
+        );
+        let checker_analyzer = analyzer::Analyzer::new();
+        checker_analyzer
+            .check_forbidden_rust_patterns(&program)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        eprintln!("✅ LANGUAGE CHECK (file_impl): No .as_str() found");
+    }
+
+    // Cross-file ownership: load peer `*.wj.meta` (from prior `wj build` runs) into the registry
+    // before analysis so call sites get `&` / `&mut` for callees defined in other files.
+    crate::metadata::merge_wj_meta_signatures_from_dir(
+        source_root,
+        &mut module_compiler.global_signatures,
+    );
+
+    // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
+    if module_compiler.enable_lint {
+        let file_name = input_path.to_string_lossy().to_string();
+        let mut rust_leakage = linter::rust_leakage::RustLeakageLinter::new(&file_name);
+        rust_leakage.lint_program(&program);
+        for diag in rust_leakage.diagnostics() {
+            eprintln!("{}", diag);
+        }
+    }
 
     // DEBUG: Print Item::Mod entries in the AST
     if std::env::var("WJ_DEBUG_AST").is_ok() {
@@ -1743,7 +1918,8 @@ fn compile_file_impl(
         };
         module_compiler
             .analyzer
-            .register_traits_from_program(&dummy_program);
+            .register_traits_from_program(&dummy_program)
+            .map_err(|e| anyhow::anyhow!("register_traits_from_program: {}", e))?;
     }
 
     let (analyzed, signatures, analyzed_trait_methods) = module_compiler
@@ -1752,18 +1928,15 @@ fn compile_file_impl(
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
     // THE WINDJAMMER WAY: Run linter after analysis
-    // Compile predictably (respect explicit intent), warn helpfully (guide to better patterns)
-    if !store_program {
-        // Only run linter during PASS 2 (regeneration), not PASS 1 (registration)
-        let mut linter = linter::Linter::new();
-        for analyzed_func in &analyzed {
-            linter.lint_function(analyzed_func);
-        }
-        let diagnostics = linter.into_diagnostics();
-        for diagnostic in &diagnostics {
-            if diagnostic.level != linter::LintLevel::Allow {
-                eprintln!("{}", diagnostic);
-            }
+    // Single-file `wj build` uses store_program=true; lints must still run so stderr warnings work.
+    let mut linter = linter::Linter::new();
+    for analyzed_func in &analyzed {
+        linter.lint_function(analyzed_func);
+    }
+    let diagnostics = linter.into_diagnostics();
+    for diagnostic in &diagnostics {
+        if diagnostic.level != linter::LintLevel::Allow {
+            eprintln!("{}", diagnostic);
         }
     }
 
@@ -1919,6 +2092,28 @@ fn compile_file_impl(
             // Return empty to signal we've handled everything
             return Ok((HashSet::new(), Vec::new()));
         } else {
+            // WINDJAMMER PHILOSOPHY: Expression-level float type inference (WASM target)
+            let mut float_inference = type_inference::FloatInference::new();
+            float_inference.set_source_root(source_root);
+            float_inference
+                .set_global_struct_field_types(&module_compiler.global_struct_field_types);
+            float_inference.set_debug_source(&source);
+            float_inference.infer_program(&program);
+
+            if !float_inference.errors.is_empty() {
+                eprintln!(
+                    "🚨 Float type inference errors in {}:",
+                    input_path.display()
+                );
+                for error in &float_inference.errors {
+                    eprintln!("  {}", error);
+                }
+                return Err(anyhow::anyhow!(
+                    "Type inference failed with {} error(s)",
+                    float_inference.errors.len()
+                ));
+            }
+
             // Use old generator for non-component WASM
             // MODULE-SCOPED SIGNATURE RESOLUTION:
             // Always start with global signatures (for cross-module lookups),
@@ -1932,6 +2127,7 @@ fn compile_file_impl(
             } else {
                 codegen::CodeGenerator::new(generator_signatures, target)
             };
+            generator.set_float_inference(float_inference);
             generator.set_inferred_bounds(inferred_bounds_map);
             generator.set_analyzed_trait_methods(analyzed_trait_methods);
             // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
@@ -1942,7 +2138,8 @@ fn compile_file_impl(
 
             // Set source file for error mapping
             generator.set_source_file(input_path);
-            let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+            let output_file_path =
+                project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
             // Create parent directories if needed
             if let Some(parent) = output_file_path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -1967,6 +2164,43 @@ fn compile_file_impl(
             result
         }
     } else {
+        // WINDJAMMER PHILOSOPHY: Expression-level float type inference (Rust target)
+        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
+        let mut float_inference = type_inference::FloatInference::new();
+        float_inference.set_source_root(source_root);
+        float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        float_inference.set_debug_source(&source);
+        float_inference.infer_program(&program);
+
+        if !float_inference.errors.is_empty() {
+            eprintln!(
+                "🚨 Float type inference errors in {}:",
+                input_path.display()
+            );
+            for error in &float_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Type inference failed with {} error(s)",
+                float_inference.errors.len()
+            ));
+        }
+
+        // TDD: Integer literal type inference (i32, i64, u32, etc.)
+        let mut int_inference = type_inference::IntInference::new();
+        int_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        int_inference.infer_program(&program);
+        if !int_inference.errors.is_empty() {
+            eprintln!("🚨 Int type inference errors in {}:", input_path.display());
+            for error in &int_inference.errors {
+                eprintln!("  {}", error);
+            }
+            return Err(anyhow::anyhow!(
+                "Int type inference failed with {} error(s)",
+                int_inference.errors.len()
+            ));
+        }
+
         // Use old generator for Rust target
         // MODULE-SCOPED SIGNATURE RESOLUTION:
         // Always start with global signatures (for cross-module lookups),
@@ -1978,6 +2212,8 @@ fn compile_file_impl(
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
         };
+        generator.set_float_inference(float_inference);
+        generator.set_int_inference(int_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
@@ -1987,7 +2223,8 @@ fn compile_file_impl(
 
         // Set source file for error mapping
         generator.set_source_file(input_path);
-        let output_file_path = get_relative_output_path(source_root, input_path, output_dir)?;
+        let output_file_path =
+            project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
         // Create parent directories if needed
         if let Some(parent) = output_file_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -2039,7 +2276,7 @@ fn compile_file_impl(
     };
 
     // Write output (preserving directory structure)
-    let output_file = get_relative_output_path(source_root, input_path, output_dir)?;
+    let output_file = project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
 
     // Bug #2B FIX: Prevent lib.rs generation in subdirectories
     // --------------------------------------------------------
@@ -2123,6 +2360,73 @@ fn compile_file_impl(
 
         #[cfg(not(target_os = "linux"))]
         drop(file); // Close file handle on non-Linux systems
+    }
+
+    // TDD FIX: Emit metadata file for cross-module type inference
+    if target == CompilationTarget::Rust {
+        use crate::metadata::{metadata_function_sig_from_analyzer, ModuleMetadata};
+
+        let module_path = input_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+
+        let mut meta = ModuleMetadata::new(module_path.to_string());
+
+        // Function signatures: use analyzer registry (includes inferred param ownership)
+        for item in &program.items {
+            match item {
+                parser::Item::Function { decl, .. } => {
+                    if let Some(sig) = signatures.get_signature(&decl.name) {
+                        meta.functions.insert(
+                            decl.name.clone(),
+                            metadata_function_sig_from_analyzer(sig, false, None),
+                        );
+                    }
+                }
+                parser::Item::Impl { block, .. } => {
+                    let type_name = &block.type_name;
+                    for func_decl in &block.functions {
+                        let full_name = format!("{}::{}", type_name, func_decl.name);
+                        if let Some(sig) = signatures.get_signature(&full_name) {
+                            meta.functions.insert(
+                                full_name,
+                                metadata_function_sig_from_analyzer(
+                                    sig,
+                                    true,
+                                    Some(type_name.clone()),
+                                ),
+                            );
+                        }
+                    }
+                }
+                parser::Item::Struct { decl, .. } => {
+                    let mut fields = std::collections::HashMap::new();
+                    for field in &decl.fields {
+                        fields.insert(
+                            field.name.clone(),
+                            ModuleMetadata::serialize_type(&field.field_type),
+                        );
+                    }
+                    meta.structs.insert(decl.name.clone(), fields);
+                }
+                _ => {}
+            }
+        }
+
+        let meta_path = crate::metadata::meta_cache_path(input_path);
+        if let Some(parent) = meta_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let meta_json = serde_json::to_string_pretty(&meta)?;
+        std::fs::write(&meta_path, &meta_json)?;
+
+        eprintln!(
+            "📋 METADATA: {} ({} functions, {} structs)",
+            meta_path.display(),
+            meta.functions.len(),
+            meta.structs.len()
+        );
     }
 
     // Return the set of imported stdlib modules and external crates for Cargo.toml generation
@@ -2249,11 +2553,14 @@ fn create_cargo_toml_with_deps(
                                     let abs_path = abs_path.canonicalize().unwrap_or(abs_path);
 
                                     // Replace the relative path with absolute path
-                                    // Note: We don't use {:?} because path is already inside quotes
                                     let before = &trimmed[..after_quote];
                                     let after = &trimmed[after_quote + path_end..];
-                                    let new_line =
-                                        format!("{}{}{}", before, abs_path.display(), after);
+                                    let new_line = format!(
+                                        "{}{}{}",
+                                        before,
+                                        path_to_toml_string(&abs_path),
+                                        after
+                                    );
                                     new_line
                                 } else {
                                     // Already absolute or not a path pattern we handle
@@ -2269,7 +2576,14 @@ fn create_cargo_toml_with_deps(
                         trimmed.to_string()
                     };
 
-                    source_cargo_deps.push(processed_line);
+                    let dep_name = processed_line.split(['=', ' ']).next().unwrap_or("").trim();
+                    let skip = matches!(
+                        dep_name,
+                        "windjammer" | "windjammer-runtime" | "windjammer_runtime"
+                    );
+                    if !skip {
+                        source_cargo_deps.push(processed_line);
+                    }
                 }
             }
         }
@@ -2440,8 +2754,8 @@ fn create_cargo_toml_with_deps(
                 let game_path = PathBuf::from(game_path);
                 if game_path.exists() {
                     external_deps.push(format!(
-                        "windjammer-game = {{ path = {:?} }}",
-                        game_path.to_str().unwrap()
+                        "windjammer-game = {{ path = \"{}\" }}",
+                        path_to_toml_string(&game_path)
                     ));
                     continue; // Skip the crates.io fallback
                 }
@@ -2536,9 +2850,9 @@ fn create_cargo_toml_with_deps(
                 };
 
                 external_deps.push(format!(
-                    "{} = {{ path = {:?} }}",
+                    "{} = {{ path = \"{}\" }}",
                     crate_name_normalized,
-                    final_path.to_str().unwrap()
+                    path_to_toml_string(&final_path)
                 ));
                 continue; // Skip the crates.io fallback
             }
@@ -3355,7 +3669,7 @@ fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<(
     fs::create_dir_all(&temp_dir)?;
 
     // Build the project
-    build_project(file, &temp_dir, target)?;
+    build_project(file, &temp_dir, target, true)?;
 
     // Handle execution based on target
     match target {
@@ -3482,8 +3796,14 @@ pub fn run_tests(
         println!();
     }
 
-    // Create temporary test directory
-    let temp_dir = std::env::temp_dir().join("windjammer-test");
+    let temp_dir = std::env::temp_dir().join(format!(
+        "windjammer-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir)?;
     }
@@ -4074,7 +4394,7 @@ fn detect_and_compile_library(
 
     // Use build_project to compile the library
     eprintln!("DEBUG: About to call build_project");
-    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust) {
+    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust, true) {
         Ok(_) => {
             eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
@@ -4248,7 +4568,7 @@ fn detect_and_compile_library(
                                         let abs_path = project_root.join(p);
                                         deps_section.push_str(&format!(
                                             "path = \"{}\", ",
-                                            abs_path.display()
+                                            path_to_toml_string(&abs_path)
                                         ));
                                     }
                                     // Add desktop feature for windjammer-ui
@@ -4361,7 +4681,8 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
     // TDD FIX: Filter out "lib" module to prevent E0761 conflict
     // "lib" is a reserved name for the library itself, not a module to import
     // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
-    modules.retain(|m| m != "lib");
+    // Also exclude "mod" — `pub mod mod;` is invalid (keyword); mod.rs is the barrel, not a child module
+    modules.retain(|m| m != "lib" && m != "mod");
 
     if modules.is_empty() {
         return Ok(()); // No modules to export after filtering
@@ -4618,10 +4939,12 @@ fn copy_ffi_files_recursive(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Convert a path to TOML-safe format (forward slashes on all platforms)
-/// Windows paths with backslashes cause TOML parse errors, but forward slashes work everywhere
+/// Convert a path to TOML-safe format (forward slashes, no Windows \\?\ prefix)
+/// Windows canonicalize() adds \\?\ prefix; backslashes cause TOML parse errors
 fn path_to_toml_string(path: &Path) -> String {
-    path.display().to_string().replace('\\', "/")
+    let s = path.display().to_string();
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.replace('\\', "/")
 }
 
 /// Find windjammer-runtime path using robust search logic
@@ -5170,124 +5493,6 @@ pub fn strip_main_functions(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Find the actual source root for a Windjammer file
-///
-/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
-/// by looking for a directory that looks like a source root:
-/// - Named "src_wj" or "src" (this is the most reliable indicator)
-/// - Or the topmost directory containing mod.wj
-fn find_source_root(file_path: &Path) -> Option<&Path> {
-    let mut current = file_path;
-    let mut topmost_mod_wj_dir = None;
-    let mut found_src_wj = None;
-
-    while let Some(parent) = current.parent() {
-        // Check if this directory looks like a source root by name
-        if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            // If named "src_wj", this is definitely the source root for multi-file projects
-            if dir_name == "src_wj" {
-                found_src_wj = Some(parent);
-                // Don't return immediately, keep looking for mod.wj to confirm multi-file structure
-            }
-        }
-
-        // Track the topmost directory with mod.wj
-        if parent.join("mod.wj").exists() {
-            topmost_mod_wj_dir = Some(parent);
-        }
-
-        current = parent;
-    }
-
-    // Prefer src_wj with mod.wj (multi-file project)
-    if let Some(src_wj) = found_src_wj {
-        if src_wj.join("mod.wj").exists() || topmost_mod_wj_dir.is_some() {
-            return Some(src_wj);
-        }
-    }
-
-    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
-    if let Some(mod_wj_dir) = topmost_mod_wj_dir {
-        return Some(mod_wj_dir);
-    }
-
-    // For single-file projects, use the file's parent directory
-    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
-    file_path.parent()
-}
-
-/// Calculate output path that preserves directory structure
-///
-/// Example:
-/// - source_root: "windjammer-game/src_wj"
-/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
-/// - output_dir: "build"
-/// - Result: "build/math/vec2.rs"
-pub fn get_relative_output_path(
-    source_root: &Path,
-    input_path: &Path,
-    output_dir: &Path,
-) -> Result<PathBuf> {
-    // Get the relative path from source_root to input_path
-    let relative = input_path.strip_prefix(source_root).unwrap_or(input_path);
-
-    // Get the base name without extension
-    let base_name = relative
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-    // TDD FIX: Check if there's a directory module with the same name
-    // If both window.wj and window/ exist, put window.wj content into window/mod.rs
-    // This prevents E0761: file for module `window` found at both "window.rs" and "window/mod.rs"
-    let source_dir_for_module = if let Some(parent) = input_path.parent() {
-        parent.join(base_name)
-    } else {
-        PathBuf::from(base_name)
-    };
-
-    let has_directory_module = source_dir_for_module.is_dir()
-        && source_dir_for_module
-            .read_dir()
-            .map(|mut entries| {
-                entries.any(|e| {
-                    e.ok()
-                        .and_then(|e| e.file_name().into_string().ok())
-                        .map(|name| name.ends_with(".wj"))
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(false);
-
-    // Replace .wj extension with .rs
-    let rs_filename = relative
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|s| s.replace(".wj", ".rs"))
-        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
-
-    // Construct output path preserving directory structure
-    let mut output_path = output_dir.to_path_buf();
-
-    // Add parent directories if they exist
-    if let Some(parent) = relative.parent() {
-        if parent != Path::new("") {
-            output_path.push(parent);
-        }
-    }
-
-    // If there's a directory module, put content into mod.rs instead of window.rs
-    if has_directory_module {
-        output_path.push(base_name);
-        output_path.push("mod.rs");
-    } else {
-        // Add the .rs filename
-        output_path.push(rs_filename);
-    }
-
-    Ok(output_path)
-}
-
 /// Generate nested module structure using the new Windjammer module system
 /// This replaces the old flat generate_mod_file with proper nested support
 pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) -> Result<()> {
@@ -5661,40 +5866,15 @@ fn cleanup_stale_module_files_recursive(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn main() {
+    if let Err(e) = run_main_cli() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_relative_output_path_nested() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/math/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/math/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_flat() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/vec2.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/vec2.rs"));
-    }
-
-    #[test]
-    fn test_get_relative_output_path_deeply_nested() {
-        let source_root = Path::new("game/src_wj");
-        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
-        let output_dir = Path::new("build");
-
-        let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
-        assert_eq!(result, PathBuf::from("build/rendering/shaders/vertex.rs"));
-    }
-
     #[test]
     fn test_two_pass_compilation_concept() {
         // This test documents the two-pass compilation approach:

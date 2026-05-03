@@ -43,7 +43,10 @@ fn main() {
 }
 "#;
 
-    let temp_dir = std::env::temp_dir();
+    let _tmp = tempfile::tempdir().unwrap();
+
+    let temp_dir = _tmp.path();
+
     let test_id = format!(
         "wj_test_{}",
         std::time::SystemTime::now()
@@ -67,6 +70,7 @@ fn main() {
         .arg("rust")
         .arg("--output")
         .arg(&out_dir)
+        .arg("--no-cargo")
         .output()
         .expect("Failed to run wj compiler");
 
@@ -99,6 +103,4 @@ fn main() {
         generated.contains(".as_ref().unwrap()") || generated.contains(".clone().unwrap()"),
         "Option::unwrap on borrowed field should use .as_ref() or .clone()"
     );
-
-    fs::remove_dir_all(&test_dir).ok();
 }

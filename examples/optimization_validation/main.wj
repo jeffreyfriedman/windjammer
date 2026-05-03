@@ -60,7 +60,7 @@ fn format_user(user: User) -> string {
     let basic = "User: ${user.name} (${user.email})"
     
     // Concatenation chain (should detect multiple concatenations)
-    let detailed = "ID: " + user.id.to_string() + ", Name: " + user.name + ", Email: " + user.email
+    let detailed = "ID: " + format!("{}", user.id) + ", Name: " + user.name + ", Email: " + user.email
     
     basic
 }
@@ -86,7 +86,7 @@ fn hash_passwords(passwords: Vec<string>) -> Vec<string> {
     for password in passwords {
         match crypto.hash_password(password) {
             Ok(hash) => hashes.push(hash),
-            Err(_) => hashes.push("error".to_string()),
+            Err(_) => hashes.push("error"),
         }
     }
     
@@ -123,9 +123,9 @@ fn main() {
     
     // Test Phase 4: String operations
     println("Phase 4: Testing string operations...")
-    let mut combined = String::new()
+    let mut combined = ""
     for i in 0..100 {
-        combined = combined + "Item " + i.to_string() + ", "
+        combined = combined + "Item " + format!("{}", i) + ", "
     }
     println("  ✓ Built string with ${combined.len()} characters")
     

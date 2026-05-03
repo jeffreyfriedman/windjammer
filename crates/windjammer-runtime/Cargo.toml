@@ -1,7 +1,7 @@
 [package]
 name = "windjammer-runtime"
 version.workspace = true
-edition.workspace = true
+edition = "2021"
 authors.workspace = true
 description = "Runtime library for Windjammer standard library implementations"
 license.workspace = true

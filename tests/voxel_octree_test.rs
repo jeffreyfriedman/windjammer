@@ -7,7 +7,8 @@ use std::fs;
 use std::path::PathBuf;
 
 fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_voxel_octree_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -15,6 +16,7 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     fs::write(test_dir.join("octree.wj"), source).unwrap();
@@ -31,7 +33,6 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
     if !output.status.success() {
-        fs::remove_dir_all(test_dir).ok();
         return (false, format!("STDERR:\n{}\nSTDOUT:\n{}", stderr, stdout));
     }
 
@@ -40,8 +41,6 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let run_output = std::process::Command::new(&binary_path)
         .current_dir(&test_dir)
         .output();
-
-    fs::remove_dir_all(test_dir).ok();
 
     match run_output {
         Ok(out) => {

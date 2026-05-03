@@ -124,6 +124,7 @@ pub fn param<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> {
         type_,
         ownership: OwnershipHint::Inferred,
         is_mutable: false,
+        decorators: Vec::new(),
     }
 }
 
@@ -135,6 +136,7 @@ pub fn param_ref<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> 
         type_,
         ownership: OwnershipHint::Ref,
         is_mutable: false,
+        decorators: Vec::new(),
     }
 }
 
@@ -146,6 +148,7 @@ pub fn param_mut<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast> 
         type_,
         ownership: OwnershipHint::Mut,
         is_mutable: true,
+        decorators: Vec::new(),
     }
 }
 
@@ -157,6 +160,7 @@ pub fn param_owned<'ast>(name: impl Into<String>, type_: Type) -> Parameter<'ast
         type_,
         ownership: OwnershipHint::Owned,
         is_mutable: false,
+        decorators: Vec::new(),
     }
 }
 

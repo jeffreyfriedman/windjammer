@@ -1,3 +1,6 @@
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use std::fs;
 /// TDD: Method call args from trait implementations should not be borrowed/cloned
 ///
@@ -5,13 +8,8 @@ use std::fs;
 /// the compiler incorrectly generates borrows/clones.
 ///
 /// This is the actual Pong bug context.
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn get_wj_compiler() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -59,7 +57,7 @@ impl GameLoop for Game {
     let output_dir = temp_dir.path().join("build");
     fs::write(&input_path, source).unwrap();
 
-    let output = Command::new(get_wj_compiler())
+    let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
             input_path.to_str().unwrap(),

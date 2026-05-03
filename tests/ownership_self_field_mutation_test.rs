@@ -8,40 +8,8 @@
 //
 // This is causing 7+ E0596 errors in Breach Protocol game.
 
-use std::process::Command;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(wj_source: &str) -> Result<String, String> {
-    use tempfile::TempDir;
-
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    std::fs::write(&wj_path, wj_source).expect("Failed to write test file");
-    std::fs::create_dir(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    Ok(std::fs::read_to_string(rust_file).expect("Failed to read generated Rust"))
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_self_field_update_key_infers_mut_self() {
@@ -81,7 +49,7 @@ impl Game {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -134,7 +102,7 @@ impl Outer {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -165,13 +133,8 @@ impl Outer {
 }
 
 #[test]
-#[ignore] // TODO: Parser doesn't support `extern struct` or `extern impl` yet
-          // Parser error: "Expected Fn, got Struct"
-          // Feature needed: extern struct/impl declarations for FFI types
-          // This test documents desired behavior once feature is implemented
 fn test_self_field_extern_method_infers_mut_self() {
-    // This is the ACTUAL bug: self.camera.look_at() where Camera3D is external
-    // The method can look up Camera3D::look_at in the registry, but needs to check it
+    // self.camera.look_at() where Camera3D comes from an extern impl signature stub
     let source = r#"
 // Simulate external type (from engine)
 extern struct Camera3D {}
@@ -195,7 +158,7 @@ impl Game {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };

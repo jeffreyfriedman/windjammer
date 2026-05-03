@@ -1,41 +1,8 @@
 // TDD: Test that methods with explicit `self` (by value) are respected
 // These tests verify the Windjammer v0.45.0+ design: explicit ownership is preserved.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn get_wj_binary() -> String {
-    env!("CARGO_BIN_EXE_wj").to_string()
-}
-
-fn compile_to_rust(source: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, source).expect("Failed to write test file");
-    fs::create_dir(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new(get_wj_binary())
-        .arg("build")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg("--target")
-        .arg("rust")
-        .arg("--no-cargo")
-        .output()
-        .expect("Failed to run wj");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let rust_file = out_dir.join("test.rs");
-    let rust_code = fs::read_to_string(rust_file).expect("Failed to read generated Rust");
-    Ok(rust_code)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_method_self_by_value_should_not_infer_mut() {
@@ -64,7 +31,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -114,7 +81,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };
@@ -158,7 +125,7 @@ fn main() {
 }
 "#;
 
-    let rust_code = match compile_to_rust(source) {
+    let rust_code = match test_utils::compile_single_result(source) {
         Ok(code) => code,
         Err(e) => panic!("Compilation failed: {}", e),
     };

@@ -2,7 +2,7 @@
 // Exact reproduction of dialogue system get_relationship error
 
 struct State {
-    pub names: Vec<String>,
+    pub names: Vec<string>,
 }
 
 impl State {
@@ -11,13 +11,13 @@ impl State {
     }
     
     // Takes owned String (not &String)
-    pub fn get_value(self, name: String) -> i32 {
+    pub fn get_value(self, name: string) -> i32 {
         return 42;
     }
 }
 
 enum Condition {
-    Check(String, i32),
+    Check(string, i32),
 }
 
 impl Condition {
@@ -35,7 +35,7 @@ impl Condition {
 }
 
 fn main() {
-    let cond = Condition::Check("test".to_string(), 10);
+    let cond = Condition::Check("test", 10);
     let state = State::new();
     let result = cond.is_met(state);
     println!("Result: {}", result);

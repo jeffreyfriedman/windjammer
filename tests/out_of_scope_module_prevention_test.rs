@@ -39,11 +39,8 @@ use tempfile::tempdir;
 fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String> {
     use std::process::Command;
 
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
-            "run",
-            "--release",
-            "--",
             "build",
             source_dir.to_str().unwrap(),
             "--output",
@@ -147,15 +144,15 @@ fn test_out_of_scope_modules_not_declared() {
         events_output_path
     );
 
-    // Verify mod.rs was created
-    let mod_rs_path = output_dir.join("components").join("mod.rs");
+    // Verify mod.rs was created in the build output (generated/) directory
+    let mod_rs_path = output_dir.join("mod.rs");
     assert!(
         mod_rs_path.exists(),
         "mod.rs should be generated: {:?}",
         mod_rs_path
     );
 
-    // Verify mod.rs does NOT declare events module
+    // Verify root mod.rs does NOT declare events module
     let mod_rs_content = fs::read_to_string(&mod_rs_path).unwrap();
     eprintln!("=== mod.rs content ===\n{}", mod_rs_content);
 
@@ -171,11 +168,24 @@ fn test_out_of_scope_modules_not_declared() {
         mod_rs_content
     );
 
-    // Verify button module IS declared (in-scope)
+    // `src_wj/components/button.wj` is emitted under `output/components/button.rs` (mirrors
+    // source tree), so `button` is declared in `output/components/mod.rs`, not the crate-root
+    // `mod.rs` (which only lists the `components` package module).
+    let components_mod = output_dir.join("components").join("mod.rs");
     assert!(
-        mod_rs_content.contains("pub mod button;"),
-        "mod.rs SHOULD declare in-scope module 'button': {}",
-        mod_rs_content
+        components_mod.is_file(),
+        "expected components/mod.rs for nested WJ tree: {:?}",
+        components_mod
+    );
+    let components_mod_content = fs::read_to_string(&components_mod).unwrap();
+    eprintln!(
+        "=== components/mod.rs content ===\n{}",
+        components_mod_content
+    );
+    assert!(
+        components_mod_content.contains("pub mod button;"),
+        "components/mod.rs should declare in-scope module 'button': {}",
+        components_mod_content
     );
 }
 

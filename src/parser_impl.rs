@@ -73,12 +73,25 @@ pub use crate::parser::ast::*;
 // SECTION 2: PARSER CORE
 // ============================================================================
 
+/// A structured warning emitted during parsing.
+#[derive(Debug, Clone)]
+pub struct ParseWarning {
+    pub message: String,
+    pub file: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
 pub struct Parser {
     pub(crate) tokens: Vec<crate::lexer::TokenWithLocation>,
     pub(crate) position: usize,
     pub(crate) filename: String,
     #[allow(dead_code)]
     pub(crate) source: String,
+    pub(crate) warnings: Vec<ParseWarning>,
+    /// True when parsing inside an `extern fn` declaration (FFI boundary).
+    /// Suppresses W0010 warnings since FFI signatures must match Rust types exactly.
+    pub(crate) in_extern_fn: bool,
     // Arena allocators for AST nodes (eliminates recursive Drop)
     // When Parser is dropped, these arenas drop all allocated AST nodes at once
     // without recursive calls to Drop, solving the Windows stack overflow issue
@@ -115,6 +128,8 @@ impl Parser {
             position: 0,
             filename: String::new(),
             source: String::new(),
+            warnings: Vec::new(),
+            in_extern_fn: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -131,10 +146,31 @@ impl Parser {
             position: 0,
             filename,
             source,
+            warnings: Vec::new(),
+            in_extern_fn: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
         }
+    }
+
+    pub fn warnings(&self) -> &[ParseWarning] {
+        &self.warnings
+    }
+
+    pub(crate) fn emit_warning(
+        &mut self,
+        message: String,
+        file: Option<String>,
+        line: Option<usize>,
+        column: Option<usize>,
+    ) {
+        self.warnings.push(ParseWarning {
+            message,
+            file,
+            line,
+            column,
+        });
     }
 
     /// Allocate an expression in the arena
@@ -254,22 +290,49 @@ impl Parser {
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
+        // Skip leading blank lines so indented r#"\\n    @derive(...)"# still attaches decorators.
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+        }
+
         // Collect doc comments (/// lines) that appear before the item
         let mut doc_lines = Vec::new();
         while let Token::DocComment(content) = self.current_token() {
             doc_lines.push(content.clone());
             self.advance();
         }
-        let doc_comment = if doc_lines.is_empty() {
+        let mut doc_comment = if doc_lines.is_empty() {
             None
         } else {
             Some(doc_lines.join("\n"))
         };
 
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+        }
+
         // Check for decorators
         let mut decorators = Vec::new();
         while let Token::Decorator(_) = self.current_token() {
             decorators.push(self.parse_decorator()?);
+        }
+
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
+        }
+
+        // Doc comments may appear after @derive and before the item (e.g. @derive(Clone)\n/// doc\npub struct S)
+        let mut doc_lines_after = Vec::new();
+        while let Token::DocComment(content) = self.current_token() {
+            doc_lines_after.push(content.clone());
+            self.advance();
+        }
+        if !doc_lines_after.is_empty() {
+            doc_comment = Some(doc_lines_after.join("\n"));
+        }
+
+        while matches!(self.current_token(), Token::Newline) {
+            self.advance();
         }
 
         // Check for pub keyword (for module functions)
@@ -281,19 +344,6 @@ impl Parser {
         };
 
         match self.current_token() {
-            Token::Extern => {
-                self.advance(); // Consume the Extern token
-                self.expect(Token::Fn)?; // Expect fn after extern
-                let mut func = self.parse_function()?;
-                func.is_extern = true; // Mark as extern function
-                func.is_pub = is_pub;
-                func.decorators = decorators;
-                func.doc_comment = doc_comment;
-                Ok(Item::Function {
-                    decl: func,
-                    location: self.current_location(),
-                })
-            }
             Token::Fn => {
                 self.advance(); // Consume the Fn token
                 let mut func = self.parse_function()?;
@@ -324,7 +374,7 @@ impl Parser {
             }
             Token::Struct => {
                 self.advance();
-                let mut struct_decl = self.parse_struct()?;
+                let mut struct_decl = self.parse_struct(false)?;
                 struct_decl.decorators = decorators;
                 struct_decl.is_pub = is_pub;
                 struct_decl.doc_comment = doc_comment;
@@ -354,7 +404,7 @@ impl Parser {
             }
             Token::Impl => {
                 self.advance();
-                let mut impl_block = self.parse_impl()?;
+                let mut impl_block = self.parse_impl(false)?;
                 impl_block.decorators = decorators;
                 Ok(Item::Impl {
                     block: impl_block,
@@ -364,11 +414,9 @@ impl Parser {
             Token::Const => {
                 self.advance();
                 let (name, type_, value) = self.parse_const_or_static()?;
-                // For now, we don't store is_pub in the AST (future enhancement)
-                // But at least we parse it correctly
-                let _ = is_pub; // Suppress unused warning
                 Ok(Item::Const {
                     name,
+                    is_pub,
                     type_,
                     value,
                     location: self.current_location(),
@@ -390,6 +438,79 @@ impl Parser {
                     value,
                     location: self.current_location(),
                 })
+            }
+            Token::Extern => {
+                // `extern let` (GPU) | `extern struct` / `extern impl` (FFI types) | `extern fn` (FFI)
+                if self.peek(1) == Some(&Token::Let) {
+                    self.advance(); // consume extern
+                    self.advance(); // consume let
+
+                    let name = if let Token::Ident(n) = self.current_token() {
+                        let n = n.clone();
+                        self.advance();
+                        n
+                    } else {
+                        return Err("Expected variable name after extern let".to_string());
+                    };
+
+                    self.expect(Token::Colon)?;
+                    let type_ = self.parse_type()?;
+
+                    // Semicolon optional (ASI)
+                    if self.current_token() == &Token::Semicolon {
+                        self.advance();
+                    }
+
+                    Ok(Item::ExternLet {
+                        name,
+                        type_,
+                        decorators,
+                        is_pub,
+                        location: self.current_location(),
+                    })
+                } else {
+                    self.advance(); // consume Extern
+                    match self.current_token() {
+                        Token::Struct => {
+                            self.advance();
+                            let mut struct_decl = self.parse_struct(true)?;
+                            struct_decl.decorators = decorators;
+                            struct_decl.is_pub = is_pub;
+                            struct_decl.doc_comment = doc_comment;
+                            Ok(Item::Struct {
+                                decl: struct_decl,
+                                location: self.current_location(),
+                            })
+                        }
+                        Token::Impl => {
+                            self.advance();
+                            let mut impl_block = self.parse_impl(true)?;
+                            impl_block.decorators = decorators;
+                            Ok(Item::Impl {
+                                block: impl_block,
+                                location: self.current_location(),
+                            })
+                        }
+                        Token::Fn => {
+                            self.expect(Token::Fn)?; // Expect fn after extern
+                            self.in_extern_fn = true;
+                            let mut func = self.parse_function()?;
+                            self.in_extern_fn = false;
+                            func.is_extern = true; // Mark as extern function
+                            func.is_pub = is_pub;
+                            func.decorators = decorators;
+                            func.doc_comment = doc_comment;
+                            Ok(Item::Function {
+                                decl: func,
+                                location: self.current_location(),
+                            })
+                        }
+                        _ => {
+                            Err("expected `let`, `struct`, `impl`, or `fn` after `extern`"
+                                .to_string())
+                        }
+                    }
+                }
             }
             Token::Use => {
                 self.advance(); // consume 'use'

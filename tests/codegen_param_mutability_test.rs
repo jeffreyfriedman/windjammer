@@ -8,69 +8,12 @@
 //             (e.g., `let result = loader.load(...)`), the parameter wasn't marked as needing `mut`.
 // Fix: Extended statement_mutates_variable_field() to recurse into Statement::Let values.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_and_check(code: &str) -> (bool, String, String) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let wj_path = temp_dir.path().join("test.wj");
-    let out_dir = temp_dir.path().join("out");
-
-    fs::write(&wj_path, code).expect("Failed to write test file");
-    fs::create_dir_all(&out_dir).expect("Failed to create output dir");
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--",
-            "build",
-            wj_path.to_str().unwrap(),
-            "-o",
-            out_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return (
-            false,
-            String::new(),
-            format!(
-                "Compiler failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        );
-    }
-
-    let generated_path = out_dir.join("test.rs");
-    let generated =
-        fs::read_to_string(&generated_path).unwrap_or_else(|e| format!("Read error: {}", e));
-
-    let rustc = Command::new("rustc")
-        .arg("--crate-type=lib")
-        .arg("--edition=2021")
-        .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
-        .output();
-
-    match rustc {
-        Ok(rustc_output) => {
-            let err = String::from_utf8_lossy(&rustc_output.stderr).to_string();
-            (rustc_output.status.success(), generated, err)
-        }
-        Err(e) => (false, generated, format!("Failed to run rustc: {}", e)),
-    }
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_owned_param_with_mut_method_call_gets_mut_binding() {
-    let (ok, generated, err) = compile_and_check(
-        r#"
+    let source = r#"
 struct Item {
     name: String,
 }
@@ -90,30 +33,19 @@ impl Loader {
 fn use_loader(loader: Loader) -> Item {
     loader.load("test".to_string())
 }
-"#,
-    );
+"#;
+    let (generated, ok) = test_utils::compile_single_check(source);
 
-    println!("Generated:\n{}", generated);
-    if !ok {
-        println!("Errors:\n{}", err);
-    }
-
-    // The key: loader must be declared as `mut` since load() takes &mut self
     assert!(
         ok,
-        "Generated Rust should compile without E0596.\nErrors:\n{}",
-        err
+        "Generated Rust should compile without E0596.\nGenerated:\n{}",
+        generated
     );
 }
 
 #[test]
 fn test_owned_param_with_mut_method_call_in_let_binding() {
-    // THE ACTUAL BUG: When the mutating method call is in a let binding (not a bare expression),
-    // statement_mutates_variable_field didn't detect it because it only checked Statement::Expression.
-    // This is the exact pattern from windjammer-game's load_game_level:
-    //   let tilemap = loader.load("tilemap", "levels/tilemap.json", 8192)?
-    let (ok, generated, err) = compile_and_check(
-        r#"
+    let source = r#"
 struct Asset {
     name: String,
     data: Vec<i64>,
@@ -141,29 +73,17 @@ fn load_level(loader: AssetLoader, level: String) -> Vec<Asset> {
     assets.push(texture)
     assets
 }
-"#,
-    );
+"#;
+    let (generated, ok) = test_utils::compile_single_check(source);
 
-    println!("Generated:\n{}", generated);
-    if !ok {
-        println!("Errors:\n{}", err);
-    }
-
-    // THE WINDJAMMER WAY (v0.45.0 fix): User writes `loader: AssetLoader` (owned),
-    // compiler preserves it as `mut loader: AssetLoader` to respect explicit intent!
-    // The linter will warn that `&mut AssetLoader` would be more efficient.
-    //
-    // OLD BEHAVIOR (pre-v0.45.0): Changed `AssetLoader` → `&mut AssetLoader`
-    // NEW BEHAVIOR (v0.45.0+): Preserves as `mut loader: AssetLoader` + linter warns
     assert!(
         ok,
-        "Generated Rust should compile without E0596 when mutating method call is in let binding.\nErrors:\n{}",
-        err
+        "Generated Rust should compile correctly with automatic &mut inference.\nGenerated:\n{}",
+        generated
     );
-    // Verify owned parameter with mut binding (respects explicit intent)
     assert!(
-        generated.contains("mut loader: AssetLoader"),
-        "Parameter 'loader' should be `mut loader: AssetLoader` (respect explicit owned).\nGenerated:\n{}",
+        generated.contains("loader: &mut AssetLoader"),
+        "Parameter 'loader' should be inferred as `&mut AssetLoader`.\nGenerated:\n{}",
         generated
     );
 }

@@ -9,42 +9,8 @@
 /// parameters (since the body is empty), but the string-literal-to-String
 /// conversion only fires for `Owned` ownership. For extern functions, the
 /// parameter type (String) should take precedence over inferred ownership.
-use std::path::PathBuf;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_windjammer_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    std::fs::write(&input_file, code).expect("Failed to write source file");
-
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-
-    let output = Command::new(&wj_binary)
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.join("build").to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(format!(
-            "Windjammer compilation failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let generated_file = test_dir.join("build/test.rs");
-    let generated =
-        std::fs::read_to_string(&generated_file).expect("Failed to read generated file");
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 fn test_extern_fn_string_literal_gets_to_string() {
@@ -56,7 +22,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains(r#""shaders/test.wgsl".to_string()"#),
@@ -75,7 +41,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains(r#""My Window".to_string()"#),
@@ -95,7 +61,7 @@ fn main() {
 }
 "#;
 
-    let generated = compile_windjammer_code(code).expect("Compilation should succeed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
     assert!(
         generated.contains("load_file("),

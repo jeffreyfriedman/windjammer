@@ -1,0 +1,53 @@
+// Integration Test: Pattern Matching
+//
+// Covers: match expressions, match guards, if let
+// EXPECTED: All backends produce identical output ending with PASSED
+
+fn describe(x: int) -> string {
+    match x {
+        1 => "one",
+        2 => "two",
+        _ => "other",
+    }
+}
+
+fn classify(n: int) -> string {
+    match n {
+        x if x > 100 => "big",
+        x if x > 0 => "small",
+        0 => "zero",
+        _ => "negative",
+    }
+}
+
+enum Maybe {
+    Some(int),
+    None,
+}
+
+fn unwrap_or(m: Maybe, default: int) -> int {
+    match m {
+        Maybe::Some(v) => v,
+        Maybe::None => default,
+    }
+}
+
+fn main() {
+    println("[patterns] describe(1)=${describe(1)}")
+    println("[patterns] describe(99)=${describe(99)}")
+
+    println("[patterns] classify(500)=${classify(500)}")
+    println("[patterns] classify(5)=${classify(5)}")
+    println("[patterns] classify(0)=${classify(0)}")
+    println("[patterns] classify(-3)=${classify(-3)}")
+
+    println("[patterns] Some(42)=${unwrap_or(Maybe::Some(42), 0)}")
+    println("[patterns] None=${unwrap_or(Maybe::None, 0)}")
+
+    let opt = Maybe::Some(10)
+    if let Maybe::Some(v) = opt {
+        println("[patterns] if_let: ${v}")
+    }
+
+    println("PASSED")
+}

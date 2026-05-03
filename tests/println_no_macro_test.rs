@@ -7,37 +7,8 @@
 //! 3. Works with string interpolation
 //! 4. Other macros keep ! syntax (for now)
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn compile_code(code: &str) -> Result<String, String> {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let test_dir = temp_dir.path();
-    let input_file = test_dir.join("test.wj");
-    fs::write(&input_file, code).expect("Failed to write source file");
-
-    // Use the pre-built wj binary directly (much faster than cargo run, especially under tarpaulin)
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            input_file.to_str().unwrap(),
-            "--output",
-            test_dir.to_str().unwrap(),
-            "--no-cargo",
-        ])
-        .output()
-        .expect("Failed to run compiler");
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let generated_file = test_dir.join("test.rs");
-    let generated = fs::read_to_string(&generated_file).expect("Failed to read generated file");
-
-    Ok(generated)
-}
+#[path = "test_utils.rs"]
+mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -49,7 +20,7 @@ fn test_println_simple_string() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with macro syntax
     assert!(
@@ -69,7 +40,7 @@ fn test_println_with_format() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with format arguments
     assert!(
@@ -89,7 +60,7 @@ fn test_println_multiple_args() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with multiple arguments
     assert!(
@@ -109,7 +80,7 @@ fn test_println_with_string_variable() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with string variable
     assert!(
@@ -133,7 +104,7 @@ fn test_println_in_if_statement() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Both println calls should be converted
     assert!(
@@ -159,7 +130,7 @@ fn test_println_with_expression() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with expression
     assert!(
@@ -179,7 +150,7 @@ fn test_println_with_method_call() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should generate println! with method call
     assert!(
@@ -199,7 +170,7 @@ fn test_println_keeps_existing_macro_syntax() {
     }
     "#;
 
-    let generated = compile_code(code).expect("Compilation failed");
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     // Should keep the macro syntax
     assert!(

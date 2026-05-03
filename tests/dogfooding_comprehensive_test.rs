@@ -8,7 +8,8 @@ use std::path::PathBuf;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_iteration_and_mutation() {
     // Common game pattern: iterate and mutate collections
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp = tempfile::tempdir().unwrap();
+    let test_dir = _tmp.path().join(format!(
         "wj_vec_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -16,6 +17,7 @@ fn test_vec_iteration_and_mutation() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -66,15 +68,14 @@ fn main() {
         .expect("Should have generated Rust file");
 
     println!("Generated Rust code:\n{}", rust_code);
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining() {
     // Common game pattern: method chaining (builder pattern)
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp2 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp2.path().join(format!(
         "wj_chain_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -82,6 +83,7 @@ fn test_method_chaining() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -137,15 +139,14 @@ fn main() {
         .expect("Should have generated Rust file");
 
     println!("Generated Rust code:\n{}", rust_code);
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_option_result_handling() {
     // Common game pattern: Option/Result usage
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp3 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp3.path().join(format!(
         "wj_option_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -153,6 +154,7 @@ fn test_option_result_handling() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -202,15 +204,14 @@ fn main() {
         .expect("Should have generated Rust file");
 
     println!("Generated Rust code:\n{}", rust_code);
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_nested_struct_field_access() {
     // Common game pattern: nested struct field access
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp4 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp4.path().join(format!(
         "wj_nested_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -218,6 +219,7 @@ fn test_nested_struct_field_access() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -271,15 +273,14 @@ fn main() {
         .expect("Should have generated Rust file");
 
     println!("Generated Rust code:\n{}", rust_code);
-
-    fs::remove_dir_all(test_dir).ok();
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_array_indexing() {
     // Common game pattern: array indexing
-    let test_dir = std::env::temp_dir().join(format!(
+    let _tmp5 = tempfile::tempdir().unwrap();
+    let test_dir = _tmp5.path().join(format!(
         "wj_array_test_{}_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -287,6 +288,7 @@ fn test_array_indexing() {
             .as_nanos(),
         std::process::id()
     ));
+
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
@@ -329,6 +331,4 @@ fn main() {
         .expect("Should have generated Rust file");
 
     println!("Generated Rust code:\n{}", rust_code);
-
-    fs::remove_dir_all(test_dir).ok();
 }
