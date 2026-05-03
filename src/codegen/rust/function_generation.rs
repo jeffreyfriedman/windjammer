@@ -1727,6 +1727,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 .get(&param.name)
                                 .unwrap_or(&OwnershipMode::Owned);
 
+
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's
                             // method signature and use its ownership for each parameter.

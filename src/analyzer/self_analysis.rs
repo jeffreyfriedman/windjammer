@@ -837,38 +837,6 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when the function returns a non-Copy `self.field` expression (last statement).
-    /// Used only for **declared** `self` with `Inferred` ownership (`fn f(self)`): moving a field
-    /// out requires owned `self`. Omitted-receiver methods (`fn g() { self.x }`) use a different
-    /// path and treat final `self.field` as a `&self` getter (codegen inserts `.clone()`).
-    pub(super) fn function_returns_non_copy_self_field(&self, func: &FunctionDecl) -> bool {
-        use crate::parser::Statement;
-
-        let return_type = match &func.return_type {
-            Some(t) => t,
-            None => return false,
-        };
-
-        if self.is_copy_type(return_type) {
-            return false;
-        }
-
-        if !func.parameters.iter().any(|p| p.name == "self") {
-            return false;
-        }
-
-        if let Some(last_stmt) = func.body.last() {
-            match last_stmt {
-                Statement::Return {
-                    value: Some(expr), ..
-                } => self.expression_is_self_field_access(expr),
-                Statement::Expression { expr, .. } => self.expression_is_self_field_access(expr),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
     /// Check if self is moved into a returned struct literal (e.g., `OtherType { field: self }`)
     /// or returned directly as a value. This means self must be consumed (owned).
     pub(super) fn function_moves_self_into_return(&self, func: &FunctionDecl) -> bool {
