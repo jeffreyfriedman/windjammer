@@ -21,6 +21,7 @@ const MAP_KEY_METHOD: u16 = 0b0000_0100;
 const INDEX_TAKING: u16 = 0b0000_1000;
 const CLOSURE_TAKING: u16 = 0b0001_0000;
 const COMMON_STDLIB_NAME: u16 = 0b0010_0000;
+const STORES_PARAMETER: u16 = 0b0100_0000;
 
 struct MethodEntry {
     name: &'static str,
@@ -37,6 +38,7 @@ const MAP_KEY: u16 = MAP_KEY_METHOD;
 const IDX: u16 = INDEX_TAKING;
 const CLOSURE: u16 = CLOSURE_TAKING;
 const COMMON: u16 = COMMON_STDLIB_NAME;
+const STORE: u16 = STORES_PARAMETER;
 
 /// The canonical table of known stdlib method behaviors.
 ///
@@ -44,13 +46,13 @@ const COMMON: u16 = COMMON_STDLIB_NAME;
 /// All downstream code automatically picks it up.
 static KNOWN_METHODS: &[MethodEntry] = &[
     // ── Vec / VecDeque / collections: mutating ──
-    m("push", MUT | COMMON),
+    m("push", MUT | COMMON | STORE),
     m("pop", MUT | COMMON),
-    m("insert", MUT | COMMON | IDX),
+    m("insert", MUT | COMMON | IDX | STORE),
     m("remove", MUT | COMMON | MAP_KEY | IDX),
     m("clear", MUT | COMMON),
-    m("append", MUT),
-    m("extend", MUT),
+    m("append", MUT | STORE),
+    m("extend", MUT | STORE),
     m("drain", MUT | ITER | IDX),
     m("truncate", MUT),
     m("resize", MUT),
@@ -72,13 +74,14 @@ static KNOWN_METHODS: &[MethodEntry] = &[
     m("rotate_left", MUT),
     m("rotate_right", MUT),
     m("set_len", MUT),
-    m("push_str", MUT),
-    m("push_front", MUT),
-    m("push_back", MUT),
+    m("push_str", MUT | STORE),
+    m("push_front", MUT | STORE),
+    m("push_back", MUT | STORE),
     m("pop_front", MUT),
     m("pop_back", MUT),
     m("make_ascii_lowercase", MUT),
     m("make_ascii_uppercase", MUT),
+    m("add", MUT | STORE),
     // ── Option / Result: mutating ──
     m("take", MUT),
     m("replace", MUT),
@@ -237,6 +240,12 @@ pub fn is_common_stdlib_method(method: &str) -> bool {
 /// Returns `true` if `method` is ANY known stdlib method (mutating or read-only).
 pub fn is_known_stdlib_method(method: &str) -> bool {
     KNOWN_NAMES.contains(method)
+}
+
+/// Returns `true` if `method` is a storage method that moves a parameter value
+/// into a collection (push, insert, extend, append, etc.).
+pub fn is_storage_method(method: &str) -> bool {
+    get_traits(method).is_some_and(|t| t & STORES_PARAMETER != 0)
 }
 
 /// Returns `true` if `method` is a known read-only stdlib method (takes `&self`, not `&mut self`).
