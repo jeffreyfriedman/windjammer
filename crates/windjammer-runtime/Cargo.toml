@@ -40,7 +40,7 @@ thiserror = "1.0"
 url = "2.5"
 
 # Additional stdlib modules
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 sha2 = "0.10"
 bcrypt = "0.17"
 base64 = "0.21"
@@ -57,7 +57,7 @@ regex = "1.10"
 chrono = "0.4"
 
 # Parallel computation
-rayon = "1.8"
+rayon = "1.12"
 wasm-bindgen-futures = { version = "0.4", optional = true }
 
 # Web/WASM support for UI
