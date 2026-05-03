@@ -341,6 +341,51 @@ jobs:
       - name: Test Docker build
         run: docker build -t windjammer:test .
 
+  changelog-check:
+    name: CHANGELOG Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate CHANGELOG entry exists for current version
+        run: |
+          WORKSPACE_VERSION=$(grep '^version = "' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+
+          if [ -z "$WORKSPACE_VERSION" ]; then
+            echo "❌ Could not find version in Cargo.toml"
+            exit 1
+          fi
+
+          echo "📦 Workspace version: $WORKSPACE_VERSION"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "❌ CHANGELOG.md not found"
+            exit 1
+          fi
+
+          if ! grep -q "## \[$WORKSPACE_VERSION\]" CHANGELOG.md; then
+            echo "❌ No CHANGELOG.md entry for version $WORKSPACE_VERSION"
+            echo ""
+            echo "Add an entry like this to the top of CHANGELOG.md:"
+            echo ""
+            echo "  ## [$WORKSPACE_VERSION] - $(date +%Y-%m-%d)"
+            echo "  ### Changed"
+            echo "  - Description of changes"
+            echo ""
+            exit 1
+          fi
+
+          if grep -q "## \[$WORKSPACE_VERSION\] - In Progress" CHANGELOG.md; then
+            echo "⚠️  CHANGELOG.md entry for $WORKSPACE_VERSION is marked 'In Progress'"
+            echo "Update it with the release date before publishing:"
+            echo "  ## [$WORKSPACE_VERSION] - $(date +%Y-%m-%d)"
+            echo ""
+            echo "This is allowed for PRs but will block publish."
+          fi
+
+          echo "✅ CHANGELOG.md has entry for version $WORKSPACE_VERSION"
+
   publish-dryrun:
     name: Publish Dry-Run (Pre-merge Validation)
     runs-on: ubuntu-latest
@@ -371,3 +416,19 @@ jobs:
           echo "✅ windjammer: package structure valid"
           cargo package --list -p windjammer-runtime > /dev/null
           echo "✅ windjammer-runtime: package structure valid"
+
+      - name: Validate CHANGELOG is publish-ready
+        run: |
+          WORKSPACE_VERSION=$(grep '^version = "' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+
+          if ! grep -q "## \[$WORKSPACE_VERSION\]" CHANGELOG.md; then
+            echo "❌ No CHANGELOG.md entry for version $WORKSPACE_VERSION"
+            echo "This WILL block publishing to crates.io."
+            exit 1
+          fi
+
+          if grep -q "## \[$WORKSPACE_VERSION\].*In Progress" CHANGELOG.md; then
+            echo "⚠️  CHANGELOG entry for $WORKSPACE_VERSION is 'In Progress' — update with release date before tagging"
+          else
+            echo "✅ CHANGELOG.md entry for $WORKSPACE_VERSION is publish-ready"
+          fi
