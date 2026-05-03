@@ -722,17 +722,40 @@ fn infer_project_name(source_dir: &Path) -> String {
     // Fallback: use directory name instead of hardcoding "windjammer"
     if let Some(dir_name) = source_dir.file_name().and_then(|n| n.to_str()) {
         if dir_name != "src" && dir_name != "src_wj" {
-            return dir_name.to_lowercase().replace(' ', "-");
+            return sanitize_package_name(&dir_name.to_lowercase().replace(' ', "-"));
         }
         // If source_dir is "src" or "src_wj", use the parent directory name
         if let Some(parent) = source_dir.parent() {
             if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
-                return parent_name.to_lowercase().replace(' ', "-");
+                return sanitize_package_name(&parent_name.to_lowercase().replace(' ', "-"));
             }
         }
     }
 
     "windjammer".to_string()
+}
+
+/// Ensure a name is a valid Cargo package name: must start with a Unicode XID
+/// start character (letter or `_`) and contain only XID continue characters,
+/// `-`, or `_`. Strip leading invalid chars and replace remaining invalid chars
+/// with `_`. Falls back to "windjammer" if nothing remains.
+fn sanitize_package_name(name: &str) -> String {
+    let stripped: String = name
+        .chars()
+        .skip_while(|c| !c.is_alphabetic() && *c != '_')
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if stripped.is_empty() {
+        "windjammer".to_string()
+    } else {
+        stripped
+    }
 }
 
 /// Extract `name = "..."` from a TOML file.
