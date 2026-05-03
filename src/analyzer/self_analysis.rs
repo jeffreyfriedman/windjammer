@@ -1037,15 +1037,22 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             Expression::MethodCall {
-                object, method: _, ..
+                object,
+                method,
+                ..
             } => {
-                // Check if object is our loop variable
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        // Check if the method consumes self
-                        // We need to look up the method's signature
-                        // For now, use heuristics: methods that match on self usually consume
-                        return true; // Conservative: assume method consumes
+                        if let Some(reg) = registry {
+                            if let Some(sig) = reg.get_signature(method)
+                                .or_else(|| reg.find_signature_ending_with(method))
+                            {
+                                return sig.has_self_receiver
+                                    && sig.param_ownership.first()
+                                        == Some(&super::OwnershipMode::Owned);
+                            }
+                        }
+                        return false;
                     }
                 }
                 false

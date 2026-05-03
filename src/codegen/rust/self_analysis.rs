@@ -277,25 +277,108 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_modifies_self(s))
         }
-        Expression::MethodCall { object, method, .. } => {
-            let is_mutating_method = super::stdlib_method_traits::method_mutates_receiver(method);
+        Expression::MethodCall { object, method, arguments, .. } => {
+            // Check if the object is self.field (or self.field.subfield, etc.)
+            let is_on_self_field = is_self_field_chain(object);
 
-            if is_mutating_method {
-                // Check if the object is self.field
-                if let Expression::FieldAccess {
-                    object: field_obj, ..
-                } = &**object
-                {
-                    if matches!(&**field_obj, Expression::Identifier { name, .. } if name == "self")
-                    {
-                        return true;
-                    }
+            if is_on_self_field {
+                let is_known_mutating =
+                    super::stdlib_method_traits::method_mutates_receiver(method);
+                let is_known_readonly = is_known_readonly_method(method);
+
+                // Known mutating → yes
+                // Known readonly → no
+                // Unknown method on self.field → conservatively assume mutating
+                // (cross-crate methods like renderer.render_frame() are usually &mut self)
+                if is_known_mutating || !is_known_readonly {
+                    return true;
                 }
             }
-            false
+
+            // Recursively check arguments for nested self.field mutations
+            arguments.iter().any(|(_, arg)| expression_modifies_self(arg))
+        }
+        Expression::Call { arguments, .. } => {
+            arguments.iter().any(|(_, arg)| expression_modifies_self(arg))
         }
         _ => false,
     }
+}
+
+fn is_self_field_chain(expr: &Expression) -> bool {
+    match expr {
+        Expression::FieldAccess { object, .. } => {
+            matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                || is_self_field_chain(object)
+        }
+        _ => false,
+    }
+}
+
+fn is_known_readonly_method(method: &str) -> bool {
+    matches!(
+        method,
+        "len"
+            | "is_empty"
+            | "contains"
+            | "contains_key"
+            | "get"
+            | "has"
+            | "has_item"
+            | "passes"
+            | "evaluate"
+            | "find"
+            | "position"
+            | "count"
+            | "any"
+            | "all"
+            | "sum"
+            | "iter"
+            | "keys"
+            | "values"
+            | "first"
+            | "last"
+            | "as_str"
+            | "as_slice"
+            | "to_string"
+            | "clone"
+            | "to_owned"
+            | "to_vec"
+            | "starts_with"
+            | "ends_with"
+            | "trim"
+            | "chars"
+            | "bytes"
+            | "lines"
+            | "split"
+            | "as_ref"
+            | "borrow"
+            | "eq"
+            | "ne"
+            | "cmp"
+            | "partial_cmp"
+            | "hash"
+            | "fmt"
+            | "display"
+            | "min"
+            | "max"
+            | "abs"
+            | "floor"
+            | "ceil"
+            | "round"
+            | "sqrt"
+            | "sin"
+            | "cos"
+            | "tan"
+            | "atan2"
+            | "powi"
+            | "powf"
+            | "log"
+            | "log2"
+            | "log10"
+            | "exp"
+            | "clamp"
+    )
 }
 
 /// Check if an expression accesses struct fields

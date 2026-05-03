@@ -845,9 +845,13 @@ impl<'ast> CodeGenerator<'ast> {
                             self.suppress_collection_turbofish = true;
                         }
 
+                        let prev_collect_target = self.collect_target_type.take();
+                        self.collect_target_type = Some(t.clone());
+
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
 
+                        self.collect_target_type = prev_collect_target;
                         self.suppress_collection_turbofish = prev_suppress_turbo;
                         self.assignment_float_target_type = prev_assign_float;
 
@@ -943,23 +947,10 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
-                        // E0507: `let x = self.field` through `&self` / `&mut self` needs `.clone()` for non-Copy
-                        if matches!(value, Expression::FieldAccess { .. }) {
-                            if self
-                                .root_identifier_of_field_or_index_chain(value)
-                                .is_some_and(|r| {
-                                    r == "self"
-                                        && (self.inferred_borrowed_params.contains("self")
-                                            || self.inferred_mut_borrowed_params.contains("self"))
-                                })
-                            {
-                                if let Some(ty) = self.infer_expression_type(value) {
-                                    if !self.is_type_copy(&ty) && !value_str.ends_with(".clone()") {
-                                        value_str = format!("{}.clone()", value_str);
-                                    }
-                                }
-                            }
-                        }
+                        // E0507: `let x = self.field` through `&self`/`&mut self`:
+                        //   Option<T> behind &mut self → .take() (moves value, leaves None)
+                        //   other non-Copy → .clone()
+                        self.apply_self_field_move_fix(value, &mut value_str);
 
                         value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
                             *mutable,
@@ -999,9 +990,13 @@ impl<'ast> CodeGenerator<'ast> {
                             self.suppress_collection_turbofish = true;
                         }
 
+                        let prev_collect_target = self.collect_target_type.take();
+                        self.collect_target_type = Some(t.clone());
+
                         // Auto-convert &str to String if type is String
                         let mut value_str = self.generate_expression(value);
 
+                        self.collect_target_type = prev_collect_target;
                         self.suppress_collection_turbofish = prev_suppress_turbo;
                         self.assignment_float_target_type = prev_assign_float;
 
@@ -1084,23 +1079,10 @@ impl<'ast> CodeGenerator<'ast> {
                             value_str = format!("{}.to_string()", value_str);
                         }
 
-                        // E0507: `let x = self.field` through `&self` / `&mut self` needs `.clone()` for non-Copy
-                        if matches!(value, Expression::FieldAccess { .. }) {
-                            if self
-                                .root_identifier_of_field_or_index_chain(value)
-                                .is_some_and(|r| {
-                                    r == "self"
-                                        && (self.inferred_borrowed_params.contains("self")
-                                            || self.inferred_mut_borrowed_params.contains("self"))
-                                })
-                            {
-                                if let Some(ty) = self.infer_expression_type(value) {
-                                    if !self.is_type_copy(&ty) && !value_str.ends_with(".clone()") {
-                                        value_str = format!("{}.clone()", value_str);
-                                    }
-                                }
-                            }
-                        }
+                        // E0507: `let x = self.field` through `&self`/`&mut self`:
+                        //   Option<T> behind &mut self → .take() (moves value, leaves None)
+                        //   other non-Copy → .clone()
+                        self.apply_self_field_move_fix(value, &mut value_str);
 
                         value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
                             *mutable,
@@ -1785,12 +1767,15 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(var_name.clone(), var_type.clone());
                 }
 
-                // Upgrade pattern bindings to `mut` when the body mutates them
+                // Upgrade pattern bindings to `mut` when the body mutates them.
+                // Only use ref mut when the scrutinee is &mut (mutable borrow).
+                // When &self (immutable), ref mut is invalid.
+                let scrutinee_is_mut_ref = scrutinee_ref_prefix.contains("mut");
                 let upgraded_pattern = if let Expression::Block { statements, .. } = main_arm.body {
                     self.upgrade_pattern_mut_bindings(
                         &main_arm.pattern,
                         statements.as_slice(),
-                        !scrutinee_ref_prefix.is_empty(),
+                        scrutinee_is_mut_ref,
                     )
                 } else {
                     main_arm.pattern.clone()
@@ -2041,9 +2026,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 format!("*{}", value_str)
                             }
                         } else {
-                            // Non-Copy type: no prefix needed. `match e` where `e: &Light`
-                            // uses match ergonomics to auto-deref.
-                            value_str
+                            // Non-Copy type behind shared ref: need & prefix to prevent
+                            // moving out of the borrow. Match ergonomics will auto-ref bindings.
+                            format!("&{}", value_str)
                         }
                     } else {
                         value_str
@@ -2159,7 +2144,7 @@ impl<'ast> CodeGenerator<'ast> {
             let upgraded_pattern = self.upgrade_pattern_mut_bindings(
                 &arm.pattern,
                 body_stmts,
-                !match_scrutinee_ref_prefix.is_empty(),
+                match_scrutinee_ref_prefix.contains("mut"),
             );
 
             output.push_str(&self.indent());
@@ -2565,6 +2550,7 @@ impl<'ast> CodeGenerator<'ast> {
             let mut value_str = self.generate_expression(value);
 
             // Mixed int/float compound assignment: `f32 += i32` → `f32 += i32 as f32`
+            // Only cast when the target is genuinely a float type (not int).
             if matches!(
                 op,
                 CompoundOp::Add
@@ -2574,17 +2560,19 @@ impl<'ast> CodeGenerator<'ast> {
                     | CompoundOp::Mod
             ) {
                 let val_ty = self.infer_expression_type(value);
-                if let Some(v) = &val_ty {
-                    if Self::is_int_numeric_type(v) {
-                        // Determine the concrete float target from the assignment context
-                        let float_name = self.resolve_compound_assign_float_target(target);
-                        if let Some(fname) = float_name {
-                            if value_str.contains(" as ")
-                                || matches!(value, Expression::Binary { .. })
-                            {
-                                value_str = format!("({}) as {}", value_str, fname);
-                            } else {
-                                value_str = format!("{} as {}", value_str, fname);
+                let tgt_is_int = tgt_ty.as_ref().is_some_and(|t| Self::is_int_numeric_type(t));
+                if !tgt_is_int {
+                    if let Some(v) = &val_ty {
+                        if Self::is_int_numeric_type(v) {
+                            let float_name = self.resolve_compound_assign_float_target(target);
+                            if let Some(fname) = float_name {
+                                if value_str.contains(" as ")
+                                    || matches!(value, Expression::Binary { .. })
+                                {
+                                    value_str = format!("({}) as {}", value_str, fname);
+                                } else {
+                                    value_str = format!("{} as {}", value_str, fname);
+                                }
                             }
                         }
                     }
@@ -2722,25 +2710,29 @@ impl<'ast> CodeGenerator<'ast> {
                     let mut right_str = self.generate_expression(right);
 
                     // Mixed int/float: cast RHS integer to target float type
-                    if matches!(
-                        op,
-                        BinaryOp::Add
-                            | BinaryOp::Sub
-                            | BinaryOp::Mul
-                            | BinaryOp::Div
-                            | BinaryOp::Mod
-                    ) {
-                        let rhs_ty = self.infer_expression_type(right);
-                        if let Some(v) = &rhs_ty {
-                            if Self::is_int_numeric_type(v) {
-                                let tgt_float = self.resolve_compound_assign_float_target(target);
-                                if let Some(float_name) = tgt_float {
-                                    if right_str.contains(" as ")
-                                        || matches!(&**right, Expression::Binary { .. })
-                                    {
-                                        right_str = format!("({}) as {}", right_str, float_name);
-                                    } else {
-                                        right_str = format!("{} as {}", right_str, float_name);
+                    // Only cast when the target is genuinely a float type (not int).
+                    let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(|t| Self::is_int_numeric_type(t));
+                    if !synth_tgt_is_int {
+                        if matches!(
+                            op,
+                            BinaryOp::Add
+                                | BinaryOp::Sub
+                                | BinaryOp::Mul
+                                | BinaryOp::Div
+                                | BinaryOp::Mod
+                        ) {
+                            let rhs_ty = self.infer_expression_type(right);
+                            if let Some(v) = &rhs_ty {
+                                if Self::is_int_numeric_type(v) {
+                                    let tgt_float = self.resolve_compound_assign_float_target(target);
+                                    if let Some(float_name) = tgt_float {
+                                        if right_str.contains(" as ")
+                                            || matches!(&**right, Expression::Binary { .. })
+                                        {
+                                            right_str = format!("({}) as {}", right_str, float_name);
+                                        } else {
+                                            right_str = format!("{} as {}", right_str, float_name);
+                                        }
                                     }
                                 }
                             }
@@ -3157,6 +3149,38 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// E0507 fix for `let x = self.field` behind borrowed self.
+    /// - Option<T> behind &mut self → `.take()` (atomically moves value out, leaves None)
+    /// - Other non-Copy behind &self/&mut self → `.clone()`
+    fn apply_self_field_move_fix(&self, value: &Expression<'ast>, value_str: &mut String) {
+        if !matches!(value, Expression::FieldAccess { .. }) {
+            return;
+        }
+        let root = self.root_identifier_of_field_or_index_chain(value);
+        let is_self_borrowed = root.is_some_and(|r| {
+            r == "self"
+                && (self.inferred_borrowed_params.contains("self")
+                    || self.inferred_mut_borrowed_params.contains("self"))
+        });
+        if !is_self_borrowed {
+            return;
+        }
+        let Some(ty) = self.infer_expression_type(value) else {
+            return;
+        };
+        if self.is_type_copy(&ty) || value_str.ends_with(".clone()") || value_str.ends_with(".take()") {
+            return;
+        }
+        let is_option = matches!(&ty, Type::Option(_))
+            || matches!(&ty, Type::Custom(n) if n == "Option");
+        let self_is_mut = self.inferred_mut_borrowed_params.contains("self");
+        if is_option && self_is_mut {
+            *value_str = format!("{}.take()", value_str);
+        } else {
+            *value_str = format!("{}.clone()", value_str);
+        }
+    }
+
     /// Tuple `let (a, b) = rhs`: register each binding's type for comparisons / codegen.
     /// When `rhs` is `vec[i]` and the element is non-Copy, Index codegen emits `&vec[i]` and Rust
     /// gives `&T` per field — mirror that as `Type::Reference` so `balance_eq_operands_for_rust`
@@ -3361,6 +3385,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // Note: we intentionally do NOT strip `&mut` for Copy inner types.
+        // Even though Copy types auto-copy on destructure, keeping `&mut`
+        // ensures that arm body mutations (e.g., search.update(dt)) propagate
+        // back to self.field via ref mut binding.
         base
     }
 
