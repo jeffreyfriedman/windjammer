@@ -272,15 +272,6 @@ pub fn is_float_receiver_method(name: &str) -> bool {
     )
 }
 
-/// Storage methods that move a value into a collection (push, insert, etc.).
-/// Used to determine if a parameter flows into a container field.
-pub fn is_storage_method(name: &str) -> bool {
-    matches!(
-        name,
-        "push" | "insert" | "extend" | "append" | "add" | "push_back" | "push_front"
-    )
-}
-
 // =============================================================================
 // Rust-to-Windjammer Type Mapping
 // =============================================================================

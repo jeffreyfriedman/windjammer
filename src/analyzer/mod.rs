@@ -2014,11 +2014,16 @@ impl<'ast> Analyzer<'ast> {
                         let is_copy = self.is_copy_type(&param.type_);
 
                         if is_copy {
-                            // Still check for mutation - mutated Copy types need &mut
                             if self.is_mutated(&param.name, &func.body, registry) {
                                 OwnershipMode::MutBorrowed
+                            } else if matches!(
+                                self.infer_passthrough_ownership(
+                                    &param.name, &param.type_, &func.body, registry, &func.name,
+                                ),
+                                Some(OwnershipMode::MutBorrowed)
+                            ) {
+                                OwnershipMode::MutBorrowed
                             } else {
-                                // Non-mutated Copy types default to Owned (pass by value)
                                 OwnershipMode::Owned
                             }
                         } else {
@@ -2960,7 +2965,7 @@ impl<'ast> Analyzer<'ast> {
                         },
                     ..
                 } => {
-                    let is_storage_method = crate::type_classification::is_storage_method(method);
+                    let is_storage_method = crate::method_registry::is_storage_method(method);
 
                     if is_storage_method {
                         // Check for storage method calls on ANY object:
