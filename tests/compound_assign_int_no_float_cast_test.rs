@@ -6,7 +6,6 @@
 ///
 /// Fix: Guard the compound assignment float cast to only apply when the target
 /// type is actually a float, not when float inference incorrectly suggests one.
-
 use std::process::Command;
 
 fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
@@ -38,7 +37,11 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
     let rs_path = out_dir.join("test.rs");
     let generated = std::fs::read_to_string(&rs_path).unwrap_or_default();
 
-    (output.status.success(), generated, format!("{}\n{}", stdout, stderr))
+    (
+        output.status.success(),
+        generated,
+        format!("{}\n{}", stdout, stderr),
+    )
 }
 
 #[test]

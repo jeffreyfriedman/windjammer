@@ -27,7 +27,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
     (result.status.success(), generated, combined)
 }
 
-/// When iterating over a field of a loop variable that is itself from a borrowed 
+/// When iterating over a field of a loop variable that is itself from a borrowed
 /// iterator, the inner for-loop should borrow the field to avoid E0507.
 ///
 /// Pattern:

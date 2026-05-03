@@ -88,8 +88,8 @@ impl<'ast> Analyzer<'ast> {
                     })
                     .unwrap_or(false);
 
-                let param_is_returned = returns_string
-                    && self.param_is_returned_directly(&param.name, &func.body);
+                let param_is_returned =
+                    returns_string && self.param_is_returned_directly(&param.name, &func.body);
 
                 if param_is_returned {
                     continue;
@@ -347,11 +347,12 @@ impl<'ast> Analyzer<'ast> {
                     // Enum variants (Some, None, Ok, Err, MyEnum::Variant) consume
                     // their arguments. Detect enum variants vs module-qualified fn
                     // calls: enum variants have an uppercase final component.
-                    let is_enum_variant = matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err")
-                        || (fn_name.contains("::") && {
-                            let last = fn_name.rsplit("::").next().unwrap_or("");
-                            last.starts_with(|c: char| c.is_uppercase())
-                        });
+                    let is_enum_variant =
+                        matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err")
+                            || (fn_name.contains("::") && {
+                                let last = fn_name.rsplit("::").next().unwrap_or("");
+                                last.starts_with(|c: char| c.is_uppercase())
+                            });
 
                     // Enum variants and constructors (Type::new, Type::from_*) consume
                     // their arguments, so string params passed to them need owned String.
@@ -376,8 +377,7 @@ impl<'ast> Analyzer<'ast> {
                             for (i, arg) in arguments.iter().enumerate() {
                                 let arg_expr = &arg.1;
                                 if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                    let sig_idx =
-                                        if sig.has_self_receiver { i + 1 } else { i };
+                                    let sig_idx = if sig.has_self_receiver { i + 1 } else { i };
                                     if let Some(param_type) = sig.param_types.get(sig_idx) {
                                         if self.type_is_string_ref_not_str(param_type) {
                                             return true;

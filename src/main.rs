@@ -2927,39 +2927,8 @@ fn create_cargo_toml_with_deps(
         format!("[dependencies]\n{}\n\n", deps.join("\n"))
     };
 
-    // THE WINDJAMMER WAY: Use project name from game.toml if it exists
-    // Check source_dir and its parent for game.toml
-    let game_toml_path = if source_dir.join("game.toml").exists() {
-        source_dir.join("game.toml")
-    } else if let Some(parent) = source_dir.parent() {
-        if parent.join("game.toml").exists() {
-            parent.join("game.toml")
-        } else {
-            PathBuf::new() // Empty, will use default
-        }
-    } else {
-        PathBuf::new()
-    };
-
-    let project_name = if !game_toml_path.as_os_str().is_empty() {
-        if let Ok(game_toml_content) = std::fs::read_to_string(&game_toml_path) {
-            eprintln!("DEBUG: Found game.toml at {:?}", game_toml_path);
-            // Parse name from game.toml and normalize for Cargo
-            let name = game_toml_content
-                .lines()
-                .find(|l| l.trim().starts_with("name"))
-                .and_then(|l| l.split('"').nth(1))
-                .map(|s| s.to_lowercase().replace(' ', "-"))
-                .unwrap_or_else(|| "windjammer-app".to_string());
-            eprintln!("DEBUG: Extracted project name: {}", name);
-            name
-        } else {
-            "windjammer-app".to_string()
-        }
-    } else {
-        eprintln!("DEBUG: No game.toml found, using default");
-        "windjammer-app".to_string()
-    };
+    // Use project name from wj.toml (canonical) or game.toml (legacy fallback)
+    let project_name = crate::cargo_toml::infer_project_name_from(source_dir);
     let lib_name_normalized = project_name.replace('-', "_");
 
     // THE WINDJAMMER WAY: Check if lib.rs exists to determine if this is a library or binary project
