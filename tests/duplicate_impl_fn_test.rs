@@ -6,7 +6,6 @@
 ///
 /// Fix: Skip duplicate occurrences gracefully instead of panicking.
 /// The first definition wins.
-
 use std::process::Command;
 
 fn compile_wj(source: &str) -> (bool, String) {
@@ -14,11 +13,13 @@ fn compile_wj(source: &str) -> (bool, String) {
     let src_path = dir.path().join("test.wj");
     std::fs::write(&src_path, source).unwrap();
 
-    let wj = std::env::var("WJ_BINARY")
-        .unwrap_or_else(|_| {
-            let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-            manifest.join("target/release/wj").to_string_lossy().to_string()
-        });
+    let wj = std::env::var("WJ_BINARY").unwrap_or_else(|_| {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        manifest
+            .join("target/release/wj")
+            .to_string_lossy()
+            .to_string()
+    });
 
     let output = Command::new(&wj)
         .arg("build")
@@ -70,7 +71,11 @@ impl Counter {
         output
     );
     // The first definition should win, so it should compile
-    assert!(success, "Expected compilation to succeed (first definition wins): {}", output);
+    assert!(
+        success,
+        "Expected compilation to succeed (first definition wins): {}",
+        output
+    );
 }
 
 #[test]

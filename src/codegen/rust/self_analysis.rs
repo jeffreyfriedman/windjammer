@@ -277,7 +277,12 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_modifies_self(s))
         }
-        Expression::MethodCall { object, method, arguments, .. } => {
+        Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } => {
             // Check if the object is self.field (or self.field.subfield, etc.)
             let is_on_self_field = is_self_field_chain(object);
 
@@ -296,11 +301,13 @@ pub fn expression_modifies_self(expr: &Expression) -> bool {
             }
 
             // Recursively check arguments for nested self.field mutations
-            arguments.iter().any(|(_, arg)| expression_modifies_self(arg))
+            arguments
+                .iter()
+                .any(|(_, arg)| expression_modifies_self(arg))
         }
-        Expression::Call { arguments, .. } => {
-            arguments.iter().any(|(_, arg)| expression_modifies_self(arg))
-        }
+        Expression::Call { arguments, .. } => arguments
+            .iter()
+            .any(|(_, arg)| expression_modifies_self(arg)),
         _ => false,
     }
 }

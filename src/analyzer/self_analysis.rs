@@ -1036,15 +1036,12 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match expr {
-            Expression::MethodCall {
-                object,
-                method,
-                ..
-            } => {
+            Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
                         if let Some(reg) = registry {
-                            if let Some(sig) = reg.get_signature(method)
+                            if let Some(sig) = reg
+                                .get_signature(method)
                                 .or_else(|| reg.find_signature_ending_with(method))
                             {
                                 return sig.has_self_receiver

@@ -13,7 +13,6 @@
 /// Impact: The analyzer thinks `GameState` is Copy, so it infers `Owned`
 /// instead of `Borrowed` for parameters, causing E0382 (use of moved
 /// value) when the parameter is used multiple times in a loop.
-
 use std::process::Command;
 
 fn compile_wj(source: &str) -> String {
@@ -23,11 +22,16 @@ fn compile_wj(source: &str) -> String {
     std::fs::create_dir_all(&out_dir).unwrap();
     std::fs::write(&wj_path, source).unwrap();
 
-    let wj_binary = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     let output = Command::new(wj_binary)
-        .args(["build", wj_path.to_str().unwrap(), "--no-cargo", "-o", out_dir.to_str().unwrap()])
+        .args([
+            "build",
+            wj_path.to_str().unwrap(),
+            "--no-cargo",
+            "-o",
+            out_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to run wj");
 

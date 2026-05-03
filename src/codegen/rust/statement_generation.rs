@@ -2560,7 +2560,7 @@ impl<'ast> CodeGenerator<'ast> {
                     | CompoundOp::Mod
             ) {
                 let val_ty = self.infer_expression_type(value);
-                let tgt_is_int = tgt_ty.as_ref().is_some_and(|t| Self::is_int_numeric_type(t));
+                let tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type);
                 if !tgt_is_int {
                     if let Some(v) = &val_ty {
                         if Self::is_int_numeric_type(v) {
@@ -2711,7 +2711,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                     // Mixed int/float: cast RHS integer to target float type
                     // Only cast when the target is genuinely a float type (not int).
-                    let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(|t| Self::is_int_numeric_type(t));
+                    let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type);
                     if !synth_tgt_is_int {
                         if matches!(
                             op,
@@ -2724,12 +2724,14 @@ impl<'ast> CodeGenerator<'ast> {
                             let rhs_ty = self.infer_expression_type(right);
                             if let Some(v) = &rhs_ty {
                                 if Self::is_int_numeric_type(v) {
-                                    let tgt_float = self.resolve_compound_assign_float_target(target);
+                                    let tgt_float =
+                                        self.resolve_compound_assign_float_target(target);
                                     if let Some(float_name) = tgt_float {
                                         if right_str.contains(" as ")
                                             || matches!(&**right, Expression::Binary { .. })
                                         {
-                                            right_str = format!("({}) as {}", right_str, float_name);
+                                            right_str =
+                                                format!("({}) as {}", right_str, float_name);
                                         } else {
                                             right_str = format!("{} as {}", right_str, float_name);
                                         }
@@ -3168,11 +3170,14 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(ty) = self.infer_expression_type(value) else {
             return;
         };
-        if self.is_type_copy(&ty) || value_str.ends_with(".clone()") || value_str.ends_with(".take()") {
+        if self.is_type_copy(&ty)
+            || value_str.ends_with(".clone()")
+            || value_str.ends_with(".take()")
+        {
             return;
         }
-        let is_option = matches!(&ty, Type::Option(_))
-            || matches!(&ty, Type::Custom(n) if n == "Option");
+        let is_option =
+            matches!(&ty, Type::Option(_)) || matches!(&ty, Type::Custom(n) if n == "Option");
         let self_is_mut = self.inferred_mut_borrowed_params.contains("self");
         if is_option && self_is_mut {
             *value_str = format!("{}.take()", value_str);

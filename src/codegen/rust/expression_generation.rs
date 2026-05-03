@@ -2988,7 +2988,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_name = self.infer_type_name(object);
                 let method_signature = if let Some(ref type_name) = type_name {
                     let qualified_name = format!("{}::{}", type_name, method);
-                    let mut sig = self.signature_registry
+                    let mut sig = self
+                        .signature_registry
                         .get_signature(&qualified_name)
                         .cloned();
                     // Validate: if the signature's param count doesn't match the call's
@@ -3005,7 +3006,9 @@ impl<'ast> CodeGenerator<'ast> {
                             // Wrong signature due to name collision; try alternatives
                             sig = None;
                             for (key, alt_sig) in &self.signature_registry.signatures {
-                                if key.ends_with(&format!("::{}", qualified_name)) && key != &qualified_name {
+                                if key.ends_with(&format!("::{}", qualified_name))
+                                    && key != &qualified_name
+                                {
                                     let alt_args = if alt_sig.has_self_receiver {
                                         alt_sig.param_ownership.len().saturating_sub(1)
                                     } else {
