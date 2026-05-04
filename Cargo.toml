@@ -1,24 +1,69 @@
-[package]
-name = "windjammer"
-version = "0.46.1"
-edition = "2021"
-
-# Prevent this from being treated as part of parent workspace
 [workspace]
 members = [
-  "crates/windjammer-runtime",
-  "crates/windjammer-lsp",
-  "crates/windjammer-mcp",
+    ".",
+    "crates/windjammer-lsp",
+    "crates/windjammer-mcp",
+    "crates/windjammer-runtime",
 ]
 
 [workspace.package]
-version = "0.46.1"
+version = "0.46.2"
 edition = "2021"
-authors = ["Jeffrey Friedman"]
-license = "MIT"
+authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
+license = "MIT OR Apache-2.0"
+rust-version = "1.90"
+
+[package]
+name = "windjammer"
+version.workspace = true
+edition.workspace = true
+default-run = "wj"
+authors.workspace = true
+license.workspace = true
+description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
+repository = "https://github.com/jeffreyfriedman/windjammer"
+homepage = "https://github.com/jeffreyfriedman/windjammer"
+documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
+keywords = ["compiler", "transpiler", "rust", "go", "language"]
+categories = ["development-tools", "compilers"]
+readme = "README.md"
+rust-version.workspace = true
+autobins = false
+exclude = [
+    "test_output_*",
+    "examples/*/build_output",
+    "examples/*/pkg",
+    "examples/*/target",
+    "examples/taskflow/rust",
+    "examples/taskflow/windjammer",
+    ".github",
+    "docs/*.md"
+]
+
+[lib]
+name = "windjammer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wj"
+path = "src/bin/wj.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "wj-lint"
+path = "src/bin/wj-lint.rs"
+
+[[bin]]
+name = "windjammer"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
+highlighting = ["dep:syntect"]
 
 [dependencies]
-# Core compiler dependencies (always available, WASM-compatible)
 clap = { version = "4.5", features = ["derive"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
@@ -31,7 +76,6 @@ chrono = "0.4"
 once_cell = "1.19"
 smallvec = "1.13"
 
-# CLI/terminal functionality (not needed for WASM)
 tempfile = { version = "3.10", optional = true }
 crossterm = { version = "0.28", optional = true }
 ratatui = { version = "0.28", optional = true }
@@ -39,34 +83,10 @@ syntect = { version = "5.2", optional = true }
 salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }
 
-[features]
-default = ["cli"]
-# CLI binary with full terminal UI, syntax highlighting, incremental compilation
-cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
-# Syntax highlighting in error messages
-highlighting = ["dep:syntect"]
-
 [dev-dependencies]
 tempfile = "3.0"
 assert_cmd = "2.0"
 criterion = "0.5"
-
-# wj binary requires cli feature - excluded from default build so tests can run
-[[bin]]
-name = "wj"
-path = "src/bin/wj.rs"
-required-features = ["cli"]
-
-# wj-lint: Minimal Rust leakage linter (no cli deps) - for CI
-[[bin]]
-name = "wj-lint"
-path = "src/bin/wj-lint.rs"
-
-# main.rs binary (windjammer) - incomplete, excluded from default build
-[[bin]]
-name = "windjammer"
-path = "src/main.rs"
-required-features = ["cli"]
 
 [[bench]]
 name = "string_optimization_bench"
