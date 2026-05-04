@@ -609,15 +609,13 @@ impl<'ast> CodeGenerator<'ast> {
         match iterable {
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
-                    // TDD FIX: Only borrow if the object itself is borrowed
-                    // If self is owned, we can consume self.field
                     if name == "self" {
                         return self.inferred_borrowed_params.contains("self")
                             || self.inferred_mut_borrowed_params.contains("self");
                     }
-                    // For other identifiers, check if they're borrowed
                     return self.inferred_borrowed_params.contains(name)
-                        || self.inferred_mut_borrowed_params.contains(name);
+                        || self.inferred_mut_borrowed_params.contains(name)
+                        || self.borrowed_iterator_vars.contains(name);
                 }
                 if let Expression::FieldAccess { .. } = &**object {
                     return self.should_borrow_for_iteration(object);
@@ -637,15 +635,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
-                    // TDD FIX for E0507: Check INFERRED ownership, not original hint
-                    // If self is owned (not in inferred_borrowed_params), fields can be consumed
                     if name == "self" {
                         return self.inferred_borrowed_params.contains("self")
                             || self.inferred_mut_borrowed_params.contains("self");
                     }
-                    // For other parameters, check inferred ownership
                     return self.inferred_borrowed_params.contains(name)
-                        || self.inferred_mut_borrowed_params.contains(name);
+                        || self.inferred_mut_borrowed_params.contains(name)
+                        || self.borrowed_iterator_vars.contains(name);
+                }
+                if let Expression::FieldAccess { .. } = &**object {
+                    return self.should_borrow_for_iteration(object);
                 }
                 false
             }

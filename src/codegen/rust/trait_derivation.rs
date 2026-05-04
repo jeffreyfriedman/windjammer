@@ -64,8 +64,9 @@ impl CodeGenerator<'_> {
             vec!["Debug".to_string(), "Clone".to_string()]
         };
 
+        let has_drop = self.types_with_drop.contains(&struct_.name);
         let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
-        if !has_trait_object_field && all_copy {
+        if !has_trait_object_field && all_copy && !has_drop {
             traits.push("Copy".to_string());
         }
 
@@ -132,25 +133,7 @@ impl CodeGenerator<'_> {
             Type::Array(inner, _) => self.type_contains_trait_object(inner),
             Type::Tuple(types) => types.iter().any(|t| self.type_contains_trait_object(t)),
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "String"
-                        | "f32"
-                        | "f64"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "isize"
-                        | "char"
-                ) =>
+                if name == "String" || crate::type_classification::is_copy_primitive(name) =>
             {
                 false
             }
@@ -194,24 +177,7 @@ impl CodeGenerator<'_> {
             Type::RawPointer { .. } => true,
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type_with_registry(t)),
             Type::Custom(name) => {
-                let is_primitive = matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                );
+                let is_primitive = crate::type_classification::is_copy_primitive(name);
                 is_primitive || self.copy_types_registry.contains(name.as_str())
             }
             _ => false,
@@ -460,25 +426,10 @@ impl CodeGenerator<'_> {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
             Type::Float => false,
-            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false,
+            Type::Custom(name) if crate::type_classification::is_float_type(name) => false,
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "String"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "isize"
-                        | "char"
-                ) =>
+                if crate::type_classification::is_integer_type(name)
+                    || matches!(name.as_str(), "String" | "char") =>
             {
                 true
             }
@@ -496,25 +447,10 @@ impl CodeGenerator<'_> {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
             Type::Float => false,
-            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false,
+            Type::Custom(name) if crate::type_classification::is_float_type(name) => false,
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "String"
-                        | "i8"
-                        | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "isize"
-                        | "char"
-                ) =>
+                if crate::type_classification::is_integer_type(name)
+                    || matches!(name.as_str(), "String" | "char") =>
             {
                 true
             }

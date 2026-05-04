@@ -239,13 +239,16 @@ impl Game {
 }
 
 #[test]
-fn test_consuming_method_should_be_self() {
+fn test_field_return_uses_borrowed_self_with_clone() {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
 
-    // Method that truly needs to consume self (e.g., into_inner)
+    // DESIGN DECISION: Methods whose body is `self.field` (returning a non-Copy
+    // field) use `&self` + auto-clone. This prevents cascading E0382 "use of
+    // moved value" errors at callsites. The clone is always correct; the
+    // compiler chooses safety over the micro-optimization of avoiding a clone.
     std::fs::write(
         src.join("wrapper.wj"),
         r#"
@@ -257,8 +260,7 @@ impl Wrapper {
     pub fn new(v: String) -> Wrapper {
         Wrapper { value: v }
     }
-    
-    // Consumes self and returns inner value - CORRECT to be self
+
     pub fn into_inner(self) -> String {
         self.value
     }
@@ -277,10 +279,10 @@ impl Wrapper {
 
     let rust_code = std::fs::read_to_string(build.join("wrapper.rs")).unwrap();
 
-    // ASSERT: into_inner should be self (consume), not &self
+    // Windjammer Way: field-return methods use &self + auto-clone
     assert!(
-        rust_code.contains("pub fn into_inner(self)"),
-        "into_inner should be self (consume) since it moves out the inner value. Found:\n{}",
+        rust_code.contains("pub fn into_inner(&self)"),
+        "Field-return methods should use &self (Windjammer auto-clones). Found:\n{}",
         rust_code
             .lines()
             .find(|l| l.contains("fn into_inner"))

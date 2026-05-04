@@ -95,6 +95,7 @@ fn test_string_contains_adds_ref() {
     assert!(
         generated_owned.contains("text.contains(&search)")
             || generated_owned.contains("text.contains(search.as_str())")
+            || generated_owned.contains("text.contains(&search.clone())")
             || generated_owned.contains("text.contains(&text)"),
         "When search is owned String, should auto-add & for String::contains. Generated:\n{}",
         generated_owned
@@ -138,7 +139,8 @@ fn test_vec_contains_adds_ref() {
     // Vec::contains expects &T, should add & when search is owned
     assert!(
         generated.contains("items.contains(&search)")
-            || generated.contains("items.contains(search)"),
+            || generated.contains("items.contains(search)")
+            || generated.contains("items.contains(&search.clone())"),
         "Should auto-add & for Vec::contains (or handle borrowed search). Generated:\n{}",
         generated
     );

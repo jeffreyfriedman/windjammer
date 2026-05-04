@@ -178,28 +178,8 @@ impl TypeAnalyzer {
             Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)
             Type::FunctionPointer { .. } => true, // TDD FIX: Function pointers are Copy!
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type(t)),
-            Type::Custom(name) => {
-                // Recognize common Rust primitive types by name
-                matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
-            }
-            _ => false, // String, Vec, Option, Result, other Custom types are not Copy
+            Type::Custom(name) => crate::type_classification::is_copy_primitive(name),
+            _ => false,
         }
     }
 
@@ -210,30 +190,11 @@ impl TypeAnalyzer {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             // Handle Rust-style type names that aren't Windjammer keywords
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                        | "String"
-                        | "str"
-                ) =>
+                if crate::type_classification::is_copy_primitive(name)
+                    || matches!(name.as_str(), "String" | "str") =>
             {
                 true
             }
-            // Check if custom type was collected as PartialEq
             Type::Custom(name) => self.partial_eq_types.contains(name),
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.is_partial_eq_type(inner)
@@ -259,26 +220,8 @@ impl TypeAnalyzer {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                        | "String"
-                        | "str"
-                ) =>
+                if crate::type_classification::is_copy_primitive(name)
+                    || matches!(name.as_str(), "String" | "str") =>
             {
                 true
             }
@@ -307,30 +250,14 @@ impl TypeAnalyzer {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
             Type::Float => false, // Floats don't implement Eq
+            Type::Custom(name) if crate::type_classification::is_float_type(name) => false,
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "bool"
-                        | "char"
-                        | "String"
-                        | "str"
-                ) =>
+                if crate::type_classification::is_integer_type(name)
+                    || matches!(name.as_str(), "bool" | "char" | "String" | "str") =>
             {
                 true
             }
-            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64") => false, // No Eq for floats
-            Type::Custom(name) => self.partial_eq_types.contains(name), // Assume custom types with PartialEq also have Eq (conservative)
+            Type::Custom(name) => self.partial_eq_types.contains(name),
             Type::Reference(inner) | Type::MutableReference(inner) => self.is_eq_type(inner),
             Type::Tuple(types) => types.iter().all(|t| self.is_eq_type(t)),
             Type::Parameterized(base, args) => {
@@ -364,25 +291,7 @@ impl TypeAnalyzer {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             Type::Custom(name)
-                if matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                        | "String"
-                ) =>
+                if crate::type_classification::is_copy_primitive(name) || name == "String" =>
             {
                 true
             }
@@ -429,28 +338,8 @@ pub fn is_copy_type(ty: &Type) -> bool {
         Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)
         Type::FunctionPointer { .. } => true, // TDD FIX: Function pointers are Copy!
         Type::Tuple(types) => types.iter().all(is_copy_type),
-        Type::Custom(name) => {
-            // Recognize common Rust primitive types by name
-            matches!(
-                name.as_str(),
-                "i8" | "i16"
-                    | "i32"
-                    | "i64"
-                    | "i128"
-                    | "isize"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "u128"
-                    | "usize"
-                    | "f32"
-                    | "f64"
-                    | "bool"
-                    | "char"
-            )
-        }
-        _ => false, // String, Vec, Option, Result, other Custom types are not Copy
+        Type::Custom(name) => crate::type_classification::is_copy_primitive(name),
+        _ => false,
     }
 }
 
@@ -1625,7 +1514,7 @@ impl<'ast> CodeGenerator<'ast> {
         match t {
             Type::Int => true,
             Type::Custom(name) => {
-                matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" | "isize")
+                crate::type_classification::is_integer_type(name) && name.starts_with('i')
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::type_is_signed_int_for_len_usize_comparison(inner)
