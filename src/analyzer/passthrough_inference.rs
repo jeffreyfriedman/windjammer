@@ -78,14 +78,21 @@ impl<'ast> Analyzer<'ast> {
             let Some(&ownership) = sig.param_ownership.get(adjusted_position) else {
                 continue;
             };
-            match inferred_mode {
-                None => inferred_mode = Some(ownership),
-                Some(existing_mode) => {
-                    if existing_mode != ownership {
-                        return Some(OwnershipMode::Owned);
-                    }
+            // TDD FIX: Use the STRONGEST ownership mode, not Owned on conflict.
+            // In Rust, &mut T can always be reborrowed as &T, so:
+            //   MutBorrowed + Borrowed → MutBorrowed (caller provides &mut, callees reborrow as needed)
+            //   MutBorrowed + Owned → Owned (one callee consumes it)
+            //   Borrowed + Owned → Owned (one callee consumes it)
+            // The old code returned Owned whenever any two modes disagreed, which broke
+            // the common pattern of passing a &mut parameter to both mutating and read-only functions.
+            inferred_mode = Some(match (inferred_mode, ownership) {
+                (None, mode) => mode,
+                (Some(OwnershipMode::Owned), _) | (_, OwnershipMode::Owned) => OwnershipMode::Owned,
+                (Some(OwnershipMode::MutBorrowed), _) | (_, OwnershipMode::MutBorrowed) => {
+                    OwnershipMode::MutBorrowed
                 }
-            }
+                _ => OwnershipMode::Borrowed,
+            });
         }
 
         inferred_mode

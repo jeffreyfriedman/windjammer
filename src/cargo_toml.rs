@@ -431,7 +431,7 @@ fn read_package_name_from_package_section(content: &str) -> Option<String> {
 
 /// Prefer a non-placeholder name already present in `output_dir/Cargo.toml` so repeated
 /// `wj build` does not reset `name` to `windjammer`. A stale `windjammer` entry is ignored
-/// so `game.toml` (via `inferred_snake`) can replace it.
+/// so `wj.toml` (via `inferred_snake`) can replace it.
 fn resolve_package_name_with_existing_cargo(output_dir: &Path, inferred_snake: &str) -> String {
     let existing_cargo = output_dir.join("Cargo.toml");
     if !existing_cargo.exists() {
@@ -689,40 +689,99 @@ fn read_package_name(cargo_toml_path: &Path) -> Option<String> {
     None
 }
 
-fn infer_project_name(source_dir: &Path) -> String {
-    // Check game.toml
-    let game_toml = source_dir.join("game.toml");
-    if game_toml.exists() {
-        if let Ok(content) = fs::read_to_string(&game_toml) {
-            if let Some(name) = content
-                .lines()
-                .find(|l| l.trim().starts_with("name"))
-                .and_then(|l| l.split('"').nth(1))
-                .map(|s| s.to_lowercase().replace(' ', "-"))
-            {
-                return name;
-            }
-        }
-    }
+/// Infer the project name from `wj.toml` or `game.toml` (legacy), falling back to directory name.
+/// Public so other modules (e.g. `main.rs` WASM Cargo.toml generation) can reuse this logic.
+pub fn infer_project_name_from(source_dir: &Path) -> String {
+    infer_project_name(source_dir)
+}
 
-    // Check parent for game.toml
-    if let Some(parent) = source_dir.parent() {
-        let parent_game = parent.join("game.toml");
-        if parent_game.exists() {
-            if let Ok(content) = fs::read_to_string(&parent_game) {
-                if let Some(name) = content
-                    .lines()
-                    .find(|l| l.trim().starts_with("name"))
-                    .and_then(|l| l.split('"').nth(1))
-                    .map(|s| s.to_lowercase().replace(' ', "-"))
-                {
-                    return name;
+fn infer_project_name(source_dir: &Path) -> String {
+    // Check wj.toml, then game.toml, in source_dir and parent
+    let config_files = ["wj.toml", "game.toml"];
+    let dirs_to_check: Vec<&Path> = {
+        let mut v = vec![source_dir];
+        if let Some(parent) = source_dir.parent() {
+            v.push(parent);
+        }
+        v
+    };
+
+    for dir in &dirs_to_check {
+        for config_name in &config_files {
+            let config_path = dir.join(config_name);
+            if config_path.exists() {
+                if let Ok(content) = fs::read_to_string(&config_path) {
+                    if let Some(name) = extract_package_name_from_toml(&content) {
+                        return name;
+                    }
                 }
             }
         }
     }
 
+    // Fallback: use directory name instead of hardcoding "windjammer"
+    if let Some(dir_name) = source_dir.file_name().and_then(|n| n.to_str()) {
+        if dir_name != "src" && dir_name != "src_wj" {
+            return sanitize_package_name(&dir_name.to_lowercase().replace(' ', "-"));
+        }
+        // If source_dir is "src" or "src_wj", use the parent directory name
+        if let Some(parent) = source_dir.parent() {
+            if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
+                return sanitize_package_name(&parent_name.to_lowercase().replace(' ', "-"));
+            }
+        }
+    }
+
     "windjammer".to_string()
+}
+
+/// Ensure a name is a valid Cargo package name: must start with a Unicode XID
+/// start character (letter or `_`) and contain only XID continue characters,
+/// `-`, or `_`. Strip leading invalid chars and replace remaining invalid chars
+/// with `_`. Falls back to "windjammer" if nothing remains.
+fn sanitize_package_name(name: &str) -> String {
+    let stripped: String = name
+        .chars()
+        .skip_while(|c| !c.is_alphabetic() && *c != '_')
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if stripped.is_empty() {
+        "windjammer".to_string()
+    } else {
+        stripped
+    }
+}
+
+/// Extract `name = "..."` from a TOML file.
+/// Supports both `[package]\nname = "..."` (wj.toml) and flat `name = "..."` (game.toml).
+fn extract_package_name_from_toml(content: &str) -> Option<String> {
+    let mut in_package = false;
+    let mut found_any_section = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            found_any_section = true;
+            in_package = trimmed == "[package]";
+            continue;
+        }
+        if trimmed.starts_with("name") {
+            // Accept if we're in [package] section, or if there are no sections at all (flat format)
+            if in_package || !found_any_section {
+                return trimmed
+                    .split('"')
+                    .nth(1)
+                    .map(|s| s.to_lowercase().replace(' ', "-"));
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -760,12 +819,58 @@ mod tests {
     }
 
     #[test]
-    fn test_infer_project_name_defaults_to_windjammer_without_game_toml() {
+    fn test_infer_project_name_defaults_to_dir_name_without_config() {
         let temp = std::env::temp_dir().join("wj_infer_default");
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).unwrap();
 
-        assert_eq!(infer_project_name(&temp), "windjammer");
+        // Falls back to directory name, not "windjammer"
+        assert_eq!(infer_project_name(&temp), "wj_infer_default");
+
+        fs::remove_dir_all(&temp).ok();
+    }
+
+    #[test]
+    fn test_infer_project_name_from_wj_toml() {
+        let temp = std::env::temp_dir().join("wj_infer_wjtoml");
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(
+            temp.join("wj.toml"),
+            "[package]\nname = \"my-cool-engine\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        assert_eq!(infer_project_name(&temp), "my-cool-engine");
+
+        fs::remove_dir_all(&temp).ok();
+    }
+
+    #[test]
+    fn test_infer_project_name_wj_toml_takes_precedence_over_game_toml() {
+        let temp = std::env::temp_dir().join("wj_infer_precedence");
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).unwrap();
+        fs::write(
+            temp.join("wj.toml"),
+            "[package]\nname = \"from-wj\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(temp.join("game.toml"), "name = \"from-game\"\n").unwrap();
+
+        assert_eq!(infer_project_name(&temp), "from-wj");
+
+        fs::remove_dir_all(&temp).ok();
+    }
+
+    #[test]
+    fn test_infer_project_name_src_dir_uses_parent() {
+        let temp = std::env::temp_dir().join("wj_infer_src_parent");
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(temp.join("src")).unwrap();
+
+        // When source_dir is "src", use parent directory name
+        assert_eq!(infer_project_name(&temp.join("src")), "wj_infer_src_parent");
 
         fs::remove_dir_all(&temp).ok();
     }

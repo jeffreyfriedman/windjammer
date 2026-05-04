@@ -719,15 +719,12 @@ impl<'ast> Analyzer<'ast> {
     fn estimate_type_size(&self, ty: &Type) -> EstimatedSize {
         match ty {
             Type::Parameterized(name, _)
-                if matches!(
-                    name.as_str(),
-                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "IndexMap"
-                ) =>
+                if crate::type_classification::is_large_collection(name) =>
             {
                 EstimatedSize::Large
             }
             Type::Parameterized(name, _)
-                if matches!(name.as_str(), "Vec" | "VecDeque" | "LinkedList") =>
+                if crate::type_classification::is_medium_collection(name) =>
             {
                 EstimatedSize::Medium
             }
@@ -760,37 +757,14 @@ impl<'ast> Analyzer<'ast> {
     fn is_safe_to_defer(&self, ty: &Type) -> bool {
         match ty {
             Type::Custom(name) | Type::Parameterized(name, _) => {
-                // Types with important Drop implementations - DO NOT defer
-                if matches!(
-                    name.as_str(),
-                    "Mutex"
-                        | "RwLock"
-                        | "File"
-                        | "TcpStream"
-                        | "UdpSocket"
-                        | "Channel"
-                        | "Receiver"
-                        | "Sender"
-                        | "JoinHandle"
-                        | "MutexGuard"
-                        | "RwLockReadGuard"
-                        | "RwLockWriteGuard"
-                ) {
+                if crate::type_classification::has_significant_drop(name) {
                     return false;
                 }
 
-                if matches!(
-                    name.as_str(),
-                    "HashMap"
-                        | "BTreeMap"
-                        | "HashSet"
-                        | "BTreeSet"
-                        | "Vec"
-                        | "VecDeque"
-                        | "LinkedList"
-                        | "String"
-                        | "IndexMap"
-                ) {
+                if crate::type_classification::is_large_collection(name)
+                    || crate::type_classification::is_medium_collection(name)
+                    || name == "String"
+                {
                     return true;
                 }
 

@@ -6,3 +6,9 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 fail-fast = false
 retries = 1
 slow-timeout = { period = "300s", terminate-after = 2 }
+
+# Tests that spawn cargo subprocesses (compiling full dependency trees from
+# scratch in temp dirs) need much more time, especially on Windows CI runners.
+[[profile.ci.overrides]]
+filter = 'test(test_library_compilation_creates_linkable_crate)'
+slow-timeout = { period = "600s", terminate-after = 3 }

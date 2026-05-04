@@ -378,10 +378,11 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(sig) = registry.get_signature(method) {
                         if sig.has_self_receiver {
                             if let Some(mode) = sig.param_ownership.first() {
-                                // Owned receiver (Windjammer `fn m(self)` / by-value on Copy) updates
-                                // or consumes the receiver slot the same as &mut for mutation analysis.
-                                if matches!(mode, OwnershipMode::MutBorrowed | OwnershipMode::Owned)
-                                {
+                                // Only &mut self methods constitute mutation.
+                                // Owned self CONSUMES the receiver (move), it doesn't mutate it.
+                                // Treating Owned as mutation incorrectly forces callers to pass
+                                // &mut when they should pass an owned value (e.g., for HashMap::insert).
+                                if matches!(mode, OwnershipMode::MutBorrowed) {
                                     return true;
                                 }
                             }

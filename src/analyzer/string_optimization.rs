@@ -76,18 +76,61 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             } else {
                 // No decorator - use automatic analysis
-                // PHASE 2 FULL: Check if parameter is passed to methods needing &String
+
+                // If the function returns String and this param is returned directly,
+                // it needs to be owned String (not &str)
+                let returns_string = func
+                    .return_type
+                    .as_ref()
+                    .map(|rt| {
+                        matches!(rt, Type::String)
+                            || matches!(rt, Type::Custom(ref n) if n == "string")
+                    })
+                    .unwrap_or(false);
+
+                let param_is_returned =
+                    returns_string && self.param_is_returned_directly(&param.name, &func.body);
+
+                if param_is_returned {
+                    continue;
+                }
+
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);
 
                 if !needs_string_ref {
-                    // Safe to use &str optimization
                     optimizable.insert(param.name.clone());
                 }
             }
         }
 
         optimizable
+    }
+
+    /// Check if a string parameter is returned directly (explicit return or implicit last expr)
+    fn param_is_returned_directly(&self, param_name: &str, body: &[&Statement]) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    if let Expression::Identifier { name, .. } = &**expr {
+                        if name == param_name {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Expression { expr, .. } => {
+                    if let Expression::Identifier { name, .. } = &**expr {
+                        if name == param_name {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Check if a parameter needs &String (passed to method that requires it)
@@ -222,34 +265,13 @@ impl<'ast> Analyzer<'ast> {
                             _ => false,
                         };
 
-                        if is_self_method {
-                            // Whitelist of known read-only methods that can use &str
-                            let is_read_only_method = matches!(
-                                method.as_str(),
-                                "contains"
-                                    | "get"
-                                    | "contains_key"
-                                    | "starts_with"
-                                    | "ends_with"
-                                    | "is_empty"
-                                    | "len"
-                                    | "chars"
-                                    | "bytes"
-                                    | "lines"
-                                    | "split"
-                                    | "trim"
-                                    | "to_lowercase"
-                                    | "to_uppercase"
-                                    | "has" // Common user-defined read-only method name
-                                    | "find" // Common search method
-                                    | "search" // Common search method
-                            );
-
-                            if !is_read_only_method {
-                                // Conservative: Method on self (or self.field) that's not in the whitelist likely needs owned String
-                                return true;
-                            }
-                        }
+                        // Self-method calls (self.log(message), self.data.insert(key, val)):
+                        // If ownership analyzer determined the param as Borrowed, then the
+                        // downstream method that receives it will also have its string param
+                        // analyzed. Known problematic stdlib methods (contains, push, insert)
+                        // are handled by special cases below.
+                        // No extra conservative block needed for self methods.
+                        let _ = is_self_method;
 
                         // SPECIAL CASE: Vec<String>::contains needs &String
                         // This is a Rust stdlib method, not in our signature registry
@@ -266,10 +288,10 @@ impl<'ast> Analyzer<'ast> {
                             return true; // Require String (owned), not &str
                         }
 
-                        // SPECIAL CASE: HashMap<String, V>::insert needs String for first arg
-                        // If parameter is passed to insert() as key, it must be String
-                        if method == "insert" && idx == 0 {
-                            return true; // Require String (owned), not &str
+                        // SPECIAL CASE: HashMap::insert consumes both key and value
+                        // Both args must be owned String, not &str
+                        if method == "insert" && (idx == 0 || idx == 1) {
+                            return true;
                         }
 
                         // Check if this method expects &String or String (owned) for this parameter position
@@ -322,10 +344,24 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    let is_enum_variant = fn_name.contains("::")
-                        || matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err");
+                    // Enum variants (Some, None, Ok, Err, MyEnum::Variant) consume
+                    // their arguments. Detect enum variants vs module-qualified fn
+                    // calls: enum variants have an uppercase final component.
+                    let is_enum_variant =
+                        matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err")
+                            || (fn_name.contains("::") && {
+                                let last = fn_name.rsplit("::").next().unwrap_or("");
+                                last.starts_with(|c: char| c.is_uppercase())
+                            });
 
-                    if is_enum_variant {
+                    // Enum variants and constructors (Type::new, Type::from_*) consume
+                    // their arguments, so string params passed to them need owned String.
+                    let is_constructor = fn_name.contains("::") && {
+                        let last = fn_name.rsplit("::").next().unwrap_or("");
+                        last.starts_with("new") || last.starts_with("from_")
+                    };
+
+                    if is_enum_variant || is_constructor {
                         for arg in arguments.iter() {
                             let arg_expr = &arg.1;
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
@@ -335,34 +371,40 @@ impl<'ast> Analyzer<'ast> {
                     }
 
                     if let Some(sig) = registry.get_signature(fn_name) {
-                        for (i, arg) in arguments.iter().enumerate() {
-                            let arg_expr = &arg.1;
-                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                let sig_idx = if sig.has_self_receiver { i + 1 } else { i };
-                                if let Some(param_type) = sig.param_types.get(sig_idx) {
-                                    if self.type_is_string_ref_not_str(param_type) {
-                                        return true;
-                                    }
-                                    if self.type_is_owned_string(param_type) {
-                                        return true;
+                        // Extern fns: codegen wraps string args in
+                        // string_to_ffi(.to_string()), so &str is always safe
+                        if !sig.is_extern {
+                            for (i, arg) in arguments.iter().enumerate() {
+                                let arg_expr = &arg.1;
+                                if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                    let sig_idx = if sig.has_self_receiver { i + 1 } else { i };
+                                    if let Some(param_type) = sig.param_types.get(sig_idx) {
+                                        if self.type_is_string_ref_not_str(param_type) {
+                                            return true;
+                                        }
+                                        if self.type_is_owned_string(param_type) {
+                                            return true;
+                                        }
                                     }
                                 }
-                            }
-                            if self.expr_uses_param_in_string_ref_context(
-                                param_name, arg_expr, registry,
-                            ) {
-                                return true;
+                                if self.expr_uses_param_in_string_ref_context(
+                                    param_name, arg_expr, registry,
+                                ) {
+                                    return true;
+                                }
                             }
                         }
                     } else {
-                        // Signature not in registry (extern fns, unanalyzed fns).
-                        // Be conservative: if our param is passed as an argument,
-                        // assume String or &String is needed to prevent incorrect &str optimization.
+                        // Signature not in registry (extern fns, other Windjammer fns).
+                        // Safe to use &str because:
+                        // - Extern fns: codegen wraps string args in string_to_ffi(.to_string()),
+                        //   which works with both &str and &String
+                        // - Other Windjammer fns: their borrowed string params will also be &str
+                        // - Known problematic stdlib methods (contains, push, insert) are
+                        //   handled by special cases above
+                        // Still recursively check sub-expressions for other patterns.
                         for arg in arguments.iter() {
                             let arg_expr = &arg.1;
-                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                return true;
-                            }
                             if self.expr_uses_param_in_string_ref_context(
                                 param_name, arg_expr, registry,
                             ) {

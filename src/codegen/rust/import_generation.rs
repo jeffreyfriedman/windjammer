@@ -948,8 +948,69 @@ impl CodeGenerator<'_> {
                                 format!("use {};\n", rust_path)
                             }
                         }
+                    } else if rust_path.contains("::") {
+                        // Multi-segment path with lowercase last segment (e.g. engine::weapon::create_fn).
+                        // Could be a module or a function import from an external crate.
+                        // Don't blindly add ::* — pass through as-is for external crate paths,
+                        // or use crate:: prefix for internal module paths.
+                        let common_internal_modules = [
+                            "math",
+                            "physics",
+                            "rendering",
+                            "world",
+                            "game",
+                            "audio",
+                            "input",
+                            "rpg",
+                            "ui",
+                            "editor",
+                            "scene",
+                            "collision2d",
+                            "networking",
+                            "effects",
+                            "animation",
+                            "ai",
+                            "dialogue",
+                            "inventory",
+                            "quest",
+                            "combat",
+                            "lighting",
+                            "camera",
+                            "particles",
+                            "terrain",
+                            "weather",
+                            "save",
+                            "config",
+                            "debug",
+                            "utils",
+                            "helpers",
+                            "core",
+                            "common",
+                            "types",
+                            "components",
+                            "systems",
+                            "resources",
+                            "entities",
+                            "events",
+                            "state",
+                            "assets",
+                            "data",
+                            "models",
+                            "controllers",
+                            "views",
+                            "managers",
+                            "services",
+                            "handlers",
+                            "processors",
+                        ];
+                        let is_likely_internal = common_internal_modules.contains(&first_segment);
+                        if is_likely_internal {
+                            format!("use crate::{};\n", rust_path)
+                        } else {
+                            format!("use {};\n", rust_path)
+                        }
                     } else {
-                        // Likely a module, add ::*
+                        // Single lowercase identifier — likely a module, add ::*
                         format!("use {}::*;\n", rust_path)
                     }
                 }

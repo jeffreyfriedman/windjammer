@@ -182,6 +182,9 @@ pub struct CodeGenerator<'ast> {
     /// While generating an assignment RHS, use this LHS type for float literal suffixes when
     /// FloatInference returns Unknown (multipass ExprId mismatch, etc.).
     pub(crate) assignment_float_target_type: Option<Type>,
+    /// When a let-binding has an explicit type annotation, this provides the target type
+    /// for `.collect()` turbofish generation (e.g., `let x: Vec<char> = ...collect()`).
+    pub(crate) collect_target_type: Option<Type>,
     // VOID BLOCK: When true, last expression in a block gets a semicolon (if-without-else bodies)
     pub(crate) in_void_block: bool,
     // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
@@ -225,6 +228,8 @@ pub struct CodeGenerator<'ast> {
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
+    // Types that implement Drop - cannot derive Copy (Rust E0184)
+    pub(crate) types_with_drop: std::collections::HashSet<String>,
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -391,6 +396,7 @@ impl<'ast> CodeGenerator<'ast> {
             user_closure_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
             assignment_float_target_type: None,
+            collect_target_type: None,
             in_void_block: false,
             in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
@@ -414,6 +420,7 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
+            types_with_drop: std::collections::HashSet::new(),
             in_struct_literal_field: false,
             in_owned_value_context: false,
             in_unsafe_block: false,
@@ -1087,6 +1094,15 @@ impl<'ast> CodeGenerator<'ast> {
         // This enables smart enum derive that only adds PartialEq if all variants support it
         self.collect_partial_eq_types(program);
 
+        // PRE-PASS: Collect types that implement Drop (cannot derive Copy, Rust E0184)
+        for item in &program.items {
+            if let Item::Impl { block, .. } = item {
+                if block.trait_name.as_deref() == Some("Drop") {
+                    self.types_with_drop.insert(block.type_name.clone());
+                }
+            }
+        }
+
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
             if let Item::BoundAlias { name, traits, .. } = item {
@@ -1604,7 +1620,15 @@ impl<'ast> CodeGenerator<'ast> {
         // Rust error E0659 ("ambiguous name"). For example, if mod.rs re-exports GizmoMode
         // from scene_view, and the file also has `use crate::gizmos::*` which exports its own
         // GizmoMode, both globs would bring GizmoMode into scope, making it ambiguous.
-        if self.is_module && !has_explicit_glob_imports {
+        // Don't inject `use super::*;` for the crate lib root (mod.rs that IS lib.rs).
+        // super has no parent at the crate root → E0433.
+        let is_lib_root = self.is_output_mod_rs()
+            && self
+                .current_output_file
+                .parent()
+                .map(|d| d.join("Cargo.toml").exists())
+                .unwrap_or(false);
+        if self.is_module && !has_explicit_glob_imports && !is_lib_root {
             implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
         }
 
