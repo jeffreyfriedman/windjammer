@@ -108,9 +108,7 @@ pub fn mutate(state: State) {
     ];
 
     let results = test_utils::compile_project_result(files).expect("Should compile");
-    let game_rs = results
-        .get("game.rs")
-        .expect("game.rs should be generated");
+    let game_rs = results.get("game.rs").expect("game.rs should be generated");
     let b_rs = results
         .get("module_b.rs")
         .expect("module_b.rs should be generated");
