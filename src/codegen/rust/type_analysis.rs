@@ -443,6 +443,12 @@ impl<'ast> CodeGenerator<'ast> {
                         return Some(tn);
                     }
                 }
+                // TDD FIX: Recognize CamelCase identifiers as type names for static method calls.
+                // In `Builder::create("hello")`, `Builder` is a type name, not a variable.
+                // Without this, signature lookup fails and string literal coercion is wrong.
+                if name.starts_with(|c: char| c.is_ascii_uppercase()) {
+                    return Some(name.clone());
+                }
                 None
             }
             Expression::FieldAccess { object, field, .. } => {

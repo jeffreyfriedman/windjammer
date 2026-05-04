@@ -2384,6 +2384,13 @@ impl<'ast> CodeGenerator<'ast> {
                                         matches!(ty, Type::String)
                                             || matches!(ty, Type::Custom(name) if name == "string" || name == "String")
                                     })
+                                } else if sig.param_types.get(i).is_some_and(|ty| {
+                                    matches!(ty, Type::Reference(inner) if
+                                        matches!(**inner, Type::Custom(ref s) if s == "str"))
+                                }) {
+                                    // Parameter type is &str (string optimization inferred this).
+                                    // String literals are already &str in Rust — no .to_string() needed.
+                                    false
                                 } else if signature_from_simple_fallback && {
                                     let qualifier = func_name.split("::").next().unwrap_or("");
                                     qualifier.chars().next().is_some_and(|c| c.is_lowercase())
