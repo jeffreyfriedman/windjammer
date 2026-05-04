@@ -794,24 +794,47 @@ impl<'a> BodyParser<'a> {
                         }
                     }
                 }
-                Err(anyhow!("Unknown field '{}' on struct '{}'", member, struct_name))
+                Err(anyhow!(
+                    "Unknown field '{}' on struct '{}'",
+                    member,
+                    struct_name
+                ))
             }
-            _ => Err(anyhow!("Cannot access member '{}' on type {:?}", member, ty)),
+            _ => Err(anyhow!(
+                "Cannot access member '{}' on type {:?}",
+                member,
+                ty
+            )),
         }
     }
 
-    fn resolve_swizzle(&self, member: &str, max_components: usize, scalar: ScalarType) -> Result<Type> {
+    fn resolve_swizzle(
+        &self,
+        member: &str,
+        max_components: usize,
+        scalar: ScalarType,
+    ) -> Result<Type> {
         let valid_xyzw = ['x', 'y', 'z', 'w'];
         let valid_rgba = ['r', 'g', 'b', 'a'];
         let chars: Vec<char> = member.chars().collect();
         if chars.is_empty() || chars.len() > 4 {
             return Err(anyhow!("Invalid swizzle '{}'", member));
         }
-        let using_rgba = valid_rgba.contains(&chars[0]) && !valid_xyzw[..max_components].contains(&chars[0]);
-        let valid_set = if using_rgba { &valid_rgba[..max_components] } else { &valid_xyzw[..max_components] };
+        let using_rgba =
+            valid_rgba.contains(&chars[0]) && !valid_xyzw[..max_components].contains(&chars[0]);
+        let valid_set = if using_rgba {
+            &valid_rgba[..max_components]
+        } else {
+            &valid_xyzw[..max_components]
+        };
         for &c in &chars {
             if !valid_set.contains(&c) {
-                return Err(anyhow!("Invalid swizzle component '{}' in '{}' for vec{}", c, member, max_components));
+                return Err(anyhow!(
+                    "Invalid swizzle component '{}' in '{}' for vec{}",
+                    c,
+                    member,
+                    max_components
+                ));
             }
         }
         match chars.len() {
