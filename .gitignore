@@ -83,3 +83,6 @@ build_game_editor/
 *.bak
 .pr-comments/
 tests/generated/
+
+# Auto-generated analysis metadata (regenerated from .wj source)
+*.wj.meta

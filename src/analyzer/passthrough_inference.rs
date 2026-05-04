@@ -87,9 +87,7 @@ impl<'ast> Analyzer<'ast> {
             // the common pattern of passing a &mut parameter to both mutating and read-only functions.
             inferred_mode = Some(match (inferred_mode, ownership) {
                 (None, mode) => mode,
-                (Some(OwnershipMode::Owned), _) | (_, OwnershipMode::Owned) => {
-                    OwnershipMode::Owned
-                }
+                (Some(OwnershipMode::Owned), _) | (_, OwnershipMode::Owned) => OwnershipMode::Owned,
                 (Some(OwnershipMode::MutBorrowed), _) | (_, OwnershipMode::MutBorrowed) => {
                     OwnershipMode::MutBorrowed
                 }
