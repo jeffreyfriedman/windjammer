@@ -776,24 +776,16 @@ impl<'a> BodyParser<'a> {
 
     fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {
         match ty {
-            Type::Vec2(_) => match member {
-                "x" | "y" | "r" | "g" => Ok(Type::Scalar(ScalarType::F32)),
-                "xy" | "rg" => Ok(Type::Vec2(Some(ScalarType::F32))),
-                _ => Ok(Type::Scalar(ScalarType::F32)),
-            },
-            Type::Vec3(_) => match member {
-                "x" | "y" | "z" | "r" | "g" | "b" => Ok(Type::Scalar(ScalarType::F32)),
-                "xy" | "xz" | "yz" | "rgb" => Ok(Type::Vec3(Some(ScalarType::F32))),
-                "xyz" => Ok(Type::Vec3(Some(ScalarType::F32))),
-                _ => Ok(Type::Scalar(ScalarType::F32)),
-            },
-            Type::Vec4(_) => match member {
-                "x" | "y" | "z" | "w" | "r" | "g" | "b" | "a" => Ok(Type::Scalar(ScalarType::F32)),
-                "xy" | "xz" | "xw" | "yz" | "yw" | "zw" => Ok(Type::Vec2(Some(ScalarType::F32))),
-                "xyz" | "rgb" => Ok(Type::Vec3(Some(ScalarType::F32))),
-                "xyzw" | "rgba" => Ok(Type::Vec4(Some(ScalarType::F32))),
-                _ => Ok(Type::Scalar(ScalarType::F32)),
-            },
+            Type::Vec2(scalar) | Type::Vec3(scalar) | Type::Vec4(scalar) => {
+                let scalar_ty = scalar.unwrap_or(ScalarType::F32);
+                let max_component = match ty {
+                    Type::Vec2(_) => 2,
+                    Type::Vec3(_) => 3,
+                    Type::Vec4(_) => 4,
+                    _ => unreachable!(),
+                };
+                self.resolve_swizzle(member, max_component, scalar_ty)
+            }
             Type::Struct(struct_name) => {
                 if let Some(s) = self.structs.get(struct_name) {
                     for f in &s.fields {
@@ -802,9 +794,55 @@ impl<'a> BodyParser<'a> {
                         }
                     }
                 }
-                Err(anyhow!("Unknown field '{}'", member))
+                Err(anyhow!(
+                    "Unknown field '{}' on struct '{}'",
+                    member,
+                    struct_name
+                ))
             }
-            _ => Ok(Type::Scalar(ScalarType::F32)),
+            _ => Err(anyhow!(
+                "Cannot access member '{}' on type {:?}",
+                member,
+                ty
+            )),
+        }
+    }
+
+    fn resolve_swizzle(
+        &self,
+        member: &str,
+        max_components: usize,
+        scalar: ScalarType,
+    ) -> Result<Type> {
+        let valid_xyzw = ['x', 'y', 'z', 'w'];
+        let valid_rgba = ['r', 'g', 'b', 'a'];
+        let chars: Vec<char> = member.chars().collect();
+        if chars.is_empty() || chars.len() > 4 {
+            return Err(anyhow!("Invalid swizzle '{}'", member));
+        }
+        let using_rgba =
+            valid_rgba.contains(&chars[0]) && !valid_xyzw[..max_components].contains(&chars[0]);
+        let valid_set = if using_rgba {
+            &valid_rgba[..max_components]
+        } else {
+            &valid_xyzw[..max_components]
+        };
+        for &c in &chars {
+            if !valid_set.contains(&c) {
+                return Err(anyhow!(
+                    "Invalid swizzle component '{}' in '{}' for vec{}",
+                    c,
+                    member,
+                    max_components
+                ));
+            }
+        }
+        match chars.len() {
+            1 => Ok(Type::Scalar(scalar)),
+            2 => Ok(Type::Vec2(Some(scalar))),
+            3 => Ok(Type::Vec3(Some(scalar))),
+            4 => Ok(Type::Vec4(Some(scalar))),
+            _ => unreachable!(),
         }
     }
 

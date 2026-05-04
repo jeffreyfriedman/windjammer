@@ -1,20 +1,22 @@
-/// TDD Tests: Ownership inference for non-Copy field moves (v0.41.0)
+/// TDD Tests: Ownership inference for self field access patterns (v0.41.0+)
 ///
-/// When a method returns `self.field` where the field is a non-Copy type (e.g. String),
-/// the compiler must infer owned `self` (not `&self`), because you can't move a field
-/// out of a borrowed reference.
+/// DESIGN DECISION (Windjammer Way): When a method returns `self.field` where
+/// the field is a non-Copy type (e.g. String), the compiler infers `&self` and
+/// auto-clones the returned field. This prevents cascading E0382 "use of moved
+/// value" errors at callsites — the getter can be called multiple times safely.
 ///
-/// This was a known issue from v0.40.0.
+/// For methods that truly consume self (builder pattern, match on self, etc.),
+/// owned self is inferred through other mechanisms.
 #[path = "test_utils.rs"]
 mod test_utils;
 
 // ==========================================
-// Return self.field (non-Copy) → owned self
+// Return self.field (non-Copy) → &self + clone
 // ==========================================
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_return_self_string_field_infers_owned_self() {
+fn test_return_self_string_field_infers_borrowed_self_with_clone() {
     let generated = test_utils::compile_single(
         r#"
 struct Text {
@@ -29,16 +31,16 @@ impl Text {
 "#,
     );
 
-    // The method returns self.content (a String, non-Copy).
-    // Moving a field out of self requires owned self, not &self.
+    // Getter returning non-Copy field uses &self + auto-clone.
+    // This prevents E0382 at callsites (can call get_content() multiple times).
     assert!(
-        generated.contains("fn get_content(self) -> String"),
-        "Expected owned `self` when returning non-Copy field. Got:\n{}",
+        generated.contains("fn get_content(&self) -> String"),
+        "Expected `&self` with auto-clone for getter returning non-Copy field. Got:\n{}",
         generated
     );
     assert!(
-        !generated.contains("fn get_content(&self)"),
-        "Should NOT use &self when returning non-Copy field. Got:\n{}",
+        generated.contains("self.content.clone()"),
+        "Expected auto-clone on non-Copy field return. Got:\n{}",
         generated
     );
 }
@@ -74,12 +76,12 @@ impl Counter {
 }
 
 // ==========================================
-// Return self.field (Vec, non-Copy) → owned self
+// Return self.field (Vec, non-Copy) → &self + clone
 // ==========================================
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_return_self_vec_field_infers_owned_self() {
+fn test_return_self_vec_field_infers_borrowed_self_with_clone() {
     let generated = test_utils::compile_single(
         r#"
 struct Container {
@@ -94,9 +96,15 @@ impl Container {
 "#,
     );
 
+    // Same as String: getter returning non-Copy Vec uses &self + clone.
     assert!(
-        generated.contains("fn take_items(self) -> Vec<i64>"),
-        "Expected owned `self` when returning non-Copy Vec field. Got:\n{}",
+        generated.contains("fn take_items(&self) -> Vec<i64>"),
+        "Expected `&self` with auto-clone for getter returning non-Copy Vec field. Got:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("self.items.clone()"),
+        "Expected auto-clone on non-Copy Vec field return. Got:\n{}",
         generated
     );
 }

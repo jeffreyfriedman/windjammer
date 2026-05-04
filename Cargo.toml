@@ -1,6 +1,6 @@
 [package]
 name = "windjammer"
-version = "0.46.0"
+version = "0.46.1"
 edition = "2021"
 
 # Prevent this from being treated as part of parent workspace
@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.46.0"
+version = "0.46.1"
 edition = "2021"
 authors = ["Jeffrey Friedman"]
 license = "MIT"

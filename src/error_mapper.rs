@@ -468,36 +468,24 @@ impl ErrorMapper {
 
     /// Convert Rust type names to Windjammer type names
     fn rust_type_to_windjammer(&self, rust_type: &str) -> String {
-        match rust_type {
-            "i32" | "i64" | "isize" => "int",
-            "u32" | "u64" | "usize" => "uint",
-            "f32" | "f64" => "float",
-            "&str" => "string",
-            "String" => "string",
-            "bool" => "bool",
-            "()" => "void",
-            _ => {
-                // Handle references
-                if let Some(stripped) = rust_type.strip_prefix('&') {
-                    return format!("&{}", self.rust_type_to_windjammer(stripped));
-                }
-                // Handle Option
-                if rust_type.starts_with("Option<") {
-                    if let Some(inner) = self.extract_between(rust_type, "Option<", ">") {
-                        return format!("{}?", self.rust_type_to_windjammer(&inner));
-                    }
-                }
-                // Handle Vec
-                if rust_type.starts_with("Vec<") {
-                    if let Some(inner) = self.extract_between(rust_type, "Vec<", ">") {
-                        return format!("[{}]", self.rust_type_to_windjammer(&inner));
-                    }
-                }
-                // Default: return as-is
-                rust_type
+        let mapped = crate::type_classification::rust_type_to_windjammer(rust_type);
+        if mapped != rust_type {
+            return mapped.to_string();
+        }
+        if let Some(stripped) = rust_type.strip_prefix('&') {
+            return format!("&{}", self.rust_type_to_windjammer(stripped));
+        }
+        if rust_type.starts_with("Option<") {
+            if let Some(inner) = self.extract_between(rust_type, "Option<", ">") {
+                return format!("{}?", self.rust_type_to_windjammer(&inner));
             }
         }
-        .to_string()
+        if rust_type.starts_with("Vec<") {
+            if let Some(inner) = self.extract_between(rust_type, "Vec<", ">") {
+                return format!("[{}]", self.rust_type_to_windjammer(&inner));
+            }
+        }
+        rust_type.to_string()
     }
 
     /// Extract text between two delimiters
