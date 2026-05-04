@@ -2014,14 +2014,18 @@ impl<'ast> Analyzer<'ast> {
                         let is_copy = self.is_copy_type(&param.type_);
 
                         if is_copy {
-                            if self.is_mutated(&param.name, &func.body, registry) {
-                                OwnershipMode::MutBorrowed
-                            } else if matches!(
-                                self.infer_passthrough_ownership(
-                                    &param.name, &param.type_, &func.body, registry, &func.name,
-                                ),
-                                Some(OwnershipMode::MutBorrowed)
-                            ) {
+                            if self.is_mutated(&param.name, &func.body, registry)
+                                || matches!(
+                                    self.infer_passthrough_ownership(
+                                        &param.name,
+                                        &param.type_,
+                                        &func.body,
+                                        registry,
+                                        &func.name,
+                                    ),
+                                    Some(OwnershipMode::MutBorrowed)
+                                )
+                            {
                                 OwnershipMode::MutBorrowed
                             } else {
                                 OwnershipMode::Owned

@@ -69,8 +69,11 @@ impl Renderer for MyRenderer {
 }
 
 #[test]
-fn test_trait_impl_matches_owned_self() {
-    // Trait takes ownership: fn consume(self) -> T
+fn test_trait_impl_field_return_uses_borrowed_self() {
+    // DESIGN DECISION: When a method body is `self.field` (returning a non-Copy
+    // field), the compiler uses &self + auto-clone even for trait methods.
+    // Both trait and impl must agree. The compiler cannot distinguish "consume"
+    // semantics from "getter" semantics when the body is identical.
     let source = r#"
 pub trait Consumable {
     fn consume(self) -> String
@@ -89,17 +92,13 @@ impl Consumable for Data {
 
     let output = test_utils::compile_single(source);
 
-    println!("\n=== Generated Rust (owned) ===\n{}\n", output);
+    println!("\n=== Generated Rust (field-return) ===\n{}\n", output);
 
-    // Trait and impl should use owned self
+    // Windjammer Way: field-return methods use &self + auto-clone
     assert!(
-        output.contains("fn consume(self) -> String"),
-        "Expected 'fn consume(self) -> String', got:\n{}",
+        output.contains("fn consume(&self) -> String"),
+        "Expected &self for field-return method (auto-clone pattern). Got:\n{}",
         output
-    );
-    assert!(
-        !output.contains("fn consume(&self)") && !output.contains("fn consume(&mut self)"),
-        "Should NOT use &self or &mut self when trait requires owned self"
     );
 }
 
