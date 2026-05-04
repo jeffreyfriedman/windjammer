@@ -492,9 +492,15 @@ impl<'ast> CodeGenerator<'ast> {
                             .needs_clone(name, self.current_statement_idx)
                             .is_some()
                         {
+                            // Borrowed/mut-borrowed params don't need cloning:
+                            // &T is Copy (reborrow is free), &mut T can be reborrowed.
+                            let is_ref_param = self.inferred_borrowed_params.contains(name)
+                                || self.inferred_mut_borrowed_params.contains(name);
+
                             // Skip .clone() for Copy types — they are implicitly copied,
                             // so .clone() is unnecessary noise.
-                            let is_copy_type = analysis.string_literal_vars.contains(name)
+                            let is_copy_type = is_ref_param
+                                || analysis.string_literal_vars.contains(name)
                                 || self.usize_variables.contains(name)
                                 || self
                                     .infer_expression_type(expr_to_generate)
@@ -1742,9 +1748,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             let arg_ty = self.infer_expression_type(arg);
                                             let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                                 matches!(t, Type::Int)
-                                                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                    ))
+                                                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                             });
                                             if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                                 let target = if param_is_f32 { "f32" } else { "f64" };
@@ -2750,9 +2754,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         let arg_ty = self.infer_expression_type(arg);
                                         let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                             matches!(t, Type::Int)
-                                                || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                    "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                ))
+                                                || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                         });
                                         if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                             let target = if param_is_f32 { "f32" } else { "f64" };
@@ -2908,6 +2910,34 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // E0507: `borrowed_var.method(args)` when the method consumes `self` (owned receiver)
+                // and the variable is a borrowed iterator variable (from `for x in &collection`).
+                // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.borrowed_iterator_vars.contains(name) && method != "clone" {
+                        if let Some(recv_ty) = self.infer_expression_type(object) {
+                            if !self.is_type_copy(&recv_ty) {
+                                if let Some(tn) = Self::type_to_name(&recv_ty) {
+                                    let qualified = format!("{}::{}", tn, method);
+                                    let sig_opt = self
+                                        .signature_registry
+                                        .get_signature(&qualified)
+                                        .or_else(|| self.signature_registry.get_signature(method));
+                                    if let Some(sig) = sig_opt {
+                                        if sig.has_self_receiver
+                                            && sig.param_ownership.first()
+                                                == Some(&crate::analyzer::OwnershipMode::Owned)
+                                            && !obj_str.ends_with(".clone()")
+                                        {
+                                            obj_str = format!("{}.clone()", obj_str);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
                 // handler and this IS a .clone() call, strip the redundant auto-clone.
                 // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
@@ -2960,9 +2990,41 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_name = self.infer_type_name(object);
                 let method_signature = if let Some(ref type_name) = type_name {
                     let qualified_name = format!("{}::{}", type_name, method);
-                    self.signature_registry
+                    let mut sig = self
+                        .signature_registry
                         .get_signature(&qualified_name)
-                        .cloned()
+                        .cloned();
+                    // Validate: if the signature's param count doesn't match the call's
+                    // argument count, it's a name collision (e.g., two different types
+                    // both named Ability with different activate methods). In that case,
+                    // try module-qualified alternatives from the registry.
+                    if let Some(ref found_sig) = sig {
+                        let expected_args = if found_sig.has_self_receiver {
+                            found_sig.param_ownership.len().saturating_sub(1)
+                        } else {
+                            found_sig.param_ownership.len()
+                        };
+                        if expected_args != arguments.len() {
+                            // Wrong signature due to name collision; try alternatives
+                            sig = None;
+                            for (key, alt_sig) in &self.signature_registry.signatures {
+                                if key.ends_with(&format!("::{}", qualified_name))
+                                    && key != &qualified_name
+                                {
+                                    let alt_args = if alt_sig.has_self_receiver {
+                                        alt_sig.param_ownership.len().saturating_sub(1)
+                                    } else {
+                                        alt_sig.param_ownership.len()
+                                    };
+                                    if alt_args == arguments.len() {
+                                        sig = Some(alt_sig.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    sig
                     // CRITICAL: Do NOT fall back to unqualified method name lookup!
                     // Unqualified lookup for common names like "get", "remove", "contains"
                     // can match WRONG user-defined methods (e.g., ComponentArray::get when
@@ -2981,41 +3043,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // receivers, arguments should use the same float type as the receiver.
                 let prev_float_target = self.assignment_float_target_type.clone();
                 let receiver_float_type = self.infer_expression_type(object);
-                let is_float_method = matches!(
-                    method.as_str(),
-                    "clamp"
-                        | "max"
-                        | "min"
-                        | "abs"
-                        | "copysign"
-                        | "recip"
-                        | "to_degrees"
-                        | "to_radians"
-                        | "signum"
-                        | "powf"
-                        | "powi"
-                        | "sqrt"
-                        | "cbrt"
-                        | "hypot"
-                        | "sin"
-                        | "cos"
-                        | "tan"
-                        | "asin"
-                        | "acos"
-                        | "atan"
-                        | "atan2"
-                        | "exp"
-                        | "exp2"
-                        | "ln"
-                        | "log"
-                        | "log2"
-                        | "log10"
-                        | "round"
-                        | "floor"
-                        | "ceil"
-                        | "trunc"
-                        | "fract"
-                );
+                let is_float_method = crate::type_classification::is_float_receiver_method(method);
                 if is_float_method {
                     if let Some(ref rft) = receiver_float_type {
                         match rft {
@@ -3404,9 +3432,30 @@ impl<'ast> CodeGenerator<'ast> {
                         // AUTO-BORROW: Methods that take &T or &[T] should auto-borrow
                         // when given owned values. Eliminates Rust leakage in .wj files.
                         let auto_borrow_methods = ["push_str", "extend_from_slice"];
-                        if auto_borrow_methods.contains(&method.as_str()) && i == 0 {
+                        let map_key_methods = ["remove", "get", "contains_key", "entry"];
+                        let is_map_method = map_key_methods.contains(&method.as_str())
+                            && i == 0
+                            && {
+                                let obj_ty = self.infer_expression_type(object);
+                                obj_ty.as_ref().is_some_and(|t| matches!(t,
+                                    Type::Parameterized(base, _) if base == "HashMap" || base == "BTreeMap" || base == "Map"
+                                ))
+                            };
+                        if (auto_borrow_methods.contains(&method.as_str()) || is_map_method) && i == 0 {
                             let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
-                            if !is_string_literal && !arg_str.starts_with('&') {
+                            let arg_already_ref = {
+                                let arg_ty = self.infer_expression_type(arg);
+                                let ty_is_ref = arg_ty.as_ref().is_some_and(|t| matches!(t,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                ) || matches!(t, Type::Custom(n) if n == "&str"));
+                                let param_is_borrowed = match arg {
+                                    Expression::Identifier { name, .. } =>
+                                        self.inferred_borrowed_params.contains(&name.to_string()),
+                                    _ => false,
+                                };
+                                ty_is_ref || param_is_borrowed
+                            };
+                            if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                                 let needs_borrow = matches!(arg,
                                     Expression::Identifier { .. } |
                                     Expression::FieldAccess { .. } |
@@ -3434,9 +3483,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             let arg_ty = self.infer_expression_type(arg);
                                             let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
                                                 matches!(t, Type::Int)
-                                                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                                                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                                                    ))
+                                                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                                             });
                                             if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64") {
                                                 let target = if param_is_f32 { "f32" } else { "f64" };
@@ -3468,7 +3515,9 @@ impl<'ast> CodeGenerator<'ast> {
                         types.iter().map(|t| self.type_to_rust(t)).collect();
                     format!("::<{}>", type_strs.join(", "))
                 } else if method == "collect" {
-                    if let Some(ret_ty) = &self.current_function_return_type {
+                    if let Some(target_ty) = &self.collect_target_type {
+                        format!("::<{}>", self.type_to_rust(target_ty))
+                    } else if let Some(ret_ty) = &self.current_function_return_type {
                         format!("::<{}>", self.type_to_rust(ret_ty))
                     } else {
                         String::new()
@@ -3722,66 +3771,9 @@ impl<'ast> CodeGenerator<'ast> {
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
-                // FIELD CHAIN OPTIMIZATION: If we're accessing a likely-Copy sub-field
-                // (e.g., .x, .y, .width, .speed), suppress borrowed-iterator cloning
-                // on the intermediate object. In Rust, (&enemy).velocity.y works fine
-                // through auto-deref — no need to clone the intermediate Vec2.
-                let field_is_likely_copy = matches!(
-                    field.as_str(),
-                    "x" | "y"
-                        | "z"
-                        | "w"
-                        | "width"
-                        | "height"
-                        | "depth"
-                        | "r"
-                        | "g"
-                        | "b"
-                        | "a"
-                        | "left"
-                        | "right"
-                        | "top"
-                        | "bottom"
-                        | "min"
-                        | "max"
-                        | "start"
-                        | "end"
-                        | "offset"
-                        | "scale"
-                        | "speed"
-                        | "time"
-                        | "delta"
-                        | "angle"
-                        | "radius"
-                        | "distance"
-                        | "visible"
-                        | "enabled"
-                        | "active"
-                        | "selected"
-                        | "focused"
-                        | "id"
-                        | "type"
-                        | "kind"
-                        | "priority"
-                        | "level"
-                        | "len"
-                        | "count"
-                        | "size"
-                        | "index"
-                        | "idx"
-                        | "vx"
-                        | "vy"
-                        | "vz"
-                        | "dx"
-                        | "dy"
-                        | "dz"
-                        | "health"
-                        | "damage"
-                        | "score"
-                        | "lives"
-                        | "frame"
-                );
-                // Also check via type inference if the outer expression (self.obj.field) is Copy
+                // FIELD CHAIN OPTIMIZATION: If we're accessing a Copy sub-field,
+                // suppress borrowed-iterator cloning on the intermediate object.
+                // In Rust, (&enemy).velocity.y works fine through auto-deref.
                 let field_is_copy_by_type = self
                     .infer_expression_type(expr_to_generate)
                     .as_ref()
@@ -3789,7 +3781,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_suppress = self.suppress_borrowed_clone;
                 let prev_field_access = self.in_field_access_object;
-                if field_is_likely_copy || field_is_copy_by_type {
+                if field_is_copy_by_type {
                     self.suppress_borrowed_clone = true;
                 }
                 // Suppress Vec index clone when we're just accessing a field
@@ -3942,23 +3934,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 .as_ref()
                                 .is_some_and(|t| self.is_type_copy(t));
 
-                            if !is_copy {
-                                // Fall back to name-based heuristics for fields we KNOW are Copy
-                                let is_likely_copy_field = matches!(
-                                    field.as_str(),
-                                    "len" | "count" | "size" | "index" | "idx" | "i" | "j" | "k" |
-                                    "x" | "y" | "z" | "w" | "width" | "height" | "depth" |
-                                    "r" | "g" | "b" | "a" | "left" | "right" | "top" | "bottom" |
-                                    "min" | "max" | "start" | "end" | "offset" | "scale" |
-                                    "speed" | "time" | "delta" | "angle" | "radius" | "distance" |
-                                    "visible" | "enabled" | "active" | "selected" | "focused" |
-                                    "id" | "type" | "kind" | "priority" | "level" |
-                                    // Method-like names that should NOT be cloned
-                                    "as_str" | "to_string" | "clone" | "iter" | "iter_mut" | "is_empty"
-                                );
-                                if !is_likely_copy_field && !base_expr.ends_with(".clone()") {
-                                    return format!("{}.clone()", base_expr);
-                                }
+                            if !is_copy && !base_expr.ends_with(".clone()") {
+                                return format!("{}.clone()", base_expr);
                             }
                         }
                     }
@@ -4011,7 +3988,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(&**object, Expression::FieldAccess { object: inner, .. }
                             if matches!(&**inner, Expression::Index { .. }));
 
-                    if object_has_index && !(field_is_likely_copy || field_is_copy_by_type) {
+                    if object_has_index && !field_is_copy_by_type {
                         return format!("{}.clone()", base_expr);
                     }
                 }
@@ -4480,8 +4457,39 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Tuple {
                 elements: exprs, ..
             } => {
-                let expr_strs: Vec<String> =
-                    exprs.iter().map(|e| self.generate_expression(e)).collect();
+                let expr_strs: Vec<String> = exprs
+                    .iter()
+                    .map(|e| {
+                        let mut s = self.generate_expression(e);
+                        if !s.ends_with(".clone()") && !s.ends_with(".to_string()") {
+                            let ty = self.infer_expression_type(e);
+                            let needs_clone = ty.as_ref().is_some_and(|t| match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    !self.is_type_copy(inner)
+                                }
+                                _ => false,
+                            });
+                            if !needs_clone {
+                                // Also clone non-Copy field accesses through references
+                                // (e.g. from_stack.item.id where from_stack is behind &)
+                                if let Expression::FieldAccess { object, .. } = e {
+                                    let root_is_ref =
+                                        self.field_access_root_is_behind_reference(object);
+                                    if root_is_ref {
+                                        let is_copy =
+                                            ty.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                        if !is_copy {
+                                            s = format!("{}.clone()", s);
+                                        }
+                                    }
+                                }
+                            } else {
+                                s = format!("{}.clone()", s);
+                            }
+                        }
+                        s
+                    })
+                    .collect();
                 format!("({})", expr_strs.join(", "))
             }
             Expression::Array {
@@ -5507,9 +5515,7 @@ impl<'ast> CodeGenerator<'ast> {
             let rt_actual = self.infer_expression_type(right);
             let is_int_type = |t: &Type| {
                 matches!(t, Type::Int)
-                    || matches!(t, Type::Custom(n) if matches!(n.as_str(),
-                        "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                    ))
+                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
             };
             let left_is_int = lt_actual.as_ref().is_some_and(&is_int_type);
             let right_is_int = rt_actual.as_ref().is_some_and(is_int_type);
@@ -5785,10 +5791,7 @@ impl<'ast> CodeGenerator<'ast> {
         fn is_integer_type(t: &Type) -> bool {
             match t {
                 Type::Int | Type::Int32 | Type::Uint => true,
-                Type::Custom(n) => matches!(
-                    n.as_str(),
-                    "i32" | "u32" | "i64" | "u64" | "usize" | "isize" | "i8" | "u8" | "i16" | "u16"
-                ),
+                Type::Custom(n) => crate::type_classification::is_integer_type(n),
                 _ => false,
             }
         }
@@ -6336,6 +6339,25 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.codegen_expression_traces_to_self(object)
             }
             Expression::Index { object, .. } => self.codegen_expression_traces_to_self(object),
+            _ => false,
+        }
+    }
+
+    /// Check whether the root of a field-access chain is behind a reference.
+    /// Walks up through nested FieldAccess nodes until it finds the root
+    /// Identifier, then checks if that variable is a borrowed or match-bound ref.
+    fn field_access_root_is_behind_reference(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                self.field_access_root_is_behind_reference(object)
+            }
+            Expression::Identifier { name, .. } => {
+                self.inferred_borrowed_params.contains(name.as_str())
+                    || self.borrowed_iterator_vars.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    })
+            }
             _ => false,
         }
     }

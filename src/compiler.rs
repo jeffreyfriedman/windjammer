@@ -49,25 +49,7 @@ fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
         Type::Vec(_) => false, // Vec is never Copy
         Type::Array(inner, _) => is_type_copy_for_single_file_build(inner, analyzer),
         Type::Custom(name) | Type::Generic(name) => {
-            // Check if it's a primitive or a Copy struct
-            matches!(
-                name.as_str(),
-                "i8" | "i16"
-                    | "i32"
-                    | "i64"
-                    | "i128"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "u128"
-                    | "usize"
-                    | "isize"
-                    | "f32"
-                    | "f64"
-                    | "bool"
-                    | "char"
-            ) || analyzer.is_copy_struct(name)
+            crate::type_classification::is_copy_primitive(name) || analyzer.is_copy_struct(name)
         }
         Type::Option(inner) => is_type_copy_for_single_file_build(inner, analyzer),
         Type::Result(ok, err) => {
@@ -591,24 +573,7 @@ fn is_type_copy_quick_for_library(
         Type::Custom(name) => {
             copy_structs.contains(name)
                 || copy_enums.contains(name)
-                || matches!(
-                    name.as_str(),
-                    "i8" | "i16"
-                        | "i32"
-                        | "i64"
-                        | "i128"
-                        | "isize"
-                        | "u8"
-                        | "u16"
-                        | "u32"
-                        | "u64"
-                        | "u128"
-                        | "usize"
-                        | "f32"
-                        | "f64"
-                        | "bool"
-                        | "char"
-                )
+                || crate::type_classification::is_copy_primitive(name)
         }
         _ => false,
     }
@@ -617,7 +582,12 @@ fn is_type_copy_quick_for_library(
 /// Discover Copy structs/enums across all library sources (including nested `mod` items).
 /// `build_library_multipass` must feed this into `Analyzer::new_with_copy_structs` and codegen's
 /// `set_copy_types_registry` so cross-file newtypes match CLI `build_project` behavior.
-fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> HashSet<String> {
+/// Returns (copy_structs, all_local_struct_names).
+/// The second set contains every struct name defined in the current crate,
+/// used to filter dep_copy_structs that collide with local non-Copy structs.
+fn collect_global_copy_structs_for_library(
+    sources: &[(PathBuf, String)],
+) -> (HashSet<String>, HashSet<String>) {
     use crate::parser::ast::EnumVariantData;
     use crate::parser::{Expression, Item};
 
@@ -748,7 +718,7 @@ fn collect_global_copy_structs_for_library(sources: &[(PathBuf, String)]) -> Has
     }
 
     global_copy_structs.extend(copy_enums.iter().cloned());
-    global_copy_structs
+    (global_copy_structs, struct_names)
 }
 
 /// TDD FIX: Build library with global multi-pass analysis
@@ -890,7 +860,8 @@ fn build_library_multipass(
         std::fs::canonicalize(&raw).unwrap_or(raw)
     };
 
-    let mut global_copy_structs = collect_global_copy_structs_for_library(&sources);
+    let (mut global_copy_structs, local_struct_names) =
+        collect_global_copy_structs_for_library(&sources);
 
     // Load Copy structs AND function signatures from dependency crate metadata.
     // Function signatures provide ownership info for cross-crate calls (e.g.,
@@ -913,8 +884,16 @@ fn build_library_multipass(
             &dep_struct_fields,
             &mut dep_copy_structs,
         );
+        // Only import dep Copy status for struct names that do NOT have a local
+        // definition. When the current crate defines a struct with the same name
+        // as a dep struct, the local definition's Copy status (already computed
+        // by collect_global_copy_structs_for_library) takes precedence.
+        // Without this filter, a Copy `PlayerState` from an engine crate would
+        // poison a non-Copy `PlayerState` in the game crate, causing E0382.
         for name in dep_copy_structs {
-            global_copy_structs.insert(name);
+            if !local_struct_names.contains(&name) {
+                global_copy_structs.insert(name);
+            }
         }
     }
 
@@ -1104,16 +1083,24 @@ fn build_library_multipass(
         // Merge into global registry using public API
         global_registry.merge(&registry);
 
-        // Also register module-qualified names (e.g., draw::draw_text) so the code
-        // generator can find the correct signature for qualified function calls.
-        // The Analyzer only produces simple names; this mirrors what
-        // merge_module_metadata_signatures does for .wj.meta files.
+        // Also register module-qualified names so the code generator can find the
+        // correct signature for qualified function calls.
+        // Uses the full module path (e.g., combat::abilities::Ability::activate)
+        // to avoid collisions when two files have the same stem name.
         let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let module_path = file_module.join("::");
         if !file_stem.is_empty() {
             for (name, sig) in &registry.signatures {
+                // Register under file_stem::name (e.g., abilities::draw_text)
                 if !name.contains("::") {
                     let qualified = format!("{}::{}", file_stem, name);
                     global_registry.add_function(qualified, sig.clone());
+                }
+                // Also register under full module path for disambiguation
+                // (e.g., combat::abilities::Ability::activate)
+                if !module_path.is_empty() {
+                    let full_qualified = format!("{}::{}", module_path, name);
+                    global_registry.add_function(full_qualified, sig.clone());
                 }
             }
         }
@@ -1150,6 +1137,10 @@ fn build_library_multipass(
             // tick=Borrowed would overwrite it because state.wj analyzed with the same stale
             // global_registry.
             let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let file_module =
+                crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
+                    .unwrap_or_default();
+            let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
                 match global_registry.signatures.get(name) {
                     None => {
@@ -1161,10 +1152,19 @@ fn build_library_multipass(
                             || sig.has_self_receiver != old_sig.has_self_receiver
                         {
                             new_registry.signatures.insert(name.clone(), sig.clone());
-                            // Keep module-qualified alias in sync
-                            if !file_stem.is_empty() && !name.contains("::") {
+                            // Keep ALL module-qualified aliases in sync.
+                            // When a Type::method entry changes (e.g., Ability::activate
+                            // gets player corrected from Owned→MutBorrowed), the
+                            // module-qualified alias (combat_abilities::Ability::activate)
+                            // must also be updated. Without this, the codegen's collision
+                            // fallback finds the stale step 2 entry.
+                            if !file_stem.is_empty() {
                                 let qualified = format!("{}::{}", file_stem, name);
                                 new_registry.signatures.insert(qualified, sig.clone());
+                                if !module_path.is_empty() {
+                                    let full_qualified = format!("{}::{}", module_path, name);
+                                    new_registry.signatures.insert(full_qualified, sig.clone());
+                                }
                             }
                         }
                     }
@@ -1753,7 +1753,6 @@ fn find_dependency_metadata_roots(
                 let src_wj = p.join("src_wj");
                 if src_wj.is_dir() {
                     roots.push(src_wj);
-                    continue;
                 }
                 // Also check one level deeper (e.g., windjammer-game/windjammer-game-core/src_wj/)
                 if let Ok(sub_entries) = std::fs::read_dir(&p) {

@@ -57,12 +57,40 @@ impl AutoCloneAnalysis {
         analysis.find_string_literal_vars(&func.body);
 
         // Track all variable usages
-        let usage_map = Self::build_usage_map(&func.body);
+        let mut usage_map = Self::build_usage_map(&func.body);
+
+        // Register function parameters as definitions at statement_idx 0.
+        // Without this, parameters are skipped by analyze_variable_usages
+        // because they have no Definition usage, causing auto-clone to miss
+        // parameters used multiple times (E0382).
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            let usages = usage_map.entry(param.name.clone()).or_default();
+            let has_def = usages.iter().any(|u| u.kind == UsageKind::Definition);
+            if !has_def {
+                usages.insert(
+                    0,
+                    Usage {
+                        kind: UsageKind::Definition,
+                        statement_idx: 0,
+                        is_move: false,
+                        in_loop: false,
+                    },
+                );
+            }
+        }
 
         // For each variable, determine if it needs clones
         for (var_name, usages) in &usage_map {
             analysis.analyze_variable_usages(var_name, usages);
         }
+
+        // Partial-move detection: if a field path like "s.item" is moved,
+        // and the root variable "s" has later uses, the field access must
+        // be cloned to avoid a partial move error (E0382).
+        analysis.detect_partial_moves(&usage_map);
 
         analysis
     }
@@ -72,7 +100,7 @@ impl AutoCloneAnalysis {
         let mut map = HashMap::new();
 
         for (idx, stmt) in statements.iter().enumerate() {
-            Self::collect_usages_from_statement(stmt, idx, &mut map);
+            Self::collect_usages_from_statement(stmt, idx, false, &mut map);
         }
 
         map
@@ -82,33 +110,33 @@ impl AutoCloneAnalysis {
     fn collect_usages_from_statement(
         stmt: &Statement,
         idx: usize,
+        in_loop: bool,
         map: &mut HashMap<String, Vec<Usage>>,
     ) {
         match stmt {
             Statement::Let { pattern, value, .. } => {
-                // Collect usages from the value expression
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
 
-                // Mark the variable as defined
                 if let Pattern::Identifier(name) = pattern {
                     map.entry(name.clone()).or_default().push(Usage {
                         statement_idx: idx,
                         kind: UsageKind::Definition,
                         is_move: false,
+                        in_loop,
                     });
                 }
             }
             Statement::Assignment { target, value, .. } => {
-                Self::collect_usages_from_expression(target, idx, UsageKind::Write, map);
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
             }
             Statement::Return {
                 value: Some(expr), ..
             } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Move, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map);
             }
             Statement::Expression { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
             }
             Statement::If {
                 condition,
@@ -116,22 +144,22 @@ impl AutoCloneAnalysis {
                 else_block,
                 ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, map);
-                for stmt in then_block {
-                    Self::collect_usages_from_statement(stmt, idx, map);
+                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
+                for (body_i, stmt) in then_block.iter().enumerate() {
+                    Self::collect_usages_from_statement(stmt, body_i, in_loop, map);
                 }
                 if let Some(else_b) = else_block {
-                    for stmt in else_b {
-                        Self::collect_usages_from_statement(stmt, idx, map);
+                    for (body_i, stmt) in else_b.iter().enumerate() {
+                        Self::collect_usages_from_statement(stmt, body_i, in_loop, map);
                     }
                 }
             }
             Statement::While {
                 condition, body, ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, map);
-                for stmt in body {
-                    Self::collect_usages_from_statement(stmt, idx, map);
+                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
+                for (body_i, stmt) in body.iter().enumerate() {
+                    Self::collect_usages_from_statement(stmt, body_i, true, map);
                 }
             }
             Statement::For {
@@ -140,21 +168,26 @@ impl AutoCloneAnalysis {
                 body,
                 ..
             } => {
-                Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, map);
-                for stmt in body {
-                    Self::collect_usages_from_statement(stmt, idx, map);
+                Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map);
+                for (body_i, stmt) in body.iter().enumerate() {
+                    Self::collect_usages_from_statement(stmt, body_i, true, map);
                 }
             }
             Statement::Loop { body, .. } => {
-                for stmt in body {
-                    Self::collect_usages_from_statement(stmt, idx, map);
+                for (body_i, stmt) in body.iter().enumerate() {
+                    Self::collect_usages_from_statement(stmt, body_i, true, map);
                 }
             }
             Statement::Match { value, arms, .. } => {
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
                 for arm in arms {
-                    // MatchArm.body is an Expression, not Vec<Statement>
-                    Self::collect_usages_from_expression(arm.body, idx, UsageKind::Read, map);
+                    Self::collect_usages_from_expression(
+                        arm.body,
+                        idx,
+                        UsageKind::Read,
+                        in_loop,
+                        map,
+                    );
                 }
             }
             _ => {}
@@ -203,6 +236,7 @@ impl AutoCloneAnalysis {
         expr: &Expression,
         idx: usize,
         kind: UsageKind,
+        in_loop: bool,
         map: &mut HashMap<String, Vec<Usage>>,
     ) {
         match expr {
@@ -211,121 +245,132 @@ impl AutoCloneAnalysis {
                     statement_idx: idx,
                     kind,
                     is_move: kind == UsageKind::Move,
+                    in_loop,
                 });
             }
             Expression::FieldAccess { object, .. } => {
-                // Track the full field access path (e.g., "config.paths")
                 if let Some(path) = Self::extract_expression_path(expr) {
                     map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
+                        in_loop,
                     });
                 }
-                // Also track the base object as a read
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
-                // Function calls may move arguments
-                Self::collect_usages_from_expression(function, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(function, idx, UsageKind::Read, in_loop, map);
                 for (_label, arg_expr) in arguments {
-                    // Assume arguments are moved (conservative)
-                    // TODO: Check function signature to determine actual ownership
-                    Self::collect_usages_from_expression(arg_expr, idx, UsageKind::Move, map);
+                    Self::collect_usages_from_expression(
+                        arg_expr,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                    );
                 }
             }
             Expression::MethodCall {
                 object, arguments, ..
             } => {
-                // Track the full method call path (e.g., "source.get_items()")
                 if let Some(path) = Self::extract_expression_path(expr) {
                     map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
+                        in_loop,
                     });
                 }
-                // Also track the base object as a read
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
                 for (_label, arg_expr) in arguments {
-                    Self::collect_usages_from_expression(arg_expr, idx, UsageKind::Move, map);
+                    Self::collect_usages_from_expression(
+                        arg_expr,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                    );
                 }
             }
             Expression::Binary { left, right, .. } => {
-                Self::collect_usages_from_expression(left, idx, UsageKind::Read, map);
-                Self::collect_usages_from_expression(right, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(left, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(right, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Unary { operand, .. } => {
-                Self::collect_usages_from_expression(operand, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(operand, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Index { object, index, .. } => {
-                // Track the full index expression path (e.g., "items[0]", "arr[i]")
                 if let Some(path) = Self::extract_expression_path(expr) {
                     map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
                         kind,
                         is_move: kind == UsageKind::Move,
+                        in_loop,
                     });
                 }
-                // Also track the base object and index as reads
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, map);
-                Self::collect_usages_from_expression(index, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(index, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Read, map);
+                    Self::collect_usages_from_expression(elem, idx, UsageKind::Read, in_loop, map);
                 }
             }
             Expression::Array { elements, .. } => {
                 for elem in elements {
-                    // Array elements are moved
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Move, map);
+                    Self::collect_usages_from_expression(elem, idx, UsageKind::Move, in_loop, map);
                 }
             }
             Expression::StructLiteral { fields, .. } => {
                 for (_, field_expr) in fields {
-                    // Struct fields are moved
-                    Self::collect_usages_from_expression(field_expr, idx, UsageKind::Move, map);
+                    Self::collect_usages_from_expression(
+                        field_expr,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                    );
                 }
             }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
-                    Self::collect_usages_from_statement(stmt, idx, map);
+                    Self::collect_usages_from_statement(stmt, idx, in_loop, map);
                 }
             }
             Expression::Cast { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Range { start, end, .. } => {
-                Self::collect_usages_from_expression(start, idx, UsageKind::Read, map);
-                Self::collect_usages_from_expression(end, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(start, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(end, idx, UsageKind::Read, in_loop, map);
             }
             Expression::TryOp { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
             }
             Expression::Await { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
             }
             Expression::ChannelSend { channel, value, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, map);
-                Self::collect_usages_from_expression(value, idx, UsageKind::Move, map);
+                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map);
             }
             Expression::ChannelRecv { channel, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, map);
+                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map);
             }
             Expression::MacroInvocation { args, .. } => {
                 for arg in args {
-                    Self::collect_usages_from_expression(arg, idx, UsageKind::Read, map);
+                    Self::collect_usages_from_expression(arg, idx, UsageKind::Read, in_loop, map);
                 }
             }
             Expression::MapLiteral { pairs, .. } => {
                 for (key, value) in pairs {
-                    Self::collect_usages_from_expression(key, idx, UsageKind::Move, map);
-                    Self::collect_usages_from_expression(value, idx, UsageKind::Move, map);
+                    Self::collect_usages_from_expression(key, idx, UsageKind::Move, in_loop, map);
+                    Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map);
                 }
             }
             _ => {}
@@ -362,21 +407,80 @@ impl AutoCloneAnalysis {
             return;
         }
 
-        // For each move, check if there are later usages
-        for move_usage in &moves {
-            let later_usages: Vec<&Usage> = usages
-                .iter()
-                .filter(|u| {
-                    u.statement_idx > move_usage.statement_idx && u.kind != UsageKind::Definition
-                })
-                .collect();
+        // For each move, check if it needs cloning:
+        // 1. There are later usages after this move
+        // 2. Multiple moves in the same statement
+        // 3. The move is inside a loop (loop may execute again, consuming the value twice)
+        let total_uses: Vec<&Usage> = usages
+            .iter()
+            .filter(|u| u.kind != UsageKind::Definition)
+            .collect();
 
-            if !later_usages.is_empty() {
-                // This move needs a clone because the variable is used later
+        for move_usage in &moves {
+            let has_later_use = total_uses
+                .iter()
+                .any(|u| u.statement_idx > move_usage.statement_idx);
+
+            let same_stmt_moves = moves
+                .iter()
+                .filter(|m| m.statement_idx == move_usage.statement_idx)
+                .count();
+
+            // Moves inside loops always need clone -- the loop body executes
+            // multiple times, consuming the value on each iteration.
+            let needs_clone = has_later_use || same_stmt_moves > 1 || move_usage.in_loop;
+
+            if needs_clone {
                 self.clone_sites.insert(
                     (var_name.to_string(), move_usage.statement_idx),
                     CloneReason::MovedButUsedLater,
                 );
+            }
+        }
+    }
+
+    /// Detect partial moves: field accesses like `s.item` where `s` is used later.
+    /// When `s.item` is moved (e.g., passed to a function taking ownership) and `s`
+    /// itself is used afterwards, `s.item` must be cloned to avoid E0382.
+    fn detect_partial_moves(&mut self, usage_map: &HashMap<String, Vec<Usage>>) {
+        let field_paths: Vec<String> = usage_map
+            .keys()
+            .filter(|k| k.contains('.') && !k.contains('('))
+            .cloned()
+            .collect();
+
+        for path in &field_paths {
+            let Some(dot_pos) = path.find('.') else {
+                continue;
+            };
+            let root = &path[..dot_pos];
+
+            let Some(root_usages) = usage_map.get(root) else {
+                continue;
+            };
+
+            let Some(field_usages) = usage_map.get(path.as_str()) else {
+                continue;
+            };
+
+            let field_moves: Vec<&Usage> = field_usages
+                .iter()
+                .filter(|u| u.is_move && u.kind != UsageKind::Definition)
+                .collect();
+
+            for field_move in &field_moves {
+                let root_used_later = root_usages.iter().any(|u| {
+                    u.kind != UsageKind::Definition
+                        && u.statement_idx >= field_move.statement_idx
+                        && u.is_move
+                });
+
+                if root_used_later {
+                    self.clone_sites.insert(
+                        (path.clone(), field_move.statement_idx),
+                        CloneReason::MovedButUsedLater,
+                    );
+                }
             }
         }
     }
@@ -457,6 +561,7 @@ struct Usage {
     statement_idx: usize,
     kind: UsageKind,
     is_move: bool,
+    in_loop: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

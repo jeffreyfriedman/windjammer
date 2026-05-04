@@ -1,4 +1,33 @@
-## [0.45.0] - 2026-03-01 (In Progress)
+## [0.46.1] - 2026-05-02
+### Focus: Release Infrastructure & CI Hardening
+This release fixes the v0.46.0 publish failure and adds pre-merge CI checks to prevent it from happening again.
+
+### Fixed
+- **CHANGELOG validation**: v0.46.0 publish to crates.io failed because no CHANGELOG.md entry existed for that version
+- **Version bump**: All crate versions updated from 0.46.0 to 0.46.1
+
+### Added
+- **Pre-merge CHANGELOG check**: CI now validates that CHANGELOG.md contains an entry for the current workspace version on every PR, catching missing entries before merge instead of at publish time
+- **Pre-merge version-CHANGELOG alignment**: The publish-dryrun CI job now checks that the CHANGELOG entry exists and is not marked "In Progress"
+
+---
+
+## [0.46.0] - 2026-03-15
+### Focus: WGSL Transpiler, Shader Library & Two-Pass String Conversion
+Major release adding WGSL shader backend, comprehensive shader library, and improved string handling.
+
+### Added
+- **WGSL Transpiler**: Full Windjammer-to-WGSL compilation backend for GPU shaders
+- **Shader Library**: Comprehensive shader authoring platform with compute, vertex, and fragment shader support
+- **Two-Pass String Conversion**: Improved string literal handling across all backends
+- **Shader TDD Framework**: Custom wgpu-based testing helpers for shader validation
+
+### Changed
+- **String handling**: Two-pass conversion for more reliable string literal processing
+
+---
+
+## [0.45.0] - 2026-03-01
 ### Focus: Explicit Mutability & Developer Experience
 This release reinforces the **explicit mutability** philosophy and improves the developer experience for game projects.
 

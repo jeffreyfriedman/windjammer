@@ -71,13 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
-        // Check if the function body modifies self (specifically for self parameters)
-        for stmt in &func.body {
-            if self.statement_modifies_self(stmt) {
-                return true;
-            }
-        }
-        false
+        super::self_analysis::function_modifies_self(func, Some(&self.signature_registry))
     }
 
     /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
@@ -133,43 +127,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .map(|i| &trait_name[i + 2..])
                     .unwrap_or(trait_name);
                 return Some(
-                    if matches!(
-                        base_trait,
-                        "Add"
-                            | "Sub"
-                            | "Mul"
-                            | "Div"
-                            | "Rem"
-                            | "Neg"
-                            | "Not"
-                            | "BitAnd"
-                            | "BitOr"
-                            | "BitXor"
-                            | "Shl"
-                            | "Shr"
-                            | "Into"
-                            | "From"
-                            | "TryInto"
-                            | "TryFrom"
-                    ) {
+                    if crate::type_classification::is_owned_self_trait(base_trait) {
                         OwnershipMode::Owned
-                    } else if matches!(
-                        base_trait,
-                        "Display"
-                            | "Debug"
-                            | "Hash"
-                            | "PartialEq"
-                            | "Eq"
-                            | "PartialOrd"
-                            | "Ord"
-                            | "Clone"
-                            | "Copy"
-                            | "Default"
-                            | "Iterator"
-                            | "IntoIterator"
-                            | "AsRef"
-                            | "Deref"
-                    ) {
+                    } else if crate::type_classification::is_ref_receiver_trait(base_trait) {
                         OwnershipMode::Borrowed
                     } else {
                         // For custom cross-file traits, use body analysis first.
@@ -194,73 +154,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         analyzed.inferred_ownership.get("self").copied()
-    }
-
-    fn statement_modifies_self(&self, stmt: &Statement) -> bool {
-        match stmt {
-            Statement::Assignment { target, .. } => {
-                // Check if target is self.field
-                self.expression_is_self_field_modification(target)
-            }
-            Statement::Expression { expr, .. } => {
-                // Check for mutating method calls like self.field.push()
-                self.expression_modifies_self(expr)
-            }
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                then_block.iter().any(|s| self.statement_modifies_self(s))
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|block| block.iter().any(|s| self.statement_modifies_self(s)))
-            }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
-                body.iter().any(|s| self.statement_modifies_self(s))
-            }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                // Match arms have a body expression, check if it contains modifications
-                self.expression_modifies_self(arm.body)
-            }),
-            _ => false,
-        }
-    }
-
-    fn expression_is_self_field_modification(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::FieldAccess { object, .. } => {
-                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-            }
-            _ => false,
-        }
-    }
-
-    fn expression_modifies_self(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.statement_modifies_self(s))
-            }
-            Expression::MethodCall { object, method, .. } => {
-                let is_mutating_method =
-                    super::stdlib_method_traits::method_mutates_receiver(method);
-
-                if is_mutating_method {
-                    // Check if the object is self.field
-                    if let Expression::FieldAccess {
-                        object: field_obj, ..
-                    } = &**object
-                    {
-                        if matches!(&**field_obj, Expression::Identifier { name, .. } if name == "self")
-                        {
-                            return true;
-                        }
-                    }
-                }
-                false
-            }
-            _ => false,
-        }
     }
 
     /// Generate extern "C" function declaration for FFI
@@ -1430,18 +1323,46 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             if let Some(ownership) = ownership {
+                let body_modifies = self.function_modifies_self(&analyzed.decl);
+                let returns_self = self.method_returns_impl_struct(&analyzed.decl);
                 let self_param = match ownership {
-                    OwnershipMode::Borrowed => "&self",
+                    OwnershipMode::Borrowed => {
+                        if body_modifies {
+                            "&mut self"
+                        } else {
+                            "&self"
+                        }
+                    }
                     OwnershipMode::MutBorrowed => "&mut self",
                     OwnershipMode::Owned => {
-                        // Check if function modifies self (builder pattern)
-                        if self.function_modifies_self(&analyzed.decl) {
+                        if body_modifies && returns_self {
                             "mut self"
-                        } else {
+                        } else if body_modifies {
+                            "&mut self"
+                        } else if returns_self {
                             "self"
+                        } else {
+                            "&self"
                         }
                     }
                 };
+                // TDD FIX: Sync borrowed-params sets with actual generated receiver.
+                // The analyzer may infer Owned but codegen promotes to &self/&mut self.
+                // Without this, for-loop borrow detection fails for implicit self methods.
+                match self_param {
+                    "&self" => {
+                        self.inferred_borrowed_params.insert("self".to_string());
+                        self.inferred_mut_borrowed_params.remove("self");
+                    }
+                    "&mut self" => {
+                        self.inferred_mut_borrowed_params.insert("self".to_string());
+                        self.inferred_borrowed_params.remove("self");
+                    }
+                    _ => {
+                        self.inferred_borrowed_params.remove("self");
+                        self.inferred_mut_borrowed_params.remove("self");
+                    }
+                }
                 params.push(self_param.to_string());
             }
         }
@@ -1460,15 +1381,14 @@ impl<'ast> CodeGenerator<'ast> {
                 // Check if this is a builder pattern (modifies fields AND returns Self)
                 let returns_self = self.function_returns_self_type(func);
                 if returns_self {
-                    // Builder pattern: use `mut self` (consuming)
                     params.push("mut self".to_string());
                 } else {
-                    // Regular mutating method: use `&mut self` (borrowing)
                     params.push("&mut self".to_string());
+                    self.inferred_mut_borrowed_params.insert("self".to_string());
                 }
             } else if accesses {
-                // Only read access needed
                 params.push("&self".to_string());
+                self.inferred_borrowed_params.insert("self".to_string());
             }
         }
 
@@ -1517,51 +1437,87 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            // E0053 FIX: Use trait's ownership when in trait impl
+                            let body_modifies = self.function_modifies_self(&analyzed.decl);
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
-                            if let Some(ownership_mode) = eff_ownership {
+                            let self_str = if let Some(ownership_mode) = eff_ownership {
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
                                             && self.method_returns_impl_struct(func) =>
                                     {
-                                        return "mut self".to_string();
+                                        "mut self"
                                     }
-                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
-                                    OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => {
-                                        if self.function_modifies_self(&analyzed.decl) {
-                                            return "mut self".to_string();
+                                    OwnershipMode::MutBorrowed => "&mut self",
+                                    OwnershipMode::Borrowed => {
+                                        if !self.in_trait_impl && body_modifies {
+                                            "&mut self"
                                         } else {
-                                            return "self".to_string();
+                                            "&self"
+                                        }
+                                    }
+                                    OwnershipMode::Owned => {
+                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
+                                        if body_modifies && ret_self {
+                                            "mut self"
+                                        } else if body_modifies {
+                                            "&mut self"
+                                        } else {
+                                            "self"
                                         }
                                     }
                                 }
-                            }
-                            if self.function_modifies_self(&analyzed.decl) {
-                                return "mut self".to_string();
                             } else {
-                                return "self".to_string();
+                                let ret_self = self.method_returns_impl_struct(&analyzed.decl);
+                                if body_modifies && ret_self {
+                                    "mut self"
+                                } else if body_modifies {
+                                    "&mut self"
+                                } else {
+                                    "self"
+                                }
+                            };
+                            // Sync borrowed-params sets with actual generated receiver.
+                            match self_str {
+                                "&self" => {
+                                    self.inferred_borrowed_params.insert("self".to_string());
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                }
+                                "&mut self" => {
+                                    self.inferred_mut_borrowed_params.insert("self".to_string());
+                                    self.inferred_borrowed_params.remove("self");
+                                }
+                                _ => {
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                }
                             }
+                            return self_str.to_string();
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(inferred_type));
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
-                            // E0053 FIX: Use trait's ownership when in trait impl
+                            let body_modifies = self.function_modifies_self(&analyzed.decl);
                             if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::MutBorrowed => return "&mut self".to_string(),
-                                    OwnershipMode::Borrowed => return "&self".to_string(),
+                                    OwnershipMode::Borrowed => {
+                                        if !self.in_trait_impl && body_modifies {
+                                            return "&mut self".to_string();
+                                        }
+                                        return "&self".to_string();
+                                    }
                                     OwnershipMode::Owned => {
-                                        // Shouldn't happen for explicit &self, but handle it
                                         return "self".to_string();
                                     }
                                 }
+                            }
+                            if !self.in_trait_impl && body_modifies {
+                                return "&mut self".to_string();
                             }
                             return "&self".to_string();
                         }
@@ -1579,16 +1535,25 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Mut => {
                         if param.name == "self" {
-                            // E0053 FIX: Use trait's ownership when in trait impl
+                            let body_modifies = self.function_modifies_self(&analyzed.decl);
                             if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 return match ownership_mode {
-                                    OwnershipMode::Borrowed => "&self".to_string(),
+                                    OwnershipMode::Borrowed => {
+                                        if !self.in_trait_impl && body_modifies {
+                                            "&mut self".to_string()
+                                        } else {
+                                            "&self".to_string()
+                                        }
+                                    }
                                     OwnershipMode::MutBorrowed => "&mut self".to_string(),
                                     OwnershipMode::Owned => {
-                                        if self.function_modifies_self(&analyzed.decl) {
+                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
+                                        if body_modifies && ret_self {
                                             "mut self".to_string()
+                                        } else if body_modifies {
+                                            "&mut self".to_string()
                                         } else {
                                             "self".to_string()
                                         }
@@ -1605,43 +1570,60 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     OwnershipHint::Inferred => {
-                        // SMART STRING INFERENCE: inferred_type already has &str vs String resolved!
-                        // For strings: Type::Reference(String) → &str, Type::String → String
-                        // For other types: Apply ownership mode from analyzer
-
-                        // Special handling for `self` parameters (trait impl methods)
-                        // E0053 FIX: Use trait's ownership when in trait impl
                         if param.name == "self" {
-                            if let Some(ownership_mode) =
+                            let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let returns_self = self.method_returns_impl_struct(&analyzed.decl);
+                            let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
-                                    // Same as explicit Owned self: builder `let mut r = self` + return `r`
-                                    // needs a by-value mutable receiver when return type is the impl struct.
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                        if !self.in_trait_impl
-                                            && self.method_returns_impl_struct(func) =>
+                                        if !self.in_trait_impl && returns_self =>
                                     {
-                                        return "mut self".to_string();
+                                        "mut self"
                                     }
-                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
-                                    OwnershipMode::Borrowed => return "&self".to_string(),
-                                    OwnershipMode::Owned => {
-                                        // Check if function actually modifies self
-                                        if self.function_modifies_self(&analyzed.decl) {
-                                            return "mut self".to_string();
+                                    OwnershipMode::MutBorrowed => "&mut self",
+                                    OwnershipMode::Borrowed => {
+                                        if !self.in_trait_impl && body_modifies {
+                                            "&mut self"
                                         } else {
-                                            return "self".to_string();
+                                            "&self"
+                                        }
+                                    }
+                                    OwnershipMode::Owned => {
+                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
+                                        if body_modifies && ret_self {
+                                            "mut self"
+                                        } else if body_modifies {
+                                            "&mut self"
+                                        } else {
+                                            "self"
                                         }
                                     }
                                 }
-                            }
-                            // Default: no effective ownership found
-                            if self.function_modifies_self(&analyzed.decl) {
-                                return "mut self".to_string();
+                            } else if body_modifies && returns_self {
+                                "mut self"
+                            } else if body_modifies {
+                                "&mut self"
                             } else {
-                                return "self".to_string();
+                                "self"
+                            };
+                            // Sync borrowed-params sets with actual generated receiver.
+                            match self_str {
+                                "&self" => {
+                                    self.inferred_borrowed_params.insert("self".to_string());
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                }
+                                "&mut self" => {
+                                    self.inferred_mut_borrowed_params.insert("self".to_string());
+                                    self.inferred_borrowed_params.remove("self");
+                                }
+                                _ => {
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                }
                             }
+                            return self_str.to_string();
                         }
 
                         // Check if type already has ownership baked in (like &str from string inference)
@@ -1660,6 +1642,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 .inferred_ownership
                                 .get(&param.name)
                                 .unwrap_or(&OwnershipMode::Owned);
+
 
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's

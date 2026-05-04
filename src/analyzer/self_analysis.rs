@@ -837,38 +837,6 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when the function returns a non-Copy `self.field` expression (last statement).
-    /// Used only for **declared** `self` with `Inferred` ownership (`fn f(self)`): moving a field
-    /// out requires owned `self`. Omitted-receiver methods (`fn g() { self.x }`) use a different
-    /// path and treat final `self.field` as a `&self` getter (codegen inserts `.clone()`).
-    pub(super) fn function_returns_non_copy_self_field(&self, func: &FunctionDecl) -> bool {
-        use crate::parser::Statement;
-
-        let return_type = match &func.return_type {
-            Some(t) => t,
-            None => return false,
-        };
-
-        if self.is_copy_type(return_type) {
-            return false;
-        }
-
-        if !func.parameters.iter().any(|p| p.name == "self") {
-            return false;
-        }
-
-        if let Some(last_stmt) = func.body.last() {
-            match last_stmt {
-                Statement::Return {
-                    value: Some(expr), ..
-                } => self.expression_is_self_field_access(expr),
-                Statement::Expression { expr, .. } => self.expression_is_self_field_access(expr),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
     /// Check if self is moved into a returned struct literal (e.g., `OtherType { field: self }`)
     /// or returned directly as a value. This means self must be consumed (owned).
     pub(super) fn function_moves_self_into_return(&self, func: &FunctionDecl) -> bool {
@@ -1036,16 +1004,20 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match expr {
-            Expression::MethodCall {
-                object, method: _, ..
-            } => {
-                // Check if object is our loop variable
+            Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        // Check if the method consumes self
-                        // We need to look up the method's signature
-                        // For now, use heuristics: methods that match on self usually consume
-                        return true; // Conservative: assume method consumes
+                        if let Some(reg) = registry {
+                            if let Some(sig) = reg
+                                .get_signature(method)
+                                .or_else(|| reg.find_signature_ending_with(method))
+                            {
+                                return sig.has_self_receiver
+                                    && sig.param_ownership.first()
+                                        == Some(&super::OwnershipMode::Owned);
+                            }
+                        }
+                        return false;
                     }
                 }
                 false
