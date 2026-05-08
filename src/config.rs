@@ -36,7 +36,7 @@ pub struct WjConfig {
     #[serde(default)]
     pub dependencies: HashMap<String, DependencySpec>,
 
-    #[serde(default)]
+    #[serde(default, alias = "dev-dependencies")]
     pub dev_dependencies: HashMap<String, DependencySpec>,
 
     /// Backend configuration for WASM proxy (optional)
@@ -47,14 +47,18 @@ pub struct WjConfig {
 /// Project metadata (for windjammer.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectConfig {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub version: String,
 }
 
 /// Package metadata (for wj.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PackageConfig {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub version: String,
     #[serde(default)]
     pub authors: Vec<String>,

@@ -123,6 +123,10 @@ enum Commands {
         #[arg(long)]
         no_cargo: bool,
 
+        /// Skip Cargo.toml generation (use project-maintained manifest)
+        #[arg(long)]
+        no_generate_cargo_toml: bool,
+
         /// External crate metadata for cross-crate type inference (NAME=PATH, repeatable)
         #[arg(long, value_name = "NAME=PATH")]
         metadata: Vec<String>,
@@ -342,6 +346,7 @@ fn main() -> anyhow::Result<()> {
             library,
             module_file,
             no_cargo,
+            no_generate_cargo_toml,
             metadata,
         } => {
             // TODO: Pass defer_drop config to compiler
@@ -369,6 +374,7 @@ fn main() -> anyhow::Result<()> {
                 library,
                 module_file,
                 !no_cargo, // run_cargo = !no_cargo
+                no_generate_cargo_toml,
                 &metadata,
             )?;
         }
@@ -560,6 +566,7 @@ fn main() -> anyhow::Result<()> {
                 false, // library
                 false, // module_file
                 false, // run_cargo - not needed when check=true
+                false, // no_generate_cargo_toml
                 &[],   // metadata
             )
             .ok(); // Ignore errors, we'll get them from the TUI
