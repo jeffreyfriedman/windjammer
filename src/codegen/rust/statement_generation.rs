@@ -123,9 +123,12 @@ impl<'ast> CodeGenerator<'ast> {
         let len = stmts.len();
         let saved_body = self.current_function_body.clone();
         let saved_idx = self.current_statement_idx;
+        let saved_local_idx = self.current_block_local_idx;
         self.current_function_body = stmts.to_vec();
         for (i, stmt) in stmts.iter().enumerate() {
-            self.current_statement_idx = i;
+            self.current_statement_idx = self.auto_clone_counter;
+            self.current_block_local_idx = i;
+            self.auto_clone_counter += 1;
 
             let is_last = i == len - 1;
             // TDD: Track if this is the last statement (used by If handler)
@@ -516,6 +519,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
+        self.current_block_local_idx = saved_local_idx;
         output
     }
 
@@ -1470,9 +1474,16 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str("loop {\n");
 
                 self.indent_level += 1;
-                for stmt in body {
+                let saved_idx = self.current_statement_idx;
+                let saved_local_idx = self.current_block_local_idx;
+                for (i, stmt) in body.iter().enumerate() {
+                    self.current_statement_idx = self.auto_clone_counter;
+                    self.current_block_local_idx = i;
+                    self.auto_clone_counter += 1;
                     output.push_str(&self.generate_statement(stmt));
                 }
+                self.current_statement_idx = saved_idx;
+                self.current_block_local_idx = saved_local_idx;
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
@@ -1497,13 +1508,17 @@ impl<'ast> CodeGenerator<'ast> {
                 self.indent_level += 1;
                 let saved_body = self.current_function_body.clone();
                 let saved_idx = self.current_statement_idx;
+                let saved_local_idx = self.current_block_local_idx;
                 self.current_function_body = body.to_vec();
                 for (i, stmt) in body.iter().enumerate() {
-                    self.current_statement_idx = i;
+                    self.current_statement_idx = self.auto_clone_counter;
+                    self.current_block_local_idx = i;
+                    self.auto_clone_counter += 1;
                     output.push_str(&self.generate_statement(stmt));
                 }
                 self.current_function_body = saved_body;
                 self.current_statement_idx = saved_idx;
+                self.current_block_local_idx = saved_local_idx;
                 self.indent_level -= 1;
 
                 output.push_str(&self.indent());
@@ -2471,13 +2486,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         let saved_body = self.current_function_body.clone();
         let saved_idx = self.current_statement_idx;
+        let saved_local_idx = self.current_block_local_idx;
         self.current_function_body = body.to_vec();
         for (i, stmt) in body.iter().enumerate() {
-            self.current_statement_idx = i;
+            self.current_statement_idx = self.auto_clone_counter;
+            self.current_block_local_idx = i;
+            self.auto_clone_counter += 1;
             output.push_str(&self.generate_statement(stmt));
         }
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
+        self.current_block_local_idx = saved_local_idx;
 
         if is_borrowed_iterator {
             if let Some(var) = &loop_var {
