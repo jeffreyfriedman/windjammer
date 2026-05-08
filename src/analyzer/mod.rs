@@ -2375,11 +2375,13 @@ impl<'ast> Analyzer<'ast> {
                     // inferring Owned for `key` breaks callers that pass the same String twice (E0382).
                     // Non-string types keep the broader rule (transform/migrate still get Owned).
                     let string_like = matches!(param_type, Type::String);
-                    if string_like {
-                        if self.is_returned(param_name, body) {
-                            return Ok(OwnershipMode::Owned);
-                        }
-                    } else {
+                    if self.is_returned(param_name, body)
+                        || self.is_stored(param_name, body)
+                    {
+                        return Ok(OwnershipMode::Owned);
+                    } else if !string_like
+                        && self.param_is_consumed_into_return(param_name, body)
+                    {
                         return Ok(OwnershipMode::Owned);
                     }
                 }
@@ -2904,6 +2906,58 @@ impl<'ast> Analyzer<'ast> {
                 .any(|el| self.expression_stores_identifier(name, el)),
             _ => false,
         }
+    }
+
+    fn param_is_consumed_into_return(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::Let {
+                    pattern: Pattern::Identifier(var_name),
+                    value,
+                    ..
+                } => {
+                    if self.expression_uses_identifier(param_name, value) {
+                        if self.is_returned(var_name, body) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Assignment { value, .. } => {
+                    if self.expression_uses_identifier(param_name, value) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.param_is_consumed_into_return(param_name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.param_is_consumed_into_return(param_name, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if self.param_is_consumed_into_return(param_name, statements) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     fn is_stored(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {

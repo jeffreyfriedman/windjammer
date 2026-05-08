@@ -952,6 +952,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // AUTO-CLONE: Load auto-clone analysis for this function
         self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
+        self.auto_clone_counter = 0;
 
         // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
         // Variables in this set can safely avoid .clone() calls

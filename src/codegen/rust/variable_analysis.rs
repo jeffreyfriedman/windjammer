@@ -1345,7 +1345,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(super) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
-        let next_idx = self.current_statement_idx + 1;
+        let next_idx = self.current_block_local_idx + 1;
         if next_idx >= self.current_function_body.len() {
             return true;
         }
