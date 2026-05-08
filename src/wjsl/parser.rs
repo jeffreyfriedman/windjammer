@@ -829,7 +829,7 @@ impl<'a> Parser<'a> {
                     } else {
                         return Err(anyhow!("Expected workgroup y"));
                     };
-                    let z = if matches!(self.peek(), Token::RParen) {
+                    let z = if matches!(self.current, Token::RParen) {
                         1u32
                     } else {
                         self.expect(Token::Comma)?;

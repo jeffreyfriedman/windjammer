@@ -715,6 +715,40 @@ impl<'a> BodyParser<'a> {
                 if matches!(self.current, Token::LParen) {
                     return self.parse_function_call(&name);
                 }
+                if name == "bitcast" && matches!(self.current, Token::LAngle) {
+                    self.advance();
+                    let target_ty = self.parse_type_annotation()?;
+                    if matches!(self.current, Token::Shr) {
+                        self.current = Token::RAngle;
+                    } else if matches!(self.current, Token::RAngle) {
+                        self.advance();
+                    }
+                    self.expect(Token::LParen)?;
+                    let _arg = self.parse_expr()?;
+                    self.expect(Token::RParen)?;
+                    let mut result = target_ty;
+                    loop {
+                        if matches!(self.current, Token::Dot) {
+                            self.advance();
+                            let member = self.expect_ident()?;
+                            result = self.get_swizzle_or_field_type(&result, &member)?;
+                        } else if matches!(self.current, Token::LBracket) {
+                            self.advance();
+                            let _index = self.parse_expr()?;
+                            self.expect(Token::RBracket)?;
+                            result = element_type_for_index(&result)?;
+                        } else {
+                            break;
+                        }
+                    }
+                    return Ok(result);
+                }
+                if matches!(self.current, Token::LAngle) {
+                    self.skip_optional_angle_bracket();
+                    if matches!(self.current, Token::LParen) {
+                        return self.parse_function_call(&name);
+                    }
+                }
                 let mut ty = self
                     .symbols
                     .get(&name)
