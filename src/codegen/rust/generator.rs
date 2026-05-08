@@ -91,8 +91,13 @@ pub struct CodeGenerator<'ast> {
     pub(crate) cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // AUTO-CLONE: Track where to automatically insert clones
     pub(crate) auto_clone_analysis: Option<crate::auto_clone::AutoCloneAnalysis>,
-    // Track current statement index for optimization hints
+    // Global monotonic counter mirroring auto_clone::build_usage_map's counter.
+    // Used for needs_clone() lookups to match indices in clone_sites.
     pub(crate) current_statement_idx: usize,
+    pub(crate) auto_clone_counter: usize,
+    // Local index within the current block (0-based enumerate index).
+    // Used by variable_is_only_field_accessed and other block-relative analyses.
+    pub(crate) current_block_local_idx: usize,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
@@ -368,6 +373,8 @@ impl<'ast> CodeGenerator<'ast> {
             cow_optimizations: std::collections::HashSet::new(),
             auto_clone_analysis: None,
             current_statement_idx: 0,
+            auto_clone_counter: 0,
+            current_block_local_idx: 0,
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),
