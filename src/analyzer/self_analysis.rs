@@ -1320,9 +1320,13 @@ impl<'ast> Analyzer<'ast> {
                     }
                     return false;
                 }
-                // Nested field chain (e.g., self.graph.passes): if the parent
-                // accesses a non-Copy self field, moving any sub-field also
-                // requires owning self.
+                // Nested field chain (e.g., self.compositor.mesh_render_width).
+                // Resolve the FULL chain type: if the final field is Copy, reading
+                // it through a reference is fine (no move of the intermediate parent).
+                if let Some(chain_type) = self.resolve_self_field_chain_type(expr) {
+                    return !self.is_copy_type(&chain_type);
+                }
+                // Fallback if chain resolution fails: recurse conservatively
                 self.expression_moves_non_copy_self_field(object)
             }
             // Struct literal: Foo { field: self.field, ... }
@@ -1339,6 +1343,66 @@ impl<'ast> Analyzer<'ast> {
 
     fn expression_is_self(&self, expr: &Expression) -> bool {
         matches!(expr, Expression::Identifier { name, .. } if name == "self")
+    }
+
+    /// Resolve the final type of a self field chain like `self.a.b.c`.
+    /// Returns `Some(type_of_c)` if the entire chain can be resolved, `None` otherwise.
+    fn resolve_self_field_chain_type(&self, expr: &Expression) -> Option<Type> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                if self.expression_is_self(object) {
+                    self.lookup_field_type_for_self(field)
+                } else {
+                    let parent_type = self.resolve_self_field_chain_type(object)?;
+                    self.lookup_field_type_on_struct(&parent_type, field)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Look up the type of a field on an arbitrary struct type.
+    /// Checks the current file's AST first, then the global cross-file registry.
+    fn lookup_field_type_on_struct(&self, ty: &Type, field: &str) -> Option<Type> {
+        let type_name = match ty {
+            Type::Custom(name) => name.as_str(),
+            _ => return None,
+        };
+
+        // First: check the current file's AST
+        if let Some(ctx) = self.self_impl_context.as_ref() {
+            let program = ctx.program();
+            for item in &program.items {
+                if let crate::parser::Item::Struct { decl, .. } = item {
+                    if decl.name == type_name {
+                        for sf in &decl.fields {
+                            if sf.name == field {
+                                return Some(sf.field_type.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Second: check the global cross-file struct field registry.
+        // Try exact name first, then suffix match (for module-qualified keys
+        // like "rendering::HybridCompositor" when we have just "HybridCompositor").
+        if let Some(fields) = self.global_struct_field_types.get(type_name) {
+            if let Some(field_type) = fields.get(field) {
+                return Some(field_type.clone());
+            }
+        }
+        let suffix = format!("::{}", type_name);
+        for (key, fields) in &self.global_struct_field_types {
+            if key.ends_with(&suffix) || key == type_name {
+                if let Some(field_type) = fields.get(field) {
+                    return Some(field_type.clone());
+                }
+            }
+        }
+
+        None
     }
 
     /// Look up the type of a field on `self` using the struct definition from the program.

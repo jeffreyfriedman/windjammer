@@ -337,6 +337,9 @@ pub struct Analyzer<'ast> {
     current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
     /// Set while analyzing methods inside an `impl` block (inherent or trait impl body).
     self_impl_context: Option<ImplSelfFieldContext<'ast>>,
+    /// Cross-file struct field type registry for nested field chain resolution.
+    /// Maps struct_name → { field_name → Type }.
+    global_struct_field_types: HashMap<String, HashMap<String, Type>>,
 }
 
 use std::collections::HashSet;
@@ -364,6 +367,7 @@ impl<'ast> Analyzer<'ast> {
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
             self_impl_context: None,
+            global_struct_field_types: HashMap::new(),
         };
 
         // Pre-register standard library traits so the analyzer knows their signatures
@@ -384,6 +388,14 @@ impl<'ast> Analyzer<'ast> {
     /// Register a single struct as Copy (for cross-crate metadata or testing)
     pub fn register_copy_struct(&mut self, name: &str) {
         self.copy_structs.insert(name.to_string());
+    }
+
+    /// Set the global struct field types for cross-file nested field chain resolution.
+    pub fn set_global_struct_field_types(
+        &mut self,
+        types: HashMap<String, HashMap<String, Type>>,
+    ) {
+        self.global_struct_field_types = types;
     }
 
     /// TDD FIX: Remove a struct from the Copy set (e.g., when local definition differs from metadata)

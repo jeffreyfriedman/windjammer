@@ -296,8 +296,21 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     let existing_mod_rs = output_dir.join("mod.rs");
     if existing_mod_rs.exists() {
         if let Ok(content) = fs::read_to_string(&existing_mod_rs) {
-            let is_auto_generated = content.starts_with("// Auto-generated mod.rs");
+            let is_auto_generated = content.starts_with("// Auto-generated mod.rs")
+                    || content.starts_with("// Module declarations");
             if !is_auto_generated {
+                // Clean up stale _mod_items references from prior builds
+                let content = content
+                    .lines()
+                    .filter(|l| {
+                        let t = l.trim();
+                        t != "pub mod _mod_items;"
+                            && t != "pub use _mod_items::*;"
+                            && t != "mod _mod_items;"
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    + "\n";
                 // Stub / hand-merged mod.rs: add sibling `foo.rs` modules and `foo/mod.rs` dirs.
                 let mut extra_modules = Vec::new();
                 for entry in fs::read_dir(output_dir)? {
@@ -318,6 +331,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                 && file_name != "mod.rs"
                                 && file_name != "main.rs"
                                 && file_name != "lib.rs"
+                                && file_name != "_mod_items.rs"
                             {
                                 if let Some(module_name) = file_name.strip_suffix(".rs") {
                                     if !mod_declared_in(&content, module_name)
@@ -333,14 +347,59 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                         }
                     }
                 }
+                let mut updated = content.clone();
                 if !extra_modules.is_empty() {
                     extra_modules.sort();
-                    let mut updated = content.clone();
                     for m in &extra_modules {
                         updated.push_str(&format!("\npub mod {};", m));
                         updated.push_str(&format!("\npub use {}::*;", m));
                     }
                     updated.push('\n');
+                }
+                // Merge _mod_items.rs (compiled mod.wj code) into this mod.rs
+                let mod_items_path = output_dir.join("_mod_items.rs");
+                if mod_items_path.exists() {
+                    if let Ok(items_content) = fs::read_to_string(&mod_items_path) {
+                        let has_code = items_content.lines().any(|line| {
+                            let t = line.trim();
+                            !t.is_empty()
+                                && !t.starts_with("//")
+                                && !t.starts_with("#[")
+                                && !t.starts_with("use ")
+                                && !(t.starts_with("pub mod ") && t.ends_with(';'))
+                                && !(t.starts_with("mod ") && t.ends_with(';'))
+                                && !(t.starts_with("pub use ") && t.ends_with("::*;"))
+                        });
+                        if has_code {
+                            updated.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
+                            for line in items_content.lines() {
+                                let trimmed = line.trim();
+                                if trimmed.starts_with("pub mod ") && trimmed.ends_with(';') {
+                                    continue;
+                                }
+                                if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                                    continue;
+                                }
+                                // Only strip auto-generated wildcard re-exports (::*;),
+                                // preserve user-defined selective re-exports like
+                                // `pub use tile_id::TileId;`
+                                if trimmed.starts_with("pub use ") && trimmed.ends_with("::*;") {
+                                    continue;
+                                }
+                                if trimmed == "#[allow(unused_imports)]" {
+                                    continue;
+                                }
+                                if trimmed == "use super::*;" {
+                                    continue;
+                                }
+                                updated.push_str(line);
+                                updated.push('\n');
+                            }
+                        }
+                    }
+                    let _ = fs::remove_file(&mod_items_path);
+                }
+                if updated != content {
                     fs::write(&existing_mod_rs, updated)?;
                 }
                 return Ok(());
@@ -359,11 +418,11 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                // THE WINDJAMMER FIX: Exclude lib.rs, mod.rs, and main.rs from module declarations
                 if file_name.ends_with(".rs")
                     && file_name != "mod.rs"
                     && file_name != "main.rs"
                     && file_name != "lib.rs"
+                    && file_name != "_mod_items.rs"
                 {
                     if let Some(module_name) = file_name.strip_suffix(".rs") {
                         modules.push(module_name.to_string());
@@ -412,6 +471,15 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
 
     modules.sort();
 
+    // When mod.wj declares explicit modules, filter out stale .rs files for modules
+    // that are no longer declared. Without this, a removed module (e.g. `beta`) stays
+    // in mod.rs because its .rs file persists from the previous build.
+    modules.retain(|m| should_merge_extra_module(m, sibling_src.as_deref()));
+
+    if modules.is_empty() {
+        return Ok(());
+    }
+
     let mut symbol_conflicts: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
@@ -453,6 +521,40 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
         );
     }
 
+    // Pre-read _mod_items.rs to extract selective re-exports from mod.wj.
+    // When the user writes `pub use camera2d::Camera2D` in mod.wj, the codegen
+    // produces `pub use self::camera2d::Camera2D;`. We use these instead of
+    // wildcard re-exports to respect the user's intent.
+    let mod_items_path = output_dir.join("_mod_items.rs");
+    let mod_items_content = mod_items_path
+        .exists()
+        .then(|| fs::read_to_string(&mod_items_path).ok())
+        .flatten();
+
+    // Collect user-defined re-exports from _mod_items.rs (both wildcard and selective).
+    // These come from explicit `pub use` declarations in the user's mod.wj.
+    let mut user_reexports: Vec<String> = Vec::new();
+    let mut has_real_code = false;
+    if let Some(ref items_content) = mod_items_content {
+        for line in items_content.lines() {
+            let t = line.trim();
+            if t.starts_with("pub use ") && t.ends_with(';') {
+                user_reexports.push(t.to_string());
+            }
+            if !t.is_empty()
+                && !t.starts_with("//")
+                && !t.starts_with("#[")
+                && !t.starts_with("use ")
+                && !(t.starts_with("pub mod ") && t.ends_with(';'))
+                && !(t.starts_with("mod ") && t.ends_with(';'))
+                && !(t.starts_with("pub use ") && t.ends_with(';'))
+            {
+                has_real_code = true;
+            }
+        }
+    }
+    let has_user_reexports = !user_reexports.is_empty();
+
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
     content.push_str("// This file declares all generated Windjammer modules\n\n");
 
@@ -467,27 +569,72 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     }
 
     content.push_str("\n// Re-export public items\n");
-    for module in &modules {
-        let needs_desktop_gate = module.starts_with("desktop_")
-            || (module.starts_with("app_") && module != "app_reactive");
 
-        if modules_with_conflicts.contains(module) {
-            if let Some(exports) = type_exports.get(module) {
-                for symbol in exports {
-                    if !conflicting_symbols.contains(symbol) {
-                        if needs_desktop_gate {
-                            content.push_str("#[cfg(feature = \"desktop\")]\n");
+    if has_user_reexports {
+        // Use the user's re-exports from mod.wj
+        for reexport in &user_reexports {
+            content.push_str(reexport);
+            content.push('\n');
+        }
+    } else {
+        // No explicit re-exports in mod.wj; generate wildcards
+        for module in &modules {
+            if module == "tests" || module == "test_runtime" || module.ends_with("_test") {
+                continue;
+            }
+
+            let needs_desktop_gate = module.starts_with("desktop_")
+                || (module.starts_with("app_") && module != "app_reactive");
+
+            if modules_with_conflicts.contains(module) {
+                if let Some(exports) = type_exports.get(module) {
+                    for symbol in exports {
+                        if !conflicting_symbols.contains(symbol) {
+                            if needs_desktop_gate {
+                                content.push_str("#[cfg(feature = \"desktop\")]\n");
+                            }
+                            content.push_str(&format!("pub use {}::{};\n", module, symbol));
                         }
-                        content.push_str(&format!("pub use {}::{};\n", module, symbol));
                     }
                 }
+            } else {
+                if needs_desktop_gate {
+                    content.push_str("#[cfg(feature = \"desktop\")]\n");
+                }
+                content.push_str(&format!("pub use {}::*;\n", module));
             }
-        } else {
-            if needs_desktop_gate {
-                content.push_str("#[cfg(feature = \"desktop\")]\n");
-            }
-            content.push_str(&format!("pub use {}::*;\n", module));
         }
+    }
+
+    // Append real code from mod.wj (traits, structs, impls, functions).
+    if has_real_code {
+        if let Some(ref items_content) = mod_items_content {
+            content.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
+            for line in items_content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("pub mod ") && trimmed.ends_with(';') {
+                    continue;
+                }
+                if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                    continue;
+                }
+                if trimmed.starts_with("pub use ") && trimmed.ends_with(';') {
+                    continue;
+                }
+                if trimmed == "#[allow(unused_imports)]" {
+                    continue;
+                }
+                if trimmed == "use super::*;" {
+                    continue;
+                }
+                content.push_str(line);
+                content.push('\n');
+            }
+        }
+    }
+
+    if mod_items_path.exists() {
+        let _ = fs::remove_file(&mod_items_path);
     }
 
     let mod_file_path = output_dir.join("mod.rs");

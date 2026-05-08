@@ -101,10 +101,10 @@ impl CodeGenerator<'_> {
 
     /// True when the Rust file being generated is a directory module root (`mod.rs`).
     pub(crate) fn is_output_mod_rs(&self) -> bool {
-        self.current_output_file
+        let name = self.current_output_file
             .file_name()
-            .and_then(|n| n.to_str())
-            == Some("mod.rs")
+            .and_then(|n| n.to_str());
+        name == Some("mod.rs") || name == Some("_mod_items.rs")
     }
 
     /// True if `first_segment` names a submodule living in the same directory as this `mod.rs`
