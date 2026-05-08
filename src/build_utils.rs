@@ -6,6 +6,18 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::Path;
 
+/// True when a module name represents a test module that should be gated with `#[cfg(test)]`.
+fn is_test_module(name: &str) -> bool {
+    name == "tests"
+        || name == "test_runtime"
+        || name == "test_output"
+        || name == "test_plugins"
+        || name == "tests_build"
+        || name.ends_with("_test")
+        || name.ends_with("_tests")
+        || name.starts_with("test_")
+}
+
 /// True when the output directory is a Rust module subtree under `src/...` (not the crate root).
 /// In that case we only emit `mod.rs` for Cargo, not `lib.rs` (which would be invalid as a nested crate root).
 fn is_submodule_output_dir(output_dir: &Path) -> bool {
@@ -351,8 +363,13 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                 if !extra_modules.is_empty() {
                     extra_modules.sort();
                     for m in &extra_modules {
-                        updated.push_str(&format!("\npub mod {};", m));
-                        updated.push_str(&format!("\npub use {}::*;", m));
+                        if is_test_module(m) {
+                            updated.push_str("\n#[cfg(test)]");
+                            updated.push_str(&format!("\npub mod {};", m));
+                        } else {
+                            updated.push_str(&format!("\npub mod {};", m));
+                            updated.push_str(&format!("\npub use {}::*;", m));
+                        }
                     }
                     updated.push('\n');
                 }
@@ -533,12 +550,23 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
 
     // Collect user-defined re-exports from _mod_items.rs (both wildcard and selective).
     // These come from explicit `pub use` declarations in the user's mod.wj.
+    // Skip re-exports of test modules -- they are gated with #[cfg(test)] and
+    // would cause unresolved import errors in non-test builds.
     let mut user_reexports: Vec<String> = Vec::new();
     let mut has_real_code = false;
     if let Some(ref items_content) = mod_items_content {
         for line in items_content.lines() {
             let t = line.trim();
             if t.starts_with("pub use ") && t.ends_with(';') {
+                let reexport_module = t
+                    .trim_start_matches("pub use ")
+                    .trim_start_matches("self::")
+                    .split("::")
+                    .next()
+                    .unwrap_or("");
+                if is_test_module(reexport_module) {
+                    continue;
+                }
                 user_reexports.push(t.to_string());
             }
             if !t.is_empty()
@@ -561,7 +589,11 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     for module in &modules {
         let needs_desktop_gate = module.starts_with("desktop_")
             || (module.starts_with("app_") && module != "app_reactive");
+        let needs_test_gate = is_test_module(module);
 
+        if needs_test_gate {
+            content.push_str("#[cfg(test)]\n");
+        }
         if needs_desktop_gate {
             content.push_str("#[cfg(feature = \"desktop\")]\n");
         }
@@ -579,7 +611,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     } else {
         // No explicit re-exports in mod.wj; generate wildcards
         for module in &modules {
-            if module == "tests" || module == "test_runtime" || module.ends_with("_test") {
+            if is_test_module(module) {
                 continue;
             }
 

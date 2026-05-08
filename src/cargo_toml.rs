@@ -8,6 +8,16 @@ use crate::CompilationTarget;
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// When true, `generate_single_file_cargo_toml` is a no-op.
+/// Set via `--no-generate-cargo-toml` CLI flag for projects that maintain
+/// their own Cargo.toml.
+static SKIP_CARGO_TOML_GENERATION: AtomicBool = AtomicBool::new(false);
+
+pub fn set_skip_cargo_toml_generation(skip: bool) {
+    SKIP_CARGO_TOML_GENERATION.store(skip, Ordering::Relaxed);
+}
 
 /// File type for Cargo target generation
 #[derive(Debug, PartialEq)]
@@ -124,6 +134,9 @@ pub fn generate_single_file_cargo_toml(
     if target != CompilationTarget::Rust {
         return Ok(());
     }
+    if SKIP_CARGO_TOML_GENERATION.load(Ordering::Relaxed) {
+        return Ok(());
+    }
 
     let has_lib_rs = output_dir.join("lib.rs").exists();
     let has_main_rs = output_dir.join("main.rs").exists();
@@ -209,7 +222,62 @@ pub fn generate_single_file_cargo_toml(
     write_cargo_toml(output_dir, source_dir, &lib_or_bin_section)
 }
 
+/// Search for `wj.toml` starting from `source_dir` and walking up parents.
+fn find_wj_config(source_dir: &Path) -> crate::config::WjConfig {
+    let mut dir = source_dir;
+    loop {
+        let candidate = dir.join("wj.toml");
+        if candidate.exists() {
+            if let Ok(cfg) = crate::config::WjConfig::load_from_file(&candidate) {
+                return cfg;
+            }
+        }
+        match dir.parent() {
+            Some(parent) if parent != dir => dir = parent,
+            _ => break,
+        }
+    }
+    crate::config::WjConfig::default()
+}
+
+/// Convert a `DependencySpec` into a Cargo.toml dependency line.
+fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::DependencySpec) -> String {
+    match spec {
+        crate::config::DependencySpec::Simple(version) => {
+            format!("{} = \"{}\"", name, version)
+        }
+        crate::config::DependencySpec::Detailed {
+            version,
+            features,
+            path,
+            git,
+            branch,
+        } => {
+            let mut parts = Vec::new();
+            if let Some(v) = version {
+                parts.push(format!("version = \"{}\"", v));
+            }
+            if let Some(f) = features {
+                let feat_str: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
+                parts.push(format!("features = [{}]", feat_str.join(", ")));
+            }
+            if let Some(p) = path {
+                parts.push(format!("path = \"{}\"", p));
+            }
+            if let Some(g) = git {
+                parts.push(format!("git = \"{}\"", g));
+            }
+            if let Some(b) = branch {
+                parts.push(format!("branch = \"{}\"", b));
+            }
+            format!("{} = {{ {} }}", name, parts.join(", "))
+        }
+    }
+}
+
 fn write_cargo_toml(output_dir: &Path, source_dir: &Path, lib_or_bin_section: &str) -> Result<()> {
+    let wj_config = find_wj_config(source_dir);
+
     let runtime_path = find_windjammer_runtime_path();
     let runtime_path_str = path_to_toml_string(&runtime_path);
 
@@ -227,11 +295,55 @@ fn write_cargo_toml(output_dir: &Path, source_dir: &Path, lib_or_bin_section: &s
     let propagated = propagate_source_cargo_deps(source_dir, &deps);
     deps.extend(propagated);
 
-    let deps_section = format!("[dependencies]\n{}\n\n", deps.join("\n"));
+    // Merge dependencies declared in wj.toml
+    let existing_dep_names: std::collections::HashSet<String> = deps
+        .iter()
+        .filter_map(|d| d.split('=').next().map(|n| n.trim().to_string()))
+        .collect();
+    for (name, spec) in &wj_config.dependencies {
+        if !existing_dep_names.contains(name) {
+            deps.push(dep_spec_to_cargo_line(name, spec));
+        }
+    }
 
     let project_name = infer_project_name(source_dir);
     let inferred_snake = project_name.replace('-', "_");
-    let package_name = resolve_package_name_with_existing_cargo(output_dir, &inferred_snake);
+    let config_name = wj_config
+        .project
+        .as_ref()
+        .map(|p| &p.name)
+        .filter(|n| !n.is_empty())
+        .or_else(|| {
+            let n = &wj_config.package.name;
+            if n.is_empty() { None } else { Some(n) }
+        });
+    let package_name = if let Some(name) = config_name {
+        name.replace('-', "_")
+    } else {
+        resolve_package_name_with_existing_cargo(output_dir, &inferred_snake)
+    };
+
+    // Filter out self-referencing dependencies (crate depending on itself).
+    let package_name_underscore = package_name.replace('-', "_");
+    deps.retain(|dep| {
+        let dep_name = dep.split('=').next().unwrap_or("").trim();
+        let dep_name_underscore = dep_name.replace('-', "_");
+        dep_name_underscore != package_name_underscore
+    });
+
+    let deps_section = format!("[dependencies]\n{}\n\n", deps.join("\n"));
+
+    // Build [dev-dependencies] section from wj.toml
+    let dev_deps_section = if wj_config.dev_dependencies.is_empty() {
+        String::new()
+    } else {
+        let lines: Vec<String> = wj_config
+            .dev_dependencies
+            .iter()
+            .map(|(name, spec)| dep_spec_to_cargo_line(name, spec))
+            .collect();
+        format!("[dev-dependencies]\n{}\n\n", lines.join("\n"))
+    };
 
     let cargo_toml = format!(
         r#"# Auto-generated by Windjammer compiler - do not edit manually
@@ -243,10 +355,10 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
-{}{}[profile.release]
+{}{}{}[profile.release]
 opt-level = 3
 "#,
-        package_name, deps_section, lib_or_bin_section
+        package_name, deps_section, dev_deps_section, lib_or_bin_section
     );
 
     let cargo_toml_path = output_dir.join("Cargo.toml");
