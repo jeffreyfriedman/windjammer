@@ -680,13 +680,6 @@ pub fn build_project(
     for file in &wj_files {
         let file_name = file.file_name().unwrap().to_str().unwrap();
 
-        // THE WINDJAMMER WAY: In multi-file projects, skip mod.wj files
-        // They're only for controlling re-exports, which generate_nested_module_structure handles
-        // Compiling them would overwrite the correctly-generated mod.rs files
-        if is_multi_file && file_name == "mod.wj" {
-            continue;
-        }
-
         print!("  Compiling {:?}... ", file_name);
 
         match compile_file_with_compiler(
@@ -737,11 +730,6 @@ pub fn build_project(
         );
         for file in &wj_files {
             let file_name = file.file_name().unwrap().to_str().unwrap();
-
-            // THE WINDJAMMER WAY: In multi-file projects, skip mod.wj files during regeneration too
-            if is_multi_file && file_name == "mod.wj" {
-                continue;
-            }
 
             print!("  Updating {:?}... ", file_name);
             match compile_file_with_compiler(
@@ -1210,6 +1198,9 @@ impl ModuleCompiler {
         // Update analyzer's Copy structs registry (in case new Copy structs were discovered)
         self.analyzer
             .update_copy_structs(self.copy_structs_registry.clone());
+        // Provide cross-file struct field types for nested field chain resolution
+        self.analyzer
+            .set_global_struct_field_types(self.global_struct_field_types.clone());
 
         // Register any newly discovered traits into the analyzer
         for trait_decl in self.trait_registry.values() {
@@ -1891,6 +1882,10 @@ fn compile_file_impl(
     module_compiler
         .analyzer
         .update_copy_structs(module_compiler.copy_structs_registry.clone());
+    // Provide cross-file struct field types for nested field chain resolution
+    module_compiler
+        .analyzer
+        .set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
 
     // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {
@@ -5514,6 +5509,8 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     };
 
     let module_content = generate_lib_rs(&module_tree, project_root, output_dir)?;
+    eprintln!("DEBUG generate_nested: writing {} at {:?}", module_file_name, module_file_path);
+    eprintln!("DEBUG generate_nested: project_root={:?}, output_dir={:?}, source_dir={:?}", project_root, output_dir, source_dir);
     std::fs::write(&module_file_path, module_content)?;
 
     // Copy hand-written modules to output directory
@@ -5540,13 +5537,31 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                             && name_str != "mod.rs"
                             && name_str != "build.rs"
                         {
-                            // THE WINDJAMMER WAY: Check if there's a corresponding .wj file
-                            // If runtime.wj exists, don't copy runtime.rs (it would overwrite the generated file!)
                             let stem = path.file_stem().unwrap().to_string_lossy();
-                            let corresponding_wj = source_dir.join(format!("{}.wj", stem));
 
+                            // Don't copy main.rs (not a module)
+                            if stem == "main" {
+                                continue;
+                            }
+
+                            // Don't copy .rs files that match a generated module name
+                            if all_generated_names.contains(stem.as_ref()) {
+                                continue;
+                            }
+
+                            // Don't copy auto-generated files (stale from previous builds)
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                if content.starts_with("#[allow(unused_imports)]")
+                                    || content.starts_with("// Auto-generated")
+                                {
+                                    continue;
+                                }
+                            }
+
+                            // Don't copy .rs files with a corresponding .wj source
+                            let corresponding_wj = source_dir.join(format!("{}.wj", stem));
                             if corresponding_wj.exists() {
-                                continue; // Skip copying - this file is generated from .wj
+                                continue;
                             }
 
                             // CRITICAL FIX: Don't copy .rs files that have corresponding subdirectories
@@ -5631,6 +5646,13 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                             "node_modules",
                             ".git",
                             "src",
+                            "tests_build",
+                            "tests_wj",
+                            "test_output",
+                            "test_scenarios",
+                            "examples",
+                            "benches",
+                            "lib",
                         ];
 
                         if !skip_dirs.contains(&dir_name_str.as_ref()) {
