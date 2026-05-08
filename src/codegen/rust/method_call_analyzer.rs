@@ -167,27 +167,17 @@ impl MethodCallAnalyzer {
                 }
 
                 // NO SIGNATURE: Use fallback heuristic
-                // Check if this is a String type (common for match arm bindings in dialog systems)
+                // Only add & for known String-typed bindings that need &str coercion.
+                // For unknown types or non-String types, do NOT add & — the callee
+                // signature determines ownership, and spurious & on owned types
+                // causes E0308 (expected T, found &T).
                 if let Some(var_types) = local_var_types {
                     if let Some(ty) = var_types.get(name.as_str()) {
-                        // String types need &
                         let is_string = matches!(ty, Type::String)
                             || matches!(ty, Type::Custom(s) if s == "String" || s == "string");
                         if is_string {
                             return true;
                         }
-                        // Copy types don't need &
-                        let is_copy = match ty {
-                            Type::Int | Type::Float | Type::Bool => true,
-                            Type::Custom(s) => crate::type_classification::is_copy_primitive(s),
-                            _ => false,
-                        };
-                        if is_copy {
-                            return false;
-                        }
-                    } else {
-                        // No type info - assume String for match arm bindings (common pattern)
-                        return true;
                     }
                 }
             }

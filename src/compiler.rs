@@ -1125,6 +1125,7 @@ fn build_library_multipass(
                 .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
             let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
+            analyzer.set_global_struct_field_types(global_struct_fields.clone());
             let (_, file_registry, _) = analyzer
                 .analyze_program_with_global_signatures(&program, &global_registry)
                 .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
@@ -1415,6 +1416,7 @@ fn build_library_multipass(
         }
 
         let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
+        analyzer.set_global_struct_field_types(global_struct_fields.clone());
 
         // Rust leakage linter
         if enable_lint {

@@ -538,6 +538,13 @@ fn detect_external_crate_deps(output_dir: &Path, source_dir: &Path) -> Vec<Strin
     .into_iter()
     .collect();
 
+    let output_pkg_name = {
+        let p = output_dir.join("Cargo.toml");
+        read_package_name(&p)
+            .map(|n| n.replace('-', "_"))
+            .unwrap_or_default()
+    };
+
     let mut external_crates: HashSet<String> = HashSet::new();
 
     if let Ok(entries) = walk_rs_files(output_dir) {
@@ -550,6 +557,7 @@ fn detect_external_crate_deps(output_dir: &Path, source_dir: &Path) -> Vec<Strin
                             let crate_name = crate_name.trim().trim_start_matches('{');
                             if !crate_name.is_empty()
                                 && !builtin_crates.contains(crate_name)
+                                && crate_name != output_pkg_name
                                 && crate_name.chars().next().is_some_and(|c| c.is_alphabetic())
                             {
                                 external_crates.insert(crate_name.to_string());

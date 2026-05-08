@@ -543,7 +543,10 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                if self.in_owned_value_context && !self.generating_assignment_target {
+                if self.in_owned_value_context
+                    && !self.generating_assignment_target
+                    && !self.in_field_access_object
+                {
                     if let Some(ty) = self.infer_expression_type(expr_to_generate) {
                         if let Type::Reference(inner) | Type::MutableReference(inner) = &ty {
                             if self.is_type_copy(inner) {
@@ -1226,12 +1229,21 @@ impl<'ast> CodeGenerator<'ast> {
                     op,
                     crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef
                 );
+                let is_deref = matches!(op, crate::parser::UnaryOp::Deref);
                 let prev_borrow = self.in_borrow_context;
                 if is_borrow {
                     self.in_borrow_context = true;
                 }
+                // When generating *expr, suppress in_owned_value_context for the
+                // inner operand to prevent double-deref (**x). The explicit * already
+                // handles the deref; the owned-value-context * would be redundant.
+                let prev_owned = self.in_owned_value_context;
+                if is_deref {
+                    self.in_owned_value_context = false;
+                }
                 let operand_str = self.generate_expression(operand);
                 self.in_borrow_context = prev_borrow;
+                self.in_owned_value_context = prev_owned;
 
                 // CRITICAL: Preserve parentheses for binary expressions in unary context
                 // !(a || b) should generate !(a || b), not !a || b
@@ -2603,11 +2615,16 @@ impl<'ast> CodeGenerator<'ast> {
                                         }
                                     }
                                     OwnershipMode::Owned => {
-                                        // TDD FIX: AUTO-CONVERT for &str/&String → String, &T → T
-                                        // When passing a reference to a function expecting owned, convert it
-                                        // - &str → String: use .to_string()
-                                        // - &String → String: use .clone()
-                                        // - &T → T: use .clone()
+                                        // String optimization override: param_types may say &str
+                                        // while param_ownership is stale as Owned. Trust param_types.
+                                        let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
+                                            matches!(t, Type::Reference(inner) if
+                                                matches!(**inner, Type::Custom(ref s) if s == "str"))
+                                        });
+                                        if param_is_str_ref {
+                                            return vec![arg_str];
+                                        }
+
                                         if let Expression::Identifier { name, .. } = arg {
                                             // Find the parameter type
                                             let param_type = self
@@ -2616,19 +2633,25 @@ impl<'ast> CodeGenerator<'ast> {
                                                 .find(|p| &p.name == name)
                                                 .map(|p| &p.type_);
 
-                                            // Check if it's a reference parameter (&str, &String, &T)
-                                            if let Some(Type::Reference(inner_type)) = param_type {
-                                                // Special case: &str (Type::Reference(Type::String) in Rust parlance)
-                                                // &str.clone() → &str, but we need String, so use .to_string()
-                                                if matches!(**inner_type, Type::String)
+                                            // Check if it's a reference parameter (&str, &String, &T, &mut T)
+                                            let inner_from_ref = match param_type {
+                                                Some(Type::Reference(inner)) => Some(inner.as_ref()),
+                                                Some(Type::MutableReference(inner)) => Some(inner.as_ref()),
+                                                _ => None,
+                                            };
+                                            if let Some(inner_type) = inner_from_ref {
+                                                if matches!(inner_type, Type::String)
                                                     && !arg_str.ends_with(".to_string()")
                                                     && !arg_str.ends_with(".clone()")
                                                 {
                                                     arg_str = format!("{}.to_string()", arg_str);
+                                                } else if self.is_type_copy(inner_type)
+                                                    && !arg_str.trim_start().starts_with('*')
+                                                {
+                                                    arg_str = format!("*{}", arg_str);
                                                 } else if !arg_str.ends_with(".clone()")
                                                     && !arg_str.trim_start().starts_with('*')
                                                 {
-                                                    // For other reference types, .clone() works
                                                     arg_str = format!("{}.clone()", arg_str);
                                                 }
                                             } else {
@@ -2644,12 +2667,15 @@ impl<'ast> CodeGenerator<'ast> {
                                                 let is_borrowed_iterator_var =
                                                     self.borrowed_iterator_vars.contains(name);
 
-                                                // Also check if it's inferred as borrowed
                                                 let is_inferred_borrowed =
                                                     self.inferred_borrowed_params.contains(name);
 
+                                                let is_inferred_mut_borrowed =
+                                                    self.inferred_mut_borrowed_params.contains(name);
+
                                                 if (is_borrowed_iterator_var
-                                                    || is_inferred_borrowed)
+                                                    || is_inferred_borrowed
+                                                    || is_inferred_mut_borrowed)
                                                     && !arg_str.ends_with(".clone()")
                                                 {
                                                     // `*ident` = owned Copy from &/&mut (see Identifier
