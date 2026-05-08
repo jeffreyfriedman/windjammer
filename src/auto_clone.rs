@@ -95,24 +95,30 @@ impl AutoCloneAnalysis {
         analysis
     }
 
-    /// Build a map of all variable usages in the function
+    /// Build a map of all variable usages in the function.
+    /// Uses a global counter so that every statement across all scopes gets a unique index.
     fn build_usage_map<'ast>(statements: &[&'ast Statement<'ast>]) -> HashMap<String, Vec<Usage>> {
         let mut map = HashMap::new();
+        let mut counter: usize = 0;
 
-        for (idx, stmt) in statements.iter().enumerate() {
-            Self::collect_usages_from_statement(stmt, idx, false, &mut map);
+        for stmt in statements.iter() {
+            Self::collect_usages_from_statement(stmt, &mut counter, false, &mut map);
         }
 
         map
     }
 
-    /// Collect all usages of variables from a statement
+    /// Collect all usages of variables from a statement.
+    /// `counter` is incremented for each statement to guarantee unique indices.
     fn collect_usages_from_statement(
         stmt: &Statement,
-        idx: usize,
+        counter: &mut usize,
         in_loop: bool,
         map: &mut HashMap<String, Vec<Usage>>,
     ) {
+        let idx = *counter;
+        *counter += 1;
+
         match stmt {
             Statement::Let { pattern, value, .. } => {
                 Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
@@ -145,12 +151,12 @@ impl AutoCloneAnalysis {
                 ..
             } => {
                 Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
-                for (body_i, stmt) in then_block.iter().enumerate() {
-                    Self::collect_usages_from_statement(stmt, body_i, in_loop, map);
+                for stmt in then_block.iter() {
+                    Self::collect_usages_from_statement(stmt, counter, in_loop, map);
                 }
                 if let Some(else_b) = else_block {
-                    for (body_i, stmt) in else_b.iter().enumerate() {
-                        Self::collect_usages_from_statement(stmt, body_i, in_loop, map);
+                    for stmt in else_b.iter() {
+                        Self::collect_usages_from_statement(stmt, counter, in_loop, map);
                     }
                 }
             }
@@ -158,8 +164,8 @@ impl AutoCloneAnalysis {
                 condition, body, ..
             } => {
                 Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
-                for (body_i, stmt) in body.iter().enumerate() {
-                    Self::collect_usages_from_statement(stmt, body_i, true, map);
+                for stmt in body.iter() {
+                    Self::collect_usages_from_statement(stmt, counter, true, map);
                 }
             }
             Statement::For {
@@ -169,13 +175,13 @@ impl AutoCloneAnalysis {
                 ..
             } => {
                 Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map);
-                for (body_i, stmt) in body.iter().enumerate() {
-                    Self::collect_usages_from_statement(stmt, body_i, true, map);
+                for stmt in body.iter() {
+                    Self::collect_usages_from_statement(stmt, counter, true, map);
                 }
             }
             Statement::Loop { body, .. } => {
-                for (body_i, stmt) in body.iter().enumerate() {
-                    Self::collect_usages_from_statement(stmt, body_i, true, map);
+                for stmt in body.iter() {
+                    Self::collect_usages_from_statement(stmt, counter, true, map);
                 }
             }
             Statement::Match { value, arms, .. } => {
@@ -338,8 +344,9 @@ impl AutoCloneAnalysis {
                 }
             }
             Expression::Block { statements, .. } => {
+                let mut block_counter = idx + 1;
                 for stmt in statements {
-                    Self::collect_usages_from_statement(stmt, idx, in_loop, map);
+                    Self::collect_usages_from_statement(stmt, &mut block_counter, in_loop, map);
                 }
             }
             Expression::Cast { expr, .. } => {
