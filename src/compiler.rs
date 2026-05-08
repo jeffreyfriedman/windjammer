@@ -721,6 +721,32 @@ fn collect_global_copy_structs_for_library(
     (global_copy_structs, struct_names)
 }
 
+/// Remove any Cargo.toml files nested under the output root.
+/// Older compiler versions generated per-directory manifests; these confuse Cargo
+/// into treating subdirectories as separate packages, causing cyclic dependency errors.
+fn clean_nested_cargo_toml(output_dir: &std::path::Path) {
+    fn visit(dir: &std::path::Path, root: &std::path::Path) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().and_then(|n| n.to_str()) == Some("target") {
+                    continue;
+                }
+                visit(&path, root);
+            } else if path.file_name().and_then(|n| n.to_str()) == Some("Cargo.toml")
+                && path.parent() != Some(root)
+            {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+    visit(output_dir, output_dir);
+}
+
 /// TDD FIX: Build library with global multi-pass analysis
 /// Solves cross-file transitive mutability inference
 #[allow(clippy::too_many_arguments)]
@@ -1575,6 +1601,11 @@ fn build_library_multipass(
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
     if target == CompilationTarget::Rust {
+        // Clean stale nested Cargo.toml files left by older compiler versions.
+        // Only the root Cargo.toml is valid; nested ones confuse Cargo into
+        // treating subdirectories as separate packages (cyclic dependency errors).
+        clean_nested_cargo_toml(output);
+
         let source_dir = if base_path.is_file() {
             base_path.parent().unwrap_or(base_path)
         } else {
