@@ -2273,7 +2273,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Check if this is an extern function call for unsafe wrapping + FFI str handling.
-                let is_extern_call = if let Some(ref sig) = signature {
+                // TDD FIX: When a signature was found via simple-name fallback for a
+                // module-qualified call (e.g. vnode_ffi::vnode_element), do NOT treat
+                // it as extern. The qualified call goes through a crate-internal module,
+                // not through FFI. Only unqualified calls to extern fn names are truly extern.
+                let is_extern_call = if signature_from_simple_fallback && func_name.contains("::") {
+                    false
+                } else if let Some(ref sig) = signature {
                     sig.is_extern
                 } else {
                     let simple = func_name.rsplit("::").next().unwrap_or(&func_name);
