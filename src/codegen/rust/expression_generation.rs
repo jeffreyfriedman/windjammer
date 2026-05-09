@@ -5037,8 +5037,16 @@ impl<'ast> CodeGenerator<'ast> {
                     self.in_void_block = false;
                 }
 
+                // Save and restore auto_clone_counter so that Expression::Block
+                // uses a local counter scope, matching the analysis behavior in
+                // collect_usages_from_expression which creates block_counter = idx + 1.
+                let saved_auto_clone = self.auto_clone_counter;
+
                 let len = stmts.len();
                 for (i, stmt) in stmts.iter().enumerate() {
+                    self.current_statement_idx = self.auto_clone_counter;
+                    self.auto_clone_counter += 1;
+
                     let is_last = i == len - 1;
                     if is_last
                         && !self.in_void_block
@@ -5111,6 +5119,8 @@ impl<'ast> CodeGenerator<'ast> {
                         output.push_str(&self.generate_statement(stmt));
                     }
                 }
+
+                self.auto_clone_counter = saved_auto_clone;
 
                 self.indent_level -= 1;
                 output.push_str(&self.indent());

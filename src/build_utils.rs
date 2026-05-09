@@ -397,10 +397,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                 if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
                                     continue;
                                 }
-                                // Only strip auto-generated wildcard re-exports (::*;),
-                                // preserve user-defined selective re-exports like
-                                // `pub use tile_id::TileId;`
-                                if trimmed.starts_with("pub use ") && trimmed.ends_with("::*;") {
+                                if trimmed.starts_with("pub use ") && trimmed.ends_with(';') {
                                     continue;
                                 }
                                 if trimmed == "#[allow(unused_imports)]" {
