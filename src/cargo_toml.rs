@@ -841,10 +841,10 @@ fn infer_project_name(source_dir: &Path) -> String {
 
     // Fallback: use directory name instead of hardcoding "windjammer"
     if let Some(dir_name) = source_dir.file_name().and_then(|n| n.to_str()) {
-        if dir_name != "src" && dir_name != "src_wj" {
+        if dir_name != "src" {
             return sanitize_package_name(&dir_name.to_lowercase().replace(' ', "-"));
         }
-        // If source_dir is "src" or "src_wj", use the parent directory name
+        // If source_dir is "src", use the parent directory name
         if let Some(parent) = source_dir.parent() {
             if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
                 return sanitize_package_name(&parent_name.to_lowercase().replace(' ', "-"));

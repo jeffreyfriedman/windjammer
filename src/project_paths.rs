@@ -13,18 +13,15 @@ use std::path::{Path, PathBuf};
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
-    let mut found_src_wj = None;
+    let mut found_src = None;
 
     while let Some(parent) = current.parent() {
-        // Check if this directory looks like a source root by name
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            // If named "src_wj", this is definitely the source root for multi-file projects
-            if dir_name == "src_wj" {
-                found_src_wj = Some(parent);
+            if dir_name == "src" {
+                found_src = Some(parent);
             }
         }
 
-        // Track the topmost directory with mod.wj
         if parent.join("mod.wj").exists() {
             topmost_mod_wj_dir = Some(parent);
         }
@@ -32,19 +29,14 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
         current = parent;
     }
 
-    // Prefer a directory named `src_wj` in the path — conventional layout for nested `ecs/foo.wj`
-    // and correct `get_relative_output_path` even when the project has no `mod.wj` yet.
-    if let Some(src_wj) = found_src_wj {
-        return Some(src_wj);
+    if let Some(src) = found_src {
+        return Some(src);
     }
 
-    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
     if let Some(mod_wj_dir) = topmost_mod_wj_dir {
         return Some(mod_wj_dir);
     }
 
-    // For single-file projects, use the file's parent directory
-    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
     file_path.parent()
 }
 
@@ -150,8 +142,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_nested() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/math/vec2.wj");
+        let source_root = Path::new("src");
+        let input_path = Path::new("src/math/vec2.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
@@ -160,8 +152,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_flat() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/vec2.wj");
+        let source_root = Path::new("src");
+        let input_path = Path::new("src/vec2.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
@@ -170,8 +162,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_deeply_nested() {
-        let source_root = Path::new("game/src_wj");
-        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let source_root = Path::new("game/src");
+        let input_path = Path::new("game/src/rendering/shaders/vertex.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();

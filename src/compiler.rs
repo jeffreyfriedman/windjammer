@@ -1782,19 +1782,19 @@ fn find_dependency_metadata_roots(
                 if canonical.starts_with(&p) {
                     continue;
                 }
-                // Look for src_wj/ directories (Windjammer game crate convention)
-                let src_wj = p.join("src_wj");
-                if src_wj.is_dir() {
-                    roots.push(src_wj);
+                // Look for src/ directories containing .wj files (Windjammer project convention)
+                let src_dir = p.join("src");
+                if src_dir.is_dir() {
+                    roots.push(src_dir);
                 }
-                // Also check one level deeper (e.g., windjammer-game/windjammer-game-core/src_wj/)
+                // Also check one level deeper (e.g., windjammer-game/windjammer-game-core/src/)
                 if let Ok(sub_entries) = std::fs::read_dir(&p) {
                     for sub_entry in sub_entries.flatten() {
                         let sub = sub_entry.path();
                         if sub.is_dir() {
-                            let sub_src_wj = sub.join("src_wj");
-                            if sub_src_wj.is_dir() {
-                                roots.push(sub_src_wj);
+                            let sub_src = sub.join("src");
+                            if sub_src.is_dir() {
+                                roots.push(sub_src);
                             }
                         }
                     }
