@@ -486,9 +486,21 @@ impl<'ast> CodeGenerator<'ast> {
                 // Look through references/derefs
                 self.infer_type_name(operand)
             }
-            Expression::MethodCall { object, .. } => {
-                // Try to infer from the object
-                self.infer_type_name(object)
+            Expression::MethodCall { object, method, .. } => {
+                // For method chains, try to resolve the return type of the method.
+                // If the method returns Self (or the same type), the type propagates.
+                let obj_type = self.infer_type_name(object);
+                if let Some(ref tn) = obj_type {
+                    let qualified = format!("{}::{}", tn, method);
+                    if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                        if let Some(ref ret_type) = sig.return_type {
+                            if let Some(ret_name) = Self::type_to_name(ret_type) {
+                                return Some(ret_name);
+                            }
+                        }
+                    }
+                }
+                obj_type
             }
             Expression::Index { object, .. } => {
                 // For collection[i], resolve the element type rather than the collection type.
@@ -541,6 +553,37 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 self.infer_type_name(object)
+            }
+            Expression::Call { function, .. } => {
+                // For constructor calls like Config::new(...), infer return type.
+                // Config::new() → FieldAccess(Identifier("Config"), "new") → type is "Config"
+                match &**function {
+                    Expression::FieldAccess { object, field, .. } => {
+                        // Type::method() — infer type from the object (Type name)
+                        if let Some(type_name) = self.infer_type_name(object) {
+                            let qualified = format!("{}::{}", type_name, field);
+                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                                if let Some(ref ret_type) = sig.return_type {
+                                    if let Some(ret_name) = Self::type_to_name(ret_type) {
+                                        return Some(ret_name);
+                                    }
+                                }
+                            }
+                            // Constructors conventionally return Self
+                            return Some(type_name);
+                        }
+                        None
+                    }
+                    Expression::Identifier { name, .. } => {
+                        if let Some(sig) = self.signature_registry.get_signature(name) {
+                            if let Some(ref ret_type) = sig.return_type {
+                                return Self::type_to_name(ret_type);
+                            }
+                        }
+                        None
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         }
