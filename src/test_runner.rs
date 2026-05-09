@@ -604,7 +604,7 @@ fn detect_and_compile_library(
         None
     };
 
-    let src_wj_dir = project_root.join("src_wj");
+    let src_wj_dir = project_root.join("src");
     if !src_wj_dir.exists() || !src_wj_dir.is_dir() {
         return Ok(None);
     }
