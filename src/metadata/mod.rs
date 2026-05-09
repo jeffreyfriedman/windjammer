@@ -8,53 +8,63 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Find the project root by walking up from `start` looking for `Cargo.toml` or `wj.toml`.
+fn find_project_root(start: &Path) -> Option<PathBuf> {
+    let mut dir = if start.is_file() {
+        start.parent()?
+    } else {
+        start
+    };
+    loop {
+        if dir.join("Cargo.toml").exists() || dir.join("wj.toml").exists() {
+            return Some(dir.to_path_buf());
+        }
+        dir = dir.parent()?;
+    }
+}
+
 /// Compute the cache path for a `.wj.meta` file.
 ///
-/// Given `<project>/src_wj/foo/bar.wj`, returns `<project>/.wj-cache/foo/bar.wj.meta`.
-/// If no `src_wj` ancestor is found, falls back to placing `.wj-cache/` next to the file.
+/// Given `<project>/src/foo/bar.wj`, returns `<project>/.wj-cache/foo/bar.wj.meta`.
+/// Finds the project root by walking up to the nearest `Cargo.toml` or `wj.toml`,
+/// then strips the `src/` prefix to compute the relative cache path.
 pub fn meta_cache_path(source_file: &Path) -> PathBuf {
-    let components: Vec<_> = source_file.components().collect();
-    let mut src_wj_idx = None;
-    for (i, comp) in components.iter().enumerate() {
-        if let std::path::Component::Normal(name) = comp {
-            if name.to_str() == Some("src_wj") {
-                src_wj_idx = Some(i);
-                break;
-            }
+    if let Some(project_root) = find_project_root(source_file) {
+        let src_dir = project_root.join("src");
+        if let Ok(relative) = source_file.strip_prefix(&src_dir) {
+            let mut cache_path = project_root.join(".wj-cache");
+            cache_path.push(relative);
+            let file_name = cache_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            cache_path.set_file_name(format!("{}.meta", file_name));
+            return cache_path;
+        }
+        // File is in the project but not under src/ -- place relative to project root
+        if let Ok(relative) = source_file.strip_prefix(&project_root) {
+            let mut cache_path = project_root.join(".wj-cache");
+            cache_path.push(relative);
+            let file_name = cache_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            cache_path.set_file_name(format!("{}.meta", file_name));
+            return cache_path;
         }
     }
-
-    if let Some(idx) = src_wj_idx {
-        let project_root: PathBuf = components[..idx].iter().collect();
-        let relative: PathBuf = components[idx + 1..].iter().collect();
-        let mut cache_path = project_root.join(".wj-cache");
-        cache_path.push(relative);
-        let file_name = cache_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        cache_path.set_file_name(format!("{}.meta", file_name));
-        cache_path
-    } else {
-        source_file.with_extension("wj.meta")
-    }
+    source_file.with_extension("wj.meta")
 }
 
 /// Get the `.wj-cache/` root for a given source root.
 ///
-/// Given `<project>/src_wj/`, returns `<project>/.wj-cache/`.
-/// For non-`src_wj` roots, places `.wj-cache/` inside the root.
+/// Finds the project root (nearest `Cargo.toml`/`wj.toml`) and returns `<project>/.wj-cache/`.
+/// Falls back to placing `.wj-cache/` inside the given root if no project marker is found.
 pub fn meta_cache_root(source_root: &Path) -> PathBuf {
-    let name = source_root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    if name == "src_wj" {
-        source_root
-            .parent()
-            .unwrap_or(source_root)
-            .join(".wj-cache")
+    if let Some(project_root) = find_project_root(source_root) {
+        project_root.join(".wj-cache")
     } else {
         source_root.join(".wj-cache")
     }
@@ -552,6 +562,14 @@ impl ModuleMetadata {
 mod tests {
     use super::*;
 
+    fn create_project(base: &std::path::Path, subdirs: &[&str]) {
+        std::fs::create_dir_all(base).unwrap();
+        std::fs::write(base.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        for sub in subdirs {
+            std::fs::create_dir_all(base.join(sub)).unwrap();
+        }
+    }
+
     #[test]
     fn test_metadata_round_trip() {
         let mut meta = ModuleMetadata::new("math::vec3".to_string());
@@ -574,58 +592,123 @@ mod tests {
         );
 
         let json = serde_json::to_string_pretty(&meta).unwrap();
-        eprintln!("Metadata JSON:\n{}", json);
-
         let loaded: ModuleMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.functions.len(), 1);
         assert!(loaded.functions.contains_key("Vec3::new"));
     }
 
     #[test]
-    fn test_meta_cache_path_with_src_wj() {
-        let source = PathBuf::from("/project/src_wj/math/vec3.wj");
+    fn test_meta_cache_path_src() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("myproject");
+        create_project(&proj, &["src/math"]);
+        let source = proj.join("src/math/vec3.wj");
+        std::fs::write(&source, "").unwrap();
+
         let result = meta_cache_path(&source);
-        assert_eq!(
-            result,
-            PathBuf::from("/project/.wj-cache/math/vec3.wj.meta")
-        );
+        assert_eq!(result, proj.join(".wj-cache/math/vec3.wj.meta"));
     }
 
     #[test]
     fn test_meta_cache_path_nested() {
-        let source = PathBuf::from("/project/src_wj/rendering/shaders/mesh.wj");
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("myproject");
+        create_project(&proj, &["src/rendering/shaders"]);
+        let source = proj.join("src/rendering/shaders/mesh.wj");
+        std::fs::write(&source, "").unwrap();
+
         let result = meta_cache_path(&source);
         assert_eq!(
             result,
-            PathBuf::from("/project/.wj-cache/rendering/shaders/mesh.wj.meta")
+            proj.join(".wj-cache/rendering/shaders/mesh.wj.meta")
         );
     }
 
     #[test]
     fn test_meta_cache_path_top_level() {
-        let source = PathBuf::from("/project/src_wj/main.wj");
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("myproject");
+        create_project(&proj, &["src"]);
+        let source = proj.join("src/main.wj");
+        std::fs::write(&source, "").unwrap();
+
         let result = meta_cache_path(&source);
-        assert_eq!(result, PathBuf::from("/project/.wj-cache/main.wj.meta"));
+        assert_eq!(result, proj.join(".wj-cache/main.wj.meta"));
     }
 
     #[test]
-    fn test_meta_cache_path_no_src_wj_fallback() {
-        let source = PathBuf::from("/other/dir/file.wj");
+    fn test_meta_cache_path_no_project_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("noproject");
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("file.wj");
+        std::fs::write(&source, "").unwrap();
+
         let result = meta_cache_path(&source);
-        assert_eq!(result, PathBuf::from("/other/dir/file.wj.meta"));
+        assert_eq!(result, dir.join("file.wj.meta"));
     }
 
     #[test]
-    fn test_meta_cache_root_src_wj() {
-        let root = PathBuf::from("/project/src_wj");
-        let result = meta_cache_root(&root);
-        assert_eq!(result, PathBuf::from("/project/.wj-cache"));
+    fn test_meta_cache_path_components_subdir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("uiproject");
+        create_project(&proj, &["src/components"]);
+        let source = proj.join("src/components/textarea.wj");
+        std::fs::write(&source, "").unwrap();
+
+        let result = meta_cache_path(&source);
+        assert_eq!(
+            result,
+            proj.join(".wj-cache/components/textarea.wj.meta")
+        );
     }
 
     #[test]
-    fn test_meta_cache_root_other() {
-        let root = PathBuf::from("/project/src");
-        let result = meta_cache_root(&root);
-        assert_eq!(result, PathBuf::from("/project/src/.wj-cache"));
+    fn test_meta_cache_path_components_nested() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("uiproject");
+        create_project(&proj, &["src/components/forms"]);
+        let source = proj.join("src/components/forms/input.wj");
+        std::fs::write(&source, "").unwrap();
+
+        let result = meta_cache_path(&source);
+        assert_eq!(
+            result,
+            proj.join(".wj-cache/components/forms/input.wj.meta")
+        );
+    }
+
+    #[test]
+    fn test_meta_cache_root_with_cargo_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("myproject");
+        create_project(&proj, &["src"]);
+        let src = proj.join("src");
+
+        let result = meta_cache_root(&src);
+        assert_eq!(result, proj.join(".wj-cache"));
+    }
+
+    #[test]
+    fn test_meta_cache_root_no_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("noproject/src");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let result = meta_cache_root(&dir);
+        assert_eq!(result, dir.join(".wj-cache"));
+    }
+
+    #[test]
+    fn test_meta_cache_root_wj_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("wjproject");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("wj.toml"), "[project]\nname = \"test\"").unwrap();
+        std::fs::create_dir_all(proj.join("src")).unwrap();
+        let src = proj.join("src");
+
+        let result = meta_cache_root(&src);
+        assert_eq!(result, proj.join(".wj-cache"));
     }
 }

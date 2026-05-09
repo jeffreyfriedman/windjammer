@@ -401,17 +401,14 @@ fn discover_hand_written_modules(
                 // Check if directory has a mod.rs (but skip common non-FFI directories)
                 let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 let skip_dirs = [
-                    "src_wj",
                     "target",
                     "build",
                     "generated",
                     "dist",
                     "node_modules",
                     ".git",
-                    "src",
                     "lib",
                     "tests_build",
-                    "tests_wj",
                     "test_output",
                     "test_scenarios",
                     "examples",

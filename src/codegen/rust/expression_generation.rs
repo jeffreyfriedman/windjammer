@@ -3539,6 +3539,34 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .collect();
 
+                // E0499 FIX: Extract temporaries when receiver and arguments both borrow self.
+                // Pattern: self.field.method(self.other_method()) generates two &mut self borrows.
+                // Fix: { let __wj_tmp0 = self.other_method(); self.field.method(__wj_tmp0) }
+                let receiver_borrows_self = self.codegen_expression_traces_to_self(object);
+                let mut self_borrow_temps: Vec<(String, String)> = Vec::new();
+                let args = if receiver_borrows_self {
+                    let needs_extraction = arguments.iter().any(|(_label, arg)| self.expression_borrows_self(arg));
+                    if needs_extraction {
+                        args.into_iter()
+                            .enumerate()
+                            .map(|(i, arg_str)| {
+                                let (_label, arg_expr) = &arguments[i];
+                                if self.expression_borrows_self(arg_expr) {
+                                    let temp_name = format!("__wj_tmp{}", i);
+                                    self_borrow_temps.push((temp_name.clone(), arg_str));
+                                    temp_name
+                                } else {
+                                    arg_str
+                                }
+                            })
+                            .collect()
+                    } else {
+                        args
+                    }
+                } else {
+                    args
+                };
+
                 // Restore float target type after argument generation
                 self.assignment_float_target_type = prev_float_target;
 
@@ -3790,17 +3818,17 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 };
 
-                // AUTO-CLONE: Method call results are ALWAYS owned values.
-                // Unlike field accesses (self.field borrows from self) or identifiers
-                // (which may be borrowed), calling a method produces a fresh value.
-                // The auto-clone analysis may flag the *object* for cloning, but that
-                // doesn't mean the *result of the method call* needs cloning.
-                //
-                // Exception: methods that return references (get, first, last) are
-                // handled separately by should_add_cloned().
-                //
-                // WINDJAMMER PHILOSOPHY: Only clone when semantically necessary.
-                // Method call results are never borrowed — cloning them is pure noise.
+                // E0499 FIX: Wrap in block with temporaries if self-borrow extraction was needed
+                let base_expr = if !self_borrow_temps.is_empty() {
+                    let mut temp_decls = String::new();
+                    for (name, value) in &self_borrow_temps {
+                        temp_decls.push_str(&format!("let {} = {}; ", name, value));
+                    }
+                    format!("{{ {}{} }}", temp_decls, base_expr)
+                } else {
+                    base_expr
+                };
+
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
@@ -6382,6 +6410,30 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.codegen_expression_traces_to_self(object)
             }
             Expression::Index { object, .. } => self.codegen_expression_traces_to_self(object),
+            _ => false,
+        }
+    }
+
+    /// Check if an expression involves borrowing `self` — including method calls on self.
+    /// Broader than `codegen_expression_traces_to_self` which only checks field access chains.
+    /// Used for self-borrow temporary extraction (E0499 prevention).
+    fn expression_borrows_self(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == "self",
+            Expression::FieldAccess { object, .. } => self.expression_borrows_self(object),
+            Expression::Index { object, .. } => self.expression_borrows_self(object),
+            Expression::MethodCall { object, arguments, .. } => {
+                self.expression_borrows_self(object)
+                    || arguments.iter().any(|(_, arg)| self.expression_borrows_self(arg))
+            }
+            Expression::Call { arguments, function, .. } => {
+                self.expression_borrows_self(function)
+                    || arguments.iter().any(|(_, arg)| self.expression_borrows_self(arg))
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_borrows_self(left) || self.expression_borrows_self(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_borrows_self(operand),
             _ => false,
         }
     }

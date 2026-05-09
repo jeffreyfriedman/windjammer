@@ -4219,10 +4219,10 @@ fn is_test_file(path: &Path) -> bool {
             return false;
         }
 
-        // Check if file is in tests_wj/ directory OR ends with _test.wj
+        // Check if file is in tests/ directory OR ends with _test.wj
         let in_tests_dir = path
             .components()
-            .any(|c| c.as_os_str().to_string_lossy() == "tests_wj");
+            .any(|c| c.as_os_str().to_string_lossy() == "tests");
 
         let ends_with_test = name_str.ends_with("_test.wj");
 
@@ -4302,7 +4302,7 @@ fn detect_and_compile_library(
     };
 
     // Check if there's a library to compile
-    let src_wj_dir = project_root.join("src_wj");
+    let src_wj_dir = project_root.join("src");
     if !src_wj_dir.exists() || !src_wj_dir.is_dir() {
         return Ok(None); // No library to compile
     }
@@ -5638,16 +5638,13 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                     if let Some(dir_name) = path.file_name() {
                         let dir_name_str = dir_name.to_string_lossy();
                         let skip_dirs = [
-                            "src_wj",
                             "target",
                             "build",
                             "generated",
                             "dist",
                             "node_modules",
                             ".git",
-                            "src",
                             "tests_build",
-                            "tests_wj",
                             "test_output",
                             "test_scenarios",
                             "examples",
