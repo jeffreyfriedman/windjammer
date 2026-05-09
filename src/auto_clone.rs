@@ -187,13 +187,23 @@ impl AutoCloneAnalysis {
             Statement::Match { value, arms, .. } => {
                 Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
                 for arm in arms {
-                    Self::collect_usages_from_expression(
-                        arm.body,
-                        idx,
-                        UsageKind::Read,
-                        in_loop,
-                        map,
-                    );
+                    // Process arm body blocks using the parent counter (like
+                    // Statement::If does for then_block/else_block) so that
+                    // statement indices stay synchronized with the codegen's
+                    // auto_clone_counter which is global.
+                    if let Expression::Block { statements, .. } = arm.body {
+                        for stmt in statements {
+                            Self::collect_usages_from_statement(stmt, counter, in_loop, map);
+                        }
+                    } else {
+                        Self::collect_usages_from_expression(
+                            arm.body,
+                            idx,
+                            UsageKind::Read,
+                            in_loop,
+                            map,
+                        );
+                    }
                 }
             }
             _ => {}
@@ -478,8 +488,7 @@ impl AutoCloneAnalysis {
             for field_move in &field_moves {
                 let root_used_later = root_usages.iter().any(|u| {
                     u.kind != UsageKind::Definition
-                        && u.statement_idx >= field_move.statement_idx
-                        && u.is_move
+                        && u.statement_idx > field_move.statement_idx
                 });
 
                 if root_used_later {
