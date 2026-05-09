@@ -766,11 +766,19 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
             content.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
             for line in items_content.lines() {
                 let trimmed = line.trim();
-                // Skip lines already handled by module system declarations above
                 if trimmed.starts_with("pub mod ") && trimmed.ends_with(';') {
                     continue;
                 }
                 if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                    continue;
+                }
+                if trimmed.starts_with("pub use ") && trimmed.ends_with(';') {
+                    continue;
+                }
+                if trimmed == "#[allow(unused_imports)]" {
+                    continue;
+                }
+                if trimmed == "use super::*;" {
                     continue;
                 }
                 content.push_str(line);
@@ -1046,6 +1054,55 @@ pub use rendering::Color
             !hand_written.contains(&"combat".to_string()),
             "Nested submodule 'combat' should NOT be treated as hand-written. Found: {:?}",
             hand_written
+        );
+    }
+
+    #[test]
+    fn test_generate_mod_rs_no_duplicate_pub_use() {
+        let temp_dir = create_test_dir(&[
+            ("mod.wj", "pub mod item\npub mod item_stack\npub use item::Item\npub use item_stack::ItemStack"),
+            ("item.wj", "pub struct Item { pub name: String }"),
+            ("item_stack.wj", "pub struct ItemStack { pub quantity: u32 }"),
+        ]);
+
+        let tree = discover_nested_modules(temp_dir.path()).unwrap();
+        assert!(tree.has_module(&["item"]));
+        assert!(tree.has_module(&["item_stack"]));
+
+        let output_dir = temp_dir.path().join("out");
+        fs::create_dir_all(&output_dir).unwrap();
+
+        fs::write(
+            output_dir.join("_mod_items.rs"),
+            "pub use self::item::Item;\npub use self::item_stack::ItemStack;\n",
+        )
+        .unwrap();
+
+        let parent_module = Module {
+            name: "inventory".to_string(),
+            path: temp_dir.path().to_path_buf(),
+            is_public: true,
+            is_directory: true,
+            has_mod_wj: true,
+            submodules: tree.root_modules.clone(),
+        };
+
+        let content = generate_mod_rs_for_submodule(&parent_module, &output_dir).unwrap();
+
+        let item_count = content.matches("pub use self::item::Item;").count()
+            + content.matches("pub use item::Item;").count();
+        assert_eq!(
+            item_count, 1,
+            "pub use Item should appear exactly once, but found {} times.\nGenerated content:\n{}",
+            item_count, content
+        );
+
+        let stack_count = content.matches("pub use self::item_stack::ItemStack;").count()
+            + content.matches("pub use item_stack::ItemStack;").count();
+        assert_eq!(
+            stack_count, 1,
+            "pub use ItemStack should appear exactly once, but found {} times.\nGenerated content:\n{}",
+            stack_count, content
         );
     }
 }

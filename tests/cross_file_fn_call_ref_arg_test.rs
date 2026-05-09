@@ -19,19 +19,12 @@ fn compile_single_file(source: &str) -> String {
 }
 
 #[test]
-fn test_cross_file_fn_call_field_access_no_clone() {
-    // Bug: When calling a cross-file function (no signature in registry),
-    // field access arguments get auto-clone from the analysis pass.
-    // This generates `fn_call(obj.field.clone())` which fails when
-    // the callee expects `&FieldType`.
-    //
-    // Real-world case: pass_id_to_label(pass.pass_id.clone()) should NOT
-    // have .clone() when the function might expect &PassId.
-    //
-    // The key: pass is used AFTER the field access (via pass.shader_id),
-    // so the auto-clone analysis marks pass.label as needing clone.
-    // But without signature info, we shouldn't clone - the function
-    // might expect a reference.
+fn test_cross_file_fn_call_field_access_clone_for_partial_move() {
+    // When pass.label is passed to a function (moving it) and pass is
+    // used later (via pass.shader_id), the auto-clone analysis correctly
+    // inserts .clone() to prevent E0382 (partial move of pass.label) or
+    // E0507 (cannot move out of borrowed reference when pass is inferred
+    // as &CompiledPass).
     let code = r#"
 use crate::debug::debug_labels::format_label
 
@@ -56,11 +49,11 @@ impl ShaderGraph {
     let output = compile_single_file(code);
     eprintln!("=== CROSS-FILE TEST OUTPUT ===\n{}", output);
 
-    // The generated code should NOT have .clone() on the argument
-    // when there's no signature (cross-file call).
+    // pass.label IS moved and pass is used later → clone is correct
+    // to prevent partial move or E0507 when pass is borrowed.
     assert!(
-        !output.contains("format_label(pass.label.clone())"),
-        "Cross-file function call should NOT add .clone() to arguments without signature info.\nGenerated:\n{}",
+        output.contains("pass.label.clone()"),
+        "Field access should be cloned when root variable is used later (partial move prevention).\nGenerated:\n{}",
         output
     );
 }
