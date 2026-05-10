@@ -72,3 +72,28 @@ pub fn float_type_from_wj_ty(ty: &Type) -> Option<FloatType> {
         _ => None,
     }
 }
+
+/// Determine cast target for float array element type mismatches.
+/// `let x = 1.0` may codegen as `f64` while a struct field is `[f32; N]` — insert `as f32`.
+pub fn float_array_elem_cast_target(expected_elem: &Type, actual: &Type) -> Option<&'static str> {
+    fn peel(ty: &Type) -> &Type {
+        match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => peel(inner),
+            t => t,
+        }
+    }
+    let exp = peel(expected_elem);
+    let got = peel(actual);
+    let want_f32 = matches!(exp, Type::Custom(n) if n == "f32");
+    let want_f64 = matches!(exp, Type::Custom(n) if n == "f64");
+    let got_f32 = matches!(got, Type::Custom(n) if n == "f32");
+    let got_f64 = matches!(got, Type::Custom(n) if n == "f64");
+    let got_float = matches!(got, Type::Float);
+    if want_f32 && (got_f64 || (got_float && !got_f32)) {
+        return Some("f32");
+    }
+    if want_f64 && got_f32 {
+        return Some("f64");
+    }
+    None
+}
