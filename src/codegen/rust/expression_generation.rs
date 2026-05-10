@@ -3936,137 +3936,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.generate_field_access(object, field, expr_to_generate)
             }
             Expression::StructLiteral { name, fields, .. } => {
-                // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
-                let _has_optimization_hint = self.struct_mapping_hints.get(name);
-
-                // CONTEXT-SENSITIVE INFERENCE: Set struct literal context for float type inference
-                let prev_struct_name = self.current_struct_literal_name.clone();
-                self.current_struct_literal_name = Some(name.to_string());
-
-                // Generate field assignments
-                let field_str: Vec<String> = fields
-                    .iter()
-                    .map(|(field_name, expr)| {
-                        // STRUCT LITERAL CONTEXT: Array literals in struct fields should use
-                        // fixed-size [...] syntax, not vec![...], because struct fields have
-                        // explicit type annotations (e.g., position: [f32; 3]).
-                        let prev_in_struct_field = self.in_struct_literal_field;
-                        let prev_field_name = self.current_struct_field_name.clone();
-                        self.in_struct_literal_field = true;
-                        self.current_struct_field_name = Some(field_name.to_string());
-
-                        // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
-                        // In Windjammer, `string` type is always owned (maps to Rust String)
-                        // So string literals in struct fields should be converted automatically.
-                        // Set coercion flag BEFORE generation so nested expressions (if-else
-                        // branches, match arms, blocks) also coerce their string literals.
-                        let prev_coerce = self.coerce_string_literals_to_owned;
-                        self.coerce_string_literals_to_owned = true;
-                        let mut expr_str = self.generate_expression(expr);
-                        self.coerce_string_literals_to_owned = prev_coerce;
-
-                        // Restore previous context
-                        self.in_struct_literal_field = prev_in_struct_field;
-                        self.current_struct_field_name = prev_field_name;
-
-                        // Auto-convert direct string literals that weren't already coerced
-                        if matches!(
-                            expr,
-                            Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            }
-                        ) && !expr_str.ends_with(".to_string()") {
-                            expr_str = format!("{}.to_string()", expr_str);
-                        }
-
-                        // CRITICAL: Auto-convert &str parameters to String for struct fields
-                        // Pattern: fn create(name: &str) -> User { User { name: name } }
-                        // When struct field is String but parameter is &str, add .to_string()
-                        if let Expression::Identifier { name: id, .. } = expr {
-                            let is_string_param = self.current_function_params.iter().any(|p| {
-                                if p.name != *id {
-                                    return false;
-                                }
-                                match &p.type_ {
-                                    crate::parser::Type::String => true,
-                                    crate::parser::Type::Custom(ref name) if name == "string" => true,
-                                    crate::parser::Type::Reference(inner) => {
-                                        matches!(**inner, crate::parser::Type::String)
-                                            || matches!(**inner, crate::parser::Type::Custom(ref name) if name == "str" || name == "string")
-                                    }
-                                    _ => false,
-                                }
-                            });
-
-                            if is_string_param && !expr_str.contains(".to_string()") {
-                                let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
-                                if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
-                                    if let Some(field_type) = field_types.get(field_name) {
-                                        let field_is_string = matches!(field_type, Type::String)
-                                            || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
-                                        if field_is_string {
-                                            expr_str = format!("{}.to_string()", expr_str);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // CRITICAL: Auto-clone self.field when constructing struct from borrowed self
-                        // Pattern: fn method(&self) -> Self { Self { field: self.field } }
-                        // Non-Copy fields from borrowed self need to be cloned
-                        if let Expression::FieldAccess { object, .. } = expr {
-                            if let Expression::Identifier { name: obj_name, .. } = &**object {
-                                if obj_name == "self" && !expr_str.contains(".clone()") {
-                                    // Check if current function takes &self (borrowed)
-                                    let self_is_borrowed =
-                                        self.current_function_params.iter().any(|p| {
-                                            p.name == "self"
-                                                && matches!(
-                                                    p.ownership,
-                                                    crate::parser::OwnershipHint::Ref
-                                                )
-                                        });
-
-                                    if self_is_borrowed {
-                                        // Clone the field access since self is borrowed
-                                        expr_str = format!("{}.clone()", expr_str);
-                                    }
-                                }
-                            }
-                        }
-
-                        // E0308: bindings from match/if-let on `&T` are `&U` when `U: Copy`
-                        if matches!(
-                            expr,
-                            Expression::Identifier { .. } | Expression::FieldAccess { .. }
-                        ) {
-                            expr_str = self.peel_copy_ref_binding_for_struct_field(expr, &expr_str);
-                            expr_str =
-                                self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
-                        }
-
-                        // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
-                        // Only use shorthand if the generated expression exactly matches the field name
-                        // (no .to_string(), .clone(), etc. conversions)
-                        if let Expression::Identifier { name: id, .. } = expr {
-                            if id == field_name && expr_str == *field_name {
-                                // Shorthand: User { name } instead of User { name: name }
-                                // Only safe when no type conversion was needed
-                                return field_name.clone();
-                            }
-                        }
-
-                        format!("{}: {}", field_name, expr_str)
-                    })
-                    .collect();
-
-                // Restore struct literal context
-                self.current_struct_literal_name = prev_struct_name;
-
-                let qualified_name = self.qualify_external_path_identifier(name);
-                format!("{} {{ {} }}", qualified_name, field_str.join(", "))
+                self.generate_struct_literal(name, fields)
             }
             Expression::MapLiteral { pairs, .. } => self.generate_map_literal(pairs),
             Expression::TryOp { expr: inner, .. } => self.generate_try_op(inner),
@@ -5358,6 +5228,148 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         base_expr
+    }
+
+    /// Generate code for struct literal expression Struct { field: value }
+    /// Handles string coercion, field shorthand, auto-clone for borrowed self
+    fn generate_struct_literal(
+        &mut self,
+        name: &str,
+        fields: &[(String, &Expression<'ast>)],
+    ) -> String {
+        use crate::parser::{Literal, Type};
+
+        // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
+        let _has_optimization_hint = self.struct_mapping_hints.get(name);
+
+        // CONTEXT-SENSITIVE INFERENCE: Set struct literal context for float type inference
+        let prev_struct_name = self.current_struct_literal_name.clone();
+        self.current_struct_literal_name = Some(name.to_string());
+
+        // Generate field assignments
+        let field_str: Vec<String> = fields
+            .iter()
+            .map(|(field_name, expr)| {
+                // STRUCT LITERAL CONTEXT: Array literals in struct fields should use
+                // fixed-size [...] syntax, not vec![...], because struct fields have
+                // explicit type annotations (e.g., position: [f32; 3]).
+                let prev_in_struct_field = self.in_struct_literal_field;
+                let prev_field_name = self.current_struct_field_name.clone();
+                self.in_struct_literal_field = true;
+                self.current_struct_field_name = Some(field_name.to_string());
+
+                // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
+                // In Windjammer, `string` type is always owned (maps to Rust String)
+                // So string literals in struct fields should be converted automatically.
+                // Set coercion flag BEFORE generation so nested expressions (if-else
+                // branches, match arms, blocks) also coerce their string literals.
+                let prev_coerce = self.coerce_string_literals_to_owned;
+                self.coerce_string_literals_to_owned = true;
+                let mut expr_str = self.generate_expression(expr);
+                self.coerce_string_literals_to_owned = prev_coerce;
+
+                // Restore previous context
+                self.in_struct_literal_field = prev_in_struct_field;
+                self.current_struct_field_name = prev_field_name;
+
+                // Auto-convert direct string literals that weren't already coerced
+                if matches!(
+                    expr,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) && !expr_str.ends_with(".to_string()") {
+                    expr_str = format!("{}.to_string()", expr_str);
+                }
+
+                // CRITICAL: Auto-convert &str parameters to String for struct fields
+                // Pattern: fn create(name: &str) -> User { User { name: name } }
+                // When struct field is String but parameter is &str, add .to_string()
+                if let Expression::Identifier { name: id, .. } = expr {
+                    let is_string_param = self.current_function_params.iter().any(|p| {
+                        if p.name != *id {
+                            return false;
+                        }
+                        match &p.type_ {
+                            Type::String => true,
+                            Type::Custom(ref name) if name == "string" => true,
+                            Type::Reference(inner) => {
+                                matches!(**inner, Type::String)
+                                    || matches!(**inner, Type::Custom(ref name) if name == "str" || name == "string")
+                            }
+                            _ => false,
+                        }
+                    });
+
+                    if is_string_param && !expr_str.contains(".to_string()") {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                            if let Some(field_type) = field_types.get(field_name) {
+                                let field_is_string = matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
+                                if field_is_string {
+                                    expr_str = format!("{}.to_string()", expr_str);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // CRITICAL: Auto-clone self.field when constructing struct from borrowed self
+                // Pattern: fn method(&self) -> Self { Self { field: self.field } }
+                // Non-Copy fields from borrowed self need to be cloned
+                if let Expression::FieldAccess { object, .. } = expr {
+                    if let Expression::Identifier { name: obj_name, .. } = &**object {
+                        if obj_name == "self" && !expr_str.contains(".clone()") {
+                            // Check if current function takes &self (borrowed)
+                            let self_is_borrowed =
+                                self.current_function_params.iter().any(|p| {
+                                    p.name == "self"
+                                        && matches!(
+                                            p.ownership,
+                                            crate::parser::OwnershipHint::Ref
+                                        )
+                                });
+
+                            if self_is_borrowed {
+                                // Clone the field access since self is borrowed
+                                expr_str = format!("{}.clone()", expr_str);
+                            }
+                        }
+                    }
+                }
+
+                // E0308: bindings from match/if-let on `&T` are `&U` when `U: Copy`
+                if matches!(
+                    expr,
+                    Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                ) {
+                    expr_str = self.peel_copy_ref_binding_for_struct_field(expr, &expr_str);
+                    expr_str =
+                        self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
+                }
+
+                // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
+                // Only use shorthand if the generated expression exactly matches the field name
+                // (no .to_string(), .clone(), etc. conversions)
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if id == field_name && expr_str == *field_name {
+                        // Shorthand: User { name } instead of User { name: name }
+                        // Only safe when no type conversion was needed
+                        return field_name.clone();
+                    }
+                }
+
+                format!("{}: {}", field_name, expr_str)
+            })
+            .collect();
+
+        // Restore struct literal context
+        self.current_struct_literal_name = prev_struct_name;
+
+        let qualified_name = self.qualify_external_path_identifier(name);
+        format!("{} {{ {} }}", qualified_name, field_str.join(", "))
     }
 
     #[inline]
