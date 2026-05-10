@@ -49,6 +49,8 @@ pub mod wjsl;
 #[cfg(feature = "cli")]
 pub mod build_utils;
 #[cfg(feature = "cli")]
+pub mod cargo_integration; // Cargo build system integration
+#[cfg(feature = "cli")]
 pub mod cli;
 #[cfg(feature = "cli")]
 pub mod error_catalog;
