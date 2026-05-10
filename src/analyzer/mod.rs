@@ -2070,6 +2070,7 @@ impl<'ast> Analyzer<'ast> {
                                         &func.body,
                                         registry,
                                         &func.name,
+                                        func,
                                     ),
                                     Some(OwnershipMode::MutBorrowed)
                                 )
@@ -2087,6 +2088,7 @@ impl<'ast> Analyzer<'ast> {
                                 &func.return_type,
                                 registry,
                                 &func.name,
+                                func,
                             )?;
 
                             // DEBUG: Log ownership inference for non-Copy parameters
@@ -2377,6 +2379,7 @@ impl<'ast> Analyzer<'ast> {
         return_type: &Option<Type>,
         registry: &SignatureRegistry,
         current_func_name: &str,
+        func: &FunctionDecl<'ast>,
     ) -> Result<OwnershipMode, String> {
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
@@ -2500,6 +2503,14 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 6b. TDD: Check if parameter calls a method that takes `self` by value (consuming).
+        // When `a.as_float()` is called and `as_float` takes owned `self`, `a` is consumed
+        // and must be owned. Without this check, `a` defaults to Borrowed (&a), producing
+        // E0507 errors because you can't move out of a shared reference.
+        if self.calls_consuming_method(param_name, body, registry) {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // 7. MULTI-PASS OWNERSHIP INFERENCE (The Proper Solution!)
         // Check if parameter is passed as an argument to another function/method.
         // Look up the callee's signature in the registry and match the ownership mode.
@@ -2521,6 +2532,7 @@ impl<'ast> Analyzer<'ast> {
             body,
             registry,
             current_func_name,
+            func,
         ) {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
@@ -3310,6 +3322,233 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// TDD: Check if a parameter calls a method that takes `self` by value (consuming).
+    /// When `a.as_float()` is called and `as_float` takes owned `self`, `a` is consumed.
+    /// This requires looking up the method's signature in the registry.
+    fn calls_consuming_method(
+        &self,
+        param_name: &str,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
+        for stmt in statements {
+            if self.stmt_calls_consuming_method(param_name, stmt, registry) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_calls_consuming_method(
+        &self,
+        param_name: &str,
+        stmt: &Statement<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_calls_consuming_method(param_name, expr, registry)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_calls_consuming_method(param_name, value, registry)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_calls_consuming_method(param_name, expr, registry),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                if self.expr_calls_consuming_method(param_name, condition, registry) {
+                    return true;
+                }
+                if self.calls_consuming_method(param_name, then_block, registry) {
+                    return true;
+                }
+                if let Some(else_b) = else_block {
+                    if self.calls_consuming_method(param_name, else_b, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_calls_consuming_method(param_name, condition, registry)
+                    || self.calls_consuming_method(param_name, body, registry)
+            }
+            Statement::Loop { body, .. } => {
+                self.calls_consuming_method(param_name, body, registry)
+            }
+            Statement::For { body, .. } => {
+                self.calls_consuming_method(param_name, body, registry)
+            }
+            Statement::Match { value, arms, .. } => {
+                if self.expr_calls_consuming_method(param_name, value, registry) {
+                    return true;
+                }
+                for arm in arms {
+                    if self.expr_calls_consuming_method(param_name, arm.body, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_calls_consuming_method(
+        &self,
+        param_name: &str,
+        expr: &Expression<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                // Check if param is the direct receiver of a consuming method
+                if self.is_direct_receiver(param_name, object) {
+                    if let Some(sig) = registry.get_signature(method) {
+                        if sig.has_self_receiver {
+                            if let Some(mode) = sig.param_ownership.first() {
+                                if matches!(mode, OwnershipMode::Owned) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Check if param is passed as an owned argument to the method
+                if let Some(sig) = registry.get_signature(method) {
+                    let param_offset = if sig.has_self_receiver { 1 } else { 0 };
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            let sig_idx = i + param_offset;
+                            if let Some(mode) = sig.param_ownership.get(sig_idx) {
+                                if matches!(mode, OwnershipMode::Owned) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Recurse into arguments and object
+                if self.expr_calls_consuming_method(param_name, object, registry) {
+                    return true;
+                }
+                for (_, arg) in arguments {
+                    if self.expr_calls_consuming_method(param_name, arg, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                // Handle Call(FieldAccess) pattern: param.method(args)
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    if self.is_direct_receiver(param_name, object) {
+                        if let Some(sig) = registry.get_signature(field) {
+                            if sig.has_self_receiver {
+                                if let Some(mode) = sig.param_ownership.first() {
+                                    if matches!(mode, OwnershipMode::Owned) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Extract function name for signature lookup
+                let func_name = match &**function {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    Expression::FieldAccess { object: obj, field, .. } => {
+                        if let Expression::Identifier { name, .. } = &**obj {
+                            None // Will try qualified name below
+                        } else {
+                            Some(field.as_str())
+                        }
+                    }
+                    _ => None,
+                };
+                // Check if param is passed as an owned argument
+                let mut names: Vec<&str> = Vec::new();
+                if let Some(n) = func_name {
+                    names.push(n);
+                }
+                if let Expression::FieldAccess { object: obj, field, .. } = &**function {
+                    if let Expression::Identifier { name, .. } = &**obj {
+                        // For qualified calls like Type::method(param)
+                        // We can't easily push a formatted string as &str, so just check directly
+                        let qualified = format!("{}::{}", name, field);
+                        if let Some(sig) = registry.get_signature(&qualified) {
+                            let param_offset = if sig.has_self_receiver { 1 } else { 0 };
+                            for (i, (_, arg)) in arguments.iter().enumerate() {
+                                if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                                    let sig_idx = i + param_offset;
+                                    if let Some(mode) = sig.param_ownership.get(sig_idx) {
+                                        if matches!(mode, OwnershipMode::Owned) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for name in &names {
+                    if let Some(sig) = registry.get_signature(name) {
+                        let param_offset = if sig.has_self_receiver { 1 } else { 0 };
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                                let sig_idx = i + param_offset;
+                                if let Some(mode) = sig.param_ownership.get(sig_idx) {
+                                    if matches!(mode, OwnershipMode::Owned) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for (_, arg) in arguments {
+                    if self.expr_calls_consuming_method(param_name, arg, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Block { statements, .. } => {
+                self.calls_consuming_method(param_name, statements, registry)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_calls_consuming_method(param_name, left, registry)
+                    || self.expr_calls_consuming_method(param_name, right, registry)
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a parameter is the direct receiver of a method call.
+    fn is_direct_receiver(&self, param_name: &str, object: &Expression) -> bool {
+        match object {
+            Expression::Identifier { name, .. } => name == param_name,
+            _ => false,
+        }
+    }
+
     /// Check if a parameter is passed as a direct (non-&) argument to a function or method call.
     /// When a parameter is passed directly (not via &) to another function, it could be consumed
     /// (the callee may take ownership). Without knowing the callee's signature, we conservatively
@@ -3905,6 +4144,25 @@ impl<'ast> Analyzer<'ast> {
         }
 
         let has_self_receiver = explicit_self || synthetic_self_receiver;
+
+        // Phase 2: `string` may become `Reference(Custom("str"))` in inferred_param_types while
+        // ownership inference still marks the parameter `Owned` (e.g. forwarding calls where
+        // the body is only `Call(FieldAccess)` and string-ref analysis does not recurse).
+        // Rust lowers these parameters as `&str` with a borrow — call-site helpers that key
+        // off `param_ownership` (`should_add_to_string`, `OwnershipMode::Owned` in bare `Call`)
+        // must agree or we emit `arg.to_string()` / bad conversions for `&str` → `&str` calls.
+        use crate::parser::Type as PType;
+        for (idx, ty) in param_types.iter().enumerate() {
+            if matches!(
+                ty,
+                PType::Reference(inner)
+                    if matches!(&**inner, PType::Custom(s) if s == "str")
+            ) {
+                if let Some(slot) = param_ownership.get_mut(idx) {
+                    *slot = OwnershipMode::Borrowed;
+                }
+            }
+        }
 
         // Extract return type for smart string inference
         let return_type = func.decl.return_type.clone();

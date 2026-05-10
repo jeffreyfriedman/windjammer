@@ -1646,7 +1646,146 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return Some(ty);
         }
-        self.scan_statements_for_collection_usage(var_name, &self.current_function_body)
+        let push_type =
+            self.scan_statements_for_collection_usage(var_name, &self.current_function_body);
+        // When push inference yields a generic Type::Float, also check function call context.
+        // E.g. compare_rgba_buffers(pixels, ...) where param type is Vec<f32> → use f32, not f64.
+        if matches!(push_type, Some(Type::Float)) {
+            if let Some(concrete) =
+                self.infer_vec_element_from_function_call(var_name, &self.current_function_body)
+            {
+                return Some(concrete);
+            }
+        }
+        push_type
+    }
+
+    /// Scan function calls where `var_name` is passed as an argument.
+    /// If the callee parameter type is `Vec<T>` with a concrete `T`, return `T`.
+    fn infer_vec_element_from_function_call(
+        &self,
+        var_name: &str,
+        stmts: &[&Statement<'_>],
+    ) -> Option<Type> {
+        for stmt in stmts {
+            if let Some(ty) = self.check_stmt_for_vec_param_type(var_name, stmt) {
+                return Some(ty);
+            }
+        }
+        None
+    }
+
+    fn check_stmt_for_vec_param_type(
+        &self,
+        var_name: &str,
+        stmt: &Statement<'_>,
+    ) -> Option<Type> {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
+                self.check_expr_for_vec_param_type(var_name, expr)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.check_expr_for_vec_param_type(var_name, expr),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => self
+                .infer_vec_element_from_function_call(var_name, then_block)
+                .or_else(|| {
+                    else_block
+                        .as_ref()
+                        .and_then(|b| self.infer_vec_element_from_function_call(var_name, b))
+                }),
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::For { body, .. } => {
+                self.infer_vec_element_from_function_call(var_name, body)
+            }
+            _ => None,
+        }
+    }
+
+    fn check_expr_for_vec_param_type(
+        &self,
+        var_name: &str,
+        expr: &Expression<'_>,
+    ) -> Option<Type> {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let mut names_to_try: Vec<String> = Vec::new();
+                match &**function {
+                    Expression::Identifier { name, .. } => {
+                        names_to_try.push(name.to_string());
+                    }
+                    Expression::FieldAccess { object, field, .. } => {
+                        names_to_try.push(field.to_string());
+                        if let Expression::Identifier { name, .. } = &**object {
+                            names_to_try.push(format!("{}::{}", name, field));
+                        }
+                    }
+                    _ => {}
+                };
+                for fn_name in &names_to_try {
+                    if let Some(sig) = self.signature_registry.get_signature(fn_name) {
+                        let param_offset = if sig.has_self_receiver { 1 } else { 0 };
+                        for (i, (_label, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == var_name)
+                            {
+                                let param_idx = i + param_offset;
+                                if let Some(param_type) = sig.param_types.get(param_idx) {
+                                    if let Type::Vec(inner) = param_type {
+                                        if !matches!(**inner, Type::Float) {
+                                            return Some((**inner).clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for (_label, arg) in arguments {
+                    if let Some(ty) = self.check_expr_for_vec_param_type(var_name, arg) {
+                        return Some(ty);
+                    }
+                }
+                None
+            }
+            Expression::MethodCall {
+                method, arguments, object, ..
+            } => {
+                if let Some(sig) = self.signature_registry.get_signature(method) {
+                    let param_offset = if sig.has_self_receiver { 1 } else { 0 };
+                    for (i, (_label, arg)) in arguments.iter().enumerate() {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == var_name) {
+                            let param_idx = i + param_offset;
+                            if let Some(param_type) = sig.param_types.get(param_idx) {
+                                if let Type::Vec(inner) = param_type {
+                                    if !matches!(**inner, Type::Float) {
+                                        return Some((**inner).clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(ty) = self.check_expr_for_vec_param_type(var_name, object) {
+                    return Some(ty);
+                }
+                for (_label, arg) in arguments {
+                    if let Some(ty) = self.check_expr_for_vec_param_type(var_name, arg) {
+                        return Some(ty);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 
     /// When `data` is moved into `Struct { field: data, ... }` and `field` is `Vec<T>`, infer `T`

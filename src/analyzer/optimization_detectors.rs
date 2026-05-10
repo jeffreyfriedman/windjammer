@@ -680,6 +680,7 @@ impl<'ast> Analyzer<'ast> {
                         &func.return_type,
                         registry,
                         &func.name,
+                        func,
                     )
                     .unwrap_or(OwnershipMode::Owned)
                 }
