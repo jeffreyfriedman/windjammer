@@ -16,6 +16,7 @@ use super::codegen_helpers;
 use super::pattern_analysis;
 use super::self_analysis;
 use super::string_analysis;
+use super::string_utilities;
 use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
@@ -152,7 +153,7 @@ impl<'ast> CodeGenerator<'ast> {
                         output.push_str(&self.indent());
                         let old_coerce_lit = self.coerce_string_literals_to_owned;
                         if self.in_function_body
-                            && Self::return_type_expects_owned_string(
+                            && string_utilities::return_type_expects_owned_string(
                                 &self.current_function_return_type,
                             )
                         {
@@ -201,7 +202,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // BUT: Don't convert if:
                         // 1. The expression explicitly uses .as_str() (user wants &str)
                         // 2. A sibling branch in an if-else uses .as_str() (type consistency)
-                        let returns_string = Self::return_type_expects_owned_string(
+                        let returns_string = string_utilities::return_type_expects_owned_string(
                             &self.current_function_return_type,
                         );
 
@@ -368,7 +369,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(expr) = value {
                             output.push_str(&self.indent());
                             let old_coerce_lit = self.coerce_string_literals_to_owned;
-                            if Self::return_type_expects_owned_string(
+                            if string_utilities::return_type_expects_owned_string(
                                 &self.current_function_return_type,
                             ) {
                                 self.coerce_string_literals_to_owned = true;
@@ -392,7 +393,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                             // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
                             // Same logic as Statement::Expression implicit returns
-                            let returns_string = Self::return_type_expects_owned_string(
+                            let returns_string = string_utilities::return_type_expects_owned_string(
                                 &self.current_function_return_type,
                             );
 
@@ -1434,7 +1435,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // - We're in an expression context (`let`/`=` RHS, etc.) and a branch yields String
                 //   (e.g. `parts[0].clone()` vs `"0"` while the function itself returns `()`).
                 let coerce_string_in_branches = else_block.is_some()
-                    && (Self::return_type_expects_owned_string(&self.current_function_return_type)
+                    && (string_utilities::return_type_expects_owned_string(&self.current_function_return_type)
                         || (self.in_expression_context && any_branch_suggests_owned_coercion));
                 if coerce_string_in_branches {
                     self.coerce_string_literals_to_owned = true;
@@ -2108,7 +2109,7 @@ impl<'ast> CodeGenerator<'ast> {
         let match_binds_refs = self.match_expression_binds_refs(value);
 
         let needs_string_conversion =
-            Self::return_type_expects_owned_string(&self.current_function_return_type)
+            string_utilities::return_type_expects_owned_string(&self.current_function_return_type)
                 || arms.iter().any(|arm| {
                     string_analysis::expression_produces_string(arm.body)
                         || arm_string_analysis::arm_returns_converted_string(arm.body)
