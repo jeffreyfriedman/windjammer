@@ -41,3 +41,12 @@ pub fn cast_int_to_float(s: &str, expr: &Expression, target: &str) -> String {
         format!("{} as {}", s, target)
     }
 }
+
+/// Peel off the outermost reference layer from a type.
+/// Returns the inner type if wrapped in Type::Reference, otherwise returns the type unchanged.
+pub fn peel_reference_layer(t: &Type) -> &Type {
+    match t {
+        Type::Reference(inner) => inner.as_ref(),
+        _ => t,
+    }
+}
