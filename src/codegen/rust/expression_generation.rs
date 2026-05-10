@@ -1183,129 +1183,10 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(qualified_call) = self.try_qualify_test_function(&func_name, arguments) {
                         return qualified_call;
                     }
-                }
 
-                // Special case: convert print/println/eprintln/eprint() to macros
-                if func_name == "print"
-                    || func_name == "println"
-                    || func_name == "eprintln"
-                    || func_name == "eprint"
-                {
-                    let macro_name = func_name.clone();
-
-                    // For print() -> println!(), otherwise keep the same name
-                    let target_macro = if macro_name == "print" {
-                        "println".to_string()
-                    } else {
-                        macro_name.clone()
-                    };
-                    // Check if the first argument is a format! macro (from string interpolation)
-                    if let Some((_, first_arg)) = arguments.first() {
-                        // Check for MacroInvocation (explicit format! calls)
-                        // first_arg is &&Expression (ref to ref from Vec element), deref both
-                        if let Expression::MacroInvocation {
-                            is_repeat: _,
-                            ref name,
-                            args: ref macro_args,
-                            ..
-                        } = **first_arg
-                        {
-                            if name == "format" && !macro_args.is_empty() {
-                                // Unwrap the format! call and put its arguments directly into println!
-                                // format!("text {}", var) -> println!("text {}", var)
-                                let format_str = self.generate_expression(macro_args[0]);
-                                let format_args: Vec<String> = macro_args[1..]
-                                    .iter()
-                                    .map(|arg| self.generate_expression(arg))
-                                    .collect();
-
-                                let args_str = if format_args.is_empty() {
-                                    String::new()
-                                } else {
-                                    format!(", {}", format_args.join(", "))
-                                };
-
-                                return format!("{}!({}{})", target_macro, format_str, args_str);
-                            }
-                        }
-
-                        // Check for Binary expression with string concatenation (will become format!)
-                        if let Expression::Binary {
-                            left,
-                            op: BinaryOp::Add,
-                            right,
-                            ..
-                        } = **first_arg
-                        {
-                            // Check if this is string concatenation
-                            let has_string_literal =
-                                matches!(
-                                    left,
-                                    Expression::Literal {
-                                        value: Literal::String(_),
-                                        ..
-                                    }
-                                ) || matches!(
-                                    right,
-                                    Expression::Literal {
-                                        value: Literal::String(_),
-                                        ..
-                                    }
-                                ) || string_analysis::contains_string_literal(left)
-                                    || string_analysis::contains_string_literal(right);
-
-                            if has_string_literal {
-                                // Collect all parts of the concatenation
-                                let mut parts = Vec::new();
-                                string_analysis::collect_concat_parts_static(left, &mut parts);
-                                string_analysis::collect_concat_parts_static(right, &mut parts);
-
-                                // Generate format string and arguments
-                                let format_str = "{}".repeat(parts.len());
-                                let format_args: Vec<String> = parts
-                                    .iter()
-                                    .map(|expr| self.generate_expression(expr))
-                                    .collect();
-
-                                return format!(
-                                    "{}!(\"{}\", {})",
-                                    target_macro,
-                                    format_str,
-                                    format_args.join(", ")
-                                );
-                            }
-                        }
-                    }
-
-                    // No interpolation, just regular print
-                    // TDD FIX: Auto-format non-string arguments
-                    // println(value) where value: bool → println!("{}", value)
-                    // println("text") → println!("text") (string literals stay as-is)
-                    let args: Vec<String> = arguments
-                        .iter()
-                        .map(|(_label, arg)| self.generate_expression(arg))
-                        .collect();
-
-                    // Check if first argument is a string literal
-                    let first_arg_is_string_literal = arguments
-                        .first()
-                        .map(|(_, arg)| {
-                            matches!(
-                                arg,
-                                Expression::Literal {
-                                    value: Literal::String(_),
-                                    ..
-                                }
-                            )
-                        })
-                        .unwrap_or(false);
-
-                    if args.len() == 1 && !first_arg_is_string_literal {
-                        // Single non-string argument - format it
-                        return format!("{}!(\"{{}}\", {})", target_macro, args[0]);
-                    } else {
-                        // Multiple args or string literal - keep as-is
-                        return format!("{}!({})", target_macro, args.join(", "));
+                    // Try print/println/eprintln macro conversion
+                    if let Some(print_macro) = self.try_generate_print_macro(&func_name, arguments) {
+                        return print_macro;
                     }
                 }
 
@@ -4018,6 +3899,133 @@ impl<'ast> CodeGenerator<'ast> {
             func_name,
             args.join(", ")
         ))
+    }
+
+    /// Try to convert print/println/eprintln/eprint to macros
+    /// Returns Some(code) if this is a print function, None otherwise
+    fn try_generate_print_macro(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> Option<String> {
+        // Print functions that convert to macros
+        if !matches!(func_name, "print" | "println" | "eprintln" | "eprint") {
+            return None;
+        }
+
+        // For print() -> println!(), otherwise keep the same name
+        let target_macro = if func_name == "print" {
+            "println"
+        } else {
+            func_name
+        };
+
+        // Check if the first argument is a format! macro (from string interpolation)
+        if let Some((_, first_arg)) = arguments.first() {
+            // Check for MacroInvocation (explicit format! calls)
+            if let Expression::MacroInvocation {
+                is_repeat: _,
+                ref name,
+                args: ref macro_args,
+                ..
+            } = **first_arg
+            {
+                if name == "format" && !macro_args.is_empty() {
+                    // Unwrap the format! call and put its arguments directly into println!
+                    // format!("text {}", var) -> println!("text {}", var)
+                    let format_str = self.generate_expression(macro_args[0]);
+                    let format_args: Vec<String> = macro_args[1..]
+                        .iter()
+                        .map(|arg| self.generate_expression(arg))
+                        .collect();
+
+                    let args_str = if format_args.is_empty() {
+                        String::new()
+                    } else {
+                        format!(", {}", format_args.join(", "))
+                    };
+
+                    return Some(format!("{}!({}{})", target_macro, format_str, args_str));
+                }
+            }
+
+            // Check for Binary expression with string concatenation (will become format!)
+            if let Expression::Binary {
+                left,
+                op: BinaryOp::Add,
+                right,
+                ..
+            } = **first_arg
+            {
+                // Check if this is string concatenation
+                let has_string_literal = matches!(
+                    left,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) || matches!(
+                    right,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) || string_analysis::contains_string_literal(left)
+                    || string_analysis::contains_string_literal(right);
+
+                if has_string_literal {
+                    // Collect all parts of the concatenation
+                    let mut parts = Vec::new();
+                    string_analysis::collect_concat_parts_static(left, &mut parts);
+                    string_analysis::collect_concat_parts_static(right, &mut parts);
+
+                    // Generate format string and arguments
+                    let format_str = "{}".repeat(parts.len());
+                    let format_args: Vec<String> = parts
+                        .iter()
+                        .map(|expr| self.generate_expression(expr))
+                        .collect();
+
+                    return Some(format!(
+                        "{}!(\"{}\", {})",
+                        target_macro,
+                        format_str,
+                        format_args.join(", ")
+                    ));
+                }
+            }
+        }
+
+        // No interpolation, just regular print
+        // TDD FIX: Auto-format non-string arguments
+        // println(value) where value: bool → println!("{}", value)
+        // println("text") → println!("text") (string literals stay as-is)
+        let args: Vec<String> = arguments
+            .iter()
+            .map(|(_label, arg)| self.generate_expression(arg))
+            .collect();
+
+        // Check if first argument is a string literal
+        let first_arg_is_string_literal = arguments
+            .first()
+            .map(|(_, arg)| {
+                matches!(
+                    arg,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                )
+            })
+            .unwrap_or(false);
+
+        if args.len() == 1 && !first_arg_is_string_literal {
+            // Single non-string argument - format it
+            Some(format!("{}!(\"{{}}\", {})", target_macro, args[0]))
+        } else {
+            // Multiple args or string literal - keep as-is
+            Some(format!("{}!({})", target_macro, args.join(", ")))
+        }
     }
 
     /// Generate code for block expression ({ ... })
