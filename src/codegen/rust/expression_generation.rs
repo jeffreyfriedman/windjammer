@@ -21,6 +21,7 @@ use super::operators;
 use super::pattern_analysis;
 use super::string_analysis;
 use super::string_utilities;
+use super::type_classification_utilities;
 use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
@@ -5940,63 +5941,46 @@ impl<'ast> CodeGenerator<'ast> {
         left_str: &mut String,
         right_str: &mut String,
     ) {
-        fn is_integer_type(t: &Type) -> bool {
-            match t {
-                Type::Int | Type::Int32 | Type::Uint => true,
-                Type::Custom(n) => crate::type_classification::is_integer_type(n),
-                _ => false,
-            }
-        }
-        fn is_float_type(t: &Type) -> bool {
-            match t {
-                Type::Float => true,
-                Type::Custom(n) => matches!(n.as_str(), "f32" | "f64"),
-                _ => false,
-            }
-        }
-        fn float_target(t: &Type) -> &str {
-            match t {
-                Type::Custom(n) if n == "f64" => "f64",
-                _ => "f32",
-            }
-        }
-        fn cast_int_to_float(s: &str, expr: &Expression, target: &str) -> String {
-            if s.contains(" as ") || matches!(expr, Expression::Binary { .. }) {
-                format!("({}) as {}", s, target)
-            } else {
-                format!("{} as {}", s, target)
-            }
-        }
-
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
 
         match (lt.as_ref(), rt.as_ref()) {
-            (Some(l), Some(r)) if is_integer_type(l) && is_float_type(r) => {
-                let target = float_target(r);
-                *left_str = cast_int_to_float(left_str, left, target);
+            (Some(l), Some(r))
+                if type_classification_utilities::is_integer_type(l)
+                    && type_classification_utilities::is_float_type(r) =>
+            {
+                let target = type_classification_utilities::float_target(r);
+                *left_str = type_classification_utilities::cast_int_to_float(left_str, left, target);
             }
-            (Some(l), Some(r)) if is_float_type(l) && is_integer_type(r) => {
-                let target = float_target(l);
-                *right_str = cast_int_to_float(right_str, right, target);
+            (Some(l), Some(r))
+                if type_classification_utilities::is_float_type(l)
+                    && type_classification_utilities::is_integer_type(r) =>
+            {
+                let target = type_classification_utilities::float_target(l);
+                *right_str =
+                    type_classification_utilities::cast_int_to_float(right_str, right, target);
             }
             // One side is typed (int), other side is a float literal (generated with _f32/_f64)
-            (Some(l), None) if is_integer_type(l) => {
+            (Some(l), None) if type_classification_utilities::is_integer_type(l) => {
                 if right_str.contains("_f32") || right_str.ends_with("f32") {
-                    *left_str = cast_int_to_float(left_str, left, "f32");
+                    *left_str =
+                        type_classification_utilities::cast_int_to_float(left_str, left, "f32");
                 } else if right_str.contains("_f64") || right_str.ends_with("f64") {
-                    *left_str = cast_int_to_float(left_str, left, "f64");
+                    *left_str =
+                        type_classification_utilities::cast_int_to_float(left_str, left, "f64");
                 }
             }
-            (None, Some(r)) if is_integer_type(r) => {
+            (None, Some(r)) if type_classification_utilities::is_integer_type(r) => {
                 if left_str.contains("_f32") || left_str.ends_with("f32") {
-                    *right_str = cast_int_to_float(right_str, right, "f32");
+                    *right_str =
+                        type_classification_utilities::cast_int_to_float(right_str, right, "f32");
                 } else if left_str.contains("_f64") || left_str.ends_with("f64") {
-                    *right_str = cast_int_to_float(right_str, right, "f64");
+                    *right_str =
+                        type_classification_utilities::cast_int_to_float(right_str, right, "f64");
                 }
             }
             // One side is typed float, other side is unresolved (integer literal with no type)
-            (Some(l), None) if is_float_type(l) => {
+            (Some(l), None) if type_classification_utilities::is_float_type(l) => {
                 use crate::parser::Literal as WjLit;
                 let is_int_literal = matches!(
                     right,
@@ -6006,11 +5990,12 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 );
                 if is_int_literal {
-                    let target = float_target(l);
-                    *right_str = cast_int_to_float(right_str, right, target);
+                    let target = type_classification_utilities::float_target(l);
+                    *right_str =
+                        type_classification_utilities::cast_int_to_float(right_str, right, target);
                 }
             }
-            (None, Some(r)) if is_float_type(r) => {
+            (None, Some(r)) if type_classification_utilities::is_float_type(r) => {
                 use crate::parser::Literal as WjLit;
                 let is_int_literal = matches!(
                     left,
@@ -6020,8 +6005,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 );
                 if is_int_literal {
-                    let target = float_target(r);
-                    *left_str = cast_int_to_float(left_str, left, target);
+                    let target = type_classification_utilities::float_target(r);
+                    *left_str =
+                        type_classification_utilities::cast_int_to_float(left_str, left, target);
                 }
             }
             _ => {}
