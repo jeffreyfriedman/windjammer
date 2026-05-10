@@ -15,6 +15,7 @@ use super::arm_string_analysis;
 use super::ast_utilities;
 use super::constant_folding;
 use super::expression_helpers;
+use super::float_type_utilities;
 use super::operators;
 use super::pattern_analysis;
 use super::string_analysis;
@@ -5362,56 +5363,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// f32/f64 suffix for a float literal on an assignment RHS when FloatInference is Unknown.
-    /// Uses codegen's `infer_expression_type` (impl `self.field`, index elements, etc.).
-    fn float_literal_suffix_from_assignment_lhs(ty: &Type) -> Option<&'static str> {
-        Self::try_extract_float_type(ty)
-    }
-
-    /// Helper: Extract float type from a Type (handles tuples, arrays, Vec, Option, Result, etc.)
-    /// Searches recursively for float types, prioritizing f32 over f64.
-    /// Returns None if no float type is found in the type tree.
-    fn try_extract_float_type(ty: &Type) -> Option<&'static str> {
-        match ty {
-            Type::Custom(name) if name == "f32" => Some("f32"),
-            Type::Custom(name) if name == "f64" => Some("f64"),
-            Type::Float => Some("f64"),
-            Type::Vec(inner) | Type::Array(inner, _) => Self::try_extract_float_type(inner),
-            Type::Option(inner) => Self::try_extract_float_type(inner),
-            Type::Result(ok_type, _) => Self::try_extract_float_type(ok_type),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::try_extract_float_type(inner)
-            }
-            Type::Tuple(types) => {
-                for t in types {
-                    if let Some("f32") = Self::try_extract_float_type(t) {
-                        return Some("f32");
-                    }
-                }
-                for t in types {
-                    if let Some("f64") = Self::try_extract_float_type(t) {
-                        return Some("f64");
-                    }
-                }
-                None
-            }
-            Type::Parameterized(name, args) => {
-                if (name == "Option" || name == "Result") && !args.is_empty() {
-                    Self::try_extract_float_type(&args[0])
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// Wrapper that defaults to f32 when no float type is found in context.
-    /// Windjammer convention: unconstrained float literals default to f32 (game/graphics standard).
-    fn extract_float_type_from_context(ty: &Type) -> &'static str {
-        Self::try_extract_float_type(ty).unwrap_or("f32")
-    }
-
     /// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer).
     pub(super) fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
         match ret {
@@ -5479,21 +5430,21 @@ impl<'ast> CodeGenerator<'ast> {
                             let from_assignment = self
                                 .assignment_float_target_type
                                 .as_ref()
-                                .and_then(Self::float_literal_suffix_from_assignment_lhs);
+                                .and_then(float_type_utilities::float_literal_suffix_from_assignment_lhs);
                             let from_struct_field = if let (Some(struct_name), Some(field_name)) = (
                                 &self.current_struct_literal_name,
                                 &self.current_struct_field_name,
                             ) {
                                 self.lookup_struct_field_types(struct_name)
                                     .and_then(|fields| fields.get(field_name))
-                                    .map(|ft| Self::extract_float_type_from_context(ft))
+                                    .map(|ft| float_type_utilities::extract_float_type_from_context(ft))
                             } else {
                                 None
                             };
                             let from_return = self
                                 .current_function_return_type
                                 .as_ref()
-                                .map(|rt| Self::extract_float_type_from_context(rt));
+                                .map(|rt| float_type_utilities::extract_float_type_from_context(rt));
                             Some(
                                 from_assignment
                                     .or(from_struct_field)
@@ -5536,7 +5487,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ) {
                     if let Some(fields) = self.lookup_struct_field_types(struct_name) {
                         if let Some(field_type) = fields.get(field_name) {
-                            Self::extract_float_type_from_context(field_type)
+                            float_type_utilities::extract_float_type_from_context(field_type)
                         } else {
                             "f32"
                         }
@@ -5544,7 +5495,7 @@ impl<'ast> CodeGenerator<'ast> {
                         "f32"
                     }
                 } else if let Some(return_type) = &self.current_function_return_type {
-                    Self::extract_float_type_from_context(return_type)
+                    float_type_utilities::extract_float_type_from_context(return_type)
                 } else {
                     "f32"
                 };
