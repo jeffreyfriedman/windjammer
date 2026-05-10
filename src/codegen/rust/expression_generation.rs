@@ -5618,12 +5618,12 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
         if let Expression::Cast { type_, .. } = expr {
-            if let Some(ft) = Self::float_type_from_wj_ty(type_) {
+            if let Some(ft) = float_type_utilities::float_type_from_wj_ty(type_) {
                 return Some(ft);
             }
         }
         if let Some(ty) = self.infer_expression_type(expr) {
-            if let Some(ft) = Self::float_type_from_wj_ty(&ty) {
+            if let Some(ft) = float_type_utilities::float_type_from_wj_ty(&ty) {
                 return Some(ft);
             }
         }
@@ -5644,22 +5644,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         None
-    }
-
-    fn float_type_from_wj_ty(ty: &Type) -> Option<crate::type_inference::FloatType> {
-        use crate::type_inference::FloatType;
-        match ty {
-            Type::Custom(n) if n == "f32" => Some(FloatType::F32),
-            Type::Custom(n) if n == "f64" => Some(FloatType::F64),
-            // `Type::Float` is the analyzer's generic "float" — it is not proof the value is f64.
-            // Treating it as F64 made `(f32_expr, subexpr)` look like (F32, F64) and inserted
-            // `f32_side as f64` while the other operand was still emitted as f32 → E0308.
-            Type::Float => None,
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::float_type_from_wj_ty(inner)
-            }
-            _ => None,
-        }
     }
 
     fn promote_mixed_f32_f64_operands(

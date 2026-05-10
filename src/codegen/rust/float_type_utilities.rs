@@ -4,6 +4,7 @@
 //! These are pure functions with no state dependencies.
 
 use crate::parser::Type;
+use crate::type_inference::FloatType;
 
 /// Extract float suffix for a literal based on assignment LHS type.
 /// Returns Some("f32") or Some("f64") if the type contains a float, None otherwise.
@@ -53,4 +54,21 @@ pub fn try_extract_float_type(ty: &Type) -> Option<&'static str> {
 /// Windjammer convention: unconstrained float literals default to f32 (game/graphics standard).
 pub fn extract_float_type_from_context(ty: &Type) -> &'static str {
     try_extract_float_type(ty).unwrap_or("f32")
+}
+
+/// Convert Windjammer Type to FloatType enum for type inference.
+/// Returns None for Type::Float (generic float, not proof of f64).
+pub fn float_type_from_wj_ty(ty: &Type) -> Option<FloatType> {
+    match ty {
+        Type::Custom(n) if n == "f32" => Some(FloatType::F32),
+        Type::Custom(n) if n == "f64" => Some(FloatType::F64),
+        // `Type::Float` is the analyzer's generic "float" — it is not proof the value is f64.
+        // Treating it as F64 made `(f32_expr, subexpr)` look like (F32, F64) and inserted
+        // `f32_side as f64` while the other operand was still emitted as f32 → E0308.
+        Type::Float => None,
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            float_type_from_wj_ty(inner)
+        }
+        _ => None,
+    }
 }
