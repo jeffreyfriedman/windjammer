@@ -16,11 +16,12 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
     let mut found_project_src: Option<&Path> = None;
+    let mut depth = 0;
 
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
             if dir_name == "src" && found_project_src.is_none() {
-                if is_project_source_dir(parent) {
+                if is_project_source_dir(parent, depth) {
                     found_project_src = Some(parent);
                 }
             }
@@ -31,6 +32,7 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
         }
 
         current = parent;
+        depth += 1;
     }
 
     if let Some(src) = found_project_src {
@@ -46,7 +48,10 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
 
 /// Check if a `src/` directory is a real project source root, not just any
 /// directory named "src" (e.g. `/Users/dev/src/` is a personal code directory).
-fn is_project_source_dir(src_dir: &Path) -> bool {
+///
+/// The `depth` parameter indicates how many levels we've walked up from the original file.
+/// This prevents matching distant ancestor `src/` directories.
+fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
     if let Some(project_dir) = src_dir.parent() {
         if project_dir.join("Cargo.toml").exists() {
             return true;
@@ -64,7 +69,9 @@ fn is_project_source_dir(src_dir: &Path) -> bool {
     
     // TDD FIX: Recognize bare src/ directories with .wj files (even without mod.wj)
     // This fixes the case where `wj build src/ecs/entity.wj` should use `src/` as root.
-    if src_dir.file_name().and_then(|n| n.to_str()) == Some("src") {
+    // CONSTRAINT: Only apply this heuristic if we're close to the original file (depth <= 3)
+    // to avoid matching distant ancestor directories like /Users/username/src/
+    if depth <= 3 && src_dir.file_name().and_then(|n| n.to_str()) == Some("src") {
         // If the src/ directory contains any .wj files (directly or in subdirs), it's a source root
         if let Ok(entries) = fs::read_dir(src_dir) {
             for entry in entries.flatten() {
