@@ -4862,31 +4862,7 @@ impl<'ast> CodeGenerator<'ast> {
                     close
                 )
             }
-            Expression::Cast { expr, type_, .. } => {
-                // Add parentheses around binary expressions for correct precedence
-                // because `as` has higher precedence than arithmetic in Rust:
-                // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
-                let mut expr_str = match &**expr {
-                    Expression::Binary { .. } => {
-                        format!("({})", self.generate_expression(expr))
-                    }
-                    _ => self.generate_expression(expr),
-                };
-                // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
-                // When the cast source is a borrowed parameter, auto-deref first.
-                if let Expression::Identifier { name, .. } = &**expr {
-                    let is_borrowed_param = self.inferred_borrowed_params.contains(name)
-                        || self.current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
-                        });
-                    if is_borrowed_param && !expr_str.starts_with('*') {
-                        expr_str = format!("*{}", expr_str);
-                    }
-                }
-                let type_str = self.type_to_rust(type_);
-                format!("{} as {}", expr_str, type_str)
-            }
+            Expression::Cast { expr, type_, .. } => self.generate_cast(expr, type_),
             Expression::Block {
                 statements: stmts,
                 is_unsafe,
@@ -5366,6 +5342,34 @@ impl<'ast> CodeGenerator<'ast> {
             })
             .collect();
         format!("({})", expr_strs.join(", "))
+    }
+
+    /// Generate code for cast expression (expr as Type)
+    /// E0606 FIX: Cannot cast &T as U - auto-deref borrowed parameters first
+    fn generate_cast(&mut self, expr: &Expression<'ast>, type_: &Type) -> String {
+        // Add parentheses around binary expressions for correct precedence
+        // because `as` has higher precedence than arithmetic in Rust:
+        // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
+        let mut expr_str = match expr {
+            Expression::Binary { .. } => {
+                format!("({})", self.generate_expression(expr))
+            }
+            _ => self.generate_expression(expr),
+        };
+        // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
+        // When the cast source is a borrowed parameter, auto-deref first.
+        if let Expression::Identifier { name, .. } = expr {
+            let is_borrowed_param = self.inferred_borrowed_params.contains(name)
+                || self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
+                });
+            if is_borrowed_param && !expr_str.starts_with('*') {
+                expr_str = format!("*{}", expr_str);
+            }
+        }
+        let type_str = self.type_to_rust(type_);
+        format!("{} as {}", expr_str, type_str)
     }
 
     #[inline]
