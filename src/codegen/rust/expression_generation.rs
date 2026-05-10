@@ -1174,77 +1174,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .unwrap_or(false);
 
                 if !is_user_defined {
-                    // Special case: convert test assertion functions to macros
-                    // THE WINDJAMMER WAY: assert_eq(a, b) -> assert_eq!(a, b)
-                    // NOTE: assert_gt, assert_gte, assert_is_some, assert_is_none, etc. are runtime functions, not macros
-                    // Print functions need special handling (format! unwrapping, interpolation)
-                    // so they are NOT in the simple macro list — handled separately below.
-                    let test_macros = [
-                        "assert",
-                        "assert_eq",
-                        "assert_ne",
-                        "assert_ok",
-                        "assert_err",
-                        "panic",
-                        "vec",
-                        "format",
-                        "write",
-                        "writeln",
-                        "dbg",
-                        "todo",
-                        "unimplemented",
-                        "unreachable",
-                    ];
-
-                    if test_macros.contains(&func_name.as_str()) {
-                        // Rust 2021: panic!(format!("...", args)) is invalid because
-                        // panic! requires a string literal as first arg.
-                        // Unwrap: panic(format!("...", a, b)) → panic!("...", a, b)
-                        if func_name == "panic" && arguments.len() == 1 {
-                            if let Expression::MacroInvocation {
-                                name: ref inner_name,
-                                args: ref inner_args,
-                                ..
-                            } = arguments[0].1
-                            {
-                                if inner_name == "format" {
-                                    let inner: Vec<String> = inner_args
-                                        .iter()
-                                        .map(|a| self.generate_expression(a))
-                                        .collect();
-                                    return format!("panic!({})", inner.join(", "));
-                                }
-                            }
-                        }
-
-                        let args: Vec<String> = arguments
-                            .iter()
-                            .map(|(_label, arg)| {
-                                let generated = self.generate_expression(arg);
-                                // Deref borrowed Copy params in assert_eq!/assert_ne!
-                                // to avoid E0277 (&i32 != i32 for PartialEq)
-                                if matches!(func_name.as_str(), "assert_eq" | "assert_ne") {
-                                    if let Expression::Identifier { name, .. } = arg {
-                                        if self.inferred_borrowed_params.contains(name.as_str()) {
-                                            let param_type = self
-                                                .current_function_params
-                                                .iter()
-                                                .find(|p| p.name == *name)
-                                                .map(|p| &p.type_);
-                                            let is_copy_ref = param_type.is_some_and(|t| {
-                                                matches!(t, crate::parser::Type::Reference(inner)
-                                                    if self.is_type_copy(inner))
-                                            });
-                                            if is_copy_ref {
-                                                return format!("*{}", generated);
-                                            }
-                                        }
-                                    }
-                                }
-                                generated
-                            })
-                            .collect();
-                        return format!("{}!({})", func_name, args.join(", "));
+                    // Try test macro conversion first
+                    if let Some(macro_call) = self.try_generate_test_macro(&func_name, arguments) {
+                        return macro_call;
                     }
 
                     // Special case: qualify test assertion runtime functions
@@ -3995,6 +3927,85 @@ impl<'ast> CodeGenerator<'ast> {
     /// Generate code for try operator expression (expr?)
     fn generate_try_op(&mut self, expr: &Expression<'ast>) -> String {
         format!("{}?", self.generate_expression(expr))
+    }
+
+    /// Try to generate a test macro call (assert_eq!, panic!, vec!, etc.)
+    /// Returns Some(code) if this is a test macro, None otherwise
+    fn try_generate_test_macro(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> Option<String> {
+        // Test macros that Windjammer converts to Rust macros
+        let test_macros = [
+            "assert",
+            "assert_eq",
+            "assert_ne",
+            "assert_ok",
+            "assert_err",
+            "panic",
+            "vec",
+            "format",
+            "write",
+            "writeln",
+            "dbg",
+            "todo",
+            "unimplemented",
+            "unreachable",
+        ];
+
+        if !test_macros.contains(&func_name) {
+            return None;
+        }
+
+        // Rust 2021: panic!(format!("...", args)) is invalid because
+        // panic! requires a string literal as first arg.
+        // Unwrap: panic(format!("...", a, b)) → panic!("...", a, b)
+        if func_name == "panic" && arguments.len() == 1 {
+            if let Expression::MacroInvocation {
+                name: ref inner_name,
+                args: ref inner_args,
+                ..
+            } = arguments[0].1
+            {
+                if inner_name == "format" {
+                    let inner: Vec<String> = inner_args
+                        .iter()
+                        .map(|a| self.generate_expression(a))
+                        .collect();
+                    return Some(format!("panic!({})", inner.join(", ")));
+                }
+            }
+        }
+
+        let args: Vec<String> = arguments
+            .iter()
+            .map(|(_label, arg)| {
+                let generated = self.generate_expression(arg);
+                // Deref borrowed Copy params in assert_eq!/assert_ne!
+                // to avoid E0277 (&i32 != i32 for PartialEq)
+                if matches!(func_name, "assert_eq" | "assert_ne") {
+                    if let Expression::Identifier { name, .. } = arg {
+                        if self.inferred_borrowed_params.contains(name.as_str()) {
+                            let param_type = self
+                                .current_function_params
+                                .iter()
+                                .find(|p| p.name == *name)
+                                .map(|p| &p.type_);
+                            let is_copy_ref = param_type.is_some_and(|t| {
+                                matches!(t, crate::parser::Type::Reference(inner)
+                                    if self.is_type_copy(inner))
+                            });
+                            if is_copy_ref {
+                                return format!("*{}", generated);
+                            }
+                        }
+                    }
+                }
+                generated
+            })
+            .collect();
+        Some(format!("{}!({})", func_name, args.join(", ")))
     }
 
     /// Generate code for block expression ({ ... })
