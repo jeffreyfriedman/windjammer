@@ -4561,53 +4561,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_tuple(exprs),
             Expression::Array {
                 elements: exprs, ..
-            } => {
-                let expected_elem_ty = self.struct_array_field_element_type();
-                let expr_strs: Vec<String> = exprs
-                    .iter()
-                    .map(|e| {
-                        let mut s = self.generate_expression(e);
-                        if let Some(ref exp_ty) = expected_elem_ty {
-                            if let Some(actual_ty) = self.infer_expression_type(e) {
-                                let skip_float_literal = matches!(
-                                    e,
-                                    Expression::Literal {
-                                        value: Literal::Float(_),
-                                        ..
-                                    }
-                                );
-                                if !skip_float_literal {
-                                    if let Some(cast) =
-                                        float_type_utilities::float_array_elem_cast_target(exp_ty, &actual_ty)
-                                    {
-                                        s = format!("({} as {})", s, cast);
-                                    }
-                                }
-                            }
-                        }
-                        s
-                    })
-                    .collect();
-
-                // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
-                //
-                // In WJ, `[a, b, c]` is a fixed-size array literal → generates `[a, b, c]` in Rust.
-                // In WJ, `vec![a, b, c]` is an explicit Vec constructor → generates `vec![a, b, c]`.
-                //
-                // Empty arrays `[]` remain `vec![]` because Rust's empty `[]` can't infer its type.
-                //
-                // This distinction is critical: `painter.line_segment([p1, p2], stroke)` expects
-                // `[Pos2; 2]`, not `Vec<Pos2>`. The developer chose `[...]` syntax intentionally.
-                if exprs.is_empty() {
-                    // Empty array [] → vec![] (Vec::new())
-                    // Rust's [] is a fixed-size array and can't infer type from later usage.
-                    "vec![]".to_string()
-                } else {
-                    // Non-empty array literals: generate fixed-size array [a, b, c]
-                    // The developer uses `vec![...]` macro syntax when Vec is needed.
-                    format!("[{}]", expr_strs.join(", "))
-                }
-            }
+            } => self.generate_array(exprs),
             Expression::MacroInvocation {
                 is_repeat,
                 name,
@@ -5377,6 +5331,60 @@ impl<'ast> CodeGenerator<'ast> {
             format!("{}({})", op_str, operand_str)
         } else {
             format!("{}{}", op_str, operand_str)
+        }
+    }
+
+    /// Generate code for array literal expression [a, b, c]
+    /// WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
+    /// - [a, b, c] → fixed-size array [a, b, c]
+    /// - vec![a, b, c] → explicit Vec
+    /// - [] → vec![] (empty fixed-size array can't infer type)
+    fn generate_array(&mut self, elements: &[&Expression<'ast>]) -> String {
+        use crate::parser::Literal;
+        let expected_elem_ty = self.struct_array_field_element_type();
+        let expr_strs: Vec<String> = elements
+            .iter()
+            .map(|e| {
+                let mut s = self.generate_expression(e);
+                if let Some(ref exp_ty) = expected_elem_ty {
+                    if let Some(actual_ty) = self.infer_expression_type(e) {
+                        let skip_float_literal = matches!(
+                            e,
+                            Expression::Literal {
+                                value: Literal::Float(_),
+                                ..
+                            }
+                        );
+                        if !skip_float_literal {
+                            if let Some(cast) =
+                                float_type_utilities::float_array_elem_cast_target(exp_ty, &actual_ty)
+                            {
+                                s = format!("({} as {})", s, cast);
+                            }
+                        }
+                    }
+                }
+                s
+            })
+            .collect();
+
+        // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
+        //
+        // In WJ, `[a, b, c]` is a fixed-size array literal → generates `[a, b, c]` in Rust.
+        // In WJ, `vec![a, b, c]` is an explicit Vec constructor → generates `vec![a, b, c]`.
+        //
+        // Empty arrays `[]` remain `vec![]` because Rust's empty `[]` can't infer its type.
+        //
+        // This distinction is critical: `painter.line_segment([p1, p2], stroke)` expects
+        // `[Pos2; 2]`, not `Vec<Pos2>`. The developer chose `[...]` syntax intentionally.
+        if elements.is_empty() {
+            // Empty array [] → vec![] (Vec::new())
+            // Rust's [] is a fixed-size array and can't infer type from later usage.
+            "vec![]".to_string()
+        } else {
+            // Non-empty array literals: generate fixed-size array [a, b, c]
+            // The developer uses `vec![...]` macro syntax when Vec is needed.
+            format!("[{}]", expr_strs.join(", "))
         }
     }
 
