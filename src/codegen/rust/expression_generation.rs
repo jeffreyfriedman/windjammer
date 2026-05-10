@@ -6398,14 +6398,8 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
 
-        fn peel_reference_layer(t: &Type) -> &Type {
-            match t {
-                Type::Reference(inner) => inner.as_ref(),
-                _ => t,
-            }
-        }
-        let lhs_base = lt.as_ref().map(peel_reference_layer);
-        let rhs_base = rt.as_ref().map(peel_reference_layer);
+        let lhs_base = lt.as_ref().map(type_classification_utilities::peel_reference_layer);
+        let rhs_base = rt.as_ref().map(type_classification_utilities::peel_reference_layer);
         let left_is_ref = matches!(lt.as_ref(), Some(Type::Reference(_)));
         let right_is_ref = matches!(rt.as_ref(), Some(Type::Reference(_)));
 
