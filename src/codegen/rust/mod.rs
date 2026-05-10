@@ -43,6 +43,7 @@ pub mod string_utilities;
 pub mod trait_derivation;
 pub mod type_analysis;
 pub mod type_casting;
+pub mod type_classification_utilities;
 pub mod types;
 pub mod variable_analysis;
 
