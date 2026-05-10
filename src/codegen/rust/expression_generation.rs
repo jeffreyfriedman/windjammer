@@ -3955,205 +3955,7 @@ impl<'ast> CodeGenerator<'ast> {
                 parameters, body, ..
             } => self.generate_closure(parameters, body),
             Expression::Index { object, index, .. } => {
-                // INDEX CHAIN OPTIMIZATION: When generating the object of an Index expression,
-                // suppress auto-clone. In `a[i][j]`, Rust auto-derefs `a[i]` (returns &Vec<T>)
-                // to access [j]. Cloning the intermediate Vec is wasteful and wrong.
-                // Same logic as in_field_access_object for FieldAccess chains.
-                let prev_field_access = self.in_field_access_object;
-                self.in_field_access_object = true;
-                let obj_str = self.generate_expression(object);
-                self.in_field_access_object = prev_field_access;
-
-                // Special case: if index is a Range, this is slice syntax
-                // FIXED: Don't add & - Rust will auto-coerce to &[T] when needed
-                // This prevents "&temporary" errors when chaining methods like .to_vec()
-                if let Expression::Range {
-                    start,
-                    end,
-                    inclusive,
-                    ..
-                } = &**index
-                {
-                    let start_str = self.generate_expression(start);
-                    let end_str = self.generate_expression(end);
-                    let range_op = if *inclusive { "..=" } else { ".." };
-                    return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
-                }
-
-                let mut idx_str = self.generate_expression(index);
-
-                // WINDJAMMER PHILOSOPHY: Auto-cast to usize for array indexing
-                // Rust requires usize for indexing, but Windjammer uses int (i64)
-                // Handle cases:
-                // 1. Simple identifier: arr[idx] -> arr[idx as usize]
-                // 2. Integer literal: arr[0] -> arr[0 as usize]
-                // 3. Cast to int/i64: arr[x as int] -> arr[x as usize]
-                // 4. Parenthesized cast: arr[(x as int)] -> arr[x as usize]
-                // 5. Already usize: don't double-cast
-                let final_idx = if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
-                    // Replace (... as i64/int) with (... as usize)
-                    let base = idx_str
-                        .trim_end_matches("as i64)")
-                        .trim_end_matches("as int)")
-                        .trim()
-                        .trim_start_matches('(')
-                        .trim();
-                    format!("{} as usize", base)
-                } else if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
-                    // Replace ... as i64/int with ... as usize
-                    let base = idx_str
-                        .trim_end_matches("as i64")
-                        .trim_end_matches("as int")
-                        .trim();
-                    format!("{} as usize", base)
-                } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
-                    // TDD FIX: Auto-cast ANY integer expression to usize (unless already cast)
-                    // Handles:
-                    // - Identifiers: items[i] → items[i as usize]
-                    // - Literals: items[0] → items[0] (Rust infers)
-                    // - Binary: items[i + 1] → items[(i + 1) as usize]  ← NEWLY FIXED!
-                    // - Method calls: items[get_index()] → items[get_index() as usize]
-                    //
-                    // Skip cast only if:
-                    // 1. Already has cast: items[i as usize]
-                    // 2. Expression produces usize: items[vec.len()]
-                    // 3. Identifier tracked as usize: for i in 0..10 { items[i] }
-                    // 4. Non-negative literal: items[0] (Rust infers)
-
-                    // Check special cases where cast is NOT needed
-                    let needs_cast = match &**index {
-                        Expression::Identifier { name, .. } => {
-                            // Skip if tracked as usize variable
-                            !self.usize_variables.contains(name)
-                        }
-                        Expression::Literal {
-                            value: Literal::Int(n),
-                            ..
-                        } => {
-                            // Non-negative int literals: Rust infers usize from index context.
-                            // Strip any type suffix the inference engine may have added
-                            // (e.g. `0_usize` → `0`), since the indexing context is enough.
-                            if *n >= 0 {
-                                let suffixes = ["_usize", "_i32", "_i64", "_u32", "_u64"];
-                                for s in &suffixes {
-                                    if idx_str.ends_with(s) {
-                                        idx_str = idx_str[..idx_str.len() - s.len()].to_string();
-                                        break;
-                                    }
-                                }
-                            }
-                            *n < 0
-                        }
-                        _ => true, // All other expressions need cast
-                    };
-
-                    if needs_cast {
-                        // TDD FIX: Add parens for complex expressions to prevent precedence issues
-                        // `i + 1` → `(i + 1) as usize` (not `i + 1 as usize` which is parsed as `i + (1 as usize)`)
-                        let needs_parens = matches!(&**index, Expression::Binary { .. });
-                        if needs_parens {
-                            format!("({}) as usize", idx_str)
-                        } else {
-                            format!("{} as usize", idx_str)
-                        }
-                    } else {
-                        idx_str
-                    }
-                } else {
-                    idx_str
-                };
-
-                let base_expr = format!("{}[{}]", obj_str, final_idx);
-
-                // WINDJAMMER PHILOSOPHY: Auto-borrow Vec indexing for non-Copy types (E0507 fix).
-                // Rust doesn't allow moving out of a Vec index (E0507).
-                // For Copy types: vec[idx] works directly (value is copied).
-                // For non-Copy types: &vec[idx] (borrow) or vec[idx].clone() when owned needed.
-                //
-                // PREFER BORROW over clone: &vec[idx] is zero-cost; .clone() allocates.
-                //
-                // CRITICAL: NEVER add & or .clone() in these contexts:
-                // 1. Assignment target: vec[i] = value (can't assign to .clone() or &)
-                // 2. Borrow context: &vec[i] (parent adds &, we output vec[idx] only)
-                // 3. Field access: vec[i].field (Rust allows field access through ref)
-                // 4. Comparison context: vec[i] == val (comparisons work on &T)
-                let suppress_borrow_or_clone = self.generating_assignment_target
-                    || self.in_borrow_context
-                    || self.in_field_access_object
-                    || self.suppress_borrowed_clone;
-
-                // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
-                // Peel &Vec<T> (generated Rust for WJ `Vec<T>` params) so Copy element detection works.
-                let element_type = self
-                    .infer_expression_type(object)
-                    .as_ref()
-                    .and_then(|t| Self::peeled_collection_element_type(t))
-                    .cloned();
-                let force_clone_for_owned_context = (self.in_struct_literal_field
-                    || self.in_owned_value_context)
-                    && element_type
-                        .as_ref()
-                        .map(|et| !self.is_type_copy(et))
-                        .unwrap_or(true)
-                    && !self.in_borrow_context
-                    && !self.generating_assignment_target;
-
-                let suppress_borrow_or_clone =
-                    suppress_borrow_or_clone && !force_clone_for_owned_context;
-
-                if !suppress_borrow_or_clone {
-                    // First check auto_clone_analysis (path-based analysis)
-                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                        if let Some(ref analysis) = self.auto_clone_analysis {
-                            if analysis
-                                .needs_clone(&path, self.current_statement_idx)
-                                .is_some()
-                            {
-                                let is_copy = self
-                                    .infer_expression_type(expr_to_generate)
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t));
-                                if !is_copy {
-                                    // Path analysis says clone needed (e.g. passed to owned param)
-                                    return format!("{}.clone()", base_expr);
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback: Type-based handling for Vec<NonCopy>[idx]
-                    // E0507 fix: vec[idx] for String tries to move → use &vec[idx] (borrow)
-                    // When owned value needed (struct literal): vec[idx].clone()
-                    let needs_borrow_or_clone = self
-                        .infer_expression_type(object)
-                        .as_ref()
-                        .and_then(|obj_ty| Self::peeled_collection_element_type(obj_ty))
-                        .map(|elem_type| !self.is_type_copy(elem_type))
-                        .unwrap_or_else(|| {
-                            // Unknown element type: avoid `&vec[i]` for untyped Vecs filled with Copy
-                            // values (e.g. `Vec::with_capacity` + `push(0 as u8)`), which produced
-                            // `&u8` vs integer literal E0277. Non-Copy unknown vecs: annotate or use
-                            // patterns that infer element type; E0507 is preferable to silent wrong refs.
-                            false
-                        });
-
-                    if needs_borrow_or_clone {
-                        if force_clone_for_owned_context {
-                            return format!("{}.clone()", base_expr);
-                        } else {
-                            // Default: auto-borrow (zero-cost, idiomatic)
-                            return format!("&{}", base_expr);
-                        }
-                    }
-                }
-
-                // `Vec<T>` / slice indexing in Rust already yields `T` for `T: Copy` in value
-                // contexts (via the `Index` trait's desugaring). Emitting `*(vec[i])` was an
-                // attempted E0308 workaround but is invalid: for `Copy` elements the inner
-                // expression is already `T`, so `*` triggers E0614 for both owned and `&Vec<T>`
-                // receivers.
-
-                base_expr
+                self.generate_index(object, index, expr_to_generate)
             }
             Expression::Tuple {
                 elements: exprs, ..
@@ -5370,6 +5172,217 @@ impl<'ast> CodeGenerator<'ast> {
 
         let qualified_name = self.qualify_external_path_identifier(name);
         format!("{} {{ {} }}", qualified_name, field_str.join(", "))
+    }
+
+    /// Generate code for index expression array[index]
+    /// Handles auto-cast to usize, slice syntax, auto-borrow/clone for non-Copy elements
+    fn generate_index(
+        &mut self,
+        object: &Expression<'ast>,
+        index: &Expression<'ast>,
+        expr_to_generate: &Expression<'ast>,
+    ) -> String {
+        use crate::parser::Literal;
+
+        // INDEX CHAIN OPTIMIZATION: When generating the object of an Index expression,
+        // suppress auto-clone. In `a[i][j]`, Rust auto-derefs `a[i]` (returns &Vec<T>)
+        // to access [j]. Cloning the intermediate Vec is wasteful and wrong.
+        // Same logic as in_field_access_object for FieldAccess chains.
+        let prev_field_access = self.in_field_access_object;
+        self.in_field_access_object = true;
+        let obj_str = self.generate_expression(object);
+        self.in_field_access_object = prev_field_access;
+
+        // Special case: if index is a Range, this is slice syntax
+        // FIXED: Don't add & - Rust will auto-coerce to &[T] when needed
+        // This prevents "&temporary" errors when chaining methods like .to_vec()
+        if let Expression::Range {
+            start,
+            end,
+            inclusive,
+            ..
+        } = index
+        {
+            let start_str = self.generate_expression(start);
+            let end_str = self.generate_expression(end);
+            let range_op = if *inclusive { "..=" } else { ".." };
+            return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
+        }
+
+        let mut idx_str = self.generate_expression(index);
+
+        // WINDJAMMER PHILOSOPHY: Auto-cast to usize for array indexing
+        // Rust requires usize for indexing, but Windjammer uses int (i64)
+        // Handle cases:
+        // 1. Simple identifier: arr[idx] -> arr[idx as usize]
+        // 2. Integer literal: arr[0] -> arr[0 as usize]
+        // 3. Cast to int/i64: arr[x as int] -> arr[x as usize]
+        // 4. Parenthesized cast: arr[(x as int)] -> arr[x as usize]
+        // 5. Already usize: don't double-cast
+        let final_idx = if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
+            // Replace (... as i64/int) with (... as usize)
+            let base = idx_str
+                .trim_end_matches("as i64)")
+                .trim_end_matches("as int)")
+                .trim()
+                .trim_start_matches('(')
+                .trim();
+            format!("{} as usize", base)
+        } else if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
+            // Replace ... as i64/int with ... as usize
+            let base = idx_str
+                .trim_end_matches("as i64")
+                .trim_end_matches("as int")
+                .trim();
+            format!("{} as usize", base)
+        } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
+            // TDD FIX: Auto-cast ANY integer expression to usize (unless already cast)
+            // Handles:
+            // - Identifiers: items[i] → items[i as usize]
+            // - Literals: items[0] → items[0] (Rust infers)
+            // - Binary: items[i + 1] → items[(i + 1) as usize]  ← NEWLY FIXED!
+            // - Method calls: items[get_index()] → items[get_index() as usize]
+            //
+            // Skip cast only if:
+            // 1. Already has cast: items[i as usize]
+            // 2. Expression produces usize: items[vec.len()]
+            // 3. Identifier tracked as usize: for i in 0..10 { items[i] }
+            // 4. Non-negative literal: items[0] (Rust infers)
+
+            // Check special cases where cast is NOT needed
+            let needs_cast = match index {
+                Expression::Identifier { name, .. } => {
+                    // Skip if tracked as usize variable
+                    !self.usize_variables.contains(name)
+                }
+                Expression::Literal {
+                    value: Literal::Int(n),
+                    ..
+                } => {
+                    // Non-negative int literals: Rust infers usize from index context.
+                    // Strip any type suffix the inference engine may have added
+                    // (e.g. `0_usize` → `0`), since the indexing context is enough.
+                    if *n >= 0 {
+                        let suffixes = ["_usize", "_i32", "_i64", "_u32", "_u64"];
+                        for s in &suffixes {
+                            if idx_str.ends_with(s) {
+                                idx_str = idx_str[..idx_str.len() - s.len()].to_string();
+                                break;
+                            }
+                        }
+                    }
+                    *n < 0
+                }
+                _ => true, // All other expressions need cast
+            };
+
+            if needs_cast {
+                // TDD FIX: Add parens for complex expressions to prevent precedence issues
+                // `i + 1` → `(i + 1) as usize` (not `i + 1 as usize` which is parsed as `i + (1 as usize)`)
+                let needs_parens = matches!(index, Expression::Binary { .. });
+                if needs_parens {
+                    format!("({}) as usize", idx_str)
+                } else {
+                    format!("{} as usize", idx_str)
+                }
+            } else {
+                idx_str
+            }
+        } else {
+            idx_str
+        };
+
+        let base_expr = format!("{}[{}]", obj_str, final_idx);
+
+        // WINDJAMMER PHILOSOPHY: Auto-borrow Vec indexing for non-Copy types (E0507 fix).
+        // Rust doesn't allow moving out of a Vec index (E0507).
+        // For Copy types: vec[idx] works directly (value is copied).
+        // For non-Copy types: &vec[idx] (borrow) or vec[idx].clone() when owned needed.
+        //
+        // PREFER BORROW over clone: &vec[idx] is zero-cost; .clone() allocates.
+        //
+        // CRITICAL: NEVER add & or .clone() in these contexts:
+        // 1. Assignment target: vec[i] = value (can't assign to .clone() or &)
+        // 2. Borrow context: &vec[i] (parent adds &, we output vec[idx] only)
+        // 3. Field access: vec[i].field (Rust allows field access through ref)
+        // 4. Comparison context: vec[i] == val (comparisons work on &T)
+        let suppress_borrow_or_clone = self.generating_assignment_target
+            || self.in_borrow_context
+            || self.in_field_access_object
+            || self.suppress_borrowed_clone;
+
+        // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
+        // Peel &Vec<T> (generated Rust for WJ `Vec<T>` params) so Copy element detection works.
+        let element_type = self
+            .infer_expression_type(object)
+            .as_ref()
+            .and_then(|t| Self::peeled_collection_element_type(t))
+            .cloned();
+        let force_clone_for_owned_context = (self.in_struct_literal_field
+            || self.in_owned_value_context)
+            && element_type
+                .as_ref()
+                .map(|et| !self.is_type_copy(et))
+                .unwrap_or(true)
+            && !self.in_borrow_context
+            && !self.generating_assignment_target;
+
+        let suppress_borrow_or_clone =
+            suppress_borrow_or_clone && !force_clone_for_owned_context;
+
+        if !suppress_borrow_or_clone {
+            // First check auto_clone_analysis (path-based analysis)
+            if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
+                if let Some(ref analysis) = self.auto_clone_analysis {
+                    if analysis
+                        .needs_clone(&path, self.current_statement_idx)
+                        .is_some()
+                    {
+                        let is_copy = self
+                            .infer_expression_type(expr_to_generate)
+                            .as_ref()
+                            .is_some_and(|t| self.is_type_copy(t));
+                        if !is_copy {
+                            // Path analysis says clone needed (e.g. passed to owned param)
+                            return format!("{}.clone()", base_expr);
+                        }
+                    }
+                }
+            }
+
+            // Fallback: Type-based handling for Vec<NonCopy>[idx]
+            // E0507 fix: vec[idx] for String tries to move → use &vec[idx] (borrow)
+            // When owned value needed (struct literal): vec[idx].clone()
+            let needs_borrow_or_clone = self
+                .infer_expression_type(object)
+                .as_ref()
+                .and_then(|obj_ty| Self::peeled_collection_element_type(obj_ty))
+                .map(|elem_type| !self.is_type_copy(elem_type))
+                .unwrap_or_else(|| {
+                    // Unknown element type: avoid `&vec[i]` for untyped Vecs filled with Copy
+                    // values (e.g. `Vec::with_capacity` + `push(0 as u8)`), which produced
+                    // `&u8` vs integer literal E0277. Non-Copy unknown vecs: annotate or use
+                    // patterns that infer element type; E0507 is preferable to silent wrong refs.
+                    false
+                });
+
+            if needs_borrow_or_clone {
+                if force_clone_for_owned_context {
+                    return format!("{}.clone()", base_expr);
+                } else {
+                    // Default: auto-borrow (zero-cost, idiomatic)
+                    return format!("&{}", base_expr);
+                }
+            }
+        }
+
+        // `Vec<T>` / slice indexing in Rust already yields `T` for `T: Copy` in value
+        // contexts (via the `Index` trait's desugaring). Emitting `*(vec[i])` was an
+        // attempted E0308 workaround but is invalid: for `Copy` elements the inner
+        // expression is already `T`, so `*` triggers E0614 for both owned and `&Vec<T>`
+        // receivers.
+
+        base_expr
     }
 
     #[inline]
