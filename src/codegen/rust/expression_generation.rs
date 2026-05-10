@@ -4390,21 +4390,12 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 }
             }
-            Expression::TryOp { expr: inner, .. } => {
-                format!("{}?", self.generate_expression(inner))
-            }
-            Expression::Await { expr: inner, .. } => {
-                format!("{}.await", self.generate_expression(inner))
-            }
+            Expression::TryOp { expr: inner, .. } => self.generate_try_op(inner),
+            Expression::Await { expr: inner, .. } => self.generate_await(inner),
             Expression::ChannelSend { channel, value, .. } => {
-                let ch_str = self.generate_expression(channel);
-                let val_str = self.generate_expression(value);
-                format!("{}.send({})", ch_str, val_str)
+                self.generate_channel_send(channel, value)
             }
-            Expression::ChannelRecv { channel, .. } => {
-                let ch_str = self.generate_expression(channel);
-                format!("{}.recv()", ch_str)
-            }
+            Expression::ChannelRecv { channel, .. } => self.generate_channel_recv(channel),
             Expression::Range {
                 start,
                 end,
@@ -5340,6 +5331,33 @@ impl<'ast> CodeGenerator<'ast> {
                 output
             }
         }
+    }
+
+    /// Generate code for try operator expression (expr?)
+    fn generate_try_op(&mut self, expr: &Expression<'ast>) -> String {
+        format!("{}?", self.generate_expression(expr))
+    }
+
+    /// Generate code for await expression (expr.await)
+    fn generate_await(&mut self, expr: &Expression<'ast>) -> String {
+        format!("{}.await", self.generate_expression(expr))
+    }
+
+    /// Generate code for channel send expression (channel.send(value))
+    fn generate_channel_send(
+        &mut self,
+        channel: &Expression<'ast>,
+        value: &Expression<'ast>,
+    ) -> String {
+        let ch_str = self.generate_expression(channel);
+        let val_str = self.generate_expression(value);
+        format!("{}.send({})", ch_str, val_str)
+    }
+
+    /// Generate code for channel receive expression (channel.recv())
+    fn generate_channel_recv(&mut self, channel: &Expression<'ast>) -> String {
+        let ch_str = self.generate_expression(channel);
+        format!("{}.recv()", ch_str)
     }
 
     #[inline]
