@@ -15,11 +15,9 @@ fn test_module_parent_file_with_submodules_not_copied() {
     let project = temp_dir.path();
 
     let src = project.join("src");
-    let src_wj = project.join("src_wj");
     let output = project.join("out");
 
     fs::create_dir_all(&src).unwrap();
-    fs::create_dir_all(&src_wj).unwrap();
     fs::create_dir_all(&output).unwrap();
 
     // Create events.rs with submodule declaration
@@ -39,13 +37,13 @@ fn test_module_parent_file_with_submodules_not_copied() {
     .unwrap();
 
     // Create .wj source
-    fs::write(src_wj.join("button.wj"), "pub struct Button {}").unwrap();
-    fs::write(src_wj.join("input.wj"), "pub struct Input {}").unwrap();
+    fs::write(src.join("button.wj"), "pub struct Button {}").unwrap();
+    fs::write(src.join("input.wj"), "pub struct Input {}").unwrap();
 
     // Build
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(&src_wj)
+        .arg(&src)
         .arg("-o")
         .arg(&output)
         .arg("--target")
@@ -93,24 +91,22 @@ fn test_simple_rs_file_without_subdirectory_is_copied() {
     let project = temp_dir.path();
 
     let src = project.join("src");
-    let src_wj = project.join("src_wj");
     let output = project.join("out");
 
     fs::create_dir_all(&src).unwrap();
-    fs::create_dir_all(&src_wj).unwrap();
     fs::create_dir_all(&output).unwrap();
 
     // Create simple utils.rs (no subdirectory)
     fs::write(src.join("utils.rs"), "pub fn helper() {}").unwrap();
 
     // Create .wj source
-    fs::write(src_wj.join("button.wj"), "pub struct Button {}").unwrap();
-    fs::write(src_wj.join("input.wj"), "pub struct Input {}").unwrap();
+    fs::write(src.join("button.wj"), "pub struct Button {}").unwrap();
+    fs::write(src.join("input.wj"), "pub struct Input {}").unwrap();
 
     // Build
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(&src_wj)
+        .arg(&src)
         .arg("-o")
         .arg(&output)
         .arg("--target")
@@ -151,11 +147,9 @@ fn test_directory_with_mod_rs_not_copied() {
     let project = temp_dir.path();
 
     let src = project.join("src");
-    let src_wj = project.join("src_wj");
     let output = project.join("out");
 
     fs::create_dir_all(&src).unwrap();
-    fs::create_dir_all(&src_wj).unwrap();
     fs::create_dir_all(&output).unwrap();
 
     // Create ffi/ directory with mod.rs
@@ -164,13 +158,13 @@ fn test_directory_with_mod_rs_not_copied() {
     fs::write(ffi_dir.join("mod.rs"), "pub fn ffi_call() {}").unwrap();
 
     // Create .wj source
-    fs::write(src_wj.join("button.wj"), "pub struct Button {}").unwrap();
-    fs::write(src_wj.join("input.wj"), "pub struct Input {}").unwrap();
+    fs::write(src.join("button.wj"), "pub struct Button {}").unwrap();
+    fs::write(src.join("input.wj"), "pub struct Input {}").unwrap();
 
     // Build
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(&src_wj)
+        .arg(&src)
         .arg("-o")
         .arg(&output)
         .arg("--target")
@@ -213,11 +207,9 @@ fn test_edge_case_both_file_and_directory() {
     let project = temp_dir.path();
 
     let src = project.join("src");
-    let src_wj = project.join("src_wj");
     let output = project.join("out");
 
     fs::create_dir_all(&src).unwrap();
-    fs::create_dir_all(&src_wj).unwrap();
     fs::create_dir_all(&output).unwrap();
 
     // Create config.rs
@@ -233,13 +225,13 @@ fn test_edge_case_both_file_and_directory() {
     fs::write(config_dir.join("settings.rs"), "pub struct Settings {}").unwrap();
 
     // Create .wj source
-    fs::write(src_wj.join("button.wj"), "pub struct Button {}").unwrap();
-    fs::write(src_wj.join("input.wj"), "pub struct Input {}").unwrap();
+    fs::write(src.join("button.wj"), "pub struct Button {}").unwrap();
+    fs::write(src.join("input.wj"), "pub struct Input {}").unwrap();
 
     // Build
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(&src_wj)
+        .arg(&src)
         .arg("-o")
         .arg(&output)
         .arg("--target")

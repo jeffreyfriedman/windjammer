@@ -9,7 +9,7 @@ use anyhow::Result;
 ///
 /// Example:
 /// ```
-/// // src_wj/rendering/sprite.wj
+/// // src/rendering/sprite.wj
 /// use texture_atlas::TextureAtlas  // Import sibling module
 /// ```
 ///
@@ -43,8 +43,8 @@ fn test_sibling_module_import() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    // Create src_wj/rendering directory
-    let rendering_dir = temp_dir.join("src_wj").join("rendering");
+    // Create src/rendering directory
+    let rendering_dir = temp_dir.join("src").join("rendering");
     fs::create_dir_all(&rendering_dir)?;
 
     // Create texture.wj (sibling module 1)
@@ -120,7 +120,7 @@ version = "0.1.0"
 
     let output = Command::new(&wj_compiler)
         .arg("build")
-        .arg(temp_dir.join("src_wj"))
+        .arg(temp_dir.join("src"))
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")

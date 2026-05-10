@@ -656,7 +656,7 @@ impl CodeGenerator<'_> {
         //
         // THE WINDJAMMER WAY: Smart defaults that work 99% of the time
         // TDD COMPILER FIX: Check INPUT file structure, not OUTPUT structure!
-        // Output might be flat (build/*.rs) while input is nested (src_wj/achievement/mod.wj)
+        // Output might be flat (build/*.rs) while input is nested (src/achievement/mod.wj)
         let is_in_subdirectory = self
             .current_wj_file
             .parent()

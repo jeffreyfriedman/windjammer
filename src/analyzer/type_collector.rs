@@ -557,13 +557,13 @@ pub struct Manager {
 
     #[test]
     fn wj_file_to_module_path_nested_and_mod_wj() {
-        let base = std::path::Path::new("/proj/src_wj");
-        let p = std::path::Path::new("/proj/src_wj/achievement/manager.wj");
+        let base = std::path::Path::new("/proj/src");
+        let p = std::path::Path::new("/proj/src/achievement/manager.wj");
         assert_eq!(
             wj_file_to_module_path(base, p),
             Some(vec!["achievement".to_string(), "manager".to_string()])
         );
-        let m = std::path::Path::new("/proj/src_wj/achievement/mod.wj");
+        let m = std::path::Path::new("/proj/src/achievement/mod.wj");
         assert_eq!(
             wj_file_to_module_path(base, m),
             Some(vec!["achievement".to_string()])

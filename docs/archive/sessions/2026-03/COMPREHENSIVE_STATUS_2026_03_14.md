@@ -153,7 +153,7 @@ let data: [f32; 2] = [1280.0, 720.0];
 **Test:** `test_screen_size_f32_vs_u32_bit_pattern` ✅
 
 **Files:**
-- `game-host-core/src_wj/rendering/voxel_gpu_renderer.wj`
+- `game-host-core/src/rendering/voxel_gpu_renderer.wj`
 - `shaders/voxel_composite.wgsl`
 - `shaders/voxel_lighting.wgsl`
 
@@ -580,8 +580,8 @@ Status: Clean (reverted attempt to add bypass system)
 **Challenge:** Adding new FFI functions requires updates in multiple places
 
 **Files affected:**
-- `game-host/src_wj/ffi/api.wj` (declaration)
-- `game-host/src_wj/ffi/gpu_safe.wj` (wrapper)
+- `game-host/src/ffi/api.wj` (declaration)
+- `game-host/src/ffi/gpu_safe.wj` (wrapper)
 - `windjammer-runtime-host/src/gpu_compute.rs` (implementation)
 - Generated code must be in sync
 

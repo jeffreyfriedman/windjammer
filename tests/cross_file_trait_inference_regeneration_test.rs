@@ -12,7 +12,7 @@ use tempfile::TempDir;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_signature_updates_on_regeneration() {
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     fs::create_dir_all(&src_dir).unwrap();
 
     // Create game_loop.wj - trait with default implementation
@@ -103,7 +103,7 @@ impl GameLoop for MyGame {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_param_inference_across_files() {
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     fs::create_dir_all(&src_dir).unwrap();
 
     // Create input.wj

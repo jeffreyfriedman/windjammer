@@ -9,15 +9,15 @@ use tempfile::TempDir;
 fn test_shader_directory_excluded_from_discovery() {
     // Create temp project structure
     let temp_dir = TempDir::new().unwrap();
-    let src_wj = temp_dir.path().join("src_wj");
-    fs::create_dir(&src_wj).unwrap();
+    let src = temp_dir.path().join("src");
+    fs::create_dir(&src).unwrap();
 
     // Create mod.wj
-    let mod_wj = src_wj.join("mod.wj");
+    let mod_wj = src.join("mod.wj");
     fs::write(&mod_wj, "pub mod math\n").unwrap();
 
     // Create regular .wj file (should be found)
-    let math_dir = src_wj.join("math");
+    let math_dir = src.join("math");
     fs::create_dir(&math_dir).unwrap();
     fs::write(
         math_dir.join("vector.wj"),
@@ -26,7 +26,7 @@ fn test_shader_directory_excluded_from_discovery() {
     .unwrap();
 
     // Create shaders directory (should be excluded)
-    let shaders_dir = src_wj.join("shaders");
+    let shaders_dir = src.join("shaders");
     fs::create_dir(&shaders_dir).unwrap();
     fs::write(
         shaders_dir.join("vertex.wj"),

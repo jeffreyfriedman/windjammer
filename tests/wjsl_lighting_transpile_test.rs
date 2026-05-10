@@ -3,7 +3,7 @@ use std::path::Path;
 #[test]
 fn test_lighting_shader_transpile_output() {
     let shader_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../game-host/game-host-core/src_wj/shaders/voxel_lighting.wjsl");
+        .join("../game-host/game-host-core/src/shaders/voxel_lighting.wjsl");
 
     if !shader_path.exists() {
         eprintln!("Shader not found at: {}", shader_path.display());
@@ -84,7 +84,7 @@ fn test_lighting_shader_transpile_output() {
 #[test]
 fn test_raymarch_shader_transpile_output() {
     let shader_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../game-host/game-host-core/src_wj/shaders/voxel_raymarch.wjsl");
+        .join("../game-host/game-host-core/src/shaders/voxel_raymarch.wjsl");
 
     if !shader_path.exists() {
         eprintln!("Shader not found at: {}", shader_path.display());

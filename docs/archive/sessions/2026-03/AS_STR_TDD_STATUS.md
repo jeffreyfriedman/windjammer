@@ -108,7 +108,7 @@ don't have .as_str()).
 ## 🚀 Impact
 
 **Game Code Changes Needed:**
-- `game-host/game-host-core/src_wj/rpg/character_stats.wj`
+- `game-host/game-host-core/src/rpg/character_stats.wj`
   - Removed `.as_str()` from `new_with_build()` function
   - **Now:** `match build_type { ... }` (idiomatic Windjammer)
 

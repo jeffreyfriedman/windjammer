@@ -89,7 +89,7 @@ buffer.destroy()  // Automatic cleanup!
 - SafeShaderModule (compute shaders) (3 tests)
 
 **Files:**
-- `game-host-core/src_wj/ffi/safe_buffers.wj`
+- `game-host-core/src/ffi/safe_buffers.wj`
 - `game-host-core/tests_wj/safe_buffers_test.wj`
 - `FFI_SAFETY_FRAMEWORK.md`
 
@@ -120,7 +120,7 @@ print(profile.gpu_passes[0].percentage)  // % of frame time
 
 **Files:**
 - `windjammer-runtime-host/src/gpu_timer.rs`
-- `game-host-core/src_wj/profiling/profiler.wj`
+- `game-host-core/src/profiling/profiler.wj`
 - `game-host-core/tests_wj/profiler_test.wj`
 - `VISUAL_PROFILER_FOUNDATION.md`
 

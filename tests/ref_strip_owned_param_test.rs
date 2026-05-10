@@ -42,7 +42,7 @@ fn test_strip_ref_when_method_param_is_owned() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write a WJ file where &expr is passed to a method expecting owned
@@ -141,7 +141,7 @@ fn test_ref_strip_compiles_with_rustc() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write a WJ file that passes &expr to an owned param — must compile cleanly

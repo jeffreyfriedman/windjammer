@@ -27,7 +27,7 @@
 // Test Strategy:
 // --------------
 // 1. Create project with src/events/ (hand-written module)
-// 2. Create src_wj/components/ with .wj files
+// 2. Create src/components/ with .wj files
 // 3. Set output to src/components/generated/
 // 4. Verify src/components/generated/mod.rs does NOT declare `pub mod events;`
 // 5. Verify button.wj compiles correctly
@@ -70,7 +70,7 @@ fn test_out_of_scope_modules_not_declared() {
     //     events/          <- Hand-written module (out of scope)
     //       mod.rs
     //       dispatcher.rs
-    //   src_wj/
+    //   src/
     //     components/      <- Source .wj files
     //       mod.wj
     //       button.wj
@@ -97,8 +97,8 @@ fn test_out_of_scope_modules_not_declared() {
     .unwrap();
 
     // Create .wj source files
-    let src_wj_dir = project_root.join("src_wj");
-    let components_src_dir = src_wj_dir.join("components");
+    let src_dir = project_root.join("src");
+    let components_src_dir = src_dir.join("components");
     fs::create_dir_all(&components_src_dir).unwrap();
 
     fs::write(components_src_dir.join("mod.wj"), "").unwrap();
@@ -114,7 +114,7 @@ fn test_out_of_scope_modules_not_declared() {
     fs::create_dir_all(&output_dir).unwrap();
 
     // Compile
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
 
     // Debug: List generated files
     eprintln!("=== Generated files in {:?} ===", output_dir);
@@ -168,7 +168,7 @@ fn test_out_of_scope_modules_not_declared() {
         mod_rs_content
     );
 
-    // `src_wj/components/button.wj` is emitted under `output/components/button.rs` (mirrors
+    // `src/components/button.wj` is emitted under `output/components/button.rs` (mirrors
     // source tree), so `button` is declared in `output/components/mod.rs`, not the crate-root
     // `mod.rs` (which only lists the `components` package module).
     let components_mod = output_dir.join("components").join("mod.rs");
@@ -195,7 +195,7 @@ fn test_ffi_modules_in_project_root_are_declared() {
     // Create project structure:
     // project/
     //   ffi.rs           <- Hand-written FFI module in project root (IN SCOPE)
-    //   src_wj/
+    //   src/
     //     mod.wj
     //     button.wj
     //   out/             <- Output directory (crate root)
@@ -211,13 +211,13 @@ fn test_ffi_modules_in_project_root_are_declared() {
     .unwrap();
 
     // Create .wj source files
-    let src_wj_dir = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj_dir).unwrap();
+    let src_dir = project_root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
 
-    fs::write(src_wj_dir.join("mod.wj"), "").unwrap();
+    fs::write(src_dir.join("mod.wj"), "").unwrap();
 
     fs::write(
-        src_wj_dir.join("button.wj"),
+        src_dir.join("button.wj"),
         "pub struct Button { pub label: string }",
     )
     .unwrap();
@@ -227,7 +227,7 @@ fn test_ffi_modules_in_project_root_are_declared() {
     fs::create_dir_all(&output_dir).unwrap();
 
     // Compile
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
 
     // Verify lib.rs was created (crate root)
     let lib_rs_path = output_dir.join("lib.rs");

@@ -15,7 +15,7 @@ fn test_scene_manager_str_params_emit_ampersand_str() {
     let scene_manager_wj = workspace_root
         .join("game-host")
         .join("game-host-core")
-        .join("src_wj")
+        .join("src")
         .join("scene")
         .join("manager.wj");
 

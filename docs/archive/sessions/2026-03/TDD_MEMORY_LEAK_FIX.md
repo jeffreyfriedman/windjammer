@@ -8,7 +8,7 @@ User's laptop crashed when running the demo. Investigation revealed a catastroph
 
 ## Root Cause
 
-### The Bug (Line 41 in `src_wj/voxel/svo.wj`)
+### The Bug (Line 41 in `src/voxel/svo.wj`)
 
 ```windjammer
 // BEFORE (CATASTROPHICALLY WRONG!)
@@ -46,7 +46,7 @@ For a 64³ voxel grid (depth=6):
 
 ## Fix Applied
 
-### Corrected Code (`src_wj/voxel/svo.wj`)
+### Corrected Code (`src/voxel/svo.wj`)
 
 ```windjammer
 // AFTER (CORRECT!)
@@ -87,13 +87,13 @@ let svo_data = encoder.encode(&grid)
 ```
 
 **Files updated:**
-- `src_wj/demos/sphere_test_demo.wj` ✅
-- `src_wj/demos/humanoid_demo.wj` ✅
-- `src_wj/demos/sundering.wj` ✅
-- `src_wj/demos/cathedral.wj` ✅
-- `src_wj/demos/rifter_quarter.wj` ✅
-- `src_wj/editor/voxel_editor.wj` ✅
-- `src_wj/voxel/chunk_manager.wj` ✅
+- `src/demos/sphere_test_demo.wj` ✅
+- `src/demos/humanoid_demo.wj` ✅
+- `src/demos/sundering.wj` ✅
+- `src/demos/cathedral.wj` ✅
+- `src/demos/rifter_quarter.wj` ✅
+- `src/editor/voxel_editor.wj` ✅
+- `src/voxel/chunk_manager.wj` ✅
 
 ## Verification
 
@@ -137,7 +137,7 @@ fn recursive_fn(self, ...) {  // Takes self by value
 **Potential compiler warning:**
 ```
 warning: recursive function takes `self` by value
-  --> src_wj/voxel/svo.wj:41:21
+  --> src/voxel/svo.wj:41:21
    |
 41 |     fn encode_region(self, grid: &VoxelGrid, ...) {
    |                      ^^^^ this will copy `self` on every recursive call

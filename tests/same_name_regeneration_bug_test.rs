@@ -10,11 +10,11 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_same_name_module_regeneration_not_empty() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let src_wj = temp_dir.path().join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = temp_dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create game_loop subdirectory with same-name file
-    let game_loop_dir = src_wj.join("game_loop");
+    let game_loop_dir = src.join("game_loop");
     std::fs::create_dir_all(&game_loop_dir).unwrap();
 
     // game_loop/mod.wj
@@ -41,7 +41,7 @@ pub trait GameLoop {
 
     // Create a game module that uses the trait
     std::fs::write(
-        src_wj.join("game.wj"),
+        src.join("game.wj"),
         r#"
 use crate::game_loop::game_loop::GameLoop
 
@@ -60,7 +60,7 @@ impl GameLoop for Game {
 
     // Root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
 pub mod game_loop;
 pub mod game;
@@ -71,7 +71,7 @@ pub mod game;
     let output_dir = temp_dir.path().join("out");
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(src_wj.join("mod.wj"))
+        .arg(src.join("mod.wj"))
         .arg("--output")
         .arg(&output_dir)
         .arg("--library")

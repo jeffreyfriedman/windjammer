@@ -167,11 +167,11 @@ pub fn initialize(self) {
 | `sample-game/src/world/level_loader.wj` | Unpacks BuiltScene, stores test_camera |
 | `sample-game/src/world/test_scene_test.wj` | New tests for SceneBuilder integration |
 | `sample-game/src/game.wj` | Uses level_loader.get_test_camera(), config validation |
-| `game-host-core/src_wj/scene/builder.wj` | Added primary_voxel_grid, get_lighting, get_materials, unpack |
-| `game-host-core/src_wj/rendering/camera.wj` | Added to_camera_data(screen_width, screen_height) |
-| `game-host-core/src_wj/rendering/visual_verification.wj` | Added is_valid(), summary(), from_rgba8() |
-| `game-host-core/src_wj/rendering/voxel_gpu_renderer.wj` | Added render_frame_with_verification() |
-| `game-host-core/src_wj/ffi/api.wj` | Added gpu_is_visual_verification_enabled() |
+| `game-host-core/src/scene/builder.wj` | Added primary_voxel_grid, get_lighting, get_materials, unpack |
+| `game-host-core/src/rendering/camera.wj` | Added to_camera_data(screen_width, screen_height) |
+| `game-host-core/src/rendering/visual_verification.wj` | Added is_valid(), summary(), from_rgba8() |
+| `game-host-core/src/rendering/voxel_gpu_renderer.wj` | Added render_frame_with_verification() |
+| `game-host-core/src/ffi/api.wj` | Added gpu_is_visual_verification_enabled() |
 | `game-host-core/ffi/api.rs` | Added gpu_is_visual_verification_enabled declaration |
 | `windjammer-runtime-host/src/gpu_compute.rs` | Implemented gpu_is_visual_verification_enabled |
 | `game-host-core/tests_wj/visual_verification_test.wj` | Added 4 new tests |
