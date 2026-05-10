@@ -54,6 +54,8 @@ pub mod cargo_integration; // Cargo build system integration
 #[cfg(feature = "cli")]
 pub mod cli;
 #[cfg(feature = "cli")]
+pub mod cli_execution; // CLI execution (run, interpret, REPL)
+#[cfg(feature = "cli")]
 pub mod error_catalog;
 #[cfg(feature = "cli")]
 pub mod error_handling; // Error handling and linting
