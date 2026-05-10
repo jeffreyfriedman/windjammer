@@ -3933,229 +3933,7 @@ impl<'ast> CodeGenerator<'ast> {
                 base_expr
             }
             Expression::FieldAccess { object, field, .. } => {
-                // FIELD CHAIN OPTIMIZATION: If we're accessing a Copy sub-field,
-                // suppress borrowed-iterator cloning on the intermediate object.
-                // In Rust, (&enemy).velocity.y works fine through auto-deref.
-                let field_is_copy_by_type = self
-                    .infer_expression_type(expr_to_generate)
-                    .as_ref()
-                    .is_some_and(|t| self.is_type_copy(t));
-
-                let prev_suppress = self.suppress_borrowed_clone;
-                let prev_field_access = self.in_field_access_object;
-                if field_is_copy_by_type {
-                    self.suppress_borrowed_clone = true;
-                }
-                // Suppress Vec index clone when we're just accessing a field
-                // e.g., players[i].score → no need to clone the whole Player
-                self.in_field_access_object = true;
-                let obj_str = self.generate_expression_with_precedence(object);
-                self.in_field_access_object = prev_field_access;
-                self.suppress_borrowed_clone = prev_suppress;
-
-                // Determine if this is a module/type path (::) or field access (.)
-                // Check the object to decide:
-                let separator = match &**object {
-                    Expression::Identifier { name, .. }
-                        if name.contains("::")
-                            || (!name.is_empty()
-                                && name.chars().next().unwrap().is_uppercase()) =>
-                    {
-                        "::" // Module path: std::fs or Type::CONST
-                    }
-                    Expression::FieldAccess { .. } => {
-                        // Check if this is a module path or a field chain
-                        // If the object string contains ::, it's a module path
-                        if obj_str.contains("::") {
-                            "::" // Module path: std::fs::File
-                        } else {
-                            "." // Field chain: transform.position.x
-                        }
-                    }
-                    _ => ".", // Actual field access (e.g., config.field)
-                };
-
-                let base_expr = format!("{}{}{}", obj_str, separator, field);
-
-                // AUTO-CLONE: Check if this field access needs to be cloned
-                // Extract the full path (e.g., "config.paths")
-                // CRITICAL: Never clone assignment targets (left side of `=`)
-                // e.g., `emitter.lifetime = 1.0` must NOT become `emitter.clone().lifetime = 1.0`
-                // DOUBLE-CLONE FIX: Skip auto-clone when we're inside an explicit .clone() call
-                // The source already has .clone(), so we must not add another one.
-                // METHOD RECEIVER / FOR-LOOP FIX: Skip auto-clone when in a method receiver
-                // or for-loop iterable context. Rust auto-borrows method receivers (&self),
-                // and for-loops iterate by reference with `&`. Cloning is unnecessary and
-                // breaks for Vec<Box<dyn Trait>> or Vec<T> where T may not be Clone.
-                if !self.generating_assignment_target
-                    && !self.in_explicit_clone_call
-                    && !self.in_field_access_object
-                {
-                    if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
-                        if let Some(ref analysis) = self.auto_clone_analysis {
-                            if analysis
-                                .needs_clone(&path, self.current_statement_idx)
-                                .is_some()
-                            {
-                                // Skip .clone() for Copy types (f32, i32, bool, etc.)
-                                // They are implicitly copied — .clone() is unnecessary noise.
-                                let is_copy = self
-                                    .infer_expression_type(expr_to_generate)
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t));
-                                if !is_copy {
-                                    // Type inference failed — fall back to name heuristic
-                                    // Fields like x, y, z, width, height are almost always Copy
-                                    let is_likely_copy_field = matches!(
-                                        field.as_str(),
-                                        "x" | "y"
-                                            | "z"
-                                            | "w"
-                                            | "width"
-                                            | "height"
-                                            | "depth"
-                                            | "r"
-                                            | "g"
-                                            | "b"
-                                            | "a"
-                                            | "left"
-                                            | "right"
-                                            | "top"
-                                            | "bottom"
-                                            | "min"
-                                            | "max"
-                                            | "start"
-                                            | "end"
-                                            | "offset"
-                                            | "scale"
-                                            | "speed"
-                                            | "time"
-                                            | "delta"
-                                            | "angle"
-                                            | "radius"
-                                            | "distance"
-                                            | "visible"
-                                            | "enabled"
-                                            | "active"
-                                            | "selected"
-                                            | "focused"
-                                            | "id"
-                                            | "type"
-                                            | "kind"
-                                            | "priority"
-                                            | "level"
-                                            | "len"
-                                            | "count"
-                                            | "size"
-                                            | "index"
-                                            | "idx"
-                                            | "vx"
-                                            | "vy"
-                                            | "vz"
-                                            | "dx"
-                                            | "dy"
-                                            | "dz"
-                                            | "health"
-                                            | "damage"
-                                            | "score"
-                                            | "lives"
-                                            | "frame"
-                                    );
-                                    if !is_likely_copy_field {
-                                        return format!("{}.clone()", base_expr);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
-                // we need to clone non-Copy fields since we can't move out of a reference
-                // BUT: Don't clone for assignment targets (left side of =)
-                // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
-                //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
-                // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
-                // AND: Don't clone when this is an intermediate object in a field access chain
-                //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
-                // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
-                // TDD FIX: Don't clone when generating call arguments (Call handler applies ownership)
-                // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
-                if !self.generating_assignment_target
-                    && !self.suppress_borrowed_clone
-                    && !self.in_explicit_clone_call
-                    && !self.in_field_access_object
-                    && !self.in_borrow_context
-                    && !self.in_call_argument_generation
-                {
-                    if let Expression::Identifier { name: var_name, .. } = &**object {
-                        if self.borrowed_iterator_vars.contains(var_name) {
-                            // First: use type inference to check if the field type is Copy
-                            let is_copy = self
-                                .infer_expression_type(expr_to_generate)
-                                .as_ref()
-                                .is_some_and(|t| self.is_type_copy(t));
-
-                            if !is_copy && !base_expr.ends_with(".clone()") {
-                                return format!("{}.clone()", base_expr);
-                            }
-                        }
-                    }
-                }
-
-                // Borrowed param field clone: when accessing param.field on a borrowed
-                // parameter (&self or any &T param), non-Copy types can't be moved
-                // out of the reference — auto-clone.
-                // Skip in comparison contexts — refs compare fine without cloning.
-                if !self.generating_assignment_target
-                    && !self.in_explicit_clone_call
-                    && !self.in_field_access_object
-                    && !self.in_borrow_context
-                    && !self.suppress_borrowed_clone
-                    && !self.in_call_argument_generation
-                {
-                    if let Expression::Identifier { name: obj_name, .. } = &**object {
-                        if self.inferred_borrowed_params.contains(obj_name.as_str()) {
-                            let field_is_copy = if obj_name == "self" && self.in_impl_block {
-                                self.current_struct_name
-                                    .as_ref()
-                                    .and_then(|sn| self.lookup_struct_field_types(sn.as_str()))
-                                    .and_then(|fields| fields.get(field.as_str()))
-                                    .is_some_and(|ty| self.is_type_copy(ty))
-                            } else {
-                                self.infer_expression_type(expr_to_generate)
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t))
-                            };
-                            if !field_is_copy && !base_expr.ends_with(".clone()") {
-                                return format!("{}.clone()", base_expr);
-                            }
-                        }
-                    }
-                }
-
-                // VEC INDEX FIELD ACCESS: When accessing a non-Copy field through Vec
-                // indexing (e.g., choices[i].text), Rust can't move out of a Vec element.
-                // The Index handler suppresses its own borrow/clone when in_field_access_object
-                // is true (correct for Copy fields like .score), but for non-Copy fields
-                // like String, the resulting expression `vec[i].text` is still a move.
-                // Fix: clone the field access result when the field type is non-Copy.
-                if !self.generating_assignment_target
-                    && !self.in_explicit_clone_call
-                    && !self.in_field_access_object
-                    && !self.in_borrow_context
-                    && !self.in_call_argument_generation
-                {
-                    let object_has_index = matches!(&**object, Expression::Index { .. })
-                        || matches!(&**object, Expression::FieldAccess { object: inner, .. }
-                            if matches!(&**inner, Expression::Index { .. }));
-
-                    if object_has_index && !field_is_copy_by_type {
-                        return format!("{}.clone()", base_expr);
-                    }
-                }
-
-                base_expr
+                self.generate_field_access(object, field, expr_to_generate)
             }
             Expression::StructLiteral { name, fields, .. } => {
                 // PHASE 3 OPTIMIZATION: Check if we have optimization hints for this struct
@@ -5390,6 +5168,196 @@ impl<'ast> CodeGenerator<'ast> {
             final_arg_strs.join(separator),
             close
         )
+    }
+
+    /// Generate code for field access expression (object.field)
+    /// Handles module paths (::), auto-clone for non-Copy fields, borrowed iterators
+    fn generate_field_access(
+        &mut self,
+        object: &Expression<'ast>,
+        field: &str,
+        expr_to_generate: &Expression<'ast>,
+    ) -> String {
+        // FIELD CHAIN OPTIMIZATION: If we're accessing a Copy sub-field,
+        // suppress borrowed-iterator cloning on the intermediate object.
+        // In Rust, (&enemy).velocity.y works fine through auto-deref.
+        let field_is_copy_by_type = self
+            .infer_expression_type(expr_to_generate)
+            .as_ref()
+            .is_some_and(|t| self.is_type_copy(t));
+
+        let prev_suppress = self.suppress_borrowed_clone;
+        let prev_field_access = self.in_field_access_object;
+        if field_is_copy_by_type {
+            self.suppress_borrowed_clone = true;
+        }
+        // Suppress Vec index clone when we're just accessing a field
+        // e.g., players[i].score → no need to clone the whole Player
+        self.in_field_access_object = true;
+        let obj_str = self.generate_expression_with_precedence(object);
+        self.in_field_access_object = prev_field_access;
+        self.suppress_borrowed_clone = prev_suppress;
+
+        // Determine if this is a module/type path (::) or field access (.)
+        // Check the object to decide:
+        let separator = match object {
+            Expression::Identifier { name, .. }
+                if name.contains("::")
+                    || (!name.is_empty()
+                        && name.chars().next().unwrap().is_uppercase()) =>
+            {
+                "::" // Module path: std::fs or Type::CONST
+            }
+            Expression::FieldAccess { .. } => {
+                // Check if this is a module path or a field chain
+                // If the object string contains ::, it's a module path
+                if obj_str.contains("::") {
+                    "::" // Module path: std::fs::File
+                } else {
+                    "." // Field chain: transform.position.x
+                }
+            }
+            _ => ".", // Actual field access (e.g., config.field)
+        };
+
+        let base_expr = format!("{}{}{}", obj_str, separator, field);
+
+        // AUTO-CLONE: Check if this field access needs to be cloned
+        // Extract the full path (e.g., "config.paths")
+        // CRITICAL: Never clone assignment targets (left side of `=`)
+        // e.g., `emitter.lifetime = 1.0` must NOT become `emitter.clone().lifetime = 1.0`
+        // DOUBLE-CLONE FIX: Skip auto-clone when we're inside an explicit .clone() call
+        // The source already has .clone(), so we must not add another one.
+        // METHOD RECEIVER / FOR-LOOP FIX: Skip auto-clone when in a method receiver
+        // or for-loop iterable context. Rust auto-borrows method receivers (&self),
+        // and for-loops iterate by reference with `&`. Cloning is unnecessary and
+        // breaks for Vec<Box<dyn Trait>> or Vec<T> where T may not be Clone.
+        if !self.generating_assignment_target
+            && !self.in_explicit_clone_call
+            && !self.in_field_access_object
+        {
+            if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
+                if let Some(ref analysis) = self.auto_clone_analysis {
+                    if analysis
+                        .needs_clone(&path, self.current_statement_idx)
+                        .is_some()
+                    {
+                        // Skip .clone() for Copy types (f32, i32, bool, etc.)
+                        // They are implicitly copied — .clone() is unnecessary noise.
+                        let is_copy = self
+                            .infer_expression_type(expr_to_generate)
+                            .as_ref()
+                            .is_some_and(|t| self.is_type_copy(t));
+                        if !is_copy {
+                            // Type inference failed — fall back to name heuristic
+                            // Fields like x, y, z, width, height are almost always Copy
+                            let is_likely_copy_field = matches!(
+                                field,
+                                "x" | "y" | "z" | "w" | "width" | "height" | "depth" | "r" | "g"
+                                    | "b" | "a" | "left" | "right" | "top" | "bottom" | "min"
+                                    | "max" | "start" | "end" | "offset" | "scale" | "speed"
+                                    | "time" | "delta" | "angle" | "radius" | "distance"
+                                    | "visible" | "enabled" | "active" | "selected" | "focused"
+                                    | "id" | "type" | "kind" | "priority" | "level" | "len"
+                                    | "count" | "size" | "index" | "idx" | "vx" | "vy" | "vz"
+                                    | "dx" | "dy" | "dz" | "health" | "damage" | "score"
+                                    | "lives" | "frame"
+                            );
+                            if !is_likely_copy_field {
+                                return format!("{}.clone()", base_expr);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // BORROWED ITERATOR: If accessing fields through a borrowed iterator variable,
+        // we need to clone non-Copy fields since we can't move out of a reference
+        // BUT: Don't clone for assignment targets (left side of =)
+        // AND: Don't clone when a parent FieldAccess is reading a Copy sub-field
+        //      (e.g., bullet.velocity.y → .y is Copy, so no need to clone velocity)
+        // AND: Don't clone when inside an explicit .clone() call (prevents double clone)
+        // AND: Don't clone when this is an intermediate object in a field access chain
+        //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
+        // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
+        // TDD FIX: Don't clone when generating call arguments (Call handler applies ownership)
+        // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
+        if !self.generating_assignment_target
+            && !self.suppress_borrowed_clone
+            && !self.in_explicit_clone_call
+            && !self.in_field_access_object
+            && !self.in_borrow_context
+            && !self.in_call_argument_generation
+        {
+            if let Expression::Identifier { name: var_name, .. } = object {
+                if self.borrowed_iterator_vars.contains(var_name) {
+                    // First: use type inference to check if the field type is Copy
+                    let is_copy = self
+                        .infer_expression_type(expr_to_generate)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+
+                    if !is_copy && !base_expr.ends_with(".clone()") {
+                        return format!("{}.clone()", base_expr);
+                    }
+                }
+            }
+        }
+
+        // Borrowed param field clone: when accessing param.field on a borrowed
+        // parameter (&self or any &T param), non-Copy types can't be moved
+        // out of the reference — auto-clone.
+        // Skip in comparison contexts — refs compare fine without cloning.
+        if !self.generating_assignment_target
+            && !self.in_explicit_clone_call
+            && !self.in_field_access_object
+            && !self.in_borrow_context
+            && !self.suppress_borrowed_clone
+            && !self.in_call_argument_generation
+        {
+            if let Expression::Identifier { name: obj_name, .. } = object {
+                if self.inferred_borrowed_params.contains(obj_name.as_str()) {
+                    let field_is_copy = if obj_name == "self" && self.in_impl_block {
+                        self.current_struct_name
+                            .as_ref()
+                            .and_then(|sn| self.lookup_struct_field_types(sn.as_str()))
+                            .and_then(|fields| fields.get(field))
+                            .is_some_and(|ty| self.is_type_copy(ty))
+                    } else {
+                        self.infer_expression_type(expr_to_generate)
+                            .as_ref()
+                            .is_some_and(|t| self.is_type_copy(t))
+                    };
+                    if !field_is_copy && !base_expr.ends_with(".clone()") {
+                        return format!("{}.clone()", base_expr);
+                    }
+                }
+            }
+        }
+
+        // VEC INDEX FIELD ACCESS: When accessing a non-Copy field through Vec
+        // indexing (e.g., choices[i].text), Rust can't move out of a Vec element.
+        // The Index handler suppresses its own borrow/clone when in_field_access_object
+        // is true (correct for Copy fields like .score), but for non-Copy fields
+        // like String, the resulting expression `vec[i].text` is still a move.
+        // Fix: clone the field access result when the field type is non-Copy.
+        if !self.generating_assignment_target
+            && !self.in_explicit_clone_call
+            && !self.in_field_access_object
+            && !self.in_borrow_context
+            && !self.in_call_argument_generation
+        {
+            let object_has_index = matches!(object, Expression::Index { .. })
+                || matches!(object, Expression::FieldAccess { object: inner, .. }
+                    if matches!(&**inner, Expression::Index { .. }));
+
+            if object_has_index && !field_is_copy_by_type {
+                return format!("{}.clone()", base_expr);
+            }
+        }
+
+        base_expr
     }
 
     #[inline]
