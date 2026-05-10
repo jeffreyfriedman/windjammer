@@ -21,6 +21,7 @@ pub mod lexer;
 pub mod linter;
 pub mod metadata;
 pub mod method_registry;
+pub mod module_system;
 pub mod parser;
 pub mod parser_impl;
 pub mod project_paths;

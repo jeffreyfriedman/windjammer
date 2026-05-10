@@ -7,13 +7,11 @@
 //! - Coverage report generation
 
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 // Import parent module functions needed by test runner
 use crate::{build_project, CompilationTarget};
-// Import sibling modules
-use crate::{lexer, parser, interpreter};
 
 pub fn run_tests(
     path: Option<&Path>,
