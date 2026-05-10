@@ -21,6 +21,7 @@ pub mod copy_semantics;
 pub mod expression_generation;
 pub mod expression_helpers;
 pub mod expressions;
+pub mod float_type_utilities;
 pub mod function_generation;
 pub mod generator;
 pub mod helpers;
