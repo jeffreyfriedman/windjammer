@@ -1479,7 +1479,9 @@ fn build_library_multipass(
         }
 
         // Preserve directory structure (directory-module layout when `foo.wj` + `foo/*.wj` co-exist).
-        let output_file = crate::project_paths::resolve_wj_output_path(&src_base, file, output)?;
+        // In library mode, mod.wj output goes to _mod_items.rs so --module-file doesn't overwrite it.
+        let output_file =
+            crate::project_paths::resolve_wj_output_path_library(&src_base, file, output)?;
         if let Some(parent) = output_file.parent() {
             std::fs::create_dir_all(parent)?;
         }

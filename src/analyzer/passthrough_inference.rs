@@ -7,6 +7,62 @@ use crate::parser::*;
 use super::{Analyzer, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
+    fn strip_type_generics(name: &str) -> String {
+        name.split('<').next().unwrap_or(name).to_string()
+    }
+
+    /// Structural type name used as `SignatureRegistry` keys (`Inventory`, `Merchant`, …).
+    fn type_to_struct_base(ty: &Type) -> Option<String> {
+        match ty {
+            Type::Custom(name) => Some(Self::strip_type_generics(name)),
+            Type::Parameterized(base, _) => Some(Self::strip_type_generics(base)),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::type_to_struct_base(inner)
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve the static type backing a method-call receiver (`self`, param, `self.field`, …).
+    fn infer_receiver_type_base(&self, object: &Expression, func: &FunctionDecl<'ast>) -> Option<String> {
+        match object {
+            Expression::Identifier { name, .. } if name == "self" => func
+                .parent_type
+                .as_ref()
+                .map(|p| Self::strip_type_generics(p)),
+            Expression::Identifier { name, .. } => func
+                .parameters
+                .iter()
+                .find(|p| &p.name == name)
+                .and_then(|p| Self::type_to_struct_base(&p.type_)),
+            Expression::FieldAccess { object: inner, field, .. } => {
+                let inner_base = self.infer_receiver_type_base(inner, func)?;
+                self.global_struct_field_types
+                    .get(&inner_base)
+                    .and_then(|m| m.get(field.as_str()))
+                    .and_then(Self::type_to_struct_base)
+            }
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                operand,
+                ..
+            } => self.infer_receiver_type_base(operand, func),
+            _ => None,
+        }
+    }
+
+    /// Registry lookup key matching [`SignatureRegistry`] (`Type::method`), not ambiguous `method` alone.
+    fn qualified_method_registry_key(
+        &self,
+        object: &Expression,
+        method: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> String {
+        self.infer_receiver_type_base(object, func)
+            .map(|base| format!("{}::{}", base, method))
+            .unwrap_or_else(|| method.to_string())
+    }
+
     /// MULTI-PASS: Infer ownership from pass-through calls using signature registry
     /// If param is ONLY passed to functions whose signatures are known, match their ownership
     pub(super) fn infer_passthrough_ownership(
@@ -16,6 +72,7 @@ impl<'ast> Analyzer<'ast> {
         body: &[&'ast Statement<'ast>],
         registry: &SignatureRegistry,
         current_func_name: &str,
+        func: &FunctionDecl<'ast>,
     ) -> Option<OwnershipMode> {
         // TDD: Check for METHOD CALLS ON the parameter first (e.g., grid.set(42))
         // This determines if parameter needs &mut based on method's self type
@@ -33,7 +90,7 @@ impl<'ast> Analyzer<'ast> {
         // Then check for pass-through calls (parameter passed AS argument)
         // (func_name, arg_position, is_self_field_call)
         let mut passthrough_calls: Vec<(String, usize, bool)> = Vec::new();
-        self.collect_passthrough_calls(param_name, body, &mut passthrough_calls);
+        self.collect_passthrough_calls(param_name, body, func, &mut passthrough_calls);
 
         // Skip recursive calls to the current function to break circular ownership inference.
         // Without this, recursive functions like `traverse(bvh, ray)` calling `traverse(bvh, ray)`
@@ -286,10 +343,11 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         body: &[&'ast Statement<'ast>],
+        func: &FunctionDecl<'ast>,
         results: &mut Vec<(String, usize, bool)>,
     ) {
         for stmt in body {
-            self.collect_passthrough_from_stmt(param_name, stmt, results);
+            self.collect_passthrough_from_stmt(param_name, stmt, func, results);
         }
     }
 
@@ -297,20 +355,21 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         stmt: &Statement,
+        func: &FunctionDecl<'ast>,
         results: &mut Vec<(String, usize, bool)>,
     ) {
         match stmt {
             Statement::Expression {
                 expr: expression, ..
             } => {
-                self.collect_passthrough_from_expr(param_name, expression, results);
+                self.collect_passthrough_from_expr(param_name, expression, func, results);
             }
             Statement::Let { value, .. } => {
-                self.collect_passthrough_from_expr(param_name, value, results);
+                self.collect_passthrough_from_expr(param_name, value, func, results);
             }
             Statement::Return { value, .. } => {
                 if let Some(expr) = value {
-                    self.collect_passthrough_from_expr(param_name, expr, results);
+                    self.collect_passthrough_from_expr(param_name, expr, func, results);
                 }
             }
             Statement::If {
@@ -319,13 +378,13 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                self.collect_passthrough_from_expr(param_name, condition, results);
+                self.collect_passthrough_from_expr(param_name, condition, func, results);
                 for stmt in then_block {
-                    self.collect_passthrough_from_stmt(param_name, stmt, results);
+                    self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                 }
                 if let Some(else_stmts) = else_block {
                     for stmt in else_stmts {
-                        self.collect_passthrough_from_stmt(param_name, stmt, results);
+                        self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                     }
                 }
             }
@@ -334,9 +393,9 @@ impl<'ast> Analyzer<'ast> {
                 body: while_body,
                 ..
             } => {
-                self.collect_passthrough_from_expr(param_name, condition, results);
+                self.collect_passthrough_from_expr(param_name, condition, func, results);
                 for stmt in while_body {
-                    self.collect_passthrough_from_stmt(param_name, stmt, results);
+                    self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                 }
             }
             Statement::For {
@@ -344,27 +403,27 @@ impl<'ast> Analyzer<'ast> {
                 body: for_body,
                 ..
             } => {
-                self.collect_passthrough_from_expr(param_name, iterable, results);
+                self.collect_passthrough_from_expr(param_name, iterable, func, results);
                 for stmt in for_body {
-                    self.collect_passthrough_from_stmt(param_name, stmt, results);
+                    self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                 }
             }
             Statement::Loop { body, .. } => {
                 for stmt in body {
-                    self.collect_passthrough_from_stmt(param_name, stmt, results);
+                    self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                 }
             }
             Statement::Match { value, arms, .. } => {
-                self.collect_passthrough_from_expr(param_name, value, results);
+                self.collect_passthrough_from_expr(param_name, value, func, results);
                 for arm in arms {
                     if let Some(guard) = arm.guard {
-                        self.collect_passthrough_from_expr(param_name, guard, results);
+                        self.collect_passthrough_from_expr(param_name, guard, func, results);
                     }
-                    self.collect_passthrough_from_expr(param_name, arm.body, results);
+                    self.collect_passthrough_from_expr(param_name, arm.body, func, results);
                 }
             }
             Statement::Assignment { value, .. } => {
-                self.collect_passthrough_from_expr(param_name, value, results);
+                self.collect_passthrough_from_expr(param_name, value, func, results);
             }
             _ => {}
         }
@@ -374,6 +433,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         expr: &Expression,
+        func: &FunctionDecl<'ast>,
         results: &mut Vec<(String, usize, bool)>,
     ) {
         match expr {
@@ -389,9 +449,9 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                self.collect_passthrough_from_expr(param_name, function, results);
+                self.collect_passthrough_from_expr(param_name, function, func, results);
                 for (_name, arg) in arguments {
-                    self.collect_passthrough_from_expr(param_name, arg, results);
+                    self.collect_passthrough_from_expr(param_name, arg, func, results);
                 }
             }
             Expression::MethodCall {
@@ -404,41 +464,40 @@ impl<'ast> Analyzer<'ast> {
                     if matches!(&**inner, Expression::Identifier { name, .. } if name == "self"));
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(arg, param_name) {
-                        if let Some(method_name) = self.extract_method_name(object, method) {
-                            results.push((method_name, i, is_self_field_call));
-                        }
+                        let method_key = self.qualified_method_registry_key(object, method, func);
+                        results.push((method_key, i, is_self_field_call));
                     }
                 }
-                self.collect_passthrough_from_expr(param_name, object, results);
+                self.collect_passthrough_from_expr(param_name, object, func, results);
                 for (_, arg) in arguments {
-                    self.collect_passthrough_from_expr(param_name, arg, results);
+                    self.collect_passthrough_from_expr(param_name, arg, func, results);
                 }
             }
             Expression::TryOp { expr, .. } => {
-                self.collect_passthrough_from_expr(param_name, expr, results);
+                self.collect_passthrough_from_expr(param_name, expr, func, results);
             }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
-                    self.collect_passthrough_from_stmt(param_name, stmt, results);
+                    self.collect_passthrough_from_stmt(param_name, stmt, func, results);
                 }
             }
             Expression::Unary { operand, .. } => {
-                self.collect_passthrough_from_expr(param_name, operand, results);
+                self.collect_passthrough_from_expr(param_name, operand, func, results);
             }
             Expression::Binary { left, right, .. } => {
-                self.collect_passthrough_from_expr(param_name, left, results);
-                self.collect_passthrough_from_expr(param_name, right, results);
+                self.collect_passthrough_from_expr(param_name, left, func, results);
+                self.collect_passthrough_from_expr(param_name, right, func, results);
             }
             Expression::Index { object, index, .. } => {
-                self.collect_passthrough_from_expr(param_name, object, results);
-                self.collect_passthrough_from_expr(param_name, index, results);
+                self.collect_passthrough_from_expr(param_name, object, func, results);
+                self.collect_passthrough_from_expr(param_name, index, func, results);
             }
             Expression::FieldAccess { object, .. } => {
-                self.collect_passthrough_from_expr(param_name, object, results);
+                self.collect_passthrough_from_expr(param_name, object, func, results);
             }
             Expression::Tuple { elements, .. } => {
                 for e in elements {
-                    self.collect_passthrough_from_expr(param_name, e, results);
+                    self.collect_passthrough_from_expr(param_name, e, func, results);
                 }
             }
             _ => {}
@@ -455,9 +514,5 @@ impl<'ast> Analyzer<'ast> {
             Expression::FieldAccess { field, .. } => Some(field.clone()),
             _ => None,
         }
-    }
-
-    fn extract_method_name(&self, _object: &Expression, method: &str) -> Option<String> {
-        Some(method.to_string())
     }
 }

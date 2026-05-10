@@ -32,6 +32,25 @@ pub struct MethodCallContext<'a, 'ast> {
 pub struct MethodCallAnalyzer;
 
 impl MethodCallAnalyzer {
+    /// True when codegen spells the callee's formal parameter `sig_param_idx` as `&str` in Rust
+    /// (`Type::Reference` to a Windjammer text type, including optimized `Reference(str)`).
+    pub fn callee_param_is_rust_str_slice(
+        method_signature: &Option<crate::analyzer::FunctionSignature>,
+        sig_param_idx: usize,
+    ) -> bool {
+        method_signature
+            .as_ref()
+            .and_then(|sig| sig.param_types.get(sig_param_idx))
+            .is_some_and(|pt| {
+                matches!(
+                    pt,
+                    Type::Reference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                            || matches!(&**inner, Type::Custom(s) if s == "str")
+                )
+            })
+    }
+
     /// Determine if we should add & to this argument
     ///
     /// NEW ARCHITECTURE: Uses type-based signature lookup to make decisions
@@ -690,6 +709,17 @@ impl MethodCallAnalyzer {
         method: &str,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
     ) -> bool {
+        if let Some(sig) = method_signature {
+            let sig_param_idx = if sig.has_self_receiver {
+                param_idx + 1
+            } else {
+                param_idx
+            };
+            if Self::callee_param_is_rust_str_slice(method_signature, sig_param_idx) {
+                return false;
+            }
+        }
+
         // Check stdlib methods FIRST - these have well-known signatures that must be respected
         // even if we have a different signature in the registry (might be a user-defined method
         // with the same name)

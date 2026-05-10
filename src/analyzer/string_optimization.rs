@@ -276,21 +276,25 @@ impl<'ast> Analyzer<'ast> {
                         // SPECIAL CASE: Vec<String>::contains needs &String
                         // This is a Rust stdlib method, not in our signature registry
                         if method == "contains" && idx == 0 {
-                            // Check if the object is a Vec<String>
-                            // For now, assume any contains() call on a collection needs &String
-                            // This is a conservative but correct heuristic
                             return true;
                         }
 
                         // SPECIAL CASE: Vec<String>::push needs String (owned), not &str
-                        // If parameter is passed to push(), it must be String
                         if method == "push" && idx == 0 {
-                            return true; // Require String (owned), not &str
+                            return true;
                         }
 
                         // SPECIAL CASE: HashMap::insert consumes both key and value
-                        // Both args must be owned String, not &str
                         if method == "insert" && (idx == 0 || idx == 1) {
+                            return true;
+                        }
+
+                        // SPECIAL CASE: HashMap::get/remove/contains_key need &String
+                        // because codegen adds & to the argument. Using &str would
+                        // produce &&str which violates String: Borrow<&str>.
+                        if matches!(method.as_ref(), "get" | "get_mut" | "remove" | "contains_key" | "get_key_value" | "entry")
+                            && idx == 0
+                        {
                             return true;
                         }
 

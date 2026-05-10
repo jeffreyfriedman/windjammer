@@ -306,23 +306,42 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     // Step 2: If a compiler-generated mod.rs exists (from compiling mod.wj),
     // preserve it but also discover hand-written modules not already declared.
     let existing_mod_rs = output_dir.join("mod.rs");
+    let mod_items_path_check = output_dir.join("_mod_items.rs");
+    // When _mod_items.rs exists, the compiler just freshly produced mod.wj output.
+    // Delete the stale mod.rs so it gets regenerated from scratch below, preventing
+    // incremental builds from duplicating trait/struct/impl definitions.
+    if mod_items_path_check.exists() && existing_mod_rs.exists() {
+        let _ = fs::remove_file(&existing_mod_rs);
+    }
     if existing_mod_rs.exists() {
         if let Ok(content) = fs::read_to_string(&existing_mod_rs) {
             let is_auto_generated = content.starts_with("// Auto-generated mod.rs")
                     || content.starts_with("// Module declarations");
             if !is_auto_generated {
-                // Clean up stale _mod_items references from prior builds
-                let content = content
-                    .lines()
-                    .filter(|l| {
-                        let t = l.trim();
-                        t != "pub mod _mod_items;"
-                            && t != "pub use _mod_items::*;"
-                            && t != "mod _mod_items;"
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-                    + "\n";
+                // Clean up stale _mod_items references AND previously-merged
+                // mod.wj content from prior builds. Without this, incremental
+                // builds would re-append _mod_items.rs content each time,
+                // producing duplicate struct/trait/impl definitions.
+                let mut filtered_lines = Vec::new();
+                let mut in_mod_wj_section = false;
+                for l in content.lines() {
+                    let t = l.trim();
+                    if t == "pub mod _mod_items;"
+                        || t == "pub use _mod_items::*;"
+                        || t == "mod _mod_items;"
+                    {
+                        continue;
+                    }
+                    if t == "// Code from mod.wj (traits, structs, impls)" {
+                        in_mod_wj_section = true;
+                        continue;
+                    }
+                    if in_mod_wj_section {
+                        continue;
+                    }
+                    filtered_lines.push(l);
+                }
+                let content = filtered_lines.join("\n") + "\n";
                 // Stub / hand-merged mod.rs: add sibling `foo.rs` modules and `foo/mod.rs` dirs.
                 let mut extra_modules = Vec::new();
                 for entry in fs::read_dir(output_dir)? {

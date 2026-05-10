@@ -142,10 +142,32 @@ pub fn get_relative_output_path(
 
 /// Output path for a `.wj` file (directory-module layout when `stem/stem.wj` + `stem/*.wj` co-exist).
 /// Deletes a stale flat `stem.rs` when emitting `stem/mod.rs` so rustc never sees both (E0761).
+///
+/// When `library` is true and the source is `mod.wj`, the compiled content goes to
+/// `_mod_items.rs` instead of `mod.rs`. This prevents the `--module-file` pass from
+/// overwriting code defined in `mod.wj` (structs, traits, impls). The module-file
+/// generator in `build_utils.rs` merges `_mod_items.rs` back into `mod.rs`.
 pub fn resolve_wj_output_path(
     source_root: &Path,
     wj_file: &Path,
     output_dir: &Path,
+) -> Result<PathBuf> {
+    resolve_wj_output_path_ext(source_root, wj_file, output_dir, false)
+}
+
+pub fn resolve_wj_output_path_library(
+    source_root: &Path,
+    wj_file: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    resolve_wj_output_path_ext(source_root, wj_file, output_dir, true)
+}
+
+fn resolve_wj_output_path_ext(
+    source_root: &Path,
+    wj_file: &Path,
+    output_dir: &Path,
+    library: bool,
 ) -> Result<PathBuf> {
     let path = get_relative_output_path(source_root, wj_file, output_dir)?;
     if path.file_name().and_then(|s| s.to_str()) == Some("mod.rs") {
@@ -154,6 +176,12 @@ pub fn resolve_wj_output_path(
             if stale != path {
                 let _ = fs::remove_file(stale);
             }
+        }
+        // In library mode, redirect mod.wj output to _mod_items.rs so that
+        // the --module-file pass can merge it without overwriting.
+        if library {
+            let items_path = path.with_file_name("_mod_items.rs");
+            return Ok(items_path);
         }
     }
     Ok(path)

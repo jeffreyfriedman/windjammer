@@ -1203,7 +1203,20 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         let qualified = format!("{}::{}", type_name, field);
                         if let Some(sig) = self.signature_registry.get_signature(&qualified) {
-                            return sig.return_type.clone();
+                            if let Some(ref ret) = sig.return_type {
+                                return Some(ret.clone());
+                            }
+                            // Constructor convention: Type::new() returns Type
+                            // even when metadata has return_type: null
+                            if !sig.has_self_receiver
+                                && type_name.starts_with(|c: char| c.is_ascii_uppercase())
+                            {
+                                return Some(Type::Custom(type_name.clone()));
+                            }
+                        }
+                        // Even without signature, CamelCase::method() likely returns CamelCase
+                        if type_name.starts_with(|c: char| c.is_ascii_uppercase()) {
+                            return Some(Type::Custom(type_name.clone()));
                         }
                     }
                     // Instance call: Call(FieldAccess(receiver, method), args) — same return type

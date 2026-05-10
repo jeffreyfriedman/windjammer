@@ -1002,9 +1002,19 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut param_types = Vec::new();
                 let mut param_ownership = Vec::new();
 
-                for param in &func.parameters {
+                // Parameter types for call-site coercion must match analyzer + Rust codegen.
+                // Phase-2 optimized `string` parameters become `Reference(str)` in
+                // `AnalyzedFunction::inferred_param_types`, but AST param.type_ stays plain
+                // `string`. Registering AST types breaks MethodCallAnalyzer's user-signatures path
+                // (wrong `param_is_str_ref`, missing `&` on String fields, spurious `.to_string()`).
+                for (idx, param) in func.parameters.iter().enumerate() {
                     if param.name != "self" {
-                        param_types.push(param.type_.clone());
+                        let p_type = analyzed
+                            .inferred_param_types
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_else(|| param.type_.clone());
+                        param_types.push(p_type);
 
                         // Use ACTUAL analyzed ownership from inferred_ownership
                         let ownership = analyzed

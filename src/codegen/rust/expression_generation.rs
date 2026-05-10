@@ -242,22 +242,41 @@ impl<'ast> CodeGenerator<'ast> {
                         || name == "Vec::reserve"
                 });
 
+                // Resolve the full method signature for instance method calls
+                // (parsed as Call(FieldAccess(object, method_name))).
+                // For `sys.register_function("fire")`, the parser produces:
+                //   Call { function: FieldAccess { object: Identifier("sys"), field: "register_function" } }
+                // We need to resolve `sys`'s type to find `SystemCoverage::register_function` in the registry.
+                let instance_method_sig = match function {
+                    Expression::FieldAccess { object, field, .. } => {
+                        self.infer_type_name(object)
+                            .and_then(|tn| {
+                                let qualified = format!("{}::{}", tn, field);
+                                self.signature_registry.get_signature(&qualified).cloned()
+                            })
+                    }
+                    _ => None,
+                };
+
                 // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
                 // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
-                let param_types: Option<Vec<Type>> = func_name.and_then(|name| {
-                    // Try direct lookup first (e.g., "Thing::new")
-                    self.signature_registry
-                        .get_signature(name)
-                        .or_else(|| {
-                            // Fallback: Try finding by suffix (e.g., "::new" matches "Thing::new")
-                            // Extract just the method name for lookup
-                            let method_name =
-                                name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
-                            self.signature_registry
-                                .find_signature_ending_with(method_name)
-                        })
-                        .map(|sig| sig.param_types.clone())
-                });
+                let param_types: Option<Vec<Type>> = if instance_method_sig.is_some() {
+                    instance_method_sig.as_ref().map(|sig| sig.param_types.clone())
+                } else {
+                    func_name.and_then(|name| {
+                        // Try direct lookup first (e.g., "Thing::new")
+                        self.signature_registry
+                            .get_signature(name)
+                            .or_else(|| {
+                                // Fallback: Try finding by suffix (e.g., "::new" matches "Thing::new")
+                                let method_name =
+                                    name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
+                                self.signature_registry
+                                    .find_signature_ending_with(method_name)
+                            })
+                            .map(|sig| sig.param_types.clone())
+                    })
+                };
 
                 let mut arg_strings = Vec::new();
                 for (idx, (_label, arg)) in arguments.iter().enumerate() {
@@ -312,6 +331,48 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
 
+                    // Ownership-based string coercion for instance method calls
+                    // (Call(FieldAccess) path — same logic as MethodCall path)
+                    if let Some(ref sig) = instance_method_sig {
+                        let sig_param_idx = if sig.has_self_receiver { idx + 1 } else { idx };
+                        if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                            match ownership {
+                                crate::analyzer::OwnershipMode::Owned => {
+                                    let is_str_lit = matches!(
+                                        arg,
+                                        Expression::Literal { value: crate::parser::Literal::String(_), .. }
+                                    );
+                                    if is_str_lit {
+                                        let is_explicit_str_ref = sig.param_types.get(sig_param_idx)
+                                            .is_some_and(|t| matches!(t, Type::Reference(inner) if
+                                                matches!(**inner, Type::String) ||
+                                                matches!(**inner, Type::Custom(ref s) if s == "str")
+                                            ));
+                                        if !is_explicit_str_ref {
+                                            arg_str = format!("{}.to_string()", arg_str);
+                                        }
+                                    }
+                                }
+                                crate::analyzer::OwnershipMode::Borrowed => {
+                                    if is_string_literal {
+                                        let param_is_str_ref_explicit = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                            matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
+                                        });
+                                        if !param_is_str_ref_explicit {
+                                            let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                                matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                            });
+                                            if param_is_string {
+                                                arg_str = format!("&{}.to_string()", arg_str);
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
                     arg_strings.push(arg_str);
                 }
 
@@ -339,6 +400,40 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Index { object, .. } => self.extract_root_identifier(object),
             _ => None,
         }
+    }
+
+    /// Borrow an owned `String` field when the callee's parameter is `&str` and `should_add_ref`
+    /// missed it (e.g. signature collision / edge cases).
+    fn ensure_ref_for_owned_string_field_when_callee_expects_str(
+        &self,
+        method_signature: &Option<crate::analyzer::FunctionSignature>,
+        sig_param_idx: usize,
+        arg_to_generate: &Expression<'ast>,
+        arg_str: String,
+        string_literal_converted: bool,
+    ) -> String {
+        if string_literal_converted {
+            return arg_str;
+        }
+        if arg_str.starts_with('&') {
+            return arg_str;
+        }
+        if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+            method_signature,
+            sig_param_idx,
+        ) {
+            return arg_str;
+        }
+        if let Expression::FieldAccess { .. } = arg_to_generate {
+            if self
+                .infer_expression_type(arg_to_generate)
+                .as_ref()
+                .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+            {
+                return format!("&{}", arg_str);
+            }
+        }
+        arg_str
     }
 
     /// `if let` / `match` on `&enum` binds `&U` for Copy fields; struct literals need `U` (E0308).
@@ -1619,6 +1714,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                     false
                                                 };
 
+                                            let mut string_literal_converted_here = false;
+
                                             // PHASE 2: String literals need conversion for &String parameters (but not &str!)
                                             if is_string_literal {
                                                 // Check if parameter is explicitly &str
@@ -1637,6 +1734,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                     if param_is_string {
                                                         // Parameter is &String - need conversion
                                                         arg_str = format!("&{}.to_string()", arg_str);
+                                                        string_literal_converted_here = true;
                                                     }
                                                 }
                                             } else if !is_user_closure_param {
@@ -1661,6 +1759,14 @@ impl<'ast> CodeGenerator<'ast> {
                                                     arg_str = format!("&{}", arg_str);
                                                 }
                                             }
+
+                                            arg_str = self.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                                                &method_signature,
+                                                sig_param_idx,
+                                                arg_to_generate,
+                                                arg_str,
+                                                string_literal_converted_here,
+                                            );
                                         }
                                         OwnershipMode::MutBorrowed => {
                                             let is_already_mut_ref =
@@ -1861,6 +1967,25 @@ impl<'ast> CodeGenerator<'ast> {
                                     );
                                 if should_ref {
                                     arg_str = format!("&{}", arg_str);
+                                }
+
+                                let string_literal_converted_here = (is_string_literal || is_str_param)
+                                    && arg_str.ends_with(".to_string()");
+                                if let Some(fb_idx) = fallback_sig.as_ref().map(|s| {
+                                    if s.has_self_receiver {
+                                        i + 1
+                                    } else {
+                                        i
+                                    }
+                                }) {
+                                    arg_str =
+                                        self.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                                            &fallback_sig,
+                                            fb_idx,
+                                            arg_to_generate,
+                                            arg_str,
+                                            string_literal_converted_here,
+                                        );
                                 }
                                 arg_str
                             })
@@ -2711,10 +2836,13 @@ impl<'ast> CodeGenerator<'ast> {
                                                             .is_some_and(|t| {
                                                             crate::codegen::rust::types::is_windjammer_text_type(t)
                                                         });
-                                                        if is_text {
+                                                        let is_phase2_str_param = self
+                                                            .str_ref_optimized_params
+                                                            .contains(name.as_str());
+                                                        if is_text && !is_phase2_str_param {
                                                             arg_str =
                                                                 format!("{}.to_string()", arg_str);
-                                                        } else {
+                                                        } else if !is_text {
                                                             // Borrowed from iterator or inferred - use .clone()
                                                             // This handles &T → T for non-text types
                                                             arg_str = format!("{}.clone()", arg_str);
@@ -3051,9 +3179,6 @@ impl<'ast> CodeGenerator<'ast> {
                         .signature_registry
                         .get_signature(&qualified_name)
                         .cloned();
-                    if method == "register_function" || qualified_name == "SystemCoverage::register_function" {
-                        eprintln!("[DEBUG] register_function: type_name={}, qualified={}, sig_found={}, sig_details={:?}", type_name, qualified_name, sig.is_some(), sig.as_ref().map(|s| (&s.param_ownership, s.has_self_receiver)));
-                    }
                     // Validate: if the signature's param count doesn't match the call's
                     // argument count, it's a name collision (e.g., two different types
                     // both named Ability with different activate methods). In that case,
@@ -3359,20 +3484,34 @@ impl<'ast> CodeGenerator<'ast> {
                         // When passing a Phase 2 optimized &str parameter to a method expecting owned String, convert it
                         // This handles cases like: HashMap::insert(key, value) where key is &str but insert expects String
                         if let Expression::Identifier { name, .. } = arg_to_generate {
-                            // Check if this parameter was Phase 2 optimized to &str
-                            let is_str_ref_optimized = self.str_ref_optimized_params.contains(name.as_str());
+                            let is_str_ref_optimized =
+                                self.str_ref_optimized_params.contains(name.as_str());
 
                             if is_str_ref_optimized {
-                                // Check if method expects owned String for this parameter
-                                // For stdlib methods like HashMap::insert, use the should_add_to_string heuristic
-                                let expects_owned = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
-                                    i,
-                                    method,
+                                let sig_param_idx = if method_signature
+                                    .as_ref()
+                                    .is_some_and(|s| s.has_self_receiver)
+                                {
+                                    i + 1
+                                } else {
+                                    i
+                                };
+                                if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
                                     &method_signature,
-                                );
+                                    sig_param_idx,
+                                ) {
+                                    let expects_owned = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
+                                        i,
+                                        method,
+                                        &method_signature,
+                                    );
 
-                                if expects_owned && !arg_str.ends_with(".to_string()") && !arg_str.ends_with(".clone()") {
-                                    arg_str = format!("{}.to_string()", arg_str);
+                                    if expects_owned
+                                        && !arg_str.ends_with(".to_string()")
+                                        && !arg_str.ends_with(".clone()")
+                                    {
+                                        arg_str = format!("{}.to_string()", arg_str);
+                                    }
                                 }
                             }
                         }
@@ -3506,6 +3645,23 @@ impl<'ast> CodeGenerator<'ast> {
                                     arg_str = format!("&{}", arg_str);
                                 }
                             }
+                        }
+
+                        let sig_param_idx_str_field = method_signature.as_ref().map(|sig| {
+                            if sig.has_self_receiver {
+                                i + 1
+                            } else {
+                                i
+                            }
+                        });
+                        if let Some(idx) = sig_param_idx_str_field {
+                            arg_str = self.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                                &method_signature,
+                                idx,
+                                arg_to_generate,
+                                arg_str,
+                                string_literal_converted,
+                            );
                         }
 
                         // AUTO-BORROW: Methods that take &T or &[T] should auto-borrow
