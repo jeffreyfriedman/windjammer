@@ -4657,42 +4657,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::Tuple {
                 elements: exprs, ..
-            } => {
-                let expr_strs: Vec<String> = exprs
-                    .iter()
-                    .map(|e| {
-                        let mut s = self.generate_expression(e);
-                        if !s.ends_with(".clone()") && !s.ends_with(".to_string()") {
-                            let ty = self.infer_expression_type(e);
-                            let needs_clone = ty.as_ref().is_some_and(|t| match t {
-                                Type::Reference(inner) | Type::MutableReference(inner) => {
-                                    !self.is_type_copy(inner)
-                                }
-                                _ => false,
-                            });
-                            if !needs_clone {
-                                // Also clone non-Copy field accesses through references
-                                // (e.g. from_stack.item.id where from_stack is behind &)
-                                if let Expression::FieldAccess { object, .. } = e {
-                                    let root_is_ref =
-                                        self.field_access_root_is_behind_reference(object);
-                                    if root_is_ref {
-                                        let is_copy =
-                                            ty.as_ref().is_some_and(|t| self.is_type_copy(t));
-                                        if !is_copy {
-                                            s = format!("{}.clone()", s);
-                                        }
-                                    }
-                                }
-                            } else {
-                                s = format!("{}.clone()", s);
-                            }
-                        }
-                        s
-                    })
-                    .collect();
-                format!("({})", expr_strs.join(", "))
-            }
+            } => self.generate_tuple(exprs),
             Expression::Array {
                 elements: exprs, ..
             } => {
@@ -5365,6 +5330,42 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             format!("{}..{}", start_str, end_str)
         }
+    }
+
+    /// Generate code for tuple expression
+    fn generate_tuple(&mut self, elements: &[&Expression<'ast>]) -> String {
+        let expr_strs: Vec<String> = elements
+            .iter()
+            .map(|e| {
+                let mut s = self.generate_expression(e);
+                if !s.ends_with(".clone()") && !s.ends_with(".to_string()") {
+                    let ty = self.infer_expression_type(e);
+                    let needs_clone = ty.as_ref().is_some_and(|t| match t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            !self.is_type_copy(inner)
+                        }
+                        _ => false,
+                    });
+                    if !needs_clone {
+                        // Also clone non-Copy field accesses through references
+                        // (e.g. from_stack.item.id where from_stack is behind &)
+                        if let Expression::FieldAccess { object, .. } = e {
+                            let root_is_ref = self.field_access_root_is_behind_reference(object);
+                            if root_is_ref {
+                                let is_copy = ty.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy {
+                                    s = format!("{}.clone()", s);
+                                }
+                            }
+                        }
+                    } else {
+                        s = format!("{}.clone()", s);
+                    }
+                }
+                s
+            })
+            .collect();
+        format!("({})", expr_strs.join(", "))
     }
 
     #[inline]
