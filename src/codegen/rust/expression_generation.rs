@@ -1179,42 +1179,9 @@ impl<'ast> CodeGenerator<'ast> {
                         return macro_call;
                     }
 
-                    // Special case: qualify test assertion runtime functions
-                    // THE WINDJAMMER WAY: These are functions, not macros, so they need proper paths
-                    let test_functions = [
-                        "assert_gt",
-                        "assert_lt",
-                        "assert_gte",
-                        "assert_lte",
-                        "assert_approx",
-                        "assert_not_empty",
-                        "assert_empty",
-                        "assert_contains",
-                        "assert_is_some",
-                        "assert_is_none",
-                    ];
-
-                    if test_functions.contains(&func_name.as_str()) {
-                        let args: Vec<String> = arguments
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, (_label, arg))| {
-                                let generated = self.generate_expression(arg);
-                                // assert_is_some and assert_is_none expect &Option, so add & for first arg
-                                if (func_name == "assert_is_some" || func_name == "assert_is_none")
-                                    && idx == 0
-                                {
-                                    format!("&{}", generated)
-                                } else {
-                                    generated
-                                }
-                            })
-                            .collect();
-                        return format!(
-                            "windjammer_runtime::test::{}({})",
-                            func_name,
-                            args.join(", ")
-                        );
+                    // Try test runtime function qualification
+                    if let Some(qualified_call) = self.try_qualify_test_function(&func_name, arguments) {
+                        return qualified_call;
                     }
                 }
 
@@ -4006,6 +3973,51 @@ impl<'ast> CodeGenerator<'ast> {
             })
             .collect();
         Some(format!("{}!({})", func_name, args.join(", ")))
+    }
+
+    /// Try to qualify test assertion runtime functions
+    /// Returns Some(code) if this is a test runtime function, None otherwise
+    fn try_qualify_test_function(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> Option<String> {
+        // Test runtime functions that need windjammer_runtime::test:: qualification
+        let test_functions = [
+            "assert_gt",
+            "assert_lt",
+            "assert_gte",
+            "assert_lte",
+            "assert_approx",
+            "assert_not_empty",
+            "assert_empty",
+            "assert_contains",
+            "assert_is_some",
+            "assert_is_none",
+        ];
+
+        if !test_functions.contains(&func_name) {
+            return None;
+        }
+
+        let args: Vec<String> = arguments
+            .iter()
+            .enumerate()
+            .map(|(idx, (_label, arg))| {
+                let generated = self.generate_expression(arg);
+                // assert_is_some and assert_is_none expect &Option, so add & for first arg
+                if (func_name == "assert_is_some" || func_name == "assert_is_none") && idx == 0 {
+                    format!("&{}", generated)
+                } else {
+                    generated
+                }
+            })
+            .collect();
+        Some(format!(
+            "windjammer_runtime::test::{}({})",
+            func_name,
+            args.join(", ")
+        ))
     }
 
     /// Generate code for block expression ({ ... })
