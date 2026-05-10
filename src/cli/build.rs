@@ -105,12 +105,12 @@ pub fn execute(
 
     // Generate mod.rs if requested
     if module_file {
-        crate::generate_mod_file(output_dir)?;
+        crate::build_utils::generate_mod_file(output_dir)?;
     }
 
     // Strip main() functions if library mode
     if library {
-        crate::strip_main_functions(output_dir)?;
+        crate::build_utils::strip_main_functions(output_dir)?;
     }
 
     println!("\n{} Transpilation complete!", "Success!".green().bold());
