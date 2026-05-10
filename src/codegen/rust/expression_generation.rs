@@ -15,6 +15,7 @@ use super::arm_string_analysis;
 use super::ast_utilities;
 use super::constant_folding;
 use super::expression_helpers;
+use super::expression_utilities;
 use super::float_type_utilities;
 use super::operators;
 use super::pattern_analysis;
@@ -1679,7 +1680,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .enumerate()
                             .flat_map(|(i, (_label, arg))| {
                                 let arg_to_generate =
-                                    Self::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
+                                    expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
                                 let prev_coerce_string_literals = self.coerce_string_literals_to_owned;
                                 self.coerce_string_literals_to_owned = false;
                                 let prev_match_arm_str = self.in_match_arm_needing_string;
@@ -1911,7 +1912,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .enumerate()
                             .map(|(i, (_label, arg))| {
                                 let arg_to_generate =
-                                    Self::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
+                                    expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
                                 let prev_coerce_string_literals = self.coerce_string_literals_to_owned;
                                 self.coerce_string_literals_to_owned = false;
                                 let prev_match_arm_str = self.in_match_arm_needing_string;
@@ -5561,31 +5562,6 @@ impl<'ast> CodeGenerator<'ast> {
         format!("format!(\"{}\", {})", format_str, args.join(", "))
     }
 
-    /// Parser emits `obj.method(args)` as `Call { function: FieldAccess(obj, method), args }`.
-    /// Strip a leading `&ident` for collection key methods so `should_add_ref` can re-add `&` only when needed.
-    fn strip_unary_ref_for_collection_key_arg<'a>(
-        method: &str,
-        param_idx: usize,
-        arg: &'a Expression<'a>,
-    ) -> &'a Expression<'a> {
-        let is_key_method =
-            super::stdlib_method_traits::is_map_key_method(method) && param_idx == 0;
-        if !is_key_method {
-            return arg;
-        }
-        if let Expression::Unary {
-            op: crate::parser::UnaryOp::Ref,
-            operand,
-            ..
-        } = arg
-        {
-            if matches!(&**operand, Expression::Identifier { .. }) {
-                return operand;
-            }
-        }
-        arg
-    }
-
     /// `f32`/`f64` classification for binary operand codegen (inference + casts + WJ types).
     fn float_class_for_binary_operand(
         &self,
@@ -6084,18 +6060,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn star_for_deref_compare(expr: &Expression, s: &str) -> String {
-        if s.starts_with('*') {
-            return s.to_string();
-        }
-        let inner = if matches!(expr, Expression::Binary { .. }) {
-            format!("({})", s)
-        } else {
-            s.to_string()
-        };
-        format!("*{}", inner)
-    }
-
     /// Fix E0277 `PartialEq` mismatches: `&T` vs `T` (Copy), `&u8` vs int literal.
     /// TDD FIX: Added handling for String == &String comparisons after changing
     /// borrowed parameters from &str to &String. String == &String doesn't work
@@ -6446,7 +6410,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && (right_is_ref || right_is_borrowed_param)
                 && !right_type_unknown
             {
-                *right_str = Self::star_for_deref_compare(right, right_str);
+                *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                 return;
             }
             // &String (ref, known) == String (owned, known) → deref left
@@ -6455,18 +6419,18 @@ impl<'ast> CodeGenerator<'ast> {
                 && right_is_owned
                 && !right_type_unknown
             {
-                *left_str = Self::star_for_deref_compare(left, left_str);
+                *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                 return;
             }
 
             // Rule 2: One borrowed param (known), one unknown
             // Unknown closure params default to &T, so deref the borrowed param side
             if left_is_borrowed_param && !left_type_unknown && right_type_unknown {
-                *left_str = Self::star_for_deref_compare(left, left_str);
+                *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                 return;
             }
             if right_is_borrowed_param && !right_type_unknown && left_type_unknown {
-                *right_str = Self::star_for_deref_compare(right, right_str);
+                *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                 return;
             }
 
@@ -6509,12 +6473,12 @@ impl<'ast> CodeGenerator<'ast> {
             if lb == rb && self.is_type_copy(lb) {
                 // Don't add * if right side is a match arm binding (owned, not ref)
                 if left_is_ref && !right_is_ref && !right_is_match_binding {
-                    *left_str = Self::star_for_deref_compare(left, left_str);
+                    *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                     return;
                 }
                 // Don't add * if left side is a match arm binding (owned, not ref)
                 if right_is_ref && !left_is_ref && !left_is_match_binding {
-                    *right_str = Self::star_for_deref_compare(right, right_str);
+                    *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                     return;
                 }
             }
@@ -6530,7 +6494,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 )
             {
-                *left_str = Self::star_for_deref_compare(left, left_str);
+                *left_str = expression_utilities::star_for_deref_compare(left, left_str);
             }
         }
 
