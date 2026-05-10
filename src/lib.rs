@@ -55,6 +55,8 @@ pub mod error_catalog;
 #[cfg(feature = "cli")]
 pub mod error_statistics;
 #[cfg(feature = "cli")]
+pub mod file_compiler; // Single-file compilation
+#[cfg(feature = "cli")]
 pub mod plugin;
 #[cfg(feature = "cli")]
 pub mod test_runner;
