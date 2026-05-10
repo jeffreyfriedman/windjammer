@@ -39,6 +39,7 @@ pub mod self_analysis;
 pub mod statement_generation;
 pub mod statements;
 pub mod string_analysis;
+pub mod string_utilities;
 pub mod trait_derivation;
 pub mod type_analysis;
 pub mod type_casting;

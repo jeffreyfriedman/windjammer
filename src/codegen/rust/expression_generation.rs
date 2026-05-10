@@ -20,6 +20,7 @@ use super::float_type_utilities;
 use super::operators;
 use super::pattern_analysis;
 use super::string_analysis;
+use super::string_utilities;
 use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
@@ -5089,7 +5090,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
                         let needs_string_conversion_from_type =
-                            Self::return_type_expects_owned_string(
+                            string_utilities::return_type_expects_owned_string(
                                 &self.current_function_return_type,
                             ) || arms.iter().any(|arm| {
                                 string_analysis::expression_produces_string(arm.body)
@@ -5361,15 +5362,6 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_unsafe_block = old_in_unsafe;
                 output
             }
-        }
-    }
-
-    /// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer).
-    pub(super) fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
-        match ret {
-            Some(Type::String) => true,
-            Some(Type::Custom(n)) if n == "String" || n == "string" => true,
-            _ => false,
         }
     }
 
