@@ -4371,25 +4371,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let qualified_name = self.qualify_external_path_identifier(name);
                 format!("{} {{ {} }}", qualified_name, field_str.join(", "))
             }
-            Expression::MapLiteral { pairs, .. } => {
-                // Generate HashMap literal: HashMap::from([(key, value), ...])
-                if pairs.is_empty() {
-                    "std::collections::HashMap::new()".to_string()
-                } else {
-                    let entries_str: Vec<String> = pairs
-                        .iter()
-                        .map(|(k, v)| {
-                            let key_str = self.generate_expression(k);
-                            let val_str = self.generate_expression(v);
-                            format!("({}, {})", key_str, val_str)
-                        })
-                        .collect();
-                    format!(
-                        "std::collections::HashMap::from([{}])",
-                        entries_str.join(", ")
-                    )
-                }
-            }
+            Expression::MapLiteral { pairs, .. } => self.generate_map_literal(pairs),
             Expression::TryOp { expr: inner, .. } => self.generate_try_op(inner),
             Expression::Await { expr: inner, .. } => self.generate_await(inner),
             Expression::ChannelSend { channel, value, .. } => {
@@ -5370,6 +5352,30 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let type_str = self.type_to_rust(type_);
         format!("{} as {}", expr_str, type_str)
+    }
+
+    /// Generate code for map literal expression
+    /// Produces HashMap::new() for empty maps, HashMap::from([...]) for non-empty
+    fn generate_map_literal(
+        &mut self,
+        pairs: &[(&Expression<'ast>, &Expression<'ast>)],
+    ) -> String {
+        if pairs.is_empty() {
+            "std::collections::HashMap::new()".to_string()
+        } else {
+            let entries_str: Vec<String> = pairs
+                .iter()
+                .map(|(k, v)| {
+                    let key_str = self.generate_expression(k);
+                    let val_str = self.generate_expression(v);
+                    format!("({}, {})", key_str, val_str)
+                })
+                .collect();
+            format!(
+                "std::collections::HashMap::from([{}])",
+                entries_str.join(", ")
+            )
+        }
     }
 
     #[inline]
