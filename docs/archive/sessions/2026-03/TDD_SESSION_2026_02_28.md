@@ -123,7 +123,7 @@ This session embodied the Windjammer philosophy:
    - Verify E0596 errors resolve
 
 3. **Continue Dogfooding**:
-   - Compile game: `cd windjammer-game/windjammer-game-core && wj build src_wj/mod.wj`
+   - Compile game: `cd windjammer-game/windjammer-game-core && wj build src/mod.wj`
    - Track error count reduction
    - Address remaining E0310, E0507 errors
 

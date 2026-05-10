@@ -76,7 +76,7 @@ Fix all remaining compiler bugs and game code issues using Test-Driven Developme
 **Impact:** 446 → 123 errors (**323 eliminated!**)
 
 **Files:**
-- `windjammer-game-core/src_wj/dialogue/system.wj`
+- `windjammer-game-core/src/dialogue/system.wj`
 
 ### 3. Quest Getters Fix
 
@@ -94,7 +94,7 @@ pub fn title(self) -> &str { &self.title }
 **Impact:** Will eliminate 4 E0507 errors once dialogue compiles
 
 **Files:**
-- `windjammer-game-core/src_wj/quest/quest.wj`
+- `windjammer-game-core/src/quest/quest.wj`
 
 ### 4. FFI Module Creation
 
@@ -109,8 +109,8 @@ extern fn renderer_draw_sprite_from_atlas(...)  // 1 use
 **Impact:** Will eliminate 12 E0425 errors once dialogue compiles
 
 **Files:**
-- `windjammer-game-core/src_wj/ffi.wj` (NEW!)
-- `windjammer-game-core/src_wj/mod.wj` (registered module)
+- `windjammer-game-core/src/ffi.wj` (NEW!)
+- `windjammer-game-core/src/mod.wj` (registered module)
 
 ## ⏳ Remaining Work (121 errors)
 

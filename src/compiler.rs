@@ -393,7 +393,7 @@ pub fn build_project_ext(
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
         // Determine output file -- preserve source directory hierarchy.
-        // Single-file `wj build src_wj/ecs/foo.wj` uses the same layout as `build_project` in
+        // Single-file `wj build src/ecs/foo.wj` uses the same layout as `build_project` in
         // main (see `project_paths::find_source_root` + `get_relative_output_path`), not a flat
         // `output/foo.rs`.
         let output_file = if wj_files.len() > 1 && library {
@@ -1750,7 +1750,7 @@ fn build_type_defining_modules_for_library(
 }
 
 /// Find dependency metadata directories by walking up from the file's parent directory.
-/// Looks for sibling directories that contain `.wj.meta` files (e.g., windjammer-game-core/src_wj/).
+/// Looks for sibling directories that contain `.wj.meta` files (e.g., windjammer-game-core/src/).
 /// Also includes explicit external paths from `--metadata` CLI flags.
 fn find_dependency_metadata_roots(
     file_parent: &Path,
@@ -1763,7 +1763,7 @@ fn find_dependency_metadata_roots(
         roots.push(path.clone());
     }
 
-    // 2. Walk up from file_parent to find workspace root, then search for src_wj/ directories
+    // 2. Walk up from file_parent to find workspace root, then search for sibling src/ directories
     let canonical =
         std::fs::canonicalize(file_parent).unwrap_or_else(|_| file_parent.to_path_buf());
     let mut current = canonical.as_path();

@@ -11,7 +11,7 @@ The 6 f32 comparison errors (physics_body, quick_start, post_processing) are **a
 
 ### 1. Generated Code Check
 
-Built windjammer-game-core with `wj build src_wj/ --output /tmp/wj_game_test --library --no-cargo`:
+Built windjammer-game-core with `wj build src/ --output /tmp/wj_game_test --library --no-cargo`:
 
 ```
 /tmp/wj_game_test/game.rs:39:
@@ -46,7 +46,7 @@ Built windjammer-game-core with `wj build src_wj/ --output /tmp/wj_game_test --l
 ### 3. Metadata Loading
 
 - **load_imported_metadata**: Loads from `use` statements; path resolution tries math/vec3.wj.meta, math.wj.meta, etc.
-- **source_root**: find_source_root() returns src_wj for nested files
+- **source_root**: find_source_root() returns src for nested files
 - **Candidate 4** (math/vec3.wj.meta for module_path=["math","vec3"]) correctly finds vec3.wj.meta
 
 ### 4. Cross-Module Test Added

@@ -18,7 +18,7 @@ use anyhow::Result;
 ///
 /// Example:
 /// ```
-/// // src_wj/panels/transform_gizmo_ui.wj
+/// // src/panels/transform_gizmo_ui.wj
 /// use crate::gizmos::*    // Explicit glob import
 /// use crate::scene::*     // Another explicit glob import
 /// ```
@@ -55,7 +55,7 @@ fn test_no_super_glob_when_explicit_glob_imports_present() -> Result<()> {
 
     // Create two modules that both export a type with the same name
     // Module A: gizmos/
-    let gizmos_dir = temp_dir.join("src_wj").join("gizmos");
+    let gizmos_dir = temp_dir.join("src").join("gizmos");
     fs::create_dir_all(&gizmos_dir)?;
 
     fs::write(
@@ -90,7 +90,7 @@ pub use transform_gizmo::TransformGizmo
     )?;
 
     // Module B: panels/
-    let panels_dir = temp_dir.join("src_wj").join("panels");
+    let panels_dir = temp_dir.join("src").join("panels");
     fs::create_dir_all(&panels_dir)?;
 
     // scene_view.wj defines its own GizmoMode (or re-uses one)
@@ -167,7 +167,7 @@ version = "0.1.0"
 
     let output = Command::new(&wj_compiler)
         .arg("build")
-        .arg(temp_dir.join("src_wj"))
+        .arg(temp_dir.join("src"))
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")
@@ -227,7 +227,7 @@ fn test_super_glob_still_added_without_explicit_glob_imports() -> Result<()> {
     fs::create_dir_all(&temp_dir)?;
 
     // Module with sibling files that need `use super::*`
-    let quest_dir = temp_dir.join("src_wj").join("quest");
+    let quest_dir = temp_dir.join("src").join("quest");
     fs::create_dir_all(&quest_dir)?;
 
     fs::write(
@@ -289,7 +289,7 @@ version = "0.1.0"
 
     let output = Command::new(&wj_compiler)
         .arg("build")
-        .arg(temp_dir.join("src_wj"))
+        .arg(temp_dir.join("src"))
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")

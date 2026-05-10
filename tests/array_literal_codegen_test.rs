@@ -46,7 +46,7 @@ fn test_array_literal_generates_fixed_array_not_vec() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write a WJ file that uses array literal syntax [a, b]
@@ -142,7 +142,7 @@ fn test_vec_macro_still_generates_vec() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write a WJ file that uses vec![] macro syntax

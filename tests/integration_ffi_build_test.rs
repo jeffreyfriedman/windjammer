@@ -9,10 +9,10 @@ use tempfile::TempDir;
 fn test_full_build_includes_ffi_imports() {
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
-    let src_wj = project_root.join("src_wj");
+    let src = project_root.join("src");
     let build_dir = project_root.join("build");
 
-    fs::create_dir_all(&src_wj).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     // Create runtime.wj that uses crate::ffi (exactly like the real file)
     let runtime_wj = r#"
@@ -34,7 +34,7 @@ impl GameRuntime {
     }
 }
 "#;
-    fs::write(src_wj.join("runtime.wj"), runtime_wj).unwrap();
+    fs::write(src.join("runtime.wj"), runtime_wj).unwrap();
 
     // Create game_loop.wj to provide GameLoop trait
     let game_loop_wj = r#"
@@ -49,7 +49,7 @@ pub struct GameLoopConfig {
     pub window_height: int,
 }
 "#;
-    fs::write(src_wj.join("game_loop.wj"), game_loop_wj).unwrap();
+    fs::write(src.join("game_loop.wj"), game_loop_wj).unwrap();
 
     // Create ffi.rs in project root (hand-written)
     let ffi_rs = r#"
@@ -64,7 +64,7 @@ where
 
     // Run the actual build process
     let result = windjammer::build_project(
-        &src_wj,
+        &src,
         &build_dir,
         windjammer::CompilationTarget::Rust,
         true,
@@ -109,10 +109,10 @@ fn test_regeneration_preserves_ffi_imports() {
     // THE WINDJAMMER WAY: Two-pass compilation shouldn't drop imports
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
-    let src_wj = project_root.join("src_wj");
+    let src = project_root.join("src");
     let build_dir = project_root.join("build");
 
-    fs::create_dir_all(&src_wj).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let simple_wj = r#"
 use crate::ffi
@@ -121,14 +121,14 @@ pub fn test() {
     ffi::some_function()
 }
 "#;
-    fs::write(src_wj.join("simple.wj"), simple_wj).unwrap();
+    fs::write(src.join("simple.wj"), simple_wj).unwrap();
 
     let ffi_rs = "pub fn some_function() {}";
     fs::write(project_root.join("ffi.rs"), ffi_rs).unwrap();
 
     // Build
     let result = windjammer::build_project(
-        &src_wj,
+        &src,
         &build_dir,
         windjammer::CompilationTarget::Rust,
         true,

@@ -205,7 +205,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 ### Test Framework Improvements
 - **Generic library detection**: Test framework now auto-detects and compiles user libraries
   - Reads `wj.toml` to find library name and source directory
-  - Compiles `src_wj/` as library dependency for tests
+  - Compiles `src/` as library dependency for tests
   - Generates proper Cargo.toml with library dependency
   - No hardcoded project names - fully generic and reusable
 - **Robust path resolution**: Enhanced `find_windjammer_runtime_path()` with:

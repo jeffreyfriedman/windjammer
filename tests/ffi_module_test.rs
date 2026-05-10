@@ -14,7 +14,7 @@ use tempfile::TempDir;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_module_declaration() {
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let output_dir = temp_dir.path().join("build");
     fs::create_dir_all(&src_dir).unwrap();
     fs::create_dir_all(&output_dir).unwrap();
@@ -102,7 +102,7 @@ pub fn get_window_width() -> i64 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_subdirectory() {
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let output_dir = temp_dir.path().join("build");
     fs::create_dir_all(&src_dir).unwrap();
     fs::create_dir_all(&output_dir).unwrap();

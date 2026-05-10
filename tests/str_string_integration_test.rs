@@ -15,7 +15,7 @@ fn test_scene_manager_str_params_emit_ampersand_str() {
     let scene_manager_wj = workspace_root
         .join("windjammer-game")
         .join("windjammer-game-core")
-        .join("src_wj")
+        .join("src")
         .join("scene")
         .join("manager.wj");
 

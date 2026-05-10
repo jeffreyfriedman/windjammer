@@ -4,21 +4,25 @@ use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Find the actual source root for a Windjammer file
+/// Find the actual source root for a Windjammer file.
 ///
-/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
-/// by looking for a directory that looks like a source root:
-/// - Named "src_wj" or "src" (this is the most reliable indicator)
-/// - Or the topmost directory containing mod.wj
+/// Walks up from the file looking for a directory that is a project source root.
+/// Priority order (first match closest to the file wins):
+///   1. `src` — only if it looks like a real project source dir
+///              (sibling Cargo.toml, or contains mod.wj / .wj files)
+///   2. Topmost directory containing mod.wj
+///   3. The file's immediate parent (standalone file fallback)
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
-    let mut found_src = None;
+    let mut found_project_src: Option<&Path> = None;
 
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            if dir_name == "src" {
-                found_src = Some(parent);
+            if dir_name == "src" && found_project_src.is_none() {
+                if is_project_source_dir(parent) {
+                    found_project_src = Some(parent);
+                }
             }
         }
 
@@ -29,7 +33,7 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
         current = parent;
     }
 
-    if let Some(src) = found_src {
+    if let Some(src) = found_project_src {
         return Some(src);
     }
 
@@ -40,11 +44,31 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     file_path.parent()
 }
 
+/// Check if a `src/` directory is a real project source root, not just any
+/// directory named "src" (e.g. `/Users/dev/src/` is a personal code directory).
+fn is_project_source_dir(src_dir: &Path) -> bool {
+    if let Some(project_dir) = src_dir.parent() {
+        if project_dir.join("Cargo.toml").exists() {
+            return true;
+        }
+        if project_dir.join("mod.wj").exists() {
+            return true;
+        }
+    }
+    if src_dir.join("mod.wj").exists() {
+        return true;
+    }
+    if src_dir.join("lib.wj").exists() || src_dir.join("main.wj").exists() {
+        return true;
+    }
+    false
+}
+
 /// Calculate output path that preserves directory structure
 ///
 /// Example:
-/// - source_root: "windjammer-game/src_wj"
-/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
+/// - source_root: "windjammer-game/src"
+/// - input_path: "windjammer-game/src/math/vec2.wj"
 /// - output_dir: "build"
 /// - Result: "build/math/vec2.rs"
 pub fn get_relative_output_path(

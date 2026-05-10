@@ -19,8 +19,8 @@ use std::process::{Command, Stdio};
 )]
 fn test_trait_explicit_mut_self_preserved() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let src_wj = temp_dir.path().join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = temp_dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Trait with explicit &mut self that doesn't mutate
     let wj_code = r#"
@@ -37,7 +37,7 @@ pub trait GameLoop {
 }
 "#;
 
-    let input_file = src_wj.join("mod.wj");
+    let input_file = src.join("mod.wj");
     std::fs::write(&input_file, wj_code).unwrap();
 
     let output_dir = temp_dir.path().join("out");

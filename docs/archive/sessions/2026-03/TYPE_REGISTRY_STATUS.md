@@ -33,7 +33,7 @@
 
 **Symptom**:
 ```
-wj build src_wj/rendering/camera2d.wj
+wj build src/rendering/camera2d.wj
 Scanning files for type definitions...
   Found 1 types  # ❌ Should find ALL types in project!
 ```
@@ -89,7 +89,7 @@ Create `.windjammer.toml` that lists all source directories:
 ```toml
 [project]
 name = "windjammer-game-core"
-source_dirs = ["src_wj/math", "src_wj/rendering", "src_wj/physics"]
+source_dirs = ["src/math", "src/rendering", "src/physics"]
 ```
 
 Then scan all listed directories.

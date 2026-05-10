@@ -70,7 +70,7 @@ pub struct PackageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SourcesConfig {
     /// Source roots - directories where compiler looks for modules
-    /// e.g., ["windjammer-game-core/src_wj", "lib/src_wj"]
+    /// e.g., ["windjammer-game-core/src", "lib/src"]
     #[serde(default)]
     pub roots: Vec<String>,
 }

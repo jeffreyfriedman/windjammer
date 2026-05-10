@@ -120,7 +120,7 @@ Running `wj build` **REGENERATES** `src/` files, **OVERWRITING** manual fixes!
 **What happened:**
 1. ✅ Fixed FFI signatures in `src/ffi.rs` → 50 errors
 2. ✅ Fixed imports in `src/*/mod.rs` → 50 errors
-3. ⚠️ Ran `wj build src_wj/ --output src/` → **REGENERATED FILES!**
+3. ⚠️ Ran `wj build src/ --output src/` → **REGENERATED FILES!**
 4. ❌ Errors jumped back to 55 (fixes lost!)
 
 ### **Solution:**

@@ -44,7 +44,7 @@ fn test_match_true_false_becomes_matches() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with simple match returning bool
@@ -140,7 +140,7 @@ fn test_match_false_true_becomes_not_matches() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with match returning false/true (inverted)
@@ -219,7 +219,7 @@ fn test_complex_match_not_optimized() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with complex match (should NOT be optimized)

@@ -14,7 +14,7 @@ use std::process::Command;
 
 fn compile_project(files: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let out_dir = temp_dir.path().join("out");
     fs::create_dir_all(&out_dir).unwrap();
 

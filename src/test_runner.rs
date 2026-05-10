@@ -604,8 +604,8 @@ fn detect_and_compile_library(
         None
     };
 
-    let src_wj_dir = project_root.join("src");
-    if !src_wj_dir.exists() || !src_wj_dir.is_dir() {
+    let src_dir = project_root.join("src");
+    if !src_dir.exists() || !src_dir.is_dir() {
         return Ok(None);
     }
 
@@ -639,7 +639,7 @@ fn detect_and_compile_library(
         lib_name
     );
 
-    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust, true) {
+    match build_project(&src_dir, &lib_output_dir, CompilationTarget::Rust, true) {
         Ok(_) => {
             if let Err(e) = generate_lib_rs_for_library(&lib_output_dir) {
                 eprintln!("WARNING: Failed to generate lib.rs: {}", e);

@@ -38,7 +38,7 @@ mod module_discovery_tests {
 
     #[test]
     fn test_discover_flat_modules() {
-        // Flat structure: src_wj/vec2.wj, src_wj/vec3.wj
+        // Flat structure: src/vec2.wj, src/vec3.wj
         let _temp_dir = create_test_project(&[
             ("vec2.wj", "pub struct Vec2 { pub x: f64, pub y: f64 }"),
             (
@@ -58,7 +58,7 @@ mod module_discovery_tests {
     #[test]
     fn test_discover_nested_modules() {
         // Nested structure:
-        // src_wj/
+        // src/
         //   mod.wj
         //   math/
         //     mod.wj
@@ -100,7 +100,7 @@ mod module_discovery_tests {
     #[test]
     fn test_auto_discover_without_mod_wj() {
         // Windjammer Way: Auto-discover modules even without mod.wj!
-        // src_wj/
+        // src/
         //   math/  (no mod.wj!)
         //     vec2.wj
         //     vec3.wj
@@ -279,7 +279,7 @@ pub use physics::RigidBody2D
         //   pub struct Vec2 { ... }
 
         // WINDJAMMER WAY (auto-discover + smart defaults):
-        // src_wj/mod.wj:
+        // src/mod.wj:
         //   pub mod math  // optional! auto-discovered if directory exists
         //   pub use math::Vec2  // explicit re-export (matters!)
         //
@@ -315,7 +315,7 @@ mod file_placement_tests {
         // When compiling nested modules, output .rs files should maintain
         // the same directory structure as source .wj files
         //
-        // Input: src_wj/math/vec2.wj
+        // Input: src/math/vec2.wj
         // Output: build/math/vec2.rs (NOT build/vec2.rs!)
 
         // This test validates that get_relative_output_path() works correctly
@@ -324,13 +324,13 @@ mod file_placement_tests {
 
     #[test]
     fn test_output_path_calculation() {
-        // source_root = "src_wj/"
-        // input_file = "src_wj/math/vec2.wj"
+        // source_root = "src/"
+        // input_file = "src/math/vec2.wj"
         // output_root = "build/"
         // Expected: "build/math/vec2.rs"
 
-        // source_root = "src_wj/"
-        // input_file = "src_wj/rendering/color.wj"
+        // source_root = "src/"
+        // input_file = "src/rendering/color.wj"
         // output_root = "build/"
         // Expected: "build/rendering/color.rs"
     }

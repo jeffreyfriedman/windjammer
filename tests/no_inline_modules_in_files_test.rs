@@ -21,15 +21,15 @@ use tempfile::TempDir;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_no_inline_modules_in_individual_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let src_wj = temp_dir.path().join("src_wj");
+    let src = temp_dir.path().join("src");
 
     // Create a multi-file project structure
-    std::fs::create_dir_all(src_wj.join("audio")).unwrap();
-    std::fs::create_dir_all(src_wj.join("physics")).unwrap();
+    std::fs::create_dir_all(src.join("audio")).unwrap();
+    std::fs::create_dir_all(src.join("physics")).unwrap();
 
     // Create audio module
     std::fs::write(
-        src_wj.join("audio/sound.wj"),
+        src.join("audio/sound.wj"),
         r#"
     pub struct Sound {
         pub volume: f32,
@@ -44,11 +44,11 @@ fn test_no_inline_modules_in_individual_files() {
     )
     .unwrap();
 
-    std::fs::write(src_wj.join("audio/mod.wj"), "pub use sound::Sound;").unwrap();
+    std::fs::write(src.join("audio/mod.wj"), "pub use sound::Sound;").unwrap();
 
     // Create physics module (completely unrelated)
     std::fs::write(
-        src_wj.join("physics/rigidbody.wj"),
+        src.join("physics/rigidbody.wj"),
         r#"
     pub struct RigidBody {
         pub mass: f32,
@@ -58,14 +58,14 @@ fn test_no_inline_modules_in_individual_files() {
     .unwrap();
 
     std::fs::write(
-        src_wj.join("physics/mod.wj"),
+        src.join("physics/mod.wj"),
         "pub use rigidbody::RigidBody;",
     )
     .unwrap();
 
     // Create root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
     pub mod audio;
     pub mod physics;
@@ -81,7 +81,7 @@ fn test_no_inline_modules_in_individual_files() {
     let compile_result = Command::new(&wj_binary)
         .args([
             "build",
-            src_wj.join("mod.wj").to_str().unwrap(),
+            src.join("mod.wj").to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
             "--library",

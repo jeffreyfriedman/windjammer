@@ -665,8 +665,8 @@ pub fn build_project(
     }
 
     // Determine source_root: if path is a file, find the actual source root
-    // BUGFIX: For nested files like src_wj/ecs/entity.wj, we need to find src_wj,
-    // not just the immediate parent (src_wj/ecs)
+    // BUGFIX: For nested files like src/ecs/entity.wj, we need to find src,
+    // not just the immediate parent (src/ecs)
     let source_root = if path.is_file() {
         project_paths::find_source_root(path)
             .unwrap_or_else(|| path.parent().unwrap_or(Path::new(".")))
@@ -971,7 +971,7 @@ struct ModuleCompiler {
     target: CompilationTarget,
     enable_lint: bool, // Run Rust leakage linter (W0001-W0004)
     stdlib_path: PathBuf,
-    source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src_wj)
+    source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../windjammer-game-core/src)
     imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
     trait_registry: HashMap<String, parser::TraitDecl<'static>>, // Global trait registry for cross-file trait resolution
@@ -4302,8 +4302,8 @@ fn detect_and_compile_library(
     };
 
     // Check if there's a library to compile
-    let src_wj_dir = project_root.join("src");
-    if !src_wj_dir.exists() || !src_wj_dir.is_dir() {
+    let src_dir = project_root.join("src");
+    if !src_dir.exists() || !src_dir.is_dir() {
         return Ok(None); // No library to compile
     }
 
@@ -4342,7 +4342,7 @@ fn detect_and_compile_library(
 
     // Use build_project to compile the library
     eprintln!("DEBUG: About to call build_project");
-    match build_project(&src_wj_dir, &lib_output_dir, CompilationTarget::Rust, true) {
+    match build_project(&src_dir, &lib_output_dir, CompilationTarget::Rust, true) {
         Ok(_) => {
             eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
@@ -5472,7 +5472,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
 
     // Generate lib.rs (for crate root) or mod.rs (for subdirectory)
     // THE WINDJAMMER WAY: Auto-discover hand-written Rust modules (FFI/interop)
-    // Look for hand-written .rs files in the project root (parent of src_wj)
+    // Look for hand-written .rs files in the project root (parent of src)
     let project_root = if let Some(parent) = source_dir.parent() {
         if parent.as_os_str().is_empty() {
             std::path::Path::new(".")
@@ -5659,7 +5659,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 continue;
                             }
 
-                            // Also check for a corresponding .wj directory in src_wj
+                            // Also check for a corresponding .wj directory in src
                             let corresponding_wj_dir = source_dir.join(dir_name_str.as_ref());
                             if corresponding_wj_dir.exists() && corresponding_wj_dir.is_dir() {
                                 continue;

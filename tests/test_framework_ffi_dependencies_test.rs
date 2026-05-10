@@ -19,11 +19,11 @@ fn test_ffi_dependencies_copied_to_test_library() -> Result<()> {
     let _tmp = tempdir()?;
     let temp_dir = _tmp.path().to_path_buf();
 
-    // Create src_wj with a simple test
-    let src_wj_dir = temp_dir.join("src_wj");
-    fs::create_dir_all(&src_wj_dir)?;
+    // Create src with a simple test
+    let src_dir = temp_dir.join("src");
+    fs::create_dir_all(&src_dir)?;
 
-    let simple_wj = src_wj_dir.join("simple.wj");
+    let simple_wj = src_dir.join("simple.wj");
     fs::write(
         &simple_wj,
         r#"

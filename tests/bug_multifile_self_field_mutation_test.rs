@@ -21,8 +21,8 @@ fn compile_windjammer_directory(
     files: &[(&str, &str)],
 ) -> Result<std::collections::HashMap<String, String>, String> {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let src_dir = temp_dir.path().join("src_wj");
-    std::fs::create_dir_all(&src_dir).expect("Failed to create src_wj dir");
+    let src_dir = temp_dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("Failed to create src dir");
     let out_dir = temp_dir.path().join("build");
 
     for (name, content) in files {

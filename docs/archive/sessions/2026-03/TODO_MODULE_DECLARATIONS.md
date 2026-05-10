@@ -207,7 +207,7 @@ pub mod game {
 - [ ] Write `tests/module_declaration_test.wj`
 - [ ] Write `tests/inline_module_test.wj` (future)
 - [ ] Run full test suite
-- [ ] Test with `windjammer-game/windjammer-game-core/src_wj/mod.wj`
+- [ ] Test with `windjammer-game/windjammer-game-core/src/mod.wj`
 
 ---
 
@@ -243,8 +243,8 @@ pub mod game {
 ## 📝 **CURRENT WORKAROUND**
 
 **Status**: Temporary files deleted
-- Deleted `windjammer-game-core/src_wj/mod.wj`
-- Deleted `windjammer-game-core/src_wj/runtime.wj`
+- Deleted `windjammer-game-core/src/mod.wj`
+- Deleted `windjammer-game-core/src/runtime.wj`
 - Build script manually generates `mod.rs`
 
 **Reason**: Allows platformer to build while we fix the parser properly

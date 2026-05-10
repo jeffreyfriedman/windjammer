@@ -47,13 +47,13 @@ fn test_camera_inverse_method_exists() {
 ### 2. Fixed Sphere Test Demo
 
 ```windjammer
-// src_wj/demos/sphere_test_demo.wj (before)
+// src/demos/sphere_test_demo.wj (before)
 let view = cam.view_matrix()
 let proj = cam.projection_matrix()
 let inv_view = cam.view_matrix()  // TODO: actual inverse
 let inv_proj = cam.projection_matrix()  // TODO: actual inverse
 
-// src_wj/demos/sphere_test_demo.wj (after)
+// src/demos/sphere_test_demo.wj (after)
 let view = cam.view_matrix()
 let proj = cam.projection_matrix()
 let inv_view = view.inverse()  // ✅ FIXED
@@ -63,14 +63,14 @@ let inv_proj = proj.inverse()  // ✅ FIXED
 ### 3. Fixed Humanoid Demo
 
 ```windjammer
-// src_wj/demos/humanoid_demo.wj (before)
+// src/demos/humanoid_demo.wj (before)
 let view = cam.view_matrix()
 let proj = cam.projection_matrix()
 // Use same matrices for inverse (simplified for now)
 let inv_view = cam.view_matrix()
 let inv_proj = cam.projection_matrix()
 
-// src_wj/demos/humanoid_demo.wj (after)
+// src/demos/humanoid_demo.wj (after)
 let view = cam.view_matrix()
 let proj = cam.projection_matrix()
 let inv_view = view.inverse()  // ✅ FIXED
@@ -174,8 +174,8 @@ test result: 2 passed; 1 failed
 
 ## Files Modified
 
-1. **`windjammer-game-core/src_wj/demos/sphere_test_demo.wj`** - Fixed `inv_view` and `inv_proj` to use `.inverse()`
-2. **`windjammer-game-core/src_wj/demos/humanoid_demo.wj`** - Fixed `inv_view` and `inv_proj` to use `.inverse()`
+1. **`windjammer-game-core/src/demos/sphere_test_demo.wj`** - Fixed `inv_view` and `inv_proj` to use `.inverse()`
+2. **`windjammer-game-core/src/demos/humanoid_demo.wj`** - Fixed `inv_view` and `inv_proj` to use `.inverse()`
 3. **`windjammer-game-core/demos/sphere_test_demo.rs`** - Generated Rust code (updated)
 4. **`windjammer-game-core/demos/humanoid_demo.rs`** - Generated Rust code (updated)
 

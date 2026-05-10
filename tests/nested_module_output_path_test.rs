@@ -1,11 +1,11 @@
 /// TDD Test: Single nested module files should compile to correct subdirectories
 ///
-/// BUG: When compiling a single nested file like `src_wj/ecs/entity.wj`,
+/// BUG: When compiling a single nested file like `src/ecs/entity.wj`,
 /// the generated Rust code is written to `entity.rs` at root instead of `ecs/entity.rs`.
 /// This happens when compiling individual files, not full projects.
 ///
 /// THE WINDJAMMER WAY: Even individual file compilations should respect directory structure!
-/// - `src_wj/ecs/entity.wj` -> `output/ecs/entity.rs`
+/// - `src/ecs/entity.wj` -> `output/ecs/entity.rs`
 /// - NOT `output/entity.rs`
 use std::path::PathBuf;
 use std::process::Command;
@@ -17,8 +17,8 @@ fn test_single_nested_file_compiles_to_correct_path() {
     let project_root = temp_dir.path();
 
     // Create nested source structure
-    let src_wj = project_root.join("src_wj");
-    let ecs_dir = src_wj.join("ecs");
+    let src = project_root.join("src");
+    let ecs_dir = src.join("ecs");
     std::fs::create_dir_all(&ecs_dir).unwrap();
 
     // Create a single nested file (simulating compiling one file at a time)
@@ -99,12 +99,12 @@ fn test_full_project_nested_modules_compile_to_correct_paths() {
     let project_root = temp_dir.path();
 
     // Create a nested Windjammer project structure
-    let src_wj = project_root.join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = project_root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
     pub mod effects;
     "#,
@@ -112,7 +112,7 @@ fn test_full_project_nested_modules_compile_to_correct_paths() {
     .unwrap();
 
     // Create effects directory
-    let effects_dir = src_wj.join("effects");
+    let effects_dir = src.join("effects");
     std::fs::create_dir_all(&effects_dir).unwrap();
 
     // Create effects/mod.wj
@@ -159,7 +159,7 @@ fn test_full_project_nested_modules_compile_to_correct_paths() {
     let compile_result = Command::new(&wj_binary)
         .args([
             "build",
-            src_wj.join("mod.wj").to_str().unwrap(),
+            src.join("mod.wj").to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
             "--library",

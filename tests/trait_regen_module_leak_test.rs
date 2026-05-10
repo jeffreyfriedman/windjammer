@@ -12,14 +12,14 @@ use std::process::Command;
 fn test_trait_regen_does_not_leak_modules() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let project_root = temp_dir.path();
-    let src_wj = project_root.join("src_wj");
+    let src = project_root.join("src");
 
     // Create a multi-file project with trait implementations
-    std::fs::create_dir_all(&src_wj).unwrap();
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
 pub mod ecs;
 pub mod physics;
@@ -32,7 +32,7 @@ pub trait MyTrait {
     .unwrap();
 
     // Create ecs module with explicit module declarations
-    let ecs_dir = src_wj.join("ecs");
+    let ecs_dir = src.join("ecs");
     std::fs::create_dir_all(&ecs_dir).unwrap();
     std::fs::write(
         ecs_dir.join("mod.wj"),
@@ -76,7 +76,7 @@ pub struct Transform {
     .unwrap();
 
     // Create physics module
-    let physics_dir = src_wj.join("physics");
+    let physics_dir = src.join("physics");
     std::fs::create_dir_all(&physics_dir).unwrap();
     std::fs::write(physics_dir.join("mod.wj"), "pub mod rigidbody;").unwrap();
     std::fs::write(
@@ -101,7 +101,7 @@ impl MyTrait for RigidBody {
     let output_dir = project_root.join("out");
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(src_wj.join("mod.wj"))
+        .arg(src.join("mod.wj"))
         .arg("--output")
         .arg(&output_dir)
         .arg("--library")

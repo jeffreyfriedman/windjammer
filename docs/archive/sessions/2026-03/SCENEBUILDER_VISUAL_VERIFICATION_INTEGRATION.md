@@ -167,11 +167,11 @@ pub fn initialize(self) {
 | `breach-protocol/src/world/level_loader.wj` | Unpacks BuiltScene, stores test_camera |
 | `breach-protocol/src/world/test_scene_test.wj` | New tests for SceneBuilder integration |
 | `breach-protocol/src/game.wj` | Uses level_loader.get_test_camera(), config validation |
-| `windjammer-game-core/src_wj/scene/builder.wj` | Added primary_voxel_grid, get_lighting, get_materials, unpack |
-| `windjammer-game-core/src_wj/rendering/camera.wj` | Added to_camera_data(screen_width, screen_height) |
-| `windjammer-game-core/src_wj/rendering/visual_verification.wj` | Added is_valid(), summary(), from_rgba8() |
-| `windjammer-game-core/src_wj/rendering/voxel_gpu_renderer.wj` | Added render_frame_with_verification() |
-| `windjammer-game-core/src_wj/ffi/api.wj` | Added gpu_is_visual_verification_enabled() |
+| `windjammer-game-core/src/scene/builder.wj` | Added primary_voxel_grid, get_lighting, get_materials, unpack |
+| `windjammer-game-core/src/rendering/camera.wj` | Added to_camera_data(screen_width, screen_height) |
+| `windjammer-game-core/src/rendering/visual_verification.wj` | Added is_valid(), summary(), from_rgba8() |
+| `windjammer-game-core/src/rendering/voxel_gpu_renderer.wj` | Added render_frame_with_verification() |
+| `windjammer-game-core/src/ffi/api.wj` | Added gpu_is_visual_verification_enabled() |
 | `windjammer-game-core/ffi/api.rs` | Added gpu_is_visual_verification_enabled declaration |
 | `windjammer-runtime-host/src/gpu_compute.rs` | Implemented gpu_is_visual_verification_enabled |
 | `windjammer-game-core/tests_wj/visual_verification_test.wj` | Added 4 new tests |

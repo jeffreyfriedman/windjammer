@@ -22,7 +22,7 @@ mod test_utils;
 fn test_cargo_toml_regenerated_when_stale_one_exists() {
     // Create a multi-file project
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let build_dir = temp_dir.path().join("build");
     fs::create_dir_all(&src_dir).unwrap();
     fs::create_dir_all(&build_dir).unwrap();
@@ -153,7 +153,7 @@ opt-level = 3
 #[cfg_attr(tarpaulin, ignore)]
 fn test_lib_rs_generated_for_multi_file_project() {
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let build_dir = temp_dir.path().join("build");
     fs::create_dir_all(&src_dir).unwrap();
 

@@ -152,7 +152,7 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
 ///
 /// THE WINDJAMMER WAY: Allow seamless FFI/interop!
 /// Users can provide hand-written Rust code (like ffi.rs or ffi/mod.rs)
-/// in the project root alongside src_wj/, and it will be automatically
+/// in the project root alongside src/, and it will be automatically
 /// integrated with generated code.
 ///
 /// This enables:
@@ -447,7 +447,7 @@ pub fn generate_lib_rs(
     );
 
     // THE WINDJAMMER WAY: Discover hand-written Rust modules (like ffi.rs)
-    // These live in the project root alongside src_wj/ and are automatically integrated
+    // These live in the project root alongside src/ and are automatically integrated
     let hand_written_modules =
         discover_hand_written_modules(project_root, module_tree, output_dir)?;
 
@@ -1009,7 +1009,7 @@ pub use rendering::Color
 
     #[test]
     fn test_nested_submodule_not_treated_as_hand_written() {
-        // Regression test: when src_wj/game/player/ exists as a submodule of game/,
+        // Regression test: when src/game/player/ exists as a submodule of game/,
         // a stale copy at project_root/src/player/ should NOT be picked up as a
         // "hand-written" top-level module.
         let temp_dir = create_test_dir(&[

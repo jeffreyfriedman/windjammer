@@ -13,12 +13,12 @@ fn test_trait_explicit_ref_not_doubled() {
     let output_dir = temp_dir.path();
 
     // Create a multi-file project with trait in one file, impl in another
-    let src_wj = temp_dir.path().join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = temp_dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create input module
     std::fs::write(
-        src_wj.join("input.wj"),
+        src.join("input.wj"),
         r#"
 pub struct Input {
     pub x: i32,
@@ -29,7 +29,7 @@ pub struct Input {
 
     // Create game_loop module with trait
     std::fs::write(
-        src_wj.join("game_loop.wj"),
+        src.join("game_loop.wj"),
         r#"
 use crate::input::Input
 
@@ -63,7 +63,7 @@ impl GameLoop for Game {
 "#;
 
     // Write root mod.wj
-    let input_file = src_wj.join("mod.wj");
+    let input_file = src.join("mod.wj");
     std::fs::write(&input_file, wj_code).unwrap();
 
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))

@@ -12,12 +12,12 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_cross_file_trait_preserves_explicit_mut() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let src_wj = temp_dir.path().join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = temp_dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create game_loop module with trait (explicit &mut self)
     std::fs::write(
-        src_wj.join("game_loop.wj"),
+        src.join("game_loop.wj"),
         r#"
 pub trait GameLoop {
     // EXPLICIT &mut self - should be preserved even if impl doesn't mutate
@@ -35,7 +35,7 @@ pub trait GameLoop {
 
     // Create game module with implementation
     std::fs::write(
-        src_wj.join("game.wj"),
+        src.join("game.wj"),
         r#"
 use crate::game_loop::GameLoop
 
@@ -59,7 +59,7 @@ impl GameLoop for Game {
 
     // Root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
 pub mod game_loop;
 pub mod game;
@@ -70,7 +70,7 @@ pub mod game;
     let output_dir = temp_dir.path().join("out");
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(src_wj.join("mod.wj"))
+        .arg(src.join("mod.wj"))
         .arg("--output")
         .arg(&output_dir)
         .arg("--library")

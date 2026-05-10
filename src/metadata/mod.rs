@@ -328,6 +328,18 @@ fn merge_wj_meta_signatures_from_dir_inner(
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
+    // If root is a file (e.g. metadata.json passed directly), handle it
+    if root.is_file() {
+        if let Some(name) = root.file_name().and_then(|n| n.to_str()) {
+            if name == "metadata.json" {
+                merge_crate_metadata_file(root, registry, copy_structs, all_struct_fields);
+            } else if name.ends_with(".wj.meta") {
+                merge_single_wj_meta_file(root, registry, copy_structs, all_struct_fields);
+            }
+        }
+        return;
+    }
+
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
@@ -341,22 +353,79 @@ fn merge_wj_meta_signatures_from_dir_inner(
                 all_struct_fields,
             );
         } else if path.to_string_lossy().ends_with(".wj.meta") {
-            let Ok(text) = std::fs::read_to_string(&path) else {
-                continue;
-            };
-            let Ok(mod_meta) = serde_json::from_str::<ModuleMetadata>(&text) else {
-                continue;
-            };
-            merge_module_metadata_signatures(&mod_meta, registry);
-            copy_structs.extend(mod_meta.copy_structs.iter().cloned());
-            for (struct_name, fields) in &mod_meta.structs {
-                let field_types: Vec<String> = fields.values().cloned().collect();
-                // TDD FIX: Track ALL variants of each struct name (don't overwrite!)
-                all_struct_fields
-                    .entry(struct_name.clone())
-                    .or_default()
-                    .push(field_types);
-            }
+            merge_single_wj_meta_file(&path, registry, copy_structs, all_struct_fields);
+        } else if path.file_name().map(|n| n == "metadata.json").unwrap_or(false) {
+            merge_crate_metadata_file(&path, registry, copy_structs, all_struct_fields);
+        }
+    }
+}
+
+fn merge_single_wj_meta_file(
+    path: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(mod_meta) = serde_json::from_str::<ModuleMetadata>(&text) else {
+        return;
+    };
+    merge_module_metadata_signatures(&mod_meta, registry);
+    copy_structs.extend(mod_meta.copy_structs.iter().cloned());
+    for (struct_name, fields) in &mod_meta.structs {
+        let field_types: Vec<String> = fields.values().cloned().collect();
+        all_struct_fields
+            .entry(struct_name.clone())
+            .or_default()
+            .push(field_types);
+    }
+}
+
+fn merge_crate_metadata_file(
+    path: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    _copy_structs: &mut Vec<String>,
+    _all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
+        return;
+    };
+    for (name, sig) in &crate_meta.functions {
+        if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
+            registry.add_function(name.clone(), a_sig);
+        } else if sig.is_extern {
+            // Extern functions with no param_ownership still need registry entries
+            // so the codegen can wrap calls in unsafe blocks.
+            let param_types: Vec<crate::parser::Type> = sig
+                .params
+                .iter()
+                .filter_map(|p| ModuleMetadata::deserialize_type(p))
+                .collect();
+            let param_ownership = param_types
+                .iter()
+                .map(|_| crate::analyzer::OwnershipMode::Owned)
+                .collect();
+            let return_type = sig
+                .return_type
+                .as_ref()
+                .and_then(|s| ModuleMetadata::deserialize_type(s));
+            registry.add_function(
+                name.clone(),
+                AnalyzerFunctionSignature {
+                    name: name.to_string(),
+                    param_types,
+                    param_ownership,
+                    return_type,
+                    return_ownership: crate::analyzer::OwnershipMode::Owned,
+                    has_self_receiver: sig.has_self_receiver,
+                    is_extern: true,
+                },
+            );
         }
     }
 }

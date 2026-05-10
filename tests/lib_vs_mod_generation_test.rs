@@ -72,7 +72,7 @@ fn test_generates_lib_rs_for_crate_root() {
     // When generating into a crate root (top-level output),
     // should generate lib.rs
     let temp_dir = TempDir::new().unwrap();
-    let source_dir = temp_dir.path().join("src_wj");
+    let source_dir = temp_dir.path().join("src");
     let output_dir = temp_dir.path().join("out");
     fs::create_dir_all(&source_dir).unwrap();
     fs::create_dir_all(&output_dir).unwrap();

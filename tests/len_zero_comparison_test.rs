@@ -38,7 +38,7 @@ fn test_len_eq_zero_becomes_is_empty() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with len() == 0 comparison
@@ -124,7 +124,7 @@ fn test_len_ne_zero_becomes_not_is_empty() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with len() != 0 comparison
@@ -206,7 +206,7 @@ fn test_len_gt_zero_becomes_not_is_empty() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with len() > 0 comparison

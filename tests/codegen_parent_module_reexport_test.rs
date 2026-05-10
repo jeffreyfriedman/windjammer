@@ -41,8 +41,8 @@ fn test_parent_module_reexport_import() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    // Create src_wj/rendering directory
-    let rendering_dir = temp_dir.join("src_wj").join("rendering");
+    // Create src/rendering directory
+    let rendering_dir = temp_dir.join("src").join("rendering");
     fs::create_dir_all(&rendering_dir)?;
 
     // Create texture.wj (base module)
@@ -94,7 +94,7 @@ struct Sprite {
 
     let output = Command::new(&wj_compiler)
         .arg("build")
-        .arg(temp_dir.join("src_wj"))
+        .arg(temp_dir.join("src"))
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")

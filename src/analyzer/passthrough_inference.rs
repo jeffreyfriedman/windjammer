@@ -50,15 +50,31 @@ impl<'ast> Analyzer<'ast> {
         let mut inferred_mode: Option<OwnershipMode> = None;
 
         for (func_name, arg_position, _is_field) in &passthrough_calls {
-            // Look up the callee signature: try exact name first, then Type::method patterns
+            // Look up the callee signature with multiple fallback strategies:
+            // 1. Exact name (e.g., "place_marker" or "StationBuilder::place_marker")
+            // 2. Suffix match (e.g., find "Type::method" from "method")
+            // 3. Simple name from qualified (e.g., "place_marker" from "station_builder::place_marker")
+            //    This handles cross-crate calls where metadata stores the simple name
+            //    but the call site uses the module-qualified name.
             let sig = match registry.get_signature(func_name) {
                 Some(s) => s,
                 None => {
-                    // Fallback: for method calls, the name might be just "method" but registered
-                    // as "Type::method". Search for entries ending with "::method".
                     match registry.find_signature_ending_with(func_name) {
                         Some(s) => s,
-                        None => continue, // Unknown callee, skip (don't abort)
+                        None => {
+                            if let Some(simple) = func_name.rsplit("::").next() {
+                                if simple != func_name {
+                                    match registry.get_signature(simple) {
+                                        Some(s) => s,
+                                        None => continue,
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            } else {
+                                continue;
+                            }
+                        }
                     }
                 }
             };

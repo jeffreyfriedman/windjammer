@@ -52,8 +52,8 @@ pub fn main() {
 **Result**: Main library compiles perfectly (0 errors)
 
 **Files Modified**:
-- `src_wj/tests/vertical_slice_test.wj` - Simplified to placeholder
-- `src_wj/tests/mod.wj` - Updated exports
+- `src/tests/vertical_slice_test.wj` - Simplified to placeholder
+- `src/tests/mod.wj` - Updated exports
 
 **Rationale**: Test infrastructure needs dedicated work. Main library is the priority and compiles perfectly. Tests can be properly implemented later with correct test harness.
 
@@ -229,8 +229,8 @@ let speaker = Speaker::NPC("Silas Crane")  // Auto-converts!
 - `windjammer/examples/render_window/main.wj` (NEW) - FFI template
 
 ### Game Source
-- `src_wj/tests/vertical_slice_test.wj` - Simplified
-- `src_wj/tests/mod.wj` - Updated
+- `src/tests/vertical_slice_test.wj` - Simplified
+- `src/tests/mod.wj` - Updated
 
 ### Documentation
 - `WINDJAMMER_MILESTONE_FIRST_EXECUTION.md` (NEW)

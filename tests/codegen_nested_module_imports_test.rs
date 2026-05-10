@@ -46,16 +46,16 @@ pub struct MoveCommand {
 "#;
 
     // Write files
-    fs::create_dir_all(temp_dir.path().join("src_wj").join("core").join("commands")).unwrap();
+    fs::create_dir_all(temp_dir.path().join("src").join("core").join("commands")).unwrap();
     fs::write(
-        temp_dir.path().join("src_wj").join("scene.wj"),
+        temp_dir.path().join("src").join("scene.wj"),
         scene_source,
     )
     .unwrap();
     fs::write(
         temp_dir
             .path()
-            .join("src_wj")
+            .join("src")
             .join("core")
             .join("commands")
             .join("command.wj"),
@@ -82,7 +82,7 @@ version = "0.1.0"
 
     let wj_output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg(temp_dir.path().join("src_wj"))
+        .arg(temp_dir.path().join("src"))
         .arg("-o")
         .arg(&output_dir)
         .arg("--library")

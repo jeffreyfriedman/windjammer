@@ -32,8 +32,8 @@
 - Humanoid demo: Orbit radius 2.0 - inside `[-2.5, +2.5]` ✅
 
 **Files Fixed:**
-- `src_wj/demos/sphere_test_demo.wj`
-- `src_wj/demos/humanoid_demo.wj`
+- `src/demos/sphere_test_demo.wj`
+- `src/demos/humanoid_demo.wj`
 
 ---
 
@@ -66,7 +66,7 @@ fn encode_region(&mut self, grid: &VoxelGrid, ...) {
 ```
 
 **Files Fixed:**
-- `src_wj/voxel/svo.wj` (core fix)
+- `src/voxel/svo.wj` (core fix)
 - All 7 demos updated to `let mut encoder`
 
 ---
@@ -151,14 +151,14 @@ test result: ok. 5 passed; 0 failed
 ## Files Modified
 
 ### Windjammer Source Files (Game Logic)
-1. **`src_wj/voxel/svo.wj`** - Fixed memory leak (core fix)
-2. **`src_wj/demos/sphere_test_demo.wj`** - Fixed camera + encoder
-3. **`src_wj/demos/humanoid_demo.wj`** - Fixed camera + encoder
-4. **`src_wj/demos/sundering.wj`** - Fixed encoder
-5. **`src_wj/demos/cathedral.wj`** - Fixed encoder
-6. **`src_wj/demos/rifter_quarter.wj`** - Fixed encoder
-7. **`src_wj/editor/voxel_editor.wj`** - Fixed encoder
-8. **`src_wj/voxel/chunk_manager.wj`** - Fixed encoder
+1. **`src/voxel/svo.wj`** - Fixed memory leak (core fix)
+2. **`src/demos/sphere_test_demo.wj`** - Fixed camera + encoder
+3. **`src/demos/humanoid_demo.wj`** - Fixed camera + encoder
+4. **`src/demos/sundering.wj`** - Fixed encoder
+5. **`src/demos/cathedral.wj`** - Fixed encoder
+6. **`src/demos/rifter_quarter.wj`** - Fixed encoder
+7. **`src/editor/voxel_editor.wj`** - Fixed encoder
+8. **`src/voxel/chunk_manager.wj`** - Fixed encoder
 
 ### Rust Runtime Files (FFI Boundary)
 - **`windjammer-runtime-host/src/main.rs`** - Removed private field access
