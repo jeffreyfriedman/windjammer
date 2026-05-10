@@ -89,13 +89,13 @@ fn test_wasm_specific_module_declaration() {
     let project_root = temp_dir.path();
 
     // Create simple .wj project
-    let src_wj_dir = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj_dir).unwrap();
+    let src_dir = project_root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
 
-    fs::write(src_wj_dir.join("mod.wj"), "").unwrap();
+    fs::write(src_dir.join("mod.wj"), "").unwrap();
 
     fs::write(
-        src_wj_dir.join("button.wj"),
+        src_dir.join("button.wj"),
         "pub struct Button { pub label: string }",
     )
     .unwrap();
@@ -104,7 +104,7 @@ fn test_wasm_specific_module_declaration() {
     fs::create_dir_all(&output_dir).unwrap();
 
     // First compilation
-    compile_wj_project(&src_wj_dir, &output_dir).expect("First compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("First compilation should succeed");
 
     // Now manually add a WASM-specific .rs file (simulating hand-written or generated code)
     fs::write(
@@ -119,7 +119,7 @@ pub fn run_wasm_example() {
     .unwrap();
 
     // Second compilation to regenerate mod.rs
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Second compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Second compilation should succeed");
 
     // Verify lib.rs was updated
     let lib_rs_path = output_dir.join("lib.rs");
@@ -163,14 +163,14 @@ fn test_desktop_specific_module_declaration() {
     let temp_dir = tempdir().unwrap();
     let project_root = temp_dir.path();
 
-    let src_wj_dir = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj_dir).unwrap();
+    let src_dir = project_root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
 
-    fs::write(src_wj_dir.join("mod.wj"), "").unwrap();
+    fs::write(src_dir.join("mod.wj"), "").unwrap();
 
     // Desktop-only module with feature gate
     fs::write(
-        src_wj_dir.join("desktop_app.wj"),
+        src_dir.join("desktop_app.wj"),
         r#"#![cfg(feature = "desktop")]
 
 pub struct DesktopApp {
@@ -183,7 +183,7 @@ pub struct DesktopApp {
     let output_dir = project_root.join("out");
     fs::create_dir_all(&output_dir).unwrap();
 
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
 
     let lib_rs_path = output_dir.join("lib.rs");
     let lib_rs_content = fs::read_to_string(&lib_rs_path).unwrap();

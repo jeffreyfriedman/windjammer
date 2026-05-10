@@ -32,9 +32,9 @@ path = "src/lib.rs"
 "#;
     fs::write(test_dir.join("Cargo.toml"), cargo_toml).unwrap();
 
-    // Create src_wj directory with a simple module
-    let src_wj_dir = test_dir.join("src_wj");
-    fs::create_dir_all(&src_wj_dir).unwrap();
+    // Create src directory with a simple module
+    let src_dir = test_dir.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
 
     // Create a simple Windjammer file
     let wj_content = r#"
@@ -49,10 +49,10 @@ impl Player {
     }
 }
 "#;
-    fs::write(src_wj_dir.join("player.wj"), wj_content).unwrap();
+    fs::write(src_dir.join("player.wj"), wj_content).unwrap();
 
     // Create mod.wj to make it a library
-    fs::write(src_wj_dir.join("mod.wj"), "pub use player::Player;").unwrap();
+    fs::write(src_dir.join("mod.wj"), "pub use player::Player;").unwrap();
 
     // Create tests_wj directory
     let tests_wj_dir = test_dir.join("tests_wj");

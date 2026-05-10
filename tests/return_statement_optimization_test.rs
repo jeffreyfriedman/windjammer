@@ -45,7 +45,7 @@ fn test_suppress_return_when_last_statement() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with explicit return as last statement
@@ -149,7 +149,7 @@ fn test_keep_return_when_early_exit() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with early return (should be kept)
@@ -231,7 +231,7 @@ fn test_suppress_void_return() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with void return as last statement

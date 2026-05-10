@@ -277,6 +277,42 @@ impl SignatureRegistry {
             .map(|(_, sig)| sig)
     }
 
+    /// Find a signature matching the simple name with a specific argument count.
+    /// Searches exact match first, then all qualified names ending with `::name`.
+    /// Used when simple-name lookup returns the wrong overload (name collision).
+    pub fn find_signature_by_name_and_arg_count(
+        &self,
+        name: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        // Try exact match first
+        if let Some(sig) = self.signatures.get(name) {
+            let sig_args = if sig.has_self_receiver {
+                sig.param_ownership.len().saturating_sub(1)
+            } else {
+                sig.param_ownership.len()
+            };
+            if sig_args == arg_count {
+                return Some(sig);
+            }
+        }
+        // Search all signatures ending with ::name
+        let pattern = format!("::{}", name);
+        for (key, sig) in &self.signatures {
+            if key.ends_with(&pattern) || key == name {
+                let sig_args = if sig.has_self_receiver {
+                    sig.param_ownership.len().saturating_sub(1)
+                } else {
+                    sig.param_ownership.len()
+                };
+                if sig_args == arg_count {
+                    return Some(sig);
+                }
+            }
+        }
+        None
+    }
+
     /// BUG #8 FIX: Merge signatures from another registry.
     /// Detects collisions when different registries provide different
     /// param types for the same key (namespace collision from different modules).

@@ -24,12 +24,12 @@ fn test_lib_module_no_conflict() -> Result<()> {
     let temp_dir = tempdir().expect("tempdir").path().to_path_buf();
     fs::create_dir_all(&temp_dir)?;
 
-    // Create src_wj directory with a lib.wj file
-    let src_wj_dir = temp_dir.join("src_wj");
-    fs::create_dir_all(&src_wj_dir)?;
+    // Create src directory with a lib.wj file
+    let src_dir = temp_dir.join("src");
+    fs::create_dir_all(&src_dir)?;
 
     // Create lib.wj with a simple struct
-    let lib_wj = src_wj_dir.join("lib.wj");
+    let lib_wj = src_dir.join("lib.wj");
     fs::write(
         &lib_wj,
         r#"
@@ -50,7 +50,7 @@ impl LibConfig {
     )?;
 
     // Create another module to ensure lib.rs is generated
-    let math_wj = src_wj_dir.join("math.wj");
+    let math_wj = src_dir.join("math.wj");
     fs::write(
         &math_wj,
         r#"
@@ -67,7 +67,7 @@ fn add(a: i32, b: i32) -> i32 {
 
     let output = Command::new(&wj_compiler)
         .arg("build")
-        .arg(&src_wj_dir)
+        .arg(&src_dir)
         .arg("-o")
         .arg(&lib_output)
         .arg("--library")
@@ -109,12 +109,12 @@ fn test_window_module_no_conflict() -> Result<()> {
     let temp_dir = tempdir().expect("tempdir").path().to_path_buf();
     fs::create_dir_all(&temp_dir)?;
 
-    // Create src_wj directory with both window.wj and window/ directory
-    let src_wj_dir = temp_dir.join("src_wj");
-    fs::create_dir_all(&src_wj_dir)?;
+    // Create src directory with both window.wj and window/ directory
+    let src_dir = temp_dir.join("src");
+    fs::create_dir_all(&src_dir)?;
 
     // Create window.wj
-    let window_wj = src_wj_dir.join("window.wj");
+    let window_wj = src_dir.join("window.wj");
     fs::write(
         &window_wj,
         r#"
@@ -127,7 +127,7 @@ struct Window {
     )?;
 
     // Create window/ directory with nested module
-    let window_dir = src_wj_dir.join("window");
+    let window_dir = src_dir.join("window");
     fs::create_dir_all(&window_dir)?;
 
     let window_manager_wj = window_dir.join("manager.wj");

@@ -78,7 +78,7 @@ fn test_camera_should_hit_sphere_with_raymarch() {
 
 ## Fixes Applied
 
-### Sphere Test Demo (`src_wj/demos/sphere_test_demo.wj`)
+### Sphere Test Demo (`src/demos/sphere_test_demo.wj`)
 
 ```windjammer
 // BEFORE (WRONG!)
@@ -98,7 +98,7 @@ let cam_z = 1.8  // Close to edge but inside world
 - Distance from sphere center: ~1.85 units
 - Camera is INSIDE world bounds [-2.0, +2.0] ✅
 
-### Humanoid Demo (`src_wj/demos/humanoid_demo.wj`)
+### Humanoid Demo (`src/demos/humanoid_demo.wj`)
 
 ```windjammer
 // BEFORE (WRONG!)
@@ -208,11 +208,11 @@ eprintln!("[debug] render frame #{}", count);
 
 ## Files Modified
 
-1. **`windjammer-game-core/src_wj/demos/sphere_test_demo.wj`**
+1. **`windjammer-game-core/src/demos/sphere_test_demo.wj`**
    - Fixed camera position to be inside world bounds
    - Fixed reference parameters for function calls
 
-2. **`windjammer-game-core/src_wj/demos/humanoid_demo.wj`**
+2. **`windjammer-game-core/src/demos/humanoid_demo.wj`**
    - Fixed orbit radius to keep camera inside world bounds
    - Fixed reference parameters for function calls
 

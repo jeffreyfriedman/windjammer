@@ -21,7 +21,7 @@ use tempfile::TempDir;
 fn test_module_imports_within_directory() {
     // Create a temporary directory for our test project
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let ecs_dir = src_dir.join("ecs");
     fs::create_dir_all(&ecs_dir).unwrap();
 
@@ -130,7 +130,7 @@ pub mod world
 fn test_prelude_reexports() {
     // Test that a prelude.wj can re-export types from other modules
     let temp_dir = TempDir::new().unwrap();
-    let src_dir = temp_dir.path().join("src_wj");
+    let src_dir = temp_dir.path().join("src");
     let math_dir = src_dir.join("math");
     fs::create_dir_all(&math_dir).unwrap();
     fs::create_dir_all(&src_dir).unwrap();

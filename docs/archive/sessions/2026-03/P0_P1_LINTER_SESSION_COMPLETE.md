@@ -238,7 +238,7 @@ cargo test linter_test --lib
 
 ```
 warning[W0001]: explicit ownership annotation
-  --> src_wj/game.wj:42:15
+  --> src/game.wj:42:15
    |
 42 |     pub fn update(&mut self, dt: f32) {
    |                   ^^^^^^^^^ help: use inferred ownership: `self`

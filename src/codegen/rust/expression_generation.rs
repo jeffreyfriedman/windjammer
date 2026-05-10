@@ -1554,7 +1554,9 @@ impl<'ast> CodeGenerator<'ast> {
                     let method_signature = type_name
                         .as_ref()
                         .map(|tn| format!("{}::{}", tn, call_method))
-                        .and_then(|q| self.signature_registry.get_signature(&q).cloned())
+                        .and_then(|q| {
+                            self.signature_registry.get_signature(&q).cloned()
+                        })
                         .or_else(|| {
                             // When `call_obj` is a module identifier (e.g., `draw` in `draw::draw_text`),
                             // infer_type_name returns None. Try module-qualified lookup directly.
@@ -2259,26 +2261,30 @@ impl<'ast> CodeGenerator<'ast> {
                             self.signature_registry.get_signature(&resolved_name)
                         {
                             signature = Some(resolved_sig.clone());
-                            // NOT a simple fallback — we resolved through the alias
                         }
                     }
 
                     // If alias resolution didn't work, try simple-name fallback
+                    // with arg count validation to avoid name collisions.
                     if signature.is_none() {
-                        if let Some(fallback) = self.signature_registry.get_signature(simple) {
-                            signature = Some(fallback.clone());
+                        if let Some(found) = self.signature_registry
+                            .find_signature_by_name_and_arg_count(simple, arguments.len())
+                        {
+                            signature = Some(found.clone());
                             signature_from_simple_fallback = true;
                         }
                     }
+
                 }
 
                 // Check if this is an extern function call for unsafe wrapping + FFI str handling.
                 // TDD FIX: When a signature was found via simple-name fallback for a
-                // module-qualified call (e.g. vnode_ffi::vnode_element), do NOT treat
-                // it as extern. The qualified call goes through a crate-internal module,
-                // not through FFI. Only unqualified calls to extern fn names are truly extern.
+                // module-qualified call (e.g. vnode_ffi::vnode_element), suppress extern
+                // detection ONLY when the signature is NOT explicitly extern. If the
+                // signature has is_extern=true, the function really is extern (e.g.
+                // input::input_is_key_pressed) and must be wrapped in unsafe.
                 let is_extern_call = if signature_from_simple_fallback && func_name.contains("::") {
-                    false
+                    signature.as_ref().is_some_and(|sig| sig.is_extern)
                 } else if let Some(ref sig) = signature {
                     sig.is_extern
                 } else {
@@ -2475,7 +2481,19 @@ impl<'ast> CodeGenerator<'ast> {
                             let simple_name = func_name.rsplit("::").next().unwrap_or(&func_name);
                             let has_ownership_collision = signature_from_simple_fallback
                                 && (self.signature_registry.has_collision(&func_name)
-                                    || self.signature_registry.has_collision(simple_name));
+                                    || self.signature_registry.has_collision(simple_name))
+                                && {
+                                    // Validate collision: if the found signature's arg count
+                                    // matches the actual call, it's the right overload despite
+                                    // the collision. Only suppress ownership when arg count
+                                    // doesn't match (genuinely ambiguous signature).
+                                    let sig_args = if sig.has_self_receiver {
+                                        sig.param_ownership.len().saturating_sub(1)
+                                    } else {
+                                        sig.param_ownership.len()
+                                    };
+                                    sig_args != arguments.len()
+                                };
 
                             if let Some(&ownership) = sig.param_ownership.get(i) {
                                 match ownership {
@@ -3033,6 +3051,9 @@ impl<'ast> CodeGenerator<'ast> {
                         .signature_registry
                         .get_signature(&qualified_name)
                         .cloned();
+                    if method == "register_function" || qualified_name == "SystemCoverage::register_function" {
+                        eprintln!("[DEBUG] register_function: type_name={}, qualified={}, sig_found={}, sig_details={:?}", type_name, qualified_name, sig.is_some(), sig.as_ref().map(|s| (&s.param_ownership, s.has_self_receiver)));
+                    }
                     // Validate: if the signature's param count doesn't match the call's
                     // argument count, it's a name collision (e.g., two different types
                     // both named Ability with different activate methods). In that case,
@@ -3072,9 +3093,28 @@ impl<'ast> CodeGenerator<'ast> {
                     // the stdlib heuristics in should_add_ref handle common patterns correctly.
                 } else {
                     if super::stdlib_method_traits::is_common_stdlib_method(method) {
-                        None // Use stdlib heuristics instead of potentially wrong signature
+                        None
                     } else {
-                        self.signature_registry.get_signature(method).cloned()
+                        self.signature_registry
+                            .get_signature(method)
+                            .cloned()
+                            .or_else(|| {
+                                let suffix_sig = self
+                                    .signature_registry
+                                    .find_signature_ending_with(method)
+                                    .cloned();
+                                if let Some(ref sig) = suffix_sig {
+                                    let expected_args = if sig.has_self_receiver {
+                                        sig.param_ownership.len().saturating_sub(1)
+                                    } else {
+                                        sig.param_ownership.len()
+                                    };
+                                    if expected_args == arguments.len() {
+                                        return suffix_sig;
+                                    }
+                                }
+                                None
+                            })
                     }
                 };
 

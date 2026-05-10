@@ -23,7 +23,7 @@ pub struct TypeRegistry {
     functions: HashMap<String, String>,
 
     /// Map: TypeName -> FilePath (for debugging)
-    /// Example: "Vec2" -> "src_wj/math/vec2.wj"
+    /// Example: "Vec2" -> "src/math/vec2.wj"
     file_paths: HashMap<String, PathBuf>,
 }
 
@@ -73,7 +73,7 @@ impl TypeRegistry {
     /// Scan a single .wj file and register all types defined in it
     pub fn scan_file(&mut self, file_path: &Path, ast: &[Item]) -> Result<(), String> {
         // Compute module path from file path
-        // Example: "src_wj/math/vec2.wj" -> "math::vec2"
+        // Example: "src/math/vec2.wj" -> "math::vec2"
         let module_path = Self::file_path_to_module_path(file_path)?;
 
         // Extract all type and function definitions from the AST
@@ -164,8 +164,8 @@ impl TypeRegistry {
 
     /// Convert a file path to a module path
     /// Since all generated files are FLAT in src/generated/, we only use the filename
-    /// Example: "src_wj/math/vec2.wj" -> "vec2"
-    /// Example: "src_wj/utils/validator.wj" -> "validator"
+    /// Example: "src/math/vec2.wj" -> "vec2"
+    /// Example: "src/utils/validator.wj" -> "validator"
     fn file_path_to_module_path(file_path: &Path) -> Result<String, String> {
         // Extract just the filename without extension
         let filename = file_path
@@ -224,7 +224,7 @@ mod tests {
     fn test_file_path_to_module_path() {
         // Since all generated files are flat, only the filename matters
         assert_eq!(
-            TypeRegistry::file_path_to_module_path(Path::new("src_wj/math/vec2.wj")).unwrap(),
+            TypeRegistry::file_path_to_module_path(Path::new("src/math/vec2.wj")).unwrap(),
             "vec2"
         );
 
@@ -234,7 +234,7 @@ mod tests {
         );
 
         assert_eq!(
-            TypeRegistry::file_path_to_module_path(Path::new("src_wj/rendering/camera2d.wj"))
+            TypeRegistry::file_path_to_module_path(Path::new("src/rendering/camera2d.wj"))
                 .unwrap(),
             "camera2d"
         );
@@ -247,7 +247,7 @@ mod tests {
         registry.register_type(
             "Vec2".to_string(),
             "vec2".to_string(),
-            PathBuf::from("src_wj/math/vec2.wj"),
+            PathBuf::from("src/math/vec2.wj"),
         );
 
         registry.register_function("check_validity".to_string(), "validator".to_string());
@@ -269,13 +269,13 @@ mod tests {
         registry.register_type(
             "Vec2".to_string(),
             "vec2".to_string(),
-            PathBuf::from("src_wj/math/vec2.wj"),
+            PathBuf::from("src/math/vec2.wj"),
         );
 
         registry.register_type(
             "Camera2D".to_string(),
             "camera2d".to_string(),
-            PathBuf::from("src_wj/rendering/camera2d.wj"),
+            PathBuf::from("src/rendering/camera2d.wj"),
         );
 
         // Use Vec2 from camera2d module -> generates import

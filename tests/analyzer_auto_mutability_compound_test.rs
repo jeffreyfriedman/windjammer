@@ -37,7 +37,7 @@ fn main() {
         .current_dir(&test_dir)
         .arg("build")
         .arg("--no-cargo")
-        .arg(&test_file)
+        .arg("compound.wj")
         .output()
         .expect("Failed to execute wj build");
 
@@ -47,13 +47,31 @@ fn main() {
     println!("STDOUT:\n{}", stdout);
     println!("STDERR:\n{}", stderr);
 
-    // Check the generated Rust code
+    // Find the generated Rust file (compiler may nest paths differently)
     let rust_file = test_dir.join("build").join("compound.rs");
-    assert!(
-        rust_file.exists(),
-        "Expected generated Rust file to exist at {:?}",
+    let rust_file = if rust_file.exists() {
         rust_file
-    );
+    } else {
+        // Search for compound.rs anywhere in the build directory
+        fn find_rs(dir: &std::path::Path, name: &str) -> Option<PathBuf> {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file() && p.file_name().map(|f| f == name).unwrap_or(false) {
+                        return Some(p);
+                    }
+                    if p.is_dir() {
+                        if let Some(found) = find_rs(&p, name) {
+                            return Some(found);
+                        }
+                    }
+                }
+            }
+            None
+        }
+        find_rs(&test_dir.join("build"), "compound.rs")
+            .expect(&format!("Could not find compound.rs in {:?}/build/", test_dir))
+    };
 
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);

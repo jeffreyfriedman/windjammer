@@ -107,7 +107,7 @@ pub struct FfiBytes {
 **3. Updated Windjammer FFI declarations:**
 
 ```windjammer
-// windjammer-game-core/src_wj/ffi/api.wj
+// windjammer-game-core/src/ffi/api.wj
 extern fn gpu_load_compute_shader(wgsl_source: string) -> u32
 // Generates:
 extern "C" {
@@ -393,8 +393,8 @@ wj game build --release --clean
 - `windjammer-runtime-host/src/*.rs` (11 extern functions updated)
 
 **Game Engine:**
-- `windjammer-game-core/src_wj/ffi/*.wj` (FFI declarations)
-- `windjammer-game/*/src_wj/*.wj` (117 Rust leakages removed)
+- `windjammer-game-core/src/ffi/*.wj` (FFI declarations)
+- `windjammer-game/*/src/*.wj` (117 Rust leakages removed)
 
 **Game:**
 - `breach-protocol/shaders/voxel_*.wgsl` (screen_size type fix)

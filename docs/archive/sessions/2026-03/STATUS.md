@@ -33,18 +33,18 @@ The VGS/point_cloud files need `mut` keywords added. Run this to see all errors:
 ```bash
 cd /Users/jeffreyfriedman/src/wj/windjammer-game
 /Users/jeffreyfriedman/src/wj/windjammer/target/release/wj build \
-  windjammer-game-core/src_wj/mod.wj \
+  windjammer-game-core/src/mod.wj \
   --output windjammer-game-core/src \
   --library --no-cargo 2>&1 | grep "^error:"
 ```
 
 ### Files Needing `mut` Fixes (8 files):
-1. `windjammer-game-core/src_wj/vgs/cluster.wj`
-2. `windjammer-game-core/src_wj/vgs/cluster_builder.wj`
-3. `windjammer-game-core/src_wj/vgs/lod_generator.wj`
-4. `windjammer-game-core/src_wj/point_cloud/point_cloud.wj`
-5. `windjammer-game-core/src_wj/demos/hybrid_demo.wj`
-6. `windjammer-game-core/src_wj/rendering/hybrid_renderer.wj`
+1. `windjammer-game-core/src/vgs/cluster.wj`
+2. `windjammer-game-core/src/vgs/cluster_builder.wj`
+3. `windjammer-game-core/src/vgs/lod_generator.wj`
+4. `windjammer-game-core/src/point_cloud/point_cloud.wj`
+5. `windjammer-game-core/src/demos/hybrid_demo.wj`
+6. `windjammer-game-core/src/rendering/hybrid_renderer.wj`
 
 ### Common Patterns to Fix:
 ```windjammer

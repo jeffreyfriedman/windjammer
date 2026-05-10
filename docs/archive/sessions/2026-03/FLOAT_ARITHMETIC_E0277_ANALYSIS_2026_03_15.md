@@ -78,7 +78,7 @@ cargo test bug_f32_f64_explicit_cast
 
 # Build game (windjammer-game-core)
 cd windjammer-game
-wj build src_wj --output .
+wj build src --output .
 # Then: grep -c "cannot multiply\|cannot divide" build_errors.log
 # Expected: 0 (or significantly reduced)
 ```

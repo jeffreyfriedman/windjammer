@@ -46,13 +46,13 @@ windjammer-runtime = {{ path = "{}" }}
     );
     fs::write(project_root.join("wj.toml"), &wj_toml).unwrap();
 
-    // Create src_wj directory with a simple library
-    let src_wj = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj).unwrap();
+    // Create src directory with a simple library
+    let src = project_root.join("src");
+    fs::create_dir_all(&src).unwrap();
 
     // Create a simple module that exports a public function
     fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
 // Simple library module
 pub fn hello() -> string {

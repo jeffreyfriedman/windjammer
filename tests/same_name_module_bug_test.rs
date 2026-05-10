@@ -1,6 +1,6 @@
 /// TDD Test: Files with same name as their parent directory should compile correctly
 ///
-/// BUG: When compiling a full project, files like `src_wj/game_loop/game_loop.wj`
+/// BUG: When compiling a full project, files like `src/game_loop/game_loop.wj`
 /// end up with 0 bytes in the output `game_loop/game_loop.rs`.
 ///
 /// This happens because during full project compilation, these files are being
@@ -18,12 +18,12 @@ fn test_same_name_module_compiles_correctly() {
     let project_root = temp_dir.path();
 
     // Create a project structure with same-name modules
-    let src_wj = project_root.join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = project_root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create root mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
     pub mod game_loop;
     pub mod input;
@@ -32,7 +32,7 @@ fn test_same_name_module_compiles_correctly() {
     .unwrap();
 
     // Create game_loop directory with game_loop.wj (same name!)
-    let game_loop_dir = src_wj.join("game_loop");
+    let game_loop_dir = src.join("game_loop");
     std::fs::create_dir_all(&game_loop_dir).unwrap();
 
     std::fs::write(
@@ -56,7 +56,7 @@ fn test_same_name_module_compiles_correctly() {
     .unwrap();
 
     // Create input directory with input.wj (same name!)
-    let input_dir = src_wj.join("input");
+    let input_dir = src.join("input");
     std::fs::create_dir_all(&input_dir).unwrap();
 
     std::fs::write(
@@ -92,7 +92,7 @@ fn test_same_name_module_compiles_correctly() {
     let compile_result = Command::new(&wj_binary)
         .args([
             "build",
-            src_wj.join("mod.wj").to_str().unwrap(),
+            src.join("mod.wj").to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
             "--library",

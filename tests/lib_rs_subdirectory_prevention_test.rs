@@ -20,7 +20,7 @@
 //
 // Test Strategy:
 // --------------
-// 1. Create a project structure with src_wj/components/lib.wj
+// 1. Create a project structure with src/components/lib.wj
 // 2. Set output to src/components/generated/
 // 3. Compile and verify NO lib.rs is created in src/components/generated/
 // 4. Verify lib.wj content is either skipped or renamed
@@ -59,7 +59,7 @@ fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String
 fn test_lib_rs_not_generated_in_subdirectory() {
     // Create temp directory structure:
     // project/
-    //   src_wj/
+    //   src/
     //     components/
     //       lib.wj (contains: pub struct LibComponent {})
     //       button.wj (contains: pub struct Button {})
@@ -71,8 +71,8 @@ fn test_lib_rs_not_generated_in_subdirectory() {
     let project_root = temp_dir.path();
 
     // Create source structure
-    let src_wj_dir = project_root.join("src_wj");
-    let components_src_dir = src_wj_dir.join("components");
+    let src_dir = project_root.join("src");
+    let components_src_dir = src_dir.join("components");
     fs::create_dir_all(&components_src_dir).unwrap();
 
     // Create lib.wj (this should NOT generate lib.rs in subdirectory)
@@ -100,7 +100,7 @@ fn test_lib_rs_not_generated_in_subdirectory() {
     fs::create_dir_all(&output_dir).unwrap();
 
     // Compile
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
 
     // Debug: List all generated files
     eprintln!("=== Generated files in {:?} ===", output_dir);
@@ -168,7 +168,7 @@ fn test_lib_rs_not_generated_in_subdirectory() {
 fn test_lib_rs_generated_at_crate_root() {
     // Create temp directory structure:
     // project/
-    //   src_wj/
+    //   src/
     //     lib.wj (contains: pub struct MyLib {})
     //     button.wj (contains: pub struct Button {})
     //   out/  <- output directory (crate root)
@@ -177,32 +177,32 @@ fn test_lib_rs_generated_at_crate_root() {
     let project_root = temp_dir.path();
 
     // Create source structure
-    let src_wj_dir = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj_dir).unwrap();
+    let src_dir = project_root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
 
     // Create lib.wj (this SHOULD generate lib.rs at crate root)
     fs::write(
-        src_wj_dir.join("lib.wj"),
+        src_dir.join("lib.wj"),
         "pub struct MyLib { pub value: int }",
     )
     .unwrap();
 
     // Create button.wj
     fs::write(
-        src_wj_dir.join("button.wj"),
+        src_dir.join("button.wj"),
         "pub struct Button { pub label: string }",
     )
     .unwrap();
 
     // Create mod.wj
-    fs::write(src_wj_dir.join("mod.wj"), "").unwrap();
+    fs::write(src_dir.join("mod.wj"), "").unwrap();
 
     // Create output directory (crate root, not a subdirectory)
     let output_dir = project_root.join("out");
     fs::create_dir_all(&output_dir).unwrap();
 
     // Compile
-    compile_wj_project(&src_wj_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
 
     // Verify lib.rs WAS created at crate root
     let lib_rs_path = output_dir.join("lib.rs");

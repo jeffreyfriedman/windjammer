@@ -31,7 +31,7 @@ fn is_submodule_output_dir(output_dir: &Path) -> bool {
 }
 
 /// Copy top-level `*.rs` files and `*/mod.rs` module trees from `<project>/src/` into the output
-/// directory when they are not already present. This keeps hand-written Rust next to `src_wj/`
+/// directory when they are not already present. This keeps hand-written Rust under `<project>/src/`
 /// discoverable in `out/` without pulling in unrelated trees (output is usually `out/`, not under
 /// `src/`).
 fn copy_project_src_tree_into_output(output_dir: &Path) -> std::io::Result<()> {

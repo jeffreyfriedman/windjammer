@@ -45,7 +45,7 @@ cd windjammer && cargo build --release
 cargo test --release pattern_binding_deref
 
 # 4. Compile blend_tree.wj and verify output
-wj build windjammer-game-core/src_wj/animation/blend_tree.wj --output /tmp/out --library --no-cargo
+wj build windjammer-game-core/src/animation/blend_tree.wj --output /tmp/out --library --no-cargo
 grep -E "node_a|node_b" /tmp/out/blend_tree.rs  # Should show *node_a, *node_b
 
 # 5. Full game build E0308 count

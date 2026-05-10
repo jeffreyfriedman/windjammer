@@ -32,7 +32,7 @@ fn test_intermediate_statements_get_semicolons_in_match_arms() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with multiple statements in match arms
@@ -129,7 +129,7 @@ fn test_if_else_expression_preserves_return_value() -> Result<()> {
 
     fs::create_dir_all(&temp_dir)?;
 
-    let src_dir = temp_dir.join("src_wj");
+    let src_dir = temp_dir.join("src");
     fs::create_dir_all(&src_dir)?;
 
     // Write WJ code with if-else used as expression (the regression case)

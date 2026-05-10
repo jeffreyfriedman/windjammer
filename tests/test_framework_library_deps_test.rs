@@ -30,15 +30,15 @@ egui_dock = "0.14"
 serde = { version = "1.0", features = ["derive"] }
 
 [lib]
-path = "src_wj/mod.wj"
+path = "src/mod.wj"
 "#;
 
     fs::write(project_root.join("wj.toml"), wj_toml).unwrap();
 
-    // Create src_wj directory with a simple module
-    let src_wj = project_root.join("src_wj");
-    fs::create_dir_all(&src_wj).unwrap();
-    fs::write(src_wj.join("mod.wj"), "// Test module\npub fn test() {}").unwrap();
+    // Create src directory with a simple module
+    let src = project_root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("mod.wj"), "// Test module\npub fn test() {}").unwrap();
 
     // Create a generated Cargo.toml (simulating what build_project generates)
     let lib_output = project_root.join("lib");

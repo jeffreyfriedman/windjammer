@@ -14,12 +14,12 @@ fn test_ffi_module_auto_discovery() {
     let project_root = temp_dir.path();
 
     // Create a Windjammer project structure
-    let src_wj = project_root.join("src_wj");
-    std::fs::create_dir_all(&src_wj).unwrap();
+    let src = project_root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
 
     // Create a simple mod.wj
     std::fs::write(
-        src_wj.join("mod.wj"),
+        src.join("mod.wj"),
         r#"
     pub mod math;
     "#,
@@ -27,9 +27,9 @@ fn test_ffi_module_auto_discovery() {
     .unwrap();
 
     // Create a math module
-    std::fs::create_dir_all(src_wj.join("math")).unwrap();
+    std::fs::create_dir_all(src.join("math")).unwrap();
     std::fs::write(
-        src_wj.join("math/vec2.wj"),
+        src.join("math/vec2.wj"),
         r#"
     pub struct Vec2 {
         pub x: f32,
@@ -39,7 +39,7 @@ fn test_ffi_module_auto_discovery() {
     )
     .unwrap();
 
-    std::fs::write(src_wj.join("math/mod.wj"), "pub use vec2::Vec2;").unwrap();
+    std::fs::write(src.join("math/mod.wj"), "pub use vec2::Vec2;").unwrap();
 
     // Compile the project
     let output_dir = project_root.join("output");
@@ -72,7 +72,7 @@ fn test_ffi_module_auto_discovery() {
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
-            src_wj.join("mod.wj").to_str().unwrap(),
+            src.join("mod.wj").to_str().unwrap(),
             "--output",
             output_dir.to_str().unwrap(),
             "--library",

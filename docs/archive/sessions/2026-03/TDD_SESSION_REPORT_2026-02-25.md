@@ -72,8 +72,8 @@
 
 ### Modified Files
 - `COMPILER_BUGS_TO_FIX.md` - Marked Bug #1 as FIXED
-- `src_wj/tests/vertical_slice_test.wj` - Simplified to placeholder
-- `src_wj/tests/mod.wj` - Simplified exports
+- `src/tests/vertical_slice_test.wj` - Simplified to placeholder
+- `src/tests/mod.wj` - Simplified exports
 
 ## Metrics
 

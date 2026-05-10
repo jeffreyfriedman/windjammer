@@ -46,7 +46,7 @@ Added case for `EnumPatternBinding::Tuple([RefMut(name)])` and `Tuple([Ref(name)
 
 ```bash
 cd windjammer-game-core
-wj build src_wj --no-cargo -o .
+wj build src --no-cargo -o .
 cargo build --release 2>&1 | rg "error\[E0282\]" | wc -l
 # Result: 0
 ```

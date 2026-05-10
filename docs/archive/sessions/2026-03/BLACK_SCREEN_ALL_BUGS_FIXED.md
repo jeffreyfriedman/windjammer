@@ -10,19 +10,19 @@
 ### Bug #1: World Origin Mismatch ✅
 **Problem**: Voxel grid at (-2,-2,-2) but shader expected (0,0,0)  
 **Fix**: Changed voxelization to start at (0,0,0)  
-**Files**: `src_wj/demos/sphere_test_demo.wj`, `humanoid_demo.wj`
+**Files**: `src/demos/sphere_test_demo.wj`, `humanoid_demo.wj`
 
 ### Bug #2: Memory Leak / Crash ✅
 **Problem**: `encode_region(self, ...)` copied entire Vec on each recursive call  
 **Fix**: Changed to `encode_region(&mut self, ...)`  
 **Impact**: Memory usage 10-20GB → <100KB  
-**Files**: `src_wj/voxel/svo.wj`
+**Files**: `src/voxel/svo.wj`
 
 ### Bug #3: SVO Structure Corruption ✅
 **Problem**: Depth-first encoding broke consecutive child requirement  
 **Fix**: Complete rewrite to breadth-first with pre-allocation  
 **Impact**: Shader could finally read correct octree nodes  
-**Files**: `src_wj/voxel/svo.wj` (added `encode_child()`)
+**Files**: `src/voxel/svo.wj` (added `encode_child()`)
 
 ### Bug #4: Voxel Scaling in Shader ✅
 **Problem**: Shader treated world coordinates as voxel indices  

@@ -375,23 +375,44 @@ impl<'ast> Analyzer<'ast> {
                 // But NOT: f.cross(param).normalize() (param is an argument, not a receiver)
                 if self.is_in_receiver_chain(name, object) {
                     // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
-                    if let Some(sig) = registry.get_signature(method) {
-                        if sig.has_self_receiver {
-                            if let Some(mode) = sig.param_ownership.first() {
-                                // Only &mut self methods constitute mutation.
-                                // Owned self CONSUMES the receiver (move), it doesn't mutate it.
-                                // Treating Owned as mutation incorrectly forces callers to pass
-                                // &mut when they should pass an owned value (e.g., for HashMap::insert).
-                                if matches!(mode, OwnershipMode::MutBorrowed) {
-                                    return true;
+                    //
+                    // COLLISION GUARD: If multiple types have a method with the same name
+                    // (e.g., Vec::clear(&mut self) vs MannequinCache::clear(&self)),
+                    // the registry stores only the last one registered. We can't trust the
+                    // result when there's a collision — fall through to conservative default.
+                    if !registry.has_collision(method) {
+                        if let Some(sig) = registry.get_signature(method) {
+                            if sig.has_self_receiver {
+                                if let Some(mode) = sig.param_ownership.first() {
+                                    if matches!(mode, OwnershipMode::MutBorrowed) {
+                                        return true;
+                                    }
+                                    // Registry found an unambiguous signature, it says not &mut self — trust it
+                                    return false;
                                 }
                             }
+                            // Registry has it but no self receiver — not a mutation
+                            return false;
                         }
                     }
 
                     if crate::method_registry::mutates_receiver(method) {
                         return true;
                     }
+
+                    // Method is known readonly in stdlib registry — not a mutation
+                    if crate::method_registry::is_known_readonly_method(method) {
+                        return false;
+                    }
+
+                    // UNKNOWN METHOD (or COLLISION): not unambiguously resolved.
+                    // Conservative default: assume mutation. This is correct because:
+                    // 1. External Rust methods (e.g. VoxelGPURenderer::add_primitive)
+                    //    are often &mut self but we have no metadata for them.
+                    // 2. It's safer to infer &mut (compiles if actually &self due to
+                    //    auto-reborrow) than to infer & (fails to compile if actually &mut self).
+                    // 3. The Windjammer philosophy: compiler does the work, not the user.
+                    return true;
                 }
                 false
             }

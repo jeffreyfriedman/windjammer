@@ -108,7 +108,7 @@ don't have .as_str()).
 ## 🚀 Impact
 
 **Game Code Changes Needed:**
-- `windjammer-game/windjammer-game-core/src_wj/rpg/character_stats.wj`
+- `windjammer-game/windjammer-game-core/src/rpg/character_stats.wj`
   - Removed `.as_str()` from `new_with_build()` function
   - **Now:** `match build_type { ... }` (idiomatic Windjammer)
 

@@ -5,7 +5,7 @@
 Audited all code in `windjammer-game/windjammer-game-core` for Rust leakage patterns and Windjammer philosophy adherence. This audit follows the parallel TDD session that fixed 382 compilation errors.
 
 **Audit Targets:**
-- All `.wj` files in `src_wj/`, `examples/`, `tests/`, `tests_wj/`
+- All `.wj` files in `src/`, `examples/`, `tests/`, `tests_wj/`
 - Compiler improvements (generic type propagation, trait ownership, mutation detection)
 
 ---

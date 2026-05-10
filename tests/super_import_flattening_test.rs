@@ -13,7 +13,7 @@ use std::process::Command;
 fn test_super_super_import_flattens_to_super() {
     // Create the test source file
     let source = r#"
-// Simulating: src_wj/rendering/camera3d.wj importing from src_wj/math/vec3.wj
+// Simulating: src/rendering/camera3d.wj importing from src/math/vec3.wj
 use super::super::math::vec3::Vec3
 
 @derive(Copy, Clone, Debug)
