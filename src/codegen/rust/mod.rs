@@ -32,6 +32,7 @@ pub mod item_generation;
 pub mod items;
 pub mod literals;
 pub mod operators;
+pub mod operator_generation;
 pub mod optimizations;
 pub mod ownership_tracker;
 pub mod pattern_analysis;
