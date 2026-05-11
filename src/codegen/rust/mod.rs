@@ -15,6 +15,7 @@ pub mod arm_string_analysis;
 pub mod ast_utilities;
 pub mod async_generation;
 pub mod backend;
+pub mod closure_generation;
 pub mod codegen_helpers;
 pub mod collection_detection;
 pub mod constant_folding;
