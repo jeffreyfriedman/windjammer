@@ -1167,6 +1167,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // the same name as a test macro or runtime function (e.g., their own
                 // `assert_approx`), their definition wins. We check the signature
                 // registry: if the function exists and is NOT extern, it's user-defined.
+                //
+                // EXCEPTION: print/println/eprintln/eprint always convert to macros
+                // (Rust requires them to be macros, not functions)
+
+                // Try print/println/eprintln macro conversion FIRST (before user-defined check)
+                if let Some(print_macro) = self.try_generate_print_macro(&func_name, arguments) {
+                    return print_macro;
+                }
+
                 let is_user_defined = self
                     .signature_registry
                     .get_signature(&func_name)
@@ -1182,11 +1191,6 @@ impl<'ast> CodeGenerator<'ast> {
                     // Try test runtime function qualification
                     if let Some(qualified_call) = self.try_qualify_test_function(&func_name, arguments) {
                         return qualified_call;
-                    }
-
-                    // Try print/println/eprintln macro conversion
-                    if let Some(print_macro) = self.try_generate_print_macro(&func_name, arguments) {
-                        return print_macro;
                     }
                 }
 
