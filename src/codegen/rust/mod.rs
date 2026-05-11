@@ -18,6 +18,7 @@ pub mod codegen_helpers;
 pub mod collection_detection;
 pub mod constant_folding;
 pub mod copy_semantics;
+pub mod data_structure_generation;
 pub mod expression_generation;
 pub mod expression_helpers;
 pub mod expression_utilities;
