@@ -1261,7 +1261,17 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } = item
                 {
-                    imports.push_str(&format!("pub use self::{}::*;\n", name));
+                    // TDD FIX: Skip glob re-exports for test modules to avoid E0659 ambiguity
+                    // Bug: Multiple test modules with same type names (e.g., PlayerState) cause
+                    // "ambiguous name" errors when both are glob re-exported in lib.rs
+                    // Root Cause: `pub use test_foo::*; pub use test_bar::*;` brings all types
+                    // into scope, creating conflicts when type names overlap
+                    // Fix: Test modules don't need glob re-exports - tests can use explicit imports
+                    // like `use crate::test_foo::Type;` or `use super::test_foo::Type;`
+                    let is_test_module = name.starts_with("test_");
+                    if !is_test_module {
+                        imports.push_str(&format!("pub use self::{}::*;\n", name));
+                    }
                 }
             }
         }
