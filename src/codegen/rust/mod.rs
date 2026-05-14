@@ -64,4 +64,5 @@ pub use backend::RustBackend;
 // Re-export commonly used functions
 pub use types::type_to_rust;
 pub mod method_call_analyzer;
+pub mod method_call_expression_generation;
 pub mod stdlib_method_traits;
