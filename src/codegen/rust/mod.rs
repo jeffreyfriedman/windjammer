@@ -12,6 +12,7 @@
 //! - **backend**: Backend trait implementation
 
 pub mod arm_string_analysis;
+pub mod assignment_statement_generation;
 pub mod ast_utilities;
 pub mod async_generation;
 pub mod backend;
