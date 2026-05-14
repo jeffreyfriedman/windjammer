@@ -32,6 +32,7 @@ pub mod float_type_utilities;
 pub mod function_generation;
 pub mod generator;
 pub mod helpers;
+pub mod if_statement_generation;
 pub mod import_generation;
 pub mod item_generation;
 pub mod items;
