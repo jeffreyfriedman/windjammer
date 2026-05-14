@@ -553,7 +553,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Last value-producing expression in an if/else branch suggests owned `String` (e.g. `.clone()` on `String`).
-    fn branch_tail_suggests_owned_string_coercion(&self, block: &[&'ast Statement<'ast>]) -> bool {
+    pub(in crate::codegen::rust) fn branch_tail_suggests_owned_string_coercion(&self, block: &[&'ast Statement<'ast>]) -> bool {
         let Some(last) = block.last().copied() else {
             return false;
         };
@@ -815,112 +815,7 @@ impl<'ast> CodeGenerator<'ast> {
                 then_block,
                 else_block,
                 ..
-            } => {
-                // WINDJAMMER PHILOSOPHY: Check if any branch explicitly uses .as_str()
-                // If so, we should NOT auto-convert string literals in other branches
-                let any_branch_has_as_str = string_analysis::block_has_as_str(then_block)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|b| string_analysis::block_has_as_str(b));
-
-                let old_suppress = self.suppress_string_conversion.get();
-                if any_branch_has_as_str {
-                    self.suppress_string_conversion.set(true);
-                }
-
-                let mut output = self.indent();
-                output.push_str("if ");
-                let cond_str = self.generate_expression(condition);
-                // Auto-deref borrowed bool in if-condition: `if r` where r: &bool → `if *r`
-                let cond_str = if let Expression::Identifier { name, .. } = condition {
-                    if self.inferred_borrowed_params.contains(name.as_str())
-                        || self.borrowed_iterator_vars.contains(name)
-                    {
-                        let is_bool_ref = self
-                            .infer_expression_type(condition)
-                            .as_ref()
-                            .is_some_and(|t| {
-                                matches!(t,
-                                    Type::Reference(inner) | Type::MutableReference(inner)
-                                    if matches!(&**inner, Type::Bool)
-                                )
-                            });
-                        if is_bool_ref && !cond_str.starts_with('*') {
-                            format!("*{}", cond_str)
-                        } else {
-                            cond_str
-                        }
-                    } else {
-                        cond_str
-                    }
-                } else {
-                    cond_str
-                };
-                output.push_str(&cond_str);
-                output.push_str(" {\n");
-
-                // DOGFOODING FIX: Preserve explicit returns in if-without-else
-                // In Rust, `if` without `else` must evaluate to `()`, so any value expression
-                // (including implicit returns) is invalid: E0308 "if without else has incompatible types"
-                //
-                // Safe to optimize returns ONLY in if-else (both branches have values/returns)
-                // Must preserve returns in if-without-else (then block evaluates to ())
-                let old_in_func_body = self.in_function_body;
-                let old_in_void_block = self.in_void_block;
-                if else_block.is_none() || !self.current_is_last_statement {
-                    self.in_function_body = false;
-                }
-                // if-without-else must evaluate to (); suppress implicit returns
-                if else_block.is_none() {
-                    self.in_void_block = true;
-                }
-
-                let old_coerce_lit = self.coerce_string_literals_to_owned;
-                let any_branch_suggests_owned_coercion = self
-                    .branch_tail_suggests_owned_string_coercion(then_block)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|eb| self.branch_tail_suggests_owned_string_coercion(eb));
-                // Coerce string literals in branches when:
-                // - The enclosing function returns owned String (even if this `if` is not the last
-                //   statement — otherwise `in_function_body` is cleared and inner blocks skip coercion), or
-                // - We're in an expression context (`let`/`=` RHS, etc.) and a branch yields String
-                //   (e.g. `parts[0].clone()` vs `"0"` while the function itself returns `()`).
-                let coerce_string_in_branches = else_block.is_some()
-                    && (string_utilities::return_type_expects_owned_string(&self.current_function_return_type)
-                        || (self.in_expression_context && any_branch_suggests_owned_coercion));
-                if coerce_string_in_branches {
-                    self.coerce_string_literals_to_owned = true;
-                }
-
-                self.indent_level += 1;
-                output.push_str(&self.generate_block(then_block));
-                self.indent_level -= 1;
-                self.in_void_block = old_in_void_block;
-
-                output.push_str(&self.indent());
-                output.push('}');
-
-                if let Some(else_b) = else_block {
-                    output.push_str(" else {\n");
-                    self.indent_level += 1;
-                    if coerce_string_in_branches {
-                        self.coerce_string_literals_to_owned = true;
-                    }
-                    output.push_str(&self.generate_block(else_b));
-                    self.indent_level -= 1;
-                    output.push_str(&self.indent());
-                    output.push('}');
-                }
-
-                self.coerce_string_literals_to_owned = old_coerce_lit;
-
-                self.in_function_body = old_in_func_body;
-
-                self.suppress_string_conversion.set(old_suppress);
-                output.push('\n');
-                output
-            }
+            } => self.generate_if_statement(condition, then_block, else_block),
             Statement::Match { value, arms, .. } => self.generate_match_statement(value, arms),
             Statement::Loop { body, .. } => {
                 let mut output = self.indent();
