@@ -23,7 +23,7 @@ pub mod constant_folding;
 pub mod copy_semantics;
 pub mod data_structure_generation;
 pub mod expression_generation;
-pub mod expression_helpers;
+pub mod identifier_and_literal_generation;pub mod expression_helpers;
 pub mod expression_utilities;
 pub mod expressions;
 pub mod float_type_utilities;
