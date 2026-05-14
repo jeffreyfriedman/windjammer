@@ -50,7 +50,7 @@ pub mod trait_derivation;
 pub mod type_analysis;
 pub mod type_casting;
 pub mod type_classification_utilities;
-pub mod types;
+pub mod type_balancing;pub mod types;
 pub mod variable_analysis;
 
 // Re-export the main CodeGenerator for backward compatibility
