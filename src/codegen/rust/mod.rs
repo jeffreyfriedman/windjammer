@@ -34,7 +34,7 @@ pub mod import_generation;
 pub mod item_generation;
 pub mod items;
 pub mod literals;
-pub mod macro_and_string_generation;
+pub mod macro_conversion;pub mod macro_and_string_generation;
 pub mod operators;
 pub mod operator_generation;
 pub mod optimizations;
