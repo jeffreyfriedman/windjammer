@@ -6,7 +6,7 @@
 //! - Match expression optimization (single-statement match -> match expression)
 //! - Implicit returns in blocks
 
-use crate::parser::{Expression, Literal, Pattern, Statement, Type};
+use crate::parser::{Expression, Literal, Pattern, Statement};
 
 use super::{
     arm_string_analysis, pattern_analysis, string_analysis, string_utilities, CodeGenerator,
