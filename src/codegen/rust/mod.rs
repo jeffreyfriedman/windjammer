@@ -15,6 +15,7 @@ pub mod arm_string_analysis;
 pub mod ast_utilities;
 pub mod async_generation;
 pub mod backend;
+pub mod binary_expression_generation;
 pub mod block_generation;
 pub mod closure_generation;
 pub mod codegen_helpers;
