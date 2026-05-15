@@ -24,6 +24,9 @@ pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
 pub mod error_handling; // Error handling and linting
+mod compilation_error_handling;
+mod output_generation;
+mod file_compilation_pipeline;
 pub mod file_compiler; // Single-file compilation
 pub mod module_system;
 pub mod project_paths; // Nested module system - The Windjammer Way! // Windjammer error codes (WJ0001, etc.)
