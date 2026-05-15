@@ -6,14 +6,14 @@ Rust integration tests live under this directory and are registered explicitly i
 
 Declared in `Cargo.toml` under `[features]`:
 
-| Feature | Directory | Purpose |
-|--------|-----------|---------|
-| `parser_tests` | `tests/parser/` | Parser, WGSL front matter, shader file detection |
-| `analyzer_tests` | `tests/analyzer/` | Analyzer, ownership inference, type checking |
-| `codegen_tests` | `tests/codegen/` | Backend codegen (Rust / Go / JS) |
-| `interpreter_tests` | `tests/interpreter/` | Interpreter runtime |
-| `conformance_tests` | `tests/conformance/` | Cross-backend conformance |
-| `integration_tests` | `tests/integration/` | End-to-end / build / FFI / modules |
+| Feature | Directory | `[[test]]` targets | Purpose |
+|--------|-----------|-------------------|---------|
+| `parser_tests` | `tests/parser/` | 43 | Parser, WGSL front matter, shader file detection |
+| `analyzer_tests` | `tests/analyzer/` | 508 | Analyzer, ownership inference, type checking |
+| `codegen_tests` | `tests/codegen/` | 103 | Backend codegen (Rust / Go / JS) |
+| `interpreter_tests` | `tests/interpreter/` | 3 | Interpreter runtime |
+| `conformance_tests` | `tests/conformance/` | 6 | Cross-backend conformance |
+| `integration_tests` | `tests/integration/` | 95 | End-to-end / build / FFI / modules |
 
 ## Commands
 
@@ -54,10 +54,10 @@ Bug-regression and linter tests are **not** tied to a suite feature. They are in
 
 ## How gating works
 
-Each integration test source file starts with `#![cfg(any(...))]` (or `#![cfg(not(any(...))))]` for regression/linter):
+Each integration test source file starts with `#![cfg(any(...))]` (or `#![cfg(not(any(...)))]` for regression/linter):
 
 - If **no** suite feature is set, the `not(any(...))` branch is true and **all** gated suites compile and run.
-- If **any** suite feature is set, only files whose feature matches (or the same `not(any(...))` case for regression/linter) stay active.
+- If **any** suite feature is set, only sources tagged for that feature compile; regression and linter crates (the `#![cfg(not(any(...)))]` form) **do not**.
 
 Cargo may still build empty test harnesses for crates that are gated off; use `--test <name>` when you want to limit work to one binary.
 
