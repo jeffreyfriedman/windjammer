@@ -9,21 +9,19 @@
 //! - Thread/Async blocks
 //! - Block generation with implicit return handling
 
-use crate::parser::ast::CompoundOp;
 use crate::parser::*;
 
-use super::codegen_helpers;
-use super::pattern_analysis;
 use super::self_analysis;
 use super::string_analysis;
-use super::string_utilities;
 use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
     /// Whether `assignment_float_target_type` should be set for the whole assignment/compound RHS
     /// (float literals + mixed f32/f64 arithmetic toward an f32 or f64 slot).
-    pub(in crate::codegen::rust) fn assignment_target_needs_float_codegen_context(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn assignment_target_needs_float_codegen_context(
+        ty: &Type,
+    ) -> bool {
         match ty {
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::assignment_target_needs_float_codegen_context(inner)
@@ -65,7 +63,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Determine the concrete Rust float type name for a compound assignment target.
     /// Priority: explicit type annotation → float inference engine → assignment context → inferred type.
-    pub(in crate::codegen::rust) fn resolve_compound_assign_float_target(&self, target: &Expression) -> Option<&'static str> {
+    pub(in crate::codegen::rust) fn resolve_compound_assign_float_target(
+        &self,
+        target: &Expression,
+    ) -> Option<&'static str> {
         // 1. Check local_var_types for explicit type annotation
         if let Expression::Identifier { name, .. } = target {
             if let Some(local_ty) = self.local_var_types.get(name) {
@@ -131,7 +132,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Last value-producing expression in an if/else branch suggests owned `String` (e.g. `.clone()` on `String`).
-    pub(in crate::codegen::rust) fn branch_tail_suggests_owned_string_coercion(&self, block: &[&'ast Statement<'ast>]) -> bool {
+    pub(in crate::codegen::rust) fn branch_tail_suggests_owned_string_coercion(
+        &self,
+        block: &[&'ast Statement<'ast>],
+    ) -> bool {
         let Some(last) = block.last().copied() else {
             return false;
         };
@@ -141,7 +145,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(in crate::codegen::rust) fn generate_statement_impl(&mut self, stmt: &Statement<'ast>) -> String {
+    pub(in crate::codegen::rust) fn generate_statement_impl(
+        &mut self,
+        stmt: &Statement<'ast>,
+    ) -> String {
         match stmt {
             Statement::Let {
                 pattern,
@@ -153,56 +160,14 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_let_statement(pattern, *mutable, type_, value, location),
             Statement::Const {
                 name, type_, value, ..
-            } => {
-                let mut output = self.indent();
-
-                // Special case: string constants should use &'static str, not String
-                let rust_type = if matches!(type_, Type::String)
-                    && matches!(
-                        value,
-                        Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        }
-                    ) {
-                    "&'static str".to_string()
-                } else {
-                    self.type_to_rust(type_)
-                };
-
-                output.push_str(&format!(
-                    "const {}: {} = {};\n",
-                    name,
-                    rust_type,
-                    self.generate_expression(value)
-                ));
-                output
-            }
+            } => self.generate_const_statement(name.as_str(), &type_, value),
             Statement::Static {
                 name,
                 mutable,
                 type_,
                 value,
                 ..
-            } => {
-                let mut output = self.indent();
-                if *mutable {
-                    output.push_str(&format!(
-                        "static mut {}: {} = {};\n",
-                        name,
-                        self.type_to_rust(type_),
-                        self.generate_expression(value)
-                    ));
-                } else {
-                    output.push_str(&format!(
-                        "static {}: {} = {};\n",
-                        name,
-                        self.type_to_rust(type_),
-                        self.generate_expression(value)
-                    ));
-                }
-                output
-            }
+            } => self.generate_static_statement(name.as_str(), *mutable, &type_, value),
             Statement::Return { value: expr, .. } => self.generate_return_statement(expr),
             Statement::Expression { expr, .. } => {
                 let mut output = self.indent();
@@ -226,62 +191,10 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => self.generate_if_statement(condition, then_block, else_block),
             Statement::Match { value, arms, .. } => self.generate_match_statement(value, arms),
-            Statement::Loop { body, .. } => {
-                let mut output = self.indent();
-                output.push_str("loop {\n");
-
-                self.indent_level += 1;
-                let saved_idx = self.current_statement_idx;
-                let saved_local_idx = self.current_block_local_idx;
-                for (i, stmt) in body.iter().enumerate() {
-                    self.current_statement_idx = self.auto_clone_counter;
-                    self.current_block_local_idx = i;
-                    self.auto_clone_counter += 1;
-                    output.push_str(&self.generate_statement(stmt));
-                }
-                self.current_statement_idx = saved_idx;
-                self.current_block_local_idx = saved_local_idx;
-                self.indent_level -= 1;
-
-                output.push_str(&self.indent());
-                output.push_str("}\n");
-                output
-            }
+            Statement::Loop { body, .. } => self.generate_loop_statement(body),
             Statement::While {
                 condition, body, ..
-            } => {
-                // TDD FIX (Bug #3): Before generating while condition expression,
-                // check if it compares a variable to .len() - if so, mark that variable as usize
-                // This must happen BEFORE generate_expression to prevent `as i64` cast
-                self.mark_usize_variables_in_condition(condition);
-
-                let mut output = self.indent();
-                output.push_str("while ");
-
-                let condition_str = self.generate_expression(condition);
-                output.push_str(&condition_str);
-                output.push_str(" {\n");
-
-                self.indent_level += 1;
-                let saved_body = self.current_function_body.clone();
-                let saved_idx = self.current_statement_idx;
-                let saved_local_idx = self.current_block_local_idx;
-                self.current_function_body = body.to_vec();
-                for (i, stmt) in body.iter().enumerate() {
-                    self.current_statement_idx = self.auto_clone_counter;
-                    self.current_block_local_idx = i;
-                    self.auto_clone_counter += 1;
-                    output.push_str(&self.generate_statement(stmt));
-                }
-                self.current_function_body = saved_body;
-                self.current_statement_idx = saved_idx;
-                self.current_block_local_idx = saved_local_idx;
-                self.indent_level -= 1;
-
-                output.push_str(&self.indent());
-                output.push_str("}\n");
-                output
-            }
+            } => self.generate_while_statement(condition, body),
             Statement::For {
                 pattern,
                 iterable,
@@ -289,16 +202,8 @@ impl<'ast> CodeGenerator<'ast> {
                 location,
                 ..
             } => self.generate_for_statement(pattern, iterable, body, location),
-            Statement::Break { .. } => {
-                let mut output = self.indent();
-                output.push_str("break;\n");
-                output
-            }
-            Statement::Continue { .. } => {
-                let mut output = self.indent();
-                output.push_str("continue;\n");
-                output
-            }
+            Statement::Break { .. } => self.generate_break_statement(),
+            Statement::Continue { .. } => self.generate_continue_statement(),
             Statement::Use { path, alias, .. } => {
                 let mut output = self.indent();
                 output.push_str("use ");
@@ -316,38 +221,8 @@ impl<'ast> CodeGenerator<'ast> {
                 compound_op,
                 ..
             } => self.generate_assignment_statement(target, value, compound_op),
-            Statement::Thread { body, .. } => {
-                // Transpile to std::thread::spawn for parallelism
-                // When used as a statement, discard the JoinHandle
-                let mut output = self.indent();
-                output.push_str("let _ = std::thread::spawn(move || {\n");
-
-                self.indent_level += 1;
-                for stmt in body {
-                    output.push_str(&self.generate_statement(stmt));
-                }
-                self.indent_level -= 1;
-
-                output.push_str(&self.indent());
-                output.push_str("});\n");
-                output
-            }
-            Statement::Async { body, .. } => {
-                // Transpile to tokio::spawn for async concurrency
-                // When used as a statement, discard the JoinHandle
-                let mut output = self.indent();
-                output.push_str("let _ = tokio::spawn(async move {\n");
-
-                self.indent_level += 1;
-                for stmt in body {
-                    output.push_str(&self.generate_statement(stmt));
-                }
-                self.indent_level -= 1;
-
-                output.push_str(&self.indent());
-                output.push_str("});\n");
-                output
-            }
+            Statement::Thread { body, .. } => self.generate_thread_statement(body),
+            Statement::Async { body, .. } => self.generate_async_statement(body),
             Statement::Defer { statement: _, .. } => {
                 // Defer is not directly supported in Rust
                 // We'll generate a comment for now
@@ -455,7 +330,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// E0507 fix for `let x = self.field` behind borrowed self.
     /// - Option<T> behind &mut self → `.take()` (atomically moves value out, leaves None)
     /// - Other non-Copy behind &self/&mut self → `.clone()`
-    pub(in crate::codegen::rust) fn apply_self_field_move_fix(&self, value: &Expression<'ast>, value_str: &mut String) {
+    pub(in crate::codegen::rust) fn apply_self_field_move_fix(
+        &self,
+        value: &Expression<'ast>,
+        value_str: &mut String,
+    ) {
         if !matches!(value, Expression::FieldAccess { .. }) {
             return;
         }
@@ -573,7 +452,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `&` / `&mut` prefix for matching on `Option` when the scrutinee lives behind a borrow.
-    pub(in crate::codegen::rust) fn option_scrutinee_ref_prefix(&self, value: &Expression<'ast>) -> &'static str {
+    pub(in crate::codegen::rust) fn option_scrutinee_ref_prefix(
+        &self,
+        value: &Expression<'ast>,
+    ) -> &'static str {
         let Some(root) = self.root_identifier_of_field_or_index_chain(value) else {
             return "";
         };
@@ -633,12 +515,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.is_type_copy(&inner) {
                     let body_mutates = some_arm
                         .and_then(|arm| {
-                            Self::some_pattern_single_binding(&arm.pattern)
-                                .map(|b| {
-                                    self.binding_receives_mutating_call_with_sig_check(
-                                        arm.body, b, &inner,
-                                    )
-                                })
+                            Self::some_pattern_single_binding(&arm.pattern).map(|b| {
+                                self.binding_receives_mutating_call_with_sig_check(
+                                    arm.body, b, &inner,
+                                )
+                            })
                         })
                         .unwrap_or(false);
                     if !body_mutates {
@@ -650,7 +531,9 @@ impl<'ast> CodeGenerator<'ast> {
         base
     }
 
-    pub(in crate::codegen::rust) fn some_pattern_single_binding<'p>(pattern: &'p Pattern<'p>) -> Option<&'p str> {
+    pub(in crate::codegen::rust) fn some_pattern_single_binding<'p>(
+        pattern: &'p Pattern<'p>,
+    ) -> Option<&'p str> {
         match pattern {
             Pattern::EnumVariant(v, EnumPatternBinding::Single(name)) => {
                 let is_some = v == "Some" || v.ends_with("::Some");
@@ -678,236 +561,11 @@ impl<'ast> CodeGenerator<'ast> {
         self.expr_binding_receives_mutating_method_call(main_arm.body, b)
     }
 
-    fn statement_binding_mut_method_scan(&self, stmt: &Statement<'ast>, binding: &str) -> bool {
-        match stmt {
-            Statement::Assignment { target, .. } => {
-                super::self_analysis::expression_references_variable_or_field(target, binding)
-            }
-            Statement::Expression { expr, .. } => {
-                self.expr_binding_receives_mutating_method_call(expr, binding)
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.expr_binding_receives_mutating_method_call(condition, binding)
-                    || then_block
-                        .iter()
-                        .any(|s| self.statement_binding_mut_method_scan(s, binding))
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.statement_binding_mut_method_scan(s, binding))
-                    })
-            }
-            Statement::While {
-                condition, body, ..
-            } => {
-                self.expr_binding_receives_mutating_method_call(condition, binding)
-                    || body
-                        .iter()
-                        .any(|s| self.statement_binding_mut_method_scan(s, binding))
-            }
-            Statement::For { body, .. } => body
-                .iter()
-                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
-            Statement::Loop { body, .. } => body
-                .iter()
-                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
-            Statement::Return {
-                value: Some(expr), ..
-            } => self.expr_binding_receives_mutating_method_call(expr, binding),
-            Statement::Let { value, .. } => {
-                self.expr_binding_receives_mutating_method_call(value, binding)
-            }
-            Statement::Match { value, arms, .. } => {
-                self.expr_binding_receives_mutating_method_call(value, binding)
-                    || arms.iter().any(|arm| {
-                        self.expr_binding_receives_mutating_method_call(arm.body, binding)
-                    })
-            }
-            _ => false,
-        }
-    }
-
-    fn expr_binding_receives_mutating_method_call(
-        &self,
-        expr: &Expression<'ast>,
-        binding: &str,
-    ) -> bool {
-        match expr {
-            Expression::Block { statements, .. } => statements
-                .iter()
-                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
-            Expression::MethodCall { object, method, .. } => {
-                if let Expression::Identifier { name, .. } = &**object {
-                    if name == binding && self.codegen_method_likely_mutates_receiver(method) {
-                        return true;
-                    }
-                }
-                self.expr_binding_receives_mutating_method_call(object, binding)
-            }
-            Expression::Binary { left, right, .. } => {
-                self.expr_binding_receives_mutating_method_call(left, binding)
-                    || self.expr_binding_receives_mutating_method_call(right, binding)
-            }
-            Expression::Unary { operand, .. } => {
-                self.expr_binding_receives_mutating_method_call(operand, binding)
-            }
-            Expression::Call {
-                function,
-                arguments,
-                ..
-            } => {
-                if let Expression::FieldAccess { object, field, .. } = &**function {
-                    if let Expression::Identifier { name, .. } = &**object {
-                        if name == binding && self.codegen_method_likely_mutates_receiver(field) {
-                            return true;
-                        }
-                    }
-                }
-                self.expr_binding_receives_mutating_method_call(function, binding)
-                    || arguments
-                        .iter()
-                        .any(|(_, a)| self.expr_binding_receives_mutating_method_call(a, binding))
-            }
-            _ => false,
-        }
-    }
-
-    fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
-    }
-
-    /// Like `expr_binding_receives_mutating_method_call` but also consults
-    /// the signature registry for user-defined methods on `binding_type`.
-    fn binding_receives_mutating_call_with_sig_check(
-        &self,
-        expr: &Expression<'ast>,
-        binding: &str,
-        binding_type: &Type,
-    ) -> bool {
-        match expr {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.stmt_binding_mut_call_with_sig(s, binding, binding_type)
-            }),
-            Expression::MethodCall { object, method, .. } => {
-                if let Expression::Identifier { name, .. } = &**object {
-                    if name == binding
-                        && self.method_mutates_via_registry_or_sig(method, binding_type)
-                    {
-                        return true;
-                    }
-                }
-                self.binding_receives_mutating_call_with_sig_check(object, binding, binding_type)
-            }
-            Expression::Call {
-                function,
-                arguments,
-                ..
-            } => {
-                if let Expression::FieldAccess { object, field, .. } = &**function {
-                    if let Expression::Identifier { name, .. } = &**object {
-                        if name == binding
-                            && self.method_mutates_via_registry_or_sig(field, binding_type)
-                        {
-                            return true;
-                        }
-                    }
-                }
-                self.binding_receives_mutating_call_with_sig_check(function, binding, binding_type)
-                    || arguments.iter().any(|(_, a)| {
-                        self.binding_receives_mutating_call_with_sig_check(a, binding, binding_type)
-                    })
-            }
-            Expression::Binary { left, right, .. } => {
-                self.binding_receives_mutating_call_with_sig_check(left, binding, binding_type)
-                    || self.binding_receives_mutating_call_with_sig_check(
-                        right,
-                        binding,
-                        binding_type,
-                    )
-            }
-            Expression::Unary { operand, .. } => {
-                self.binding_receives_mutating_call_with_sig_check(operand, binding, binding_type)
-            }
-            _ => false,
-        }
-    }
-
-    fn stmt_binding_mut_call_with_sig(
-        &self,
-        stmt: &Statement<'ast>,
-        binding: &str,
-        binding_type: &Type,
-    ) -> bool {
-        match stmt {
-            Statement::Assignment { target, .. } => {
-                super::self_analysis::expression_references_variable_or_field(target, binding)
-            }
-            Statement::Expression { expr, .. } => {
-                self.binding_receives_mutating_call_with_sig_check(expr, binding, binding_type)
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.binding_receives_mutating_call_with_sig_check(
-                    condition,
-                    binding,
-                    binding_type,
-                ) || then_block
-                    .iter()
-                    .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type))
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type))
-                    })
-            }
-            Statement::Match { value, arms, .. } => {
-                self.binding_receives_mutating_call_with_sig_check(value, binding, binding_type)
-                    || arms.iter().any(|arm| {
-                        self.binding_receives_mutating_call_with_sig_check(
-                            arm.body,
-                            binding,
-                            binding_type,
-                        )
-                    })
-            }
-            Statement::Return { value, .. } => value
-                .map(|v| {
-                    self.binding_receives_mutating_call_with_sig_check(v, binding, binding_type)
-                })
-                .unwrap_or(false),
-            _ => false,
-        }
-    }
-
-    /// Check if a method on the given type is known to mutate its receiver,
-    /// using both the stdlib method registry and the signature registry.
-    fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
-        if crate::method_registry::mutates_receiver(method) {
-            return true;
-        }
-        let type_name = match receiver_type {
-            Type::Custom(name) => name.as_str(),
-            _ => return false,
-        };
-        let qualified = format!("{}::{}", type_name, method);
-        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
-            if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-                return sig.param_ownership[0]
-                    == crate::analyzer::OwnershipMode::MutBorrowed;
-            }
-        }
-        false
-    }
-
     /// Check if expression is self.field (or self.field.subfield) - traces to self
-    pub(in crate::codegen::rust) fn match_scrutinee_is_self_field(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn match_scrutinee_is_self_field(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name == "self")
@@ -918,7 +576,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(in crate::codegen::rust) fn match_scrutinee_is_self_method_call(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn match_scrutinee_is_self_method_call(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::MethodCall { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
@@ -942,13 +603,19 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(in crate::codegen::rust) fn match_arms_mutate_self(&self, arms: &[crate::parser::MatchArm<'ast>]) -> bool {
+    pub(in crate::codegen::rust) fn match_arms_mutate_self(
+        &self,
+        arms: &[crate::parser::MatchArm<'ast>],
+    ) -> bool {
         let ctx = self_analysis::AnalysisContext::new(&[], &self.current_struct_fields);
         arms.iter()
             .any(|arm| self_analysis::expression_mutates_fields(&ctx, arm.body))
     }
 
-    pub(in crate::codegen::rust) fn get_assignment_target_type(&self, target: &Expression) -> Option<String> {
+    pub(in crate::codegen::rust) fn get_assignment_target_type(
+        &self,
+        target: &Expression,
+    ) -> Option<String> {
         match target {
             Expression::FieldAccess { object, field, .. } => {
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {

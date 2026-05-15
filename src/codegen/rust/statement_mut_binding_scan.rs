@@ -1,0 +1,236 @@
+//! Scanning statements and expressions for mutating method calls on bindings
+//! (used by Option match / `&` vs `&mut` scrutinee prefix logic).
+
+use crate::parser::*;
+
+use super::CodeGenerator;
+
+impl<'ast> CodeGenerator<'ast> {
+    fn statement_binding_mut_method_scan(
+        &self,
+        stmt: &Statement<'ast>,
+        binding: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                super::self_analysis::expression_references_variable_or_field(target, binding)
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_binding_receives_mutating_method_call(expr, binding)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_binding_receives_mutating_method_call(condition, binding)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_binding_mut_method_scan(s, binding))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.statement_binding_mut_method_scan(s, binding))
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_binding_receives_mutating_method_call(condition, binding)
+                    || body
+                        .iter()
+                        .any(|s| self.statement_binding_mut_method_scan(s, binding))
+            }
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
+            Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_binding_receives_mutating_method_call(expr, binding),
+            Statement::Let { value, .. } => {
+                self.expr_binding_receives_mutating_method_call(value, binding)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_binding_receives_mutating_method_call(value, binding)
+                    || arms.iter().any(|arm| {
+                        self.expr_binding_receives_mutating_method_call(arm.body, binding)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn expr_binding_receives_mutating_method_call(
+        &self,
+        expr: &Expression<'ast>,
+        binding: &str,
+    ) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_binding_mut_method_scan(s, binding)),
+            Expression::MethodCall { object, method, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == binding && self.codegen_method_likely_mutates_receiver(method) {
+                        return true;
+                    }
+                }
+                self.expr_binding_receives_mutating_method_call(object, binding)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_binding_receives_mutating_method_call(left, binding)
+                    || self.expr_binding_receives_mutating_method_call(right, binding)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_binding_receives_mutating_method_call(operand, binding)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if name == binding && self.codegen_method_likely_mutates_receiver(field) {
+                            return true;
+                        }
+                    }
+                }
+                self.expr_binding_receives_mutating_method_call(function, binding)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expr_binding_receives_mutating_method_call(a, binding))
+            }
+            _ => false,
+        }
+    }
+
+    fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
+        crate::method_registry::mutates_receiver(method)
+    }
+
+    /// Like `expr_binding_receives_mutating_method_call` but also consults
+    /// the signature registry for user-defined methods on `binding_type`.
+    pub(in crate::codegen::rust) fn binding_receives_mutating_call_with_sig_check(
+        &self,
+        expr: &Expression<'ast>,
+        binding: &str,
+        binding_type: &Type,
+    ) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type)),
+            Expression::MethodCall { object, method, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == binding
+                        && self.method_mutates_via_registry_or_sig(method, binding_type)
+                    {
+                        return true;
+                    }
+                }
+                self.binding_receives_mutating_call_with_sig_check(object, binding, binding_type)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if name == binding
+                            && self.method_mutates_via_registry_or_sig(field, binding_type)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                self.binding_receives_mutating_call_with_sig_check(function, binding, binding_type)
+                    || arguments.iter().any(|(_, a)| {
+                        self.binding_receives_mutating_call_with_sig_check(a, binding, binding_type)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.binding_receives_mutating_call_with_sig_check(left, binding, binding_type)
+                    || self.binding_receives_mutating_call_with_sig_check(
+                        right,
+                        binding,
+                        binding_type,
+                    )
+            }
+            Expression::Unary { operand, .. } => {
+                self.binding_receives_mutating_call_with_sig_check(operand, binding, binding_type)
+            }
+            _ => false,
+        }
+    }
+
+    fn stmt_binding_mut_call_with_sig(
+        &self,
+        stmt: &Statement<'ast>,
+        binding: &str,
+        binding_type: &Type,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                super::self_analysis::expression_references_variable_or_field(target, binding)
+            }
+            Statement::Expression { expr, .. } => {
+                self.binding_receives_mutating_call_with_sig_check(expr, binding, binding_type)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.binding_receives_mutating_call_with_sig_check(condition, binding, binding_type)
+                    || then_block
+                        .iter()
+                        .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type))
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.binding_receives_mutating_call_with_sig_check(value, binding, binding_type)
+                    || arms.iter().any(|arm| {
+                        self.binding_receives_mutating_call_with_sig_check(
+                            arm.body,
+                            binding,
+                            binding_type,
+                        )
+                    })
+            }
+            Statement::Return { value, .. } => value
+                .map(|v| {
+                    self.binding_receives_mutating_call_with_sig_check(v, binding, binding_type)
+                })
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    /// Check if a method on the given type is known to mutate its receiver,
+    /// using both the stdlib method registry and the signature registry.
+    fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
+        if crate::method_registry::mutates_receiver(method) {
+            return true;
+        }
+        let type_name = match receiver_type {
+            Type::Custom(name) => name.as_str(),
+            _ => return false,
+        };
+        let qualified = format!("{}::{}", type_name, method);
+        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+            if sig.has_self_receiver && !sig.param_ownership.is_empty() {
+                return sig.param_ownership[0] == crate::analyzer::OwnershipMode::MutBorrowed;
+            }
+        }
+        false
+    }
+}
