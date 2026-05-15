@@ -5140,7 +5140,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer).
-    pub(super) fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
+    pub(in crate::codegen::rust) fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
         match ret {
             Some(Type::String) => true,
             Some(Type::Custom(n)) if n == "String" || n == "string" => true,
@@ -5154,7 +5154,7 @@ impl<'ast> CodeGenerator<'ast> {
             && (self.in_match_arm_needing_string || self.coerce_string_literals_to_owned)
     }
 
-    pub(super) fn generate_literal_with_context(
+    pub(in crate::codegen::rust) fn generate_literal_with_context(
         &self,
         lit: &Literal,
         expr: &Expression<'ast>,
@@ -5289,7 +5289,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate literal without expression context (used in older code paths)
-    pub(super) fn generate_literal(&self, lit: &Literal) -> String {
+    pub(in crate::codegen::rust) fn generate_literal(&self, lit: &Literal) -> String {
         // Delegate to context-sensitive version
         self.generate_literal_context_sensitive(lit)
     }

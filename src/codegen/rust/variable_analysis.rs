@@ -20,7 +20,7 @@ use super::CodeGenerator;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum VariableUsage {
+pub(in crate::codegen::rust) enum VariableUsage {
     NotUsed,
     FieldAccessOnly,
     Moved,
@@ -37,7 +37,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///   function (sequential loops), so the first loop must not move it (E0382).
     ///
     /// Applies to locals **and** parameters (parameters were incorrectly skipped before).
-    pub(super) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
+    pub(in crate::codegen::rust) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
         self.for_loop_borrow_needed.clear();
         let mut counts: HashMap<String, usize> = HashMap::new();
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
@@ -351,7 +351,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Does **not** apply to parameters declared as Windjammer `int` (`idx < vec.len()` stays `int`
     /// and codegen casts `.len()` to `i64`).
-    pub(super) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
+    pub(in crate::codegen::rust) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
         self.walk_condition_mark_usize_loop_counters(condition);
     }
 
@@ -406,7 +406,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Recursively find unused let bindings and for-loop variables in a block of statements.
-    pub(super) fn find_unused_bindings(
+    pub(in crate::codegen::rust) fn find_unused_bindings(
         stmts: &[&Statement],
         out: &mut std::collections::HashSet<(usize, usize)>,
     ) {
@@ -471,7 +471,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
         for stmt in stmts {
             if Self::variable_used_in_statement(stmt, var_name) {
                 return true;
@@ -481,7 +481,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a variable name appears in a single statement.
-    pub(super) fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
         match stmt {
             Statement::Let { value, .. } | Statement::Const { value, .. } => {
                 Self::variable_used_in_expression(value, var_name)
@@ -532,7 +532,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a variable name appears in an expression.
-    pub(super) fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::Literal { .. } => false,
             Expression::Identifier { name, .. } => name == var_name,
@@ -605,7 +605,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// TDD FIX for E0507: Check if for-loop should borrow the iterable
     /// Only borrow if the base object is borrowed (not owned)
-    pub(super) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
@@ -628,7 +628,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if we're iterating over a borrowed collection
-    pub(super) fn is_iterating_over_borrowed(&self, iterable: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn is_iterating_over_borrowed(&self, iterable: &Expression) -> bool {
         match iterable {
             Expression::Unary { op, .. } => {
                 matches!(op, UnaryOp::Ref | UnaryOp::MutRef)
@@ -675,7 +675,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a loop body modifies a variable
-    pub(super) fn loop_body_modifies_variable(
+    pub(in crate::codegen::rust) fn loop_body_modifies_variable(
         &self,
         body: &[&'ast Statement<'ast>],
         var_name: &str,
@@ -691,7 +691,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// For `for x in coll` when `coll` is borrowed (`&self.field`): if the body calls a method on
     /// `x` whose inferred receiver is `&mut self` (e.g. `System::update` on `Box<dyn System>`),
     /// the iterable must be `&mut coll`, not `&coll`.
-    pub(super) fn loop_body_calls_mut_dispatch_method(
+    pub(in crate::codegen::rust) fn loop_body_calls_mut_dispatch_method(
         &self,
         iterable: &Expression<'ast>,
         body: &[&'ast Statement<'ast>],
@@ -749,7 +749,7 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    pub(super) fn method_requires_mut_receiver_for_element_type(
+    pub(in crate::codegen::rust) fn method_requires_mut_receiver_for_element_type(
         &self,
         elem: &Type,
         method: &str,
@@ -976,7 +976,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// FIXED: Never add &mut for index access - let auto-clone analysis handle it!
-    pub(super) fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
         false
     }
 
@@ -1023,7 +1023,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// TDD: Auto-mutability inference
-    pub(super) fn variable_needs_mut(&self, var_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn variable_needs_mut(&self, var_name: &str) -> bool {
         let statements = &self.current_function_body;
         for stmt in statements.iter() {
             if self.statement_mutates_variable_field(stmt, var_name) {
@@ -1033,7 +1033,7 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    pub(super) fn statement_mutates_variable_field(
+    pub(in crate::codegen::rust) fn statement_mutates_variable_field(
         &self,
         stmt: &Statement,
         var_name: &str,
@@ -1113,7 +1113,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// When matching on `&mut slots[i]`, a call `x.foo()` is a write through the borrow unless
     /// `foo` is a known `&self` stdlib API. User methods may still lower to `&self`, but we need
     /// `ref mut x` so updates reach the [`Vec`] element (see mutability_complete_test).
-    pub(super) fn statement_nonreadonly_method_call_on_var(
+    pub(in crate::codegen::rust) fn statement_nonreadonly_method_call_on_var(
         &self,
         stmt: &Statement,
         var_name: &str,
@@ -1340,11 +1340,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn is_mutating_method(&self, method: &str) -> bool {
+    pub(in crate::codegen::rust) fn is_mutating_method(&self, method: &str) -> bool {
         crate::method_registry::mutates_receiver(method)
     }
 
-    pub(super) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
         let next_idx = self.current_statement_idx + 1;
         if next_idx >= self.current_function_body.len() {
             return true;
@@ -1477,7 +1477,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if an expression references `self` (for closure move semantics)
-    pub(super) fn expression_references_self(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn expression_references_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == "self",
             Expression::FieldAccess { object, .. } => self.expression_references_self(object),
@@ -1640,7 +1640,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Forward-scan the current function body for `.push()` / `.insert()` calls on a variable
     /// to infer the collection element type for `Vec::new()` / `HashSet::new()` declarations.
     /// Returns the inferred element `Type` if found.
-    pub(super) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
+    pub(in crate::codegen::rust) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
         if let Some(ty) = self
             .scan_statements_for_struct_literal_vec_binding(var_name, &self.current_function_body)
         {

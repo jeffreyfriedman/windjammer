@@ -157,7 +157,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate extern "C" function declaration for FFI
-    pub(super) fn generate_extern_function(&self, func: &FunctionDecl) -> String {
+    pub(in crate::codegen::rust) fn generate_extern_function(&self, func: &FunctionDecl) -> String {
         let mut output = String::new();
 
         output.push_str("    pub fn ");

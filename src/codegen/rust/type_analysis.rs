@@ -392,7 +392,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Needed because parameters and fields are often `&Vec<f32>` in generated Rust while the WJ
     /// type is still conceptually a vector; without this, index element type inference returns
     /// `None` and downstream codegen mis-handles Copy elements (E0308 `f32` vs `&f32`).
-    pub(super) fn peeled_collection_element_type(ty: &Type) -> Option<&Type> {
+    pub(in crate::codegen::rust) fn peeled_collection_element_type(ty: &Type) -> Option<&Type> {
         let mut t = ty;
         loop {
             match t {
@@ -406,7 +406,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// BUG #8 FIX: Infer the type name from an expression
     /// This enables qualified method signature lookup (Type::method)
-    pub(super) fn infer_type_name(&self, expr: &Expression) -> Option<String> {
+    pub(in crate::codegen::rust) fn infer_type_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => {
                 // "self" refers to the current struct type
@@ -541,7 +541,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Extract a type name from a Type enum (for signature lookup)
-    pub(super) fn type_to_name(type_: &Type) -> Option<String> {
+    pub(in crate::codegen::rust) fn type_to_name(type_: &Type) -> Option<String> {
         match type_ {
             // WJ `string` / `String` must resolve to the stdlib registry key "String" so
             // `infer_type_name` can find e.g. `String::contains` (Pattern/&str) signatures.
@@ -562,7 +562,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Extract the element type from an iterable type.
     /// Vec<T> → T, &Vec<T> → T, &mut Vec<T> → T, Array(T, _) → T
-    pub(super) fn extract_iterator_element_type(iterable_type: &Type) -> Option<Type> {
+    pub(in crate::codegen::rust) fn extract_iterator_element_type(iterable_type: &Type) -> Option<Type> {
         match iterable_type {
             Type::Vec(inner) => Some(inner.as_ref().clone()),
             Type::Array(inner, _) => Some(inner.as_ref().clone()),
@@ -574,7 +574,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `match` / `if let` on `&vec[i]` (non-Copy element) or explicit `&expr` — Rust binds fields as `&T`.
-    pub(super) fn match_scrutinee_yields_ref_enum_bindings(&self, scrutinee: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn match_scrutinee_yields_ref_enum_bindings(&self, scrutinee: &Expression) -> bool {
         match scrutinee {
             Expression::Unary {
                 op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
@@ -613,7 +613,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Infer the types of variables bound in match arm patterns.
     /// When matching `Some(x)` on `opt: Option<Stack>`, returns [("x", Type::Custom("Stack"))].
     /// When matching `Variant { a, b }` on `&vec[i]` with non-Copy elements, fields bind as `&FieldTy`.
-    pub(super) fn infer_match_bound_types(
+    pub(in crate::codegen::rust) fn infer_match_bound_types(
         &self,
         scrutinee: &Expression,
         pattern: &Pattern,
@@ -712,7 +712,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Map parser [`Type`] to [`crate::type_inference::IntType`] for mixed-integer `as T` codegen.
-    pub(super) fn parser_type_to_promotion_int_type(
+    pub(in crate::codegen::rust) fn parser_type_to_promotion_int_type(
         ty: &Type,
     ) -> Option<crate::type_inference::IntType> {
         use crate::type_inference::IntType;
@@ -742,7 +742,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Integer kind for binary mixed-type casts: use annotated types for params/fields when
     /// IntInference disagrees (e.g. `a: u32` must not be treated as `i32`).
-    pub(super) fn int_type_for_mixed_int_codegen(
+    pub(in crate::codegen::rust) fn int_type_for_mixed_int_codegen(
         &self,
         expr: &Expression<'ast>,
         inference: &crate::type_inference::IntInference,
@@ -845,7 +845,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Try to infer the Type of an expression from local variable tracking and function parameters.
-    pub(super) fn infer_expression_type(&self, expr: &Expression) -> Option<Type> {
+    pub(in crate::codegen::rust) fn infer_expression_type(&self, expr: &Expression) -> Option<Type> {
         match expr {
             Expression::Identifier { name, .. } => {
                 // Check local variable types first
@@ -1299,13 +1299,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Check if an expression's inferred type wraps a reference
     /// (e.g. `Option<&T>`, `Result<&T, E>`).
-    pub(super) fn expression_type_contains_reference(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn expression_type_contains_reference(&self, expr: &Expression) -> bool {
         self.infer_expression_type(expr)
             .as_ref()
             .is_some_and(Self::type_contains_reference_static)
     }
 
-    pub(super) fn type_contains_reference_static(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_contains_reference_static(ty: &Type) -> bool {
         match ty {
             Type::Reference(_) | Type::MutableReference(_) => true,
             Type::Option(inner) => Self::type_contains_reference_static(inner),
@@ -1314,7 +1314,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn type_contains_mut_reference_static(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_contains_mut_reference_static(ty: &Type) -> bool {
         match ty {
             Type::MutableReference(_) => true,
             Type::Option(inner) => Self::type_contains_mut_reference_static(inner),
@@ -1325,7 +1325,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Check if an expression already produces `&str`, making a redundant
     /// `.as_str()` call unnecessary. Uses type inference plus borrowed-param tracking.
-    pub(super) fn expression_produces_str_ref(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn expression_produces_str_ref(&self, expr: &Expression) -> bool {
         if let Some(ty) = self.infer_expression_type(expr) {
             if matches!(
                 ty,
@@ -1462,7 +1462,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Check if an expression's inferred type is usize.
     /// Uses infer_expression_type() for comprehensive type resolution including
     /// parameters, local variables, nested field access, and method return types.
-    pub(super) fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
         if let Some(t) = self.infer_expression_type(expr) {
             return matches!(t, Type::Custom(ref name) if name == "usize");
         }
@@ -1474,7 +1474,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// When the other operand is already `usize` (or an untyped int literal, which Rust
     /// matches to `usize` next to `.len()`), returns `false`.
-    pub(super) fn comparison_other_side_needs_len_as_i64(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn comparison_other_side_needs_len_as_i64(&self, expr: &Expression) -> bool {
         if self.infer_expression_type_is_usize(expr) {
             return false;
         }

@@ -112,7 +112,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate a statement with automatic source tracking
     #[allow(dead_code)]
-    pub(super) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
+    pub(in crate::codegen::rust) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
         let code = self.generate_statement(stmt);
         self.track_generated_lines(&code);
         code
@@ -2953,7 +2953,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn extract_pattern_bindings(
+    pub(in crate::codegen::rust) fn extract_pattern_bindings(
         &self,
         pattern: &Pattern,
         bindings: &mut std::collections::HashSet<String>,
@@ -3002,7 +3002,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Upgrade pattern bindings to `mut` when the body mutates them.
     /// E.g. `if let Some(v) = opt { v.push(1) }` → `if let Some(mut v) = ...`
     /// When `scrutinee_is_ref` is true, use `ref mut` instead of `mut` (borrowed context).
-    pub(super) fn upgrade_pattern_mut_bindings<'s>(
+    pub(in crate::codegen::rust) fn upgrade_pattern_mut_bindings<'s>(
         &self,
         pattern: &Pattern<'s>,
         body_stmts: &[&Statement<'s>],
@@ -3258,7 +3258,7 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    pub(super) fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
         // When the scrutinee evaluates to a Copy type (or &CopyType where
         // CopyType has no inner references), match ergonomics auto-copy the
         // value, so pattern bindings are owned — not refs. Skip ONLY for
