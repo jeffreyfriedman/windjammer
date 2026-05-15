@@ -73,7 +73,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Helper to analyze statements for struct mapping patterns
-    fn analyze_statement_for_struct_mappings(
+    pub(crate) fn analyze_statement_for_struct_mappings(
         &self,
         stmt: &Statement,
         optimizations: &mut Vec<StructMappingOptimization>,
@@ -107,7 +107,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Analyze an expression for struct mapping opportunities
-    fn analyze_expression_for_struct_mappings(
+    pub(crate) fn analyze_expression_for_struct_mappings(
         &self,
         expr: &Expression,
         optimizations: &mut Vec<StructMappingOptimization>,
@@ -179,7 +179,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Extract the source variable/expression from a field expression
-    fn extract_field_source(&self, expr: &Expression) -> Option<String> {
+    pub(crate) fn extract_field_source(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, .. } => {
@@ -203,7 +203,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Convert expression to string for field mapping tracking
     #[allow(clippy::only_used_in_recursion)]
-    fn expression_to_string(&self, expr: &Expression) -> String {
+    pub(crate) fn expression_to_string(&self, expr: &Expression) -> String {
         match expr {
             Expression::Identifier { name, .. } => name.clone(),
             Expression::FieldAccess { object, field, .. } => {
@@ -232,7 +232,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn analyze_statement_for_assignments(
+    pub(crate) fn analyze_statement_for_assignments(
         &self,
         stmt: &Statement,
         optimizations: &mut Vec<AssignmentOptimization>,
@@ -314,7 +314,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Analyze a statement for string optimization opportunities
     #[allow(clippy::only_used_in_recursion)]
-    fn analyze_statement_for_string_ops(
+    pub(crate) fn analyze_statement_for_string_ops(
         &self,
         stmt: &Statement,
         optimizations: &mut Vec<StringOptimization>,
@@ -365,7 +365,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Detect concatenation chains (a + b + c + ...)
     #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
-    fn detect_concatenation_chain(
+    pub(crate) fn detect_concatenation_chain(
         &self,
         expr: &Expression,
         optimizations: &mut Vec<StringOptimization>,
@@ -387,7 +387,7 @@ impl<'ast> Analyzer<'ast> {
     /// Count the number of concatenation operations
     #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
     #[allow(clippy::only_used_in_recursion)]
-    fn count_concatenations(&self, expr: &Expression, count: &mut usize) {
+    pub(crate) fn count_concatenations(&self, expr: &Expression, count: &mut usize) {
         if let Expression::Binary {
             op, left, right, ..
         } = expr
@@ -402,7 +402,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a statement is accumulating strings (s += ...)
     #[allow(dead_code)] // TODO: Implement loop accumulation optimization in future version
-    fn is_string_accumulation(&self, stmt: &Statement) -> bool {
+    pub(crate) fn is_string_accumulation(&self, stmt: &Statement) -> bool {
         matches!(
             stmt,
             Statement::Assignment {
@@ -413,7 +413,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Helper to analyze a statement for clone patterns
-    fn analyze_statement_for_clones(
+    pub(crate) fn analyze_statement_for_clones(
         &self,
         stmt: &Statement,
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
@@ -487,7 +487,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Helper to analyze a statement in loop context (marks variables as in_loop)
-    fn analyze_statement_for_clones_in_loop(
+    pub(crate) fn analyze_statement_for_clones_in_loop(
         &self,
         stmt: &Statement,
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
@@ -559,7 +559,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Helper to analyze an expression for variable usage in loop context
     #[allow(clippy::only_used_in_recursion)]
-    fn analyze_expression_for_clones_in_loop(
+    pub(crate) fn analyze_expression_for_clones_in_loop(
         &self,
         expr: &Expression,
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
@@ -599,7 +599,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Helper to analyze an expression for variable usage
     #[allow(clippy::only_used_in_recursion)]
-    fn analyze_expression_for_clones(
+    pub(crate) fn analyze_expression_for_clones(
         &self,
         expr: &Expression,
         usage: &mut HashMap<String, (usize, usize, bool, bool)>,
@@ -717,7 +717,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Estimate the size of a type for defer drop optimization
-    fn estimate_type_size(&self, ty: &Type) -> EstimatedSize {
+    pub(crate) fn estimate_type_size(&self, ty: &Type) -> EstimatedSize {
         match ty {
             Type::Parameterized(name, _)
                 if crate::type_classification::is_large_collection(name) =>
@@ -745,7 +745,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a type is small (return value size check)
-    fn is_small_type(&self, ty: &Type) -> bool {
+    pub(crate) fn is_small_type(&self, ty: &Type) -> bool {
         matches!(
             ty,
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool
@@ -755,7 +755,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if it's safe to defer dropping this type
     /// Must be Send (can move to another thread) and have no important Drop side effects
-    fn is_safe_to_defer(&self, ty: &Type) -> bool {
+    pub(crate) fn is_safe_to_defer(&self, ty: &Type) -> bool {
         match ty {
             Type::Custom(name) | Type::Parameterized(name, _) => {
                 if crate::type_classification::has_significant_drop(name) {
@@ -857,7 +857,7 @@ impl<'ast> Analyzer<'ast> {
         optimizations
     }
 
-    fn detect_smallvec_in_statement(
+    pub(crate) fn detect_smallvec_in_statement(
         &self,
         stmt: &Statement,
         optimizations: &mut Vec<SmallVecOptimization>,
@@ -883,7 +883,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Estimate the size of a Vec literal or similar construction
-    fn estimate_vec_literal_size(&self, expr: &Expression) -> Option<usize> {
+    pub(crate) fn estimate_vec_literal_size(&self, expr: &Expression) -> Option<usize> {
         match expr {
             // vec![1, 2, 3] macro invocation
             Expression::MacroInvocation {
@@ -948,7 +948,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Extract an integer literal value from an expression
-    fn extract_literal_int(&self, expr: &Expression) -> Option<usize> {
+    pub(crate) fn extract_literal_int(&self, expr: &Expression) -> Option<usize> {
         match expr {
             Expression::Literal {
                 value: Literal::Int(n),
@@ -989,7 +989,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Analyze if a variable is conditionally modified (some branches modify, others don't)
-    fn analyze_conditional_modification(
+    pub(crate) fn analyze_conditional_modification(
         &self,
         var_name: &str,
         body: &[&'ast Statement<'ast>],
@@ -1062,7 +1062,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a variable is modified in a block of statements
-    fn is_variable_modified(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn is_variable_modified(&self, var_name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         for stmt in statements {
             match stmt {
                 // Assignment to the variable

@@ -51,7 +51,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn expression_consumes_self(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_consumes_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
             Expression::StructLiteral { fields, .. } => fields
@@ -100,7 +100,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn statement_consumes_self_field_elements(
+    pub(crate) fn statement_consumes_self_field_elements(
         &self,
         stmt: &Statement,
         registry: Option<&super::SignatureRegistry>,
@@ -150,7 +150,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_is_self_field(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_is_self_field(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name == "self")
@@ -159,7 +159,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn statement_calls_consuming_method_on_var(
+    pub(crate) fn statement_calls_consuming_method_on_var(
         &self,
         stmt: &Statement,
         var_name: &str,
@@ -194,7 +194,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_calls_consuming_method_on_var(
+    pub(crate) fn expression_calls_consuming_method_on_var(
         &self,
         expr: &Expression,
         var_name: &str,
@@ -233,7 +233,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn statement_matches_on_self_consuming(&self, stmt: &Statement) -> bool {
+    pub(crate) fn statement_matches_on_self_consuming(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Match { value, arms, .. } => {
                 // Check if the match scrutinee is `self` or `&self`
@@ -291,7 +291,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if match arms consume bound values (return them, cast them, etc.)
     /// vs. just returning literals without using the bindings.
-    fn match_arms_consume_bound_values(&self, arms: &[crate::parser::MatchArm]) -> bool {
+    pub(crate) fn match_arms_consume_bound_values(&self, arms: &[crate::parser::MatchArm]) -> bool {
         for arm in arms {
             // Get all variable names bound in the pattern
             let bound_vars = self.pattern_bound_variables(&arm.pattern);
@@ -305,7 +305,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn pattern_bound_variables(&self, pattern: &Pattern) -> Vec<String> {
+    pub(crate) fn pattern_bound_variables(&self, pattern: &Pattern) -> Vec<String> {
         use crate::parser::EnumPatternBinding;
 
         let mut vars = Vec::new();
@@ -342,7 +342,7 @@ impl<'ast> Analyzer<'ast> {
         vars
     }
 
-    fn expression_uses_variables_consuming(&self, expr: &Expression, vars: &[String]) -> bool {
+    pub(crate) fn expression_uses_variables_consuming(&self, expr: &Expression, vars: &[String]) -> bool {
         use crate::parser::Expression;
 
         match expr {
@@ -392,7 +392,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn statement_uses_variables_consuming(&self, stmt: &Statement, vars: &[String]) -> bool {
+    pub(crate) fn statement_uses_variables_consuming(&self, stmt: &Statement, vars: &[String]) -> bool {
         match stmt {
             Statement::Return {
                 value: Some(expr), ..
@@ -404,7 +404,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_contains_match_on_self_consuming(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_contains_match_on_self_consuming(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Block { statements, .. } => statements
                 .iter()
@@ -428,7 +428,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_is_self_or_ref_self(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_is_self_or_ref_self(&self, expr: &Expression) -> bool {
         use crate::parser::UnaryOp;
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
@@ -460,7 +460,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn statement_moves_non_copy_self_field(&self, stmt: &Statement) -> bool {
+    pub(crate) fn statement_moves_non_copy_self_field(&self, stmt: &Statement) -> bool {
         use crate::parser::Statement;
         match stmt {
             Statement::Let { value, .. } => self.expression_moves_non_copy_self_field(value),
@@ -506,7 +506,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
         match expr {
             // `self.field` or `self.a.b` used as a value (not in a method call position)
             Expression::FieldAccess { object, field, .. } => {
@@ -538,13 +538,13 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_is_self(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_is_self(&self, expr: &Expression) -> bool {
         matches!(expr, Expression::Identifier { name, .. } if name == "self")
     }
 
     /// Resolve the final type of a self field chain like `self.a.b.c`.
     /// Returns `Some(type_of_c)` if the entire chain can be resolved, `None` otherwise.
-    fn resolve_self_field_chain_type(&self, expr: &Expression) -> Option<Type> {
+    pub(crate) fn resolve_self_field_chain_type(&self, expr: &Expression) -> Option<Type> {
         match expr {
             Expression::FieldAccess { object, field, .. } => {
                 if self.expression_is_self(object) {
@@ -560,7 +560,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Look up the type of a field on an arbitrary struct type.
     /// Checks the current file's AST first, then the global cross-file registry.
-    fn lookup_field_type_on_struct(&self, ty: &Type, field: &str) -> Option<Type> {
+    pub(crate) fn lookup_field_type_on_struct(&self, ty: &Type, field: &str) -> Option<Type> {
         let type_name = match ty {
             Type::Custom(name) => name.as_str(),
             _ => return None,
@@ -603,7 +603,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Look up the type of a field on `self` using the struct definition from the program.
-    fn lookup_field_type_for_self(&self, field: &str) -> Option<Type> {
+    pub(crate) fn lookup_field_type_for_self(&self, field: &str) -> Option<Type> {
         let ctx = self.self_impl_context.as_ref()?;
         let program = ctx.program();
         let struct_name = &ctx.impl_type_base;
@@ -622,7 +622,7 @@ impl<'ast> Analyzer<'ast> {
         None
     }
 
-    fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {
+    pub(crate) fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
             Expression::StructLiteral { name, .. } if name == type_name => true,
@@ -645,7 +645,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a statement uses a specific identifier
-    fn statement_uses_identifier(&self, name: &str, stmt: &Statement) -> bool {
+    pub(crate) fn statement_uses_identifier(&self, name: &str, stmt: &Statement) -> bool {
         match stmt {
             Statement::Expression { expr, .. } => self.expression_uses_identifier(name, expr),
             Statement::Let { value, .. } => self.expression_uses_identifier(name, value),
@@ -735,6 +735,4 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
-
-    /// Check if a function accesses self fields (for impl methods)
 }

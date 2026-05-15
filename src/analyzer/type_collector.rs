@@ -388,7 +388,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::Parser;
 
-    fn external_for_snippet(src: &str) -> Vec<String> {
+    pub(crate) fn external_for_snippet(src: &str) -> Vec<String> {
         let owned = src.to_string();
         let mut lexer = Lexer::new(&owned);
         let tokens = lexer.tokenize_with_locations();
@@ -397,7 +397,7 @@ mod tests {
         external_type_import_paths(&program)
     }
 
-    fn local_for_snippet(src: &str) -> std::collections::HashSet<String> {
+    pub(crate) fn local_for_snippet(src: &str) -> std::collections::HashSet<String> {
         let owned = src.to_string();
         let mut lexer = Lexer::new(&owned);
         let tokens = lexer.tokenize_with_locations();
@@ -407,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn collect_struct_field_custom_type() {
+    pub(crate) fn collect_struct_field_custom_type() {
         let local = local_for_snippet(
             r#"
 pub struct DialogueChoice {
@@ -429,7 +429,7 @@ pub struct DialogueChoice {
     }
 
     #[test]
-    fn collect_hashmap_value_types_only() {
+    pub(crate) fn collect_hashmap_value_types_only() {
         let ext = external_for_snippet(
             r#"
 pub struct Manager {
@@ -452,7 +452,7 @@ pub struct Manager {
     }
 
     #[test]
-    fn collect_impl_method_param_type() {
+    pub(crate) fn collect_impl_method_param_type() {
         let ext = external_for_snippet(
             r#"
 pub struct Manager {
@@ -468,7 +468,7 @@ impl Manager {
     }
 
     #[test]
-    fn local_type_not_external() {
+    pub(crate) fn local_type_not_external() {
         let ext = external_for_snippet(
             r#"
 pub struct Inner { x: i32 }
@@ -479,7 +479,7 @@ pub struct Outer { inner: Inner }
     }
 
     #[test]
-    fn auto_super_paths_empty_when_super_glob_present() {
+    pub(crate) fn auto_super_paths_empty_when_super_glob_present() {
         let owned = r#"
 use super::*
 
@@ -497,7 +497,7 @@ pub struct UserManager {
     }
 
     #[test]
-    fn auto_super_paths_omit_explicitly_imported_unqualified_types() {
+    pub(crate) fn auto_super_paths_omit_explicitly_imported_unqualified_types() {
         let owned = r#"
 use crate::math::Vec3
 
@@ -526,7 +526,7 @@ pub struct Manager {
     }
 
     #[test]
-    fn rust_use_path_sibling_submodule() {
+    pub(crate) fn rust_use_path_sibling_submodule() {
         let cur = vec!["achievement".into(), "manager".into()];
         let def = vec!["achievement".into(), "achievement_id".into()];
         assert_eq!(
@@ -536,7 +536,7 @@ pub struct Manager {
     }
 
     #[test]
-    fn rust_use_path_flat_sibling() {
+    pub(crate) fn rust_use_path_flat_sibling() {
         let cur = vec!["manager".into()];
         let def = vec!["user".into()];
         assert_eq!(
@@ -546,7 +546,7 @@ pub struct Manager {
     }
 
     #[test]
-    fn rust_use_path_cousin_modules() {
+    pub(crate) fn rust_use_path_cousin_modules() {
         let cur = vec!["ai".into(), "foo".into(), "manager".into()];
         let def = vec!["ai".into(), "state_machine".into()];
         assert_eq!(
@@ -556,7 +556,7 @@ pub struct Manager {
     }
 
     #[test]
-    fn wj_file_to_module_path_nested_and_mod_wj() {
+    pub(crate) fn wj_file_to_module_path_nested_and_mod_wj() {
         let base = std::path::Path::new("/proj/src");
         let p = std::path::Path::new("/proj/src/achievement/manager.wj");
         assert_eq!(

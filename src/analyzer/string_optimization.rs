@@ -108,7 +108,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a string parameter is returned directly (explicit return or implicit last expr)
-    fn param_is_returned_directly(&self, param_name: &str, body: &[&Statement]) -> bool {
+    pub(crate) fn param_is_returned_directly(&self, param_name: &str, body: &[&Statement]) -> bool {
         for stmt in body {
             match stmt {
                 Statement::Return {
@@ -135,7 +135,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a parameter needs &String (passed to method that requires it)
     /// Recursively traverses the function body to find all usages
-    fn param_needs_string_ref(
+    pub(crate) fn param_needs_string_ref(
         &self,
         param_name: &str,
         body: &[&Statement],
@@ -150,7 +150,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a statement uses the parameter in a context requiring &String or String (owned)
-    fn statement_uses_param_in_string_ref_context(
+    pub(crate) fn statement_uses_param_in_string_ref_context(
         &self,
         param_name: &str,
         stmt: &Statement,
@@ -217,7 +217,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a block needs &String (block is Vec<&Statement>)
-    fn block_needs_string_ref(
+    pub(crate) fn block_needs_string_ref(
         &self,
         param_name: &str,
         block: &Vec<&Statement>,
@@ -232,7 +232,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if an expression uses the parameter in a context requiring &String
-    fn expr_uses_param_in_string_ref_context(
+    pub(crate) fn expr_uses_param_in_string_ref_context(
         &self,
         param_name: &str,
         expr: &Expression,
@@ -491,7 +491,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if an expression is the parameter or &parameter
-    fn expr_is_param_or_ref_to_param(&self, param_name: &str, expr: &Expression) -> bool {
+    pub(crate) fn expr_is_param_or_ref_to_param(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
             Expression::Unary {
@@ -518,7 +518,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a type is &String (not &str)
     /// This is the key distinction for the optimization
-    fn type_is_string_ref_not_str(&self, ty: &Type) -> bool {
+    pub(crate) fn type_is_string_ref_not_str(&self, ty: &Type) -> bool {
         match ty {
             Type::Reference(inner) => match &**inner {
                 Type::String => true,
@@ -531,7 +531,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a type is owned String (not &str, not &String)
     /// Used to detect when parameters are passed to functions expecting owned String
-    fn type_is_owned_string(&self, ty: &Type) -> bool {
+    pub(crate) fn type_is_owned_string(&self, ty: &Type) -> bool {
         matches!(ty, Type::String) || matches!(ty, Type::Custom(name) if name == "string")
     }
 }
