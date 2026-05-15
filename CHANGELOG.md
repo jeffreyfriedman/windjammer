@@ -1,3 +1,27 @@
+# Changelog
+
+## [0.47.0] - 2026-05-15
+
+### Changed
+- **MASSIVE REFACTORING**: Systematic modularization of entire compiler codebase
+  - Reduced all files to <1,000 lines (largest now 988 lines)
+  - Split `expression_generation.rs`: 6,609 → 815 lines
+  - Split `statement_generation.rs`: 3,786 → 652 lines
+  - Created 350+ focused, single-responsibility modules
+  - Refactored 28+ major subsystems across 202 commits
+
+### Fixed
+- Test infrastructure: Fixed 88 tests to prevent `.rlib` pollution in project root
+- All tests now use `--out-dir` or `--emit=metadata` for proper artifact isolation
+
+### Improved
+- Maintainability: Every file now under 1,000 lines with clear module boundaries
+- Discoverability: Focused modules make navigation and understanding trivial
+- Testability: Smaller modules enable targeted unit testing
+- Onboarding: New contributors can understand subsystems in isolation
+
+---
+
 ## [0.46.2] - 2026-05-04
 ### Focus: Publish Fix & Cargo.toml Restoration
 This release fixes the v0.46.1 publish failure and restores the root Cargo.toml to its correct structure.
