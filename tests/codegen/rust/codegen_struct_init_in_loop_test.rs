@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Verify struct initialization in loops is not converted to HashMap
 // Bug: E0423 + E0425: Struct init `ffi::GpuVertex { position: [...], normal: [...] }`
 //      becomes `ffi::GpuVertex; HashMap::from([(position, [...]), (normal, [...])])`

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: Borrowed string parameters should generate as &String, not &str
 ///
 /// PROBLEM: Currently generates `fn foo(s: &str)` which breaks when calling Vec<String> methods

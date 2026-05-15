@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 /// TDD: WJSL body parser improvements
 ///
 /// Bug 1: `let val: vec4<f32> = ...` fails with "Expected Assign, found Colon"

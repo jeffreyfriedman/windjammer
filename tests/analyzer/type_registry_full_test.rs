@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // Integration test: TypeRegistry fixes import paths correctly
 // This test verifies that imports like "use math::Vec2" are transformed
 // to "use super::vec2::Vec2" when Vec2 is defined in vec2.wj

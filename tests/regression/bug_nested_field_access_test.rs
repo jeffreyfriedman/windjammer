@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD Test: Nested Field Access Through Borrowed Iterator
 ///
 /// Bug: Compiler fails to handle nested field access like stack.item.id

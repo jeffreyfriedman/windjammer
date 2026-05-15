@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Match arm bindings (owned String) passed to methods expecting &String
 // Reproduces E0308 errors in dialog.wj lines 27, 33, 36, 39, 146, etc.
 //

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD: Trait impl must not pick analyzed data from an inherent method with the same name.
 // Dogfooding: VoxelGPURenderer had `set_lighting(&mut self, LightingConfig)` and
 // `impl RenderPort for VoxelGPURenderer { fn set_lighting(..., LightingData) }`;

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Float literal inference for binary operations with typed LHS
 ///
 /// BUG: `x * 1.0` where `x: f32` generates `1.0_f64`, causing E0277 trait bound errors.

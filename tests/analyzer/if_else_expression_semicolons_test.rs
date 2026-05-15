@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: if/else used as an expression must not get trailing semicolons on branch values.
 //!
 //! BUG: `let x: f32 = if c { a } else { b }` wrapped as `Block { If }` was generating

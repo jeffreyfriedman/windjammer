@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0432: In a nested library directory, an explicit `use sibling::Type` must become
 //! `use super::sibling::Type` in the generated `.rs`. A bare `use sibling::Type` is not
 //! resolved as a sibling module (Rust looks for an external crate / crate root).

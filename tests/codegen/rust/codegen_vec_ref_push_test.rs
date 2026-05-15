@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// Test that pushing borrowed iterator vars to Vec<&T> doesn't add .clone()
 ///
 /// Bug: When building Vec<&Quest> from iterator, transpiler was adding

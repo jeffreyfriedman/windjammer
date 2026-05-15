@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! Vec<Copy> index codegen: never emit `*(vec[i])` (E0614).
 //!
 //! Windjammer lowers many `Vec<T>` parameters to `&Vec<T>` in Rust, but `vec[i]` is still `T` for

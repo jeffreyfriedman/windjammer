@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! E0432 regression: nested `src/<dir>/*.rs` + auto-generated `use super::...` imports.
 //!
 //! `rust_use_path_from_module_to_type` already emits the correct number of `super::` segments for

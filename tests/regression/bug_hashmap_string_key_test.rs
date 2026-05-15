@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD Test: HashMap/BTreeMap with String keys - E0277 fix
 ///
 /// Problem: HashMap<String, T>.contains_key(&name) where name is &String

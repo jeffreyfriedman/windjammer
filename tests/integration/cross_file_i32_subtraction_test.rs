@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! TDD: Cross-file i32 subtraction should not insert `as u32` casts.
 //! Reproduces a bug where library compilation mode incorrectly casts
 //! i32 struct field operands to u32 in subtraction expressions.

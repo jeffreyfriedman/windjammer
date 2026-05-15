@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Copy semantics in tuple pattern binding (E0614 fix)
 //!
 //! Bug: let (nx, ny, cost) = vec[i] marked bindings as &i32, &i32, &f32.

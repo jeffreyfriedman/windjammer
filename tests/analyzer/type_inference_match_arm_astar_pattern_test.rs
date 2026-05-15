@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD Test: Float literal inference in match arms (astar_grid pattern)
 //!
 //! Bug: `match g_score.get(&(x, y)) { Some(v) => *v, None => 999999.0 }` generates

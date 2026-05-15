@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Parameter types must propagate to identifiers in expressions
 // Bug: `pub fn foo(x: f32) { x > 0.0 }` generates `0.0_f64` instead of `0.0_f32`
 

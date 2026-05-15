@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// Test: Indexed access on Vec fields resolves the element type for method signature lookup.
 ///
 /// Bug: `self.enemy_ais[i].update(self.enemies[i], ...)` generated `&self.enemies[i]`

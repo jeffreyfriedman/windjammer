@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Vec.push with Index expressions — Copy elements use plain `vec[idx]` (no `&`, no `*`).
 ///
 /// Non-Copy elements still use `&vec[idx]` or `.clone()` per ownership analysis.

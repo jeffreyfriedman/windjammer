@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Trait implementations must match trait signatures EXACTLY
 // Bug: Trait impls apply ownership inference when they should match trait signature
 // Expected: impl fn update(delta: f32) to match trait fn update(delta: f32)

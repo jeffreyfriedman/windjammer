@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD Test: Files with same name as their parent directory should compile correctly
 ///
 /// BUG: When compiling a full project, files like `src/game_loop/game_loop.wj`

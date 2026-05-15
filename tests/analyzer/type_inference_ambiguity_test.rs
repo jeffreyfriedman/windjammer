@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: E0282 Type Annotations - Vec::new() inference from .push()
 ///
 /// Bug: `let mut x = Vec::new(); x.push(item)` generates Rust that needs type annotation.

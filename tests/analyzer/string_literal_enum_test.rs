@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! Test: String literal to String conversion in enum construction
 //! Bug: Codegen produces `Speaker::NPC("string")` which generates `&str`
 //! Fix: Should generate `Speaker::NPC("string".to_string())` or `Speaker::NPC(String::from("string"))`

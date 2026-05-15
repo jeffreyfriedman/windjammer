@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0308: `expected u32, found &u32` (and similar) from spurious references on Copy scalars.
 //!
 //! Root cause: match / Vec index on non-Copy yields `&T` bindings; `.clone()` on `&Copy` clones the

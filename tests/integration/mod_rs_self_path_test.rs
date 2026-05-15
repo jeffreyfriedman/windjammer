@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! TDD: `mod.rs` must re-export child modules with `self::`, not `super::`, when a
 //! same-named top-level directory exists (E0432). See `is_child_module_of_mod_rs_dir`.
 

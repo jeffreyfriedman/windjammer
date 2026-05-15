@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: No spurious `as f64` on f32 operands in float binary ops (E0308: f64 * f32).
 ///
 /// When float inference says f32 on one side but `infer_expression_type` only knows `Type::Float`,

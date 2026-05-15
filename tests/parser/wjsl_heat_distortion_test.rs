@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD: heat_distortion.wjsl transpiles to valid WGSL (screen-space heat shimmer).
 //! Tests the heat distortion compute shader which produces realistic heat haze
 //! near fire sources, explosions, and hot surfaces.

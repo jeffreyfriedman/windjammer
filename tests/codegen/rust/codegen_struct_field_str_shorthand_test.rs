@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Verify struct field shorthand doesn't break type conversion
 // Bug: E0308: Using field shorthand `User { name }` when `name: &str` but field is `String`
 // Root Cause: Codegen uses field shorthand even when type conversion is needed

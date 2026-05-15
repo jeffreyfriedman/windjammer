@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Pass-through ownership inference for method calls on self.field.
 //! When parameter `attack` is passed to `self.stats.apply_damage(attack)` and
 //! `apply_damage` expects owned `Attack`, `take_damage` should infer `attack` as Owned.

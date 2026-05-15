@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Verify GameLoop trait and struct don't cause ambiguity
 // Bug: E0659: `GameLoop` is ambiguous
 // Root Cause: Both game_loop::GameLoop (trait) and game::GameLoop (struct) exist

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 /// TDD: mat3x3/mat4x4/mat2x2 multi-argument constructor support in WJSL type checker
 ///
 /// Bug: The WJSL BodyParser only parses ONE argument for matrix constructors

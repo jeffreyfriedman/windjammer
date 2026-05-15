@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 // TDD Test Harness: Bug #1 - Method self-by-value incorrectly infers &mut
 // This is the Rust test harness that compiles and runs the Windjammer test
 

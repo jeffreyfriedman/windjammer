@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// Test: pub const declarations in Windjammer must emit `pub const` in generated Rust.
 ///
 /// Bug: The Windjammer compiler parsed `pub const` but discarded the `pub` modifier,
