@@ -13,7 +13,7 @@ mod scope_analysis;
 mod type_checking;
 mod mutation_detection;
 mod optimization_detectors;
-mod ownership_trait_inference;
+mod trait_analysis;
 mod passthrough_inference;
 mod self_mutating_calls;
 mod self_binding_mutation;

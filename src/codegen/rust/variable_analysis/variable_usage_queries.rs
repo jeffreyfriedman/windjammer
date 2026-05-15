@@ -6,7 +6,7 @@ use super::CodeGenerator;
 impl<'ast> CodeGenerator<'ast> {
 
     /// Recursively find unused let bindings and for-loop variables in a block of statements.
-    pub(super) fn find_unused_bindings(
+    pub(crate) fn find_unused_bindings(
         stmts: &[&Statement],
         out: &mut std::collections::HashSet<(usize, usize)>,
     ) {
@@ -71,7 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
+    pub(crate) fn variable_used_in_statements(stmts: &[&Statement], var_name: &str) -> bool {
         for stmt in stmts {
             if Self::variable_used_in_statement(stmt, var_name) {
                 return true;
@@ -81,7 +81,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a variable name appears in a single statement.
-    pub(super) fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
+    pub(crate) fn variable_used_in_statement(stmt: &Statement, var_name: &str) -> bool {
         match stmt {
             Statement::Let { value, .. } | Statement::Const { value, .. } => {
                 Self::variable_used_in_expression(value, var_name)
@@ -132,7 +132,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a variable name appears in an expression.
-    pub(super) fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
+    pub(crate) fn variable_used_in_expression(expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::Literal { .. } => false,
             Expression::Identifier { name, .. } => name == var_name,

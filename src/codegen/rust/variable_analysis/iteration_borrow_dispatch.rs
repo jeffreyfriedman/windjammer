@@ -8,7 +8,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// TDD FIX for E0507: Check if for-loop should borrow the iterable
     /// Only borrow if the base object is borrowed (not owned)
-    pub(super) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
+    pub(crate) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
@@ -31,7 +31,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if we're iterating over a borrowed collection
-    pub(super) fn is_iterating_over_borrowed(&self, iterable: &Expression) -> bool {
+    pub(crate) fn is_iterating_over_borrowed(&self, iterable: &Expression) -> bool {
         match iterable {
             Expression::Unary { op, .. } => {
                 matches!(op, UnaryOp::Ref | UnaryOp::MutRef)
@@ -78,7 +78,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a loop body modifies a variable
-    pub(super) fn loop_body_modifies_variable(
+    pub(crate) fn loop_body_modifies_variable(
         &self,
         body: &[&'ast Statement<'ast>],
         var_name: &str,
@@ -94,7 +94,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// For `for x in coll` when `coll` is borrowed (`&self.field`): if the body calls a method on
     /// `x` whose inferred receiver is `&mut self` (e.g. `System::update` on `Box<dyn System>`),
     /// the iterable must be `&mut coll`, not `&coll`.
-    pub(super) fn loop_body_calls_mut_dispatch_method(
+    pub(crate) fn loop_body_calls_mut_dispatch_method(
         &self,
         iterable: &Expression<'ast>,
         body: &[&'ast Statement<'ast>],
@@ -152,7 +152,7 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    pub(super) fn method_requires_mut_receiver_for_element_type(
+    pub(crate) fn method_requires_mut_receiver_for_element_type(
         &self,
         elem: &Type,
         method: &str,
