@@ -16,6 +16,8 @@ fn verify_with_rustc(rust_code: &str) {
         .arg("--edition=2021")
         .arg("--crate-type=lib")
         .arg("--emit=metadata")
+        .arg("--out-dir")
+        .arg(dir.path())
         .arg("-o")
         .arg(dir.path().join("verify.rmeta"))
         .arg(&rs_file)

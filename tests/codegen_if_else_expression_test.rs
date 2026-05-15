@@ -67,12 +67,14 @@ pub fn get_last_inline(is_empty: bool, value: i64) -> Option<i64> {
     );
 
     // Verify the code actually compiles (rustc should succeed)
+    let rustc_out = temp_dir.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).expect("rustc output dir");
     let rustc_output = Command::new("rustc")
         .arg("--crate-type=lib")
         .arg("--edition=2021")
         .arg(&generated_rs)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
+        .arg("--out-dir")
+        .arg(rustc_out.to_str().unwrap())
         .output()
         .expect("Failed to run rustc");
 

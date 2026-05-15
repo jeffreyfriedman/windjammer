@@ -91,11 +91,13 @@ pub fn make_vec() -> Vec3 {
     );
 
     // Verify Rust compiles with rustc (no E0308, no Cargo.toml needed)
+    let rustc_out = temp.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).expect("rustc out dir");
     let rust_build = Command::new("rustc")
+        .args(["--edition", "2021", "--crate-type", "lib"])
         .arg(out_test_rs(&temp))
-        .arg("--crate-type=lib")
-        .arg("-o")
-        .arg(temp.path().join("test.lib"))
+        .arg("--out-dir")
+        .arg(rustc_out.to_str().unwrap())
         .output()
         .expect("Failed to run rustc");
 
@@ -143,11 +145,13 @@ pub fn add_vecs() -> Vec3 {
     );
 
     // Verify Rust compiles with rustc
+    let rustc_out = temp.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).expect("rustc out dir");
     let rust_build = Command::new("rustc")
+        .args(["--edition", "2021", "--crate-type", "lib"])
         .arg(out_test_rs(&temp))
-        .arg("--crate-type=lib")
-        .arg("-o")
-        .arg(temp.path().join("test.lib"))
+        .arg("--out-dir")
+        .arg(rustc_out.to_str().unwrap())
         .output()
         .expect("Failed to run rustc");
 

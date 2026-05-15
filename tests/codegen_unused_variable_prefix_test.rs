@@ -50,12 +50,15 @@ fn compile_and_check_warnings(code: &str) -> (bool, String, Vec<String>) {
     let generated =
         fs::read_to_string(&generated_path).unwrap_or_else(|e| format!("Read error: {}", e));
 
+    let rustc_out = temp_dir.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).expect("rustc output dir");
+
     let rustc = Command::new("rustc")
         .arg("--crate-type=lib")
         .arg("--edition=2021")
         .arg(&generated_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
+        .arg("--out-dir")
+        .arg(rustc_out.to_str().unwrap())
         .output();
 
     match rustc {
