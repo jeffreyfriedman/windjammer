@@ -30,6 +30,7 @@ pub mod identifier_and_literal_generation;pub mod expression_helpers;
 pub mod expression_utilities;
 pub mod expressions;
 pub mod float_type_utilities;
+pub mod for_statement_generation;
 pub mod function_generation;
 pub mod generator;
 pub mod helpers;
