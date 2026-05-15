@@ -27,7 +27,7 @@ impl<'ast> Analyzer<'ast> {
         self.function_modifies_self_fields_with_registry_inner(func, registry, &mut visited)
     }
 
-    fn function_modifies_self_fields_with_registry_inner(
+    pub(crate) fn function_modifies_self_fields_with_registry_inner(
         &self,
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
@@ -63,7 +63,7 @@ impl<'ast> Analyzer<'ast> {
     /// its result is cached. On cycle (A→B→A), returns false — the cycle
     /// itself provides no evidence of mutation. Actual mutations are caught
     /// on non-recursive paths.
-    fn function_modifies_self_fields_recursive(
+    pub(crate) fn function_modifies_self_fields_recursive(
         &self,
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
@@ -86,7 +86,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a type contains a mutable reference (&mut T)
     /// This includes Option<&mut T>, Result<&mut T, E>, Vec<&mut T>, etc.
-    fn type_is_mut_ref(&self, ty: &Type) -> bool {
+    pub(crate) fn type_is_mut_ref(&self, ty: &Type) -> bool {
         match ty {
             Type::MutableReference(_) => true,
             Type::Option(inner) | Type::Vec(inner) | Type::Reference(inner) => {

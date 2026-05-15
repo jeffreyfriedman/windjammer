@@ -5,7 +5,7 @@ use crate::parser::*;
 
 use super::Analyzer;
 impl<'ast> Analyzer<'ast> {
-    fn statement_modifies_self_fields(
+    pub(crate) fn statement_modifies_self_fields(
         &self,
         stmt: &Statement,
         registry: Option<&super::SignatureRegistry>,
@@ -84,7 +84,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if an expression contains self field mutations (for match arms and blocks)
-    fn expression_contains_self_field_mutations(
+    pub(crate) fn expression_contains_self_field_mutations(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,
@@ -123,7 +123,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if expression is an index access on a self field (self.field[index] or self.field[i][j])
-    fn expression_is_self_field_index_access(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_is_self_field_index_access(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Index { object, .. } => {
                 self.expression_is_self_field_access(object)
@@ -134,7 +134,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if expression mutates self fields
-    fn expression_mutates_self_fields(
+    pub(crate) fn expression_mutates_self_fields(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,
@@ -157,7 +157,7 @@ impl<'ast> Analyzer<'ast> {
         result
     }
 
-    fn expression_mutates_self_fields_inner(
+    pub(crate) fn expression_mutates_self_fields_inner(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,

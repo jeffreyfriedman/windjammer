@@ -7,13 +7,13 @@ use super::Analyzer;
 impl<'ast> Analyzer<'ast> {
     /// Check if function calls methods on self that require &mut self
     #[allow(dead_code)]
-    fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
+    pub(crate) fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
         let mut visited = HashSet::new();
         self.function_calls_mutating_self_methods_with_registry(func, None, &mut visited)
     }
 
     /// Check if function calls methods on self that require &mut self (with registry)
-    fn function_calls_mutating_self_methods_with_registry(
+    pub(crate) fn function_calls_mutating_self_methods_with_registry(
         &self,
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
@@ -28,7 +28,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if statement calls methods on self that require &mut self
-    fn statement_calls_mutating_self_methods(
+    pub(crate) fn statement_calls_mutating_self_methods(
         &self,
         stmt: &Statement,
         registry: Option<&super::SignatureRegistry>,
@@ -90,7 +90,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if expression calls methods on self that require &mut self
-    fn expression_calls_mutating_self_methods(
+    pub(crate) fn expression_calls_mutating_self_methods(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,
@@ -113,7 +113,7 @@ impl<'ast> Analyzer<'ast> {
         result
     }
 
-    fn expression_calls_mutating_self_methods_inner(
+    pub(crate) fn expression_calls_mutating_self_methods_inner(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,
@@ -238,7 +238,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Extract function name from a Call's function expression (Identifier or FieldAccess)
-    fn call_function_name<'a>(&self, expr: &'a Expression<'a>) -> Option<&'a str> {
+    pub(crate) fn call_function_name<'a>(&self, expr: &'a Expression<'a>) -> Option<&'a str> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.as_str()),
             Expression::FieldAccess { field, .. } => Some(field.as_str()),
@@ -248,7 +248,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if object.method() is a self.field[.subfield...].method() pattern
     /// where method requires &mut self. Checks both stdlib list and signature registry.
-    fn expression_is_self_field_mutating_method_call(
+    pub(crate) fn expression_is_self_field_mutating_method_call(
         &self,
         object: &Expression<'ast>,
         method: &str,
@@ -294,7 +294,7 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding: `self.patrol.update_wait()` must resolve `PatrolConfig::update_wait`, not another
         // type's `update_wait` from the unqualified registry / same-impl map.
         if let (Some(ctx), Some(reg)) = (&self.self_impl_context, registry) {
-            if let Some(receiver_ty) = Self::static_value_type_of_self_rooted_expr(
+            if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
                 ctx.program(),
                 &ctx.impl_type_base,
                 object,
