@@ -114,8 +114,16 @@ name = "analyzer_method_call_mut_propagation_test"
 path = "tests/analyzer/analyzer_method_call_mut_propagation_test.rs"
 
 [[test]]
-name = "analyzer_ownership_comprehensive_tests"
-path = "tests/analyzer/analyzer_ownership_comprehensive_tests.rs"
+name = "analyzer_ownership_control_flow_test"
+path = "tests/analyzer/analyzer_ownership_control_flow_test.rs"
+
+[[test]]
+name = "analyzer_ownership_params_test"
+path = "tests/analyzer/analyzer_ownership_params_test.rs"
+
+[[test]]
+name = "analyzer_ownership_trait_generic_test"
+path = "tests/analyzer/analyzer_ownership_trait_generic_test.rs"
 
 [[test]]
 name = "analyzer_self_mutability_inference_test"
@@ -1250,8 +1258,20 @@ name = "ownership_tracker_population_test"
 path = "tests/analyzer/ownership_tracker_population_test.rs"
 
 [[test]]
-name = "ownership_tracker_test"
-path = "tests/analyzer/ownership_tracker_test.rs"
+name = "ownership_tracker_bindings_api_test"
+path = "tests/analyzer/ownership_tracker_bindings_api_test.rs"
+
+[[test]]
+name = "ownership_tracker_literals_ops_test"
+path = "tests/analyzer/ownership_tracker_literals_ops_test.rs"
+
+[[test]]
+name = "ownership_tracker_methods_unary_test"
+path = "tests/analyzer/ownership_tracker_methods_unary_test.rs"
+
+[[test]]
+name = "ownership_tracker_paths_test"
+path = "tests/analyzer/ownership_tracker_paths_test.rs"
 
 [[test]]
 name = "ownership_transitive_mut_test"
@@ -2518,8 +2538,20 @@ name = "conformance_tests"
 path = "tests/conformance/conformance_tests.rs"
 
 [[test]]
-name = "cross_backend_conformance_test"
-path = "tests/conformance/cross_backend_conformance_test.rs"
+name = "conformance_go_test"
+path = "tests/conformance/conformance_go_test.rs"
+
+[[test]]
+name = "conformance_interpreter_test"
+path = "tests/conformance/conformance_interpreter_test.rs"
+
+[[test]]
+name = "conformance_js_test"
+path = "tests/conformance/conformance_js_test.rs"
+
+[[test]]
+name = "conformance_rust_test"
+path = "tests/conformance/conformance_rust_test.rs"
 
 [[test]]
 name = "integration_backend_conformance_test"
@@ -2638,12 +2670,28 @@ name = "dogfooding_comprehensive_test"
 path = "tests/integration/dogfooding_comprehensive_test.rs"
 
 [[test]]
-name = "dogfooding_fixes_test"
-path = "tests/integration/dogfooding_fixes_test.rs"
+name = "dogfooding_fixes_match_collections_test"
+path = "tests/integration/dogfooding_fixes_match_collections_test.rs"
 
 [[test]]
-name = "dogfooding_ownership_inference_test"
-path = "tests/integration/dogfooding_ownership_inference_test.rs"
+name = "dogfooding_fixes_self_iterator_test"
+path = "tests/integration/dogfooding_fixes_self_iterator_test.rs"
+
+[[test]]
+name = "dogfooding_fixes_strings_ui_test"
+path = "tests/integration/dogfooding_fixes_strings_ui_test.rs"
+
+[[test]]
+name = "ownership_binary_op_test"
+path = "tests/integration/ownership_binary_op_test.rs"
+
+[[test]]
+name = "ownership_field_test"
+path = "tests/integration/ownership_field_test.rs"
+
+[[test]]
+name = "ownership_method_test"
+path = "tests/integration/ownership_method_test.rs"
 
 [[test]]
 name = "extern_borrowed_string_test"
