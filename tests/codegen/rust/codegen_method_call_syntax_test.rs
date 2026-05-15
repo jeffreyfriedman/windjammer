@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Method Calls Should Use Dot Syntax, Not Module Syntax
 // Bug: When a variable has the same name as a common module (json, fmt, etc.),
 //      method calls are incorrectly generated as module calls (::) instead of dot (.)

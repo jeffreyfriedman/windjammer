@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // Test: Enum PartialEq derivation with f32-containing types
 // The compiler should intelligently skip PartialEq for enums with variants containing f32 fields
 

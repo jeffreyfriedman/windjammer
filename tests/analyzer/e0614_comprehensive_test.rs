@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0614 Phase 11 Comprehensive Fix Tests
 //!
 //! Covers all 5 E0614 regression patterns:

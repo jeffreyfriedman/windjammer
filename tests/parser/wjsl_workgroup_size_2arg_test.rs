@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD test: @workgroup_size with 2 arguments (x, y) should default z=1
 //!
 //! Bug: The WJSL parser used `self.peek()` instead of `self.current` to check

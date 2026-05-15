@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // TDD Test: Build System Should Regenerate Cargo.toml Even When Stale One Exists
 // Bug: When a stale Cargo.toml exists in the output directory from a previous build,
 //      the is_component_project flag is set to true prematurely (on the first file

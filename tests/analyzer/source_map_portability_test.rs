@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! Tests for source map portability across machines.
 //!
 //! The `wj build` CLI does not always emit `.rs.map` siblings for every invocation; these tests

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// Test: vec![value; count] syntax should be preserved
 ///
 /// Bug #7: Transpiler incorrectly converts semicolon to comma in vec! macro

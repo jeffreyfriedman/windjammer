@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Float literal inference from function parameter types
 //
 // Bug: Vec3::new(x, 0.0, z) generates 0.0_f64 instead of 0.0_f32

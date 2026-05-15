@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! Cross-file trait method signatures: multipass build must match impl receivers to inferred trait
 //! receivers (E0053 / E0186 regressions).
 

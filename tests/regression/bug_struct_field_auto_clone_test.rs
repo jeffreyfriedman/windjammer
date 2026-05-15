@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 // TDD Test for Bug: Struct field access in loops incorrectly auto-cloned
 //
 // Bug: When accessing a String field from a struct reference in a loop,

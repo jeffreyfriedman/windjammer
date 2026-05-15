@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: Integer literals don't need `as usize` cast in index and usize arithmetic
 ///
 /// Bug: The compiler generates `arr[0 as usize]` instead of `arr[0]`, and

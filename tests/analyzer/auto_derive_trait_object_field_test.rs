@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Structs that contain a custom field whose definition includes a trait object
 //! must not auto-derive `Debug`/`Clone` (Rust cannot derive them for `Box<dyn Trait>`).
 //!

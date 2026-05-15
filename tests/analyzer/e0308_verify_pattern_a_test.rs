@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0308 Phase 9: Verify Pattern A - Struct literal tuple float fields
 //!
 //! Keyframe { rotation: (0.0, 0.0, 0.0, 1.0) } with rotation: (f32, f32, f32, f32)

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: if/else branches must unify String vs string literals (E0308 in Rust).
 //!
 //! When one branch is owned `String` (e.g. `.clone()`) and the other is a literal,

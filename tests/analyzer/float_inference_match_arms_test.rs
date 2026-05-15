@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Match arms must have matching float types
 // Bug: `match opt { Some(v) => v, None => 999999.0 }` generates incompatible f32/f64 types
 

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: Explicit String parameters should remain owned, not be inferred as &String
 ///
 /// BUG: When a Windjammer function declares `path: String`, the compiler is generating

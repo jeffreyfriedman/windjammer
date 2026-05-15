@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // TDD: Test that compiler generates mod.rs (not lib.rs) when output is a subdirectory
 // Write tests FIRST, then implement the fix
 

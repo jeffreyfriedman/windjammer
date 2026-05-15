@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// TDD: Float literal inference with method return types
 /// BUG: `self.get_cost() * 1.414` generates f64 instead of f32
 /// FIX: Use float inference results in binary operations

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Float literal inference from struct field types
 //
 // Bug: AStarCell { cost: 1.0 } generates cost: 1.0_f64 even though cost: f32

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Float literal inference with method call returning f32
 //
 // Bug: self.get_cost() * 1.414 generates 1.414_f64 instead of 1.414_f32

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// TDD: Fix pub use module path bug
 /// BUG: Generates `pub use voxel_grid::VoxelGrid` instead of `pub use self::voxel_grid::VoxelGrid`
 /// FIX: Add `self::` prefix for module-relative pub use

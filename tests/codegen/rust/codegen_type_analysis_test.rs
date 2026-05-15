@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Tests for type_analysis functions (Phase 8 - Retroactive TDD)
 
 use windjammer::codegen::rust::type_analysis::{is_copy_type, is_known_copy_type};

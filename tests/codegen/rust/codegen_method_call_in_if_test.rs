@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Method Calls Inside If Blocks Should Use Dot Syntax
 // Bug: Method calls inside if blocks without semicolons generate module syntax
 // Root Cause: Expression context in if blocks causes incorrect code generation

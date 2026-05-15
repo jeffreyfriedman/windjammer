@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! TDD Test: Module re-export generation
 //!
 //! Bug: mod.wj files with `pub use` declarations do not generate corresponding

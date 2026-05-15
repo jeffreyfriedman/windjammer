@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Auto-ref should NOT add & to dereferenced Copy types
 // Bug: contains(*entity) was generating contains(&*entity) instead of contains(*entity)
 //

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD: Documents sibling-module type visibility. Auto-imports for cross-file types are
 // a codegen feature; this test only checks `wj` emits Rust and, when rustc fails, records
 // the known limitation without failing the suite.

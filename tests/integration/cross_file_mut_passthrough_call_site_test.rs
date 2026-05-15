@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // TDD: Cross-file mut-borrow passthrough at call sites
 //
 // Bug: When file A defines `fn mutate(grid: VoxelGrid)` where grid is mutated

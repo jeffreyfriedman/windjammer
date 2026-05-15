@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD: Integer literals in vec.len() +/- literal must infer as usize (not i32).
 //
 // Bug: items.len() - 1 → 1_i32 → E0277 cannot subtract i32 from usize

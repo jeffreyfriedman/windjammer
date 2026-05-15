@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0596/E0594 Mutability Complete Elimination Tests
 //!
 //! TDD tests for automatic mutability inference. Current codegen may use `if let Some(x) = &v[i]`

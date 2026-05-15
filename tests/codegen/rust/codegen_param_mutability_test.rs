@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD Test: Standalone Function Parameters Should Be Declared `mut` When Used with &mut self Methods
 // Bug: When a standalone function takes an owned parameter and calls a &mut self method on it,
 //      the generated Rust doesn't declare the parameter as `mut`, causing E0596.

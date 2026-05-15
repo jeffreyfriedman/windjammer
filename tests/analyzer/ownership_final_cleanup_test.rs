@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Abstract trait `self` parsing must not force by-value receivers for non-`Self` returns.
 //!
 //! Root cause (dogfooding): `fn is_enabled(self) -> bool` on a trait was parsed as `OwnershipHint::Owned`

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: No .clone() on borrowed fields when used in borrow context (&expr)
 ///
 /// Bug: `for ingredient in &recipe.ingredients.clone()` clones the entire Vec

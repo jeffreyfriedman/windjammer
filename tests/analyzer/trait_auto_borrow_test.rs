@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Trait Auto-Borrow for E0277 Elimination
 ///
 /// Root cause: Not auto-borrowing for trait operations (PartialEq, Add, Sub, etc).

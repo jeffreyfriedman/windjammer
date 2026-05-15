@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD Test: .clone() on borrowed strings should generate .to_string() when needed
 ///
 /// Bug: When a string parameter is inferred as &str and .clone() is called on it,

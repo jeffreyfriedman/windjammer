@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Dogfooding E0382 fixes — string return type must not force Owned when the param is not returned,
 //! and passthrough must not apply unrelated `contains`/`len` registry overloads to `str` parameters.
 

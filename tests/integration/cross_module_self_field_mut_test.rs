@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! TDD Test: Cross-module ownership inference for self.field passed to free functions
 //!
 //! Bug: When a method calls a module-qualified free function (e.g., helpers::fill_grid(self.grid)),

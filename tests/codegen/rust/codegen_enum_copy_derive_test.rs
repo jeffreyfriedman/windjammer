@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// TDD Test: Auto-derive Copy for data-carrying enums when all fields are Copy
 ///
 /// Bug: The compiler only derives Copy for unit-only enums, but should also

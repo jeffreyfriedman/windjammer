@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// Regression guard: struct field `Vec<Copy>` indices must not use explicit `*` (E0614).
 ///
 /// Rust already yields `f32` / `i32` for `Copy` elements; `*(node.params[0])` is invalid.

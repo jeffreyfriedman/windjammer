@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0599 / Vec<T>: Clone — generic `impl Foo<T>` that clones `self.dense` must emit `T: Clone`.
 use std::fs;
 use std::path::PathBuf;

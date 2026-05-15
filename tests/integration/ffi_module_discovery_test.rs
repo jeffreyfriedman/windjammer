@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 /// TDD Test: FFI modules in src/ffi/ should be auto-discovered and added to lib.rs
 ///
 /// THE WINDJAMMER WAY: Hand-written Rust modules (like FFI) should be automatically

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0308: `expected VoxelScene, found &VoxelScene` when fluent methods use `let mut result = self`
 //! and the analyzer inferred `&self` for an explicit consuming `self` parameter.
 //!

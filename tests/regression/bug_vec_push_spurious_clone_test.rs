@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD: Vec.push() generates spurious .clone() when vec is later passed to another method
 ///
 /// Bug: When a Vec is declared with `let mut`, pushed to, and later passed to a method,

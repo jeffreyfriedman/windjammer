@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 // method_call() -> f32, then method_call() * literal should infer literal as f32
 
 #[path = "../common/test_utils.rs"]

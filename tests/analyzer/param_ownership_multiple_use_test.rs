@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Parameter used multiple times in loop should be inferred as borrowed
 // Reproduces E0382 errors in dialog.wj lines 92-97, 129-131, 129-146, 169-172
 //

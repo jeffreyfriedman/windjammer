@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Duplicate struct basenames across modules (e.g. two `CharacterController` types).
 //! Unqualified registry lookup returns None → `self.field` did not constrain float literals → E0308 (f32 vs f64).
 //!

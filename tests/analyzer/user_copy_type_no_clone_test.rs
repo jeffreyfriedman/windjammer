@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: No .clone() on user-defined Copy types (enums/structs with @derive(Copy))
 ///
 /// Bug: When a variable of a user-defined Copy type (e.g., VoxelType with @derive(Copy))

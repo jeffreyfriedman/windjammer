@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// **Current behavior (dogfooding):** Windjammer may infer `let mut` / defer checks so `wj build`
 /// succeeds; rustc may still be invoked downstream. These tests assert what the `wj` CLI does
 /// today, not a future native immutability pass.

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: No .clone() on intermediate Vec when using nested indexing
 ///
 /// Bug: `self.tiles[row][col]` generates `self.tiles[row as usize].clone()[col as usize]`

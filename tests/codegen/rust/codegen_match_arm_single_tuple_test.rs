@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// TDD Test: Match arm type inference for single-element enum tuples
 ///
 /// Issue: local_var_types is empty for DialogCondition::QuestComplete(quest_id)

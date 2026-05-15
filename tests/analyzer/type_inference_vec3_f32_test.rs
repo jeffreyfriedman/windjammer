@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Vec3 (f32) vs f64 literal consistency
 ///
 /// BUG: Windjammer generates Vec3::new(1.0_f64, 2.0_f64, 3.0_f64) but Vec3 has f32 fields,

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD: Shader files should be detected by content, not directory name.
 //!
 //! Bug: The compiler hardcodes `if dir_name != "shaders"` to skip shader files.

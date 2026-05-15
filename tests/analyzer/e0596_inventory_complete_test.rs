@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: E0596 Phase 11 Regression - if let Some(x) = self.slots[i] { x.mutate() }
 //!
 //! Root cause: infer_match_bound_types always returned is_mut_ref=false for Index expressions,

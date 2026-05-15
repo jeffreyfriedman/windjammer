@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "conformance_tests",
+))]
+
 /// Cross-backend conformance: mutation, loops, and continue.
 #[path = "cross_backend_conformance_harness.rs"]
 mod cross_backend_conformance_harness;

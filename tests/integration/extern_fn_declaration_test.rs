@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 //! TDD Test: Extern fn declarations for FFI
 //! WINDJAMMER PHILOSOPHY: Enable seamless Rust interop through extern functions
 //! Extern functions allow calling Rust code (or C code via Rust) from Windjammer

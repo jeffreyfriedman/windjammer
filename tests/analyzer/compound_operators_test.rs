@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Compound operators should be preserved in generated code
 // Bug: `x += 1` expands to `x = x + 1` instead of `x += 1`
 // Expected: Preserve compound operators for cleaner, more idiomatic Rust

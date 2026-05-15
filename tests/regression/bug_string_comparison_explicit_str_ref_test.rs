@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD test for BUG: Explicit &str type parameters getting unnecessary * derefs in comparisons
 ///
 /// PROBLEM: When a function has an explicit `tag: &str` parameter, comparing it

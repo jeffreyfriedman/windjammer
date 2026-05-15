@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Float literal inference for array and Vec literals
 ///
 /// Problem: vec![1.0, 2.0, 3.0] where Vec<f32> generates f64 elements, causing E0308 errors.

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 //! TDD: Same-precedence `*`/`/` on the RHS of `/` must keep parentheses in Rust output.
 //!
 //! Without parens, `x / (2.0 * y)` becomes `x / 2.0 * y` which parses as `(x / 2.0) * y`.
