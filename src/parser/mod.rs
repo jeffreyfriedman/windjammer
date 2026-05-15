@@ -18,8 +18,12 @@ pub mod type_parser;
 // Pattern parsing module - extracted from parser_impl.rs
 pub mod pattern_parser;
 
-// Expression parsing module - extracted from parser_impl.rs
+// Expression parsing (split across submodules; all extend `impl Parser`)
+mod binary_expression_parser;
 pub mod expression_parser;
+mod interpolated_string_expression_parser;
+mod match_value_expression_parser;
+mod primary_expression_parser;
 
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;
