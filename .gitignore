@@ -1,88 +1,25 @@
-# Rust
-/target/
-# Note: Cargo.lock IS committed for binary crates (like this compiler)
-# Only library-only crates should gitignore Cargo.lock
-# Keep Cargo.lock files in examples (at any depth)
-!examples/**/Cargo.lock
+# Rust artifacts
+/target
 **/*.rs.bk
 *.pdb
 
-# Build directories (temp build artifacts)
-/build/
-/build_*/
+# Test artifacts (prevent pollution)
+/*.rlib
+/*.rmeta
+/*.so
+/*.dylib
+/*.dll
 
-# Generated output
-/output/
-/test_output/
-/test_output_*/
+# Windjammer artifacts
+/build
+/test_output_*
 
-# WASM build artifacts (match at any depth)
-examples/**/pkg/
-examples/**/target/
-examples/**/build/
-examples/**/build_output/
-examples/**/src/
-**/build/target/
-
-# Temporary test files
-test_*.wj
-temp_*.wj
-
-# Editor files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
+
+# OS
 .DS_Store
-
-# Build artifacts
-*.o
-*.a
-*.rlib
-*.so
-*.dylib
-*.dll
-
-# Profiling
-*.profraw
-*.profdata
-
-# Code coverage
-/coverage/
-
-# Debugging
-*.dSYM/
-
-# Documentation build
-/book/
-
-# Local configuration
-.env
-.env.local
-
-# Node modules (if we add any JS tooling later)
-node_modules/
-
-# Python (if we add any Python tooling)
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Logs
-*.log
-
-# OS files
 Thumbs.db
-Desktop.ini
-
-/.sandbox/
-crates/windjammer-editor-desktop/src-tauri/target/
-build_editor/
-build_game_editor/
-*.bak
-.pr-comments/
-tests/generated/
-
-# Auto-generated analysis metadata (regenerated from .wj source)
-*.wj.meta
