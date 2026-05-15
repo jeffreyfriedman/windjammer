@@ -14,6 +14,10 @@ pub mod engine;
 pub mod environment;
 pub mod value;
 
+mod value_operations;
+mod statement_execution;
+mod expression_evaluation;
+
 pub use engine::Interpreter;
 pub use environment::Environment;
 pub use value::Value;
