@@ -13,6 +13,7 @@
 # Windjammer artifacts
 /build
 /test_output_*
+.wj-cache/
 
 # IDE
 .vscode/
