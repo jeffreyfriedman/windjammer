@@ -1,5 +1,6 @@
 use crate::analyzer::OwnershipMode;
 use crate::codegen::rust::ast_utilities;
+use crate::parser::Type as WjType;
 use crate::parser::*;
 
 use super::{CodeGenerator, VariableUsage};
@@ -252,6 +253,61 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// `cache.place(grid, ...)` lowers to `place(&mut grid, ...)` when the resolved method signature
+    /// marks that argument [`MutBorrowed`] (or explicit `&mut T`). [`variable_needs_mut`] must agree
+    /// or we emit `&mut grid` without `let mut grid` (E0596).
+    fn method_call_passes_ident_as_mut_borrow(
+        &self,
+        object: &Expression,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        var_name: &str,
+    ) -> bool {
+        let Some(receiver_type) = self.infer_type_name(object) else {
+            return false;
+        };
+        let qualified_name = format!("{}::{}", receiver_type, method);
+        if self.signature_registry.has_collision(&qualified_name) {
+            return false;
+        }
+        let Some(sig) = self.signature_registry.get_signature(&qualified_name) else {
+            return false;
+        };
+        let matches_var = |e: &Expression| match e {
+            Expression::Identifier { name, .. } => name == var_name,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::MutRef,
+                operand,
+                ..
+            } => matches!(
+                &**operand,
+                Expression::Identifier { name, .. } if name == var_name
+            ),
+            _ => false,
+        };
+
+        for (i, (_label, arg)) in arguments.iter().enumerate() {
+            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+
+            let mut_borrow_via_ownership = sig
+                .param_ownership
+                .get(sig_param_idx)
+                .is_some_and(|&o| o == OwnershipMode::MutBorrowed);
+
+            let mut_borrow_via_type = sig
+                .param_types
+                .get(sig_param_idx)
+                .is_some_and(|ty| matches!(ty, WjType::MutableReference(_)));
+
+            if mut_borrow_via_ownership || mut_borrow_via_type {
+                if matches_var(arg) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn expression_is_field_of_variable(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
@@ -263,7 +319,12 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expression_mutates_variable_field(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
                         if self.is_mutating_method(method) {
@@ -333,7 +394,13 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                false
+                if self.method_call_passes_ident_as_mut_borrow(object, method, arguments, var_name)
+                {
+                    return true;
+                }
+                arguments
+                    .iter()
+                    .any(|(_, arg_expr)| self.expression_mutates_variable_field(arg_expr, var_name))
             }
             Expression::Binary { left, right, .. } => {
                 self.expression_mutates_variable_field(left, var_name)
