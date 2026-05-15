@@ -33,12 +33,16 @@ fn compile_and_rustc_check(wj_code: &str) -> Result<(), String> {
     }
 
     let rs_file = out_dir.join("test.rs");
+    let rustc_out = temp_dir.path().join("rustc_out");
+    std::fs::create_dir_all(&rustc_out).expect("rustc output dir");
     let rustc_output = Command::new("rustc")
         .arg("--edition=2021")
         .arg("--crate-type=lib")
         .arg("--emit=metadata")
+        .arg("--out-dir")
+        .arg(&rustc_out)
         .arg("-o")
-        .arg(temp_dir.path().join("test"))
+        .arg(rustc_out.join("test"))
         .arg(&rs_file)
         .output()
         .expect("Failed to run rustc");

@@ -75,12 +75,15 @@ fn verify_rust_compiles(rust_code: &str) -> Result<(), String> {
     let rs_path = temp_dir.path().join("test.rs");
     fs::write(&rs_path, rust_code).expect("Failed to write rs file");
 
+    let rustc_out = temp_dir.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).expect("rustc output dir");
+
     let output = Command::new("rustc")
         .arg("--edition=2021")
         .arg("--crate-type=lib")
         .arg(&rs_path)
-        .arg("-o")
-        .arg(temp_dir.path().join("test.rlib"))
+        .arg("--out-dir")
+        .arg(rustc_out.to_str().unwrap())
         .arg("-A")
         .arg("warnings")
         .output();
