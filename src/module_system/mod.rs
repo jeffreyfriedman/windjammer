@@ -1,146 +1,27 @@
-// Windjammer Module System - The Windjammer Way!
-//
-// Philosophy:
-// - Auto-discover modules from directory structure (compiler does the work)
-// - Respect explicit pub mod / pub use declarations in mod.wj
-// - Generate lib.rs/mod.rs automatically
-// - No boilerplate - developer focuses on logic, not project structure
-//
-// This is NOT just copying Rust's module system!
-// Windjammer infers structure while Rust forces manual declaration.
+//! Windjammer Module System - The Windjammer Way!
+//!
+//! Philosophy:
+//! - Auto-discover modules from directory structure (compiler does the work)
+//! - Respect explicit pub mod / pub use declarations in mod.wj
+//! - Generate lib.rs/mod.rs automatically
+//! - No boilerplate - developer focuses on logic, not project structure
+//!
+//! This is NOT just copying Rust's module system!
+//! Windjammer infers structure while Rust forces manual declaration.
 
-use anyhow::{Context, Result};
+pub(crate) mod import_resolution;
+pub(crate) mod module_graph;
+pub(crate) mod module_resolution;
+
+pub use module_graph::{discover_nested_modules, Module, ModuleTree};
+
+use anyhow::Result;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-/// Represents a discovered module in the project
-#[derive(Debug, Clone)]
-pub struct Module {
-    pub name: String,
-    pub path: PathBuf,
-    pub is_directory: bool,
-    pub submodules: Vec<Module>,
-    pub has_mod_wj: bool,
-    pub is_public: bool,
-}
-
-/// Represents the complete module tree of a Windjammer project
-#[derive(Debug)]
-pub struct ModuleTree {
-    pub root_path: PathBuf,
-    pub root_modules: Vec<Module>,
-}
-
-impl ModuleTree {
-    /// Check if a module exists at the given path
-    pub fn has_module(&self, path: &[&str]) -> bool {
-        if path.is_empty() {
-            return false;
-        }
-
-        let mut current_modules = &self.root_modules;
-
-        for (i, name) in path.iter().enumerate() {
-            if let Some(module) = current_modules.iter().find(|m| m.name == *name) {
-                if i == path.len() - 1 {
-                    return true;
-                }
-                current_modules = &module.submodules;
-            } else {
-                return false;
-            }
-        }
-
-        false
-    }
-}
-
-/// Discover all modules in a Windjammer project (nested directories supported!)
-///
-/// The Windjammer Way:
-/// - Auto-discover directories as modules (even without mod.wj)
-/// - Respect mod.wj declarations if present
-/// - Make the compiler smart, not the user
-pub fn discover_nested_modules(root_path: &Path) -> Result<ModuleTree> {
-    let root_modules = discover_modules_recursive(root_path, true)?;
-
-    Ok(ModuleTree {
-        root_path: root_path.to_path_buf(),
-        root_modules,
-    })
-}
-
-/// Recursively discover modules in a directory
-fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Module>> {
-    let mut modules = Vec::new();
-    let mut subdirs = Vec::new();
-    let mut wj_files = Vec::new();
-
-    // Read directory contents
-    for entry in fs::read_dir(dir_path)
-        .with_context(|| format!("Failed to read directory: {:?}", dir_path))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        let file_name = entry.file_name();
-        let name = file_name.to_string_lossy();
-
-        if path.is_dir() {
-            // Skip common directories
-            if name.starts_with('.') || name == "target" || name == "build" {
-                continue;
-            }
-            subdirs.push((name.to_string(), path));
-        } else if path.is_file() && name.ends_with(".wj") {
-            wj_files.push((name.to_string(), path));
-        }
-    }
-
-    // Process subdirectories as modules
-    for (dir_name, dir_path) in subdirs {
-        let has_mod_wj = dir_path.join("mod.wj").exists();
-        let submodules = discover_modules_recursive(&dir_path, false)?;
-
-        // THE WINDJAMMER WAY: Only include directories that have content
-        // Skip empty directories to avoid "file not found for module" errors
-        let has_content = has_mod_wj || !submodules.is_empty();
-
-        if has_content {
-            modules.push(Module {
-                name: dir_name.clone(),
-                path: dir_path,
-                is_directory: true,
-                submodules,
-                has_mod_wj,
-                is_public: true, // TODO: Parse mod.wj to determine visibility
-            });
-        }
-    }
-
-    // Process .wj files as modules (excluding mod.wj)
-    for (file_name, file_path) in wj_files {
-        if file_name == "mod.wj" {
-            continue; // mod.wj is not a module itself, it declares the parent module
-        }
-
-        let module_name = file_name.strip_suffix(".wj").unwrap().to_string();
-
-        modules.push(Module {
-            name: module_name,
-            path: file_path,
-            is_directory: false,
-            submodules: Vec::new(),
-            has_mod_wj: false,
-            is_public: true, // TODO: Parse file to determine visibility
-        });
-    }
-
-    // Sort modules alphabetically for consistent output
-    modules.sort_by(|a, b| a.name.cmp(&b.name));
-
-    Ok(modules)
-}
+use import_resolution::parse_mod_declarations;
+use module_resolution::discover_hand_written_modules;
 
 /// Generate lib.rs content for a Windjammer project
 ///
@@ -149,292 +30,6 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
 /// - Auto-generate pub mod for discovered directories
 /// - Use wildcard re-exports ONLY if no explicit pub use exists
 ///   Discover hand-written Rust modules in the project root
-///
-/// THE WINDJAMMER WAY: Allow seamless FFI/interop!
-/// Users can provide hand-written Rust code (like ffi.rs or ffi/mod.rs)
-/// in the project root alongside src/, and it will be automatically
-/// integrated with generated code.
-///
-/// This enables:
-/// - FFI bindings to C/C++
-/// - Direct Rust interop
-/// - Performance-critical code in pure Rust
-/// - Gradual migration from Rust to Windjammer
-///
-/// Returns only modules that are NOT in the generated module tree.
-fn discover_hand_written_modules(
-    project_root: &Path,
-    module_tree: &ModuleTree,
-    output_dir: &Path,
-) -> Result<Vec<String>> {
-    let mut modules = Vec::new();
-
-    if !project_root.exists() {
-        return Ok(modules);
-    }
-
-    // Build set of ALL generated module names (including nested submodules) for quick lookup.
-    // This prevents stale copies of nested modules (e.g., sundering/player/) in src/ from
-    // being picked up as "hand-written" top-level modules.
-    fn collect_all_module_names(modules: &[Module], names: &mut HashSet<String>) {
-        for m in modules {
-            names.insert(m.name.clone());
-            if !m.submodules.is_empty() {
-                collect_all_module_names(&m.submodules, names);
-            }
-        }
-    }
-    let mut generated_names = HashSet::new();
-    collect_all_module_names(&module_tree.root_modules, &mut generated_names);
-
-    // THE WINDJAMMER WAY: Rust convention is to put library code in src/
-    // So we need to check both project_root/ and project_root/src/ for hand-written modules
-    let mut search_dirs = vec![project_root.to_path_buf()];
-
-    // Only add src/ if it's different from project_root
-    let src_dir = project_root.join("src");
-    if src_dir.exists() && src_dir != project_root {
-        search_dirs.push(src_dir);
-    }
-
-    // BUG #12 FIX: Also search the parent directory of output_dir for sibling modules
-    // Example: If output is src/components/generated/, search src/components/ for siblings
-    // like platform.rs
-    if let Some(output_parent) = output_dir.parent() {
-        if output_parent != project_root && output_parent != project_root.join("src") {
-            search_dirs.push(output_parent.to_path_buf());
-        }
-    }
-
-    for search_dir in &search_dirs {
-        if !search_dir.exists() {
-            continue;
-        }
-
-        // When search_dir IS the output_dir, flat .rs files are either generated
-        // (already in module tree) or stale (from previous builds). Only discover
-        // directory modules (like ffi/) in this case.
-        let search_is_output = {
-            let a = search_dir.canonicalize().unwrap_or_else(|_| search_dir.clone());
-            let b = output_dir.canonicalize().unwrap_or_else(|_| output_dir.to_path_buf());
-            a == b
-        };
-
-        let is_output_parent = output_dir.parent() == Some(search_dir.as_path());
-        let needs_scope_filter = if is_output_parent {
-            // Searching immediate parent of output - include siblings, no filtering
-            false
-        } else if output_dir.strip_prefix(search_dir).is_ok() {
-            // Output is within search_dir, but not immediate child
-            // Apply filtering to avoid including unrelated files
-            if let Ok(rel) = output_dir.strip_prefix(search_dir) {
-                // If rel has 2+ components, we're searching an ancestor directory
-                rel.components().count() >= 2
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        for entry in fs::read_dir(search_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                // When search_dir IS the output directory, skip ALL flat .rs files.
-                // They are either generated (in the module tree) or stale artifacts.
-                // Only directory modules (like ffi/) are legitimate hand-written modules.
-                if search_is_output {
-                    continue;
-                }
-
-                if let Some(name) = path.file_stem() {
-                    let name_str = name.to_string_lossy().to_string();
-
-                    // Skip .rs files that have corresponding subdirectories
-                    // Example: Skip events.rs if events/ directory exists
-                    // (these are module parent files that won't work in generated context)
-                    let corresponding_dir = search_dir.join(&name_str);
-                    if corresponding_dir.exists() && corresponding_dir.is_dir() {
-                        continue; // Skip this file - it's a module parent
-                    }
-
-                    // BUG #12 FIX: Apply scope filtering
-                    if needs_scope_filter {
-                        // Output is within src/ (e.g., src/components/generated/)
-                        // Only include files that are within the same subdirectory tree
-                        if let Ok(rel_output) = output_dir.strip_prefix(search_dir) {
-                            if let Ok(rel_path) = path.strip_prefix(search_dir) {
-                                // Check if the file has a parent directory within search_dir
-                                // e.g., src/components/platform.rs -> parent is "components"
-                                // e.g., src/app.rs -> no parent (directly in search_dir)
-                                if let Some(file_parent) = rel_path.parent() {
-                                    if file_parent == Path::new("") {
-                                        // File is directly in search_dir (e.g., src/app.rs)
-                                        // But output is in a subdirectory (e.g., src/components/generated/)
-                                        // Skip these top-level files
-                                        continue;
-                                    }
-
-                                    // Get the first component of the output and file paths
-                                    // e.g., for src/components/generated/ -> "components"
-                                    // e.g., for src/components/platform.rs -> "components"
-                                    let output_first_component = rel_output.components().next();
-                                    let path_first_component = file_parent.components().next();
-
-                                    // Only include if they share the same first component
-                                    if let (Some(output_comp), Some(path_comp)) =
-                                        (output_first_component, path_first_component)
-                                    {
-                                        if output_comp != path_comp {
-                                            continue; // Skip - different subdirectory tree
-                                        }
-                                    } else {
-                                        continue; // Skip - incompatible paths
-                                    }
-                                } else {
-                                    // No parent -> file is at root (shouldn't happen for files in search_dir)
-                                    continue;
-                                }
-                            }
-                        }
-                    } else if let Some(output_parent) = output_dir.parent() {
-                        // When searching output_dir.parent(), only include files
-                        // that are SIBLINGS of the output directory
-                        if *search_dir == output_parent {
-                            // We're searching the immediate parent of output_dir
-                            // Make sure the file is NOT from a parent of output_parent
-                            if let Some(file_parent) = path.parent() {
-                                if file_parent != output_parent {
-                                    continue; // Skip - file is not a direct sibling
-                                }
-                            }
-                        }
-                    }
-
-                    // Skip lib.rs, mod.rs, main.rs, and generated modules
-                    if name_str != "lib" 
-                        && name_str != "mod"
-                        && name_str != "main"
-                        && !generated_names.contains(&name_str)
-                        && path.extension().and_then(|s| s.to_str()) == Some("rs")
-                        && !modules.contains(&name_str)
-                    {
-                        // Skip files that look auto-generated by the Windjammer compiler
-                        // (stale flat .rs files from previous builds)
-                        let is_auto_generated = if let Ok(content) = fs::read_to_string(&path) {
-                            content.starts_with("#[allow(unused_imports)]")
-                                || content.starts_with("// Auto-generated")
-                        } else {
-                            false
-                        };
-                        if !is_auto_generated {
-                            modules.push(name_str);
-                        }
-                    }
-                }
-            } else if path.is_dir() {
-                // CRITICAL FIX: Don't declare directories that are ancestors of output_dir
-                // Example: Don't declare "pub mod components;" when output is src/components/generated/
-                if let (Ok(canonical_dir), Ok(canonical_output)) =
-                    (path.canonicalize(), output_dir.canonicalize())
-                {
-                    if canonical_output.starts_with(&canonical_dir) {
-                        continue; // Skip - this directory is an ancestor of output
-                    }
-                }
-
-                // BUG #12 FIX: Apply same scope filtering to directories as we do for files
-                if needs_scope_filter {
-                    // Output is within search_dir (e.g., src/components/generated/)
-                    // Only include directories that are within the same subdirectory tree
-                    if let Ok(rel_output) = output_dir.strip_prefix(search_dir) {
-                        if let Ok(rel_path) = path.strip_prefix(search_dir) {
-                            // Check if the directory has a parent within search_dir
-                            // e.g., src/components/platform/ -> parent is "components"
-                            // e.g., src/platform/ -> no parent (directly in search_dir)
-                            if let Some(dir_parent) = rel_path.parent() {
-                                if dir_parent == Path::new("") {
-                                    // Directory is directly in search_dir (e.g., src/platform/)
-                                    // But output is in a subdirectory (e.g., src/components/generated/)
-                                    // Skip these top-level directories
-                                    continue;
-                                }
-
-                                // Get the first component of the output and directory paths
-                                // e.g., for src/components/generated/ -> "components"
-                                // e.g., for src/components/platform/ -> "components"
-                                let output_first_component = rel_output.components().next();
-                                let path_first_component = dir_parent.components().next();
-
-                                // Only include if they share the same first component
-                                if let (Some(output_comp), Some(path_comp)) =
-                                    (output_first_component, path_first_component)
-                                {
-                                    if output_comp != path_comp {
-                                        continue; // Skip - different subdirectory tree
-                                    }
-                                } else {
-                                    continue; // Skip - incompatible paths
-                                }
-                            } else {
-                                // No parent -> directory is at root (shouldn't happen)
-                                continue;
-                            }
-                        }
-                    }
-                } else if let Some(output_parent) = output_dir.parent() {
-                    // When searching output_dir.parent(), only include directories
-                    // that are SIBLINGS of the output directory
-                    if *search_dir == output_parent {
-                        // We're searching the immediate parent of output_dir
-                        // Make sure the directory is NOT from a parent of output_parent
-                        if let Some(dir_parent) = path.parent() {
-                            if dir_parent != output_parent {
-                                continue; // Skip - directory is not a direct sibling
-                            }
-                        }
-                    }
-                }
-
-                // Check if directory has a mod.rs (but skip common non-FFI directories)
-                let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                let skip_dirs = [
-                    "target",
-                    "build",
-                    "generated",
-                    "dist",
-                    "node_modules",
-                    ".git",
-                    "lib",
-                    "tests_build",
-                    "test_output",
-                    "test_scenarios",
-                    "examples",
-                    "benches",
-                    "wj-plugins",
-                ];
-                if !skip_dirs.contains(&dir_name) {
-                    let mod_rs = path.join("mod.rs");
-                    if mod_rs.exists() {
-                        if let Some(name) = path.file_name() {
-                            let name_str = name.to_string_lossy().to_string();
-                            // Only include if not a generated module
-                            if !generated_names.contains(&name_str) && !modules.contains(&name_str)
-                            {
-                                modules.push(name_str);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(modules)
-}
-
 pub fn generate_lib_rs(
     module_tree: &ModuleTree,
     project_root: &Path,
@@ -789,76 +384,10 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
     Ok(content)
 }
 
-/// Parse mod.wj to extract pub mod and pub use declarations
-///
-/// Returns: (pub_mod_names, pub_use_paths)
-fn parse_mod_declarations(content: &str) -> (Vec<String>, Vec<String>) {
-    let mut pub_mods = Vec::new();
-    let mut pub_uses = Vec::new();
-
-    // Track multi-line pub use statements
-    let mut in_pub_use = false;
-    let mut current_pub_use = String::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        // Skip empty lines and comments
-        if trimmed.is_empty() || trimmed.starts_with("//") {
-            continue;
-        }
-
-        // Match: pub mod <name>
-        if trimmed.starts_with("pub mod ") && !in_pub_use {
-            if let Some(name) = trimmed
-                .strip_prefix("pub mod ")
-                .and_then(|s| s.split_whitespace().next())
-            {
-                // Remove trailing semicolon from module name
-                let name = name.trim_end_matches(';');
-                pub_mods.push(name.to_string());
-            }
-        }
-        // Match: pub use <path>
-        else if trimmed.starts_with("pub use ") {
-            in_pub_use = true;
-            current_pub_use.push_str(trimmed.strip_prefix("pub use ").unwrap());
-            current_pub_use.push(' ');
-
-            // Check if this line completes the pub use statement
-            // Complete if: has closing brace, or doesn't have opening brace (single-line)
-            let has_opening_brace = trimmed.contains('{');
-            let has_closing_brace = trimmed.contains('}');
-
-            if has_closing_brace || !has_opening_brace {
-                in_pub_use = false;
-                // Remove trailing semicolon and whitespace
-                let pub_use_str = current_pub_use.trim().trim_end_matches(';').to_string();
-                pub_uses.push(pub_use_str);
-                current_pub_use.clear();
-            }
-        }
-        // Continue multi-line pub use
-        else if in_pub_use {
-            current_pub_use.push_str(trimmed);
-            current_pub_use.push(' ');
-
-            // Check if this line completes the pub use statement
-            if trimmed.contains('}') {
-                in_pub_use = false;
-                // Remove trailing semicolon and whitespace
-                let pub_use_str = current_pub_use.trim().trim_end_matches(';').to_string();
-                pub_uses.push(pub_use_str);
-                current_pub_use.clear();
-            }
-        }
-    }
-
-    (pub_mods, pub_uses)
-}
-
 #[cfg(test)]
 mod tests {
+    use super::import_resolution::parse_mod_declarations;
+    use super::module_resolution::discover_hand_written_modules;
     use super::*;
     use tempfile::TempDir;
 
@@ -1094,7 +623,9 @@ pub use rendering::Color
             item_count, content
         );
 
-        let stack_count = content.matches("pub use self::item_stack::ItemStack;").count()
+        let stack_count = content
+            .matches("pub use self::item_stack::ItemStack;")
+            .count()
             + content.matches("pub use item_stack::ItemStack;").count();
         assert_eq!(
             stack_count, 1,
