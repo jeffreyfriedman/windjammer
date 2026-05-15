@@ -54,7 +54,7 @@ impl<'ast> CodeGenerator<'ast> {
             .all(|(a, b)| a.name == b.name)
     }
 
-    pub(super) fn generate_struct(&mut self, s: &StructDecl) -> String {
+    pub(in crate::codegen::rust) fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
         // Track which fields have type usize (for auto-casting in comparisons)
@@ -414,7 +414,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
+    pub(in crate::codegen::rust) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
         // WINDJAMMER PHILOSOPHY: Auto-derive common traits for enums
@@ -494,7 +494,7 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    pub(super) fn generate_trait_with_analysis(
+    pub(in crate::codegen::rust) fn generate_trait_with_analysis(
         &mut self,
         trait_decl: &crate::parser::TraitDecl<'ast>,
         analyzed: &[AnalyzedFunction<'ast>],
@@ -782,7 +782,7 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    pub(super) fn generate_impl(
+    pub(in crate::codegen::rust) fn generate_impl(
         &mut self,
         impl_block: &ImplBlock<'ast>,
         analyzed: &[AnalyzedFunction<'ast>],
@@ -935,7 +935,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate automatic trait implementation for @component decorator
-    pub(super) fn generate_component_impl(&mut self, s: &StructDecl) -> String {
+    pub(in crate::codegen::rust) fn generate_component_impl(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
         // For now, generate a marker comment
@@ -949,7 +949,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate automatic trait implementation for @game decorator
-    pub(super) fn generate_game_impl(&mut self, s: &StructDecl) -> String {
+    pub(in crate::codegen::rust) fn generate_game_impl(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
 
         // Generate Default implementation

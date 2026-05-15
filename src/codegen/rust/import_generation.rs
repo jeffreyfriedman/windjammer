@@ -336,7 +336,7 @@ impl CodeGenerator<'_> {
         lines
     }
 
-    pub(super) fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
+    pub(in crate::codegen::rust) fn generate_use(&self, path: &[String], alias: Option<&str>) -> String {
         if path.is_empty() {
             return String::new();
         }

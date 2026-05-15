@@ -18,7 +18,7 @@ impl CodeGenerator<'_> {
     ///
     /// Standard library derivable traits are emitted in stable order; any other traits
     /// (e.g. `Serialize`, `Parser`) follow in sorted order.
-    pub(super) fn merge_standard_derive_traits(
+    pub(in crate::codegen::rust) fn merge_standard_derive_traits(
         explicit: Vec<String>,
         inferred: Vec<String>,
     ) -> Vec<String> {
@@ -48,7 +48,7 @@ impl CodeGenerator<'_> {
         out
     }
 
-    pub(super) fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
+    pub(in crate::codegen::rust) fn infer_derivable_traits(&self, struct_: &StructDecl) -> Vec<String> {
         // For tuple structs, check tuple_fields instead of named fields
         let all_types: Vec<&Type> = if let Some(ref tuple_fields) = struct_.tuple_fields {
             tuple_fields.iter().collect()
@@ -119,7 +119,7 @@ impl CodeGenerator<'_> {
     /// User-defined struct names use `trait_object_types` (filled by `collect_trait_object_types`)
     /// so an outer struct is treated as containing a trait object when a field's type is a struct
     /// that (transitively) holds `dyn` / `trait X`.
-    pub(super) fn type_contains_trait_object(&self, type_: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_contains_trait_object(&self, type_: &Type) -> bool {
         match type_ {
             Type::TraitObject(_) | Type::ImplTrait(_) => true,
             Type::Vec(inner)
@@ -143,7 +143,7 @@ impl CodeGenerator<'_> {
     }
 
     /// Fixpoint pass: record every struct in this program that transitively contains a trait object.
-    pub(super) fn collect_trait_object_types(&mut self, program: &Program) {
+    pub(in crate::codegen::rust) fn collect_trait_object_types(&mut self, program: &Program) {
         loop {
             let sz = self.trait_object_types.len();
 
@@ -168,7 +168,7 @@ impl CodeGenerator<'_> {
     }
 
     /// TDD FIX: Check if a type is Copy, including user-defined types with @derive(Copy)
-    pub(super) fn is_copy_type_with_registry(&self, ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn is_copy_type_with_registry(&self, ty: &Type) -> bool {
         use crate::parser::Type;
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
@@ -191,7 +191,7 @@ impl CodeGenerator<'_> {
     }
 
     /// Check if all enum variants have only Copy fields.
-    pub(super) fn all_enum_variants_are_copy(
+    pub(in crate::codegen::rust) fn all_enum_variants_are_copy(
         &self,
         variants: &[crate::parser::EnumVariant],
     ) -> bool {
@@ -205,7 +205,7 @@ impl CodeGenerator<'_> {
         })
     }
 
-    pub(super) fn all_enum_variants_are_partial_eq(
+    pub(in crate::codegen::rust) fn all_enum_variants_are_partial_eq(
         &self,
         variants: &[crate::parser::EnumVariant],
     ) -> bool {
@@ -227,7 +227,7 @@ impl CodeGenerator<'_> {
     /// That broke parent structs and enums comparing fields of child structs. Fix: fixpoint
     /// registration mirroring `struct_emits_partial_eq` + `is_partial_eq_type`, and interleave
     /// structs with enums so mutually dependent types converge.
-    pub(super) fn collect_partial_eq_types(&mut self, program: &Program) {
+    pub(in crate::codegen::rust) fn collect_partial_eq_types(&mut self, program: &Program) {
         for item in &program.items {
             if let Item::Enum { decl: e, .. } = item {
                 self.collect_enum_variant_types(e);
@@ -443,7 +443,7 @@ impl CodeGenerator<'_> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn is_hashable_type(&self, ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn is_hashable_type(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Bool | Type::String => true,
             Type::Float => false,
@@ -464,7 +464,7 @@ impl CodeGenerator<'_> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn has_default(&self, ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn has_default(&self, ty: &Type) -> bool {
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
             Type::String => true,
