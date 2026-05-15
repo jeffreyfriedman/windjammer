@@ -1,0 +1,10 @@
+use std::http
+
+fn main() {
+    let http_server = http.new_server("localhost:8080")
+    
+    http.route(http_server, "GET", "/ws", move |req| {
+        print("Got request")
+    })
+}
+

@@ -267,7 +267,10 @@ impl<'ast> Analyzer<'ast> {
 
     /// Merge receiver ownership from impls: strongest wins.
     /// `Owned` (consuming) > `MutBorrowed` (&mut self) > `Borrowed` (&self).
-    pub(crate) fn merge_borrow_trait_receivers(a: OwnershipMode, b: OwnershipMode) -> OwnershipMode {
+    pub(crate) fn merge_borrow_trait_receivers(
+        a: OwnershipMode,
+        b: OwnershipMode,
+    ) -> OwnershipMode {
         use OwnershipMode::*;
         match (a, b) {
             (Owned, _) | (_, Owned) => Owned,

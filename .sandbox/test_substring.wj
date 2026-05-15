@@ -1,0 +1,9 @@
+fn main() {
+    let text: String = "Hello, World!"
+    
+    // Try substring - this doesn't exist in Rust
+    let sub = text.substring(0, 5)
+    
+    println!("Substring: {}", sub)
+}
+

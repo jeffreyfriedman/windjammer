@@ -292,8 +292,15 @@ impl<'ast> Analyzer<'ast> {
                         // SPECIAL CASE: HashMap::get/remove/contains_key need &String
                         // because codegen adds & to the argument. Using &str would
                         // produce &&str which violates String: Borrow<&str>.
-                        if matches!(method.as_ref(), "get" | "get_mut" | "remove" | "contains_key" | "get_key_value" | "entry")
-                            && idx == 0
+                        if matches!(
+                            method.as_ref(),
+                            "get"
+                                | "get_mut"
+                                | "remove"
+                                | "contains_key"
+                                | "get_key_value"
+                                | "entry"
+                        ) && idx == 0
                         {
                             return true;
                         }
@@ -491,7 +498,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if an expression is the parameter or &parameter
-    pub(crate) fn expr_is_param_or_ref_to_param(&self, param_name: &str, expr: &Expression) -> bool {
+    pub(crate) fn expr_is_param_or_ref_to_param(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
             Expression::Unary {

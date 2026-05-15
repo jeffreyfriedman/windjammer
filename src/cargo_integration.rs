@@ -10,8 +10,8 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::{CompilationTarget, source_map, error_mapper};
 use crate::test_runner;
+use crate::{error_mapper, source_map, CompilationTarget};
 pub enum RustFileType {
     Test,    // Contains #[test] functions
     Binary,  // Contains fn main()
@@ -889,4 +889,3 @@ pub fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> 
         Ok(())
     }
 }
-

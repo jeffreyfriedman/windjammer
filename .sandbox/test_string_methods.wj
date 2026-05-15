@@ -1,0 +1,17 @@
+fn main() {
+    let text: String = "Hello, World!"
+    
+    // Test various string methods
+    let upper = text.to_uppercase()
+    let lower = text.to_lowercase()
+    let len = text.len()
+    
+    // Test substring (this might not exist in Rust)
+    // let sub = text.substring(0, 5)
+    
+    println!("Original: {}", text)
+    println!("Upper: {}", upper)
+    println!("Lower: {}", lower)
+    println!("Length: {}", len)
+}
+

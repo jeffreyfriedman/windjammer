@@ -1,0 +1,37 @@
+// Test game to validate ECS + compiler integration
+// This should compile to Rust with our new ECS-based code generation
+
+use std::game::*
+
+@game
+struct TestGame {
+    frame_count: int,
+    score: int,
+}
+
+@init
+fn init(game: TestGame) {
+    println!("🎮 Test Game Initialized!")
+    println!("ECS integration working!")
+    game.frame_count = 0
+    game.score = 0
+}
+
+@update
+fn update(game: TestGame, delta: float, input: Input) {
+    game.frame_count += 1
+    game.score += 1
+    
+    if game.frame_count % 60 == 0 {
+        println!("Frame: {}, Score: {}, Delta: {}", game.frame_count, game.score, delta)
+    }
+}
+
+@render
+fn render(game: TestGame, renderer: Renderer) {
+    // Clear screen to dark blue
+    renderer.clear(Color::rgb(0.1, 0.1, 0.3))
+    
+    // TODO: Render game objects once we have the renderer API
+}
+

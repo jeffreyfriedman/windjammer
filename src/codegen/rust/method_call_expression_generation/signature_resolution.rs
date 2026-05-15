@@ -29,8 +29,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if expected_args != arguments.len() {
                     sig = None;
                     for (key, alt_sig) in &self.signature_registry.signatures {
-                        if key.ends_with(&format!("::{}", qualified_name))
-                            && key != &qualified_name
+                        if key.ends_with(&format!("::{}", qualified_name)) && key != &qualified_name
                         {
                             let alt_args = if alt_sig.has_self_receiver {
                                 alt_sig.param_ownership.len().saturating_sub(1)

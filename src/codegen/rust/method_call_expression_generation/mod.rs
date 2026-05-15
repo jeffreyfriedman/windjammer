@@ -41,13 +41,7 @@ impl<'ast> CodeGenerator<'ast> {
             type_name,
         );
         self.mc_finalize_method_call_expression(
-            object,
-            method,
-            type_args,
-            arguments,
-            obj_str,
-            args,
-            prev_float,
+            object, method, type_args, arguments, obj_str, args, prev_float,
         )
     }
 }

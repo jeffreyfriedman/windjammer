@@ -4,9 +4,7 @@ use super::engine::ControlFlow;
 use super::engine::Interpreter;
 use super::value::{EnumData, Value};
 use super::value_operations::{apply_compound_op_static, literal_to_value, value_to_iterable};
-use crate::parser::{
-    CompoundOp, Expression, MatchArm, Pattern, Statement,
-};
+use crate::parser::{CompoundOp, Expression, MatchArm, Pattern, Statement};
 
 impl<'a> Interpreter<'a> {
     pub(crate) fn exec_body(&mut self, stmts: &[&'a Statement<'a>]) -> ControlFlow {
@@ -37,11 +35,7 @@ impl<'a> Interpreter<'a> {
         ControlFlow::Continue
     }
 
-    pub(crate) fn exec_statement(
-        &mut self,
-        stmt: &'a Statement<'a>,
-        is_last: bool,
-    ) -> ControlFlow {
+    pub(crate) fn exec_statement(&mut self, stmt: &'a Statement<'a>, is_last: bool) -> ControlFlow {
         match stmt {
             Statement::Let { pattern, value, .. } => {
                 let val = self.eval_expression(value);

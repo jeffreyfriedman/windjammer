@@ -92,10 +92,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Special case: if this is println!/eprintln!/print!/eprint! with a single non-literal arg,
             // wrap it with "{}" to make it valid Rust: println!(var) -> println!("{}", var)
             // Also wrap format!() calls: println!(format!(...)) -> println!("{}", format!(...))
-            if (name == "println"
-                || name == "eprintln"
-                || name == "print"
-                || name == "eprint")
+            if (name == "println" || name == "eprintln" || name == "print" || name == "eprint")
                 && args.len() == 1
                 && !matches!(
                     &args[0],
@@ -129,33 +126,31 @@ impl<'ast> CodeGenerator<'ast> {
         // In Windjammer, `string` maps to Rust `String`, so vec!["a", "b"] must
         // become vec!["a".to_string(), "b".to_string()] for Vec<String>.
         // Only apply when: macro is vec, brackets delimiter, has string literal args.
-        let final_arg_strs: Vec<String> = if name == "vec"
-            && matches!(delimiter, MacroDelimiter::Brackets)
-            && !is_repeat
-        {
-            arg_strs
-                .iter()
-                .enumerate()
-                .map(|(idx, s)| {
-                    // Check if the original arg is a string literal
-                    if idx < args.len() {
-                        if let Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        } = &args[idx]
-                        {
-                            // Add .to_string() if not already present
-                            if !s.ends_with(".to_string()") {
-                                return format!("{}.to_string()", s);
+        let final_arg_strs: Vec<String> =
+            if name == "vec" && matches!(delimiter, MacroDelimiter::Brackets) && !is_repeat {
+                arg_strs
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, s)| {
+                        // Check if the original arg is a string literal
+                        if idx < args.len() {
+                            if let Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            } = &args[idx]
+                            {
+                                // Add .to_string() if not already present
+                                if !s.ends_with(".to_string()") {
+                                    return format!("{}.to_string()", s);
+                                }
                             }
                         }
-                    }
-                    s.clone()
-                })
-                .collect()
-        } else {
-            arg_strs
-        };
+                        s.clone()
+                    })
+                    .collect()
+            } else {
+                arg_strs
+            };
 
         format!(
             "{}!{}{}{}",

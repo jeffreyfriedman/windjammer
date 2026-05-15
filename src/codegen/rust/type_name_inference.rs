@@ -224,7 +224,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Extract the element type from an iterable type.
     /// Vec<T> → T, &Vec<T> → T, &mut Vec<T> → T, Array(T, _) → T
-    pub(in crate::codegen::rust) fn extract_iterator_element_type(iterable_type: &Type) -> Option<Type> {
+    pub(in crate::codegen::rust) fn extract_iterator_element_type(
+        iterable_type: &Type,
+    ) -> Option<Type> {
         match iterable_type {
             Type::Vec(inner) => Some(inner.as_ref().clone()),
             Type::Array(inner, _) => Some(inner.as_ref().clone()),
@@ -234,5 +236,4 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         }
     }
-
 }

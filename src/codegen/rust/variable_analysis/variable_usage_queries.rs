@@ -4,7 +4,6 @@ use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// Recursively find unused let bindings and for-loop variables in a block of statements.
     pub(crate) fn find_unused_bindings(
         stmts: &[&Statement],

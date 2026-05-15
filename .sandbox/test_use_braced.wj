@@ -1,0 +1,7 @@
+use std::db
+use ../models/user::{User, RegisterRequest}
+
+fn main() {
+    println("test")
+}
+

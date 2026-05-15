@@ -121,7 +121,10 @@ pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::Dependenc
 /// Read source project's Cargo.toml and propagate dependencies that aren't already present.
 /// This ensures FFI dependencies (wgpu, bytemuck, rapier3d, etc.) are available in the
 /// generated build's Cargo.toml without requiring the user to manually copy them.
-pub(crate) fn propagate_source_cargo_deps(source_dir: &Path, existing_deps: &[String]) -> Vec<String> {
+pub(crate) fn propagate_source_cargo_deps(
+    source_dir: &Path,
+    existing_deps: &[String],
+) -> Vec<String> {
     use std::collections::HashSet;
 
     let skip_crates: HashSet<&str> = ["windjammer", "windjammer-runtime", "windjammer_runtime"]
@@ -275,7 +278,11 @@ pub(crate) fn walk_rs_files(dir: &Path) -> Result<Vec<PathBuf>> {
 /// `Cargo.toml`. Uses absolute paths so relative `source_dir` values
 /// (e.g. `"src"`) don't limit traversal depth. Skips any match that
 /// points to `output_dir` itself to prevent cyclic self-dependencies.
-pub(crate) fn resolve_crate_path(crate_name: &str, source_dir: &Path, output_dir: &Path) -> Option<String> {
+pub(crate) fn resolve_crate_path(
+    crate_name: &str,
+    source_dir: &Path,
+    output_dir: &Path,
+) -> Option<String> {
     let hyphenated = crate_name.replace('_', "-");
 
     let abs_source = source_dir.canonicalize().unwrap_or_else(|_| {
@@ -331,7 +338,11 @@ pub(crate) fn try_find_crate_at(
 /// If `crate_dir/Cargo.toml` exists, produce a dependency line for it.
 /// `output_dir` is the directory we're generating into — we must never add
 /// a dependency that points back to it (that would create a cyclic package).
-pub(crate) fn check_cargo_toml(crate_dir: &Path, crate_name: &str, output_dir: &Path) -> Option<String> {
+pub(crate) fn check_cargo_toml(
+    crate_dir: &Path,
+    crate_name: &str,
+    output_dir: &Path,
+) -> Option<String> {
     let cargo_toml = crate_dir.join("Cargo.toml");
     if !cargo_toml.exists() {
         return None;

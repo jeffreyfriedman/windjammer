@@ -2,9 +2,7 @@
 
 use crate::parser::*;
 
-use super::super::{
-    AnalyzedFunction, Analyzer, ConstStaticOptimization, SmallVecOptimization,
-};
+use super::super::{AnalyzedFunction, Analyzer, ConstStaticOptimization, SmallVecOptimization};
 
 impl<'ast> Analyzer<'ast> {
     pub(in crate::analyzer) fn detect_const_static_opportunities(

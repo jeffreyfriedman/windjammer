@@ -2,7 +2,6 @@
 
 use crate::parser::Statement;
 
-
 /// Check if a statement terminates control flow (return, break, continue)
 pub(super) fn is_terminator(stmt: &Statement) -> bool {
     matches!(

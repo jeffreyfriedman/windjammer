@@ -1,0 +1,35 @@
+
+trait Renderable {
+    fn render(self) -> string
+}
+
+struct Text {
+    content: string,
+}
+
+impl Renderable for Text {
+    fn render(self) -> string {
+        self.content
+    }
+}
+
+struct Div {
+    children: Vec<string>,
+}
+
+impl Div {
+    fn new() -> Div {
+        Div { children: Vec::new() }
+    }
+    
+    fn child<T: Renderable>(component: T) -> Div {
+        self.children.push(component.render())
+        self
+    }
+}
+
+fn main() {
+    let div = Div::new()
+        .child(Text { content: "Hello" })
+        .child(Text { content: "World" })
+}

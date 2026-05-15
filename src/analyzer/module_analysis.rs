@@ -221,7 +221,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
     /// Helper: Check if two signature registries have converged (no changes)
-    pub(crate) fn signatures_converged(&self, old: &SignatureRegistry, new: &SignatureRegistry) -> bool {
+    pub(crate) fn signatures_converged(
+        &self,
+        old: &SignatureRegistry,
+        new: &SignatureRegistry,
+    ) -> bool {
         // If sizes differ, not converged
         if old.signatures.len() != new.signatures.len() {
             return false;

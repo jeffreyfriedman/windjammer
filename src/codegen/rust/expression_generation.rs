@@ -224,11 +224,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // We need to resolve `sys`'s type to find `SystemCoverage::register_function` in the registry.
                 let instance_method_sig = match function {
                     Expression::FieldAccess { object, field, .. } => {
-                        self.infer_type_name(object)
-                            .and_then(|tn| {
-                                let qualified = format!("{}::{}", tn, field);
-                                self.signature_registry.get_signature(&qualified).cloned()
-                            })
+                        self.infer_type_name(object).and_then(|tn| {
+                            let qualified = format!("{}::{}", tn, field);
+                            self.signature_registry.get_signature(&qualified).cloned()
+                        })
                     }
                     _ => None,
                 };
@@ -236,7 +235,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
                 // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
                 let param_types: Option<Vec<Type>> = if instance_method_sig.is_some() {
-                    instance_method_sig.as_ref().map(|sig| sig.param_types.clone())
+                    instance_method_sig
+                        .as_ref()
+                        .map(|sig| sig.param_types.clone())
                 } else {
                     func_name.and_then(|name| {
                         // Try direct lookup first (e.g., "Thing::new")
@@ -315,7 +316,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 crate::analyzer::OwnershipMode::Owned => {
                                     let is_str_lit = matches!(
                                         arg,
-                                        Expression::Literal { value: crate::parser::Literal::String(_), .. }
+                                        Expression::Literal {
+                                            value: crate::parser::Literal::String(_),
+                                            ..
+                                        }
                                     );
                                     if is_str_lit {
                                         let is_explicit_str_ref = sig.param_types.get(sig_param_idx)
@@ -368,7 +372,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// e.g., stack.item.id → "stack", self.field → "self"
-    pub(in crate::codegen::rust) fn extract_root_identifier(&self, expr: &Expression) -> Option<String> {
+    pub(in crate::codegen::rust) fn extract_root_identifier(
+        &self,
+        expr: &Expression,
+    ) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, .. } => self.extract_root_identifier(object),
@@ -484,7 +491,10 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|arm| pattern_analysis::pattern_extracts_value(&arm.pattern))
     }
 
-    pub(in crate::codegen::rust) fn generate_expression_with_precedence(&mut self, expr: &Expression<'ast>) -> String {
+    pub(in crate::codegen::rust) fn generate_expression_with_precedence(
+        &mut self,
+        expr: &Expression<'ast>,
+    ) -> String {
         // Wrap expressions in parentheses if they need them for proper precedence
         // when used as the object of a method call or field access
         match expr {
@@ -529,9 +539,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Literal { value: lit, .. } => {
                 self.generate_literal_with_context(lit, expr_to_generate)
             }
-            Expression::Identifier { name, .. } => {
-                self.generate_identifier(name, expr_to_generate)
-            }
+            Expression::Identifier { name, .. } => self.generate_identifier(name, expr_to_generate),
             Expression::Binary {
                 left, op, right, ..
             } => self.generate_binary_expression(left, op, right),
@@ -606,7 +614,6 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Try to generate a test macro call (assert_eq!, panic!, vec!, etc.)
     /// Returns Some(code) if this is a test macro, None otherwise
-
 
     /// Try to convert print/println/eprintln/eprint to macros
     /// Returns Some(code) if this is a print function, None otherwise
@@ -705,24 +712,26 @@ impl<'ast> CodeGenerator<'ast> {
                         FloatType::Unknown => {
                             // Same resolution order as `generate_literal_context_sensitive`, so
                             // `[f32; 3]` struct fields still get `_f32` when inference is Unknown.
-                            let from_assignment = self
-                                .assignment_float_target_type
-                                .as_ref()
-                                .and_then(float_type_utilities::float_literal_suffix_from_assignment_lhs);
+                            let from_assignment =
+                                self.assignment_float_target_type.as_ref().and_then(
+                                    float_type_utilities::float_literal_suffix_from_assignment_lhs,
+                                );
                             let from_struct_field = if let (Some(struct_name), Some(field_name)) = (
                                 &self.current_struct_literal_name,
                                 &self.current_struct_field_name,
                             ) {
                                 self.lookup_struct_field_types(struct_name)
                                     .and_then(|fields| fields.get(field_name))
-                                    .map(|ft| float_type_utilities::extract_float_type_from_context(ft))
+                                    .map(|ft| {
+                                        float_type_utilities::extract_float_type_from_context(ft)
+                                    })
                             } else {
                                 None
                             };
-                            let from_return = self
-                                .current_function_return_type
-                                .as_ref()
-                                .map(|rt| float_type_utilities::extract_float_type_from_context(rt));
+                            let from_return =
+                                self.current_function_return_type.as_ref().map(|rt| {
+                                    float_type_utilities::extract_float_type_from_context(rt)
+                                });
                             Some(
                                 from_assignment
                                     .or(from_struct_field)
@@ -759,7 +768,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `f32`/`f64` classification for binary operand codegen (inference + casts + WJ types).
     /// Used for E0507 Option::map fix - self.children.map() needs .as_ref()
-    pub(in crate::codegen::rust) fn codegen_expression_traces_to_self(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn codegen_expression_traces_to_self(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name == "self")
@@ -778,13 +790,23 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => name == "self",
             Expression::FieldAccess { object, .. } => self.expression_borrows_self(object),
             Expression::Index { object, .. } => self.expression_borrows_self(object),
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expression_borrows_self(object)
-                    || arguments.iter().any(|(_, arg)| self.expression_borrows_self(arg))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_borrows_self(arg))
             }
-            Expression::Call { arguments, function, .. } => {
+            Expression::Call {
+                arguments,
+                function,
+                ..
+            } => {
                 self.expression_borrows_self(function)
-                    || arguments.iter().any(|(_, arg)| self.expression_borrows_self(arg))
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_borrows_self(arg))
             }
             Expression::Binary { left, right, .. } => {
                 self.expression_borrows_self(left) || self.expression_borrows_self(right)
@@ -797,7 +819,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// Check whether the root of a field-access chain is behind a reference.
     /// Walks up through nested FieldAccess nodes until it finds the root
     /// Identifier, then checks if that variable is a borrowed or match-bound ref.
-    pub(in crate::codegen::rust) fn field_access_root_is_behind_reference(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn field_access_root_is_behind_reference(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 self.field_access_root_is_behind_reference(object)

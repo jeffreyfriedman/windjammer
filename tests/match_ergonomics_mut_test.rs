@@ -9,9 +9,7 @@ fn compile_wj(source: &str, args: &[&str]) -> String {
     let out_dir = dir.path().join("build");
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    let wj = std::env::current_dir()
-        .unwrap()
-        .join("target/release/wj");
+    let wj = std::env::current_dir().unwrap().join("target/release/wj");
 
     let mut cmd = Command::new(&wj);
     cmd.arg("build")
@@ -22,7 +20,11 @@ fn compile_wj(source: &str, args: &[&str]) -> String {
         cmd.arg(a);
     }
     let output = cmd.output().unwrap();
-    assert!(output.status.success(), "wj build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "wj build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     std::fs::read_to_string(out_dir.join("test.rs")).unwrap()
 }
@@ -70,11 +72,18 @@ impl Foo {
 
     // The generated code must compile with rustc (no E0308 &mut i32 vs i32)
     let result = rustc_check(&generated);
-    assert!(result.is_ok(), "Generated code failed to compile: {}", result.unwrap_err());
+    assert!(
+        result.is_ok(),
+        "Generated code failed to compile: {}",
+        result.unwrap_err()
+    );
 
     // Verify self.active = level works (level should be i32, not &mut i32)
-    assert!(!generated.contains("&mut self.forced"),
-        "Should not use &mut on Copy Option field. Generated:\n{}", generated);
+    assert!(
+        !generated.contains("&mut self.forced"),
+        "Should not use &mut on Copy Option field. Generated:\n{}",
+        generated
+    );
 }
 
 /// Bug 3: *kf.position.x -- f32 cannot be dereferenced
@@ -100,11 +109,18 @@ pub fn extract_position(kf: Keyframe) -> (f32, f32, f32) {
     let generated = compile_wj(source, &[]);
 
     // Must NOT contain *kf.position.x -- f32 cannot be dereferenced
-    assert!(!generated.contains("*kf.position.x"),
-        "Should not deref Copy field chain. Generated:\n{}", generated);
+    assert!(
+        !generated.contains("*kf.position.x"),
+        "Should not deref Copy field chain. Generated:\n{}",
+        generated
+    );
 
     let result = rustc_check(&generated);
-    assert!(result.is_ok(), "Generated code failed to compile: {}", result.unwrap_err());
+    assert!(
+        result.is_ok(),
+        "Generated code failed to compile: {}",
+        result.unwrap_err()
+    );
 }
 
 /// Bug 4: &mut u32 == u32 -- comparison through &mut reference
@@ -130,5 +146,9 @@ impl Editor {
     let generated = compile_wj(source, &[]);
 
     let result = rustc_check(&generated);
-    assert!(result.is_ok(), "Generated code failed to compile: {}", result.unwrap_err());
+    assert!(
+        result.is_ok(),
+        "Generated code failed to compile: {}",
+        result.unwrap_err()
+    );
 }

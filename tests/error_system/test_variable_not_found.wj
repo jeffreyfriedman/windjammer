@@ -1,0 +1,8 @@
+// Test: Variable not found error translation
+// Expected: "Variable not found: count"
+
+fn main() {
+    let total = 100
+    println!("Count: {}", count)  // Error: count not declared
+}
+

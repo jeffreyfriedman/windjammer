@@ -342,7 +342,11 @@ impl<'ast> Analyzer<'ast> {
         vars
     }
 
-    pub(crate) fn expression_uses_variables_consuming(&self, expr: &Expression, vars: &[String]) -> bool {
+    pub(crate) fn expression_uses_variables_consuming(
+        &self,
+        expr: &Expression,
+        vars: &[String],
+    ) -> bool {
         use crate::parser::Expression;
 
         match expr {
@@ -392,7 +396,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(crate) fn statement_uses_variables_consuming(&self, stmt: &Statement, vars: &[String]) -> bool {
+    pub(crate) fn statement_uses_variables_consuming(
+        &self,
+        stmt: &Statement,
+        vars: &[String],
+    ) -> bool {
         match stmt {
             Statement::Return {
                 value: Some(expr), ..

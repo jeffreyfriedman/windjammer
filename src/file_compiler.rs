@@ -12,8 +12,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 // Import compiler internals (ModuleCompiler is defined in this file)
-use crate::{CompilationTarget, lexer, parser, parser_impl};
 use crate::{analyzer, codegen, type_inference};
+use crate::{lexer, parser, parser_impl, CompilationTarget};
 pub struct ModuleCompiler {
     pub compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     pub target: CompilationTarget,
@@ -93,7 +93,11 @@ impl ModuleCompiler {
         Ok(())
     }
 
-    pub(crate) fn compile_module(&mut self, module_path: &str, source_file: Option<&Path>) -> Result<()> {
+    pub(crate) fn compile_module(
+        &mut self,
+        module_path: &str,
+        source_file: Option<&Path>,
+    ) -> Result<()> {
         // Skip if already compiled
         if self.compiled_modules.contains_key(module_path) {
             return Ok(());
@@ -271,7 +275,11 @@ impl ModuleCompiler {
             .analyze_program_with_global_signatures(&program, &self.global_signatures)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
-        crate::compilation_error_handling::check_module_mutability(module_path, &file_path, &program)?;
+        crate::compilation_error_handling::check_module_mutability(
+            module_path,
+            &file_path,
+            &program,
+        )?;
 
         // WINDJAMMER PHILOSOPHY: Expression-level float type inference
         // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing

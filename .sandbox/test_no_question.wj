@@ -1,0 +1,12 @@
+fn foo() {
+    let x = bar()
+    x
+}
+
+fn bar() -> int {
+    5
+}
+
+fn main() {}
+
+

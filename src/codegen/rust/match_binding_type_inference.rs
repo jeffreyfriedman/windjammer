@@ -5,7 +5,10 @@ use crate::parser::{EnumPatternBinding, Expression, Pattern, Type};
 use std::collections::HashMap;
 
 impl<'ast> CodeGenerator<'ast> {
-    pub(in crate::codegen::rust) fn match_scrutinee_yields_ref_enum_bindings(&self, scrutinee: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn match_scrutinee_yields_ref_enum_bindings(
+        &self,
+        scrutinee: &Expression,
+    ) -> bool {
         match scrutinee {
             Expression::Unary {
                 op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,

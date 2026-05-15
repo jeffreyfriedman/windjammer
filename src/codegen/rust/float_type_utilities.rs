@@ -23,9 +23,7 @@ pub fn try_extract_float_type(ty: &Type) -> Option<&'static str> {
         Type::Vec(inner) | Type::Array(inner, _) => try_extract_float_type(inner),
         Type::Option(inner) => try_extract_float_type(inner),
         Type::Result(ok_type, _) => try_extract_float_type(ok_type),
-        Type::Reference(inner) | Type::MutableReference(inner) => {
-            try_extract_float_type(inner)
-        }
+        Type::Reference(inner) | Type::MutableReference(inner) => try_extract_float_type(inner),
         Type::Tuple(types) => {
             for t in types {
                 if let Some("f32") = try_extract_float_type(t) {
@@ -66,9 +64,7 @@ pub fn float_type_from_wj_ty(ty: &Type) -> Option<FloatType> {
         // Treating it as F64 made `(f32_expr, subexpr)` look like (F32, F64) and inserted
         // `f32_side as f64` while the other operand was still emitted as f32 → E0308.
         Type::Float => None,
-        Type::Reference(inner) | Type::MutableReference(inner) => {
-            float_type_from_wj_ty(inner)
-        }
+        Type::Reference(inner) | Type::MutableReference(inner) => float_type_from_wj_ty(inner),
         _ => None,
     }
 }

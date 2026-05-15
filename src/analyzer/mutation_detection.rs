@@ -680,7 +680,11 @@ impl<'ast> Analyzer<'ast> {
     ///
     /// Aligns with [`Self::has_mutable_method_call`]: `local.field.mut_method()` marks `local`
     /// when the method's analyzed signature uses `&mut self`.
-    pub(crate) fn collect_mutations_in_expression(&mut self, expr: &Expression, registry: &SignatureRegistry) {
+    pub(crate) fn collect_mutations_in_expression(
+        &mut self,
+        expr: &Expression,
+        registry: &SignatureRegistry,
+    ) {
         if let Expression::MethodCall { object, .. } = expr {
             if let Some(root) = Self::receiver_root_local_identifier(object) {
                 if root != "self" && self.has_mutable_method_call(root, expr, registry) {

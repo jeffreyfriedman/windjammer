@@ -1,0 +1,17 @@
+struct Signal<T> {
+    value: T
+}
+
+impl<T> Signal<T> {
+    fn get() -> T {
+        self.value
+    }
+}
+
+fn main() {
+    let s = Signal { value: "hello" }
+    foo(if s.get().len() > 0 { "a" } else { "b" })
+}
+
+fn foo(s: string) {}
+

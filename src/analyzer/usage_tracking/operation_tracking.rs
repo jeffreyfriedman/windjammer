@@ -6,7 +6,11 @@ use super::Analyzer;
 
 impl<'ast> Analyzer<'ast> {
     // TDD FIX (Bug #5): `is_used_in_arithmetic_op` checks ONLY arithmetic ops, not comparisons.
-    pub(crate) fn is_used_in_arithmetic_op(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn is_used_in_arithmetic_op(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Let { value, .. } => {
@@ -121,7 +125,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(crate) fn is_used_in_binary_op(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn is_used_in_binary_op(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::Let { value, .. } => {

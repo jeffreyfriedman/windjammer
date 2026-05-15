@@ -57,11 +57,7 @@ fn test_no_inline_modules_in_individual_files() {
     )
     .unwrap();
 
-    std::fs::write(
-        src.join("physics/mod.wj"),
-        "pub use rigidbody::RigidBody;",
-    )
-    .unwrap();
+    std::fs::write(src.join("physics/mod.wj"), "pub use rigidbody::RigidBody;").unwrap();
 
     // Create root mod.wj
     std::fs::write(

@@ -24,7 +24,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Resolve the static type backing a method-call receiver (`self`, param, `self.field`, …).
-    pub(crate) fn infer_receiver_type_base(&self, object: &Expression, func: &FunctionDecl<'ast>) -> Option<String> {
+    pub(crate) fn infer_receiver_type_base(
+        &self,
+        object: &Expression,
+        func: &FunctionDecl<'ast>,
+    ) -> Option<String> {
         match object {
             Expression::Identifier { name, .. } if name == "self" => func
                 .parent_type
@@ -35,7 +39,11 @@ impl<'ast> Analyzer<'ast> {
                 .iter()
                 .find(|p| &p.name == name)
                 .and_then(|p| Self::type_to_struct_base(&p.type_)),
-            Expression::FieldAccess { object: inner, field, .. } => {
+            Expression::FieldAccess {
+                object: inner,
+                field,
+                ..
+            } => {
                 let inner_base = self.infer_receiver_type_base(inner, func)?;
                 self.global_struct_field_types
                     .get(&inner_base)
@@ -148,25 +156,23 @@ impl<'ast> Analyzer<'ast> {
             //    but the call site uses the module-qualified name.
             let sig = match registry.get_signature(func_name) {
                 Some(s) => s,
-                None => {
-                    match registry.find_signature_ending_with(func_name) {
-                        Some(s) => s,
-                        None => {
-                            if let Some(simple) = func_name.rsplit("::").next() {
-                                if simple != func_name {
-                                    match registry.get_signature(simple) {
-                                        Some(s) => s,
-                                        None => continue,
-                                    }
-                                } else {
-                                    continue;
+                None => match registry.find_signature_ending_with(func_name) {
+                    Some(s) => s,
+                    None => {
+                        if let Some(simple) = func_name.rsplit("::").next() {
+                            if simple != func_name {
+                                match registry.get_signature(simple) {
+                                    Some(s) => s,
+                                    None => continue,
                                 }
                             } else {
                                 continue;
                             }
+                        } else {
+                            continue;
                         }
                     }
-                }
+                },
             };
             let adjusted_position = if sig.has_self_receiver {
                 *arg_position + 1

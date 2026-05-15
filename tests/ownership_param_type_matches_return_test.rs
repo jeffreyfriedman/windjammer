@@ -8,7 +8,13 @@ fn compile_wj(source: &str) -> String {
     std::fs::write(&input, source).unwrap();
 
     let result = Command::new(env!("CARGO_BIN_EXE_windjammer"))
-        .args(["build", "--path", input.to_str().unwrap(), "--output", output_dir.to_str().unwrap()])
+        .args([
+            "build",
+            "--path",
+            input.to_str().unwrap(),
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("failed to run wj");
 

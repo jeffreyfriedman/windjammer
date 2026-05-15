@@ -1,0 +1,54 @@
+
+trait Renderable {
+    fn render(self) -> string
+}
+
+struct Text {
+    content: string,
+}
+
+impl Renderable for Text {
+    fn render(self) -> string {
+        self.content
+    }
+}
+
+impl Text {
+    fn new(content: string) -> Text {
+        Text { content }
+    }
+}
+
+struct Div {
+    children: Vec<string>,
+}
+
+impl Div {
+    fn new() -> Div {
+        Div { children: Vec::new() }
+    }
+    
+    fn child<T: Renderable>(component: T) -> Div {
+        self.children.push(component.render())
+        self
+    }
+    
+    fn render(self) -> string {
+        let mut html = ""
+        html.push_str("<div>")
+        for child in self.children {
+            html.push_str(child.as_str())
+        }
+        html.push_str("</div>")
+        html
+    }
+}
+
+fn main() {
+    let result = Div::new()
+        .child(Text::new("Hello"))
+        .child(Text::new("World"))
+        .render()
+    
+    println!("{}", result)
+}

@@ -44,7 +44,10 @@ pub(super) fn find_calls_in_statements<'ast>(
 }
 
 /// Find function calls in a statement
-pub(super) fn find_calls_in_statement<'ast>(stmt: &'ast Statement<'ast>, called: &mut HashSet<String>) {
+pub(super) fn find_calls_in_statement<'ast>(
+    stmt: &'ast Statement<'ast>,
+    called: &mut HashSet<String>,
+) {
     match stmt {
         Statement::Expression { expr, .. } => {
             find_calls_in_expression(expr, called);
@@ -100,7 +103,10 @@ pub(super) fn find_calls_in_statement<'ast>(stmt: &'ast Statement<'ast>, called:
 }
 
 /// Find function calls in an expression
-pub(super) fn find_calls_in_expression<'ast>(expr: &'ast Expression<'ast>, called: &mut HashSet<String>) {
+pub(super) fn find_calls_in_expression<'ast>(
+    expr: &'ast Expression<'ast>,
+    called: &mut HashSet<String>,
+) {
     match expr {
         Expression::Call {
             function,

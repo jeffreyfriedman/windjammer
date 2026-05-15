@@ -324,10 +324,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 ));
             }
             if let Some(ref ret_type) = func.return_type {
-                output.push_str(&format!(
-                    " * @returns {{{}}}\n",
-                    type_to_jsdoc(ret_type)
-                ));
+                output.push_str(&format!(" * @returns {{{}}}\n", type_to_jsdoc(ret_type)));
             }
             output.push_str(" */\n");
         }

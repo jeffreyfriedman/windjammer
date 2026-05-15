@@ -5,12 +5,12 @@ use crate::parser::{BinaryOp, Type, UnaryOp};
 /// TDD FIX: Escape JavaScript reserved keywords
 pub(crate) fn escape_js_keyword(name: &str) -> String {
     match name {
-        "break" | "case" | "catch" | "class" | "const" | "continue" | "debugger"
-        | "default" | "delete" | "do" | "else" | "export" | "extends" | "finally" | "for"
-        | "function" | "if" | "import" | "in" | "instanceof" | "let" | "new" | "return"
-        | "super" | "switch" | "this" | "throw" | "try" | "typeof" | "var" | "void"
-        | "while" | "with" | "yield" | "async" | "await" | "enum" | "implements"
-        | "interface" | "package" | "private" | "protected" | "public" | "static" => {
+        "break" | "case" | "catch" | "class" | "const" | "continue" | "debugger" | "default"
+        | "delete" | "do" | "else" | "export" | "extends" | "finally" | "for" | "function"
+        | "if" | "import" | "in" | "instanceof" | "let" | "new" | "return" | "super" | "switch"
+        | "this" | "throw" | "try" | "typeof" | "var" | "void" | "while" | "with" | "yield"
+        | "async" | "await" | "enum" | "implements" | "interface" | "package" | "private"
+        | "protected" | "public" | "static" => {
             format!("{}_", name) // Append underscore to avoid keyword conflict
         }
         _ => name.to_string(),

@@ -1,0 +1,28 @@
+struct Signal<T> {
+    value: T
+}
+
+impl<T> Signal<T> {
+    fn get() -> T {
+        self.value
+    }
+}
+
+struct ContactForm {
+    name_error: Signal<string>
+}
+
+impl ContactForm {
+    fn view() -> VNode {
+        input([
+            class(if self.name_error.get().len() > 0 { "erro" } else { "" })
+        ])
+    }
+}
+
+fn input(attrs: Vec<Attr>) -> VNode {}
+fn class(s: string) -> Attr {}
+
+struct VNode {}
+struct Attr {}
+

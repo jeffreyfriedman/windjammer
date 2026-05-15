@@ -1,0 +1,18 @@
+// Test: Type mismatch errors
+// Expected: Should show "Type mismatch" with conversion suggestions
+
+fn main() {
+    // Test 1: String assigned to int
+    let x: int = "hello"
+    
+    // Test 2: Int assigned to string
+    let y: string = 42
+    
+    // Test 3: Wrong function argument type
+    process_number("not a number")
+}
+
+fn process_number(n: int) {
+    println!("{}", n)
+}
+

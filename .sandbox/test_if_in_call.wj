@@ -1,0 +1,4 @@
+fn main() {
+    let x = class(if true { "a" } else { "b" })
+}
+

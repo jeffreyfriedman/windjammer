@@ -70,7 +70,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if an expression uses a parameter in a way that requires ownership for return.
     /// This includes direct use, wrapping in Some/Ok/Err, tuples, etc.
-    pub(crate) fn expression_uses_identifier_for_return(&self, name: &str, expr: &Expression) -> bool {
+    pub(crate) fn expression_uses_identifier_for_return(
+        &self,
+        name: &str,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             // Direct identifier use
             Expression::Identifier { name: id, .. } if id == name => true,

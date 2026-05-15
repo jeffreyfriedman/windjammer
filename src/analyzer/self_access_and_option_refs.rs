@@ -287,5 +287,4 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
-
 }

@@ -12,9 +12,7 @@ use crate::{lexer, metadata};
 
 use crate::file_compiler::ModuleCompiler;
 use crate::output_generation::{
-    generate_main_rust_code,
-    write_single_file_outputs,
-    MainCodegenOutcome,
+    generate_main_rust_code, write_single_file_outputs, MainCodegenOutcome,
 };
 
 pub fn compile_file(

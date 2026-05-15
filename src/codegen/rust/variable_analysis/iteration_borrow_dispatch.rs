@@ -5,7 +5,6 @@ use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// TDD FIX for E0507: Check if for-loop should borrow the iterable
     /// Only borrow if the base object is borrowed (not owned)
     pub(crate) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {

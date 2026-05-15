@@ -1,0 +1,8 @@
+fn test() -> () {
+    print("hello")
+}
+
+fn main() {
+    test()
+}
+

@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// Pre-scan a function body (recursively) for `for x in iterable` patterns.
     ///
     /// Insert `iterable` into `for_loop_borrow_needed` when:

@@ -4,7 +4,6 @@ use super::{CodeGenerator, VariableUsage};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// Check if an expression references `self` (for closure move semantics)
     pub(crate) fn expression_references_self(&self, expr: &Expression) -> bool {
         match expr {

@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use crate::CompilationTarget;
-use crate::{build_project, lexer, parser, interpreter};
+use crate::{build_project, interpreter, lexer, parser};
 
 pub fn run_file(file: &Path, target: CompilationTarget, args: &[String]) -> Result<()> {
     use colored::*;
@@ -236,4 +236,3 @@ pub fn run_repl() -> Result<()> {
     println!("{}", "Goodbye!".dimmed());
     Ok(())
 }
-

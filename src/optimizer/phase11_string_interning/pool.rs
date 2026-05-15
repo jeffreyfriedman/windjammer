@@ -49,8 +49,7 @@ pub(super) fn create_pool_statics<'ast>(
     pool: &[StringPoolEntry],
     optimizer: &crate::optimizer::Optimizer,
 ) -> Vec<Item<'ast>> {
-    pool
-        .iter()
+    pool.iter()
         .map(|entry| Item::Static {
             name: entry.pool_name.clone(),
             mutable: false,

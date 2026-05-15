@@ -1,0 +1,24 @@
+
+trait Renderable {
+    fn render(self) -> string
+}
+
+struct Text {
+    content: string,
+}
+
+impl Renderable for Text {
+    fn render(self) -> string {
+        self.content
+    }
+}
+
+fn print_component<T: Renderable>(component: T) {
+    let html = component.render()
+    println!("{}", html)
+}
+
+fn main() {
+    let text = Text { content: "Hello" }
+    print_component(text)
+}

@@ -66,7 +66,7 @@ fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
     if src_dir.join("lib.wj").exists() || src_dir.join("main.wj").exists() {
         return true;
     }
-    
+
     // TDD FIX: Recognize bare src/ directories with .wj files (even without mod.wj)
     // This fixes the case where `wj build src/ecs/entity.wj` should use `src/` as root.
     // CONSTRAINT: Only apply this heuristic if we're close to the original file (depth <= 3)
@@ -82,10 +82,9 @@ fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
                 if path.is_dir() {
                     // Check one level deep for .wj files (covers src/ecs/entity.wj case)
                     if let Ok(sub_entries) = fs::read_dir(&path) {
-                        if sub_entries
-                            .flatten()
-                            .any(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("wj"))
-                        {
+                        if sub_entries.flatten().any(|e| {
+                            e.path().extension().and_then(|ext| ext.to_str()) == Some("wj")
+                        }) {
                             return true;
                         }
                     }
@@ -93,7 +92,7 @@ fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
             }
         }
     }
-    
+
     false
 }
 
