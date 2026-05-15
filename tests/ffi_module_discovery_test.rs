@@ -108,12 +108,14 @@ fn test_ffi_module_auto_discovery() {
     // Verify the ffi module itself compiles with rustc (standalone check)
     let ffi_mod_rs = output_dir.join("ffi/mod.rs");
     if ffi_mod_rs.exists() {
+        let rmeta_out = output_dir.join("ffi_module_verify.rmeta");
         let rustc_result = Command::new("rustc")
             .arg("--crate-type")
             .arg("lib")
+            .arg("--emit=metadata")
+            .arg("-o")
+            .arg(&rmeta_out)
             .arg(&ffi_mod_rs)
-            .arg("--out-dir")
-            .arg(&output_dir)
             .arg("--edition")
             .arg("2021")
             .output()
