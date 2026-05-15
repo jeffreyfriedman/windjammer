@@ -15,7 +15,7 @@ impl CodeGenerator<'_> {
     /// Check if a program references a collection type (HashMap or HashSet)
     /// by walking the AST properly -- not by searching debug text which
     /// includes comments and causes false positives.
-    pub(super) fn program_references_collection(program: &Program, type_name: &str) -> bool {
+    pub(in crate::codegen::rust) fn program_references_collection(program: &Program, type_name: &str) -> bool {
         for item in &program.items {
             if Self::item_references_collection(item, type_name) {
                 return true;
