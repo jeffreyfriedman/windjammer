@@ -55,10 +55,15 @@ fn main() {
     );
 
     // Verify it compiles
+    let build_dir = test_dir.join("build");
     let compile_output = Command::new("rustc")
-        .current_dir(test_dir.join("build"))
+        .current_dir(&build_dir)
         .arg("--crate-type")
         .arg("bin")
+        .arg("--out-dir")
+        .arg(&build_dir)
+        .arg("-o")
+        .arg(build_dir.join("import_alias_bin"))
         .arg("import_alias.rs")
         .output()
         .expect("Failed to run rustc");
