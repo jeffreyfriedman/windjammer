@@ -88,6 +88,8 @@ fn main() {
         .arg("bin")
         .arg("--edition")
         .arg("2021")
+        .arg("--out-dir")
+        .arg(&test_dir)
         .arg("-o")
         .arg(test_dir.join("test_bin"))
         .output()
