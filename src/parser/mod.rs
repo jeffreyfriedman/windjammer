@@ -6,8 +6,9 @@
 //! - `ast`: Abstract Syntax Tree type definitions
 //! - `core`: Core parser struct and methods
 //!
-//! This is a work in progress - modules will be added incrementally as we
-//! refactor the monolithic parser_impl.rs file.
+//! Expression parsing is split across `binary_expression_parser`, `call_expression_parser`,
+//! `compound_primary_expression_parser`, `primary_expression_parser`, plus
+//! `interpolated_string_expression_parser` and `match_value_expression_parser`.
 
 // AST module - extracted from parser_impl.rs
 pub mod ast;
@@ -20,6 +21,8 @@ pub mod pattern_parser;
 
 // Expression parsing (split across submodules; all extend `impl Parser`)
 mod binary_expression_parser;
+mod call_expression_parser;
+mod compound_primary_expression_parser;
 pub mod expression_parser;
 mod interpolated_string_expression_parser;
 mod match_value_expression_parser;
