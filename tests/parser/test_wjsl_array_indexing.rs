@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD tests for WJSL array indexing in function bodies
 //!
 //! Bug: "Expected semicolon, found LBracket" when parsing arr[idx] syntax

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // TDD Test: Windjammer Compiler Bug - extern fn not being transpiled
 //
 // Bug: extern fn declarations in .wj files are not appearing in generated .rs files

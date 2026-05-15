@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD: Auto-generated WJSL binding preamble from ShaderGraph metadata.
 //!
 //! Tests that binding metadata produces valid WJSL declarations that

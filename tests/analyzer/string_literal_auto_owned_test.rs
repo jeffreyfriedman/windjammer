@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: String literals in String-typed contexts must generate `"".to_string()` in Rust, not bare `&str` literals.
 //!
 //! After removing `.to_string()` from Windjammer source, codegen must still emit owned `String` where Rust expects it.

@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 // BUG: Parser reports "Unexpected Break token" in match arm
 //
 // DISCOVERED DURING: Dogfooding astar_grid.wj

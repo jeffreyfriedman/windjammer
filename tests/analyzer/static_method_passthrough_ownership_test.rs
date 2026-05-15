@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: Static method calls (Type::method) must NOT be treated as enum variant constructors.
 ///
 /// Bug: `expr_has_enum_variant_consuming` uses `fn_name.contains("::")` to detect enum

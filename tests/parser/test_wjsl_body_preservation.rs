@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD tests for WJSL body pass-through - ensures let, for, return keywords are preserved.
 //!
 //! Bug: VGS_WJSL_CONVERSION_REPORT.md - "body pass-through loses let, for, return keywords"

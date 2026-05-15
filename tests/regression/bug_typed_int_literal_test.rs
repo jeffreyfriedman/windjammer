@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 // TDD Test for Bug: Typed integer literals generating stray type statements
 //
 // Bug: When using typed integer literals like `0u64`, the compiler

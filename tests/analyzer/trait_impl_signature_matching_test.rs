@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Trait impl methods must match trait method signatures
 // Bug: Impl methods generate `self` when trait has `&self`
 // Expected: Impl methods should match trait ownership (&self, &mut self, owned)

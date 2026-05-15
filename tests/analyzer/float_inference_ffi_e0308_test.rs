@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Float inference for ffi::module-qualified calls (E0308 fix)
 ///
 /// Bug: ffi::tilemap_check_collision(1.0, 2.0) generates f64 when params are f32.

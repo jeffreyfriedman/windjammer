@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Float inference for chained binary operations (f32/f64 mixing fix)
 ///
 /// BUG: Constants like 6.28318 (2*PI) are inferred as f64, but used with f32 values.

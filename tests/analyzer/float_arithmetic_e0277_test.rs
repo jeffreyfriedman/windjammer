@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // Pattern: f32 method/let * float literal — must NOT mis-label literal as f64 and cast the f32 side
 // to f64 (perception.wj: `dot.acos() * (180.0 / PI)` style). Regression: E0308/E0277.
 

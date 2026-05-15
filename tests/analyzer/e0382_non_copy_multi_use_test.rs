@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD TEST: E0382 fix - Non-Copy struct used multiple times should infer Borrowed
 //
 // ROOT CAUSE: GameState has Vec fields (NOT Copy), but metadata from other files

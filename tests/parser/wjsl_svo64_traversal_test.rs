@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 /// TDD: Verify voxel_raymarch.wjsl uses 64-tree (4x4x4) child indexing, not 8-tree (2x2x2).
 ///
 /// Bug: SVO builder creates a 64-tree (64 children per node, 4x4x4 subdivision)

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// Test: `trait TraitName` in type position with auto dispatch inference
 ///
 /// THE WINDJAMMER WAY: Users write `trait Describable` as a type. The compiler

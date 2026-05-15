@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 //! TDD for Bug #2: Detect test files and generate [[test]] targets
 //!
 //! Problem: Compiler generates Cargo.toml without [[bin]] or [[test]] targets,

@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: E0308 when rebuilding enum variants from `if let` / `match` on `&vec[i]` (non-Copy element).
 //!
 //! Rust binds `BlendNode::Blend1D { clips, parameter }` as `&Vec<_>` and `&f32`; struct literals need

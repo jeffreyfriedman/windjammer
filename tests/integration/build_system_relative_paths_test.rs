@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // TDD Test: Build System Should Convert Relative Paths to Absolute
 // Bug: When copying dependencies from source Cargo.toml, relative path dependencies
 //      (like windjammer-runtime = { path = "../../windjammer/crates/..." })

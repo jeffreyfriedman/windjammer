@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD Test: Read-only non-Copy parameters should be inferred as borrowed (&T)
 ///
 /// Bug: Functions that only READ their non-Copy parameters (Vec, String, Custom structs)

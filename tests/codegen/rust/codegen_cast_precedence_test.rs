@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 // TDD TEST: Cast expressions must be wrapped in parentheses before operators/methods
 //
 // BUG: The compiler generates `x as T.method()` which Rust parses as `x as (T.method())`

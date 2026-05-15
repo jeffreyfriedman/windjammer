@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD: water.wjsl transpiles to valid WGSL (animated water surface with reflections).
 //! Tests the water compute shader which produces animated, reflective water surfaces
 //! suitable for lakes, rivers, oceans in the voxel engine.

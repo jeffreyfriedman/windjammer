@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 //! TDD: auto-clone when a local is moved into a nested call argument then reused (E0382).
 //!
 //! Mirrors `windjammer-game-core/.../uv_unwrap.wj`: `outer(a, b, inner(v))` moves `v`, then `v`

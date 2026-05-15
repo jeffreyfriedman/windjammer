@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! E0507 fix: Option if-let with Vec index + &mut self must NOT generate &mut & (double ref).
 //!
 //! Pattern: if let Some(stack) = self.slots[i] { stack.quantity -= 1 }

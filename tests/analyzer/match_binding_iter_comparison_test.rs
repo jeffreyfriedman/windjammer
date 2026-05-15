@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: When iterating over a match-arm binding from a borrowed scrutinee,
 //! the iterator variable is `&T`. Comparing it with an owned `T` field
 //! requires dereferencing: `*o == self.value` (not `o == self.value`).

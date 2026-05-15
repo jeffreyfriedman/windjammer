@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD Test: Trait method declarations without bodies
 //! WINDJAMMER PHILOSOPHY: Traits should support method declarations without bodies
 //! This enables proper trait definitions that implementations must fulfill

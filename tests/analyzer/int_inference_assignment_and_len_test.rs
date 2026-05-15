@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: E0308-style integer literal suffixes from assignment targets and `.len()` comparisons.
 //!
 //! - `self.field = 0` where `field: i64` must emit `0_i64`, not `0_i32`.

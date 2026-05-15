@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Ref/ref mut pattern binding logic - ownership tracking system
 //!
 //! Fixes E0596 (cannot borrow as mutable) and E0594 (cannot borrow as immutable)

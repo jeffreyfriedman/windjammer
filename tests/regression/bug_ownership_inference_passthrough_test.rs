@@ -1,3 +1,12 @@
+#![cfg(not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+)))]
+
 /// TDD Test: Ownership Inference Pass-Through Bug
 ///
 /// Bug: Analyzer incorrectly infers Owned for parameters that are only

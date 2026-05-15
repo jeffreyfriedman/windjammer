@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // TDD Test: Float inference must handle expressions without locations
 // Bug: Expressions without unique locations all map to ExprId { line: 0, col: 0 }
 // Solution: Sequential ID assignment during constraint collection

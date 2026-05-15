@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD Test: Unit struct syntax
 //! WINDJAMMER PHILOSOPHY: Support zero-field structs with semicolon syntax
 //! Unit structs are useful for marker types, singleton patterns, and FFI

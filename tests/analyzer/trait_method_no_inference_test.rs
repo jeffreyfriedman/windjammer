@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 // Test: Trait method signatures should use EXACT types from source (no inference)
 // Bug: Trait methods with default implementations were getting ownership inference
 // Expected: `delta: f32` in source → `delta: f32` in generated (NOT `delta: &f32`)

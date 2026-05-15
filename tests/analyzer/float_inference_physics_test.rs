@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 /// TDD: Float inference in comparison with zero (len > 0.0)
 ///
 /// Bug: In physics/advanced_collision.wj get_axes(), `if len > 0.0` infers 0.0 as f64

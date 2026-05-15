@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: E0507 / E0596 / E0382 edge cases from dogfooding (library multipass + registry aliases).
 //!
 //! 1. **Copy registry in `build_library_multipass`**: Cross-file newtypes must be Copy in the

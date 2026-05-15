@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
 /// TDD: Float literal inference in binary operations
 /// BUG: `f32_value * 1.414` generates `f32_value * 1.414_f64` (type mismatch)
 /// FIX: Infer float literals from operand types in binary operations

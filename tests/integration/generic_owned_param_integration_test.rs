@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+))]
+
 // Integration test for generic owned parameter inference
 // Verifies that `mut game: G` generates as `mut game: G` not `game: &G`
 // NOTE: Full rustc compilation is disabled due to known issues:

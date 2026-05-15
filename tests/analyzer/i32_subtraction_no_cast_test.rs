@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
 //! TDD: Subtraction of two i32 fields should not insert any `as u32` casts.
 //! Reproduces a pre-existing bug where the compiler incorrectly casts one operand
 //! of an i32 subtraction to u32, causing type mismatches in downstream usage.

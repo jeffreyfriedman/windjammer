@@ -1,3 +1,15 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "parser_tests",
+))]
+
 //! TDD: particle_simulation.wjsl and particle_render.wjsl transpile to valid WGSL.
 //! Tests the GPU particle system compute shaders for simulation and rendering.
 
