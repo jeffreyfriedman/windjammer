@@ -3,6 +3,8 @@
 
 use std::process::Command;
 
+use tempfile::tempdir;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_method_params() {
@@ -58,17 +60,19 @@ fn test_copy_type_method_params() {
         "draw_rect should be &self (borrowed) with unused params prefixed"
     );
 
-    // Try to compile the generated Rust code with rustc
+    // Type-check generated Rust in a temp dir (avoid leaving .rlib under tests/generated)
+    let rs_path = "tests/generated/copy_type_method_params/copy_type_method_params_test.rs";
+    let tmp = tempdir().expect("tempdir");
     let compile_output = Command::new("rustc")
         .args([
-            "--crate-type",
-            "lib",
+            "--crate-type=lib",
+            "--emit=metadata",
             "--edition",
             "2021",
-            "tests/generated/copy_type_method_params/copy_type_method_params_test.rs",
-            "--out-dir",
-            "tests/generated/copy_type_method_params",
+            "-o",
         ])
+        .arg(tmp.path().join("verify.rmeta"))
+        .arg(rs_path)
         .output()
         .expect("Failed to run rustc");
 
