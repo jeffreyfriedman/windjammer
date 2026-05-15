@@ -8,7 +8,10 @@
 
 pub mod code_splitter;
 pub mod differential_loading;
+mod expression_generation;
 mod generator;
+mod statement_generation;
+mod type_conversion;
 pub mod minifier;
 pub mod module_federation;
 pub mod polyfills;
