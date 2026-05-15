@@ -21,13 +21,13 @@ fn rust_compiles(rust_code: &str) -> bool {
     fs::write(&rs_path, rust_code).expect("write");
     let output = Command::new("rustc")
         .args([
-            "--crate-type",
-            "lib",
+            "--crate-type=lib",
+            "--emit=metadata",
             "--edition",
             "2021",
-            "-o",
-            temp_dir.path().join("test.rlib").to_str().unwrap(),
         ])
+        .arg("-o")
+        .arg(temp_dir.path().join("verify.rmeta"))
         .arg(&rs_path)
         .output()
         .expect("rustc");

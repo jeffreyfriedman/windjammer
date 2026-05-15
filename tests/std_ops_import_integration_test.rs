@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use tempfile::tempdir;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_std_ops_imports_map_to_rust_stdlib() {
@@ -78,13 +80,14 @@ fn test_std_ops_imports_map_to_rust_stdlib() {
         generated_code
     );
 
-    // Verify the generated Rust code compiles with rustc
+    // Verify the generated Rust code compiles with rustc (artifacts only in temp dir)
+    let rustc_tmp = tempdir().expect("tempdir");
     let rustc_output = Command::new("rustc")
         .arg("--crate-type")
         .arg("bin")
         .arg(&generated_file)
         .arg("--out-dir")
-        .arg(&output_dir)
+        .arg(rustc_tmp.path())
         .output()
         .expect("Failed to run rustc");
 
