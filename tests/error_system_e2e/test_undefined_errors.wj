@@ -1,0 +1,15 @@
+// Test: Undefined variable and function errors
+// Expected: Should show "Variable not found" and "Function not found"
+
+fn main() {
+    // Test 1: Undefined variable
+    println!("{}", undefined_var)
+    
+    // Test 2: Undefined function
+    undefined_function()
+    
+    // Test 3: Undefined method
+    let s = "hello"
+    s.undefined_method()
+}
+

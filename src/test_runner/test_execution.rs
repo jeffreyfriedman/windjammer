@@ -1,7 +1,7 @@
 //! Compiling the project under test, FFI wiring, and generating the Rust test harness crate.
 
-use anyhow::Result;
 use crate::{build_project, CompilationTarget};
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 use super::test_discovery::TestFunction;

@@ -69,8 +69,14 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
     };
 
     let module_content = generate_lib_rs(&module_tree, project_root, output_dir)?;
-    eprintln!("DEBUG generate_nested: writing {} at {:?}", module_file_name, module_file_path);
-    eprintln!("DEBUG generate_nested: project_root={:?}, output_dir={:?}, source_dir={:?}", project_root, output_dir, source_dir);
+    eprintln!(
+        "DEBUG generate_nested: writing {} at {:?}",
+        module_file_name, module_file_path
+    );
+    eprintln!(
+        "DEBUG generate_nested: project_root={:?}, output_dir={:?}, source_dir={:?}",
+        project_root, output_dir, source_dir
+    );
     std::fs::write(&module_file_path, module_content)?;
 
     // Copy hand-written modules to output directory
@@ -289,7 +295,9 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
 
                                 if should_copy {
                                     let dest_dir = output_dir.join(dir_name);
-                                    if let Err(e) = crate::test_runner::copy_dir_recursive(&path, &dest_dir) {
+                                    if let Err(e) =
+                                        crate::test_runner::copy_dir_recursive(&path, &dest_dir)
+                                    {
                                         eprintln!(
                                             "Warning: Failed to copy directory {}: {}",
                                             dir_name_str, e

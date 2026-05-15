@@ -428,7 +428,8 @@ impl<'ast> CodeGenerator<'ast> {
                     && type_classification_utilities::is_float_type(r) =>
             {
                 let target = type_classification_utilities::float_target(r);
-                *left_str = type_classification_utilities::cast_int_to_float(left_str, left, target);
+                *left_str =
+                    type_classification_utilities::cast_int_to_float(left_str, left, target);
             }
             (Some(l), Some(r))
                 if type_classification_utilities::is_float_type(l)
@@ -874,8 +875,12 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
 
-        let lhs_base = lt.as_ref().map(type_classification_utilities::peel_reference_layer);
-        let rhs_base = rt.as_ref().map(type_classification_utilities::peel_reference_layer);
+        let lhs_base = lt
+            .as_ref()
+            .map(type_classification_utilities::peel_reference_layer);
+        let rhs_base = rt
+            .as_ref()
+            .map(type_classification_utilities::peel_reference_layer);
         let left_is_ref = matches!(lt.as_ref(), Some(Type::Reference(_)));
         let right_is_ref = matches!(rt.as_ref(), Some(Type::Reference(_)));
 

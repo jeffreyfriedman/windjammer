@@ -47,11 +47,7 @@ pub struct MoveCommand {
 
     // Write files
     fs::create_dir_all(temp_dir.path().join("src").join("core").join("commands")).unwrap();
-    fs::write(
-        temp_dir.path().join("src").join("scene.wj"),
-        scene_source,
-    )
-    .unwrap();
+    fs::write(temp_dir.path().join("src").join("scene.wj"), scene_source).unwrap();
     fs::write(
         temp_dir
             .path()

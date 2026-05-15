@@ -6,7 +6,6 @@ use crate::parser::*;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
-
     /// Generate multiple test functions from a parameterized test (@test_cases)
     ///
     /// Example Windjammer:

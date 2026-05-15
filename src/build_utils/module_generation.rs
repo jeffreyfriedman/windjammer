@@ -193,7 +193,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     if existing_mod_rs.exists() {
         if let Ok(content) = fs::read_to_string(&existing_mod_rs) {
             let is_auto_generated = content.starts_with("// Auto-generated mod.rs")
-                    || content.starts_with("// Module declarations");
+                || content.starts_with("// Module declarations");
             if !is_auto_generated {
                 // Clean up stale _mod_items references AND previously-merged
                 // mod.wj content from prior builds. Without this, incremental

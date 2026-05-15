@@ -222,7 +222,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if a statement contains an enum variant constructor that consumes a parameter.
     /// Recursively scans all expressions within the statement.
-    pub(crate) fn stmt_has_enum_variant_consuming(&self, name: &str, stmt: &Statement<'ast>) -> bool {
+    pub(crate) fn stmt_has_enum_variant_consuming(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
         match stmt {
             Statement::Let { value, .. } => self.expr_has_enum_variant_consuming(name, value),
             Statement::Expression { expr, .. } => self.expr_has_enum_variant_consuming(name, expr),
@@ -238,7 +242,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// Recursively check if an expression contains an enum variant constructor
     /// (function call where name contains "::") that has the parameter as a direct argument.
-    pub(crate) fn expr_has_enum_variant_consuming(&self, name: &str, expr: &Expression<'ast>) -> bool {
+    pub(crate) fn expr_has_enum_variant_consuming(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
         match expr {
             Expression::Call {
                 function,

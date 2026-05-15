@@ -1,0 +1,22 @@
+struct Config {}
+struct GitignoreCache {}
+
+fn walk_path(path: string, config: Config, gitignore_cache: &mut GitignoreCache) -> Result<Vec<string>, Error> {
+    Ok(vec![])
+}
+
+pub fn collect_files(paths: Vec<string>, config: Config) -> Result<Vec<string>, Error> {
+    let mut all_files = vec![]
+    let mut gitignore_cache = GitignoreCache::new()
+    
+    for path in paths {
+        let files = walk_path(path, config.clone(), &mut gitignore_cache)?
+        all_files.extend(files)
+    }
+    
+    Ok(all_files)
+}
+
+fn main() {}
+
+

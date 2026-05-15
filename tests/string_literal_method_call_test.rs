@@ -15,8 +15,7 @@ fn compile_wj(source: &str) -> String {
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let wj_bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
+    let wj_bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
 
     let output = Command::new(&wj_bin)
         .arg("build")
@@ -26,8 +25,14 @@ fn compile_wj(source: &str) -> String {
         .expect("Failed to run wj");
 
     if !output.status.success() {
-        eprintln!("wj build stderr: {}", String::from_utf8_lossy(&output.stderr));
-        eprintln!("wj build stdout: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!(
+            "wj build stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        eprintln!(
+            "wj build stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
     }
 
     let rs_file = dir.join("build/test.rs");

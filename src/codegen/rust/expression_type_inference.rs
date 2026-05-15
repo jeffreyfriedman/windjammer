@@ -71,7 +71,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Try to infer the Type of an expression from local variable tracking and function parameters.
-    pub(in crate::codegen::rust) fn infer_expression_type(&self, expr: &Expression) -> Option<Type> {
+    pub(in crate::codegen::rust) fn infer_expression_type(
+        &self,
+        expr: &Expression,
+    ) -> Option<Type> {
         match expr {
             Expression::Identifier { name, .. } => {
                 // Check local variable types first

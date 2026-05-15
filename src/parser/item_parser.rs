@@ -139,7 +139,7 @@ impl Parser {
                             break;
                         } else {
                             return Err(
-                                "Expected ',' or '>' in type parameters after 'for'".to_string(),
+                                "Expected ',' or '>' in type parameters after 'for'".to_string()
                             );
                         }
                     }

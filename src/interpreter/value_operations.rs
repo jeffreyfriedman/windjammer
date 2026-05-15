@@ -4,11 +4,7 @@ use super::value::Value;
 use crate::parser::{BinaryOp, CompoundOp, Literal};
 
 /// Apply a compound operation (+=, -=, etc.) without borrowing the interpreter
-pub(crate) fn apply_compound_op_static(
-    left: &Value,
-    right: &Value,
-    op: &CompoundOp,
-) -> Value {
+pub(crate) fn apply_compound_op_static(left: &Value, right: &Value, op: &CompoundOp) -> Value {
     let bin_op = match op {
         CompoundOp::Add => BinaryOp::Add,
         CompoundOp::Sub => BinaryOp::Sub,

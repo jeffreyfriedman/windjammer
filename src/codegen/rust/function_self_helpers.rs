@@ -234,7 +234,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// 3. Trivial getters/setters - always inline
     /// 4. Functions with only one return statement - simple enough to inline
     /// 5. Don't inline: main(), test functions, async functions, large functions
-    pub(super) fn should_inline_function(&self, func: &FunctionDecl, _analyzed: &AnalyzedFunction) -> bool {
+    pub(super) fn should_inline_function(
+        &self,
+        func: &FunctionDecl,
+        _analyzed: &AnalyzedFunction,
+    ) -> bool {
         // Never inline main
         if func.name == "main" {
             return false;

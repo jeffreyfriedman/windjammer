@@ -1,0 +1,17 @@
+// Test: Struct-related errors
+// Expected: Should show "Type not found" and "Field not found"
+
+fn main() {
+    // Test 1: Undefined struct
+    let p = UndefinedStruct { x: 10, y: 20 }
+    
+    // Test 2: Undefined field
+    let point = Point { x: 1, y: 2 }
+    println!("{}", point.z)  // Error: no field `z`
+}
+
+struct Point {
+    x: int,
+    y: int
+}
+

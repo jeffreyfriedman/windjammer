@@ -162,7 +162,8 @@ pub(crate) fn build_library_multipass(
     // Function signatures provide ownership info for cross-crate calls (e.g.,
     // voxelgrid_to_svo64_flat from windjammer-game-core). The metadata includes
     // module-qualified names for unambiguous lookup.
-    let dep_roots = super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
+    let dep_roots =
+        super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
     let mut dep_registry = SignatureRegistry::new();
     {
         let mut dep_copy_structs = Vec::new();
@@ -613,8 +614,10 @@ pub(crate) fn build_library_multipass(
         ));
     }
 
-    let type_defining_modules = super::dependency_resolution::build_type_defining_modules_for_library(&sources, &src_base)?;
-    let extern_submodule_qualifiers = super::dependency_resolution::build_extern_submodule_qualifier_map(&sources, &src_base)?;
+    let type_defining_modules =
+        super::dependency_resolution::build_type_defining_modules_for_library(&sources, &src_base)?;
+    let extern_submodule_qualifiers =
+        super::dependency_resolution::build_extern_submodule_qualifier_map(&sources, &src_base)?;
 
     // Step 4B-pre: Build GLOBAL analyzed_trait_methods across ALL files.
     // Each file's Analyzer is fresh, so cross-file trait info (e.g. RenderPort defined

@@ -10,7 +10,10 @@
 
 use crate::parser::*;
 
-use super::{arm_string_analysis, codegen_helpers, pattern_analysis, string_analysis, string_utilities, CodeGenerator};
+use super::{
+    arm_string_analysis, codegen_helpers, pattern_analysis, string_analysis, string_utilities,
+    CodeGenerator,
+};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
@@ -666,7 +669,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         let old_str = format!("{}\n", name);
                                         let new_str = format!("*{}\n", name);
-                                        final_arm_str = final_arm_str.replacen(&old_str, &new_str, 1);
+                                        final_arm_str =
+                                            final_arm_str.replacen(&old_str, &new_str, 1);
                                     }
                                 } else {
                                     if final_arm_str.trim() == name {
@@ -674,7 +678,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         let old_str = format!("{}\n", name);
                                         let new_str = format!("{}.clone()\n", name);
-                                        final_arm_str = final_arm_str.replacen(&old_str, &new_str, 1);
+                                        final_arm_str =
+                                            final_arm_str.replacen(&old_str, &new_str, 1);
                                     }
                                 }
                             }

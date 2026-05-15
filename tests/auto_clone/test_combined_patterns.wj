@@ -1,0 +1,84 @@
+// Test: Auto-clone for combined patterns (field.method()[index])
+
+struct Repository {
+    files: Vec<string>,
+}
+
+impl Repository {
+    fn get_files(&self) -> Vec<string> {
+        self.files.clone()
+    }
+    
+    fn get_file_at(&self, idx: int) -> string {
+        self.files[idx as usize].clone()
+    }
+}
+
+fn main() {
+    test_field_then_method()
+    test_method_then_index()
+    test_all_combined()
+    println!("✓ All combined pattern auto-clone tests passed!")
+}
+
+fn test_field_then_method() {
+    let repo = Repository {
+        files: vec!["a.txt", "b.txt"],
+    }
+    
+    // Access field, then call method on result (should auto-clone)
+    let count = count_items(repo.get_files())
+    
+    // Should still be usable
+    assert!(repo.get_files().len() == 2, "files should still have 2 elements")
+    assert!(count == 2, "count should be 2")
+    
+    println!("✓ Field then method auto-clone works")
+}
+
+fn test_method_then_index() {
+    let repo = Repository {
+        files: vec!["first.txt", "second.txt", "third.txt"],
+    }
+    
+    // Call method, then index result (should auto-clone)
+    let file = process_file(repo.get_files()[0])
+    
+    // Should still be usable
+    assert!(repo.get_files()[0] == "first.txt", "first file should still be first.txt")
+    assert!(file == "FIRST.TXT", "processed file should be FIRST.TXT")
+    
+    println!("✓ Method then index auto-clone works")
+}
+
+fn test_all_combined() {
+    let repo = Repository {
+        files: vec!["x.txt", "y.txt"],
+    }
+    
+    // Complex combination: field.method()[index]
+    let files = repo.get_files()
+    let first = process_file(files[0])
+    
+    // All should still be usable
+    assert!(files[0] == "x.txt", "first file should still be x.txt")
+    assert!(first == "X.TXT", "processed should be X.TXT")
+    assert!(repo.get_files().len() == 2, "repo files should still have 2 elements")
+    
+    println!("✓ All combined patterns auto-clone works")
+}
+
+fn count_items(items: Vec<string>) -> int {
+    items.len() as int
+}
+
+fn process_file(file: string) -> string {
+    file.to_uppercase()
+}
+
+fn assert(condition: bool, message: string) {
+    if !condition {
+        panic!("{}", message)
+    }
+}
+

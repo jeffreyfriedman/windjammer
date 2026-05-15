@@ -1,0 +1,40 @@
+/// Test parameterized tests with @test_cases decorator
+
+@test_cases([
+    (5, 3, 8),
+    (10, -5, 5),
+    (0, 0, 0),
+    (-3, -7, -10),
+])
+fn add_numbers(a: int, b: int, expected: int) {
+    let result = a + b;
+    assert_eq(result, expected);
+}
+
+@test_cases([
+    ("hello", 5),
+    ("world", 5),
+    ("", 0),
+])
+fn string_length(input: string, expected: int) {
+    let len = input.len() as int;
+    assert_eq(len, expected);
+}
+
+@test_cases([
+    (true, false),
+    (false, true),
+])
+fn bool_negation(input: bool, expected: bool) {
+    assert_eq(!input, expected);
+}
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,15 @@
+// Test: Mutability errors
+// Expected: Should show "Cannot assign to immutable variable"
+
+fn main() {
+    // Test 1: Assign to immutable variable
+    let mut x = 10
+    x = 20  // Error: cannot assign twice to immutable variable
+    
+    // Test 2: Mutate immutable reference
+    let mut y = vec![1, 2, 3]
+    y.push(4)  // Error: cannot borrow as mutable
+    
+    println!("{} {:?}", x, y)
+}
+

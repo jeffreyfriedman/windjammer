@@ -1,0 +1,30 @@
+{
+  "module_path": "test",
+  "functions": {
+    "Cache::store": {
+      "params": [
+        "Custom(\"Self\")",
+        "Reference(Custom(\"str\"))",
+        "Custom(\"i32\")"
+      ],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Cache",
+      "param_ownership": [
+        "MutBorrowed",
+        "Owned",
+        "Owned"
+      ],
+      "has_self_receiver": true,
+      "is_extern": false
+    }
+  },
+  "structs": {
+    "Cache": {
+      "data": "Parameterized(\"HashMap\", [String, Custom(\"i32\")])"
+    }
+  },
+  "trait_impls": {},
+  "copy_structs": [],
+  "version": "0.46.0"
+}

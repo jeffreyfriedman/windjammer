@@ -124,8 +124,8 @@ fn test_self_referencing_dep_filtered() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let cargo_toml = fs::read_to_string(out_dir.join("Cargo.toml"))
-        .expect("Cargo.toml should exist");
+    let cargo_toml =
+        fs::read_to_string(out_dir.join("Cargo.toml")).expect("Cargo.toml should exist");
 
     let package_name = cargo_toml
         .lines()
@@ -197,8 +197,8 @@ proptest = { version = "1.0", features = ["attr-macro"] }
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let cargo_toml = fs::read_to_string(out_dir.join("Cargo.toml"))
-        .expect("Cargo.toml should exist");
+    let cargo_toml =
+        fs::read_to_string(out_dir.join("Cargo.toml")).expect("Cargo.toml should exist");
     println!("Generated Cargo.toml:\n{}", cargo_toml);
 
     assert!(
@@ -235,18 +235,10 @@ fn test_nested_cargo_toml_cleaned() {
     )
     .unwrap();
 
-    fs::write(
-        src_dir.join("mod.wj"),
-        "pub mod rendering\n",
-    )
-    .unwrap();
+    fs::write(src_dir.join("mod.wj"), "pub mod rendering\n").unwrap();
 
     fs::create_dir_all(src_dir.join("rendering")).unwrap();
-    fs::write(
-        src_dir.join("rendering/mod.wj"),
-        "",
-    )
-    .unwrap();
+    fs::write(src_dir.join("rendering/mod.wj"), "").unwrap();
 
     fs::write(
         src_dir.join("rendering/camera.wj"),

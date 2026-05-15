@@ -234,8 +234,7 @@ mod tests {
         );
 
         assert_eq!(
-            TypeRegistry::file_path_to_module_path(Path::new("src/rendering/camera2d.wj"))
-                .unwrap(),
+            TypeRegistry::file_path_to_module_path(Path::new("src/rendering/camera2d.wj")).unwrap(),
             "camera2d"
         );
     }

@@ -2,9 +2,7 @@
 
 #![allow(clippy::transmute_undefined_repr)]
 
-use crate::parser::{
-    Expression, FunctionDecl, ImplBlock, Item, Literal, MatchArm, Statement,
-};
+use crate::parser::{Expression, FunctionDecl, ImplBlock, Item, Literal, MatchArm, Statement};
 use std::collections::HashMap;
 
 /// Replace string literals in an expression with pool references

@@ -487,8 +487,7 @@ impl AutoCloneAnalysis {
 
             for field_move in &field_moves {
                 let root_used_later = root_usages.iter().any(|u| {
-                    u.kind != UsageKind::Definition
-                        && u.statement_idx > field_move.statement_idx
+                    u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
                 });
 
                 if root_used_later {

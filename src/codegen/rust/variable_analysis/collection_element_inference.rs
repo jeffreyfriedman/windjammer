@@ -4,7 +4,6 @@ use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// Forward-scan the current function body for `.push()` / `.insert()` calls on a variable
     /// to infer the collection element type for `Vec::new()` / `HashSet::new()` declarations.
     /// Returns the inferred element `Type` if found.
@@ -43,11 +42,7 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    fn check_stmt_for_vec_param_type(
-        &self,
-        var_name: &str,
-        stmt: &Statement<'_>,
-    ) -> Option<Type> {
+    fn check_stmt_for_vec_param_type(&self, var_name: &str, stmt: &Statement<'_>) -> Option<Type> {
         match stmt {
             Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
                 self.check_expr_for_vec_param_type(var_name, expr)
@@ -75,11 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn check_expr_for_vec_param_type(
-        &self,
-        var_name: &str,
-        expr: &Expression<'_>,
-    ) -> Option<Type> {
+    fn check_expr_for_vec_param_type(&self, var_name: &str, expr: &Expression<'_>) -> Option<Type> {
         match expr {
             Expression::Call {
                 function,
@@ -125,7 +116,10 @@ impl<'ast> CodeGenerator<'ast> {
                 None
             }
             Expression::MethodCall {
-                method, arguments, object, ..
+                method,
+                arguments,
+                object,
+                ..
             } => {
                 if let Some(sig) = self.signature_registry.get_signature(method) {
                     let param_offset = if sig.has_self_receiver { 1 } else { 0 };

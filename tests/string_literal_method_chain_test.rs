@@ -63,19 +63,23 @@ pub fn test_chain() {
     // All string literals in chained calls should get .to_string()
     assert!(
         output.contains(r#""test".to_string()"#),
-        "String literal 'test' should get .to_string() in new(): {}", output
+        "String literal 'test' should get .to_string() in new(): {}",
+        output
     );
     assert!(
         output.contains(r#""alpha".to_string()"#),
-        "String literal 'alpha' should get .to_string() in chained add_item(): {}", output
+        "String literal 'alpha' should get .to_string() in chained add_item(): {}",
+        output
     );
     assert!(
         output.contains(r#""beta".to_string()"#),
-        "String literal 'beta' should get .to_string() in second chained add_item(): {}", output
+        "String literal 'beta' should get .to_string() in second chained add_item(): {}",
+        output
     );
     assert!(
         output.contains(r#""renamed".to_string()"#),
-        "String literal 'renamed' should get .to_string() in chained with_label(): {}", output
+        "String literal 'renamed' should get .to_string() in chained with_label(): {}",
+        output
     );
 }
 
@@ -108,10 +112,12 @@ pub fn test_multi_param() {
 
     assert!(
         output.contains(r#""position".to_string()"#),
-        "String literal 'position' should get .to_string(): {}", output
+        "String literal 'position' should get .to_string(): {}",
+        output
     );
     assert!(
         output.contains(r#""rotation".to_string()"#),
-        "String literal 'rotation' should get .to_string(): {}", output
+        "String literal 'rotation' should get .to_string(): {}",
+        output
     );
 }

@@ -16,20 +16,18 @@ fn compile_wj_to_rust(source: &str) -> String {
     use std::process::Command;
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "wj_collision_test_{}_{}", std::process::id(), id
-    ));
+    let dir = std::env::temp_dir().join(format!("wj_collision_test_{}_{}", std::process::id(), id));
     std::fs::create_dir_all(&dir).unwrap();
     let wj_file = dir.join("test.wj");
     std::fs::write(&wj_file, source).unwrap();
 
-    let wj = std::env::var("WJ_BINARY")
-        .unwrap_or_else(|_| {
-            let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("target/release/wj");
-            if dev.exists() { return dev.to_string_lossy().to_string(); }
-            "wj".to_string()
-        });
+    let wj = std::env::var("WJ_BINARY").unwrap_or_else(|_| {
+        let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+        if dev.exists() {
+            return dev.to_string_lossy().to_string();
+        }
+        "wj".to_string()
+    });
 
     let output = Command::new(&wj)
         .arg("build")

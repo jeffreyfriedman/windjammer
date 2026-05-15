@@ -126,10 +126,7 @@ impl CodeGenerator<'_> {
                     result.push_str(&format!("use {}::Regex;\n", rust_import));
                 }
                 "time" => {
-                    result.push_str(&format!(
-                        "use {}::{{Duration, Instant}};\n",
-                        rust_import
-                    ));
+                    result.push_str(&format!("use {}::{{Duration, Instant}};\n", rust_import));
                 }
                 _ => {}
             }

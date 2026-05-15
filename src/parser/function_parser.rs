@@ -74,7 +74,9 @@ impl Parser {
         })
     }
 
-    pub(in crate::parser) fn parse_parameters(&mut self) -> Result<Vec<Parameter<'static>>, String> {
+    pub(in crate::parser) fn parse_parameters(
+        &mut self,
+    ) -> Result<Vec<Parameter<'static>>, String> {
         let mut params = Vec::new();
 
         while self.current_token() != &Token::RParen {
