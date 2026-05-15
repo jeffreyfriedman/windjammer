@@ -118,4 +118,158 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    pub(super) fn extract_pattern_bindings(
+        &self,
+        pattern: &Pattern,
+        bindings: &mut std::collections::HashSet<String>,
+    ) {
+        use crate::parser::EnumPatternBinding;
+        match pattern {
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => {
+                bindings.insert(name.clone());
+            }
+            Pattern::Reference(inner) => {
+                self.extract_pattern_bindings(inner, bindings);
+            }
+            Pattern::Ref(name) | Pattern::RefMut(name) => {
+                bindings.insert(name.clone());
+            }
+            Pattern::EnumVariant(_name, binding) => match binding {
+                EnumPatternBinding::Single(var_name) => {
+                    bindings.insert(var_name.clone());
+                }
+                EnumPatternBinding::Tuple(patterns) => {
+                    for pat in patterns {
+                        self.extract_pattern_bindings(pat, bindings);
+                    }
+                }
+                EnumPatternBinding::Struct(fields, _) => {
+                    for (_field_name, pat) in fields {
+                        self.extract_pattern_bindings(pat, bindings);
+                    }
+                }
+                _ => {}
+            },
+            Pattern::Tuple(patterns) => {
+                for pat in patterns {
+                    self.extract_pattern_bindings(pat, bindings);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn upgrade_pattern_mut_bindings<'s>(
+        &self,
+        pattern: &Pattern<'s>,
+        body_stmts: &[&Statement<'s>],
+        scrutinee_is_ref: bool,
+    ) -> Pattern<'s> {
+        use crate::parser::EnumPatternBinding;
+        match pattern {
+            Pattern::Identifier(name) => {
+                let is_mutated = body_stmts.iter().any(|stmt| {
+                    self.statement_mutates_variable_field(stmt, name)
+                        || (scrutinee_is_ref
+                            && self.statement_nonreadonly_method_call_on_var(stmt, name))
+                });
+                if is_mutated {
+                    if scrutinee_is_ref {
+                        Pattern::RefMut(name.clone())
+                    } else {
+                        Pattern::MutBinding(name.clone())
+                    }
+                } else {
+                    pattern.clone()
+                }
+            }
+            Pattern::EnumVariant(variant, binding) => {
+                let new_binding = match binding {
+                    EnumPatternBinding::Single(name) => {
+                        let is_mutated = body_stmts.iter().any(|stmt| {
+                            self.statement_mutates_variable_field(stmt, name)
+                                || (scrutinee_is_ref
+                                    && self.statement_nonreadonly_method_call_on_var(stmt, name))
+                        });
+                        if is_mutated {
+                            if scrutinee_is_ref {
+                                EnumPatternBinding::Tuple(vec![Pattern::RefMut(name.clone())])
+                            } else {
+                                EnumPatternBinding::Tuple(vec![Pattern::MutBinding(name.clone())])
+                            }
+                        } else {
+                            binding.clone()
+                        }
+                    }
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let new_patterns: Vec<Pattern<'s>> = patterns
+                            .iter()
+                            .map(|p| {
+                                self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref)
+                            })
+                            .collect();
+                        EnumPatternBinding::Tuple(new_patterns)
+                    }
+                    other => other.clone(),
+                };
+                Pattern::EnumVariant(variant.clone(), new_binding)
+            }
+            Pattern::Tuple(patterns) => {
+                let new_patterns: Vec<Pattern<'s>> = patterns
+                    .iter()
+                    .map(|p| self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref))
+                    .collect();
+                Pattern::Tuple(new_patterns)
+            }
+            _ => pattern.clone(),
+        }
+    }
+
+    pub(super) fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                if let Some(ty) = self.local_var_types.get(name) {
+                    return matches!(ty, Type::Reference(_) | Type::MutableReference(_));
+                }
+                false
+            }
+            Expression::FieldAccess { object, .. } => {
+                // If object is self, check if self is borrowed
+                if let Expression::Identifier { name: obj_name, .. } = &**object {
+                    if obj_name == "self" {
+                        return self.current_function_params.iter().any(|p| {
+                            p.name == "self"
+                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        });
+                    }
+                }
+                false
+            }
+            Expression::Index { object, .. } => {
+                // Vec/array indexing can return references
+                if let Some(ty) = self.infer_expression_type(&**object) {
+                    matches!(ty, Type::Vec(_) | Type::Array(_, _))
+                } else {
+                    false
+                }
+            }
+            Expression::MethodCall { .. } => {
+                // Method calls might return references
+                if let Some(ty) = self.infer_expression_type(expr) {
+                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+                } else {
+                    false
+                }
+            }
+            Expression::Call { .. } => {
+                // Function calls might return references
+                if let Some(ty) = self.infer_expression_type(expr) {
+                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
 }
