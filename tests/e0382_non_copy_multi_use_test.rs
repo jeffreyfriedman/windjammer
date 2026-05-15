@@ -104,6 +104,8 @@ pub fn is_available(game_state: GameState) -> bool {
     // TDD ASSERTION 3: The critical test - verify no E0382 in generated code
     // Note: There may be other errors (E0308 for tuple destructuring, string literals),
     // but E0382 specifically tests if GameState was wrongly marked as Copy.
+    let rustc_out = temp_dir.path().join("rustc_out");
+    fs::create_dir_all(&rustc_out).unwrap();
     let rustc_output = Command::new("rustc")
         .args([
             "--crate-type",
@@ -112,7 +114,7 @@ pub fn is_available(game_state: GameState) -> bool {
             "2021",
             rs_file.to_str().unwrap(),
             "--out-dir",
-            temp_dir.path().to_str().unwrap(),
+            rustc_out.to_str().unwrap(),
         ])
         .output()
         .expect("Failed to run rustc");

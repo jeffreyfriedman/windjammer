@@ -107,12 +107,16 @@ fn main() {
         rust_code
     );
 
-    // Verify it compiles
+    // Verify it compiles (rustc output isolated under test_dir, never cwd)
+    let rustc_out = test_dir.join("rustc_out");
+    fs::create_dir_all(&rustc_out).unwrap();
     let compile_output = Command::new("rustc")
         .current_dir(test_dir.join("build"))
         .arg("--crate-type")
         .arg("bin")
         .arg("vec3_copy_no_ref.rs")
+        .arg("--out-dir")
+        .arg(&rustc_out)
         .output()
         .expect("Failed to run rustc");
 

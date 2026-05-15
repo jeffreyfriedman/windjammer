@@ -5,8 +5,27 @@
 mod test_utils;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use tempfile::tempdir;
+
+/// Locate `name` (e.g. `foo.rs`) anywhere under `root` after `wj build`.
+fn find_generated_rs_under(root: &Path, name: &str) -> Option<PathBuf> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let read = fs::read_dir(&dir).ok()?;
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
 
 fn compile_should_succeed(code: &str, test_name: &str) {
     match test_utils::compile_single_result(code) {
@@ -20,9 +39,18 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
         .join("tests")
         .join(wj_file);
 
-    // First, compile the Windjammer code
+    // One temp dir for wj output + rustc metadata (avoids mixing two TempDirs)
+    let work = tempdir().expect("tempdir");
+
+    // First, compile the Windjammer code (isolated output — safe under parallel tests)
     let output = Command::new(test_utils::wj_binary())
-        .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .args([
+            "build",
+            wj_path.to_str().unwrap(),
+            "-o",
+            work.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to execute compiler");
 
@@ -37,17 +65,30 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
 
     // Get the generated Rust file name (remove .wj extension, add .rs)
     let rust_file = wj_file.replace(".wj", ".rs");
-    let rust_path = PathBuf::from("./build").join(&rust_file);
+    let rs_name = Path::new(&rust_file)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("rs file name");
+    let rust_path = find_generated_rs_under(work.path(), rs_name).unwrap_or_else(|| {
+        panic!(
+            "✗ {}: no {} under {:?}",
+            test_name,
+            rs_name,
+            fs::read_dir(work.path())
+                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        )
+    });
 
-    // Then, try to compile the generated Rust code with rustc
-    // Use --crate-type=lib to avoid needing a main function
+    // Type-check generated Rust (metadata only; explicit -o)
     let rust_output = Command::new("rustc")
-        .args([
-            rust_path.to_str().unwrap(),
-            "--crate-type=lib",
-            "--edition=2021",
-            "-O",
-        ])
+        .arg("--crate-type=lib")
+        .arg("--emit=metadata")
+        .arg("--edition=2021")
+        .arg("-O")
+        .arg("-o")
+        .arg(work.path().join("verify.rmeta"))
+        .arg(rust_path.as_os_str())
         .output()
         .expect("Failed to execute rustc");
 
@@ -68,8 +109,16 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
         .join("tests")
         .join(wj_file);
 
+    let work = tempdir().expect("tempdir");
+
     let output = Command::new(test_utils::wj_binary())
-        .args(["build", wj_path.to_str().unwrap(), "--no-cargo"])
+        .args([
+            "build",
+            wj_path.to_str().unwrap(),
+            "-o",
+            work.path().to_str().unwrap(),
+            "--no-cargo",
+        ])
         .output()
         .expect("Failed to execute compiler");
 
@@ -81,7 +130,20 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
 
     // Read the generated Rust file
     let rust_file = wj_file.replace(".wj", ".rs");
-    let rust_path = PathBuf::from("./build").join(&rust_file);
+    let rs_name = Path::new(&rust_file)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("rs file name");
+    let rust_path = find_generated_rs_under(work.path(), rs_name).unwrap_or_else(|| {
+        panic!(
+            "✗ {}: no {} under {:?}",
+            test_name,
+            rs_name,
+            fs::read_dir(work.path())
+                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        )
+    });
     let generated_rust = fs::read_to_string(&rust_path)
         .unwrap_or_else(|_| panic!("Failed to read generated Rust file: {:?}", rust_path));
 
