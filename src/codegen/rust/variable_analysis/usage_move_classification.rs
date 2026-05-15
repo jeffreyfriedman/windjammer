@@ -6,7 +6,7 @@ use super::{CodeGenerator, VariableUsage};
 impl<'ast> CodeGenerator<'ast> {
 
     /// Check if an expression references `self` (for closure move semantics)
-    pub(super) fn expression_references_self(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_references_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == "self",
             Expression::FieldAccess { object, .. } => self.expression_references_self(object),

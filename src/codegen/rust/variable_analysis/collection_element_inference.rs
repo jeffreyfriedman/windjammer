@@ -8,7 +8,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Forward-scan the current function body for `.push()` / `.insert()` calls on a variable
     /// to infer the collection element type for `Vec::new()` / `HashSet::new()` declarations.
     /// Returns the inferred element `Type` if found.
-    pub(super) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
+    pub(crate) fn infer_collection_element_type_from_usage(&self, var_name: &str) -> Option<Type> {
         if let Some(ty) = self
             .scan_statements_for_struct_literal_vec_binding(var_name, &self.current_function_body)
         {

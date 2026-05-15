@@ -8,7 +8,7 @@ use super::{CodeGenerator, VariableUsage};
 impl<'ast> CodeGenerator<'ast> {
 
     /// FIXED: Never add &mut for index access - let auto-clone analysis handle it!
-    pub(super) fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
+    pub(crate) fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
         false
     }
 
@@ -55,7 +55,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// TDD: Auto-mutability inference
-    pub(super) fn variable_needs_mut(&self, var_name: &str) -> bool {
+    pub(crate) fn variable_needs_mut(&self, var_name: &str) -> bool {
         let statements = &self.current_function_body;
         for stmt in statements.iter() {
             if self.statement_mutates_variable_field(stmt, var_name) {
@@ -65,7 +65,7 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    pub(super) fn statement_mutates_variable_field(
+    pub(crate) fn statement_mutates_variable_field(
         &self,
         stmt: &Statement,
         var_name: &str,
@@ -145,7 +145,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// When matching on `&mut slots[i]`, a call `x.foo()` is a write through the borrow unless
     /// `foo` is a known `&self` stdlib API. User methods may still lower to `&self`, but we need
     /// `ref mut x` so updates reach the [`Vec`] element (see mutability_complete_test).
-    pub(super) fn statement_nonreadonly_method_call_on_var(
+    pub(crate) fn statement_nonreadonly_method_call_on_var(
         &self,
         stmt: &Statement,
         var_name: &str,
@@ -372,11 +372,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn is_mutating_method(&self, method: &str) -> bool {
+    pub(crate) fn is_mutating_method(&self, method: &str) -> bool {
         crate::method_registry::mutates_receiver(method)
     }
 
-    pub(super) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
+    pub(crate) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
         let next_idx = self.current_block_local_idx + 1;
         if next_idx >= self.current_function_body.len() {
             return true;
