@@ -1,8 +1,10 @@
 // Expression parsing entry points and shared helpers (`parse_arguments`, `peek`).
 //
 // The `impl Parser` expression logic is split across sibling modules (all `impl Parser`):
-// - `binary_expression_parser` — precedence / binary and postfix chain
-// - `primary_expression_parser` — literals, paths, calls, blocks, `if`, `match`, closures
+// - `binary_expression_parser` — precedence / binary and postfix chain bootstrap
+// - `call_expression_parser` — postfix chain: calls, field/method access, index, slice, `?`, `as`, macros
+// - `compound_primary_expression_parser` — `match`, closures, `if` / `if let`, `unsafe` as primaries
+// - `primary_expression_parser` — literals, paths, tuples/arrays, blocks, remaining primaries
 // - `interpolated_string_expression_parser` — string interpolation
 // - `match_value_expression_parser` — match-arm values (no struct literals / assignment)
 
