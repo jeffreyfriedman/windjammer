@@ -47,6 +47,7 @@ pub mod operator_generation;
 pub mod optimizations;
 pub mod ownership_tracker;
 pub mod pattern_analysis;
+pub mod pattern_generation;
 pub mod return_statement_generation;
 pub mod rust_coercion_rules;
 pub mod self_analysis;
