@@ -6,8 +6,7 @@ fn compile_wj_to_rust(source: &str) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let test_dir =
-        std::env::temp_dir().join(format!("wj_unknown_method_mut_test_{}", test_id));
+    let test_dir = std::env::temp_dir().join(format!("wj_unknown_method_mut_test_{}", test_id));
     let _ = std::fs::remove_dir_all(&test_dir);
     let _ = std::fs::create_dir_all(&test_dir);
 

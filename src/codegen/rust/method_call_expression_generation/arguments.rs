@@ -25,16 +25,13 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(ref rft) = receiver_float_type {
                 match rft {
                     Type::Custom(n) if n == "f64" => {
-                        self.assignment_float_target_type =
-                            Some(Type::Custom("f64".to_string()));
+                        self.assignment_float_target_type = Some(Type::Custom("f64".to_string()));
                     }
                     Type::Custom(n) if n == "f32" => {
-                        self.assignment_float_target_type =
-                            Some(Type::Custom("f32".to_string()));
+                        self.assignment_float_target_type = Some(Type::Custom("f32".to_string()));
                     }
                     Type::Float => {
-                        self.assignment_float_target_type =
-                            Some(Type::Custom("f64".to_string()));
+                        self.assignment_float_target_type = Some(Type::Custom("f64".to_string()));
                     }
                     _ => {}
                 }

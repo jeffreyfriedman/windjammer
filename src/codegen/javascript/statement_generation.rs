@@ -471,7 +471,8 @@ impl JavaScriptGenerator {
                         )
                     }
                     EnumPatternBinding::Tuple(patterns) => {
-                        let mut conditions = vec![format!("{}.type === '{}'", match_value, js_name)];
+                        let mut conditions =
+                            vec![format!("{}.type === '{}'", match_value, js_name)];
                         for (i, pat) in patterns.iter().enumerate() {
                             if let Pattern::Identifier(bind) = pat {
                                 conditions.push(format!(

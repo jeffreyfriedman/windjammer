@@ -3,9 +3,7 @@
 use super::engine::{ControlFlow, EnumVariantKind, Interpreter};
 use super::value::{EnumData, FunctionValue, Value};
 use super::value_operations::{binary_op, literal_to_value};
-use crate::parser::{
-    BinaryOp, Expression, UnaryOp,
-};
+use crate::parser::{BinaryOp, Expression, UnaryOp};
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -147,7 +145,9 @@ impl<'a> Interpreter<'a> {
             Expression::FieldAccess { object, field, .. } => {
                 let obj_val = self.eval_expression(object);
                 match obj_val {
-                    Value::Struct { fields, .. } => fields.get(field).cloned().unwrap_or(Value::Nil),
+                    Value::Struct { fields, .. } => {
+                        fields.get(field).cloned().unwrap_or(Value::Nil)
+                    }
                     _ => Value::Nil,
                 }
             }

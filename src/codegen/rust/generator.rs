@@ -20,12 +20,12 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_wasm_imports: bool,
     pub(crate) needs_web_imports: bool,
     pub(crate) needs_js_imports: bool,
-    pub(crate) needs_serde_imports: bool, // For JSON support
-    pub(crate) needs_write_import: bool, // For string capacity optimization (write! macro)
+    pub(crate) needs_serde_imports: bool,   // For JSON support
+    pub(crate) needs_write_import: bool,    // For string capacity optimization (write! macro)
     pub(crate) needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
-    pub(crate) needs_cow_import: bool,   // For Phase 9 Cow optimization
-    pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
-    pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
+    pub(crate) needs_cow_import: bool,      // For Phase 9 Cow optimization
+    pub(crate) needs_hashmap_import: bool,  // Auto-detect HashMap usage
+    pub(crate) needs_hashset_import: bool,  // Auto-detect HashSet usage
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,

@@ -1,0 +1,9 @@
+fn print_twice(x: int) {
+    println!("{}", x)
+    println!("{}", x)
+}
+
+fn main() {
+    print_twice(42)
+}
+

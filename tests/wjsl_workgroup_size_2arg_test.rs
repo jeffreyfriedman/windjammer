@@ -15,10 +15,17 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let result = windjammer::wjsl::transpile_wjsl(source);
-    assert!(result.is_ok(), "2-arg workgroup_size failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "2-arg workgroup_size failed: {:?}",
+        result.err()
+    );
     let wgsl = result.unwrap();
-    assert!(wgsl.contains("@workgroup_size(8, 8, 1)") || wgsl.contains("@workgroup_size(8u, 8u, 1u)"),
-        "Expected workgroup_size(8, 8, 1) in output: {}", wgsl);
+    assert!(
+        wgsl.contains("@workgroup_size(8, 8, 1)") || wgsl.contains("@workgroup_size(8u, 8u, 1u)"),
+        "Expected workgroup_size(8, 8, 1) in output: {}",
+        wgsl
+    );
 }
 
 #[test]
@@ -32,7 +39,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let result = windjammer::wjsl::transpile_wjsl(source);
-    assert!(result.is_ok(), "3-arg workgroup_size failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "3-arg workgroup_size failed: {:?}",
+        result.err()
+    );
 }
 
 #[test]
@@ -58,5 +69,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 "#;
     let result = windjammer::wjsl::transpile_wjsl(source);
-    assert!(result.is_ok(), "Workgroup_size with body failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Workgroup_size with body failed: {:?}",
+        result.err()
+    );
 }

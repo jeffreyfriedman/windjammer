@@ -6,7 +6,6 @@ use super::{CodeGenerator, VariableUsage};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-
     /// FIXED: Never add &mut for index access - let auto-clone analysis handle it!
     pub(crate) fn should_mut_borrow_index_access(&self, _expr: &Expression) -> bool {
         false

@@ -33,7 +33,10 @@ fn compile_wj(source: &str) -> String {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!("Compilation failed:\nstdout: {}\nstderr: {}", stdout, stderr);
+        panic!(
+            "Compilation failed:\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        );
     }
 
     let rs_path = out_dir.join("test.rs");
@@ -42,7 +45,10 @@ fn compile_wj(source: &str) -> String {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        panic!("Generated file not found at {:?}\nstdout: {}\nstderr: {}", rs_path, stdout, stderr);
+        panic!(
+            "Generated file not found at {:?}\nstdout: {}\nstderr: {}",
+            rs_path, stdout, stderr
+        );
     }
 }
 

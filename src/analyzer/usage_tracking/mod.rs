@@ -64,7 +64,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(crate) fn stmts_have_if_else_with_param(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn stmts_have_if_else_with_param(
+        &self,
+        name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_has_if_else_with_param(name, stmt))
@@ -96,7 +100,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(crate) fn stmts_mention_identifier(&self, name: &str, stmts: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn stmts_mention_identifier(
+        &self,
+        name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
         stmts
             .iter()
             .any(|stmt| self.stmt_mentions_identifier(name, stmt))
@@ -140,7 +148,11 @@ impl<'ast> Analyzer<'ast> {
     /// TDD: Check if a parameter is iterated over in a for loop (consumed by iteration)
     /// e.g., `for item in items` (not `for item in &items`)
     /// When you iterate over a Vec without `&`, the Vec is consumed and elements are moved.
-    pub(crate) fn is_iterated_over(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+    pub(crate) fn is_iterated_over(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
         for stmt in statements {
             match stmt {
                 Statement::For { iterable, body, .. } => {

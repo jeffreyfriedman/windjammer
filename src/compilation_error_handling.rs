@@ -7,7 +7,10 @@ use crate::errors;
 use crate::parser;
 
 /// Used by `compile_file_impl` after parsing the main file.
-pub(crate) fn check_top_level_mutability(input_path: &Path, program: &parser::Program) -> Result<()> {
+pub(crate) fn check_top_level_mutability(
+    input_path: &Path,
+    program: &parser::Program,
+) -> Result<()> {
     let mut mut_checker = errors::MutabilityChecker::new(input_path.to_path_buf());
     let mut has_mut_errors = false;
     apply_mutability_check(&mut mut_checker, program, &mut has_mut_errors);

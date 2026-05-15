@@ -4,7 +4,6 @@ use crate::parser::{Expression, FunctionDecl, ImplBlock, MatchArm, Statement};
 
 use super::{control_flow, DeadCodeStats};
 
-
 /// Eliminate dead code in impl block methods
 pub(super) fn eliminate_dead_code_in_impl<'ast>(
     impl_block: &ImplBlock<'ast>,

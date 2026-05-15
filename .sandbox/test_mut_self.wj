@@ -1,0 +1,11 @@
+struct Foo {}
+
+impl Foo {
+    pub fn bar(mut self, x: int) -> int {
+        x + 1
+    }
+}
+
+fn main() {}
+
+

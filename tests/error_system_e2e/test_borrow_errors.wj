@@ -1,0 +1,17 @@
+// Test: Borrow checker errors
+// Expected: Should show "Cannot borrow" or "Value used after move"
+
+fn main() {
+    // Test 1: Immutable borrow after mutable borrow
+    let mut x = vec![1, 2, 3]
+    let r1 = &mut x
+    let r2 = &x  // Error: cannot borrow as immutable
+    println!("{:?} {:?}", r1, r2)
+    
+    // Test 2: Multiple mutable borrows
+    let mut y = vec![4, 5, 6]
+    let m1 = &mut y
+    let m2 = &mut y  // Error: cannot borrow as mutable more than once
+    println!("{:?} {:?}", m1, m2)
+}
+

@@ -117,7 +117,8 @@ pub fn validate_combat() {
                 rs_file,
                 alt,
                 std::fs::read_dir(&output_dir)
-                    .map(|d| d.filter_map(|e| e.ok().map(|e| e.path()))
+                    .map(|d| d
+                        .filter_map(|e| e.ok().map(|e| e.path()))
                         .collect::<Vec<_>>())
                     .unwrap_or_default()
             );

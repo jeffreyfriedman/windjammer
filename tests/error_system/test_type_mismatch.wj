@@ -1,0 +1,8 @@
+// Test: Type mismatch error translation
+// Expected: "Type mismatch: expected int, found string"
+
+fn main() {
+    let x: int = "hello"
+    println!("x = {}", x)
+}
+

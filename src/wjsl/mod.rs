@@ -9,12 +9,12 @@
 
 mod ast;
 mod codegen;
+mod expression_type_checking;
 mod lexer;
 pub mod parser;
 mod shader_type_rules;
-mod type_checker;
-mod expression_type_checking;
 mod statement_type_checking;
+mod type_checker;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

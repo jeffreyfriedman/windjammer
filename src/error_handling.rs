@@ -254,4 +254,3 @@ fn extract_between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str>
     let end_pos = remaining.find(end)?;
     Some(&remaining[..end_pos])
 }
-

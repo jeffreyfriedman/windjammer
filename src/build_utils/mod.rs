@@ -8,10 +8,8 @@ mod nested_module_structure;
 mod path_utilities;
 
 pub use file_operations::strip_main_functions;
-pub use module_generation::{
-    cleanup_stale_module_files,
-    cleanup_stale_module_files_recursive,
-    generate_mod_file,
-};
 pub(crate) use module_generation::generate_mod_file_with_layout;
+pub use module_generation::{
+    cleanup_stale_module_files, cleanup_stale_module_files_recursive, generate_mod_file,
+};
 pub use nested_module_structure::generate_nested_module_structure;

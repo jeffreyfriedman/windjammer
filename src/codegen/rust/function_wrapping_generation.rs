@@ -17,7 +17,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate function with decorator wrapping (timeout, bench, requires, ensures, etc.)
-    pub(super) fn generate_function_with_wrapping(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
+    pub(super) fn generate_function_with_wrapping(
+        &mut self,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
 
@@ -189,7 +192,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate function body with decorator wrapping
-    pub(super) fn generate_wrapped_function_body(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
+    pub(super) fn generate_wrapped_function_body(
+        &mut self,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> String {
         let func = &analyzed.decl;
         let mut output = String::new();
 

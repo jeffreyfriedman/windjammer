@@ -206,6 +206,7 @@ fn optimize_loops_in_item<'ast>(
 mod tests {
     use super::*;
     use crate::parser::{BinaryOp, Decorator, Literal, Pattern, Type};
+    use crate::parser_impl::{Expression, Statement};
     use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     #[test]

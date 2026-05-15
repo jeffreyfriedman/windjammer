@@ -6,7 +6,10 @@ use crate::parser::{BinaryOp, Expression, Literal, Type};
 impl<'ast> CodeGenerator<'ast> {
     /// Check if an expression's inferred type wraps a reference
     /// (e.g. `Option<&T>`, `Result<&T, E>`).
-    pub(in crate::codegen::rust) fn expression_type_contains_reference(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn expression_type_contains_reference(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         self.infer_expression_type(expr)
             .as_ref()
             .is_some_and(Self::type_contains_reference_static)
@@ -169,7 +172,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// Check if an expression's inferred type is usize.
     /// Uses infer_expression_type() for comprehensive type resolution including
     /// parameters, local variables, nested field access, and method return types.
-    pub(in crate::codegen::rust) fn infer_expression_type_is_usize(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn infer_expression_type_is_usize(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         if let Some(t) = self.infer_expression_type(expr) {
             return matches!(t, Type::Custom(ref name) if name == "usize");
         }
@@ -181,7 +187,10 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// When the other operand is already `usize` (or an untyped int literal, which Rust
     /// matches to `usize` next to `.len()`), returns `false`.
-    pub(in crate::codegen::rust) fn comparison_other_side_needs_len_as_i64(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn comparison_other_side_needs_len_as_i64(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         if self.infer_expression_type_is_usize(expr) {
             return false;
         }

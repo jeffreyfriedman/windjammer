@@ -1,0 +1,19 @@
+fn main() {
+    let ignored_dirs = vec![
+        "target",
+        "node_modules",
+        ".git",
+        ".svn",
+        ".hg",
+        "dist",
+        "build",
+        "__pycache__",
+        ".cache",
+        ".venv",
+        "venv",
+    ]
+    
+    println!(ignored_dirs.len())
+}
+
+

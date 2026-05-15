@@ -88,7 +88,8 @@ pub fn eliminate_dead_code<'ast>(
                 location,
             } => {
                 // Process impl block methods
-                let new_impl = eliminate::eliminate_dead_code_in_impl(impl_block, &mut stats, optimizer);
+                let new_impl =
+                    eliminate::eliminate_dead_code_in_impl(impl_block, &mut stats, optimizer);
                 new_items.push(Item::Impl {
                     block: new_impl,
                     location: location.clone(),
@@ -140,7 +141,9 @@ pub fn eliminate_dead_code<'ast>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{Decorator, Expression, FunctionDecl, Item, Literal, Pattern, Statement, Type};
+    use crate::parser::{
+        Decorator, Expression, FunctionDecl, Item, Literal, Pattern, Statement, Type,
+    };
     use crate::test_utils::{test_alloc_expr, test_alloc_stmt};
 
     fn make_pub_func<'ast>(name: &str, body: Vec<&'ast Statement<'ast>>) -> FunctionDecl<'ast> {

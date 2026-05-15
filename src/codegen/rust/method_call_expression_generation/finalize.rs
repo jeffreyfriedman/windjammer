@@ -22,7 +22,9 @@ impl<'ast> CodeGenerator<'ast> {
         let receiver_borrows_self = self.codegen_expression_traces_to_self(object);
         let mut self_borrow_temps: Vec<(String, String)> = Vec::new();
         let args = if receiver_borrows_self {
-            let needs_extraction = arguments.iter().any(|(_label, arg)| self.expression_borrows_self(arg));
+            let needs_extraction = arguments
+                .iter()
+                .any(|(_label, arg)| self.expression_borrows_self(arg));
             if needs_extraction {
                 args.into_iter()
                     .enumerate()
@@ -49,8 +51,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Generate turbofish if present, or infer for collect() from return type
         let turbofish = if let Some(types) = type_args {
-            let type_strs: Vec<String> =
-                types.iter().map(|t| self.type_to_rust(t)).collect();
+            let type_strs: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
             format!("::<{}>", type_strs.join(", "))
         } else if method == "collect" {
             if let Some(target_ty) = &self.collect_target_type {
@@ -155,9 +156,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Otherwise, use . for instance methods on fields
                 match object {
                     Expression::Identifier { name, .. } => {
-                        if name.chars().next().is_some_and(|c| c.is_uppercase())
-                            || name == "std"
-                        {
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "std" {
                             "::" // Module::path::method() -> static method
                         } else {
                             "." // self.field.method() or variable.field.method() -> instance method
@@ -256,8 +255,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Extract to temp var
                         let temp_name = format!("_temp{}", temp_counter);
                         temp_counter += 1;
-                        temp_decls
-                            .push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                        temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
 
                         // When the method expects &str (push_str, extend_from_slice),
                         // add & to pass borrowed temp. Otherwise, pass owned value.

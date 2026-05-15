@@ -4,7 +4,6 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use crate::CompilationTarget;
 use crate::analyzer::{AnalyzedFunction, SignatureRegistry};
 use crate::codegen;
 use crate::component_analyzer;
@@ -14,6 +13,7 @@ use crate::metadata::{metadata_function_sig_from_analyzer, ModuleMetadata};
 use crate::parser;
 use crate::project_paths;
 use crate::type_inference;
+use crate::CompilationTarget;
 
 /// `EarlySuccess` = Go / WASM component paths already wrote outputs.
 pub(crate) enum MainCodegenOutcome {
@@ -190,7 +190,8 @@ pub(crate) fn generate_main_rust_code<'ast>(
     generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
     generator.set_source_file(input_path);
-    let output_file_path = project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
+    let output_file_path =
+        project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
     if let Some(parent) = output_file_path.parent() {
         std::fs::create_dir_all(parent)?;
     }

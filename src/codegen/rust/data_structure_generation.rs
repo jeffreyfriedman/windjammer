@@ -93,9 +93,9 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         );
                         if !skip_float_literal {
-                            if let Some(cast) =
-                                float_type_utilities::float_array_elem_cast_target(exp_ty, &actual_ty)
-                            {
+                            if let Some(cast) = float_type_utilities::float_array_elem_cast_target(
+                                exp_ty, &actual_ty,
+                            ) {
                                 s = format!("({} as {})", s, cast);
                             }
                         }
@@ -156,8 +156,7 @@ impl<'ast> CodeGenerator<'ast> {
         let separator = match object {
             Expression::Identifier { name, .. }
                 if name.contains("::")
-                    || (!name.is_empty()
-                        && name.chars().next().unwrap().is_uppercase()) =>
+                    || (!name.is_empty() && name.chars().next().unwrap().is_uppercase()) =>
             {
                 "::" // Module path: std::fs or Type::CONST
             }
@@ -206,15 +205,58 @@ impl<'ast> CodeGenerator<'ast> {
                             // Fields like x, y, z, width, height are almost always Copy
                             let is_likely_copy_field = matches!(
                                 field,
-                                "x" | "y" | "z" | "w" | "width" | "height" | "depth" | "r" | "g"
-                                    | "b" | "a" | "left" | "right" | "top" | "bottom" | "min"
-                                    | "max" | "start" | "end" | "offset" | "scale" | "speed"
-                                    | "time" | "delta" | "angle" | "radius" | "distance"
-                                    | "visible" | "enabled" | "active" | "selected" | "focused"
-                                    | "id" | "type" | "kind" | "priority" | "level" | "len"
-                                    | "count" | "size" | "index" | "idx" | "vx" | "vy" | "vz"
-                                    | "dx" | "dy" | "dz" | "health" | "damage" | "score"
-                                    | "lives" | "frame"
+                                "x" | "y"
+                                    | "z"
+                                    | "w"
+                                    | "width"
+                                    | "height"
+                                    | "depth"
+                                    | "r"
+                                    | "g"
+                                    | "b"
+                                    | "a"
+                                    | "left"
+                                    | "right"
+                                    | "top"
+                                    | "bottom"
+                                    | "min"
+                                    | "max"
+                                    | "start"
+                                    | "end"
+                                    | "offset"
+                                    | "scale"
+                                    | "speed"
+                                    | "time"
+                                    | "delta"
+                                    | "angle"
+                                    | "radius"
+                                    | "distance"
+                                    | "visible"
+                                    | "enabled"
+                                    | "active"
+                                    | "selected"
+                                    | "focused"
+                                    | "id"
+                                    | "type"
+                                    | "kind"
+                                    | "priority"
+                                    | "level"
+                                    | "len"
+                                    | "count"
+                                    | "size"
+                                    | "index"
+                                    | "idx"
+                                    | "vx"
+                                    | "vy"
+                                    | "vz"
+                                    | "dx"
+                                    | "dy"
+                                    | "dz"
+                                    | "health"
+                                    | "damage"
+                                    | "score"
+                                    | "lives"
+                                    | "frame"
                             );
                             if !is_likely_copy_field {
                                 return format!("{}.clone()", base_expr);
@@ -608,8 +650,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_borrow_context
             && !self.generating_assignment_target;
 
-        let suppress_borrow_or_clone =
-            suppress_borrow_or_clone && !force_clone_for_owned_context;
+        let suppress_borrow_or_clone = suppress_borrow_or_clone && !force_clone_for_owned_context;
 
         if !suppress_borrow_or_clone {
             // First check auto_clone_analysis (path-based analysis)

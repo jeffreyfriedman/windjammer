@@ -56,19 +56,19 @@ pub mod cli;
 #[cfg(feature = "cli")]
 pub mod cli_execution; // CLI execution (run, interpret, REPL)
 #[cfg(feature = "cli")]
+mod compilation_error_handling;
+#[cfg(feature = "cli")]
 pub mod error_catalog;
 #[cfg(feature = "cli")]
 pub mod error_handling; // Error handling and linting
 #[cfg(feature = "cli")]
 pub mod error_statistics;
 #[cfg(feature = "cli")]
-mod compilation_error_handling;
-#[cfg(feature = "cli")]
-mod output_generation;
-#[cfg(feature = "cli")]
 mod file_compilation_pipeline;
 #[cfg(feature = "cli")]
 pub mod file_compiler; // Single-file compilation
+#[cfg(feature = "cli")]
+mod output_generation;
 #[cfg(feature = "cli")]
 pub mod plugin;
 #[cfg(feature = "cli")]

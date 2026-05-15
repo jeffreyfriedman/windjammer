@@ -38,7 +38,9 @@ pub(super) fn ref_from_signature_registries(
                         if let Expression::Identifier { name, .. } = arg {
                             if let Some(local_types) = local_var_types {
                                 if let Some(var_type) = local_types.get(name.as_str()) {
-                                    if crate::codegen::rust::types::is_windjammer_text_type(var_type) {
+                                    if crate::codegen::rust::types::is_windjammer_text_type(
+                                        var_type,
+                                    ) {
                                         return Some(true);
                                     }
                                 }
@@ -46,7 +48,9 @@ pub(super) fn ref_from_signature_registries(
 
                             let is_owned_string = current_function_params.iter().any(|p| {
                                 p.name == *name
-                                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                    && crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    )
                                     && !inferred_borrowed_params.contains(name.as_str())
                             });
                             if is_owned_string {
@@ -86,7 +90,9 @@ pub(super) fn ref_from_signature_registries(
                         if let Expression::Identifier { name, .. } = arg {
                             if let Some(local_types) = local_var_types {
                                 if let Some(var_type) = local_types.get(name.as_str()) {
-                                    if crate::codegen::rust::types::is_windjammer_text_type(var_type) {
+                                    if crate::codegen::rust::types::is_windjammer_text_type(
+                                        var_type,
+                                    ) {
                                         return Some(true);
                                     }
                                 }
@@ -94,7 +100,9 @@ pub(super) fn ref_from_signature_registries(
 
                             let is_owned_string = current_function_params.iter().any(|p| {
                                 p.name == *name
-                                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                    && crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    )
                                     && !inferred_borrowed_params.contains(name.as_str())
                             });
                             if is_owned_string {

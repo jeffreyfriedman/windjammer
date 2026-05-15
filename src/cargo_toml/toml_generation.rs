@@ -6,8 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::dependency_management::{
-    dep_spec_to_cargo_line, detect_external_crate_deps, find_windjammer_runtime_path, path_to_toml_string,
-    propagate_source_cargo_deps, walk_rs_files,
+    dep_spec_to_cargo_line, detect_external_crate_deps, find_windjammer_runtime_path,
+    path_to_toml_string, propagate_source_cargo_deps, walk_rs_files,
 };
 use super::feature_management::{wasm_output_needs_runtime, WEB_SYS_CARGO_FEATURES};
 
@@ -29,7 +29,11 @@ pub(crate) fn find_wj_config(source_dir: &Path) -> crate::config::WjConfig {
     crate::config::WjConfig::default()
 }
 
-pub(crate) fn write_cargo_toml(output_dir: &Path, source_dir: &Path, lib_or_bin_section: &str) -> Result<()> {
+pub(crate) fn write_cargo_toml(
+    output_dir: &Path,
+    source_dir: &Path,
+    lib_or_bin_section: &str,
+) -> Result<()> {
     let wj_config = find_wj_config(source_dir);
 
     let runtime_path = find_windjammer_runtime_path();
@@ -69,7 +73,11 @@ pub(crate) fn write_cargo_toml(output_dir: &Path, source_dir: &Path, lib_or_bin_
         .filter(|n| !n.is_empty())
         .or_else(|| {
             let n = &wj_config.package.name;
-            if n.is_empty() { None } else { Some(n) }
+            if n.is_empty() {
+                None
+            } else {
+                Some(n)
+            }
         });
     let package_name = if let Some(name) = config_name {
         name.replace('-', "_")
@@ -271,7 +279,10 @@ pub(crate) fn read_package_name_from_package_section(content: &str) -> Option<St
 /// Prefer a non-placeholder name already present in `output_dir/Cargo.toml` so repeated
 /// `wj build` does not reset `name` to `windjammer`. A stale `windjammer` entry is ignored
 /// so `wj.toml` (via `inferred_snake`) can replace it.
-pub(crate) fn resolve_package_name_with_existing_cargo(output_dir: &Path, inferred_snake: &str) -> String {
+pub(crate) fn resolve_package_name_with_existing_cargo(
+    output_dir: &Path,
+    inferred_snake: &str,
+) -> String {
     let existing_cargo = output_dir.join("Cargo.toml");
     if !existing_cargo.exists() {
         return inferred_snake.to_string();
