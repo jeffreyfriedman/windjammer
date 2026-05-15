@@ -9,7 +9,6 @@
     )),
     feature = "integration_tests",
 ))]
-
 #![allow(unused)]
 // Dogfooding — match, patterns, collections.
 #[path = "../common/test_utils.rs"]
@@ -262,4 +261,3 @@ fn process_all(items: Vec<Item>) -> i32 {
 // =============================================================================
 // Test: If expressions in format! arguments don't have semicolons
 // =============================================================================
-

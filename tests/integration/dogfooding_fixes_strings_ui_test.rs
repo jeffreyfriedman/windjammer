@@ -9,7 +9,6 @@
     )),
     feature = "integration_tests",
 ))]
-
 #![allow(unused)]
 // Dogfooding — strings, decorators, refs.
 #[path = "../common/test_utils.rs"]
@@ -358,4 +357,3 @@ fn test() {
 // =============================================================================
 // Test: Match arms type consistency
 // =============================================================================
-

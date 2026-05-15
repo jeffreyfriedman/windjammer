@@ -583,13 +583,11 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(op, BinaryOp::And | BinaryOp::Or) {
             let deref_if_borrowed_bool = |expr: &Expression, s: &str, gen: &Self| -> String {
                 if let Expression::Identifier { name, .. } = expr {
-                    if gen.inferred_borrowed_params.contains(name.as_str())
-                        || gen.borrowed_iterator_vars.contains(name)
-                    {
-                        if !s.starts_with('*') {
+                    if (gen.inferred_borrowed_params.contains(name.as_str())
+                        || gen.borrowed_iterator_vars.contains(name))
+                        && !s.starts_with('*') {
                             return format!("*{}", s);
                         }
-                    }
                 }
                 s.to_string()
             };

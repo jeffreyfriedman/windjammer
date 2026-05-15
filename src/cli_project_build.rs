@@ -493,9 +493,8 @@ pub fn build_project(
                     if let Some(filename) = entry.file_name().to_str() {
                         if filename.ends_with(".rs") {
                             if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                                rust_code_deps.extend(
-                                    RustBackend::extract_external_dependencies(&content),
-                                );
+                                rust_code_deps
+                                    .extend(RustBackend::extract_external_dependencies(&content));
                             }
                         }
                     }
@@ -506,8 +505,7 @@ pub fn build_project(
             let builtin_skip = ["crate", "super", "windjammer", "windjammer_runtime"];
             let mut combined_external_crates = filtered_external_crates;
             for dep in rust_code_deps {
-                if !combined_external_crates.contains(&dep)
-                    && !builtin_skip.contains(&dep.as_str())
+                if !combined_external_crates.contains(&dep) && !builtin_skip.contains(&dep.as_str())
                 {
                     combined_external_crates.push(dep);
                 }

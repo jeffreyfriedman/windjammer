@@ -188,9 +188,7 @@ impl Parser {
                         self.advance();
                         n
                     } else {
-                        return Err(
-                            "Expected identifier after & in closure parameter".to_string()
-                        );
+                        return Err("Expected identifier after & in closure parameter".to_string());
                     }
                 }
                 Token::Ident(name) => {

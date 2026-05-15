@@ -9,7 +9,6 @@
     )),
     feature = "analyzer_tests",
 ))]
-
 #![allow(unused)]
 //! Analyzer ownership: traits, generics, regressions.
 #[path = "../common/test_utils.rs"]

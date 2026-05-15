@@ -275,13 +275,13 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     if let Ok(items_content) = fs::read_to_string(&mod_items_path) {
                         let has_code = items_content.lines().any(|line| {
                             let t = line.trim();
-                            !t.is_empty()
-                                && !t.starts_with("//")
-                                && !t.starts_with("#[")
-                                && !t.starts_with("use ")
-                                && !(t.starts_with("pub mod ") && t.ends_with(';'))
-                                && !(t.starts_with("mod ") && t.ends_with(';'))
-                                && !(t.starts_with("pub use ") && t.ends_with("::*;"))
+                            !(t.is_empty()
+                                || t.starts_with("//")
+                                || t.starts_with("#[")
+                                || t.starts_with("use ")
+                                || (t.starts_with("pub mod ") && t.ends_with(';'))
+                                || (t.starts_with("mod ") && t.ends_with(';'))
+                                || (t.starts_with("pub use ") && t.ends_with("::*;")))
                         });
                         if has_code {
                             updated.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
@@ -462,13 +462,13 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                 }
                 user_reexports.push(t.to_string());
             }
-            if !t.is_empty()
-                && !t.starts_with("//")
-                && !t.starts_with("#[")
-                && !t.starts_with("use ")
-                && !(t.starts_with("pub mod ") && t.ends_with(';'))
-                && !(t.starts_with("mod ") && t.ends_with(';'))
-                && !(t.starts_with("pub use ") && t.ends_with(';'))
+            if !(t.is_empty()
+                || t.starts_with("//")
+                || t.starts_with("#[")
+                || t.starts_with("use ")
+                || (t.starts_with("pub mod ") && t.ends_with(';'))
+                || (t.starts_with("mod ") && t.ends_with(';'))
+                || (t.starts_with("pub use ") && t.ends_with(';')))
             {
                 has_real_code = true;
             }

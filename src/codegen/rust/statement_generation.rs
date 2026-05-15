@@ -160,14 +160,14 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_let_statement(pattern, *mutable, type_, value, location),
             Statement::Const {
                 name, type_, value, ..
-            } => self.generate_const_statement(name.as_str(), &type_, value),
+            } => self.generate_const_statement(name.as_str(), type_, value),
             Statement::Static {
                 name,
                 mutable,
                 type_,
                 value,
                 ..
-            } => self.generate_static_statement(name.as_str(), *mutable, &type_, value),
+            } => self.generate_static_statement(name.as_str(), *mutable, type_, value),
             Statement::Return { value: expr, .. } => self.generate_return_statement(expr),
             Statement::Expression { expr, .. } => {
                 let mut output = self.indent();
@@ -408,6 +408,7 @@ impl<'ast> CodeGenerator<'ast> {
         matches!(value, Expression::Index { .. }) && !self.is_type_copy(element_type)
     }
 
+    #[allow(dead_code)] // Used by upcoming borrow-prefix work
     fn identifier_is_borrowed_or_self(&self, name: &str) -> bool {
         if self.inferred_borrowed_params.contains(name)
             || self.inferred_mut_borrowed_params.contains(name)

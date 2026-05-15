@@ -71,6 +71,7 @@ impl<'a> Parser<'a> {
         )
     }
 
+    #[allow(dead_code)] // Reserved for lookahead parsing
     fn peek(&mut self) -> &Token {
         if self.peeked.is_none() {
             self.peeked = Some(self.lexer.next_token());

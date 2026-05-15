@@ -274,6 +274,7 @@ pub fn interpret(source: &str) -> BackendResult {
     }
 }
 
+#[allow(dead_code)] // Used by opt-in conformance modules
 pub fn assert_rust_and_interpreter_agree(test_name: &str, source: &str, expected_contains: &str) {
     let rust_result = compile_and_run_rust(source);
     let interp_result = interpret(source);

@@ -16,7 +16,6 @@
 use windjammer::analyzer::OwnershipMode;
 use windjammer::codegen::rust::ownership_tracker::OwnershipTracker;
 use windjammer::parser::ast::builders::*;
-use windjammer::parser::UnaryOp;
 use windjammer::test_utils::test_alloc_expr;
 
 #[path = "../common/ownership_tracker_alloc.rs"]

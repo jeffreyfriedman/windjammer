@@ -1,10 +1,10 @@
 #![cfg(not(any(
-        feature = "parser_tests",
-        feature = "analyzer_tests",
-        feature = "codegen_tests",
-        feature = "interpreter_tests",
-        feature = "conformance_tests",
-        feature = "integration_tests",
+    feature = "parser_tests",
+    feature = "analyzer_tests",
+    feature = "codegen_tests",
+    feature = "interpreter_tests",
+    feature = "conformance_tests",
+    feature = "integration_tests",
 )))]
 
 // test_no_implicit_f64_to_f32: When f32 and f64 are mixed, must emit explicit cast.

@@ -156,16 +156,14 @@ impl<'ast> CodeGenerator<'ast> {
                 rc = None;
             }
             // One side is integer but float inference classified it as float: clear that side
-            if left_is_int && !left_float_lit && lc.is_some() {
-                if !matches!(left, Expression::Cast { .. }) {
+            if left_is_int && !left_float_lit && lc.is_some()
+                && !matches!(left, Expression::Cast { .. }) {
                     lc = None;
                 }
-            }
-            if right_is_int && !right_float_lit && rc.is_some() {
-                if !matches!(right, Expression::Cast { .. }) {
+            if right_is_int && !right_float_lit && rc.is_some()
+                && !matches!(right, Expression::Cast { .. }) {
                     rc = None;
                 }
-            }
         }
 
         // Float literal with Unknown classification: match sibling so mixed ops still get casts

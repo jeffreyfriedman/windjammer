@@ -20,8 +20,7 @@ impl<'ast> CodeGenerator<'ast> {
                     value: Literal::String(_),
                     ..
                 }
-            )
-        {
+            ) {
             "&'static str".to_string()
         } else {
             self.type_to_rust(type_)

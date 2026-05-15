@@ -126,17 +126,17 @@ impl MethodCallAnalyzer {
         );
 
         if is_stdlib_method {
-            return match (method, param_idx) {
-                ("push", 0) => true,
-                ("insert", 0) => true,
-                ("draw_text", 0) => true,
-                ("set_title", 0) => true,
-                ("set_text", 0) => true,
-                ("set_label", 0) => true,
-                ("log", 0) => true,
-                ("print", 0) => true,
-                _ => false,
-            };
+            return matches!(
+                (method, param_idx),
+                ("push", 0)
+                    | ("insert", 0)
+                    | ("draw_text", 0)
+                    | ("set_title", 0)
+                    | ("set_text", 0)
+                    | ("set_label", 0)
+                    | ("log", 0)
+                    | ("print", 0),
+            );
         }
 
         if let Some(sig) = method_signature {

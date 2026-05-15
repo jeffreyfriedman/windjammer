@@ -13,9 +13,7 @@
 /// Cross-backend conformance: baseline programs and Rust+Interpreter-only cases.
 #[path = "cross_backend_conformance_harness.rs"]
 mod cross_backend_conformance_harness;
-use cross_backend_conformance_harness::{
-    assert_backends_agree, assert_rust_and_interpreter_agree,
-};
+use cross_backend_conformance_harness::{assert_backends_agree, assert_rust_and_interpreter_agree};
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]

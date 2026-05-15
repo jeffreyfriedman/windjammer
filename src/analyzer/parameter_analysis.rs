@@ -9,6 +9,7 @@ use crate::parser::*;
 use super::{Analyzer, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
+    #[allow(clippy::too_many_arguments)] // Inference needs full function context
     pub(crate) fn infer_parameter_ownership(
         &self,
         param_name: &str,
@@ -52,9 +53,10 @@ impl<'ast> Analyzer<'ast> {
                     // inferring Owned for `key` breaks callers that pass the same String twice (E0382).
                     // Non-string types keep the broader rule (transform/migrate still get Owned).
                     let string_like = matches!(param_type, Type::String);
-                    if self.is_returned(param_name, body) || self.is_stored(param_name, body) {
-                        return Ok(OwnershipMode::Owned);
-                    } else if !string_like && self.param_is_consumed_into_return(param_name, body) {
+                    if self.is_returned(param_name, body)
+                        || self.is_stored(param_name, body)
+                        || (!string_like && self.param_is_consumed_into_return(param_name, body))
+                    {
                         return Ok(OwnershipMode::Owned);
                     }
                 }

@@ -9,7 +9,6 @@
     )),
     feature = "codegen_tests",
 ))]
-
 // TDD Tests for string expression analysis functions
 //
 // This module contains pure functions for analyzing string-related expressions:
@@ -17,7 +16,6 @@
 // - Detecting string literals in expressions
 //
 // UPDATED: Now using AST builder functions for cleaner, more readable tests!
-
 #![allow(clippy::needless_borrow)]
 
 use windjammer::codegen::rust::string_analysis::{collect_concat_parts, contains_string_literal};
