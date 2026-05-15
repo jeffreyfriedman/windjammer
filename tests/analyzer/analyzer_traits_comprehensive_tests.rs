@@ -9,7 +9,6 @@
     )),
     feature = "analyzer_tests",
 ))]
-
 #![allow(unused)]
 //! Comprehensive Analyzer Trait/Impl Tests
 //!

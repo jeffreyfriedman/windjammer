@@ -11,6 +11,7 @@ use std::path::Path;
 
 use crate::error_mapper;
 
+#[allow(clippy::too_many_arguments)] // CLI surface; bundling would obscure call sites
 pub fn lint_project(
     path: &Path,
     max_function_length: usize,

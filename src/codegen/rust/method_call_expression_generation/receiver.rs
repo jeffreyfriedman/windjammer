@@ -120,11 +120,9 @@ impl<'ast> CodeGenerator<'ast> {
         if method == "map"
             && self.inferred_borrowed_params.contains("self")
             && self.codegen_expression_traces_to_self(object)
-        {
-            if !obj_str.contains(".as_ref()") {
+            && !obj_str.contains(".as_ref()") {
                 obj_str = format!("{}.as_ref()", obj_str);
             }
-        }
 
         obj_str
     }

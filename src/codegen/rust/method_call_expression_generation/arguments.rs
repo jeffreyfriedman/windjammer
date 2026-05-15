@@ -227,7 +227,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             _ => {
                                 // No signature info - use heuristic (fallback to old logic)
-                                if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, &method_signature) {
+                                if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, method_signature) {
                                     arg_str = format!("{}.to_string()", arg_str);
                                     true
                                 } else {
@@ -267,13 +267,13 @@ impl<'ast> CodeGenerator<'ast> {
                             i
                         };
                         if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
-                            &method_signature,
+                            method_signature,
                             sig_param_idx,
                         ) {
                             let expects_owned = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
                                 i,
                                 method,
-                                &method_signature,
+                                method_signature,
                             );
 
                             if expects_owned
@@ -292,7 +292,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &arg_str,
                     method,
                     i,
-                    &method_signature,
+                    method_signature,
                     &self.borrowed_iterator_vars,
                     &self.current_function_params,
                     &self.inferred_borrowed_params,
@@ -396,7 +396,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &arg_str,
                         method,
                         i,
-                        &method_signature,
+                        method_signature,
                         &self.usize_variables,
                         &self.current_function_params,
                         &self.borrowed_iterator_vars,
@@ -426,7 +426,7 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 if let Some(idx) = sig_param_idx_str_field {
                     arg_str = self.ensure_ref_for_owned_string_field_when_callee_expects_str(
-                        &method_signature,
+                        method_signature,
                         idx,
                         arg_to_generate,
                         arg_str,

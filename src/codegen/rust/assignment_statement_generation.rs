@@ -222,8 +222,8 @@ impl<'ast> CodeGenerator<'ast> {
                     // Mixed int/float: cast RHS integer to target float type
                     // Only cast when the target is genuinely a float type (not int).
                     let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type);
-                    if !synth_tgt_is_int {
-                        if matches!(
+                    if !synth_tgt_is_int
+                        && matches!(
                             op,
                             BinaryOp::Add
                                 | BinaryOp::Sub
@@ -249,7 +249,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
-                    }
 
                     self.assignment_float_target_type = prev_assign_ty;
 
@@ -307,11 +306,10 @@ impl<'ast> CodeGenerator<'ast> {
                 let assignment_target_is_text = target_type
                     .as_ref()
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-                if assignment_target_is_text {
-                    if !value_str.contains(".clone()") && !value_str.contains(".to_string()") {
+                if assignment_target_is_text
+                    && !value_str.contains(".clone()") && !value_str.contains(".to_string()") {
                         value_str = format!("{}.to_string()", value_str);
                     }
-                }
             }
             // E0308 FIX: match-bound variables from &/&mut scrutinees are references.
             // When assigning to a Copy-type field (e.g. self.x = min_x where min_x: &mut f32),

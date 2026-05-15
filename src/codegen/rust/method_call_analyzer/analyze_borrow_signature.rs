@@ -61,7 +61,7 @@ pub(super) fn ref_from_known_method_signature(
                 let is_owned_string_local = local_var_types
                     .as_ref()
                     .and_then(|vars| vars.get(arg_name))
-                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
 
                 if is_owned_string_param || is_owned_string_local {
                     return Some(true);

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 ///
 /// Walks up from the file looking for a directory that is a project source root.
 /// Priority order (first match closest to the file wins):
-///   1. `src` — only if it looks like a real project source dir
-///              (sibling Cargo.toml, or contains mod.wj / .wj files)
+///   1. `src` — only if it looks like a real project source dir  
+///      (sibling Cargo.toml, or contains mod.wj / .wj files)
 ///   2. Topmost directory containing mod.wj
 ///   3. The file's immediate parent (standalone file fallback)
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
@@ -20,11 +20,10 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
 
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            if dir_name == "src" && found_project_src.is_none() {
-                if is_project_source_dir(parent, depth) {
+            if dir_name == "src" && found_project_src.is_none()
+                && is_project_source_dir(parent, depth) {
                     found_project_src = Some(parent);
                 }
-            }
         }
 
         if parent.join("mod.wj").exists() {

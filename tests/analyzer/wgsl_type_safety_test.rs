@@ -9,7 +9,6 @@
     )),
     feature = "analyzer_tests",
 ))]
-
 // TDD: WGSL Type Safety Tests
 // CRITICAL: Ensure host/shader type consistency to prevent black screen bugs!
 //
@@ -19,7 +18,6 @@
 // - Result: Garbage values → complete rendering failure
 //
 // THE TRANSPILER MUST PREVENT THIS CLASS OF BUGS!
-
 #![allow(clippy::assertions_on_constants)]
 
 #[cfg(test)]

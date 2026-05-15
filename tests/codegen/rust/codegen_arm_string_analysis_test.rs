@@ -9,12 +9,10 @@
     )),
     feature = "codegen_tests",
 ))]
-
 // TDD Tests for Match Arm String Analysis
 // Tests written FIRST before extraction!
 //
 // UPDATED: Now using AST builder functions!
-
 #![allow(clippy::needless_borrow)]
 
 use windjammer::codegen::rust::arm_string_analysis::*;

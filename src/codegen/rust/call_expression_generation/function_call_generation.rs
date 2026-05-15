@@ -314,11 +314,11 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             })
         } else {
             // Not a function pointer - try registry
-            gen.signature_registry.get_signature(&func_name).cloned()
+            gen.signature_registry.get_signature(func_name).cloned()
         }
     } else {
         // Not a parameter - try registry lookup
-        let direct = gen.signature_registry.get_signature(&func_name).cloned();
+        let direct = gen.signature_registry.get_signature(func_name).cloned();
         direct.or_else(|| {
             if let Some(pos) = func_name.rfind("::") {
                 let qualifier = &func_name[..pos];
@@ -355,7 +355,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     let mut signature_from_simple_fallback = false;
     if signature.is_none() && func_name.contains("::") {
         let qualifier = func_name.split("::").next().unwrap_or("");
-        let simple = func_name.rsplit("::").next().unwrap_or(&func_name);
+        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
 
         // Try resolving through module alias map first
         if let Some(original_module) = gen.module_alias_map.get(qualifier) {
@@ -389,20 +389,19 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     } else if let Some(ref sig) = signature {
         sig.is_extern
     } else {
-        let simple = func_name.rsplit("::").next().unwrap_or(&func_name);
+        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
         gen.extern_function_names.contains(simple)
     };
 
-    let args: Vec<String> =
-        super::argument_generation::collect_regular_function_arguments(
-            gen,
-            func_name,
-            func_str.as_str(),
-            arguments,
-            &signature,
-            signature_from_simple_fallback,
-            is_extern_call,
-        );
+    let args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
+        gen,
+        func_name,
+        func_str.as_str(),
+        arguments,
+        &signature,
+        signature_from_simple_fallback,
+        is_extern_call,
+    );
 
     // TDD FIX (Bug #3): Extract format!() macros in arguments to temp variables
     // The args vec has already been generated as Rust strings

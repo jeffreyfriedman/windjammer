@@ -21,6 +21,7 @@ pub(crate) enum MainCodegenOutcome {
     RustCode(String),
 }
 
+#[allow(clippy::too_many_arguments)] // Single entry point for full compile pipeline
 pub(crate) fn generate_main_rust_code<'ast>(
     target: CompilationTarget,
     source_root: &Path,
@@ -43,7 +44,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
             ..Default::default()
         };
 
-        let output = codegen::generate(&program, Target::Go, Some(config))
+        let output = codegen::generate(program, Target::Go, Some(config))
             .map_err(|e| anyhow::anyhow!("Go codegen error: {}", e))?;
 
         let output_file = output_dir.join("main.go");
@@ -70,7 +71,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
                 ..Default::default()
             };
 
-            let output = codegen::generate(&program, Target::WebAssembly, Some(config))
+            let output = codegen::generate(program, Target::WebAssembly, Some(config))
                 .map_err(|e| anyhow::anyhow!("Component codegen error: {}", e))?;
 
             let output_file = output_dir.join("lib.rs");
@@ -211,6 +212,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     Ok(MainCodegenOutcome::RustCode(result))
 }
 
+#[allow(clippy::too_many_arguments)] // Mirrors `generate_main_rust_code` callers
 pub(crate) fn write_single_file_outputs<'ast>(
     target: CompilationTarget,
     source_root: &Path,

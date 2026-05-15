@@ -160,15 +160,12 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 "::" // Module path: std::fs or Type::CONST
             }
-            Expression::FieldAccess { .. } => {
+            Expression::FieldAccess { .. }
                 // Check if this is a module path or a field chain
                 // If the object string contains ::, it's a module path
-                if obj_str.contains("::") {
+                if obj_str.contains("::") => {
                     "::" // Module path: std::fs::File
-                } else {
-                    "." // Field chain: transform.position.x
                 }
-            }
             _ => ".", // Actual field access (e.g., config.field)
         };
 

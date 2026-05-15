@@ -9,7 +9,6 @@
     )),
     feature = "analyzer_tests",
 ))]
-
 #![allow(unused)]
 //! Analyzer ownership: control flow and iterators.
 #[path = "../common/test_utils.rs"]

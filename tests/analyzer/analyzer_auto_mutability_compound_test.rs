@@ -81,10 +81,8 @@ fn main() {
             }
             None
         }
-        find_rs(&test_dir.join("build"), "compound.rs").expect(&format!(
-            "Could not find compound.rs in {:?}/build/",
-            test_dir
-        ))
+        find_rs(&test_dir.join("build"), "compound.rs").unwrap_or_else(|| panic!("Could not find compound.rs in {:?}/build/",
+            test_dir))
     };
 
     let rust_code = fs::read_to_string(&rust_file).unwrap();

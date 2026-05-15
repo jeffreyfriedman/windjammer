@@ -2,8 +2,8 @@
 
 use crate::parser::*;
 
-use super::argument_generation;
 use super::super::CodeGenerator;
+use super::argument_generation;
 
 /// Parser sometimes emits `Call { function: FieldAccess { .. }, args }` instead of `MethodCall`.
 #[allow(clippy::too_many_arguments)]

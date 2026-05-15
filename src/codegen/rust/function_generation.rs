@@ -8,7 +8,6 @@
 //! - Self parameter inference and builder pattern detection
 
 use crate::analyzer::*;
-use crate::parser::*;
 
 use super::CodeGenerator;
 

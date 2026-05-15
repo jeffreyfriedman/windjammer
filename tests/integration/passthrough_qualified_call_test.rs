@@ -49,7 +49,7 @@ fn compile_wj_to_rust(source: &str) -> String {
                 let path = entry.path();
                 if path.is_dir() {
                     find_rs_files(&path, results);
-                } else if path.extension().map_or(false, |e| e == "rs") {
+                } else if path.extension().is_some_and(|e| e == "rs") {
                     results.push(path);
                 }
             }

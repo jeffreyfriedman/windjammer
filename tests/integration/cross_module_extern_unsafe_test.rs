@@ -49,20 +49,16 @@ fn compile_wj_to_rust(source: &str) -> String {
 
     // Try to find any .rs file
     if let Ok(entries) = std::fs::read_dir(&test_dir) {
-        for entry in entries {
-            if let Ok(e) = entry {
-                if e.path().extension().map(|x| x == "rs").unwrap_or(false) {
-                    return std::fs::read_to_string(e.path()).unwrap_or_default();
-                }
+        for e in entries.flatten() {
+            if e.path().extension().map(|x| x == "rs").unwrap_or(false) {
+                return std::fs::read_to_string(e.path()).unwrap_or_default();
             }
         }
     }
     if let Ok(build_dir) = std::fs::read_dir(test_dir.join("build")) {
-        for entry in build_dir {
-            if let Ok(e) = entry {
-                if e.path().extension().map(|x| x == "rs").unwrap_or(false) {
-                    return std::fs::read_to_string(e.path()).unwrap_or_default();
-                }
+        for e in build_dir.flatten() {
+            if e.path().extension().map(|x| x == "rs").unwrap_or(false) {
+                return std::fs::read_to_string(e.path()).unwrap_or_default();
             }
         }
     }
