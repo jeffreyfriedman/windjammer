@@ -9,7 +9,6 @@
     )),
     feature = "integration_tests",
 ))]
-
 #![allow(unused)]
 // Dogfooding — copy detection, self patterns, iterator borrows.
 #[path = "../common/test_utils.rs"]

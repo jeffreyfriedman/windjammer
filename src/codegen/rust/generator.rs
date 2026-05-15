@@ -3,7 +3,6 @@
 
 // Rust code generator
 use crate::analyzer::*;
-use crate::codegen::rust::expression_helpers;
 use crate::parser::*;
 use crate::CompilationTarget;
 use std::cell::Cell;

@@ -87,7 +87,10 @@ fn compile_and_check_rust_compiles(wj_file: &str, test_name: &str) {
             test_name,
             rs_name,
             fs::read_dir(work.path())
-                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect::<Vec<_>>())
+                .map(|d| d
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .collect::<Vec<_>>())
                 .unwrap_or_default()
         )
     });
@@ -152,7 +155,10 @@ fn compile_and_check_generated_rust(wj_file: &str, expected_imports: &[&str], te
             test_name,
             rs_name,
             fs::read_dir(work.path())
-                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect::<Vec<_>>())
+                .map(|d| d
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .collect::<Vec<_>>())
                 .unwrap_or_default()
         )
     });

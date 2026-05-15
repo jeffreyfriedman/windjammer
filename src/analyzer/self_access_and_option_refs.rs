@@ -3,6 +3,8 @@
 use crate::parser::*;
 
 use super::Analyzer;
+
+#[allow(dead_code)] // Entry points retained for Option/self analysis experiments
 impl<'ast> Analyzer<'ast> {
     pub(super) fn function_accesses_self_fields(&self, func: &FunctionDecl) -> bool {
         for stmt in &func.body {

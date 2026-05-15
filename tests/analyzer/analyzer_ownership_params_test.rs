@@ -9,7 +9,6 @@
     )),
     feature = "analyzer_tests",
 ))]
-
 #![allow(unused)]
 //! Analyzer ownership: parameters, explicit annotations, self.
 #[path = "../common/test_utils.rs"]

@@ -34,7 +34,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     let prev_suppress = self.suppress_string_conversion.get();
                     self.suppress_string_conversion.set(true);
-                    let fmt = self.generate_expression(&args[0]);
+                    let fmt = self.generate_expression(args[0]);
                     self.suppress_string_conversion.set(prev_suppress);
                     let rest: Vec<String> = args[1..]
                         .iter()
@@ -102,7 +102,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 )
             {
-                vec!["\"{}\"".to_string(), self.generate_expression(&args[0])]
+                vec!["\"{}\"".to_string(), self.generate_expression(args[0])]
             } else {
                 args.iter().map(|e| self.generate_expression(e)).collect()
             }

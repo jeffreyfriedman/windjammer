@@ -17,6 +17,8 @@
 //! The existing `CodeGenerator` is preserved and re-exported for backward compatibility.
 //! New code should use the `CodegenBackend` trait interface.
 
+#![allow(clippy::collapsible_match)] // Binary crates do not inherit `lib.rs` crate attributes
+
 // New modular backends
 pub mod backend;
 pub mod go;

@@ -23,7 +23,6 @@
 /// the parameter needs &mut. This is safe because:
 /// 1. If the method actually takes &self, the generated &mut will still compile (Rust auto-reborrows)
 /// 2. If the method takes &mut self, we correctly generate &mut
-
 fn compile_wj_to_rust(source: &str) -> String {
     use std::process::Command;
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

@@ -6,11 +6,7 @@ use crate::parser::*;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
-    fn statement_binding_mut_method_scan(
-        &self,
-        stmt: &Statement<'ast>,
-        binding: &str,
-    ) -> bool {
+    fn statement_binding_mut_method_scan(&self, stmt: &Statement<'ast>, binding: &str) -> bool {
         match stmt {
             Statement::Assignment { target, .. } => {
                 super::self_analysis::expression_references_variable_or_field(target, binding)

@@ -9,12 +9,10 @@
     )),
     feature = "codegen_tests",
 ))]
-
 // TDD Tests for Constant Folding Optimization
 // Tests written FIRST before extraction!
 //
 // UPDATED: Now using standard AST builder functions!
-
 #![allow(clippy::needless_borrow)]
 
 use windjammer::codegen::rust::constant_folding::*;

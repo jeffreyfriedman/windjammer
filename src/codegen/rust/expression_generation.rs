@@ -8,13 +8,9 @@
 //! - Closures, blocks, match expressions
 //! - Cast, try, await, range expressions
 
-use crate::analyzer::*;
 use crate::parser::*;
 
-use super::ast_utilities;
 use super::constant_folding;
-use super::expression_helpers;
-use super::expression_utilities;
 use super::float_type_utilities;
 use super::pattern_analysis;
 use super::CodeGenerator;
@@ -410,7 +406,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self
                 .infer_expression_type(arg_to_generate)
                 .as_ref()
-                .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
             {
                 return format!("&{}", arg_str);
             }
@@ -603,60 +599,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Generate code for identifier expression
-    /// Handles:
-    /// - Implicit self.field access (in impl blocks)
-    /// - Auto-clone analysis for variables
-    /// - Copy type optimization (skip .clone())
-    /// - Reference dereferencing (*ref for Copy types)
-
-    /// Generate code for try operator expression (expr?)
-
-    /// Try to generate a test macro call (assert_eq!, panic!, vec!, etc.)
-    /// Returns Some(code) if this is a test macro, None otherwise
-
-    /// Try to convert print/println/eprintln/eprint to macros
-    /// Returns Some(code) if this is a print function, None otherwise
-
-    /// Generate code for block expression ({ ... })
-    /// Handles:
-    /// - Unsafe blocks (unsafe { ... })
-    /// - Match expression optimization (single-statement blocks with match)
-    /// - If-let pattern detection
-    /// - String literal auto-conversion in match arms
-    /// - Implicit returns for last expression
-
-    /// Generate code for await expression (expr.await)
-
-    /// Generate code for channel send expression (channel.send(value))
-
-    /// Generate code for channel receive expression (channel.recv())
-
-    /// Generate code for range expression (start..end or start..=end)
-    /// TDD FIX: Range type unification for 0..vec.len()
-
-    /// Generate code for tuple expression
-
-    /// Generate code for cast expression (expr as Type)
-    /// E0606 FIX: Cannot cast &T as U - auto-deref borrowed parameters first
-
-    /// Generate code for map literal expression
-    /// Produces HashMap::new() for empty maps, HashMap::from([...]) for non-empty
-
-    /// Generate code for unary expression (!expr, -expr, *expr, &expr, &mut expr)
-
-    /// Generate code for macro invocation expression
-    /// Handles format!, println!, vec!, and other macros with special semantics
-
-    /// Generate code for field access expression (object.field)
-    /// Handles module paths (::), auto-clone for non-Copy fields, borrowed iterators
-
-    /// Generate code for struct literal expression Struct { field: value }
-    /// Handles string coercion, field shorthand, auto-clone for borrowed self
-
-    /// Generate code for index expression array[index]
-    /// Handles auto-cast to usize, slice syntax, auto-borrow/clone for non-Copy elements
-
+    /// Whether string literals in this context coerce to owned `String` (match arms, inference).
     #[inline]
     fn should_coerce_string_literal_to_owned(&self) -> bool {
         !self.suppress_string_conversion.get()
@@ -760,14 +703,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Old context-sensitive approach (fallback when inference not available)
-
-    /// Generate literal without expression context (used in older code paths)
-
-    /// Generate efficient string concatenation using format! macro
-
-    /// `f32`/`f64` classification for binary operand codegen (inference + casts + WJ types).
-    /// Used for E0507 Option::map fix - self.children.map() needs .as_ref()
+    /// Walks field/index chains to see if codegen traces to `self`.
+    ///
+    /// Used for `f32`/`f64` classification and E0507 `Option::map` (`self.children.map()` → `.as_ref()`).
     pub(in crate::codegen::rust) fn codegen_expression_traces_to_self(
         &self,
         expr: &Expression,

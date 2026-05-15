@@ -28,12 +28,7 @@ fn rust_compiles(rust_code: &str) -> bool {
     let rs_path = temp_dir.path().join("test.rs");
     std::fs::write(&rs_path, rust_code).expect("write");
     let output = Command::new("rustc")
-        .args([
-            "--crate-type=lib",
-            "--emit=metadata",
-            "--edition",
-            "2021",
-        ])
+        .args(["--crate-type=lib", "--emit=metadata", "--edition", "2021"])
         .arg("-o")
         .arg(temp_dir.path().join("verify.rmeta"))
         .arg(&rs_path)

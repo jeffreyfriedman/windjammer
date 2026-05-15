@@ -15,8 +15,6 @@
 
 use windjammer::analyzer::OwnershipMode;
 use windjammer::codegen::rust::ownership_tracker::OwnershipTracker;
-use windjammer::parser::ast::builders::*;
-use windjammer::parser::ast::operators::BinaryOp;
 use windjammer::parser::Expression;
 use windjammer::test_utils::test_alloc_expr;
 

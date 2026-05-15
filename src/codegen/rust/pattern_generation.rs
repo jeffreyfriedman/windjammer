@@ -247,7 +247,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::Index { object, .. } => {
                 // Vec/array indexing can return references
-                if let Some(ty) = self.infer_expression_type(&**object) {
+                if let Some(ty) = self.infer_expression_type(object) {
                     matches!(ty, Type::Vec(_) | Type::Array(_, _))
                 } else {
                     false

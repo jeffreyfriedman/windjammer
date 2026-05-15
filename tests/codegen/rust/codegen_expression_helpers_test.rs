@@ -9,12 +9,10 @@
     )),
     feature = "codegen_tests",
 ))]
-
 // TDD Tests for expression helper functions (Phase 8)
 // These tests are written BEFORE extracting the functions
 //
 // UPDATED: Now using AST builder functions!
-
 #![allow(clippy::needless_borrow)]
 
 use windjammer::codegen::rust::expression_helpers::{is_const_evaluable, is_reference_expression};

@@ -1,5 +1,7 @@
 //! Expression allocators for OwnershipTracker integration tests.
 
+#![allow(dead_code)] // Helpers shared across analyzer tests; not every test uses every allocator
+
 use windjammer::parser::ast::builders::*;
 use windjammer::parser::ast::operators::BinaryOp;
 use windjammer::parser::Expression;

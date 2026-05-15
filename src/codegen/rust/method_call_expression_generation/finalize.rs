@@ -5,7 +5,7 @@ use crate::parser::*;
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     pub(in crate::codegen::rust) fn mc_finalize_method_call_expression(
         &mut self,
         object: &Expression<'ast>,
@@ -155,13 +155,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // If the object is an identifier that looks like a module, use ::
                 // Otherwise, use . for instance methods on fields
                 match object {
-                    Expression::Identifier { name, .. } => {
-                        if name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "std" {
+                    Expression::Identifier { name, .. }
+                        if (name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "std") => {
                             "::" // Module::path::method() -> static method
-                        } else {
-                            "." // self.field.method() or variable.field.method() -> instance method
                         }
-                    }
                     _ => ".", // Default to instance method
                 }
             }

@@ -135,7 +135,6 @@ pub fn colorize_diagnostic(text: &str, _level: &error_mapper::DiagnosticLevel) -
 
 /// Lint a Windjammer project using the LSP diagnostics engine
 #[allow(dead_code)]
-
 pub fn create_cargo_toml_with_deps(
     output_dir: &Path,
     imported_modules: &HashSet<String>,

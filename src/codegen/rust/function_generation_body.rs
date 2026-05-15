@@ -1,6 +1,5 @@
 //! Return type / where-clause / brace and generated body for regular functions.
 
-use crate::analyzer::*;
 use crate::codegen::rust::codegen_helpers;
 use crate::parser::*;
 

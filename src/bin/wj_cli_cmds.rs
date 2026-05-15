@@ -231,10 +231,7 @@ fn cmd_explain(code: &str) -> Result<()> {
     Ok(())
 }
 
-fn cmd_shader_compile(
-    input: &std::path::Path,
-    output: Option<&std::path::Path>,
-) -> Result<()> {
+fn cmd_shader_compile(input: &std::path::Path, output: Option<&std::path::Path>) -> Result<()> {
     let source = std::fs::read_to_string(input)
         .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", input.display(), e))?;
     let wgsl = windjammer::shader::compile_shader(&source)?;
