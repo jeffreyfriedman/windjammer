@@ -16,7 +16,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///   function (sequential loops), so the first loop must not move it (E0382).
     ///
     /// Applies to locals **and** parameters (parameters were incorrectly skipped before).
-    pub(super) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
+    pub(crate) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
         self.for_loop_borrow_needed.clear();
         let mut counts: HashMap<String, usize> = HashMap::new();
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
@@ -330,7 +330,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Does **not** apply to parameters declared as Windjammer `int` (`idx < vec.len()` stays `int`
     /// and codegen casts `.len()` to `i64`).
-    pub(super) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
+    pub(crate) fn mark_usize_variables_in_condition(&mut self, condition: &Expression) {
         self.walk_condition_mark_usize_loop_counters(condition);
     }
 

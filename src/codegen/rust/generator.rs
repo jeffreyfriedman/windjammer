@@ -17,15 +17,15 @@ pub struct CodeGenerator<'ast> {
     pub(crate) in_trait_impl: bool, // true if currently generating code for a trait implementation
     /// When in a trait impl, the trait name (for looking up analyzed_trait_methods)
     pub(crate) current_trait_impl_name: Option<String>,
-    needs_wasm_imports: bool,
-    needs_web_imports: bool,
-    needs_js_imports: bool,
-    needs_serde_imports: bool,           // For JSON support
+    pub(crate) needs_wasm_imports: bool,
+    pub(crate) needs_web_imports: bool,
+    pub(crate) needs_js_imports: bool,
+    pub(crate) needs_serde_imports: bool, // For JSON support
     pub(crate) needs_write_import: bool, // For string capacity optimization (write! macro)
-    needs_smallvec_import: bool,         // For Phase 8 SmallVec optimization
+    pub(crate) needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
     pub(crate) needs_cow_import: bool,   // For Phase 9 Cow optimization
-    needs_hashmap_import: bool,          // Auto-detect HashMap usage
-    needs_hashset_import: bool,          // Auto-detect HashSet usage
+    pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
+    pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -34,7 +34,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
-    bound_aliases: std::collections::HashMap<String, Vec<String>>,     // bound Name = Trait + Trait
+    pub(crate) bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
     // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
     pub(crate) clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
     // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
@@ -658,7 +658,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Generate an item inside an inline module
-    fn generate_inline_module_item(
+    pub(crate) fn generate_inline_module_item(
         &mut self,
         item: &Item<'ast>,
         analyzed: &[AnalyzedFunction<'ast>],
