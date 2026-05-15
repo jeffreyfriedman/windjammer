@@ -1,0 +1,169 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
+//! TDD Test: Trait method declarations without bodies
+//! WINDJAMMER PHILOSOPHY: Traits should support method declarations without bodies
+//! This enables proper trait definitions that implementations must fulfill
+
+#[path = "../common/test_utils.rs"]
+mod test_utils;
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_trait_method_no_body_single() {
+    // TDD: Simple trait with single method without body
+    let code = r#"
+    pub trait Drawable {
+        fn draw(&self);
+    }
+    "#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    // Should generate trait with method declaration ending in semicolon
+    assert!(
+        generated.contains("fn draw(&self);"),
+        "Trait method without body should end with semicolon. Generated:\n{}",
+        generated
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_trait_method_no_body_multiple() {
+    // TDD: Trait with multiple methods without bodies
+    let code = r#"
+    pub trait GameLoop {
+        fn init(&mut self);
+        fn update(&mut self, delta: f32);
+        fn render(&self);
+    }
+    "#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    assert!(
+        generated.contains("fn init(&mut self);"),
+        "Expected init method. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("fn update(&mut self, delta: f32);"),
+        "Expected update method. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("fn render(&self);"),
+        "Expected render method. Generated:\n{}",
+        generated
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_trait_method_mixed_bodies() {
+    // TDD: Trait with some methods having default implementations and some not
+    let code = r#"
+    pub trait Updatable {
+        fn update(&mut self);
+        
+        fn tick(&mut self) {
+            self.update()
+        }
+    }
+    "#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    // Method without body should have semicolon
+    assert!(
+        generated.contains("fn update(&mut self);"),
+        "Method without body should end with semicolon. Generated:\n{}",
+        generated
+    );
+
+    // Method with default impl should have body
+    assert!(
+        generated.contains("fn tick(&mut self) {"),
+        "Method with default impl should have body. Generated:\n{}",
+        generated
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_trait_impl_with_no_body_trait() {
+    // TDD: Full trait + impl scenario
+    let code = r#"
+    pub trait Drawable {
+        fn draw(&self);
+        fn update(&mut self, delta: f32);
+    }
+    
+    pub struct Sprite {
+        pub x: f32,
+        pub y: f32,
+    }
+    
+    impl Drawable for Sprite {
+        fn draw(&self) {
+            let _pos = self.x + self.y
+        }
+        
+        fn update(&mut self, delta: f32) {
+            self.x = self.x + delta;
+            self.y = self.y + delta
+        }
+    }
+    "#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    // Trait should have method declarations
+    assert!(
+        generated.contains("fn draw(&self);"),
+        "Trait method should end with semicolon. Generated:\n{}",
+        generated
+    );
+
+    // Impl should have method bodies
+    assert!(
+        generated.contains("fn draw(&self) {") || generated.contains("pub fn draw(&self) {"),
+        "Impl method should have body. Generated:\n{}",
+        generated
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_trait_method_with_return_type() {
+    // TDD: Trait method without body but with return type
+    let code = r#"
+    pub trait Calculator {
+        fn add(&self, a: int, b: int) -> int;
+        fn multiply(&self, a: int, b: int) -> int;
+    }
+    "#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    assert!(
+        generated.contains("fn add(&self, a: i64, b: i64) -> i64;"),
+        "Method with return type should end with semicolon. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("fn multiply(&self, a: i64, b: i64) -> i64;"),
+        "Method with return type should end with semicolon. Generated:\n{}",
+        generated
+    );
+}
