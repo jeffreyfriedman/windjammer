@@ -11,7 +11,10 @@ mod ast;
 mod codegen;
 mod lexer;
 pub mod parser;
+mod shader_type_rules;
 mod type_checker;
+mod expression_type_checking;
+mod statement_type_checking;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
