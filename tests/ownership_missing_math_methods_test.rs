@@ -10,31 +10,39 @@ use std::process::Command;
 
 fn compile_wj(source: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
-    let wj_path = dir.path().join("test.wj");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    std::fs::create_dir_all(&out_dir).unwrap();
+
+    let wj_path = src_dir.join("test.wj");
     std::fs::write(&wj_path, source).unwrap();
 
-    let wj_bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
-    let wj_bin = if wj_bin.exists() {
-        wj_bin
-    } else {
-        std::path::PathBuf::from("wj")
-    };
+    let wj_bin = env!("CARGO_BIN_EXE_wj");
 
-    let output = Command::new(&wj_bin)
+    let output = Command::new(wj_bin)
         .arg("build")
-        .arg(&wj_path)
+        .arg(&src_dir)
+        .arg("--output")
+        .arg(&out_dir)
         .arg("--target")
         .arg("rust")
         .output()
         .expect("failed to run wj");
 
-    let rs_path = dir.path().join("test.rs");
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        panic!("Compilation failed:\nstdout: {}\nstderr: {}", stdout, stderr);
+    }
+
+    let rs_path = out_dir.join("test.rs");
     if rs_path.exists() {
         std::fs::read_to_string(&rs_path).unwrap()
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Compilation failed: {}", stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        panic!("Generated file not found at {:?}\nstdout: {}\nstderr: {}", rs_path, stdout, stderr);
     }
 }
 
