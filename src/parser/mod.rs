@@ -24,6 +24,12 @@ pub mod expression_parser;
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;
 
+// Item sub-parsers (split from item_parser for maintainability)
+pub mod enum_parser;
+pub mod function_parser;
+pub mod struct_parser;
+pub mod trait_parser;
+
 // Item parsing module - extracted from parser_impl.rs
 pub mod item_parser;
 
