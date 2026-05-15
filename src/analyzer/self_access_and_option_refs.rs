@@ -1,5 +1,4 @@
 //! Self field reads, Option-scrutinee paths, variable references.
-use std::collections::HashSet;
 
 use crate::parser::*;
 
@@ -15,7 +14,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if a statement accesses self fields
-    fn statement_accesses_self_fields(&self, stmt: &Statement) -> bool {
+    pub(crate) fn statement_accesses_self_fields(&self, stmt: &Statement) -> bool {
         match stmt {
             Statement::Expression { expr, .. }
             | Statement::Return {
@@ -56,7 +55,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if expression accesses self fields
     #[allow(clippy::only_used_in_recursion)]
-    fn expression_accesses_self_fields(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_accesses_self_fields(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name == "self")
@@ -91,7 +90,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// `match self.opt { Some(x) => x.foo() }` where `foo` takes `&mut self` requires `&mut self` on the outer method.
-    fn function_mutates_through_self_option_scrutinee(
+    pub(crate) fn function_mutates_through_self_option_scrutinee(
         &self,
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
@@ -101,7 +100,7 @@ impl<'ast> Analyzer<'ast> {
             .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
     }
 
-    fn statement_mutates_through_self_option_scrutinee(
+    pub(crate) fn statement_mutates_through_self_option_scrutinee(
         &self,
         stmt: &Statement,
         registry: Option<&super::SignatureRegistry>,
@@ -137,7 +136,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn match_arm_some_calls_mut_method_on_binding(
+    pub(crate) fn match_arm_some_calls_mut_method_on_binding(
         &self,
         arm: &MatchArm,
         registry: Option<&super::SignatureRegistry>,
@@ -155,7 +154,7 @@ impl<'ast> Analyzer<'ast> {
         self.expr_calls_mut_self_method_on_identifier(arm.body, binding, registry)
     }
 
-    fn expr_calls_mut_self_method_on_identifier(
+    pub(crate) fn expr_calls_mut_self_method_on_identifier(
         &self,
         expr: &Expression,
         id: &str,
@@ -204,7 +203,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn block_expr_calls_mut_self_on_id<'s>(
+    pub(crate) fn block_expr_calls_mut_self_on_id<'s>(
         &self,
         block: &[&'s Statement<'s>],
         id: &str,

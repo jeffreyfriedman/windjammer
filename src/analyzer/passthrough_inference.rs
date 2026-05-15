@@ -7,12 +7,12 @@ use crate::parser::*;
 use super::{Analyzer, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
-    fn strip_type_generics(name: &str) -> String {
+    pub(crate) fn strip_type_generics(name: &str) -> String {
         name.split('<').next().unwrap_or(name).to_string()
     }
 
     /// Structural type name used as `SignatureRegistry` keys (`Inventory`, `Merchant`, …).
-    fn type_to_struct_base(ty: &Type) -> Option<String> {
+    pub(crate) fn type_to_struct_base(ty: &Type) -> Option<String> {
         match ty {
             Type::Custom(name) => Some(Self::strip_type_generics(name)),
             Type::Parameterized(base, _) => Some(Self::strip_type_generics(base)),
@@ -24,7 +24,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Resolve the static type backing a method-call receiver (`self`, param, `self.field`, …).
-    fn infer_receiver_type_base(&self, object: &Expression, func: &FunctionDecl<'ast>) -> Option<String> {
+    pub(crate) fn infer_receiver_type_base(&self, object: &Expression, func: &FunctionDecl<'ast>) -> Option<String> {
         match object {
             Expression::Identifier { name, .. } if name == "self" => func
                 .parent_type
@@ -51,8 +51,41 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Static type for `self...` receivers inside an `impl`, for `Type::method` registry keys.
+    pub(crate) fn static_value_type_of_self_rooted_expr(
+        &self,
+        _program: &Program<'ast>,
+        impl_type_base: &str,
+        expr: &Expression<'ast>,
+    ) -> Option<Type> {
+        match expr {
+            Expression::Identifier { name, .. } if name == "self" => {
+                Some(Type::Custom(impl_type_base.to_string()))
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                let inner_ty =
+                    self.static_value_type_of_self_rooted_expr(_program, impl_type_base, object)?;
+                let inner_base = Self::type_to_struct_base(&inner_ty)?;
+                self.global_struct_field_types
+                    .get(&inner_base)
+                    .and_then(|m| m.get(field.as_str()))
+                    .cloned()
+            }
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                operand,
+                ..
+            } => self.static_value_type_of_self_rooted_expr(_program, impl_type_base, operand),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn type_base_for_qualified_sig_lookup(ty: &Type) -> Option<String> {
+        Self::type_to_struct_base(ty)
+    }
+
     /// Registry lookup key matching [`SignatureRegistry`] (`Type::method`), not ambiguous `method` alone.
-    fn qualified_method_registry_key(
+    pub(crate) fn qualified_method_registry_key(
         &self,
         object: &Expression,
         method: &str,
@@ -174,7 +207,7 @@ impl<'ast> Analyzer<'ast> {
     /// TDD: Infer ownership from method calls made ON the parameter
     /// E.g., `grid.set(42)` where `set(&mut self, ...)` → grid needs `&mut Grid`
     /// E.g., `grid.get(0)` where `get(&self, ...)` → grid needs `&Grid`
-    fn infer_from_method_calls_on_param(
+    pub(crate) fn infer_from_method_calls_on_param(
         &self,
         param_name: &str,
         body: &[&'ast Statement<'ast>],
@@ -216,7 +249,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Collect method calls made ON the parameter (param is the receiver)
     /// E.g., `grid.set(42)` → collect "set"
-    fn collect_method_calls_on_param(
+    pub(crate) fn collect_method_calls_on_param(
         &self,
         param_name: &str,
         body: &[&'ast Statement<'ast>],
@@ -227,7 +260,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn collect_method_calls_from_stmt(
+    pub(crate) fn collect_method_calls_from_stmt(
         &self,
         param_name: &str,
         stmt: &Statement,
@@ -285,7 +318,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn collect_method_calls_from_expr(
+    pub(crate) fn collect_method_calls_from_expr(
         &self,
         param_name: &str,
         expr: &Expression,
@@ -339,7 +372,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Helper: Collect all function calls where param is passed as an argument
     /// Returns (function_name, argument_position, is_self_field_call)
-    fn collect_passthrough_calls(
+    pub(crate) fn collect_passthrough_calls(
         &self,
         param_name: &str,
         body: &[&'ast Statement<'ast>],
@@ -351,7 +384,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn collect_passthrough_from_stmt(
+    pub(crate) fn collect_passthrough_from_stmt(
         &self,
         param_name: &str,
         stmt: &Statement,
@@ -429,7 +462,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn collect_passthrough_from_expr(
+    pub(crate) fn collect_passthrough_from_expr(
         &self,
         param_name: &str,
         expr: &Expression,
@@ -508,7 +541,7 @@ impl<'ast> Analyzer<'ast> {
         matches!(expr, Expression::Identifier { name: id, .. } if id == name)
     }
 
-    fn extract_function_name(&self, expr: &Expression) -> Option<String> {
+    pub(crate) fn extract_function_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { field, .. } => Some(field.clone()),

@@ -1,5 +1,4 @@
 //! Inferring `&mut self` upgrades for dispatched `for` loops over `self` fields.
-use std::collections::HashSet;
 
 use crate::parser::*;
 
@@ -38,7 +37,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn function_body_has_dispatch_for_loop_needing_mut_self(
+    pub(crate) fn function_body_has_dispatch_for_loop_needing_mut_self(
         &self,
         statements: &[&'ast Statement<'ast>],
         impl_ty: &str,
@@ -50,7 +49,7 @@ impl<'ast> Analyzer<'ast> {
             .any(|s| self.statement_tree_has_dispatch_for_loop(s, impl_ty, program, registry))
     }
 
-    fn statement_tree_has_dispatch_for_loop(
+    pub(crate) fn statement_tree_has_dispatch_for_loop(
         &self,
         stmt: &Statement<'ast>,
         impl_ty: &str,
@@ -117,7 +116,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn statement_tree_has_dispatch_for_loop_in_expr(
+    pub(crate) fn statement_tree_has_dispatch_for_loop_in_expr(
         &self,
         expr: &Expression<'ast>,
         impl_ty: &str,
@@ -132,7 +131,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn for_loop_over_self_field_triggers_mut_self(
+    pub(crate) fn for_loop_over_self_field_triggers_mut_self(
         &self,
         pattern: &Pattern,
         iterable: &Expression<'ast>,
@@ -171,7 +170,7 @@ impl<'ast> Analyzer<'ast> {
             .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, peeled, registry))
     }
 
-    fn peel_ref_expr<'e>(expr: &'e Expression<'ast>) -> &'e Expression<'ast> {
+    pub(crate) fn peel_ref_expr<'e>(expr: &'e Expression<'ast>) -> &'e Expression<'ast> {
         match expr {
             Expression::Unary {
                 op: UnaryOp::Ref | UnaryOp::MutRef,
@@ -182,7 +181,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn lookup_struct_field_type(
+    pub(crate) fn lookup_struct_field_type(
         program: &Program<'ast>,
         struct_name: &str,
         field: &str,
@@ -191,7 +190,7 @@ impl<'ast> Analyzer<'ast> {
         Self::lookup_struct_field_type_items(&program.items, base, field)
     }
 
-    fn lookup_struct_field_type_items(
+    pub(crate) fn lookup_struct_field_type_items(
         items: &[crate::parser::Item<'ast>],
         struct_base: &str,
         field: &str,
@@ -220,7 +219,7 @@ impl<'ast> Analyzer<'ast> {
         None
     }
 
-    fn type_vec_element(ty: &Type) -> Option<Type> {
+    pub(crate) fn type_vec_element(ty: &Type) -> Option<Type> {
         match ty {
             Type::Vec(inner) => Some(inner.as_ref().clone()),
             Type::Reference(inner) | Type::MutableReference(inner) => Self::type_vec_element(inner),
@@ -228,7 +227,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn peel_box_and_ref_type(ty: &Type) -> &Type {
+    pub(crate) fn peel_box_and_ref_type(ty: &Type) -> &Type {
         match ty {
             Type::Parameterized(name, args)
                 if (name == "Box" || name.ends_with("::Box")) && args.len() == 1 =>
@@ -242,7 +241,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn trait_method_self_ownership_lookup(
+    pub(crate) fn trait_method_self_ownership_lookup(
         &self,
         trait_name: &str,
         method: &str,
@@ -267,7 +266,7 @@ impl<'ast> Analyzer<'ast> {
         None
     }
 
-    fn type_needs_mut_receiver_for_method(
+    pub(crate) fn type_needs_mut_receiver_for_method(
         &self,
         elem: &Type,
         method: &str,
@@ -287,7 +286,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmt_calls_mut_dispatch_on_var(
+    pub(crate) fn stmt_calls_mut_dispatch_on_var(
         &self,
         stmt: &Statement<'ast>,
         loop_var: &str,
@@ -365,7 +364,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expr_calls_mut_dispatch_on_var(
+    pub(crate) fn expr_calls_mut_dispatch_on_var(
         &self,
         expr: &Expression<'ast>,
         loop_var: &str,

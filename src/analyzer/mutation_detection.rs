@@ -14,7 +14,7 @@ impl<'ast> Analyzer<'ast> {
     /// When we see `arr[i].method()`, only `arr` is being used mutably, NOT `i`.
     /// The index `i` is just being READ to select which element to call the method on.
     #[allow(dead_code)] // Reserved for future mutation analysis
-    fn expr_contains_identifier(&self, name: &str, expr: &Expression) -> bool {
+    pub(crate) fn expr_contains_identifier(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
             Expression::FieldAccess { object, .. } => self.expr_contains_identifier(name, object),
@@ -154,7 +154,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Match arm bodies are expressions; blocks contain real statement lists.
-    fn is_mutated_in_match_arm_body(
+    pub(crate) fn is_mutated_in_match_arm_body(
         &self,
         name: &str,
         scrutinee: &Expression<'ast>,
@@ -173,7 +173,7 @@ impl<'ast> Analyzer<'ast> {
     /// `if let Some(x) = param[i]` with `Option` inner `Copy`: mutating `x` must update `param`'s
     /// slot, so treat `param` as mut-borrowed. Plain `is_mutated` misses this because assignments
     /// target `x`, not `param`.
-    fn if_let_some_mutates_indexed_binding_of_param(
+    pub(crate) fn if_let_some_mutates_indexed_binding_of_param(
         &self,
         param: &str,
         scrutinee: &Expression<'ast>,
@@ -195,7 +195,7 @@ impl<'ast> Analyzer<'ast> {
         self.match_arm_body_mutates_binding(inner_binding, arm.body, registry)
     }
 
-    fn enum_some_single_binding<'p>(pattern: &'p Pattern<'p>) -> Option<&'p str> {
+    pub(crate) fn enum_some_single_binding<'p>(pattern: &'p Pattern<'p>) -> Option<&'p str> {
         match pattern {
             Pattern::EnumVariant(v, EnumPatternBinding::Single(name))
                 if v == "Some" || v.ends_with("::Some") =>
@@ -207,7 +207,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True if `expr` is or contains an index operation (`vec[i]`, `a.b[i]`).
-    fn expr_has_indexed_access(expr: &Expression<'_>) -> bool {
+    pub(crate) fn expr_has_indexed_access(expr: &Expression<'_>) -> bool {
         match expr {
             Expression::Index { .. } => true,
             Expression::FieldAccess { object, .. } => Self::expr_has_indexed_access(object),
@@ -215,7 +215,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn match_binding_is_assignment_target(expr: &Expression, var: &str) -> bool {
+    pub(crate) fn match_binding_is_assignment_target(expr: &Expression, var: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == var,
             Expression::FieldAccess { object, .. } => {
@@ -233,7 +233,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn match_arm_body_mutates_binding(
+    pub(crate) fn match_arm_body_mutates_binding(
         &self,
         binding: &str,
         body: &Expression<'ast>,
@@ -250,7 +250,7 @@ impl<'ast> Analyzer<'ast> {
     /// Like [Self::has_mutable_method_call], plus: unknown methods on `binding` (not known &-self
     /// std APIs) count as mutations. Used only for `if let Some(x) = vec[i]` bodies so `.add()` on
     /// a Copy `Option` payload is not mistaken for a read (see mutability_complete_test).
-    fn expr_may_mutate_if_let_some_binding(
+    pub(crate) fn expr_may_mutate_if_let_some_binding(
         &self,
         binding: &str,
         expr: &Expression<'ast>,
@@ -267,7 +267,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn stmt_mutates_binding_in_tree(
+    pub(crate) fn stmt_mutates_binding_in_tree(
         &self,
         stmt: &Statement<'ast>,
         binding: &str,
@@ -324,7 +324,7 @@ impl<'ast> Analyzer<'ast> {
     /// THE WINDJAMMER WAY: Array indices are NEVER mutation targets!
     /// When we see `arr[i] = x`, only `arr` is mutated, NOT `i`.
     /// This is critical for Copy types like usize - they should stay owned (by value).
-    fn is_direct_mutation_target(&self, name: &str, target: &Expression) -> bool {
+    pub(crate) fn is_direct_mutation_target(&self, name: &str, target: &Expression) -> bool {
         match target {
             Expression::Identifier { name: id, .. } => id == name,
 
@@ -352,7 +352,7 @@ impl<'ast> Analyzer<'ast> {
     /// passed as arguments to intermediate methods in a chain.
     /// Example: f.cross(up).normalize() - up is an argument to cross, NOT
     /// a receiver of normalize, so normalize's mutability doesn't apply to up.
-    fn is_in_receiver_chain(&self, name: &str, expr: &Expression) -> bool {
+    pub(crate) fn is_in_receiver_chain(&self, name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
             Expression::FieldAccess { object, .. } => self.is_in_receiver_chain(name, object),
@@ -362,7 +362,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn has_mutable_method_call(
+    pub(crate) fn has_mutable_method_call(
         &self,
         name: &str,
         expr: &Expression,
@@ -492,7 +492,7 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn stmt_has_potentially_mutating_method_call(
+    pub(crate) fn stmt_has_potentially_mutating_method_call(
         &self,
         name: &str,
         stmt: &Statement<'ast>,
@@ -541,7 +541,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expr_has_potentially_mutating_method_call(
+    pub(crate) fn expr_has_potentially_mutating_method_call(
         &self,
         name: &str,
         expr: &Expression<'ast>,
@@ -611,7 +611,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Root local binding for `a.b.c` / `a[i]` receiver chains (not `self`).
-    fn receiver_root_local_identifier<'e>(expr: &'e Expression<'e>) -> Option<&'e str> {
+    pub(crate) fn receiver_root_local_identifier<'e>(expr: &'e Expression<'e>) -> Option<&'e str> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.as_str()),
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
@@ -622,7 +622,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Recursively collect all variable mutations
-    fn collect_mutations(
+    pub(crate) fn collect_mutations(
         &mut self,
         statements: &[&'ast Statement<'ast>],
         registry: &SignatureRegistry,
@@ -680,7 +680,7 @@ impl<'ast> Analyzer<'ast> {
     ///
     /// Aligns with [`Self::has_mutable_method_call`]: `local.field.mut_method()` marks `local`
     /// when the method's analyzed signature uses `&mut self`.
-    fn collect_mutations_in_expression(&mut self, expr: &Expression, registry: &SignatureRegistry) {
+    pub(crate) fn collect_mutations_in_expression(&mut self, expr: &Expression, registry: &SignatureRegistry) {
         if let Expression::MethodCall { object, .. } = expr {
             if let Some(root) = Self::receiver_root_local_identifier(object) {
                 if root != "self" && self.has_mutable_method_call(root, expr, registry) {
@@ -745,7 +745,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Track mutation target (left side of assignment)
-    fn collect_mutation_target(&mut self, expr: &Expression) {
+    pub(crate) fn collect_mutation_target(&mut self, expr: &Expression) {
         match expr {
             Expression::Identifier { name, .. } => {
                 self.mutated_variables.insert(name.clone());

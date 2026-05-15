@@ -3,7 +3,7 @@ use crate::parser::*;
 
 use super::Analyzer;
 impl<'ast> Analyzer<'ast> {
-    fn for_loop_body_mutates_element_of_self_iterable(
+    pub(crate) fn for_loop_body_mutates_element_of_self_iterable(
         &self,
         pattern: &Pattern,
         iterable: &Expression<'ast>,
@@ -37,7 +37,7 @@ impl<'ast> Analyzer<'ast> {
         })
     }
 
-    fn assignment_target_starts_with_var(expr: &Expression, var: &str) -> bool {
+    pub(crate) fn assignment_target_starts_with_var(expr: &Expression, var: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == var,
             Expression::FieldAccess { object, .. } => {
@@ -58,7 +58,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Whether `stmt` mutates `var` or a field/index chain rooted at `var` (loop element patterns).
-    fn statement_tree_mutates_binding(&self, stmt: &Statement, var: &str) -> bool {
+    pub(crate) fn statement_tree_mutates_binding(&self, stmt: &Statement, var: &str) -> bool {
         match stmt {
             Statement::Assignment { target, .. } => {
                 Self::assignment_target_starts_with_var(target, var)
@@ -112,7 +112,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn expression_tree_mutates_binding(&self, expr: &Expression, var: &str) -> bool {
+    pub(crate) fn expression_tree_mutates_binding(&self, expr: &Expression, var: &str) -> bool {
         match expr {
             Expression::Block { statements, .. } => statements
                 .iter()
@@ -123,7 +123,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Check if an expression traces back to `self` through a chain of field accesses.
     /// Returns true for: self.field, self.field.subfield, self.field[i], etc.
-    fn expression_traces_to_self(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_traces_to_self(&self, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
