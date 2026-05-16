@@ -1,0 +1,15 @@
+// From regression/bug_f32_f64_explicit_cast_test.rs `test_no_implicit_f64_to_f32`.
+pub fn compute_angle(member_index: int, count: int) -> f32 {
+    let pi2: f32 = 6.28318
+    let angle = (member_index as f32) * (pi2 / count as f32)
+    angle
+}
+
+pub fn test_angle_at_zero_member() {
+    let a = compute_angle(0, 8)
+    let tol = 0.0001
+    let zero = 0.0
+    let neg_tol = zero - tol
+    let near_zero = a >= neg_tol && a <= tol
+    assert(near_zero, "zero member index should yield near-zero radians")
+}

@@ -1,0 +1,19 @@
+// regression/bug_astar_break_test.rs `test_continue_in_match_arm` — runtime terminates (original while had a non-progressing iteration on 0 branch).
+pub fn test_loop_continue_from_match_arm() {
+    let mut count = 0
+    let mut i = 0
+    while i < 6 {
+        match i {
+            0 => {
+                i = i + 1
+                continue
+            },
+            1 => {
+                count = count + 1
+            },
+            _ => {},
+        }
+        i = i + 1
+    }
+    assert_eq(count, 1)
+}

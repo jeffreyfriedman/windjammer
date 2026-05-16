@@ -1,3 +1,43 @@
+# Changelog
+
+## [0.47.0] - 2026-05-15
+
+### Changed
+- **MASSIVE REFACTORING**: Systematic modularization of entire compiler codebase
+  - Reduced all files to <1,000 lines (largest now 988 lines)
+  - Split `expression_generation.rs`: 6,609 → 815 lines
+  - Split `statement_generation.rs`: 3,786 → 652 lines
+  - Created 350+ focused, single-responsibility modules
+  - Refactored 28+ major subsystems across 202 commits
+
+### Fixed
+- Test infrastructure: Fixed 88 tests to prevent `.rlib` pollution in project root
+- All tests now use `--out-dir` or `--emit=metadata` for proper artifact isolation
+
+### Improved
+- Maintainability: Every file now under 1,000 lines with clear module boundaries
+- Discoverability: Focused modules make navigation and understanding trivial
+- Testability: Smaller modules enable targeted unit testing
+- Onboarding: New contributors can understand subsystems in isolation
+
+---
+
+## [0.46.2] - 2026-05-04
+### Focus: Publish Fix & Cargo.toml Restoration
+This release fixes the v0.46.1 publish failure and restores the root Cargo.toml to its correct structure.
+
+### Fixed
+- **crates.io publish**: Root `[package]` was missing required `description` and `license` fields, causing 400 Bad Request on publish
+- **Cargo.toml restoration**: Root package now properly inherits from `[workspace.package]` (`version.workspace = true`, `license.workspace = true`, etc.) matching the v0.45.0 structure that successfully published
+- **License corrected**: Restored dual license `MIT OR Apache-2.0` (was incorrectly changed to `MIT` only)
+- **Authors corrected**: Restored full author metadata with email and "Windjammer Contributors"
+- **Package metadata restored**: `autobins`, `exclude`, `default-run`, `readme`, `documentation`, `rust-version` fields restored
+
+### Added
+- **Publish dry-run in CI**: Pre-merge checks now run `cargo publish --dry-run` to catch packaging errors before they reach the publish workflow
+
+---
+
 ## [0.46.1] - 2026-05-02
 ### Focus: Release Infrastructure & CI Hardening
 This release fixes the v0.46.0 publish failure and adds pre-merge CI checks to prevent it from happening again.
@@ -189,7 +229,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 ### Test Framework Improvements
 - **Generic library detection**: Test framework now auto-detects and compiles user libraries
   - Reads `wj.toml` to find library name and source directory
-  - Compiles `src_wj/` as library dependency for tests
+  - Compiles `src/` as library dependency for tests
   - Generates proper Cargo.toml with library dependency
   - No hardcoded project names - fully generic and reusable
 - **Robust path resolution**: Enhanced `find_windjammer_runtime_path()` with:

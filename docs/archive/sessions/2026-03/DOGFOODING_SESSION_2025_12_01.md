@@ -245,10 +245,10 @@ This led to:
 - `docs/DOGFOODING_SESSION_2025_12_01.md`
 
 ### Game Engine
-- `src_wj/game_loop/game_loop.wj` (NEW)
-- `src_wj/game_loop/mod.wj` (NEW)
-- `src_wj/input/input.wj` (NEW)
-- `src_wj/input/mod.wj` (NEW)
+- `src/game_loop/game_loop.wj` (NEW)
+- `src/game_loop/mod.wj` (NEW)
+- `src/input/input.wj` (NEW)
+- `src/input/mod.wj` (NEW)
 - Multiple files: Changed `use crate::` to `use super::`
 
 ---

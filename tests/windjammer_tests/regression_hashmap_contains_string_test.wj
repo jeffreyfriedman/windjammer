@@ -1,0 +1,13 @@
+// From regression/bug_hashmap_string_key_test.rs `test_hashmap_string_key_contains` — string keys with contains_key (&String / &str ergonomics).
+
+use std::collections::HashMap
+
+fn check_exists(map: HashMap<string, int>, key: string) -> bool {
+    map.contains_key(&key)
+}
+
+pub fn test_hashmap_contains_string_key_directly() {
+    let mut map = HashMap::new()
+    map.insert("foo".to_string(), 42)
+    assert_eq(check_exists(map, "foo".to_string()), true)
+}

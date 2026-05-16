@@ -1,0 +1,32 @@
+// TDD TEST: Temporary variable ownership in error handling
+// Bug: Generated &_temp0 instead of _temp0 for owned String parameter
+// Expected: Should move temp variable, not borrow it
+
+enum MyError {
+    InvalidFormat(string),  // Takes owned String
+    TooLarge(string),
+}
+
+fn process_file(ext: string, size: u64) -> Result<(), MyError> {
+    // BUG: format!() returns String, error variant takes String
+    // Generated code incorrectly adds & to the temp variable!
+    if ext != "txt" {
+        return Err(MyError::InvalidFormat(format!("Unsupported: {}", ext)))
+    }
+    
+    if size > 1000 {
+        return Err(MyError::TooLarge(format!("File too large: {}", size)))
+    }
+    
+    Ok(())
+}
+
+fn main() {
+    match process_file("bin", 500) {
+        Ok(_) => println("Success"),
+        Err(MyError::InvalidFormat(msg)) => println("Format error: {}", msg),
+        Err(MyError::TooLarge(msg)) => println("Size error: {}", msg),
+    }
+    
+    println("✅ Temporary variable ownership works!")
+}

@@ -60,7 +60,7 @@ let data: [f32; 2] = [self.screen_width as f32, self.screen_height as f32];
 ```
 
 **Files:**
-- `game-host-core/src_wj/rendering/voxel_gpu_renderer.wj`
+- `game-host-core/src/rendering/voxel_gpu_renderer.wj`
 - `sample-game/shaders/voxel_composite.wgsl`
 - `sample-game/shaders/voxel_lighting.wgsl`
 
@@ -261,7 +261,7 @@ If ANY buffer is all zeros → That shader is broken.
 - `windjammer-runtime-host/src/tests/ffi_composite_test.rs` (screen_size type fix)
 
 **Game Core:**
-- `game-host-core/src_wj/rendering/voxel_gpu_renderer.wj` (screen_size upload fix)
+- `game-host-core/src/rendering/voxel_gpu_renderer.wj` (screen_size upload fix)
 
 **Sample Game:**
 - `sample-game/BLACK_SCREEN_DEEP_DIVE.md` (initial analysis)

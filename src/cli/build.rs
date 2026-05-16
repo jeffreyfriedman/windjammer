@@ -32,6 +32,7 @@ pub fn execute(
     library: bool,
     module_file: bool,
     run_cargo: bool,
+    no_generate_cargo_toml: bool,
     metadata: &[String],
 ) -> Result<()> {
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
@@ -99,16 +100,17 @@ pub fn execute(
         })
         .collect();
 
+    crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
     crate::build_project_ext(path, output_dir, target, true, library, &external_metadata)?;
 
     // Generate mod.rs if requested
     if module_file {
-        crate::generate_mod_file(output_dir)?;
+        crate::build_utils::generate_mod_file(output_dir)?;
     }
 
     // Strip main() functions if library mode
     if library {
-        crate::strip_main_functions(output_dir)?;
+        crate::build_utils::strip_main_functions(output_dir)?;
     }
 
     println!("\n{} Transpilation complete!", "Success!".green().bold());

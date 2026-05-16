@@ -78,7 +78,7 @@ fn generate_use(&mut self, path: &[String], alias: Option<&str>) -> String {
 ```rust
 fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
     // Recursively discover all .wj files in subdirectories
-    // Example: finds src_wj/math/vec2.wj, src_wj/physics/collision2d.wj, etc.
+    // Example: finds src/math/vec2.wj, src/physics/collision2d.wj, etc.
 }
 ```
 
@@ -132,7 +132,7 @@ for module in module_names {
 
 ### 1. Flat Module Paths
 Since all generated Rust files go to `src/generated/*.rs` (flat directory), we only track the filename:
-- Input: `src_wj/math/vec2.wj`
+- Input: `src/math/vec2.wj`
 - Registry stores: `"vec2"` (not `"math::vec2"`)
 - Generated import: `use super::vec2::Vec2;`
 

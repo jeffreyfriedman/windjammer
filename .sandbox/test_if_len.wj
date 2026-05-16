@@ -1,0 +1,5 @@
+fn main() {
+    let errors = "test"
+    let x = class(if errors.len() > 0 { "erro" } else { "" })
+}
+

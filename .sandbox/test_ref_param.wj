@@ -1,0 +1,9 @@
+fn test(x: &str) -> string {
+    x.to_string()
+}
+
+fn main() {
+    let result = test("hello")
+    print(result)
+}
+

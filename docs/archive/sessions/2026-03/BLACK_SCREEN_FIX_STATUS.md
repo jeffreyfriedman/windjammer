@@ -170,7 +170,7 @@ fn test_svo_access(@builtin(global_invocation_id) id: vec3<u32>) {
 
 ## 📝 **Files Modified**
 
-- ✅ `/home/user/src/wj/game-host/game-host-core/src_wj/voxel/svo_convert.wj`
+- ✅ `/home/user/src/wj/game-host/game-host-core/src/voxel/svo_convert.wj`
   - Line 162: Fixed node update to preserve child mask
 
 ---

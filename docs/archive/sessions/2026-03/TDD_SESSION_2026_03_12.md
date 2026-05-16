@@ -220,7 +220,7 @@ Game Logic (ECS) → RenderPort trait → GameRenderer → VoxelGPURenderer → 
 
 **Files:**
 - `shaders/*.wgsl` - WGSL shaders (5 files)
-- `src_wj/shaders/*.wj` - Windjammer shader wrappers (5 files)
+- `src/shaders/*.wj` - Windjammer shader wrappers (5 files)
 - `tests/atmosphere_shader_test.rs` - Rust TDD tests
 - `tests/debug_shaders_test.rs` - Rust TDD tests
 - `tests/atmosphere_shader_test.wj` - Windjammer integration tests
@@ -276,10 +276,10 @@ Game Logic (ECS) → RenderPort trait → GameRenderer → VoxelGPURenderer → 
 
 **Shaders:**
 - `game-host/shaders/*.wgsl` (5 files)
-- `game-host/src_wj/shaders/*.wj` (5 files)
+- `game-host/src/shaders/*.wj` (5 files)
 
 **Rendering:**
-- `game-host/src_wj/rendering/game_renderer.wj`
+- `game-host/src/rendering/game_renderer.wj`
 
 ---
 
@@ -292,14 +292,14 @@ Game Logic (ECS) → RenderPort trait → GameRenderer → VoxelGPURenderer → 
 - `windjammer/src/codegen/javascript/generator.rs`
 
 **Shader Graph:**
-- `game-host/src_wj/rendering/shader_graph.wj`
-- `game-host/src_wj/rendering/shader_graph_executor.wj`
-- `game-host/src_wj/rendering/voxel_gpu_renderer.wj`
-- `game-host/src_wj/rendering/render_port.wj`
+- `game-host/src/rendering/shader_graph.wj`
+- `game-host/src/rendering/shader_graph_executor.wj`
+- `game-host/src/rendering/voxel_gpu_renderer.wj`
+- `game-host/src/rendering/render_port.wj`
 
 **Game Logic:**
-- `game-host/src_wj/game.wj`
-- `game-host/src_wj/voxel_editor.wj`
+- `game-host/src/game.wj`
+- `game-host/src/voxel_editor.wj`
 
 ---
 

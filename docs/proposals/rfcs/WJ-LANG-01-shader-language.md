@@ -583,7 +583,7 @@ wgpu / GPU
 wj build shader.wjsl --target wgsl --output shaders/
 
 # Compile directory
-wj build src_wj/shaders/ --target wgsl --output shaders/
+wj build src/shaders/ --target wgsl --output shaders/
 
 # With source maps (for debugging)
 wj build shader.wjsl --target wgsl --output shaders/ --source-map

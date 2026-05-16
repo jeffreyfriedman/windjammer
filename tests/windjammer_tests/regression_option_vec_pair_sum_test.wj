@@ -1,0 +1,23 @@
+// From regression/bug_option_unwrap_borrow_test.rs — unwrap Option<Vec<_>> nested under Node (dogfooded scene-graph style sums).
+
+struct Node {
+    pub value: int,
+    pub children: Option<Vec<int>>,
+}
+
+fn sum_pair(node: Node) -> int {
+    if node.children.is_some() {
+        let children = node.children.unwrap()
+        children[0] + children[1]
+    } else {
+        0
+    }
+}
+
+pub fn test_option_children_unwrap_sums_leaf_pair() {
+    let n = Node {
+        value: 1,
+        children: Some(vec![2, 3]),
+    }
+    assert_eq(sum_pair(n), 5)
+}
