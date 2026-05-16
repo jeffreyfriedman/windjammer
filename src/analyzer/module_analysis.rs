@@ -288,6 +288,8 @@ impl<'ast> Analyzer<'ast> {
                     // PHASE 9: Detect Cow optimizations
                     analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
+                    analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
@@ -408,6 +410,8 @@ impl<'ast> Analyzer<'ast> {
                         // PHASE 9: Detect Cow optimizations
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
+                        analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+
                         let signature = self.build_signature(&analyzed_func);
 
                         let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
@@ -486,6 +490,8 @@ impl<'ast> Analyzer<'ast> {
                         // PHASE 9: Detect Cow optimizations
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
 
+                        analyzed_func.cache_locality = self.analyze_cache_locality(program, &func);
+
                         // THE WINDJAMMER WAY: Store analyzed trait method for trait impl matching
                         // BUT: Don't overwrite if cross-file inference has already set it!
                         // (finalize_trait_inference runs globally and sets the most permissive signature)
@@ -546,6 +552,8 @@ impl<'ast> Analyzer<'ast> {
                                     self.detect_smallvec_opportunities(func);
                                 analyzed_func.cow_optimizations =
                                     self.detect_cow_opportunities(func);
+                                analyzed_func.cache_locality =
+                                    self.analyze_cache_locality(program, func);
                                 let signature = self.build_signature(&analyzed_func);
                                 registry.add_function(func.name.clone(), signature);
                                 // Add to analyzed list for codegen to access (but marked as in-module)
@@ -651,6 +659,9 @@ impl<'ast> Analyzer<'ast> {
                                         self.detect_smallvec_opportunities(func);
                                     analyzed_func.cow_optimizations =
                                         self.detect_cow_opportunities(func);
+
+                                    analyzed_func.cache_locality =
+                                        self.analyze_cache_locality(program, func);
 
                                     let signature = self.build_signature(&analyzed_func);
                                     let qualified_name =

@@ -322,6 +322,10 @@ name = "compiler_test"
 path = "tests/analyzer/compiler_test.rs"
 
 [[test]]
+name = "cache_locality_analysis_test"
+path = "tests/analyzer/cache_locality_analysis_test.rs"
+
+[[test]]
 name = "compound_assign_int_no_float_cast_test"
 path = "tests/analyzer/compound_assign_int_no_float_cast_test.rs"
 
@@ -2450,6 +2454,10 @@ name = "codegen_string_comprehensive_tests"
 path = "tests/codegen/rust/codegen_string_comprehensive_tests.rs"
 
 [[test]]
+name = "codegen_simd_vectorization_test"
+path = "tests/codegen/rust/codegen_simd_vectorization_test.rs"
+
+[[test]]
 name = "codegen_string_extended_test"
 path = "tests/codegen/rust/codegen_string_extended_test.rs"
 
@@ -3331,6 +3339,14 @@ path = "tests/regression/same_name_regeneration_bug_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"
+harness = false
+
+[[bench]]
+name = "simd_vectorization_bench"
+harness = false
+
+[[bench]]
+name = "cache_locality_aosoa_bench"
 harness = false
 
 [profile.release]

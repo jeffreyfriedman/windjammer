@@ -7,6 +7,7 @@ use crate::parser::*;
 use std::collections::{HashMap, HashSet};
 
 mod borrow_analysis;
+mod cache_locality;
 mod forbidden_patterns;
 mod function_analysis;
 mod generic_analysis;
@@ -20,6 +21,7 @@ mod self_access_and_option_refs;
 mod self_analysis;
 mod self_binding_mutation;
 mod self_dispatch_for_loops;
+pub mod simd_loops;
 mod self_field_mutation;
 mod self_mutating_calls;
 mod self_return_and_consumption;
@@ -31,6 +33,10 @@ pub mod type_collector;
 mod usage_tracking;
 
 pub use signature_registry::{FunctionSignature, SignatureRegistry};
+
+pub use cache_locality::{
+    cache_locality_json_report, AccessPatternKind, AoSoACandidate, CacheLocalityAnalysis,
+};
 
 // Type alias for complex return type
 type ProgramAnalysisResult<'ast> = (
@@ -67,6 +73,8 @@ pub struct AnalyzedFunction<'ast> {
     pub smallvec_optimizations: Vec<SmallVecOptimization>,
     // PHASE 9 OPTIMIZATION: Track string/data that can use Cow
     pub cow_optimizations: Vec<CowOptimization>,
+    /// Cache locality: AoSoA / SoA loop candidates (ECS-style Vec<Struct> iteration).
+    pub cache_locality: CacheLocalityAnalysis,
     // STRING PARAMETER OPTIMIZATION (Phase 2): Track which string params can use &str
     pub str_ref_optimizable_params: HashSet<String>,
 }

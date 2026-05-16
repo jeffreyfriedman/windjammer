@@ -313,6 +313,8 @@ impl<'ast> Analyzer<'ast> {
         let smallvec_optimizations = Vec::new(); // TODO: Implement detection
         let cow_optimizations = Vec::new(); // TODO: Implement detection
 
+        let cache_locality = super::CacheLocalityAnalysis::default();
+
         // PHASE 2: Analyze which string parameters can use &str optimization
         let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
 
@@ -349,6 +351,7 @@ impl<'ast> Analyzer<'ast> {
             const_static_optimizations,
             smallvec_optimizations,
             cow_optimizations,
+            cache_locality,
             str_ref_optimizable_params,
         })
     }
