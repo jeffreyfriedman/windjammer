@@ -7,6 +7,7 @@ pub fn test_loop_break_from_match_arm() {
                 x = 1
             },
             1 => break,
+            _ => break, // Catch all other cases
         }
     }
 }
