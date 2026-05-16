@@ -27,9 +27,7 @@ pub use type_checker::type_check_wjsl;
 /// Transpile WJSL source to WGSL
 pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
     let ast = parse_wjsl(source)?;
-    if let Err(e) = type_checker::check(&ast, source) {
-        eprintln!("[wjsl] Type checker warning (non-fatal): {}", e);
-    }
+    type_checker::check(&ast, source)?;
     let wgsl = codegen::WjslCodegen::new(ast).generate()?;
     Ok(wgsl)
 }
