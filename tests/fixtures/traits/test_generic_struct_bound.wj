@@ -1,0 +1,16 @@
+
+trait Renderable {
+    fn render(self) -> string
+}
+
+struct Container<T: Renderable> {
+    child: T,
+}
+
+impl<T: Renderable> Container<T> {
+    fn new(child: T) -> Container<T> {
+        Container { child }
+    }
+}
+
+fn main() {}

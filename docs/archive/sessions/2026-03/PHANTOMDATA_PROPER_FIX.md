@@ -238,8 +238,8 @@ PhantomData enables many powerful patterns in Windjammer:
 - ✅ Added `tests/trait_method_mutability_inference.rs` (4 tests, all passing)
 
 **Windjammer-Game Repo:**
-- ✅ Updated `src_wj/rendering/gpu_types.wj` (import PhantomData)
-- ✅ Updated `src_wj/rendering/render_port.wj` (idiomatic trait methods)
+- ✅ Updated `src/rendering/gpu_types.wj` (import PhantomData)
+- ✅ Updated `src/rendering/render_port.wj` (idiomatic trait methods)
 
 ---
 

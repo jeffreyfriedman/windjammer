@@ -205,7 +205,7 @@ Doc: SOLID_RED_FIX_2026_03_14.md"
 ### Commit 2: P1 (Rust Leakage Phase 2)
 
 ```bash
-git add windjammer-game/windjammer-game-core/src_wj/
+git add windjammer-game/windjammer-game-core/src/
 git add windjammer-game/windjammer-game-core/RUST_LEAKAGE_CLEANUP_PROGRESS.md
 git add windjammer-game/windjammer-game-core/RUST_LEAKAGE_PHASE2_COMPLETE.md
 git commit -m "refactor: eliminate Rust leakage Phase 2 (10 files, 68 violations)

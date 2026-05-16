@@ -1,0 +1,10 @@
+// From regression/bug_f32_f64_explicit_cast_test.rs `test_consistent_float_inference`.
+pub fn check_bounds(x: f32, width: f32, tile_size: f32, map_width: f32) -> u32 {
+    let right_tile = ((x + width - 0.001) / tile_size).floor().min(map_width - 1.0) as u32
+    right_tile
+}
+
+pub fn test_tile_index_near_map_edge() {
+    let t = check_bounds(95.5, 1.2, 1.0, 100.0)
+    assert_eq(t, 96u32)
+}

@@ -167,7 +167,7 @@ if left_is_borrowed != right_is_borrowed {
 - `DEREF_LOGIC_DESIGN.md` (new doc, design analysis)
 
 **Game Engine (`windjammer-game-core`):**
-- `src_wj/ecs/entity.wj` (source fix: removed unnecessary `&`)
+- `src/ecs/entity.wj` (source fix: removed unnecessary `&`)
 - `src/ffi.rs` (added GpuVertex::normal field)
 - `src/rendering/mod.rs` (commented out unimplemented imports)
 - `src/dialogue/mod.rs` (commented out unimplemented import)

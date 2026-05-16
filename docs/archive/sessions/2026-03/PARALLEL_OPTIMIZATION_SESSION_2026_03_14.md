@@ -480,11 +480,11 @@ Detailed leakage audit:
 ### windjammer-game-core
 
 **New files:**
-- `src_wj/rendering/texture_packer.wj`
+- `src/rendering/texture_packer.wj`
 - `tests_wj/texture_packer_test.wj`
-- `src_wj/frustum/frustum_test.wj`
-- `src_wj/vgs/visibility_test.wj`
-- `src_wj/rendering/bvh_traversal_test.wj`
+- `src/frustum/frustum_test.wj`
+- `src/vgs/visibility_test.wj`
+- `src/rendering/bvh_traversal_test.wj`
 - `RUST_LEAKAGE_AUDIT_2026_03_14.md`
 
 **Modified files (16 for Rust leakage audit):**

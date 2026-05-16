@@ -248,8 +248,8 @@ If you see this, Windjammer compiled and ran!
 - `windjammer/examples/render_window/main.wj` (next: add FFI)
 
 ### Game Source Fixed
-- `src_wj/tests/vertical_slice_test.wj` (simplified)
-- `src_wj/tests/mod.wj` (simplified)
+- `src/tests/vertical_slice_test.wj` (simplified)
+- `src/tests/mod.wj` (simplified)
 
 ### Documentation
 - `TDD_VEC_INDEXING_OWNERSHIP_FIX.md`

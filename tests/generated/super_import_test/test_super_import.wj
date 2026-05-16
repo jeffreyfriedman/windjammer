@@ -1,0 +1,14 @@
+
+// Simulating: src/rendering/camera3d.wj importing from src/math/vec3.wj
+use super::super::math::vec3::Vec3
+
+@derive(Copy, Clone, Debug)
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+pub struct Camera3D {
+    pub position: Vec3,
+}

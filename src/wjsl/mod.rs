@@ -9,8 +9,11 @@
 
 mod ast;
 mod codegen;
+mod expression_type_checking;
 mod lexer;
 pub mod parser;
+mod shader_type_rules;
+mod statement_type_checking;
 mod type_checker;
 
 use std::collections::HashSet;

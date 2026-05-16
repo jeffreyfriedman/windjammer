@@ -1,0 +1,12 @@
+// i32 accumulator (second scenario from typed integer stray-statement regressions)
+
+pub fn calculate_sum() -> i32 {
+    let mut sum = 0i32
+    sum = sum + 5
+    sum = sum + 7
+    sum
+}
+
+pub fn test_i32_literals_accumulate() {
+    assert_eq(calculate_sum(), 12)
+}

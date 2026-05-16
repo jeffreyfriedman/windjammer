@@ -171,7 +171,7 @@ pub fn migrate(data: GameSaveData, ...) -> Result<GameSaveData, String>
 ### Workstream 1: Build System Fix ✅
 **Problem:** `runtime_host` couldn't find `breach_protocol` crate
 
-**Root Cause:** wj-game plugin only handled `src_wj/` layout, not `src/` (breach-protocol's layout)
+**Root Cause:** wj-game plugin only handled `src/` layout, not `src/` (breach-protocol's layout)
 
 **Fix:** Added `strip_prefix("src")` handling in wj-game plugin
 
@@ -229,7 +229,7 @@ pub fn migrate(data: GameSaveData, ...) -> Result<GameSaveData, String>
 4. **Better error messages** - 5 categories improved
 
 ### Build System:
-1. **wj-game plugin enhanced** - Handles multiple layouts (src_wj/, src/)
+1. **wj-game plugin enhanced** - Handles multiple layouts (src/, src/)
 2. **Auto-fix functions** - 7 common issues fixed automatically
 3. **Module sync** - 115+ files sync correctly
 
@@ -392,7 +392,7 @@ impl Player {
 **Impact:** Handles multiple project layouts
 
 **Fix:** wj-game plugin now supports:
-- `src_wj/` layout (windjammer-game)
+- `src/` layout (windjammer-game)
 - `src/` layout (breach-protocol)
 - Automatic path normalization
 

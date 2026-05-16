@@ -1,0 +1,12 @@
+
+use std::collections::HashMap
+
+pub struct Cache {
+    pub data: HashMap<string, i32>,
+}
+
+impl Cache {
+    pub fn store(self, key: string, value: i32) {
+        self.data.insert(key, value)
+    }
+}

@@ -5,14 +5,14 @@
 ### ✅ **Completed (GREEN Phase)**
 
 1. **Windjammer Octree Implementation**
-   - File: `windjammer-game-core/src_wj/voxel/svo_convert.wj` 
+   - File: `windjammer-game-core/src/voxel/svo_convert.wj` 
    - Proper hierarchical octree (not flat list)
    - **16,241 nodes** (was 6,181 flat)
    - Recursive subdivision with homogeneity checks
    - All Rust octree tests passing ✅
 
 2. **SVO Debug Utilities (100% Windjammer!)**
-   - File: `windjammer-game-core/src_wj/voxel/svo_debug.wj`
+   - File: `windjammer-game-core/src/voxel/svo_debug.wj`
    - `print_octree_structure()` - Visual inspection
    - `validate_octree()` - Structure validation
    - `octree_stats()` - Statistics

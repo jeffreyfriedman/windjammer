@@ -1,0 +1,12 @@
+fn foo() {
+    let x = bar()?
+    x
+}
+
+fn bar() -> Result<int, Error> {
+    Ok(5)
+}
+
+fn main() {}
+
+

@@ -1,0 +1,13 @@
+// WebSocket connection module
+// TODO: Implement full connection handling
+
+pub struct Connection {
+    pub id: string,
+}
+
+impl Connection {
+    pub fn new(id: string) -> Connection {
+        Connection { id }
+    }
+}
+

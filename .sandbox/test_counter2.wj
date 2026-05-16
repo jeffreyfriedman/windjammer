@@ -1,0 +1,37 @@
+use windjammer_ui::reactivity::Signal
+use windjammer_ui::vdom::{VElement, VNode, VText}
+
+struct CounterApp {
+    count: Signal<i32>,
+    root_element: Option<web_sys::Element>,
+}
+
+impl CounterApp {
+    fn new() -> CounterApp {
+        CounterApp {
+            count: Signal::new(0),
+            root_element: None,
+        }
+    }
+    
+    fn render(self) -> VNode {
+        let count_value = self.count.get()
+        
+        VNode::Element(
+            VElement::new("div")
+                .attr("class", "counter-app")
+        )
+    }
+    
+    fn mount(self, selector: &str) -> Result<(), String> {
+        print("Mounting to: ${selector}")
+        Ok(())
+    }
+}
+
+fn main() {
+    let app = CounterApp::new()
+    let _ = app.mount("#app")
+    print("Counter app created and mounted!")
+}
+

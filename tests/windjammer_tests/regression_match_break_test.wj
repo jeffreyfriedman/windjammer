@@ -1,0 +1,13 @@
+// From regression/bug_astar_break_test.rs `test_break_in_match_arm`.
+pub fn test_loop_break_from_match_arm() {
+    let mut x = 0
+    loop {
+        match x {
+            0 => {
+                x = 1
+            },
+            1 => break,
+            _ => break, // Catch all other cases
+        }
+    }
+}

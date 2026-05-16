@@ -104,7 +104,7 @@ cargo test float_inference_chained_ops
 
 Then regenerate game code and verify:
 ```bash
-wj build windjammer-game-core/src_wj/particles/particle_emitter3d.wj --output /tmp/out --no-cargo
+wj build windjammer-game-core/src/particles/particle_emitter3d.wj --output /tmp/out --no-cargo
 grep -E "6\.28318|0\.5_f" /tmp/out/particle_emitter3d.rs
 # Should show 6.28318_f32, 0.5_f32 (not _f64)
 ```

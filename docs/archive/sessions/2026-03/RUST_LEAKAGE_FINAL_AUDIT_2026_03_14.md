@@ -1,13 +1,13 @@
 # Rust Leakage Final Audit Report
 **Date:** 2026-03-14  
-**Scope:** windjammer-game/windjammer-game-core/src_wj  
+**Scope:** windjammer-game/windjammer-game-core/src  
 **Tool:** wj-lint --strict
 
 ## Audit Command
 
 ```bash
 cd /Users/jeffreyfriedman/src/wj/windjammer
-./target/release/wj-lint ../windjammer-game/windjammer-game-core/src_wj --strict
+./target/release/wj-lint ../windjammer-game/windjammer-game-core/src --strict
 ```
 
 ## Summary

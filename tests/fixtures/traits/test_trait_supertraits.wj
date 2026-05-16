@@ -1,0 +1,26 @@
+
+trait Employee {
+    fn work() -> string
+}
+
+trait Manager: Employee {
+    fn manage() -> string
+}
+
+struct Boss {
+    name: string,
+}
+
+impl Employee for Boss {
+    fn work() -> string {
+        "Working"
+    }
+}
+
+impl Manager for Boss {
+    fn manage() -> string {
+        "Managing"
+    }
+}
+
+fn main() {}

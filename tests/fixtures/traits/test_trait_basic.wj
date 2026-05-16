@@ -1,0 +1,19 @@
+
+trait Renderable {
+    fn render() -> string
+}
+
+struct Button {
+    label: string,
+}
+
+impl Renderable for Button {
+    fn render() -> string {
+        self.label
+    }
+}
+
+fn main() {
+    let b = Button { label: "Click" }
+    let html = b.render()
+}

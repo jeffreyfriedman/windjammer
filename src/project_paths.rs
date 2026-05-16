@@ -4,55 +4,104 @@ use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Find the actual source root for a Windjammer file
+/// Find the actual source root for a Windjammer file.
 ///
-/// For example, given "src_wj/ecs/entity.wj", this will walk up to find "src_wj"
-/// by looking for a directory that looks like a source root:
-/// - Named "src_wj" or "src" (this is the most reliable indicator)
-/// - Or the topmost directory containing mod.wj
+/// Walks up from the file looking for a directory that is a project source root.
+/// Priority order (first match closest to the file wins):
+///   1. `src` — only if it looks like a real project source dir  
+///      (sibling Cargo.toml, or contains mod.wj / .wj files)
+///   2. Topmost directory containing mod.wj
+///   3. The file's immediate parent (standalone file fallback)
 pub fn find_source_root(file_path: &Path) -> Option<&Path> {
     let mut current = file_path;
     let mut topmost_mod_wj_dir = None;
-    let mut found_src_wj = None;
+    let mut found_project_src: Option<&Path> = None;
+    let mut depth = 0;
 
     while let Some(parent) = current.parent() {
-        // Check if this directory looks like a source root by name
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            // If named "src_wj", this is definitely the source root for multi-file projects
-            if dir_name == "src_wj" {
-                found_src_wj = Some(parent);
+            if dir_name == "src"
+                && found_project_src.is_none()
+                && is_project_source_dir(parent, depth)
+            {
+                found_project_src = Some(parent);
             }
         }
 
-        // Track the topmost directory with mod.wj
         if parent.join("mod.wj").exists() {
             topmost_mod_wj_dir = Some(parent);
         }
 
         current = parent;
+        depth += 1;
     }
 
-    // Prefer a directory named `src_wj` in the path — conventional layout for nested `ecs/foo.wj`
-    // and correct `get_relative_output_path` even when the project has no `mod.wj` yet.
-    if let Some(src_wj) = found_src_wj {
-        return Some(src_wj);
+    if let Some(src) = found_project_src {
+        return Some(src);
     }
 
-    // Otherwise, use the topmost mod.wj directory (multi-file project without src_wj)
     if let Some(mod_wj_dir) = topmost_mod_wj_dir {
         return Some(mod_wj_dir);
     }
 
-    // For single-file projects, use the file's parent directory
-    // This prevents deeply nested output paths like /tmp/output/wj/windjammer-game/examples/file.rs
     file_path.parent()
+}
+
+/// Check if a `src/` directory is a real project source root, not just any
+/// directory named "src" (e.g. `/Users/dev/src/` is a personal code directory).
+///
+/// The `depth` parameter indicates how many levels we've walked up from the original file.
+/// This prevents matching distant ancestor `src/` directories.
+fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
+    if let Some(project_dir) = src_dir.parent() {
+        if project_dir.join("Cargo.toml").exists() {
+            return true;
+        }
+        if project_dir.join("mod.wj").exists() {
+            return true;
+        }
+    }
+    if src_dir.join("mod.wj").exists() {
+        return true;
+    }
+    if src_dir.join("lib.wj").exists() || src_dir.join("main.wj").exists() {
+        return true;
+    }
+
+    // TDD FIX: Recognize bare src/ directories with .wj files (even without mod.wj)
+    // This fixes the case where `wj build src/ecs/entity.wj` should use `src/` as root.
+    // CONSTRAINT: Only apply this heuristic if we're close to the original file (depth <= 3)
+    // to avoid matching distant ancestor directories like /Users/username/src/
+    if depth <= 3 && src_dir.file_name().and_then(|n| n.to_str()) == Some("src") {
+        // If the src/ directory contains any .wj files (directly or in subdirs), it's a source root
+        if let Ok(entries) = fs::read_dir(src_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("wj") {
+                    return true;
+                }
+                if path.is_dir() {
+                    // Check one level deep for .wj files (covers src/ecs/entity.wj case)
+                    if let Ok(sub_entries) = fs::read_dir(&path) {
+                        if sub_entries.flatten().any(|e| {
+                            e.path().extension().and_then(|ext| ext.to_str()) == Some("wj")
+                        }) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Calculate output path that preserves directory structure
 ///
 /// Example:
-/// - source_root: "windjammer-game/src_wj"
-/// - input_path: "windjammer-game/src_wj/math/vec2.wj"
+/// - source_root: "windjammer-game/src"
+/// - input_path: "windjammer-game/src/math/vec2.wj"
 /// - output_dir: "build"
 /// - Result: "build/math/vec2.rs"
 pub fn get_relative_output_path(
@@ -108,8 +157,12 @@ pub fn get_relative_output_path(
         }
     }
 
-    // If there's a directory module, put content into mod.rs instead of window.rs
-    if has_directory_module {
+    // mod.wj code (traits, structs, impls) goes to _mod_items.rs so it doesn't
+    // conflict with the mod.rs generated by the module system. The module system
+    // will append _mod_items.rs content into mod.rs after generating declarations.
+    if base_name == "mod" {
+        output_path.push("_mod_items.rs");
+    } else if has_directory_module {
         output_path.push(base_name);
         output_path.push("mod.rs");
     } else {
@@ -122,10 +175,32 @@ pub fn get_relative_output_path(
 
 /// Output path for a `.wj` file (directory-module layout when `stem/stem.wj` + `stem/*.wj` co-exist).
 /// Deletes a stale flat `stem.rs` when emitting `stem/mod.rs` so rustc never sees both (E0761).
+///
+/// When `library` is true and the source is `mod.wj`, the compiled content goes to
+/// `_mod_items.rs` instead of `mod.rs`. This prevents the `--module-file` pass from
+/// overwriting code defined in `mod.wj` (structs, traits, impls). The module-file
+/// generator in `build_utils.rs` merges `_mod_items.rs` back into `mod.rs`.
 pub fn resolve_wj_output_path(
     source_root: &Path,
     wj_file: &Path,
     output_dir: &Path,
+) -> Result<PathBuf> {
+    resolve_wj_output_path_ext(source_root, wj_file, output_dir, false)
+}
+
+pub fn resolve_wj_output_path_library(
+    source_root: &Path,
+    wj_file: &Path,
+    output_dir: &Path,
+) -> Result<PathBuf> {
+    resolve_wj_output_path_ext(source_root, wj_file, output_dir, true)
+}
+
+fn resolve_wj_output_path_ext(
+    source_root: &Path,
+    wj_file: &Path,
+    output_dir: &Path,
+    library: bool,
 ) -> Result<PathBuf> {
     let path = get_relative_output_path(source_root, wj_file, output_dir)?;
     if path.file_name().and_then(|s| s.to_str()) == Some("mod.rs") {
@@ -134,6 +209,12 @@ pub fn resolve_wj_output_path(
             if stale != path {
                 let _ = fs::remove_file(stale);
             }
+        }
+        // In library mode, redirect mod.wj output to _mod_items.rs so that
+        // the --module-file pass can merge it without overwriting.
+        if library {
+            let items_path = path.with_file_name("_mod_items.rs");
+            return Ok(items_path);
         }
     }
     Ok(path)
@@ -146,8 +227,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_nested() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/math/vec2.wj");
+        let source_root = Path::new("src");
+        let input_path = Path::new("src/math/vec2.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
@@ -156,8 +237,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_flat() {
-        let source_root = Path::new("src_wj");
-        let input_path = Path::new("src_wj/vec2.wj");
+        let source_root = Path::new("src");
+        let input_path = Path::new("src/vec2.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();
@@ -166,8 +247,8 @@ mod tests {
 
     #[test]
     fn test_get_relative_output_path_deeply_nested() {
-        let source_root = Path::new("game/src_wj");
-        let input_path = Path::new("game/src_wj/rendering/shaders/vertex.wj");
+        let source_root = Path::new("game/src");
+        let input_path = Path::new("game/src/rendering/shaders/vertex.wj");
         let output_dir = Path::new("build");
 
         let result = get_relative_output_path(source_root, input_path, output_dir).unwrap();

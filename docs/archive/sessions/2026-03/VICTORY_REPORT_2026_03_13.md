@@ -113,7 +113,7 @@ TOTAL:          95+ FILES ✅
    - Known mutating methods (push, insert, damage, etc.)
 
 5. ✅ **Build System** (wj-game plugin)
-   - Multiple layout support (src_wj/, src/)
+   - Multiple layout support (src/, src/)
    - Auto-fix functions (7 common patterns)
    - 115+ file synchronization
 

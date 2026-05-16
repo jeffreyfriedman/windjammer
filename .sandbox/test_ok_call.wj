@@ -1,0 +1,5 @@
+fn main() {
+    let x = Ok(42)
+    print("Done!")
+}
+

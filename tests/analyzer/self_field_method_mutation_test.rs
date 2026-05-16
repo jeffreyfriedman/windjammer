@@ -1,0 +1,119 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "analyzer_tests",
+))]
+
+/// TDD Test: Self ownership inference when calling methods on self.field
+///
+/// Bug: When render() calls self.renderer.update_camera(camera) and
+/// self.renderer.render_frame(), these methods mutate self.renderer
+/// (they need &mut self). The analyzer should infer &mut self for render()
+/// because calling any mutating method on self.field requires mutable access.
+///
+/// Root Cause: expression_is_self_field_mutating_method_call only checks
+/// is_mutating_method() which is a hardcoded stdlib list. User-defined
+/// methods like update_camera(), render_frame(), initialize(), shutdown()
+/// are not in that list.
+#[path = "../common/test_utils.rs"]
+mod test_utils;
+
+#[test]
+fn test_self_field_method_call_propagates_mutability() {
+    let code = r#"
+pub struct Inner {
+    count: u32,
+}
+
+impl Inner {
+    pub fn new() -> Inner {
+        Inner { count: 0 }
+    }
+
+    pub fn update_state(self) {
+        self.count = self.count + 1
+    }
+}
+
+pub struct Outer {
+    inner: Inner,
+}
+
+impl Outer {
+    pub fn new() -> Outer {
+        Outer { inner: Inner::new() }
+    }
+
+    pub fn do_work(self) {
+        self.inner.update_state()
+    }
+}
+
+fn main() {
+    let outer = Outer::new()
+    outer.do_work()
+}
+"#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
+
+    assert!(
+        generated.contains("fn do_work(&mut self)"),
+        "do_work() should infer &mut self because it calls self.inner.update_state() which mutates inner.\nGenerated code:\n{}",
+        generated
+    );
+}
+
+#[test]
+fn test_self_field_render_frame_propagates_mutability() {
+    let code = r#"
+pub struct Renderer {
+    frame_count: u32,
+}
+
+impl Renderer {
+    pub fn new() -> Renderer {
+        Renderer { frame_count: 0 }
+    }
+
+    pub fn render_frame(self) {
+        self.frame_count = self.frame_count + 1
+    }
+}
+
+pub struct Demo {
+    renderer: Renderer,
+    initialized: bool,
+}
+
+impl Demo {
+    pub fn new() -> Demo {
+        Demo { renderer: Renderer::new(), initialized: false }
+    }
+
+    pub fn render(self) {
+        if !self.initialized { return }
+        self.renderer.render_frame()
+    }
+}
+
+fn main() {
+    let demo = Demo::new()
+    demo.render()
+}
+"#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
+
+    assert!(
+        generated.contains("fn render(&mut self)"),
+        "render() should infer &mut self because it calls self.renderer.render_frame() which mutates renderer.\nGenerated code:\n{}",
+        generated
+    );
+}

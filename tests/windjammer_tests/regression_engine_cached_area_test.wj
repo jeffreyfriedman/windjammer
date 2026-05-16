@@ -1,0 +1,30 @@
+// From regression/bug_self_subfield_copy_read_test.rs `test_assign_rhs_copy_subfield...`
+struct SettingsSz {
+    width: int,
+    height: int,
+}
+
+struct EngineCache {
+    settings: SettingsSz,
+    cached_area: int,
+}
+
+impl EngineCache {
+    fn refresh_area(self) {
+        let w = self.settings.width
+        let h = self.settings.height
+        self.cached_area = w * h
+    }
+}
+
+pub fn test_engine_refresh_cached_area_from_settings() {
+    let mut engine = EngineCache {
+        settings: SettingsSz {
+            width: 3,
+            height: 4,
+        },
+        cached_area: 0,
+    }
+    engine.refresh_area()
+    assert_eq(engine.cached_area, 12)
+}

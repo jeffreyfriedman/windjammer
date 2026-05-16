@@ -156,7 +156,7 @@ impl FactionManager {
 **Tests:** Plugin integration tests
 
 **Capabilities:**
-- Multiple layout support (src_wj/, src/)
+- Multiple layout support (src/, src/)
 - 115+ file synchronization
 - Auto-fix functions (7 patterns)
 - One-command workflow
@@ -343,7 +343,7 @@ $ wj game build --release
 9. ✅ assert_eq! float literals defaulted to f64
 
 ### Build System Bugs (2):
-10. ✅ wj-game plugin only handled src_wj/ layout
+10. ✅ wj-game plugin only handled src/ layout
 11. ✅ File sync didn't preserve directory structure
 
 ### Code Quality Issues (4):

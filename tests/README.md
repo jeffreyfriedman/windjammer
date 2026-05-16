@@ -1,72 +1,66 @@
-# Windjammer compiler integration tests (`tests/`)
+# Windjammer integration tests
 
-This directory contains Rust integration tests for the `windjammer` crate. Each `tests/*.rs` file is a separate test binary (unless configured otherwise in `Cargo.toml`).
+Rust integration tests live under this directory and are registered explicitly in the root `Cargo.toml` (`[[test]]` targets). Most crates use a crate-level `cfg` gate so you can **run a subset of suites** by enabling one or more `*_tests` Cargo features.
 
-## When to use what
+## Suite features
 
-| Goal | Use |
-|------|-----|
-| Parser/analyzer/codegen on **one** snippet, no filesystem | A dedicated `tests/foo_test.rs` with `Lexer` + `Parser` + `Analyzer` + `CodeGenerator`, or the `wj` CLI in a temp file (see `trait_impl_signature_match_test.rs`). |
-| **Multi-file** projects, `use` across modules, **multipass** ownership / trait inference | [`integration_test_helpers.rs`](./integration_test_helpers.rs) [`MultiFileTest`](./integration_test_helpers.rs) + [`build_project_ext`](../src/compiler.rs) (same path as real library builds). |
-| Nested `src/foo/bar.wj` trees, auto-imports | Temp dir + `build_project_ext` directly (see `nested_module_import_test.rs`, `cross_module_struct_literal_test.rs`). |
+Declared in `Cargo.toml` under `[features]`:
 
-## `MultiFileTest` (file-based multipass)
+| Feature | Directory | `[[test]]` targets | Purpose |
+|--------|-----------|-------------------|---------|
+| `parser_tests` | `tests/parser/` | 43 | Parser, WGSL front matter, shader file detection |
+| `analyzer_tests` | `tests/analyzer/` | 508 | Analyzer, ownership inference, type checking |
+| `codegen_tests` | `tests/codegen/` | 103 | Backend codegen (Rust / Go / JS) |
+| `interpreter_tests` | `tests/interpreter/` | 3 | Interpreter runtime |
+| `conformance_tests` | `tests/conformance/` | 6 | Cross-backend conformance |
+| `integration_tests` | `tests/integration/` | 95 | End-to-end / build / FFI / modules |
 
-Source of truth: [`integration_test_helpers.rs`](./integration_test_helpers.rs).
+## Commands
 
-1. `MultiFileTest::new()` — temp project with `src/` and `build/`.
-2. `add_file("module.wj", "...")` — paths are relative to `src/`.
-3. `compile()` → `Result<HashMap<String, String>, String>` — keys are paths under `build/` (e.g. `holder.rs`).
-4. `assert_contains("holder.rs", "fn foo")` — compiles then asserts on generated Rust.
-5. `assert_compile_error("Parse error")` — expects `compile()` to fail; substring must appear in the error.
-6. `assert_compiles_without_error()` — writes a flat `lib.rs` + verification `Cargo.toml`, then runs `cargo check` (slow in a cold tempdir; see ignored test in `integration_test_helpers_self_test.rs`).
+**Full suite** (default—no suite feature flags): every gated directory plus `tests/regression/` and `tests/linter/` (those are only active when *no* suite feature above is enabled).
 
-### Include the helper in a new test crate
-
-Cargo does not compile `tests/*.rs` as one crate. Pull the helper in with:
-
-```rust
-#[path = "integration_test_helpers.rs"]
-mod integration_test_helpers;
-
-use integration_test_helpers::MultiFileTest;
+```bash
+cd windjammer
+cargo test --release
 ```
 
-### Template for a new complex scenario
+**One suite** (example: parser):
 
-```rust
-#[path = "integration_test_helpers.rs"]
-mod integration_test_helpers;
-
-use integration_test_helpers::MultiFileTest;
-
-#[test]
-fn test_my_cross_file_bug() {
-    let mut t = MultiFileTest::new();
-    t.add_file(
-        "defs.wj",
-        r#"
-pub struct Thing { pub n: i32 }
-"#,
-    );
-    t.add_file(
-        "user.wj",
-        r#"
-use defs::Thing
-
-pub fn f() -> Thing {
-    Thing { n: 1 }
-}
-"#,
-    );
-    t.assert_contains("user.rs", "Thing");
-}
+```bash
+cargo test --release --features parser_tests
 ```
 
-Avoid Rust reserved words as **module** names (`trait`, `impl`, `mod`, …) in file stems when you care about readable generated Rust.
+**Another suite** (example: Rust codegen):
 
-## Related tests
+```bash
+cargo test --release --features codegen_tests
+```
 
-- Cross-file trait ownership (manual multipass helper): `cross_file_trait_impl_test.rs`
-- Multi-file multipass + `assert_contains` for trait signatures: `trait_impl_multi_file_test.rs`
-- Single-file trait vs impl Rust typecheck (E0053): `trait_impl_signature_match_test.rs`
+**Multiple suites**:
+
+```bash
+cargo test --release --features "parser_tests codegen_tests"
+```
+
+**Single integration test binary** (still respects the same feature gates):
+
+```bash
+cargo test --release --features parser_tests --test parser_expression_tests
+```
+
+## `regression/` and `linter/`
+
+Bug-regression and linter tests are **not** tied to a suite feature. They are included only when you run the full suite (**no** `parser_tests`, `analyzer_tests`, `codegen_tests`, `interpreter_tests`, `conformance_tests`, or `integration_tests` feature is enabled). That keeps focused runs fast and avoids widening every partial suite with long regression matrices.
+
+## How gating works
+
+Each integration test source file starts with `#![cfg(any(...))]` (or `#![cfg(not(any(...)))]` for regression/linter):
+
+- If **no** suite feature is set, the `not(any(...))` branch is true and **all** gated suites compile and run.
+- If **any** suite feature is set, only sources tagged for that feature compile; regression and linter crates (the `#![cfg(not(any(...)))]` form) **do not**.
+
+Cargo may still build empty test harnesses for crates that are gated off; use `--test <name>` when you want to limit work to one binary.
+
+## Shared helpers
+
+`tests/common/` holds modules included via `#[path = ...] mod ...;` from individual tests. Helpers are not standalone `[[test]]` targets.

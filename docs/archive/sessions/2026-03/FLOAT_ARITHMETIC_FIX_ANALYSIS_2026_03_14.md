@@ -83,7 +83,7 @@ The existing inference logic *should* handle all patterns. The issue may be:
 
 4. **Regenerate game:**
    ```bash
-   cd windjammer-game-core && wj build src_wj --output .
+   cd windjammer-game-core && wj build src --output .
    ```
    Then check if float errors reduced in `cargo build`.
 

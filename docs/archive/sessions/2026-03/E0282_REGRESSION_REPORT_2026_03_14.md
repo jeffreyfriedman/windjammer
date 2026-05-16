@@ -81,7 +81,7 @@ Both `statement_generation.rs` (if-let and match) now remove vars from `borrowed
 
 **To verify the fix:**
 1. Build windjammer compiler: `cd windjammer && cargo build --release`
-2. Transpile: `cd windjammer-game-core && wj build src_wj --output . --no-cargo`
+2. Transpile: `cd windjammer-game-core && wj build src --output . --no-cargo`
 3. Build: `cargo build --release 2>&1 | rg "E0282" | wc -l`
 4. **Expected:** 27 or fewer E0282 errors
 

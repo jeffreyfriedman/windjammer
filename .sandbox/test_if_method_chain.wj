@@ -1,0 +1,17 @@
+struct S {
+    x: string
+}
+
+impl S {
+    fn get() -> string {
+        self.x
+    }
+}
+
+fn main() {
+    let s = S { x: "hello" }
+    foo(if s.get().len() > 0 { "a" } else { "b" })
+}
+
+fn foo(s: string) {}
+

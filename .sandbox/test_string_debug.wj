@@ -1,0 +1,5 @@
+fn main() {
+    let msg: String = "test"
+    println!("{}", msg)
+}
+

@@ -1,0 +1,7 @@
+fn main() {
+    let x = ""
+    foo(if x.len() > 0 { "a" } else { "b" })
+}
+
+fn foo(s: string) {}
+

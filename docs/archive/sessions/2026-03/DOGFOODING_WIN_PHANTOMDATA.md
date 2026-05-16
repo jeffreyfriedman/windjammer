@@ -91,7 +91,7 @@ pub mod prelude {
 ### 3. Used in `gpu_types.wj`
 
 ```windjammer
-// windjammer-game/src_wj/rendering/gpu_types.wj
+// windjammer-game/src/rendering/gpu_types.wj
 
 use windjammer_runtime::marker::PhantomData
 
