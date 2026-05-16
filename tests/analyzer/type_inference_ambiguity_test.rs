@@ -288,9 +288,14 @@ struct Foo {
 
 impl Foo {
     pub fn check(self) {
-        if self.investigation_position.is_some() {
-            if let Some(pos) = self.investigation_position {
-                self.investigation = Some(InvestigationState::new(pos))
+        let mut temp = self.investigation_position;
+        if temp.is_some() {
+            if let Some(pos) = &mut temp {
+                // pos is &mut Vec3, need to dereference for Copy type
+                let state = InvestigationState::new(*pos);
+                // Cannot use self.investigation here due to borrow checker
+                // but the test is checking the deref pattern on pos
+                let _ = state;
             }
         }
     }
