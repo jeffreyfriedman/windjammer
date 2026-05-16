@@ -32,9 +32,22 @@ fn test_static_method_inference() {
     .expect("Failed to run windjammer compiler");
 
     // Read the generated Rust code
+    // The file location depends on whether path stripping succeeded:
+    // - Success: <output_dir>/static_method_inference_test.rs
+    // - Failure: <output_dir>/wj/windjammer/tests/static_method_inference_test.rs
     let generated_code =
         std::fs::read_to_string(out_tmp.path().join("static_method_inference_test.rs"))
-            .expect("Failed to read generated code");
+            .or_else(|_| {
+                std::fs::read_to_string(
+                    out_tmp
+                        .path()
+                        .join("wj")
+                        .join("windjammer")
+                        .join("tests")
+                        .join("static_method_inference_test.rs"),
+                )
+            })
+            .expect("Failed to read generated code (tried both possible paths)");
 
     // Verify static methods do NOT have &self
     assert!(
