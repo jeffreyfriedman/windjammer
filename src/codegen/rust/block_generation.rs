@@ -633,6 +633,9 @@ impl<'ast> CodeGenerator<'ast> {
                     if match_binds_refs && !final_arm_str.ends_with(".clone()") {
                         let mut bound_vars = std::collections::HashSet::new();
                         self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
+                        let match_bound_entries =
+                            self.infer_match_bound_types(value, &arm.pattern);
+                        let added_borrowed: Vec<String> = bound_vars.iter().cloned().collect();
                         let binding_name: Option<&str> =
                             if let Expression::Identifier { name, .. } = arm.body {
                                 Some(name)
@@ -656,9 +659,8 @@ impl<'ast> CodeGenerator<'ast> {
                             };
                         if let Some(name) = binding_name {
                             if bound_vars.contains(name) {
-                                let bound_type = self
-                                    .infer_match_bound_types(value, &arm.pattern)
-                                    .into_iter()
+                                let bound_type = match_bound_entries
+                                    .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
                                 let is_copy =
@@ -683,6 +685,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
+                        } else if let Some(rewritten) =
+                            self.rewrite_some_wrapper_for_ref_match_binding(
+                                arm.body,
+                                &match_bound_entries,
+                                &added_borrowed,
+                            )
+                        {
+                            final_arm_str = rewritten;
+                        } else if let Some(rewritten) = self.rewrite_some_ident_arm_string(
+                            final_arm_str.trim(),
+                            &match_bound_entries,
+                            &added_borrowed,
+                        ) {
+                            final_arm_str = rewritten;
                         }
                     }
 

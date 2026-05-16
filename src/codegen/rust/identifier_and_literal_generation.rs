@@ -38,6 +38,13 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let base_name = self.qualify_external_path_identifier(&base_name);
 
+        // `None` parses as Identifier but lowers to Option::None. It cannot be a binding
+        // name alongside normal locals/params — but auto_clone / needs_clone lookups can
+        // still hit a false-positive site at the wrong statement_idx, yielding `None.clone()`.
+        if name == "None" && !is_parameter && !is_local_variable {
+            return base_name;
+        }
+
         // AUTO-CLONE: Check if this variable needs to be cloned at this point
         // CRITICAL: Never clone assignment targets (left side of `=`)
         // DOUBLE-CLONE FIX: Skip auto-clone when inside an explicit .clone() call
