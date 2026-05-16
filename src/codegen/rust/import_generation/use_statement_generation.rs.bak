@@ -309,33 +309,33 @@ impl CodeGenerator<'_> {
         if let Some(alias_name) = alias {
             if is_directory_prefix {
                 let rp = self.expand_bare_module_path_for_type(&rust_path);
-                format!("{}use {}{} as {};\n", pub_prefix, import_prefix, rp, alias_name)
+                format!("use {}{} as {};\n", import_prefix, rp, alias_name)
             } else if is_actual_module_file {
                 if self.is_output_mod_rs() {
-                    format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name)
+                    format!("use self::{} as {};\n", rust_path, alias_name)
                 } else {
-                    format!("{}use super::{} as {};\n", pub_prefix, rust_path, alias_name)
+                    format!("use super::{} as {};\n", rust_path, alias_name)
                 }
             } else {
-                format!("{}use {} as {};\n", pub_prefix, rust_path, alias_name)
+                format!("use {} as {};\n", rust_path, alias_name)
             }
         } else if rust_path.ends_with("::*") {
-            format!("{}use {};\n", pub_prefix, rust_path)
+            format!("use {};\n", rust_path)
         } else if is_directory_prefix {
             let rp = self.expand_bare_module_path_for_type(&rust_path);
-            format!("{}use {}{};\n", pub_prefix, import_prefix, rp)
+            format!("use {}{};\n", import_prefix, rp)
         } else if is_actual_module_file {
             if self.is_output_mod_rs() {
-                format!("{}use self::{};\n", pub_prefix, rust_path)
+                format!("use self::{};\n", rust_path)
             } else {
-                format!("{}use super::{};\n", pub_prefix, rust_path)
+                format!("use super::{};\n", rust_path)
             }
         } else if rust_path.starts_with("crate::") {
             let path_without_crate = rust_path.strip_prefix("crate::").unwrap();
             let pwc = self.expand_bare_module_path_for_type(path_without_crate);
-            format!("{}use {}{};\n", pub_prefix, import_prefix, pwc)
+            format!("use {}{};\n", import_prefix, pwc)
         } else if rust_path.chars().next().is_some_and(|c| c.is_uppercase()) {
-            format!("{}use {};\n", pub_prefix, rust_path)
+            format!("use {};\n", rust_path)
         } else {
             let last_segment = rust_path.split("::").last().unwrap_or("");
             if last_segment
@@ -345,9 +345,9 @@ impl CodeGenerator<'_> {
             {
                 if is_in_subdirectory && is_sibling_module_file {
                     if self.is_output_mod_rs() {
-                        format!("{}use self::{};\n", pub_prefix, rust_path)
+                        format!("use self::{};\n", rust_path)
                     } else {
-                        format!("{}use {};\n", pub_prefix, rust_path)
+                        format!("use {};\n", rust_path)
                     }
                 } else if rust_path.contains("::") {
                     let is_likely_internal =
@@ -355,22 +355,22 @@ impl CodeGenerator<'_> {
 
                     let rp = self.expand_bare_module_path_for_type(&rust_path);
                     if is_likely_internal {
-                        format!("{}use crate::{};\n", pub_prefix, rp)
+                        format!("use crate::{};\n", rp)
                     } else {
-                        format!("{}use {};\n", pub_prefix, rp)
+                        format!("use {};\n", rp)
                     }
                 } else {
-                    format!("{}use {};\n", pub_prefix, rust_path)
+                    format!("use {};\n", rust_path)
                 }
             } else if rust_path.contains("::") {
                 let is_likely_internal = external_imports::is_likely_internal_module(first_segment);
                 if is_likely_internal {
-                    format!("{}use crate::{};\n", pub_prefix, rust_path)
+                    format!("use crate::{};\n", rust_path)
                 } else {
-                    format!("{}use {};\n", pub_prefix, rust_path)
+                    format!("use {};\n", rust_path)
                 }
             } else {
-                format!("{}use {}::*;\n", pub_prefix, rust_path)
+                format!("use {}::*;\n", rust_path)
             }
         }
     }
