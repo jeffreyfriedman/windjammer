@@ -43,7 +43,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # CLI
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 
 # HTTP transport and OAuth
 axum = { version = "0.8", optional = true }
@@ -65,7 +65,7 @@ url = "2.5"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3.8"
+tempfile = "3.27"
 criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 
 [[bench]]
