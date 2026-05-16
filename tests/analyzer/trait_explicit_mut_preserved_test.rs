@@ -105,10 +105,12 @@ pub trait GameLoop {
     }
 
     // Retry logic for file reading to handle I/O race conditions
+    // mod.wj generates _mod_items.rs, not mod.rs
     let mut generated_rust = String::new();
     let mut retries = 3;
     while retries > 0 {
-        if let Ok(content) = std::fs::read_to_string(output_dir.join("mod.rs"))
+        if let Ok(content) = std::fs::read_to_string(output_dir.join("_mod_items.rs"))
+            .or_else(|_| std::fs::read_to_string(output_dir.join("mod.rs")))
             .or_else(|_| std::fs::read_to_string(output_dir.join("lib.rs")))
         {
             if !content.is_empty() {
