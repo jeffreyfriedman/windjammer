@@ -194,7 +194,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("#[repr(C)]\n");
 
         // Add struct declaration with type parameters
-        let pub_prefix = if s.is_pub || self.is_module {
+        let pub_prefix = if s.is_pub {
             "pub "
         } else {
             ""
@@ -286,8 +286,8 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(")]\n");
                 }
             }
-            // In modules, all fields should be pub for cross-module access
-            let pub_keyword = if self.is_module || field.is_pub {
+            // Respect field visibility from source
+            let pub_keyword = if field.is_pub {
                 "pub "
             } else {
                 ""
@@ -440,7 +440,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
-        let pub_prefix = if e.is_pub || self.is_module {
+        let pub_prefix = if e.is_pub {
             "pub "
         } else {
             ""
