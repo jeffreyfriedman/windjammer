@@ -1,0 +1,13 @@
+// From regression/bug_method_return_binary_float_test.rs `test_function_return_f32_in_binary_op` — f32-returning callee forces literal widening consistently.
+
+pub fn get_value() -> f32 {
+    42.0
+}
+
+pub fn compute_total() -> f32 {
+    get_value() + 3.14
+}
+
+pub fn test_add_literal_after_const_f32_function() {
+    assert_approx(compute_total() as f64, 45.14, 0.02)
+}

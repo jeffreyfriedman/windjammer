@@ -1,0 +1,16 @@
+// From analyzer/feature_tests.rs `test_pipe_operator`.
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn add_ten(x: int) -> int {
+    x + 10
+}
+
+fn process(x: int) -> int {
+    x |> double |> add_ten
+}
+
+pub fn test_pipe_composes_helpers() {
+    assert_eq(process(13), 36)
+}

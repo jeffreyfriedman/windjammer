@@ -1,0 +1,9 @@
+fn test() -> Result<(), String> {
+    Ok(())
+}
+
+fn main() {
+    let _ = test()
+    print("Done!")
+}
+

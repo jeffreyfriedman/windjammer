@@ -1,0 +1,9 @@
+fn call_with_ref(callback: fn(&int) -> int, value: int) -> int {
+    callback(&value)
+}
+
+fn main() {
+    let result = call_with_ref(|x| x * 2, 5)
+    println!("Result: {}", result)
+}
+

@@ -1,0 +1,19 @@
+
+trait Container {
+    type Item
+    fn get(index: int) -> Item
+}
+
+struct Vec {
+    items: Vec<string>,
+}
+
+impl Container for Vec {
+    type Item = string
+    
+    fn get(index: int) -> string {
+        self.items[index]
+    }
+}
+
+fn main() {}

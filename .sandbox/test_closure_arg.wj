@@ -1,0 +1,8 @@
+fn foo(f: fn(int) -> int) {
+    print(f(5))
+}
+
+fn main() {
+    foo(|x| x + 1)
+}
+

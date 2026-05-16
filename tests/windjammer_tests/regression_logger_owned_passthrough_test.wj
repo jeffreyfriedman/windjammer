@@ -1,0 +1,30 @@
+// From regression/bug_is_stored_enum_option_test.rs `test_passthrough_to_owned_method` — info → log passthrough on owned self.
+
+struct Logger {
+    pub entries: Vec<string>,
+}
+
+impl Logger {
+    pub fn new() -> Logger {
+        Logger { entries: Vec::new() }
+    }
+
+    pub fn log(self, msg: string) {
+        self.entries.push(msg)
+    }
+
+    pub fn info(self, message: string) {
+        self.log(message)
+    }
+
+    pub fn warn(self, message: string) {
+        self.log(message)
+    }
+}
+
+pub fn test_logger_passthrough_info_warn_two_entries() {
+    let mut logger = Logger::new()
+    logger.info("a".to_string())
+    logger.warn("b".to_string())
+    assert_eq(logger.entries.len() as int, 2)
+}

@@ -15,7 +15,7 @@
 
 **Fix**: Changed voxelization from `voxelize(-2, -2, -2, ...)` to `voxelize(0, 0, 0, ...)` and adjusted camera positions
 
-**File**: `src_wj/demos/sphere_test_demo.wj`, `src_wj/demos/humanoid_demo.wj`
+**File**: `src/demos/sphere_test_demo.wj`, `src/demos/humanoid_demo.wj`
 
 ---
 
@@ -29,7 +29,7 @@
 
 **Impact**: Memory usage dropped from **10-20GB** to **<100KB**
 
-**File**: `src_wj/voxel/svo.wj`
+**File**: `src/voxel/svo.wj`
 
 **Test**: `memory_safety_test.rs` - all passing ✅
 
@@ -126,9 +126,9 @@ Lookup world position (2.0, 2.0, 2.0):
 ## Files Modified
 
 ### Windjammer Source (.wj)
-1. `src_wj/voxel/svo.wj` - Complete rewrite of `encode_region`, added `encode_child`
-2. `src_wj/demos/sphere_test_demo.wj` - Fixed voxel origin and camera position
-3. `src_wj/demos/humanoid_demo.wj` - Fixed voxel origin and camera position
+1. `src/voxel/svo.wj` - Complete rewrite of `encode_region`, added `encode_child`
+2. `src/demos/sphere_test_demo.wj` - Fixed voxel origin and camera position
+3. `src/demos/humanoid_demo.wj` - Fixed voxel origin and camera position
 
 ### Tests Created
 1. `tests/camera_matrix_correctness_test.rs` - Camera math validation

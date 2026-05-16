@@ -53,7 +53,7 @@ Changed from depth-first to **breadth-first with pre-allocation**:
 
 ### Code Changes
 
-**File**: `src_wj/voxel/svo.wj`
+**File**: `src/voxel/svo.wj`
 
 - **Old**: Depth-first with placeholder that gets overwritten
 - **New**: Breadth-first with pre-allocated consecutive slots
@@ -92,7 +92,7 @@ The shader can now:
 
 ## Files Modified
 
-- `src_wj/voxel/svo.wj` - Complete rewrite of `encode_region` logic
+- `src/voxel/svo.wj` - Complete rewrite of `encode_region` logic
 - Added `encode_child()` helper function
 
 ## Lessons Learned

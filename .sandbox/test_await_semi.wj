@@ -1,0 +1,13 @@
+async fn test() {
+    foo().await;
+    bar()
+}
+
+async fn foo() -> int {
+    42
+}
+
+fn bar() -> int {
+    10
+}
+

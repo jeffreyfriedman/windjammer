@@ -207,7 +207,7 @@ pub mod game {
 - [ ] Write `tests/module_declaration_test.wj`
 - [ ] Write `tests/inline_module_test.wj` (future)
 - [ ] Run full test suite
-- [ ] Test with `game-host/game-host-core/src_wj/mod.wj`
+- [ ] Test with `game-host/game-host-core/src/mod.wj`
 
 ---
 
@@ -243,8 +243,8 @@ pub mod game {
 ## 📝 **CURRENT WORKAROUND**
 
 **Status**: Temporary files deleted
-- Deleted `game-host-core/src_wj/mod.wj`
-- Deleted `game-host-core/src_wj/runtime.wj`
+- Deleted `game-host-core/src/mod.wj`
+- Deleted `game-host-core/src/runtime.wj`
 - Build script manually generates `mod.rs`
 
 **Reason**: Allows platformer to build while we fix the parser properly

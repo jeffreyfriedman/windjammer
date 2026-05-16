@@ -1,0 +1,8 @@
+// Test: Function not found error translation
+// Expected: "Function not found: calculate_total"
+
+fn main() {
+    let result = calculate_total(100, 200)
+    println!("Result: {}", result)
+}
+

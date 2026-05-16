@@ -1,0 +1,8 @@
+// From analyzer/feature_tests.rs `test_basic_function`: minimal fn + exercised assert.
+fn add(x: int, y: int) -> int {
+    x + y
+}
+
+pub fn test_add_returns_sum() {
+    assert_eq(add(40, 2), 42)
+}

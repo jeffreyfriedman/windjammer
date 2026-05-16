@@ -99,7 +99,7 @@ pub mod vec3;
 
 **Windjammer Way** (auto-discover + smart defaults):
 ```wj
-// src_wj/mod.wj
+// src/mod.wj
 pub mod math        // optional - auto-discovered!
 pub use math::Vec2  // explicit intent - preserved!
 
@@ -217,7 +217,7 @@ pub use mat4::Mat4;
 
 **Game Host Library:**
 ```
-game-host/game-host-core/src_wj/
+game-host/game-host-core/src/
   mod.wj (root module)
   math/
     mod.wj

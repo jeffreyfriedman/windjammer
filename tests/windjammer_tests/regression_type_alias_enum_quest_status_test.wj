@@ -1,0 +1,20 @@
+// From regression/bug_quest_objective_test.rs / bug_quest_state_test.rs — enum backed by pub type alias (quest_status pattern).
+
+pub enum QuestState {
+    Idle,
+    Active,
+}
+
+pub type QuestStatus = QuestState
+
+pub fn is_idle(state: QuestStatus) -> bool {
+    match state {
+        QuestState::Idle => true,
+        QuestState::Active => false,
+    }
+}
+
+pub fn test_enum_type_alias_matches_concrete_variant() {
+    let s: QuestStatus = QuestState::Active
+    assert_eq(is_idle(s), false)
+}

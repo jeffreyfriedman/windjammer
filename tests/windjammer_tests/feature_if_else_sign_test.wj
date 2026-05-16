@@ -1,0 +1,13 @@
+// From analyzer/feature_tests.rs `test_if_else_expression`: if-expression returns string limbs.
+fn sign(x: int) -> string {
+    if x > 0 {
+        "positive"
+    } else {
+        "negative"
+    }
+}
+
+pub fn test_sign_labels() {
+    assert_str_contains(sign(3), "positive")
+    assert_str_contains(sign(-1), "negative")
+}

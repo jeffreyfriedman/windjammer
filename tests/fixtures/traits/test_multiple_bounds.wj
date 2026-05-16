@@ -1,0 +1,15 @@
+
+trait Renderable {
+    fn render(self) -> string
+}
+
+trait Clickable {
+    fn click(self)
+}
+
+fn process<T: Renderable + Clickable>(component: T) {
+    let html = component.render()
+    component.click()
+}
+
+fn main() {}

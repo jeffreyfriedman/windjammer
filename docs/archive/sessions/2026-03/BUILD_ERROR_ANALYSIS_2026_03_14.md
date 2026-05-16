@@ -22,13 +22,13 @@
    - `crafting.wj`: Same pattern (3 structs)
    - **Fix:** Moved doc comments before `@derive` (source fix; parser could be updated to accept doc comments in this position)
 
-2. **Regenerated** with `wj build src_wj/mod.wj --output game-host-core --library --no-cargo`
+2. **Regenerated** with `wj build src/mod.wj --output game-host-core --library --no-cargo`
 
 3. **Restored Cargo.toml** (wj overwrites with windjammer-app; restored game-host-core)
 
 4. **Shaders stub**: Replaced generated shaders/mod.rs (28 non-existent .rs modules) with empty stub. WGSL shaders load from .wgsl files at runtime.
 
-5. **FFI declarations**: Added to `src_wj/ffi/api.wj`:
+5. **FFI declarations**: Added to `src/ffi/api.wj`:
    - `gpu_read_gbuffer_float` (debug inspector)
    - `renderdoc_init`, `renderdoc_request_capture`, `renderdoc_is_frame_capturing`
 
@@ -123,7 +123,7 @@
 
 ```bash
 # Regenerate (from game-host root)
-wj build game-host-core/src_wj/mod.wj --output game-host-core --library --no-cargo
+wj build game-host-core/src/mod.wj --output game-host-core --library --no-cargo
 
 # Restore Cargo.toml (wj overwrites)
 # Edit: name = "game-host-core", remove self-dep, lib name = "game_host_core"
