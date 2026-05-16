@@ -1,0 +1,10 @@
+fn test(selector: &str) -> Result<(), String> {
+    print("Mounting to: ${selector}")
+    Ok(())
+}
+
+fn main() {
+    let _ = test("#app")
+    print("Done!")
+}
+

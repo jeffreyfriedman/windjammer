@@ -410,12 +410,14 @@ jobs:
             ${{ runner.os }}-cargo-publish-
             ${{ runner.os }}-cargo-registry-
       
-      - name: Validate package structure
+      - name: Validate publish readiness (dry-run)
         run: |
-          cargo package --list > /dev/null
-          echo "✅ windjammer: package structure valid"
-          cargo package --list -p windjammer-runtime > /dev/null
-          echo "✅ windjammer-runtime: package structure valid"
+          echo "Dry-run: windjammer (core)"
+          cargo publish --dry-run 2>&1
+          echo "✅ windjammer: publish dry-run passed"
+          echo "Dry-run: windjammer-runtime"
+          cargo publish --dry-run -p windjammer-runtime 2>&1
+          echo "✅ windjammer-runtime: publish dry-run passed"
 
       - name: Validate CHANGELOG is publish-ready
         run: |

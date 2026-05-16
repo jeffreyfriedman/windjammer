@@ -1,0 +1,7 @@
+use std::db
+use std::log
+
+fn main() {
+    println("test")
+}
+

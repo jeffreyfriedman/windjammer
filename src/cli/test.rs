@@ -6,9 +6,9 @@ use anyhow::Result;
 use std::path::Path;
 
 pub fn execute(filter: Option<&str>) -> Result<()> {
-    // Call the main run_tests function from main.rs
+    // Call the main run_tests function from test_runner module
     // For now, test current directory with default settings
-    crate::run_tests(
+    crate::test_runner::run_tests(
         Some(Path::new(".")),
         filter,
         false, // nocapture

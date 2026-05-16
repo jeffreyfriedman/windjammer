@@ -88,7 +88,7 @@ wj build ai/npc_behavior.wj
 
 ### Option 2: Whole-Program Analysis
 ```
-wj build src_wj/
+wj build src/
   ↓
   Pass 1: Parse all files → AST forest
   Pass 2: Build global symbol table

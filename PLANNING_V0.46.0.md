@@ -137,7 +137,7 @@ Eliminate manual `#[path]` stubs and scale to 1000+ modules.
 
 **Project Structure:**
 ```
-src_wj/
+src/
   ├── math/
   │   ├── vector.wj
   │   ├── matrix.wj

@@ -1,0 +1,9 @@
+// Test: Ownership error translation
+// Expected: "Ownership error: This value was already used"
+
+fn main() {
+    let s = "hello"
+    let s2 = s
+    println!("{}", s)  // Error: s was moved
+}
+

@@ -1,0 +1,9 @@
+pub fn get_count() -> u32 {
+    let mut count: u32 = 0
+    count = count + 1
+    count + 10
+}
+
+pub fn test_u32_inference_pattern() {
+    assert_eq(get_count(), 11)
+}

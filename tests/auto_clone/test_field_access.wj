@@ -1,0 +1,59 @@
+// Test: Auto-clone for field access
+
+struct Config {
+    paths: Vec<string>,
+    max_size: int,
+    enabled: bool,
+}
+
+fn main() {
+    test_field_access_auto_clone()
+    test_nested_field_access()
+    println!("✓ All field access auto-clone tests passed!")
+}
+
+fn test_field_access_auto_clone() {
+    let config = Config {
+        paths: vec!["/tmp", "/usr"],
+        max_size: 1024,
+        enabled: true,
+    }
+    
+    // Move config.paths to function (should auto-clone)
+    let count = count_paths(config.paths)
+    
+    // config.paths should still be usable
+    assert!(config.paths.len() == 2, "paths should still have 2 elements")
+    assert!(count == 2, "count should be 2")
+    
+    println!("✓ Field access auto-clone works")
+}
+
+fn test_nested_field_access() {
+    let config = Config {
+        paths: vec!["a", "b", "c"],
+        max_size: 2048,
+        enabled: false,
+    }
+    
+    // Use config.paths multiple times
+    let first_count = count_paths(config.paths)
+    let second_count = count_paths(config.paths)
+    
+    assert!(first_count == 3, "first count should be 3")
+    assert!(second_count == 3, "second count should be 3")
+    assert!(config.paths.len() == 3, "paths should still have 3 elements")
+    
+    println!("✓ Nested field access auto-clone works")
+}
+
+fn count_paths(paths: Vec<string>) -> int {
+    paths.len() as int
+}
+
+fn assert(condition: bool, message: string) {
+    if !condition {
+        panic!("{}", message)
+    }
+}
+

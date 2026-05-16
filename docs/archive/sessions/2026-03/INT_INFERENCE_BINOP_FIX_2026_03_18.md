@@ -133,7 +133,7 @@ self.value + 1_u16      // CORRECT ✅
 ### Verification
 Manual test on actual game code:
 ```bash
-$ wj build --no-cargo src_wj/game_engine.wj
+$ wj build --no-cargo src/game_engine.wj
 $ grep "frame_count %" build/game_engine.rs
 
 # Before fix:

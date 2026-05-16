@@ -1,0 +1,17 @@
+// From regression/bug_hashmap_string_key_test.rs `test_hashmap_string_key_get` — get() with cloned / copied int values.
+
+use std::collections::HashMap
+
+fn get_score(map: HashMap<string, int>, key: string) -> Option<int> {
+    map.get(&key).cloned()
+}
+
+pub fn test_hashmap_get_clones_mapped_int() {
+    let mut map = HashMap::new()
+    map.insert("foo".to_string(), 7)
+    let v = get_score(map, "foo".to_string())
+    match v {
+        Some(x) => assert_eq(x, 7),
+        None => assert(false, "expected Some from get_score"),
+    }
+}

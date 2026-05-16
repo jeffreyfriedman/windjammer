@@ -1,0 +1,62 @@
+// Test: Auto-clone for index expressions
+
+fn main() {
+    test_literal_index_auto_clone()
+    test_variable_index_auto_clone()
+    test_multiple_index_uses()
+    println!("✓ All index expression auto-clone tests passed!")
+}
+
+fn test_literal_index_auto_clone() {
+    let items = vec!["apple", "banana", "cherry"]
+    
+    // Move items[0] to function (should auto-clone)
+    let processed = process_item(items[0])
+    
+    // items[0] should still be usable
+    assert!(items[0] == "apple", "items[0] should still be apple")
+    assert!(processed == "APPLE", "processed should be APPLE")
+    
+    println!("✓ Literal index auto-clone works")
+}
+
+fn test_variable_index_auto_clone() {
+    let items = vec!["first", "second", "third"]
+    let idx = 1
+    
+    // Move items[idx] to function (should auto-clone)
+    let processed = process_item(items[idx])
+    
+    // items[idx] should still be usable
+    assert!(items[idx] == "second", "items[idx] should still be second")
+    assert!(processed == "SECOND", "processed should be SECOND")
+    
+    println!("✓ Variable index auto-clone works")
+}
+
+fn test_multiple_index_uses() {
+    let items = vec!["a", "b", "c"]
+    
+    // Use items[0] multiple times
+    let first = process_item(items[0])
+    let second = process_item(items[0])
+    let third = process_item(items[0])
+    
+    assert!(first == "A", "first should be A")
+    assert!(second == "A", "second should be A")
+    assert!(third == "A", "third should be A")
+    assert!(items[0] == "a", "items[0] should still be a")
+    
+    println!("✓ Multiple index uses auto-clone works")
+}
+
+fn process_item(item: string) -> string {
+    item.to_uppercase()
+}
+
+fn assert(condition: bool, message: string) {
+    if !condition {
+        panic!("{}", message)
+    }
+}
+

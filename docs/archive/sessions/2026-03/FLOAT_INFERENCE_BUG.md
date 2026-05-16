@@ -40,7 +40,7 @@ pub fn progress_percentage(self) -> f32 {
 
 ### Game Code FAILS (same pattern!)
 ```windjammer
-// src_wj/achievement/achievement.wj
+// src/achievement/achievement.wj
 pub fn progress_percentage(self) -> f32 {
     if self.requirement == 0 {
         1.0  // Generates 1.0_f64 ❌

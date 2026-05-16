@@ -1,0 +1,12 @@
+// From regression/bug_astar_break_test.rs `test_return_in_match_arm` (uses `int` instead of Rust `i32`).
+fn helper(x: int) -> int {
+    match x {
+        0 => return 0,
+        _ => x + 1,
+    }
+}
+
+pub fn test_match_early_return_semantics() {
+    assert_eq(helper(0), 0)
+    assert_eq(helper(10), 11)
+}

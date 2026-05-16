@@ -1,0 +1,12 @@
+// Covers u64 accumulator patterns (concept from bug_typed_int_literal codegen regression)
+
+pub fn count_items() -> u64 {
+    let mut total: u64 = 0
+    total = total + 1
+    total = total + 2
+    total
+}
+
+pub fn test_u64_accumulator_sum() {
+    assert_eq(count_items(), 3)
+}

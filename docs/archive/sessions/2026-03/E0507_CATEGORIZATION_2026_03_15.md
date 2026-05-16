@@ -82,7 +82,7 @@ cd windjammer && cargo test --test e0507_ownership_inference_test --features cli
 ```bash
 # Compile single file that had E0507
 cd windjammer-game-core
-wj build src_wj/ai/npc_behavior.wj --output /tmp/e0507_test --library --no-cargo
+wj build src/ai/npc_behavior.wj --output /tmp/e0507_test --library --no-cargo
 # Check generated Rust for &mut self.search in if-let
 ```
 

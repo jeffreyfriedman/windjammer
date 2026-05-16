@@ -18,7 +18,7 @@
 - `test_first_node_becomes_root` ❌ → ✅
 - `test_simple_sphere_voxelization` ❌ → ✅
 
-**Fix:** Modified all `add_*` methods in `src_wj/csg/scene.wj` to auto-set root:
+**Fix:** Modified all `add_*` methods in `src/csg/scene.wj` to auto-set root:
 ```windjammer
 if self.root_id == -1 {
     self.root_id = id;
@@ -28,7 +28,7 @@ if self.root_id == -1 {
 **Impact:** Voxel count increased from **0 to 588** for humanoid!
 
 **Files Changed:**
-- `src_wj/csg/scene.wj` (8 methods: add_sphere, add_box, add_cylinder, add_torus, add_cone, add_capsule, add_union, add_intersect, add_difference, add_smooth_union, add_translate, add_rotate_y, add_scale)
+- `src/csg/scene.wj` (8 methods: add_sphere, add_box, add_cylinder, add_torus, add_cone, add_capsule, add_union, add_intersect, add_difference, add_smooth_union, add_translate, add_rotate_y, add_scale)
 
 ---
 
@@ -41,7 +41,7 @@ if self.root_id == -1 {
 **TDD Test:**
 - `test_humanoid_generates_valid_voxels` ❌ (30 voxels) → ✅ (612 voxels)
 
-**Fix:** Modified `src_wj/procedural/humanoid.wj`:
+**Fix:** Modified `src/procedural/humanoid.wj`:
 ```windjammer
 let root = scene.add_union(body, neck_head)
 scene.set_root(root)
@@ -51,7 +51,7 @@ root
 **Impact:** Voxel count increased from **30 to 588** for full humanoid body!
 
 **Files Changed:**
-- `src_wj/procedural/humanoid.wj`
+- `src/procedural/humanoid.wj`
 
 ---
 
@@ -64,7 +64,7 @@ root
 **TDD Test:**
 - `test_humanoid_svo_encoding` ❌ ("Interior node 240 has invalid child_ptr=0") → ✅
 
-**Fix:** Modified `src_wj/voxel/svo.wj` to use placeholder approach:
+**Fix:** Modified `src/voxel/svo.wj` to use placeholder approach:
 ```windjammer
 // Push placeholder FIRST
 let placeholder_idx = self.nodes.len()
@@ -82,7 +82,7 @@ self.nodes[placeholder_idx] = interior_data
 **Impact:** SVO structure now valid, all interior nodes have correct child pointers!
 
 **Files Changed:**
-- `src_wj/voxel/svo.wj`
+- `src/voxel/svo.wj`
 
 ---
 

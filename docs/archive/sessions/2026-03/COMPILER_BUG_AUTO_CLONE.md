@@ -149,8 +149,8 @@ The compiler DOES have signature information:
 - `windjammer/src/codegen/rust/generator.rs` - Code generation
 - `windjammer/src/analyzer.rs` - Ownership inference
 - `windjammer/tests/bug_struct_field_auto_clone_test.rs` - TDD tests
-- `windjammer-game/windjammer-game-core/src_wj/rpg/crafting.wj` - Affected game code
-- `windjammer-game/windjammer-game-core/src_wj/rpg/trading.wj` - Affected game code
+- `windjammer-game/windjammer-game-core/src/rpg/crafting.wj` - Affected game code
+- `windjammer-game/windjammer-game-core/src/rpg/trading.wj` - Affected game code
 
 ## Design Decision Needed
 

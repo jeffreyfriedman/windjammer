@@ -46,7 +46,7 @@ cd windjammer-game && wj game build 2>&1 | grep -c "E0308"
 
 # Or transpile + cargo build
 cd /Users/jeffreyfriedman/src/wj
-./windjammer/target/release/wj build windjammer-game/windjammer-game-core/src_wj/mod.wj \
+./windjammer/target/release/wj build windjammer-game/windjammer-game-core/src/mod.wj \
   --output windjammer-game/windjammer-game-core/src --library --no-cargo
 cd windjammer-game/windjammer-game-core && cargo build 2>&1 | grep -c "E0308"
 ```

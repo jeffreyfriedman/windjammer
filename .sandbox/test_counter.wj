@@ -1,0 +1,24 @@
+use windjammer_ui::reactivity::Signal
+
+struct CounterApp {
+    count: Signal<i32>,
+}
+
+impl CounterApp {
+    fn new() -> CounterApp {
+        CounterApp {
+            count: Signal::new(0),
+        }
+    }
+    
+    fn render(self) {
+        let count_value = self.count.get()
+        print("Count: ${count_value}")
+    }
+}
+
+fn main() {
+    let app = CounterApp::new()
+    app.render()
+}
+

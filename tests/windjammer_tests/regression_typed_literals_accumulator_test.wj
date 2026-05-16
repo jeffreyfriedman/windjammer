@@ -1,0 +1,11 @@
+// From regression/bug_typed_int_literal_test.rs — explicit u64 locals must not produce stray top-level type statements.
+fn count_items() -> u64 {
+    let mut total: u64 = 0
+    total = total + 1
+    total = total + 2
+    total
+}
+
+pub fn test_u64_literal_accumulator() {
+    assert_eq(count_items(), 3)
+}

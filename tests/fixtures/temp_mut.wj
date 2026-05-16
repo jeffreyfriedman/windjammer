@@ -1,0 +1,9 @@
+
+fn increment(x: int) {
+    x += 1
+}
+
+fn main() {
+    let mut counter = 0
+    increment(counter)
+}

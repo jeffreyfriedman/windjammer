@@ -1,0 +1,8 @@
+// From analyzer/feature_tests.rs `test_string_interpolation`.
+fn greet(name: string) -> string {
+    "Hello, ${name}!"
+}
+
+pub fn test_greeting_contains_name() {
+    assert_str_contains(greet("Ada"), "Ada")
+}

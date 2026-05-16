@@ -1,0 +1,25 @@
+struct Signal<T> {
+    value: T
+}
+
+impl<T> Signal<T> {
+    fn get() -> T {
+        self.value
+    }
+}
+
+struct ContactForm {
+    name_error: Signal<string>
+}
+
+impl ContactForm {
+    fn test() {
+        foo([
+            bar(if self.name_error.get().len() > 0 { "a" } else { "b" })
+        ])
+    }
+}
+
+fn foo(attrs: Vec<string>) {}
+fn bar(s: string) -> string { s }
+

@@ -23,6 +23,12 @@
 //! | `Option<T>` | `*T` (pointer, nil for None) |
 //! | Struct | struct |
 //! | Enum | interface + variant structs |
+//!
+//! ## Layout (`generator/`)
+//!
+//! The Go emitter lives in `generator/mod.rs`, which `include!`s focused fragments:
+//! `type_generation.rs`, `function_generation.rs`, `statement_generation.rs`, and
+//! `expression_generation.rs` (single module, shared imports in `mod.rs`).
 
 mod generator;
 

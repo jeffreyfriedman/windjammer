@@ -1,0 +1,10 @@
+fn main() {
+    let x = ""
+    foo([
+        bar(if x.len() > 0 { "a" } else { "b" })
+    ])
+}
+
+fn foo(attrs: Vec<string>) {}
+fn bar(s: string) -> string { s }
+

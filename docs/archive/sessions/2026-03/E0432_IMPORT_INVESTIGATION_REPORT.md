@@ -28,7 +28,7 @@
 **Error:** `use crate::plugin::{Plugin, PluginContext}` - PluginContext not found
 
 **Root Cause:** 
-- `src_wj/mod.wj` re-exports `pub use plugin::{Plugin, PluginContext, App}`
+- `src/mod.wj` re-exports `pub use plugin::{Plugin, PluginContext, App}`
 - `plugin/mod.wj` defines only `Plugin` trait and `App` struct
 - **PluginContext is never defined** in the plugin module
 
@@ -54,7 +54,7 @@ pub type PluginContext = App
 **Root Cause:** Build log may be stale. Current state:
 - `rendering/mod.rs` line 61: `pub mod texture_packer;`
 - `rendering/texture_packer.rs` EXISTS (verified via glob_file_search)
-- `src_wj/rendering/mod.wj` line 10: `pub mod texture_packer`
+- `src/rendering/mod.wj` line 10: `pub mod texture_packer`
 
 **Status:** Module structure appears correct. If error persists:
 - Verify `rendering/texture_packer.rs` exports `TexturePacker` and `PackedRect`

@@ -1,0 +1,16 @@
+// From regression/bug_quest_objective_test.rs — module-level pub type aliases must unify with the aliased struct (quest/objective pattern).
+
+pub struct Objective {
+    pub id: int,
+}
+
+pub type QuestObjective = Objective
+
+pub fn unwrap_id(goal: QuestObjective) -> int {
+    goal.id
+}
+
+pub fn test_type_alias_behaves_like_objective_struct() {
+    let goal = Objective { id: 404 }
+    assert_eq(unwrap_id(goal), 404)
+}
