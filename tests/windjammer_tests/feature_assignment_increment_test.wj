@@ -1,0 +1,8 @@
+// Behavior aligned with analyzer/feature_tests.rs `test_assignment_statement` (mutation + ints).
+// Note: analyzer coverage for `x = x + 1` on inferred &mut params remains in `feature_tests.rs`
+// (`+=` codegen on refs); this fixture asserts simple increment semantics via a local mutable binding.
+pub fn test_increment_via_local_assignment() {
+    let mut base = 41
+    base = base + 1
+    assert_eq(base, 42)
+}
