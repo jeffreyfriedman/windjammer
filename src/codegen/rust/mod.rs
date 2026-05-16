@@ -11,6 +11,7 @@
 //! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
 
+pub mod aosoa_transform;
 pub mod arm_string_analysis;
 pub mod assignment_statement_generation;
 pub mod ast_utilities;
@@ -70,6 +71,7 @@ pub mod pattern_analysis;
 pub mod pattern_generation;
 pub mod program_generation;
 pub mod return_statement_generation;
+pub mod simd_transform;
 pub mod rust_coercion_rules;
 pub mod self_analysis;
 pub mod statement_generation;
