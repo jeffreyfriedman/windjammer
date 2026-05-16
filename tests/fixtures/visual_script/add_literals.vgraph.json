@@ -1,0 +1,36 @@
+{
+  "format": "windjammer-vgraph",
+  "version": 1,
+  "module_name": "fixture_add",
+  "nodes": [
+    { "id": "e1", "kind": "event_on_start" },
+    {
+      "id": "a",
+      "kind": "literal_float",
+      "payload": { "value": 2.0 }
+    },
+    {
+      "id": "b",
+      "kind": "literal_float",
+      "payload": { "value": 3.0 }
+    },
+    { "id": "sum", "kind": "add_float" }
+  ],
+  "edges": [
+    {
+      "kind": "exec",
+      "from": { "node": "e1", "pin": "exec_out" },
+      "to": { "node": "sum", "pin": "exec_in" }
+    },
+    {
+      "kind": "data",
+      "from": { "node": "a", "pin": "value" },
+      "to": { "node": "sum", "pin": "a" }
+    },
+    {
+      "kind": "data",
+      "from": { "node": "b", "pin": "value" },
+      "to": { "node": "sum", "pin": "b" }
+    }
+  ]
+}

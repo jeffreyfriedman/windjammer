@@ -44,6 +44,7 @@ pub mod test_utils;
 pub mod type_classification;
 pub mod type_inference;
 pub mod type_registry;
+pub mod visual_script;
 pub mod wjsl;
 
 // CLI-related modules (required for wj binary)
