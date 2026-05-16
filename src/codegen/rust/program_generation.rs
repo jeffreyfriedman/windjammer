@@ -284,7 +284,7 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     ..
                 } => {
-                    let pub_prefix = if *is_pub || self.is_module {
+                    let pub_prefix = if *is_pub {
                         "pub "
                     } else {
                         ""
