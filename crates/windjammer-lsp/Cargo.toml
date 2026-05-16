@@ -29,7 +29,7 @@ salsa = "0.24"
 dashmap = "5.5"
 
 # Parallel processing
-rayon = "1.8"
+rayon = "1.12"
 
 # Regex for inline refactoring
 regex = "1.10"
@@ -68,9 +68,9 @@ cargo_metadata = "0.23"
 
 [dev-dependencies]
 # Testing
-assert_cmd = "2.0"
+assert_cmd = "2.2"
 predicates = "3.0"
-tempfile = "3.8"
+tempfile = "3.27"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"] }
