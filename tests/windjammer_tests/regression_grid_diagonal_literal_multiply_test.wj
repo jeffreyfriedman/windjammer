@@ -1,0 +1,20 @@
+// From regression/bug_method_return_binary_float_test.rs `test_astar_grid_get_cost_times_literal` — f32 diagonal scale from Grid::get_cost (A* style).
+
+pub struct Grid {
+    pub cells: Vec<f32>,
+}
+
+impl Grid {
+    pub fn get_cost(self, x: int, y: int) -> f32 {
+        self.cells[0]
+    }
+
+    pub fn diagonal_cost(self, x: int, y: int) -> f32 {
+        self.get_cost(x, y) * 1.414
+    }
+}
+
+pub fn test_diagonal_multiplier_matches_f32_context() {
+    let g = Grid { cells: vec![10.0] }
+    assert_approx(g.diagonal_cost(0, 0) as f64, 14.14, 0.02)
+}

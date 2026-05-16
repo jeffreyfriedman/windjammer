@@ -1,0 +1,20 @@
+// From regression/bug_is_stored_enum_option_test.rs `test_enum_variant_construction_keeps_owned` — tuple enum stores owned strings + numeric payload.
+
+enum Objective {
+    Kill(string, int),
+}
+
+fn extract_count(obj: Objective) -> int {
+    match obj {
+        Objective::Kill(_, count) => count,
+    }
+}
+
+fn make_kill(kind: string, count: int) -> Objective {
+    Objective::Kill(kind, count)
+}
+
+pub fn test_kill_variant_stores_numeric_payload() {
+    let o = make_kill("wolf".to_string(), 5)
+    assert_eq(extract_count(o), 5)
+}

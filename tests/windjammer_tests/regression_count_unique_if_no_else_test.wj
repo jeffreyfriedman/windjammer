@@ -1,0 +1,17 @@
+// From regression/bug_if_without_else_unit_test.rs — if-without-else last stmt must suppress non-unit value in codegen.
+use std::collections::HashSet
+
+fn count_unique(items: Vec<int>) -> int {
+    let mut seen = HashSet::new()
+    for item in &items {
+        if *item > 0 {
+            seen.insert(*item)
+        }
+    }
+    seen.len() as int
+}
+
+pub fn test_count_positive_unique_after_if_inserts() {
+    let items = vec![1, 2, 3, 2, 1]
+    assert_eq(count_unique(items), 3)
+}

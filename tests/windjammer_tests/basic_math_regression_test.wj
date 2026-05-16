@@ -1,0 +1,15 @@
+// Ported philosophy: arithmetic + asserts (from standard Rust regression style)
+
+pub fn test_addition_and_comparison() {
+    let result = 2 + 2
+    assert_eq(result, 4)
+}
+
+pub fn test_subtraction() {
+    assert_eq(10 - 7, 3)
+}
+
+pub fn test_comparisons() {
+    assert_lt(3, 5)
+    assert_gt(9, 4)
+}
