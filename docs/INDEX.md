@@ -32,6 +32,7 @@ This is your complete guide to the Game Host Framework - the game engine that pr
   - Performance highlights
   - Unique innovations
   - Market positioning
+  - Canonical game-framework tagline lives in **`game-host`**: companion summary **[`GAME_ENGINE_VISION.md`](GAME_ENGINE_VISION.md)**
 
 - **[Competitive Analysis](COMPETITIVE_ANALYSIS.md)** (521 lines)
   - Detailed Unity/Unreal/Godot comparison
