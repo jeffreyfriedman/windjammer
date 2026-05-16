@@ -30,8 +30,9 @@ fn compile_wj_to_rust(source: &str) -> String {
 
     fs::write(&src_path, source).expect("write source");
 
-    let wj = std::env::var("WJ_COMPILER")
-        .unwrap_or_else(|_| "/Users/jeffreyfriedman/src/wj/windjammer/target/release/wj".into());
+    // Use CARGO_BIN_EXE_wj (available in integration tests) instead of hardcoded path
+    let wj =
+        std::env::var("CARGO_BIN_EXE_wj").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string());
 
     let output = Command::new(&wj)
         .arg("build")
