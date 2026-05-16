@@ -61,7 +61,9 @@ pub mod test
     )
     .expect("Build should succeed");
 
-    let rust_code = std::fs::read_to_string(build.join("test/mod.rs")).unwrap();
+    // mod.wj generates _mod_items.rs, not mod.rs
+    let rust_code = std::fs::read_to_string(build.join("test/_mod_items.rs"))
+        .expect("Failed to read generated test/_mod_items.rs");
 
     // ASSERT: Should NOT use `self::windjammer_game_core`
     assert!(
