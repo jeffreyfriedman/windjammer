@@ -560,6 +560,10 @@ impl<'ast> CodeGenerator<'ast> {
             false
         };
 
+        // When codegen prepends `&` / `&mut` on the scrutinee (`match &node.children`),
+        // pattern bindings are reference types even if `match_expression_binds_refs` is false.
+        let scrutinee_prefix_binds_refs = !match_scrutinee_ref_prefix.is_empty();
+
         for arm in arms {
             // Upgrade pattern bindings to `mut` when the arm body mutates them
             let body_stmts: &[&Statement<'ast>] =
@@ -594,7 +598,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.match_arm_bindings.insert(var.clone());
             }
 
-            let added_borrowed: Vec<String> = if (match_binds_refs || scrutinee_type_has_ref)
+            let added_borrowed: Vec<String> = if (match_binds_refs
+                || scrutinee_type_has_ref
+                || scrutinee_prefix_binds_refs)
                 && !owned_bindings_from_copy_deref
             {
                 bound_vars.iter().cloned().collect()
@@ -646,7 +652,9 @@ impl<'ast> CodeGenerator<'ast> {
 
             self.in_match_arm_needing_string = old_in_match_arm;
 
-            if (match_binds_refs || scrutinee_type_has_ref) && !arm_str.ends_with(".clone()") {
+            if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                && !arm_str.ends_with(".clone()")
+            {
                 // Extract the binding name from either a direct identifier
                 // or a block whose only/last statement is an expression identifier
                 let binding_name: Option<&str> =
@@ -705,6 +713,18 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                } else if let Some(rewritten) = self.rewrite_some_wrapper_for_ref_match_binding(
+                    arm.body,
+                    &match_bound_type_entries,
+                    &added_borrowed,
+                ) {
+                    arm_str = rewritten;
+                } else if let Some(rewritten) = self.rewrite_some_ident_arm_string(
+                    arm_str.trim(),
+                    &match_bound_type_entries,
+                    &added_borrowed,
+                ) {
+                    arm_str = rewritten;
                 }
             }
 
@@ -745,5 +765,119 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&self.indent());
         output.push_str("}\n");
         output
+    }
+
+    /// `Some(x)` (or a block containing only that expression) where `x` is a match binding
+    /// introduced under ref ergonomics; used to upgrade to owned `Option` for the arm value.
+    fn match_arm_some_call_single_ident<'e>(body: &'e Expression<'e>) -> Option<&'e str> {
+        let expr = match body {
+            Expression::Block { statements, .. } => {
+                if statements.len() != 1 {
+                    return None;
+                }
+                match statements[0] {
+                    Statement::Expression { expr, .. } => expr,
+                    _ => return None,
+                }
+            }
+            other => other,
+        };
+        let Expression::Call {
+            function,
+            arguments,
+            ..
+        } = expr
+        else {
+            return None;
+        };
+        if arguments.len() != 1 {
+            return None;
+        }
+        let Expression::Identifier { name: fname, .. } = &**function else {
+            return None;
+        };
+        if fname != "Some" && !fname.ends_with("::Some") {
+            return None;
+        }
+        let (_, arg) = &arguments[0];
+        let Expression::Identifier { name: inner, .. } = &**arg else {
+            return None;
+        };
+        Some(inner.as_str())
+    }
+
+    /// When match ergonomics bind `x` as `&T` but the arm returns `Some(x)` expecting
+    /// `Option<T>`, emit `Some(x.clone())` or `Some(*x)` for `Copy` `T`.
+    pub(in crate::codegen::rust) fn rewrite_some_wrapper_for_ref_match_binding(
+        &self,
+        arm_body: &'ast Expression<'ast>,
+        match_bound_type_entries: &[(String, Type)],
+        added_borrowed: &[String],
+    ) -> Option<String> {
+        let inner = Self::match_arm_some_call_single_ident(arm_body)?;
+        if !added_borrowed.iter().any(|n| n == inner) {
+            return None;
+        }
+        let binding_type = match_bound_type_entries
+            .iter()
+            .find(|(n, _)| n == inner)
+            .map(|(_, t)| t);
+        let inner_type = binding_type.map(|bt| match bt {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        });
+        let is_copy = inner_type.is_some_and(|t| self.is_type_copy(t));
+        let inner_expr = if is_copy {
+            format!("*{}", inner)
+        } else {
+            format!("{}.clone()", inner)
+        };
+        Some(format!("Some({})", inner_expr))
+    }
+
+    /// Fallback when `infer_match_bound_types` is empty / AST shape misses: `Some(x)` lowering
+    /// is always plain text; salvage from generated Rust substring.
+    pub(in crate::codegen::rust) fn rewrite_some_ident_arm_string(
+        &self,
+        arm_str: &str,
+        match_bound_type_entries: &[(String, Type)],
+        added_borrowed: &[String],
+    ) -> Option<String> {
+        let s = arm_str.trim();
+        const PREFIX: &str = "Some(";
+        if !s.starts_with(PREFIX) || !s.ends_with(')') {
+            return None;
+        }
+        let inner = s[PREFIX.len()..s.len().saturating_sub(1)].trim();
+        if !Self::looks_like_simple_binding_ident(inner)
+            || !added_borrowed.iter().any(|n| n == inner)
+        {
+            return None;
+        }
+        let binding_type = match_bound_type_entries
+            .iter()
+            .find(|(n, _)| n == inner)
+            .map(|(_, t)| t);
+        let inner_ty = binding_type.map(|bt| match bt {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        });
+        let is_copy = inner_ty.is_some_and(|t| self.is_type_copy(t));
+        if is_copy {
+            Some(format!("Some(*{})", inner))
+        } else {
+            Some(format!("Some({}.clone())", inner))
+        }
+    }
+
+    fn looks_like_simple_binding_ident(inner: &str) -> bool {
+        let mut ch = inner.chars();
+        let Some(c0) = ch.next() else {
+            return false;
+        };
+        if !(c0.is_ascii_alphabetic() || c0 == '_') {
+            return false;
+        }
+        ch.all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
 }

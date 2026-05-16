@@ -98,6 +98,10 @@ assert_cmd = "2.0"
 criterion = "0.5"
 
 [[test]]
+name = "windjammer_fixtures_integration"
+path = "tests/windjammer_tests/windjammer_fixtures_integration.rs"
+
+[[test]]
 name = "ambiguous_reexports_test"
 path = "tests/analyzer/ambiguous_reexports_test.rs"
 
