@@ -62,9 +62,19 @@ fn test_string_literal_enum_auto_convert() {
     }
 
     // Read generated Rust file
+    // Try both possible output paths
     let generated_rs = output_dir.join("string_literal_enum_test.rs");
-    let generated_code =
-        fs::read_to_string(&generated_rs).expect("Failed to read generated Rust file");
+    let generated_code = fs::read_to_string(&generated_rs)
+        .or_else(|_| {
+            fs::read_to_string(
+                output_dir
+                    .join("wj")
+                    .join("windjammer")
+                    .join("tests")
+                    .join("string_literal_enum_test.rs"),
+            )
+        })
+        .expect("Failed to read generated Rust file (tried both possible paths)");
 
     println!("Generated code:\n{}", generated_code);
 
