@@ -633,8 +633,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if match_binds_refs && !final_arm_str.ends_with(".clone()") {
                         let mut bound_vars = std::collections::HashSet::new();
                         self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
-                        let match_bound_entries =
-                            self.infer_match_bound_types(value, &arm.pattern);
+                        let match_bound_entries = self.infer_match_bound_types(value, &arm.pattern);
                         let added_borrowed: Vec<String> = bound_vars.iter().cloned().collect();
                         let binding_name: Option<&str> =
                             if let Expression::Identifier { name, .. } = arm.body {
@@ -685,8 +684,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
-                        } else if let Some(rewritten) =
-                            self.rewrite_some_wrapper_for_ref_match_binding(
+                        } else if let Some(rewritten) = self
+                            .rewrite_some_wrapper_for_ref_match_binding(
                                 arm.body,
                                 &match_bound_entries,
                                 &added_borrowed,

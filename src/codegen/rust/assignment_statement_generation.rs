@@ -230,25 +230,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 | BinaryOp::Mul
                                 | BinaryOp::Div
                                 | BinaryOp::Mod
-                        ) {
-                            let rhs_ty = self.infer_expression_type(right);
-                            if let Some(v) = &rhs_ty {
-                                if Self::is_int_numeric_type(v) {
-                                    let tgt_float =
-                                        self.resolve_compound_assign_float_target(target);
-                                    if let Some(float_name) = tgt_float {
-                                        if right_str.contains(" as ")
-                                            || matches!(&**right, Expression::Binary { .. })
-                                        {
-                                            right_str =
-                                                format!("({}) as {}", right_str, float_name);
-                                        } else {
-                                            right_str = format!("{} as {}", right_str, float_name);
-                                        }
+                        )
+                    {
+                        let rhs_ty = self.infer_expression_type(right);
+                        if let Some(v) = &rhs_ty {
+                            if Self::is_int_numeric_type(v) {
+                                let tgt_float = self.resolve_compound_assign_float_target(target);
+                                if let Some(float_name) = tgt_float {
+                                    if right_str.contains(" as ")
+                                        || matches!(&**right, Expression::Binary { .. })
+                                    {
+                                        right_str = format!("({}) as {}", right_str, float_name);
+                                    } else {
+                                        right_str = format!("{} as {}", right_str, float_name);
                                     }
                                 }
                             }
                         }
+                    }
 
                     self.assignment_float_target_type = prev_assign_ty;
 
@@ -307,9 +306,11 @@ impl<'ast> CodeGenerator<'ast> {
                     .as_ref()
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                 if assignment_target_is_text
-                    && !value_str.contains(".clone()") && !value_str.contains(".to_string()") {
-                        value_str = format!("{}.to_string()", value_str);
-                    }
+                    && !value_str.contains(".clone()")
+                    && !value_str.contains(".to_string()")
+                {
+                    value_str = format!("{}.to_string()", value_str);
+                }
             }
             // E0308 FIX: match-bound variables from &/&mut scrutinees are references.
             // When assigning to a Copy-type field (e.g. self.x = min_x where min_x: &mut f32),
