@@ -238,11 +238,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if *is_pub {
                     has_explicit_pub_use = true;
                 }
-                let use_stmt = self.generate_use(path, alias.as_deref());
+                let use_stmt = self.generate_use(path, alias.as_deref(), *is_pub);
                 if !use_stmt.trim().is_empty() {
-                    if *is_pub {
-                        imports.push_str("pub ");
-                    }
+                    // Don't prepend pub - it's already in use_stmt
                     imports.push_str(&use_stmt);
                 }
             }
