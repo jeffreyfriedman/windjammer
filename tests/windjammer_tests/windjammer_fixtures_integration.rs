@@ -58,8 +58,8 @@ fn inner_run_windjammer_fixture_wj(fixture_rel: &str) {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixed_dir = manifest.join("tests/windjammer_tests");
     let src_path = fixed_dir.join(fixture_rel);
-    let source =
-        fs::read_to_string(&src_path).unwrap_or_else(|e| panic!("read {}: {e}", src_path.display()));
+    let source = fs::read_to_string(&src_path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", src_path.display()));
 
     let tmp = TempDir::new().expect("tempdir");
     let root = tmp.path();
@@ -147,10 +147,7 @@ fixture!(
     feature_string_interpolate,
     "feature_string_interpolate_test.wj"
 );
-fixture!(
-    feature_pipe_operator,
-    "feature_pipe_operator_test.wj"
-);
+fixture!(feature_pipe_operator, "feature_pipe_operator_test.wj");
 fixture!(regression_match_break, "regression_match_break_test.wj");
 fixture!(
     regression_match_continue,

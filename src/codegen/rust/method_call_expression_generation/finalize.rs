@@ -156,9 +156,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // Otherwise, use . for instance methods on fields
                 match object {
                     Expression::Identifier { name, .. }
-                        if (name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "std") => {
-                            "::" // Module::path::method() -> static method
-                        }
+                        if (name.chars().next().is_some_and(|c| c.is_uppercase())
+                            || name == "std") =>
+                    {
+                        "::" // Module::path::method() -> static method
+                    }
                     _ => ".", // Default to instance method
                 }
             }
