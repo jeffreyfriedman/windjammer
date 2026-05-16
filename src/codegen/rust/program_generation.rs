@@ -716,6 +716,24 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
         output.push_str(&body);
 
+        if std::env::var("WJ_EMIT_AOSOA_HINTS").ok().as_deref() == Some("1") {
+            let hints = crate::codegen::rust::aosoa_transform::emit_aosoa_hints(program, analyzed);
+            if !hints.is_empty() {
+                output.push_str("\n\n// --- Windjammer cache locality (WJ_EMIT_AOSOA_HINTS=1) ---\n");
+                output.push_str(&hints);
+            }
+        }
+
+        if let Ok(report_path) = std::env::var("WJ_CACHE_LOCALITY_JSON") {
+            let json = crate::analyzer::cache_locality_json_report(analyzed);
+            if let Err(e) = std::fs::write(&report_path, json) {
+                eprintln!(
+                    "windjammer: WJ_CACHE_LOCALITY_JSON failed to write {}: {}",
+                    report_path, e
+                );
+            }
+        }
+
         output
     }
 }

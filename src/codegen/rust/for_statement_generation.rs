@@ -19,6 +19,12 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
         location: &crate::parser::ast::SourceLocation,
     ) -> String {
+        if let Some(simd_block) =
+            super::simd_transform::try_emit_simd_for_loop(self, pattern, iterable, body)
+        {
+            return simd_block;
+        }
+
         let mut output = self.indent();
         output.push_str("for ");
 
