@@ -1,0 +1,19 @@
+// From regression/bug_f32_f64_explicit_cast_test.rs `test_method_chain_float_consistency`.
+pub struct ScaleVec {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+pub fn scale_with_literal(v: ScaleVec) -> f32 {
+    v.x * 2.0
+}
+
+pub fn test_unit_x_scaled_by_literal_two() {
+    let v = ScaleVec {
+        x: 1.0,
+        y: 0.0,
+        z: 0.0,
+    }
+    assert_approx(scale_with_literal(v) as f64, 2.0, 0.001)
+}

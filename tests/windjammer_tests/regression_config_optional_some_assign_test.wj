@@ -1,0 +1,24 @@
+// From regression/bug_is_stored_enum_option_test.rs `test_some_wrapping_keeps_owned` — Option<string> field update via method.
+
+struct Config {
+    pub current: Option<string>,
+}
+
+impl Config {
+    pub fn new() -> Config {
+        Config { current: None }
+    }
+
+    pub fn set_current(self, id: string) {
+        self.current = Some(id)
+    }
+}
+
+pub fn test_optional_string_field_some_after_set() {
+    let mut cfg = Config::new()
+    cfg.set_current("token")
+    match cfg.current {
+        Some(_) => {},
+        None => assert(false, "expected Some after set_current"),
+    }
+}
