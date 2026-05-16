@@ -57,9 +57,19 @@ fn test_string_borrow_inference() {
     }
 
     // Read generated Rust code
+    // Try both possible output paths (see generic_owned_param_integration_test)
     let generated_file = output_dir.join("string_borrow_inference_test.rs");
-    let generated_code =
-        std::fs::read_to_string(&generated_file).expect("Failed to read generated file");
+    let generated_code = std::fs::read_to_string(&generated_file)
+        .or_else(|_| {
+            std::fs::read_to_string(
+                output_dir
+                    .join("wj")
+                    .join("windjammer")
+                    .join("tests")
+                    .join("string_borrow_inference_test.rs"),
+            )
+        })
+        .expect("Failed to read generated file (tried both possible paths)");
 
     println!("Generated code:\n{}", generated_code);
 
