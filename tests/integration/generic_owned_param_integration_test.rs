@@ -38,17 +38,26 @@ fn test_generic_owned_param_inference() {
     .expect("Windjammer compilation failed");
 
     // Read the generated Rust code
-    // The compiler preserves directory structure, so the file is at:
-    // output_dir/wj/windjammer/tests/generic_owned_param_test.rs
-    let generated_code = std::fs::read_to_string(
-        out_tmp
-            .path()
-            .join("wj")
-            .join("windjammer")
-            .join("tests")
-            .join("generic_owned_param_test.rs"),
-    )
-    .expect("Failed to read generated code");
+    // The compiler outputs relative to source_root (tests/ directory),
+    // so the file is directly in output_dir
+
+    // Read the generated Rust code
+    // The file location depends on whether path stripping succeeded:
+    // - Success: <output_dir>/generic_owned_param_test.rs
+    // - Failure: <output_dir>/wj/windjammer/tests/generic_owned_param_test.rs
+    let generated_code =
+        std::fs::read_to_string(out_tmp.path().join("generic_owned_param_test.rs"))
+            .or_else(|_| {
+                std::fs::read_to_string(
+                    out_tmp
+                        .path()
+                        .join("wj")
+                        .join("windjammer")
+                        .join("tests")
+                        .join("generic_owned_param_test.rs"),
+                )
+            })
+            .expect("Failed to read generated code (tried both possible paths)");
 
     // Print for debugging
     println!("Generated code:\n{}", generated_code);
