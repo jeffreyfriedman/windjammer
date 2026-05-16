@@ -8,7 +8,10 @@ impl CodeGenerator<'_> {
         &self,
         path: &[String],
         alias: Option<&str>,
+        is_pub: bool,
     ) -> String {
+        let pub_prefix = if is_pub { "pub " } else { "" };
+        
         if path.is_empty() {
             return String::new();
         }
@@ -20,7 +23,7 @@ impl CodeGenerator<'_> {
         let normalized_for_super = full_path.replace('.', "::");
         if normalized_for_super.starts_with("crate::super::") {
             let path_without_crate = normalized_for_super.strip_prefix("crate::").unwrap();
-            return format!("use {};\n", path_without_crate);
+            return format!("{}use {};\n", pub_prefix, path_without_crate);
         }
 
         // mod.rs: `crate::<this_module>::X` means the current directory module, not the crate root.
@@ -38,9 +41,9 @@ impl CodeGenerator<'_> {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
                             if let Some(alias_name) = alias {
-                                return format!("use self::{} as {};\n", rest, alias_name);
+                                return format!("{}use self::{} as {};\n", rest, alias_name, pub_prefix);
                             }
-                            return format!("use self::{};\n", rest);
+                            return format!("{}use self::{};\n", rest, pub_prefix);
                         }
                     }
                 }
@@ -57,7 +60,7 @@ impl CodeGenerator<'_> {
 
             // Braced crate imports: expand each type to its defining submodule (fixes E0432).
             if normalized.contains("::{") && normalized.contains('}') {
-                let braced = self.expand_braced_crate_import(&normalized, alias);
+                let braced = self.expand_braced_crate_import(&normalized, alias, is_pub);
                 if !braced.is_empty() {
                     return braced;
                 }
@@ -82,9 +85,9 @@ impl CodeGenerator<'_> {
 
             // TDD FIX: Preserve alias for crate:: imports
             if let Some(alias_name) = alias {
-                return format!("use {} as {};\n", expanded, alias_name);
+                return format!("{}use {} as {};\n", expanded, alias_name, pub_prefix);
             }
-            return format!("use {};\n", expanded);
+            return format!("{}use {};\n", expanded, pub_prefix);
         }
 
         // Handle stdlib imports FIRST (before glob handling)
@@ -106,17 +109,17 @@ impl CodeGenerator<'_> {
                 .replace('.', "::")
                 .trim_end_matches("::")
                 .to_string();
-            return format!("use {}::*;\n", rust_path);
+            return format!("{}use {}::*;\n", rust_path, pub_prefix);
         }
 
         // Handle braced imports: module::{A, B, C} or module.{A, B, C}
         if (full_path.contains("::{") || full_path.contains(".{")) && full_path.contains('}') {
             // Try :: separator first, then . separator
             if let Some((base, items)) = full_path.split_once("::{") {
-                return format!("use {}::{{{};\n", base, items);
+                return format!("{}use {}::{{{};\n", base, items, pub_prefix);
             } else if let Some((base, items)) = full_path.split_once(".{") {
                 let rust_base = base.replace('.', "::");
-                return format!("use {}::{{{};\n", rust_base, items);
+                return format!("{}use {}::{{{};\n", rust_base, items, pub_prefix);
             }
         }
 
@@ -137,22 +140,22 @@ impl CodeGenerator<'_> {
                 if let Some(last) = segments.last() {
                     if last.chars().next().is_some_and(|c| c.is_uppercase()) {
                         // Importing a specific type: ./config::Config -> use crate::config::Config;
-                        return format!("use crate::{};\n", rust_path);
+                        return format!("{}use crate::{};\n", rust_path, pub_prefix);
                     }
                 }
                 // For crate::module imports, just import the module (not ::*)
                 // This allows qualified usage like module::func() in the code
-                return format!("use crate::{};\n", rust_path);
+                return format!("{}use crate::{};\n", rust_path, pub_prefix);
             } else {
                 // Module import: ./config
                 // In the main entry point (is_module=false), modules are already in scope via pub mod declarations
                 // In submodules (is_module=true), we need to explicitly use sibling modules
                 let module_name = stripped.split('/').next_back().unwrap_or(stripped);
                 if let Some(alias_name) = alias {
-                    return format!("use crate::{} as {};\n", module_name, alias_name);
+                    return format!("{}use crate::{} as {};\n", module_name, alias_name, pub_prefix);
                 } else if self.is_module {
                     // In a module, we need to explicitly use sibling modules
-                    return format!("use crate::{};\n", module_name);
+                    return format!("{}use crate::{};\n", module_name, pub_prefix);
                 } else {
                     // In main entry point, modules are already in scope
                     return String::new();
@@ -168,7 +171,7 @@ impl CodeGenerator<'_> {
         // TDD FIX: Paths starting with super:: must NOT get crate:: prepended
         // Rust requires super at path start: "use super::enemy::Enemy" not "use crate::super::enemy::Enemy"
         if rust_path.starts_with("super::") {
-            return format!("use {};\n", rust_path);
+            return format!("{}use {};\n", rust_path, pub_prefix);
         }
 
         // TDD FIX: Bare paths referencing inline modules need self:: prefix.
@@ -178,9 +181,9 @@ impl CodeGenerator<'_> {
         if let Some(first_seg) = rust_path.split("::").next() {
             if self.inline_module_names.contains(first_seg) {
                 if let Some(alias_name) = alias {
-                    return format!("use self::{} as {};\n", rust_path, alias_name);
+                    return format!("{}use self::{} as {};\n", rust_path, alias_name, pub_prefix);
                 }
-                return format!("use self::{};\n", rust_path);
+                return format!("{}use self::{};\n", rust_path, pub_prefix);
             }
         }
 
@@ -218,18 +221,18 @@ impl CodeGenerator<'_> {
                     if self.is_output_mod_rs() {
                         // mod.wj: `pub use animation::Animation` → self::animation::Animation (not super::Animation)
                         if let Some(alias_name) = alias {
-                            return format!("use self::{} as {};\n", rust_path, alias_name);
+                            return format!("{}use self::{} as {};\n", rust_path, alias_name, pub_prefix);
                         }
-                        return format!("use self::{};\n", rust_path);
+                        return format!("{}use self::{};\n", rust_path, pub_prefix);
                     }
                     // Strip the parent directory name and use super:: instead
                     let path_without_parent = rust_path
                         .strip_prefix(&format!("{}::", parent_dir))
                         .unwrap();
                     if let Some(alias_name) = alias {
-                        return format!("use super::{} as {};\n", path_without_parent, alias_name);
+                        return format!("{}use super::{} as {};\n", path_without_parent, alias_name, pub_prefix);
                     }
-                    return format!("use super::{};\n", path_without_parent);
+                    return format!("{}use super::{};\n", path_without_parent, pub_prefix);
                 }
             }
         }
@@ -260,7 +263,7 @@ impl CodeGenerator<'_> {
                 if let Some(type_name) = segments.last() {
                     if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
                         // It's a type, use just super::TypeName
-                        return format!("use super::{};\n", type_name);
+                        return format!("{}use super::{};\n", type_name, pub_prefix);
                     }
                 }
             }

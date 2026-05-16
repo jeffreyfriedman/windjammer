@@ -266,7 +266,9 @@ impl CodeGenerator<'_> {
         out
     }
 
-    fn expand_braced_crate_import(&self, normalized: &str, alias: Option<&str>) -> String {
+    fn expand_braced_crate_import(&self, normalized: &str, alias: Option<&str>, is_pub: bool) -> String {
+        let pub_prefix = if is_pub { "pub " } else { "" };
+        
         let module_root = if self.is_module {
             self.get_module_root_name()
         } else {
@@ -285,16 +287,16 @@ impl CodeGenerator<'_> {
 
         let Some((base, rest)) = with_root.split_once("::{") else {
             return if let Some(a) = alias {
-                format!("use {} as {};\n", with_root, a)
+                format!("{}use {} as {};\n", pub_prefix, with_root, a)
             } else {
-                format!("use {};\n", with_root)
+                format!("{}use {};\n", pub_prefix, with_root)
             };
         };
         let Some(inner) = rest.strip_suffix('}') else {
             return if let Some(a) = alias {
-                format!("use {} as {};\n", with_root, a)
+                format!("{}use {} as {};\n", pub_prefix, with_root, a)
             } else {
-                format!("use {};\n", with_root)
+                format!("{}use {};\n", pub_prefix, with_root)
             };
         };
         let types: Vec<&str> = inner
@@ -304,9 +306,9 @@ impl CodeGenerator<'_> {
             .collect();
         if types.is_empty() {
             return if let Some(a) = alias {
-                format!("use {} as {};\n", with_root, a)
+                format!("{}use {} as {};\n", pub_prefix, with_root, a)
             } else {
-                format!("use {};\n", with_root)
+                format!("{}use {};\n", pub_prefix, with_root)
             };
         }
 
@@ -315,9 +317,9 @@ impl CodeGenerator<'_> {
             .all(|t| t.chars().next().is_some_and(|c| c.is_ascii_uppercase()));
         if !all_pascal {
             return if let Some(a) = alias {
-                format!("use {} as {};\n", with_root, a)
+                format!("{}use {} as {};\n", pub_prefix, with_root, a)
             } else {
-                format!("use {};\n", with_root)
+                format!("{}use {};\n", pub_prefix, with_root)
             };
         }
 
@@ -325,9 +327,9 @@ impl CodeGenerator<'_> {
             let single = format!("{}::{}", base, types[0]);
             let exp = self.expand_crate_path_string(&single);
             return if let Some(a) = alias {
-                format!("use {} as {};\n", exp, a)
+                format!("{}use {} as {};\n", pub_prefix, exp, a)
             } else {
-                format!("use {};\n", exp)
+                format!("{}use {};\n", pub_prefix, exp)
             };
         }
 
@@ -336,7 +338,7 @@ impl CodeGenerator<'_> {
         for typ in types {
             let single = format!("{}::{}", base, typ);
             let exp = self.expand_crate_path_string(&single);
-            lines.push_str(&format!("use {};\n", exp));
+            lines.push_str(&format!("{}use {};\n", pub_prefix, exp));
         }
         lines
     }
