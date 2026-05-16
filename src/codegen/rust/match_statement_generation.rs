@@ -598,15 +598,14 @@ impl<'ast> CodeGenerator<'ast> {
                 self.match_arm_bindings.insert(var.clone());
             }
 
-            let added_borrowed: Vec<String> = if (match_binds_refs
-                || scrutinee_type_has_ref
-                || scrutinee_prefix_binds_refs)
-                && !owned_bindings_from_copy_deref
-            {
-                bound_vars.iter().cloned().collect()
-            } else {
-                Vec::new()
-            };
+            let added_borrowed: Vec<String> =
+                if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                    && !owned_bindings_from_copy_deref
+                {
+                    bound_vars.iter().cloned().collect()
+                } else {
+                    Vec::new()
+                };
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.insert(var.clone());
             }

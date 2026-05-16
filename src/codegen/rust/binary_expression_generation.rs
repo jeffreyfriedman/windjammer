@@ -585,9 +585,10 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Identifier { name, .. } = expr {
                     if (gen.inferred_borrowed_params.contains(name.as_str())
                         || gen.borrowed_iterator_vars.contains(name))
-                        && !s.starts_with('*') {
-                            return format!("*{}", s);
-                        }
+                        && !s.starts_with('*')
+                    {
+                        return format!("*{}", s);
+                    }
                 }
                 s.to_string()
             };

@@ -20,10 +20,12 @@ pub fn find_source_root(file_path: &Path) -> Option<&Path> {
 
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-            if dir_name == "src" && found_project_src.is_none()
-                && is_project_source_dir(parent, depth) {
-                    found_project_src = Some(parent);
-                }
+            if dir_name == "src"
+                && found_project_src.is_none()
+                && is_project_source_dir(parent, depth)
+            {
+                found_project_src = Some(parent);
+            }
         }
 
         if parent.join("mod.wj").exists() {
