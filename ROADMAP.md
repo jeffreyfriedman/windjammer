@@ -11,6 +11,8 @@ As of v0.34.0, Windjammer has been restructured into focused repositories:
 - **windjammer-ui** - Cross-platform UI framework (separate repo)
 - **windjammer-game** - Game development framework (private)
 
+The game framework targets a **unified renderer** (**voxel + mesh**), **memory-safe** code, **code-first automatable** (TDD, regressions), **deploy-anywhere** story—see **`docs/GAME_ENGINE_VISION.md`** and the companion **`windjammer-game/VISION.md`**.
+
 This roadmap now focuses on **core language features** and **developer tooling**.
 
 ---

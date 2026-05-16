@@ -8,6 +8,8 @@
 
 A high-level programming language that combines Go's ergonomics with Rust's safety and performance—plus world-class IDE support.
 
+**Game framework (`windjammer-game`):** A **unified renderer** toolchain (**voxel and mesh**) for diverse games—from voxel sandboxes (Minecraft, Teardown) to cinematic character-led titles (Control, Horizon). **Memory-safe.** **Code-first, TDD-driven** workflows for automation, visual regressions, and agent-friendly iteration versus editor-only tooling. **Rust, Go, JavaScript**, and more for **desktop, WASM, mobile**—*Unified Renderer. Memory-Safe. Code-First Automatable. Deploy Anywhere.* Summary: [`docs/GAME_ENGINE_VISION.md`](docs/GAME_ENGINE_VISION.md).
+
 > **🎯 The 80/20 Language**: 80% of Rust's power with 20% of the complexity  
 > **🛠️ Production-Ready Tooling**: Complete LSP, debugging, and editor integration  
 > **📊 [Read the detailed comparison: Windjammer vs Rust vs Go](docs/COMPARISON.md)**
