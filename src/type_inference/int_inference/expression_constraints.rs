@@ -217,7 +217,7 @@ impl IntInference {
                                 if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
                                     eprintln!("[INT_INFERENCE DEBUG] Qualified lookup '{}': {:?}", qualified, sig.is_some());
                                     if let Some(ref s) = sig {
-                                        eprintln!("[INT_INFERENCE DEBUG] Signature params: {:?}", s.0);
+                                        eprintln!("[INT_INFERENCE DEBUG] Original signature params: {:?}", s.0);
                                     }
                                 }
                                 (sig, generics)
@@ -251,9 +251,13 @@ impl IntInference {
                     // e.g., HashMap::insert has param type "K", but receiver is HashMap<u32, String>
                     // so we need to substitute K → u32
                     if !receiver_generics.is_empty() {
-                        Some(params.iter().map(|ty| {
+                        let substituted: Vec<Type> = params.iter().map(|ty| {
                             self.substitute_generic_params_typed(ty, &receiver_generics)
-                        }).collect())
+                        }).collect();
+                        if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                            eprintln!("[INT_INFERENCE DEBUG] After substitution: {:?}", substituted);
+                        }
+                        Some(substituted)
                     } else {
                         Some(params)
                     }

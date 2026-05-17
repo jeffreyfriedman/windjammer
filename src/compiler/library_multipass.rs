@@ -365,13 +365,16 @@ pub(crate) fn build_library_multipass(
                         .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
                 }
                 Item::Impl { block, .. } => {
+                    // TDD FIX: Strip generic parameters from type_name for signature registration
+                    // Parser stores "HashMap<K, V>" but we look up "HashMap::get"
+                    let base_type_name = block.type_name.split('<').next().unwrap_or(&block.type_name);
                     for func_decl in &block.functions {
                         let param_types: Vec<crate::parser::ast::types::Type> = func_decl
                             .parameters
                             .iter()
                             .map(|p| p.type_.clone())
                             .collect();
-                        let full_name = format!("{}::{}", block.type_name, func_decl.name);
+                        let full_name = format!("{}::{}", base_type_name, func_decl.name);
                         global_float_signatures
                             .insert(full_name, (param_types, func_decl.return_type.clone()));
                     }
