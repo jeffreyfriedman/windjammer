@@ -263,7 +263,47 @@ impl IntInference {
                     }
                 } else {
                     None
-                }.or_else(|| {
+                };
+
+                // TDD FIX: Vec index-based methods - first arg must be usize
+                // Check this BEFORE fallback signature lookup to avoid conflicts
+                let is_always_usize_method =
+                    method == "with_capacity" || method == "reserve" || method == "truncate";
+                let is_vec_index_method = method == "remove"
+                    || method == "swap"
+                    || method == "swap_remove"
+                    || method == "insert"
+                    || method == "drain"
+                    || method == "split_off";
+                let receiver_is_vec = match self.infer_type_from_expression(object) {
+                        Some(Type::Vec(_)) => true,
+                        Some(Type::Custom(name)) if name.starts_with("Vec<") => true,
+                        _ => match object {
+                            Expression::FieldAccess {
+                                object: inner_obj,
+                                field: field_name,
+                                ..
+                            } => {
+                                matches!(&**inner_obj, Expression::Identifier { name, .. } if name == "self")
+                                    && self
+                                        .current_impl_type
+                                        .as_deref()
+                                        .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
+                                        .and_then(|fields| fields.get(field_name))
+                                        .is_some_and(|t| matches!(t, Type::Vec(_)))
+                            }
+                            _ => false,
+                        },
+                    };
+                let skip_fallback = (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
+                    && !arguments.is_empty();
+
+                // Fallback: search for any method with matching name
+                // BUT skip if this is a Vec usize method to avoid HashMap::remove() conflicts
+                let method_sig = method_sig.or_else(|| {
+                    if skip_fallback {
+                        return None; // Don't search - we'll add usize constraint instead
+                    }
                     self.function_signatures
                         .iter()
                         .filter(|(func_name, (params, _))| {
@@ -301,36 +341,8 @@ impl IntInference {
                     }
                 }
 
-                // TDD FIX: Vec index-based methods - first arg must be usize
-                let is_always_usize_method =
-                    method == "with_capacity" || method == "reserve" || method == "truncate";
-                let is_vec_index_method = method == "remove"
-                    || method == "swap"
-                    || method == "swap_remove"
-                    || method == "split_off"
-                    || method == "drain";
-                let receiver_is_vec = self
-                    .infer_type_from_expression(object)
-                    .is_some_and(|t| matches!(t, Type::Vec(_)))
-                    || match object {
-                        Expression::FieldAccess {
-                            object: inner_obj,
-                            field: field_name,
-                            ..
-                        } => {
-                            matches!(&**inner_obj, Expression::Identifier { name, .. } if name == "self")
-                                && self
-                                    .current_impl_type
-                                    .as_deref()
-                                    .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
-                                    .and_then(|fields| fields.get(field_name))
-                                    .is_some_and(|t| matches!(t, Type::Vec(_)))
-                        }
-                        _ => false,
-                    };
-                if (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
-                    && !arguments.is_empty()
-                {
+                // Apply usize constraint for Vec index methods (uses skip_fallback var from above)
+                if skip_fallback && !arguments.is_empty() {
                     if let Some((_label, arg)) = arguments.first() {
                         let arg_id = self.get_expr_id(arg);
                         self.constraints.push(IntConstraint::MustBe(

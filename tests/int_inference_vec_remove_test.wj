@@ -1,0 +1,42 @@
+// TDD Test: Vec::remove() should accept usize parameter
+// Bug: Vec::remove() parameter registered as I64 instead of Usize
+// Result: "Type conflict: must be I64 (remove() parameter 0) but also Usize"
+
+fn test_vec_remove_with_usize() {
+    let mut items: Vec<i32> = Vec::new()
+    items.push(1)
+    items.push(2)
+    items.push(3)
+    
+    // This should work: remove() takes usize parameter
+    let index: usize = 1
+    items.remove(index)
+    
+    // Should also work with literal usize
+    items.remove(0)
+}
+
+fn test_vec_remove_with_loop_index() {
+    let mut items: Vec<String> = Vec::new()
+    items.push("a")
+    items.push("b")
+    items.push("c")
+    
+    // Loop index is usize, should work with remove()
+    for i in 0..items.len() {
+        if i == 1 {
+            items.remove(i)
+            break
+        }
+    }
+}
+
+fn test_vec_remove_from_back() {
+    let mut items: Vec<f32> = Vec::new()
+    items.push(1.0)
+    items.push(2.0)
+    
+    // len() returns usize, remove() takes usize
+    let last_idx = items.len() - 1
+    items.remove(last_idx)
+}
