@@ -1,0 +1,4 @@
+
+[dependencies.tracy-client]
+version = "0.18"
+optional = true

@@ -41,6 +41,9 @@ impl<'ast> CodeGenerator<'ast> {
             if decorator_reg2.should_skip_for_backend(&decorator.name, self.target) {
                 continue;
             }
+            if decorator_reg2.is_wrapping_decorator(&decorator.name) {
+                continue;
+            }
 
             // Map Windjammer decorator to Rust attribute (same as struct decorator handling)
             let rust_attr = self.map_decorator(&decorator.name);

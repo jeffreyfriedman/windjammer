@@ -17,6 +17,9 @@ pub mod http;
 pub mod json;
 pub mod mime;
 
+// Profiling (Tracy zones; optional `tracy` feature)
+pub mod profiling;
+
 // Additional stdlib modules
 #[cfg(feature = "server")]
 pub mod async_runtime;

@@ -11,7 +11,8 @@ impl<'ast> CodeGenerator<'ast> {
         func.decorators.iter().any(|d| {
             matches!(
                 d.name.as_str(),
-                "timeout" | "bench" | "requires" | "ensures" | "property_test" | "invariant"
+                "timeout" | "bench" | "profile" | "requires" | "ensures" | "property_test"
+                    | "invariant"
             ) || (d.name == "test" && !d.arguments.is_empty())
         })
     }
@@ -222,6 +223,8 @@ impl<'ast> CodeGenerator<'ast> {
             .decorators
             .iter()
             .find(|d| d.name == "test" && !d.arguments.is_empty());
+        let profile_decorator = func.decorators.iter().find(|d| d.name == "profile");
+        let needs_profile = profile_decorator.is_some();
 
         // Handle @property_test
         if let Some(prop_decorator) = property_test_decorator {
@@ -360,6 +363,20 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&self.indent());
             output.push_str("let _bench_result = windjammer_runtime::bench::bench(|| {\n");
             self.indent_level += 1;
+        }
+
+        // Tracy zone (CPU): innermost around timed work so @timeout / @bench wrappers are excluded
+        if needs_profile {
+            let zone_expr = if let Some(dec) = profile_decorator {
+                self.profile_decorator_static_name_expr(dec)
+            } else {
+                "\"unnamed\"".to_string()
+            };
+            output.push_str(&self.indent());
+            output.push_str(&format!(
+                "let _wj_profile_zone = windjammer_runtime::profiling::tracy_zone({});\n",
+                zone_expr
+            ));
         }
 
         // Add @requires checks (preconditions)
@@ -543,5 +560,14 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         output
+    }
+
+    /// First argument to `@profile("…")` as a Rust `&'static str` expression.
+    fn profile_decorator_static_name_expr(&mut self, dec: &Decorator<'ast>) -> String {
+        if let Some((_, expr)) = dec.arguments.first() {
+            self.generate_expression_immut(expr)
+        } else {
+            "\"unnamed\"".to_string()
+        }
     }
 }
