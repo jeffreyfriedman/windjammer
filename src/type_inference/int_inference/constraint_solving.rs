@@ -1,8 +1,17 @@
 impl IntInference {
     fn solve_constraints(&mut self) {
+        // First pass: Seed inferred_types with all MustBe constraints
+        // CRITICAL: Update existing entries if new constraint is more specific
         for constraint in &self.constraints.clone() {
             if let IntConstraint::MustBe(expr_id, int_ty, _) = constraint {
-                if !self.inferred_types.contains_key(expr_id) {
+                let current = self.inferred_types.get(expr_id).copied();
+                let should_update = match current {
+                    None => true, // No type yet - insert
+                    Some(IntType::Unknown) => *int_ty != IntType::Unknown, // Replace Unknown with concrete
+                    Some(current_ty) if current_ty == *int_ty => false, // Already correct
+                    Some(_) => false, // Conflict - will be reported in main loop
+                };
+                if should_update {
                     self.inferred_types.insert(*expr_id, *int_ty);
                 }
             }
