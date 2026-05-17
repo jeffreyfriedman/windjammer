@@ -223,6 +223,56 @@ impl IntInference {
         self.solve_constraints();
     }
 
+    /// TDD FIX: Substitute generic type parameters with concrete types
+    /// E.g., for HashMap<u32, String>::insert, parameter type K becomes u32
+    /// Generic params: K=0, V=1, T=2, etc.
+    fn substitute_generic_params(&self, ty: &Type, generics: &[String]) -> Type {
+        match ty {
+            Type::Custom(name) if name.len() == 1 => {
+                // Single-letter types like K, V, T are likely generics
+                let ch = name.chars().next().unwrap();
+                if ch.is_ascii_uppercase() {
+                    // Common generic parameter names and their indices
+                    let idx = match ch {
+                        'K' => 0, // Key type (HashMap)
+                        'V' => 1, // Value type (HashMap)
+                        'T' => 0, // Generic T (Vec, Option, etc.)
+                        'U' => 1, // Second generic
+                        'E' => 1, // Error type (Result)
+                        _ => return ty.clone(),
+                    };
+                    if let Some(concrete) = generics.get(idx) {
+                        // Parse the concrete type string
+                        return self.parse_type_from_string(concrete);
+                    }
+                }
+                ty.clone()
+            }
+            Type::Option(inner) => Type::Option(Box::new(self.substitute_generic_params(inner, generics))),
+            Type::Result(ok, err) => Type::Result(
+                Box::new(self.substitute_generic_params(ok, generics)),
+                Box::new(self.substitute_generic_params(err, generics)),
+            ),
+            Type::Vec(inner) => Type::Vec(Box::new(self.substitute_generic_params(inner, generics))),
+            _ => ty.clone(),
+        }
+    }
+
+    /// Parse a type from a string representation (e.g., "u32" → Type::Uint)
+    fn parse_type_from_string(&self, s: &str) -> Type {
+        match s {
+            "u32" => Type::Uint,
+            "i32" => Type::Int32,
+            "i64" => Type::Int,
+            "f32" => Type::Float,
+            "f64" => Type::Float,
+            "bool" => Type::Bool,
+            "usize" => Type::Custom("usize".to_string()),
+            "string" => Type::String,
+            _ => Type::Custom(s.to_string()),
+        }
+    }
+
     fn lookup_struct_fields(&self, type_name: &str) -> Option<&HashMap<String, Type>> {
         struct_field_registry::lookup_struct_field_map(
             &self.struct_field_types,

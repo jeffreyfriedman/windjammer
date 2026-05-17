@@ -72,6 +72,23 @@ fn test_bench_decorator() {
 }
 
 #[test]
+fn test_profile_decorator_emits_tracy_zone() {
+    let source = r#"
+    @profile("render_pass")
+    fn render_frame() {
+        let x = 1 + 1;
+    }
+    "#;
+
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+
+    assert!(output.contains("windjammer_runtime::profiling::tracy_zone"));
+    assert!(output.contains("render_pass"));
+    assert!(output.contains("let x ="));
+}
+
+#[test]
 fn test_requires_decorator() {
     let source = r#"
     @requires(x > 0)
