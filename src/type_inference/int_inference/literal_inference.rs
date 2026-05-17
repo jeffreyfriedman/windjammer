@@ -175,6 +175,24 @@ impl IntInference {
         }
     }
 
+    /// Extract key type K from HashMap<K,V> or BTreeMap<K,V>
+    fn extract_map_key_type(&self, ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Parameterized(name, args) => {
+                let base = crate::type_inference::generic_type_base_name(name);
+                if matches!(base, "HashMap" | "BTreeMap" | "Map") && args.len() >= 2 {
+                    Some(args[0].clone())
+                } else {
+                    None
+                }
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.extract_map_key_type(inner)
+            }
+            _ => None,
+        }
+    }
+
     /// Extract value type V from HashMap<K,V> or BTreeMap<K,V>
     fn extract_map_value_type(&self, ty: &Type) -> Option<Type> {
         match ty {
