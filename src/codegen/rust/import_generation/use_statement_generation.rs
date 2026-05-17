@@ -181,9 +181,9 @@ impl CodeGenerator<'_> {
         if let Some(first_seg) = rust_path.split("::").next() {
             if self.inline_module_names.contains(first_seg) {
                 if let Some(alias_name) = alias {
-                    return format!("{}use self::{} as {};\n", rust_path, alias_name, pub_prefix);
+                    return format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name);
                 }
-                return format!("{}use self::{};\n", rust_path, pub_prefix);
+                return format!("{}use self::{};\n", pub_prefix, rust_path);
             }
         }
 
@@ -221,9 +221,9 @@ impl CodeGenerator<'_> {
                     if self.is_output_mod_rs() {
                         // mod.wj: `pub use animation::Animation` → self::animation::Animation (not super::Animation)
                         if let Some(alias_name) = alias {
-                            return format!("{}use self::{} as {};\n", rust_path, alias_name, pub_prefix);
+                            return format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name);
                         }
-                        return format!("{}use self::{};\n", rust_path, pub_prefix);
+                        return format!("{}use self::{};\n", pub_prefix, rust_path);
                     }
                     // Strip the parent directory name and use super:: instead
                     let path_without_parent = rust_path
