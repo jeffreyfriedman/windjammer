@@ -199,7 +199,7 @@ impl IntInference {
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
                 // TDD FIX: Extract generic type parameters for HashMap<K,V> specialization
                 let receiver_type = self.infer_type_from_expression(object);
-                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
+                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
                     eprintln!("[INT_INFERENCE DEBUG] Method call: {}, Receiver type: {:?}", method, receiver_type);
                 }
                 let (qualified_sig, receiver_generics) =
@@ -210,12 +210,15 @@ impl IntInference {
                                 let qualified = format!("{}::{}", base, method);
                                 // Type params are already parsed Type enums, extract them directly
                                 let generics = type_params.clone();
-                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
-                                    eprintln!("[INT_INFERENCE DEBUG] Parameterized type '{}' with {} params", base, generics.len());
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                                    eprintln!("[INT_INFERENCE DEBUG] Parameterized type '{}' with {} params: {:?}", base, generics.len(), generics);
                                 }
                                 let sig = self.function_signatures.get(&qualified).cloned();
-                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
                                     eprintln!("[INT_INFERENCE DEBUG] Qualified lookup '{}': {:?}", qualified, sig.is_some());
+                                    if let Some(ref s) = sig {
+                                        eprintln!("[INT_INFERENCE DEBUG] Signature params: {:?}", s.0);
+                                    }
                                 }
                                 (sig, generics)
                             }
