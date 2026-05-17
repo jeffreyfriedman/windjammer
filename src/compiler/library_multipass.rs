@@ -16,6 +16,43 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+/// Detect if source code imports from Windjammer stdlib (`std::*`)
+fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
+    let mut stdlib_modules = HashSet::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("use std::") {
+            // Extract module: "use std::collections::HashMap" -> "collections"
+            if let Some(rest) = trimmed.strip_prefix("use std::") {
+                if let Some(module) = rest.split("::").next() {
+                    stdlib_modules.insert(module.to_string());
+                }
+            }
+        }
+    }
+    stdlib_modules
+}
+
+/// Find Windjammer stdlib directory (relative to compiler binary)
+fn find_stdlib_dir() -> Option<PathBuf> {
+    // Check: ../std/ relative to compiler executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            // In development: windjammer/target/release/wj -> windjammer/std/
+            let dev_stdlib = parent.parent()?.parent()?.join("std");
+            if dev_stdlib.is_dir() {
+                return Some(dev_stdlib);
+            }
+            // In installed: ~/.cargo/bin/wj -> ~/.cargo/wj-stdlib/
+            let installed_stdlib = parent.parent()?.join("wj-stdlib");
+            if installed_stdlib.is_dir() {
+                return Some(installed_stdlib);
+            }
+        }
+    }
+    None
+}
+
 /// TDD FIX: Build library with global multi-pass analysis
 /// Solves cross-file transitive mutability inference
 #[allow(clippy::too_many_arguments)]
@@ -29,9 +66,32 @@ pub(crate) fn build_library_multipass(
     external_paths: &HashMap<String, PathBuf>,
     mut crate_metadata: CrateMetadata,
 ) -> Result<()> {
-    // Step 1: Read all source files (keep sources alive for lifetime safety)
+    // Step 0: Detect stdlib usage and prepend stdlib files
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
+    let mut needed_stdlib_modules = HashSet::new();
 
+    // Quick scan: which stdlib modules does user code import?
+    for file in wj_files {
+        if let Ok(source) = std::fs::read_to_string(file) {
+            needed_stdlib_modules.extend(uses_windjammer_stdlib(&source));
+        }
+    }
+
+    // If stdlib is needed, prepend stdlib source files FIRST
+    if !needed_stdlib_modules.is_empty() {
+        if let Some(stdlib_dir) = find_stdlib_dir() {
+            for module in &needed_stdlib_modules {
+                let stdlib_file = stdlib_dir.join(format!("{}.wj", module));
+                if stdlib_file.exists() {
+                    if let Ok(source) = std::fs::read_to_string(&stdlib_file) {
+                        sources.push((stdlib_file, source));
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 1: Read all user source files (keep sources alive for lifetime safety)
     for file in wj_files {
         let canon = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
         let source = std::fs::read_to_string(&canon)?;
