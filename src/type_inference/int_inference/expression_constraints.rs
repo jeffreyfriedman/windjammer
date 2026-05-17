@@ -340,8 +340,22 @@ impl IntInference {
                 // TDD FIX: HashMap<K,V>::insert and Vec<T>::push - propagate generic types from receiver
                 // Handles: mgr.name_to_id.insert("test", 42) where name_to_id: HashMap<string, int>
                 if let Some(receiver_type) = self.infer_type_from_expression(object) {
-                    // HashMap<K,V>.insert(K, V) - constrain second argument to V
+                    // HashMap<K,V>.insert(K, V) - constrain BOTH key and value arguments
                     if method == "insert" {
+                        // Constrain KEY (first argument) to K
+                        if let Some(key_type) = self.extract_map_key_type(&receiver_type) {
+                            if let Some(int_ty) = self.extract_int_type(&key_type) {
+                                if let Some((_label, key_arg)) = arguments.first() {
+                                    let key_id = self.get_expr_id(key_arg);
+                                    self.constraints.push(IntConstraint::MustBe(
+                                        key_id,
+                                        int_ty,
+                                        "HashMap/BTreeMap.insert key type".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        // Constrain VALUE (second argument) to V
                         if let Some(value_type) = self.extract_map_value_type(&receiver_type) {
                             if let Some(int_ty) = self.extract_int_type(&value_type) {
                                 if let Some((_label, value_arg)) = arguments.get(1) {
