@@ -266,16 +266,21 @@ impl IntInference {
         self.substitute_generic_params_typed(ty, &typed_generics)
     }
 
-    /// Parse a type from a string representation (e.g., "u32" → Type::Uint)
+    /// Parse a type from a string representation (e.g., "u32" → Type::Custom("u32"))
     fn parse_type_from_string(&self, s: &str) -> Type {
         match s {
-            "u32" => Type::Uint,
             "i32" => Type::Int32,
             "i64" => Type::Int,
+            "u64" => Type::Custom("u64".to_string()), // Specific u64
+            "u32" => Type::Custom("u32".to_string()), // Specific u32, NOT Type::Uint!
+            "usize" => Type::Custom("usize".to_string()),
+            "u8" => Type::Custom("u8".to_string()),
+            "i8" => Type::Custom("i8".to_string()),
+            "u16" => Type::Custom("u16".to_string()),
+            "i16" => Type::Custom("i16".to_string()),
             "f32" => Type::Float,
             "f64" => Type::Float,
             "bool" => Type::Bool,
-            "usize" => Type::Custom("usize".to_string()),
             "string" => Type::String,
             _ => Type::Custom(s.to_string()),
         }
