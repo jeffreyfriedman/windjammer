@@ -1,0 +1,40 @@
+// TDD Test: Explicit i32 loop counters should work with array indexing
+// Current: Integer inference reports conflict
+// Expected: Should allow i32 counters with automatic usize cast for indices
+
+fn test_i32_loop_counter_with_array() {
+    let items: Vec<string> = Vec::new()
+    
+    // Explicit i32 counter (common pattern in game code)
+    let mut i: i32 = 0
+    while i < 10 {
+        // Should auto-cast i32 to usize for array index
+        if i < items.len() as i32 {
+            let _value = items[i as usize]
+        }
+        i = i + 1
+    }
+}
+
+fn test_i32_capacity_with_array_access() {
+    let slots: Vec<Option<i32>> = Vec::new()
+    let capacity: i32 = 10
+    
+    let mut i: i32 = 0
+    while i < capacity {
+        let _slot = slots[i as usize]
+        i = i + 1
+    }
+}
+
+fn get_slot_helper(slots: Vec<Option<i32>>, index: i32) -> Option<i32> {
+    if index < 0 || index >= slots.len() as i32 {
+        return None
+    }
+    slots[index as usize]
+}
+
+fn test_i32_parameter_as_array_index() {
+    let slots: Vec<Option<i32>> = Vec::new()
+    get_slot_helper(slots, 5)
+}
