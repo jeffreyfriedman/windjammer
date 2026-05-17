@@ -85,9 +85,9 @@ impl CodeGenerator<'_> {
 
             // TDD FIX: Preserve alias for crate:: imports
             if let Some(alias_name) = alias {
-                return format!("{}use {} as {};\n", expanded, alias_name, pub_prefix);
+                return format!("{}use {} as {};\n", pub_prefix, expanded, alias_name);
             }
-            return format!("{}use {};\n", expanded, pub_prefix);
+            return format!("{}use {};\n", pub_prefix, expanded);
         }
 
         // Handle stdlib imports FIRST (before glob handling)
@@ -109,17 +109,17 @@ impl CodeGenerator<'_> {
                 .replace('.', "::")
                 .trim_end_matches("::")
                 .to_string();
-            return format!("{}use {}::*;\n", rust_path, pub_prefix);
+            return format!("{}use {}::*;\n", pub_prefix, rust_path);
         }
 
         // Handle braced imports: module::{A, B, C} or module.{A, B, C}
         if (full_path.contains("::{") || full_path.contains(".{")) && full_path.contains('}') {
             // Try :: separator first, then . separator
             if let Some((base, items)) = full_path.split_once("::{") {
-                return format!("{}use {}::{{{};\n", base, items, pub_prefix);
+                return format!("{}use {}::{{{};\n", pub_prefix, base, items);
             } else if let Some((base, items)) = full_path.split_once(".{") {
                 let rust_base = base.replace('.', "::");
-                return format!("{}use {}::{{{};\n", rust_base, items, pub_prefix);
+                return format!("{}use {}::{{{};\n", pub_prefix, rust_base, items);
             }
         }
 
@@ -145,7 +145,7 @@ impl CodeGenerator<'_> {
                 }
                 // For crate::module imports, just import the module (not ::*)
                 // This allows qualified usage like module::func() in the code
-                return format!("{}use crate::{};\n", rust_path, pub_prefix);
+                return format!("{}use crate::{};\n", pub_prefix, rust_path);
             } else {
                 // Module import: ./config
                 // In the main entry point (is_module=false), modules are already in scope via pub mod declarations
@@ -155,7 +155,7 @@ impl CodeGenerator<'_> {
                     return format!("{}use crate::{} as {};\n", pub_prefix, module_name, alias_name);
                 } else if self.is_module {
                     // In a module, we need to explicitly use sibling modules
-                    return format!("{}use crate::{};\n", module_name, pub_prefix);
+                    return format!("{}use crate::{};\n", pub_prefix, module_name);
                 } else {
                     // In main entry point, modules are already in scope
                     return String::new();
@@ -171,7 +171,7 @@ impl CodeGenerator<'_> {
         // TDD FIX: Paths starting with super:: must NOT get crate:: prepended
         // Rust requires super at path start: "use super::enemy::Enemy" not "use crate::super::enemy::Enemy"
         if rust_path.starts_with("super::") {
-            return format!("{}use {};\n", rust_path, pub_prefix);
+            return format!("{}use {};\n", pub_prefix, rust_path);
         }
 
         // TDD FIX: Bare paths referencing inline modules need self:: prefix.
@@ -230,9 +230,9 @@ impl CodeGenerator<'_> {
                         .strip_prefix(&format!("{}::", parent_dir))
                         .unwrap();
                     if let Some(alias_name) = alias {
-                        return format!("{}use super::{} as {};\n", path_without_parent, alias_name, pub_prefix);
+                        return format!("{}use super::{} as {};\n", pub_prefix, path_without_parent, alias_name);
                     }
-                    return format!("{}use super::{};\n", path_without_parent, pub_prefix);
+                    return format!("{}use super::{};\n", pub_prefix, path_without_parent);
                 }
             }
         }
@@ -263,7 +263,7 @@ impl CodeGenerator<'_> {
                 if let Some(type_name) = segments.last() {
                     if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
                         // It's a type, use just super::TypeName
-                        return format!("{}use super::{};\n", type_name, pub_prefix);
+                        return format!("{}use super::{};\n", pub_prefix, type_name);
                     }
                 }
             }
