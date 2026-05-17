@@ -144,6 +144,34 @@ impl IntInference {
             "HashMap::with_capacity".to_string(),
             (vec![Type::Custom("usize".to_string())], None),
         );
+        // HashMap::insert(K, V)
+        self.function_signatures.insert(
+            "HashMap::insert".to_string(),
+            (vec![Type::Custom("K".to_string()), Type::Custom("V".to_string())], None),
+        );
+        if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+            eprintln!("[INT_INFERENCE DEBUG] Registered HashMap::insert signature");
+        }
+        // HashMap::get(&K) -> Option<&V>
+        self.function_signatures.insert(
+            "HashMap::get".to_string(),
+            (vec![Type::Custom("K".to_string())], None),
+        );
+        // HashMap::get_mut(&K) -> Option<&mut V>
+        self.function_signatures.insert(
+            "HashMap::get_mut".to_string(),
+            (vec![Type::Custom("K".to_string())], None),
+        );
+        // HashMap::contains_key(&K) -> bool
+        self.function_signatures.insert(
+            "HashMap::contains_key".to_string(),
+            (vec![Type::Custom("K".to_string())], None),
+        );
+        // HashMap::remove(&K) -> Option<V>
+        self.function_signatures.insert(
+            "HashMap::remove".to_string(),
+            (vec![Type::Custom("K".to_string())], None),
+        );
 
         // String methods
         self.function_signatures.insert(
@@ -170,7 +198,10 @@ impl IntInference {
         &mut self,
         signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     ) {
-        self.function_signatures = signatures;
+        // TDD FIX: Merge instead of replace to preserve stdlib HashMap/Vec methods
+        for (key, value) in signatures {
+            self.function_signatures.insert(key, value);
+        }
     }
 
     pub fn set_global_struct_field_types(
