@@ -41,9 +41,9 @@ impl CodeGenerator<'_> {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
                             if let Some(alias_name) = alias {
-                                return format!("{}use self::{} as {};\n", rest, alias_name, pub_prefix);
+                                return format!("{}use self::{} as {};\n", pub_prefix, rest, alias_name);
                             }
-                            return format!("{}use self::{};\n", rest, pub_prefix);
+                            return format!("{}use self::{};\n", pub_prefix, rest);
                         }
                     }
                 }
