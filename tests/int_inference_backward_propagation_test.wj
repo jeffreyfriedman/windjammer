@@ -1,0 +1,33 @@
+// TDD Test: Integer type should propagate backward to variable declarations
+// Bug: Variables inferred as I32 (default) but used in contexts requiring Usize/U32
+// Expected: Compiler should propagate constraints backward to declarations
+
+fn test_array_index_backward_propagation() {
+    let items: Vec<i32> = Vec::new()
+    
+    // Bug: idx inferred as I32 (default), but used as array index (needs Usize)
+    // Expected: idx should be Usize
+    let idx = 0
+    let value = items[idx] // Should propagate Usize requirement to idx
+}
+
+fn test_loop_index_backward_propagation() {
+    let items: Vec<String> = Vec::new()
+    
+    // Bug: i inferred as I32 in loop, but used as array index
+    // Expected: i should be Usize
+    let mut i = 0
+    while i < items.len() {
+        let value = items[i] // Should propagate Usize to i
+        i = i + 1
+    }
+}
+
+fn test_function_parameter_backward_propagation() {
+    let items: Vec<f32> = Vec::new()
+    
+    // Bug: idx inferred as I32, but remove() needs Usize
+    // Expected: idx should be Usize
+    let idx = 5
+    items.remove(idx) // Should propagate Usize to idx
+}
