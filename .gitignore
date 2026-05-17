@@ -24,3 +24,7 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated Rust files in stdlib
+std/**/*.rs
+!std/**/lib.rs
