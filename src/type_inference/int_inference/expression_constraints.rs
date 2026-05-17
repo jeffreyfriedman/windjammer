@@ -198,18 +198,35 @@ impl IntInference {
                 // Prefer qualified lookup (Type::method) to avoid ambiguous matches.
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
                 // TDD FIX: Extract generic type parameters for HashMap<K,V> specialization
+                let receiver_type = self.infer_type_from_expression(object);
+                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
+                    eprintln!("[INT_INFERENCE DEBUG] Method call: {}, Receiver type: {:?}", method, receiver_type);
+                }
                 let (qualified_sig, receiver_generics) =
-                    self.infer_type_from_expression(object)
+                    receiver_type
                         .map(|ty| match &ty {
+                            // TDD FIX: Handle Parameterized types (e.g., HashMap<u32, Keyframe>)
+                            Type::Parameterized(base, type_params) => {
+                                let qualified = format!("{}::{}", base, method);
+                                // Type params are already parsed Type enums, extract them directly
+                                let generics = type_params.clone();
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
+                                    eprintln!("[INT_INFERENCE DEBUG] Parameterized type '{}' with {} params", base, generics.len());
+                                }
+                                let sig = self.function_signatures.get(&qualified).cloned();
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() && method == "insert" {
+                                    eprintln!("[INT_INFERENCE DEBUG] Qualified lookup '{}': {:?}", qualified, sig.is_some());
+                                }
+                                (sig, generics)
+                            }
                             Type::Custom(n) => {
                                 let base = n.split('<').next().unwrap_or(n);
                                 let qualified = format!("{}::{}", base, method);
-                                // Extract generic parameters from receiver type
-                                // e.g., "HashMap<u32, String>" → ["u32", "String"]
+                                // For Custom types with angle brackets (legacy), parse the string
                                 let generics = if n.contains('<') {
                                     if let (Some(start), Some(end)) = (n.find('<'), n.rfind('>')) {
                                         let inner = &n[start+1..end];
-                                        inner.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>()
+                                        inner.split(',').map(|s| self.parse_type_from_string(s.trim())).collect()
                                     } else {
                                         vec![]
                                     }
@@ -232,7 +249,7 @@ impl IntInference {
                     // so we need to substitute K → u32
                     if !receiver_generics.is_empty() {
                         Some(params.iter().map(|ty| {
-                            self.substitute_generic_params(ty, &receiver_generics)
+                            self.substitute_generic_params_typed(ty, &receiver_generics)
                         }).collect())
                     } else {
                         Some(params)
