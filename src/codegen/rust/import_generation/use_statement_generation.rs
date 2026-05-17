@@ -364,8 +364,13 @@ impl CodeGenerator<'_> {
                 }
             } else if rust_path.contains("::") {
                 let is_likely_internal = external_imports::is_likely_internal_module(first_segment);
+                let is_external = external_imports::is_external_crate(first_segment);
+                
                 if is_likely_internal {
                     format!("{}use crate::{};\n", pub_prefix, rust_path)
+                } else if is_external {
+                    // External crate module - import the module itself, not glob its contents
+                    format!("{}use {};\n", pub_prefix, rust_path)
                 } else {
                     format!("{}use {};\n", pub_prefix, rust_path)
                 }
