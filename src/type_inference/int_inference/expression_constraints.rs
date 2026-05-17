@@ -6,13 +6,24 @@ impl IntInference {
     ) {
         match expr {
             Expression::Identifier { name, .. } => {
+                let id = self.get_expr_id(expr);
+                
+                // TDD FIX: Link this identifier use to its declaration/assignment
+                // This enables backward propagation (e.g. array index Usize → variable declaration Usize)
+                if let Some(assignment_id) = self.var_assignments.get(name) {
+                    self.constraints.push(IntConstraint::MustMatch(
+                        id,
+                        *assignment_id,
+                        format!("identifier {} links to assignment", name),
+                    ));
+                }
+                
                 if let Some(var_type) = self
                     .var_types
                     .get(name)
                     .or_else(|| self.const_types.get(name))
                 {
                     if let Some(int_ty) = self.extract_int_type(var_type) {
-                        let id = self.get_expr_id(expr);
                         self.constraints.push(IntConstraint::MustBe(
                             id,
                             int_ty,
