@@ -140,7 +140,7 @@ impl CodeGenerator<'_> {
                 if let Some(last) = segments.last() {
                     if last.chars().next().is_some_and(|c| c.is_uppercase()) {
                         // Importing a specific type: ./config::Config -> use crate::config::Config;
-                        return format!("{}use crate::{};\n", rust_path, pub_prefix);
+                        return format!("{}use crate::{};\n", pub_prefix, rust_path);
                     }
                 }
                 // For crate::module imports, just import the module (not ::*)
@@ -152,7 +152,7 @@ impl CodeGenerator<'_> {
                 // In submodules (is_module=true), we need to explicitly use sibling modules
                 let module_name = stripped.split('/').next_back().unwrap_or(stripped);
                 if let Some(alias_name) = alias {
-                    return format!("{}use crate::{} as {};\n", module_name, alias_name, pub_prefix);
+                    return format!("{}use crate::{} as {};\n", pub_prefix, module_name, alias_name);
                 } else if self.is_module {
                     // In a module, we need to explicitly use sibling modules
                     return format!("{}use crate::{};\n", module_name, pub_prefix);
