@@ -139,39 +139,9 @@ impl IntInference {
             (vec![Type::Custom("usize".to_string())], None),
         );
 
-        // HashMap<K,V> methods
-        self.function_signatures.insert(
-            "HashMap::with_capacity".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
-        // HashMap::insert(K, V)
-        self.function_signatures.insert(
-            "HashMap::insert".to_string(),
-            (vec![Type::Custom("K".to_string()), Type::Custom("V".to_string())], None),
-        );
-        if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
-            eprintln!("[INT_INFERENCE DEBUG] Registered HashMap::insert signature");
-        }
-        // HashMap::get(&K) -> Option<&V>
-        self.function_signatures.insert(
-            "HashMap::get".to_string(),
-            (vec![Type::Custom("K".to_string())], None),
-        );
-        // HashMap::get_mut(&K) -> Option<&mut V>
-        self.function_signatures.insert(
-            "HashMap::get_mut".to_string(),
-            (vec![Type::Custom("K".to_string())], None),
-        );
-        // HashMap::contains_key(&K) -> bool
-        self.function_signatures.insert(
-            "HashMap::contains_key".to_string(),
-            (vec![Type::Custom("K".to_string())], None),
-        );
-        // HashMap::remove(&K) -> Option<V>
-        self.function_signatures.insert(
-            "HashMap::remove".to_string(),
-            (vec![Type::Custom("K".to_string())], None),
-        );
+        // HashMap<K,V> methods - REMOVED: Now auto-collected from std/collections.wj!
+        // The Windjammer stdlib defines HashMap, and the compiler automatically
+        // discovers its methods during analysis. No hard-coding needed!
 
         // String methods
         self.function_signatures.insert(
