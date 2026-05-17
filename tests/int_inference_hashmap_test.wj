@@ -1,0 +1,34 @@
+// TDD test for integer inference bug with HashMap methods
+// Bug: HashMap<u32, V>.insert(key, val) and .get(key) infer key as i64 instead of u32
+
+use std::collections::HashMap
+
+pub struct TestStruct {
+    data: HashMap<u32, string>,
+}
+
+impl TestStruct {
+    pub fn new() -> TestStruct {
+        TestStruct {
+            data: HashMap::new()
+        }
+    }
+    
+    // Bug reproduction: bone_id declared as u32, but insert infers it as i64
+    pub fn insert_test(self, key: u32, value: string) {
+        self.data.insert(key, value)  // ERROR: must be U32 but was I64
+    }
+    
+    // Bug reproduction: key declared as u32, but get infers it as i64  
+    pub fn get_test(self, key: u32) -> Option<string> {
+        self.data.get(key)  // ERROR: must be U32 but was I64
+    }
+}
+
+// Test with local variable (should work - does variable binding help?)
+pub fn test_with_local() {
+    let mut map: HashMap<u32, string> = HashMap::new()
+    let key: u32 = 42
+    map.insert(key, "test")
+    let result = map.get(key)
+}

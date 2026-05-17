@@ -100,3 +100,20 @@ fn test_generic_function_with_wrapping_decorator_preserves_type_parameter() {
         generated
     );
 }
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_generic_function_with_profile_decorator_preserves_type_parameter() {
+    let generated = test_utils::compile_fixture("profile_generic").expect("Compilation failed");
+
+    assert!(
+        generated.contains("fn identity<T>") || generated.contains("pub fn identity<T>"),
+        "Generic function with @profile should preserve <T>. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("tracy_zone"),
+        "Expected tracy_zone in generated code. Got:\n{}",
+        generated
+    );
+}

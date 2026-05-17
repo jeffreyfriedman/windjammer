@@ -197,22 +197,49 @@ impl IntInference {
 
                 // Prefer qualified lookup (Type::method) to avoid ambiguous matches.
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
-                let qualified_sig =
+                // TDD FIX: Extract generic type parameters for HashMap<K,V> specialization
+                let (qualified_sig, receiver_generics) =
                     self.infer_type_from_expression(object)
-                        .and_then(|ty| match &ty {
+                        .map(|ty| match &ty {
                             Type::Custom(n) => {
                                 let base = n.split('<').next().unwrap_or(n);
                                 let qualified = format!("{}::{}", base, method);
-                                self.function_signatures.get(&qualified).cloned()
+                                // Extract generic parameters from receiver type
+                                // e.g., "HashMap<u32, String>" → ["u32", "String"]
+                                let generics = if n.contains('<') {
+                                    if let (Some(start), Some(end)) = (n.find('<'), n.rfind('>')) {
+                                        let inner = &n[start+1..end];
+                                        inner.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>()
+                                    } else {
+                                        vec![]
+                                    }
+                                } else {
+                                    vec![]
+                                };
+                                (self.function_signatures.get(&qualified).cloned(), generics)
                             }
                             Type::Vec(_) => {
                                 let qualified = format!("Vec::{}", method);
-                                self.function_signatures.get(&qualified).cloned()
+                                (self.function_signatures.get(&qualified).cloned(), vec![])
                             }
-                            _ => None,
-                        });
+                            _ => (None, vec![]),
+                        })
+                        .unwrap_or((None, vec![]));
 
-                let method_sig = qualified_sig.map(|(params, _)| params).or_else(|| {
+                let method_sig = if let Some((params, _ret_ty)) = qualified_sig {
+                    // TDD FIX: Substitute generic parameters with concrete types from receiver
+                    // e.g., HashMap::insert has param type "K", but receiver is HashMap<u32, String>
+                    // so we need to substitute K → u32
+                    if !receiver_generics.is_empty() {
+                        Some(params.iter().map(|ty| {
+                            self.substitute_generic_params(ty, &receiver_generics)
+                        }).collect())
+                    } else {
+                        Some(params)
+                    }
+                } else {
+                    None
+                }.or_else(|| {
                     self.function_signatures
                         .iter()
                         .filter(|(func_name, (params, _))| {
