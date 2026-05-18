@@ -8,15 +8,14 @@ impl IntInference {
             Expression::Identifier { name, .. } => {
                 let id = self.get_expr_id(expr);
                 
-                // TDD FIX: Link this identifier use to its declaration/assignment
-                // This enables backward propagation (e.g. array index Usize → variable declaration Usize)
-                if let Some(assignment_id) = self.var_assignments.get(name) {
-                    self.constraints.push(IntConstraint::MustMatch(
-                        id,
-                        *assignment_id,
-                        format!("identifier {} links to assignment", name),
-                    ));
-                }
+                // TDD FIX REMOVED: Don't link identifier uses to assignments.
+                // This caused backward propagation where:
+                //   let n = data.len() as i32  // n is i32
+                //   data[n]  // Index forces usize
+                // would make n usize at declaration, breaking comparisons like `if idx >= n`
+                //
+                // Instead, we'll insert casts at use sites during code generation:
+                //   data[n as usize]  // Cast happens here, not at declaration
                 
                 if let Some(var_type) = self
                     .var_types
