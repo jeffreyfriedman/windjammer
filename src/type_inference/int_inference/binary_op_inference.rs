@@ -21,11 +21,17 @@ impl IntInference {
             | BinaryOp::BitXor
             | BinaryOp::Shl
             | BinaryOp::Shr => {
-                self.constraints.push(IntConstraint::MustMatch(
-                    left_id,
-                    right_id,
-                    format!("binary op {:?}", op),
-                ));
+                // TDD FIX REMOVED: Don't create MustMatch for binary ops!
+                // This caused backward propagation:
+                //   let n = data.len() as i32  // n is i32
+                //   let idx = n / 2  // This creates MustMatch(n, 2)
+                //   // Then 2 gets inferred as i32 from context
+                //   // OR if written as `n / 2_usize`, MustMatch makes n become usize!
+                //
+                // Instead, we let each operand keep its declared type and insert casts
+                // during code generation when needed.
+                //
+                // self.constraints.push(IntConstraint::MustMatch(...)); ← REMOVED
 
                 // TDD: items.len() - 1 / items.len() + k → literal must be usize (Rust len is usize)
                 if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
@@ -51,97 +57,9 @@ impl IntInference {
                     }
                 }
 
-                // TDD FIX: Propagate type from left side (identifier or field access)
-                let left_int_ty = match left {
-                    Expression::Identifier { name, .. } => self
-                        .var_types
-                        .get(name)
-                        .or_else(|| self.const_types.get(name))
-                        .and_then(|ty| self.extract_int_type(ty)),
-                    Expression::FieldAccess { object, field, .. } => {
-                        // Handle self.field or obj.field
-                        if let Expression::Identifier { ref name, .. } = **object {
-                            // Get struct name from variable or self
-                            let struct_name = if name == "self" {
-                                self.current_impl_type.as_ref()
-                            } else {
-                                self.var_types.get(name.as_str()).and_then(|ty| {
-                                    if let Type::Custom(sname) = ty {
-                                        Some(sname)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            };
-
-                            struct_name.and_then(|sname| {
-                                self.lookup_struct_fields(sname.as_str())
-                                    .and_then(|fields| fields.get(field.as_str()))
-                                    .and_then(|field_ty| self.extract_int_type(field_ty))
-                            })
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        // TDD FIX: Fallback to expression type inference for complex expressions
-                        self.infer_type_from_expression(left)
-                            .and_then(|ty| self.extract_int_type(&ty))
-                    }
-                };
-
-                if let Some(int_ty) = left_int_ty {
-                    self.constraints.push(IntConstraint::MustBe(
-                        right_id,
-                        int_ty,
-                        format!("LHS has type {:?}", int_ty),
-                    ));
-                }
-
-                // TDD FIX: Propagate type from right side (identifier or field access)
-                let right_int_ty = match right {
-                    Expression::Identifier { name, .. } => self
-                        .var_types
-                        .get(name)
-                        .or_else(|| self.const_types.get(name))
-                        .and_then(|ty| self.extract_int_type(ty)),
-                    Expression::FieldAccess { object, field, .. } => {
-                        if let Expression::Identifier { ref name, .. } = **object {
-                            let struct_name = if name == "self" {
-                                self.current_impl_type.as_ref()
-                            } else {
-                                self.var_types.get(name.as_str()).and_then(|ty| {
-                                    if let Type::Custom(sname) = ty {
-                                        Some(sname)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            };
-
-                            struct_name.and_then(|sname| {
-                                self.lookup_struct_fields(sname.as_str())
-                                    .and_then(|fields| fields.get(field.as_str()))
-                                    .and_then(|field_ty| self.extract_int_type(field_ty))
-                            })
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        // TDD FIX: Fallback to expression type inference
-                        self.infer_type_from_expression(right)
-                            .and_then(|ty| self.extract_int_type(&ty))
-                    }
-                };
-
-                if let Some(int_ty) = right_int_ty {
-                    self.constraints.push(IntConstraint::MustBe(
-                        left_id,
-                        int_ty,
-                        format!("RHS has type {:?}", int_ty),
-                    ));
-                }
+                // TDD FIX: Don't propagate types bidirectionally in binary ops.
+                // Each side keeps its own type. Code generation will insert casts.
+                // (Lines 54-144 REMOVED)
             }
             BinaryOp::Eq
             | BinaryOp::Ne
@@ -149,11 +67,11 @@ impl IntInference {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                self.constraints.push(IntConstraint::MustMatch(
-                    left_id,
-                    right_id,
-                    format!("comparison {:?}", op),
-                ));
+                // TDD FIX REMOVED: Don't create MustMatch for comparisons!
+                // Same issue as arithmetic - causes backward propagation.
+                // Code generation will insert casts when types don't match.
+                //
+                // self.constraints.push(IntConstraint::MustMatch(...)); ← REMOVED
 
                 // TDD FIX: When comparing with .len() (returns usize), constrain literal to usize
                 // e.g., items.len() > 0 → 0 should be usize, not i32
@@ -162,7 +80,7 @@ impl IntInference {
                 let right_is_len =
                     matches!(right, Expression::MethodCall { method, .. } if method == "len");
                 let left_is_literal = matches!(left, Expression::Literal { .. });
-                let right_is_literal = matches!(right, Expression::Literal { .. });
+                let right_is_literal = matches!(left, Expression::Literal { .. });
 
                 if left_is_len && right_is_literal {
                     self.constraints.push(IntConstraint::MustBe(
@@ -179,97 +97,9 @@ impl IntInference {
                     ));
                 }
 
-                // TDD FIX: Propagate type from left side for comparisons
-                // First try pattern matching for direct field access/identifier
-                let left_int_ty = match left {
-                    Expression::Identifier { name, .. } => self
-                        .var_types
-                        .get(name)
-                        .or_else(|| self.const_types.get(name))
-                        .and_then(|ty| self.extract_int_type(ty)),
-                    Expression::FieldAccess { object, field, .. } => {
-                        if let Expression::Identifier { ref name, .. } = **object {
-                            let struct_name = if name == "self" {
-                                self.current_impl_type.as_ref()
-                            } else {
-                                self.var_types.get(name.as_str()).and_then(|ty| {
-                                    if let Type::Custom(sname) = ty {
-                                        Some(sname)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            };
-
-                            struct_name.and_then(|sname| {
-                                self.lookup_struct_fields(sname.as_str())
-                                    .and_then(|fields| fields.get(field.as_str()))
-                                    .and_then(|field_ty| self.extract_int_type(field_ty))
-                            })
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        // TDD FIX: Fallback to expression type inference for complex expressions
-                        // This handles cases like (self.count % 60) where the result type matters
-                        self.infer_type_from_expression(left)
-                            .and_then(|ty| self.extract_int_type(&ty))
-                    }
-                };
-
-                if let Some(int_ty) = left_int_ty {
-                    self.constraints.push(IntConstraint::MustBe(
-                        right_id,
-                        int_ty,
-                        format!("comparison LHS has type {:?}", int_ty),
-                    ));
-                }
-
-                // TDD FIX: Propagate type from right side for comparisons
-                let right_int_ty = match right {
-                    Expression::Identifier { name, .. } => self
-                        .var_types
-                        .get(name)
-                        .or_else(|| self.const_types.get(name))
-                        .and_then(|ty| self.extract_int_type(ty)),
-                    Expression::FieldAccess { object, field, .. } => {
-                        if let Expression::Identifier { ref name, .. } = **object {
-                            let struct_name = if name == "self" {
-                                self.current_impl_type.as_ref()
-                            } else {
-                                self.var_types.get(name.as_str()).and_then(|ty| {
-                                    if let Type::Custom(sname) = ty {
-                                        Some(sname)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            };
-
-                            struct_name.and_then(|sname| {
-                                self.lookup_struct_fields(sname.as_str())
-                                    .and_then(|fields| fields.get(field.as_str()))
-                                    .and_then(|field_ty| self.extract_int_type(field_ty))
-                            })
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        // TDD FIX: Fallback to expression type inference
-                        self.infer_type_from_expression(right)
-                            .and_then(|ty| self.extract_int_type(&ty))
-                    }
-                };
-
-                if let Some(int_ty) = right_int_ty {
-                    self.constraints.push(IntConstraint::MustBe(
-                        left_id,
-                        int_ty,
-                        format!("comparison RHS has type {:?}", int_ty),
-                    ));
-                }
+                // TDD FIX: Don't propagate types in comparisons.
+                // Each side keeps its declared type. Code generation handles type conversion.
+                // (Lines 182-272 REMOVED)
             }
             _ => {}
         }
