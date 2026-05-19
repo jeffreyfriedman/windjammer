@@ -85,8 +85,32 @@ impl<'a> BodyParser<'a> {
                 self.advance();
             } else if matches!(self.current, Token::Eof) {
                 break;
+            } else if matches!(self.current, Token::RBrace) {
+                // End of block - stop parsing (caller will consume RBrace)
+                break;
+            } else if matches!(self.current, Token::Ident(_)) {
+                // Try to parse as assignment or expression statement
+                let name = self.expect_ident()?;
+                
+                if matches!(self.current, Token::Assign) {
+                    // Assignment: identifier = expr;
+                    self.advance(); // consume '='
+                    let _expr_ty = self.parse_expr()?;
+                    self.expect_semicolon()?;
+                    // TODO: Type check that expr_ty matches variable's declared type
+                } else {
+                    // Not an assignment - this is an error!
+                    return Err(self.error_at(format!(
+                        "Unexpected identifier '{}' in statement position. Expected 'let', 'var', assignment, or control flow. Token after identifier: {:?}",
+                        name, self.current
+                    )));
+                }
             } else {
-                self.advance();
+                // Unrecognized token - FAIL LOUDLY
+                return Err(self.error_at(format!(
+                    "Unexpected token in statement position: {:?}. Expected 'let', 'var', 'return', 'if', 'for', 'while', etc.",
+                    self.current
+                )));
             }
         }
         Ok(())
@@ -454,10 +478,27 @@ impl<'a> BodyParser<'a> {
             } else if matches!(self.current, Token::Semicolon) {
                 self.advance();
             } else if matches!(self.current, Token::Ident(_)) {
-                // Assignment or expression statement
-                let _ = self.parse_expr()?;
-                if matches!(self.current, Token::Semicolon) {
-                    self.advance();
+                // Could be assignment or expression statement
+                let name = self.expect_ident()?;
+                
+                if matches!(self.current, Token::Assign) {
+                    // Assignment: identifier = expr;
+                    self.advance(); // consume '='
+                    let _expr_ty = self.parse_expr()?;
+                    if matches!(self.current, Token::Semicolon) {
+                        self.advance();
+                    }
+                    // TODO: Type check that expr_ty matches variable's declared type
+                } else {
+                    // Not an assignment - could be function call, field access, etc.
+                    // We already consumed the identifier, so we need to handle the rest
+                    // For now, skip to semicolon or next statement
+                    while !matches!(self.current, Token::Semicolon | Token::RBrace | Token::Eof) {
+                        self.advance();
+                    }
+                    if matches!(self.current, Token::Semicolon) {
+                        self.advance();
+                    }
                 }
             } else {
                 // Unknown token, skip it
