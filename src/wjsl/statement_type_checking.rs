@@ -69,13 +69,18 @@ impl<'a> BodyParser<'a> {
                 self.expect_semicolon()?;
             } else if matches!(self.current, Token::Var) {
                 self.parse_var_decl()?;
-            } else if matches!(
-                self.current,
-                Token::If | Token::For | Token::While | Token::Loop | Token::Switch
-            ) {
-                self.skip_block()?;
+            } else if matches!(self.current, Token::For) {
+                self.parse_for_loop()?;
+            } else if matches!(self.current, Token::If) {
+                self.parse_if_statement()?;
+            } else if matches!(self.current, Token::While) {
+                self.parse_while_loop()?;
+            } else if matches!(self.current, Token::Loop) {
+                self.parse_loop_statement()?;
+            } else if matches!(self.current, Token::Switch) {
+                self.parse_switch_statement()?;
             } else if matches!(self.current, Token::LBrace) {
-                self.skip_braces()?;
+                self.parse_block()?;
             } else if matches!(self.current, Token::Semicolon) {
                 self.advance();
             } else if matches!(self.current, Token::Eof) {
@@ -258,6 +263,208 @@ impl<'a> BodyParser<'a> {
             }
             self.advance();
         }
+        Ok(())
+    }
+
+    /// Parse a for loop: for (init; condition; increment) { body }
+    fn parse_for_loop(&mut self) -> Result<()> {
+        self.advance(); // consume 'for'
+        
+        // Expect '('
+        if matches!(self.current, Token::LParen) {
+            self.advance();
+        }
+        
+        // Parse init statement (e.g., var i = 0u;)
+        if matches!(self.current, Token::Var) {
+            self.parse_var_decl()?;
+        } else if matches!(self.current, Token::Let) {
+            self.advance();
+            if matches!(self.current, Token::Mut) {
+                self.advance();
+                self.parse_var_decl_body()?;
+            }
+        } else {
+            // Skip to semicolon
+            while !matches!(self.current, Token::Semicolon) && !matches!(self.current, Token::Eof) {
+                self.advance();
+            }
+            if matches!(self.current, Token::Semicolon) {
+                self.advance();
+            }
+        }
+        
+        // Skip condition and increment - just advance to the block
+        while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+            self.advance();
+        }
+        
+        if matches!(self.current, Token::Eof) {
+            return Err(self.error_at("Expected block after 'for'".to_string()));
+        }
+        
+        // Parse the block body (with inherited symbols including loop variable)
+        self.parse_block()
+    }
+
+    /// Parse an if statement: if (condition) { body } else { body }
+    fn parse_if_statement(&mut self) -> Result<()> {
+        self.advance(); // consume 'if'
+        
+        // Skip condition
+        while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+            self.advance();
+        }
+        
+        if matches!(self.current, Token::Eof) {
+            return Err(self.error_at("Expected block after 'if'".to_string()));
+        }
+        
+        // Parse the if block
+        self.parse_block()?;
+        
+        // Handle else if/else
+        while matches!(self.current, Token::Else) {
+            self.advance();
+            
+            if matches!(self.current, Token::If) {
+                self.advance();
+                // Skip condition
+                while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+                    self.advance();
+                }
+            }
+            
+            if matches!(self.current, Token::LBrace) {
+                self.parse_block()?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Parse a while loop: while (condition) { body }
+    fn parse_while_loop(&mut self) -> Result<()> {
+        self.advance(); // consume 'while'
+        
+        // Skip condition
+        while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+            self.advance();
+        }
+        
+        if matches!(self.current, Token::Eof) {
+            return Err(self.error_at("Expected block after 'while'".to_string()));
+        }
+        
+        self.parse_block()
+    }
+
+    /// Parse a loop statement: loop { body }
+    fn parse_loop_statement(&mut self) -> Result<()> {
+        self.advance(); // consume 'loop'
+        
+        if !matches!(self.current, Token::LBrace) {
+            return Err(self.error_at("Expected block after 'loop'".to_string()));
+        }
+        
+        self.parse_block()
+    }
+
+    /// Parse a switch statement: switch (value) { case ... }
+    fn parse_switch_statement(&mut self) -> Result<()> {
+        self.advance(); // consume 'switch'
+        
+        // Skip value expression
+        while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+            self.advance();
+        }
+        
+        if matches!(self.current, Token::Eof) {
+            return Err(self.error_at("Expected block after 'switch'".to_string()));
+        }
+        
+        self.parse_block()
+    }
+
+    /// Parse a block { ... } recursively, inheriting outer scope symbols
+    fn parse_block(&mut self) -> Result<()> {
+        self.expect(Token::LBrace)?;
+        
+        let mut depth = 1;
+        while depth > 0 && !matches!(self.current, Token::Eof) {
+            if matches!(self.current, Token::LBrace) {
+                depth += 1;
+                self.advance();
+            } else if matches!(self.current, Token::RBrace) {
+                depth -= 1;
+                self.advance();
+                if depth == 0 {
+                    break;
+                }
+            } else if matches!(self.current, Token::Let) {
+                self.advance();
+                if matches!(self.current, Token::Mut) {
+                    self.advance();
+                    self.parse_var_decl_body()?;
+                } else {
+                    let name = self.expect_ident()?;
+                    let explicit_ty = if matches!(self.current, Token::Colon) {
+                        self.advance();
+                        Some(self.parse_type_annotation()?)
+                    } else {
+                        None
+                    };
+                    let inferred_ty = if matches!(self.current, Token::Assign) {
+                        self.advance();
+                        Some(self.parse_expr()?)
+                    } else {
+                        None
+                    };
+                    let ty = explicit_ty
+                        .or(inferred_ty)
+                        .unwrap_or(Type::Scalar(ScalarType::F32));
+                    self.symbols.insert(name, ty);
+                    self.expect_semicolon()?;
+                }
+            } else if matches!(self.current, Token::Var) {
+                self.parse_var_decl()?;
+            } else if matches!(self.current, Token::For) {
+                self.parse_for_loop()?;
+            } else if matches!(self.current, Token::If) {
+                self.parse_if_statement()?;
+            } else if matches!(self.current, Token::While) {
+                self.parse_while_loop()?;
+            } else if matches!(self.current, Token::Loop) {
+                self.parse_loop_statement()?;
+            } else if matches!(self.current, Token::Switch) {
+                self.parse_switch_statement()?;
+            } else if matches!(self.current, Token::Return) {
+                self.advance(); // consume 'return'
+                if !matches!(self.current, Token::Semicolon) && !matches!(self.current, Token::RBrace) {
+                    let _ = self.parse_expr()?;
+                }
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+            } else if matches!(self.current, Token::Break | Token::Continue) {
+                self.advance();
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+            } else if matches!(self.current, Token::Semicolon) {
+                self.advance();
+            } else if matches!(self.current, Token::Ident(_)) {
+                // Assignment or expression statement
+                let _ = self.parse_expr()?;
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+            } else {
+                // Unknown token, skip it
+                self.advance();
+            }
+        }
+        
         Ok(())
     }
 
