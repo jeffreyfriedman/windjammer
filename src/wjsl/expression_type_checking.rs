@@ -292,12 +292,9 @@ impl<'a> BodyParser<'a> {
                     }
                     return Ok(result);
                 }
-                if matches!(self.current, Token::LAngle) {
-                    self.skip_optional_angle_bracket();
-                    if matches!(self.current, Token::LParen) {
-                        return self.parse_function_call(&name);
-                    }
-                }
+                // NOTE: Removed skip_optional_angle_bracket() check here because it causes
+                // the parser to skip tokens when < is a comparison operator, not a generic.
+                // Generic type parameters should be handled explicitly in type contexts only.
                 let mut ty = self
                     .symbols
                     .get(&name)
