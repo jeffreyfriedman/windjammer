@@ -348,7 +348,9 @@ impl<'a> BodyParser<'a> {
                 }
             }
             _ => Err(anyhow!(
-                "Unexpected token in expression: {:?}",
+                "[line {}:{}] Unexpected token in expression: {:?}",
+                self.current_line,
+                self.current_column,
                 self.current
             )),
         }
