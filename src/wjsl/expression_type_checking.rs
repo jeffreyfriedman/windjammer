@@ -356,7 +356,7 @@ impl<'a> BodyParser<'a> {
         }
     }
 
-    fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {
+    pub(crate) fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {
         match ty {
             Type::Vec2(scalar) | Type::Vec3(scalar) | Type::Vec4(scalar) => {
                 let scalar_ty = scalar.unwrap_or(ScalarType::F32);
