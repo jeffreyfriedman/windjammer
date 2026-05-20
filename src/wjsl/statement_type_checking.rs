@@ -2,7 +2,7 @@
 
 use crate::wjsl::ast::*;
 use crate::wjsl::lexer::Token;
-use crate::wjsl::shader_type_rules::{type_to_string, types_match};
+use crate::wjsl::shader_type_rules::{element_type_for_index, type_to_string, types_match};
 use crate::wjsl::type_checker::BodyParser;
 use anyhow::{anyhow, Result};
 
@@ -92,19 +92,23 @@ impl<'a> BodyParser<'a> {
         } else if matches!(self.current, Token::Semicolon) {
             self.advance();
         } else if matches!(self.current, Token::Ident(_)) {
-            // Could be assignment (x = ...) or field assignment (x.y = ...)
-            // Parse the left-hand side expression (identifier, field access, array index, etc.)
-            // Then check if it's followed by =
-            let _lhs = self.parse_expr()?;
+            // Could be assignment (x = ...), compound assignment (x += ...), or field assignment (x.y = ...)
+            // Parse the left-hand side (lvalue: identifier with optional field/array access)
+            let _lhs_ty = self.parse_lvalue()?;
             
-            if matches!(self.current, Token::Assign) {
-                // It's an assignment
-                self.advance(); // consume '='
+            if matches!(self.current, Token::Assign 
+                        | Token::PlusAssign | Token::MinusAssign 
+                        | Token::StarAssign | Token::SlashAssign
+                        | Token::PercentAssign | Token::AndAssign 
+                        | Token::OrAssign | Token::XorAssign
+                        | Token::ShlAssign | Token::ShrAssign) {
+                // It's an assignment or compound assignment
+                self.advance(); // consume assignment operator
                 let _rhs = self.parse_expr()?;
                 self.expect_semicolon()?;
                 // TODO: Type check that rhs matches lhs type
             } else {
-                // Standalone expression - this is an error in WJSL
+                // Not an assignment - error
                 return Err(self.error_at(format!(
                     "Unexpected expression statement. Expected assignment or control flow. Token after expression: {:?}",
                     self.current
@@ -452,5 +456,34 @@ impl<'a> BodyParser<'a> {
         } else {
             Err(self.error_at(format!("Expected semicolon, found {:?}", self.current)))
         }
+    }
+
+    /// Parse an lvalue (left-hand side of assignment): identifier with optional field/array access
+    fn parse_lvalue(&mut self) -> Result<Type> {
+        // Must start with an identifier
+        let name = self.expect_ident()?;
+        let mut ty = self
+            .symbols
+            .get(&name)
+            .ok_or_else(|| anyhow!("Unknown identifier '{}'", name))?
+            .clone();
+
+        // Handle postfix operations: .field and [index]
+        loop {
+            if matches!(self.current, Token::Dot) {
+                self.advance();
+                let member = self.expect_ident()?;
+                ty = self.get_swizzle_or_field_type(&ty, &member)?;
+            } else if matches!(self.current, Token::LBracket) {
+                self.advance();
+                let _index_ty = self.parse_expr()?;
+                self.expect(Token::RBracket)?;
+                ty = element_type_for_index(&ty)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(ty)
     }
 }
