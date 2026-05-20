@@ -347,12 +347,16 @@ impl<'a> BodyParser<'a> {
                     Ok(Type::Scalar(ScalarType::F32))
                 }
             }
-            _ => Err(anyhow!(
-                "[line {}:{}] Unexpected token in expression: {:?}",
-                self.current_line,
-                self.current_column,
-                self.current
-            )),
+            _ => {
+                eprintln!("[DEBUG parse_primary] UNEXPECTED TOKEN: {:?} at line {}:{}", 
+                          self.current, self.current_line, self.current_column);
+                Err(anyhow!(
+                    "[line {}:{}] Unexpected token in expression: {:?}",
+                    self.current_line,
+                    self.current_column,
+                    self.current
+                ))
+            }
         }
     }
 
