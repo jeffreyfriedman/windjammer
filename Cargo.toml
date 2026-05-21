@@ -3147,6 +3147,10 @@ name = "wjsl_water_shader_test"
 path = "tests/parser/wjsl_water_shader_test.rs"
 
 [[test]]
+name = "wjsl_shader_regressions"
+path = "tests/parser/wjsl_shader_regressions.rs"
+
+[[test]]
 name = "wjsl_workgroup_size_2arg_test"
 path = "tests/parser/wjsl_workgroup_size_2arg_test.rs"
 
