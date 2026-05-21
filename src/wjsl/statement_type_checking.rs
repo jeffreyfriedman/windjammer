@@ -462,6 +462,55 @@ impl<'a> BodyParser<'a> {
         Ok(())
     }
 
+    /// Parse a block used as an if-expression branch: `{ expr }` or `{ stmts; expr }`.
+    pub(crate) fn parse_block_expr_value(&mut self) -> Result<Type> {
+        self.expect(Token::LBrace)?;
+
+        let mut result_ty = None;
+
+        while !matches!(self.current, Token::RBrace | Token::Eof) {
+            if matches!(self.current, Token::Return) {
+                self.advance();
+                if !matches!(self.current, Token::Semicolon) {
+                    result_ty = Some(self.parse_expr()?);
+                }
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+            } else if matches!(
+                self.current,
+                Token::Let
+                    | Token::Var
+                    | Token::For
+                    | Token::If
+                    | Token::While
+                    | Token::Loop
+                    | Token::Switch
+                    | Token::LBrace
+            ) {
+                self.parse_single_statement(None)?;
+            } else if matches!(self.current, Token::Break | Token::Continue | Token::Discard) {
+                self.advance();
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+            } else if matches!(self.current, Token::Semicolon) {
+                self.advance();
+            } else {
+                let ty = self.parse_expr()?;
+                if matches!(self.current, Token::Semicolon) {
+                    self.advance();
+                }
+                result_ty = Some(ty);
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        result_ty.ok_or_else(|| {
+            self.error_at("Expected expression value in if-expression branch".to_string())
+        })
+    }
+
     pub(crate) fn expect_ident(&mut self) -> Result<String> {
         if let Token::Ident(s) = &self.current {
             let name = s.clone();
