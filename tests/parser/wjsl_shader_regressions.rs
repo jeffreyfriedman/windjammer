@@ -5,7 +5,7 @@
 /// - voxel_lighting.wjsl: "Expected semicolon, found FloatLiteral(25.0)"
 /// - point_light/area_light.wjsl: "Invalid operands for *: mat4x4 and mat4x4"
 
-#![cfg(any(
+#[cfg(any(
     not(any(
         feature = "parser_tests",
         feature = "analyzer_tests",

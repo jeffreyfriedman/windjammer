@@ -76,6 +76,18 @@ pub(in crate::wjsl) fn check_binary_op(left: &Type, op: BinaryOp, right: &Type) 
                         "Matrix * vector: mat4x4 * vec4 or mat3x3 * vec3 required"
                     ))
                 }
+            } else if is_matrix(left) && is_matrix(right) {
+                if let (Type::Mat4x4(_), Type::Mat4x4(_)) = (left, right) {
+                    Ok(Type::Mat4x4(Some(ScalarType::F32)))
+                } else if let (Type::Mat3x3(_), Type::Mat3x3(_)) = (left, right) {
+                    Ok(Type::Mat3x3(Some(ScalarType::F32)))
+                } else if let (Type::Mat2x2(_), Type::Mat2x2(_)) = (left, right) {
+                    Ok(Type::Mat2x2(Some(ScalarType::F32)))
+                } else {
+                    Err(anyhow!(
+                        "Matrix * matrix: operand sizes must match (e.g. mat4x4 * mat4x4)"
+                    ))
+                }
             } else if is_vector(left) && is_vector(right) {
                 if !same_vec_size(left, right) {
                     return Err(anyhow!(
