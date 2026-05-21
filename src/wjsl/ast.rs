@@ -58,6 +58,8 @@ pub struct StructField {
     /// Optional @align(N) or @size(N) - for Phase 2
     pub align: Option<u32>,
     pub size: Option<u32>,
+    pub location: Option<u32>,
+    pub builtin: Option<String>,
 }
 
 /// Global binding (uniform, storage, texture, sampler)

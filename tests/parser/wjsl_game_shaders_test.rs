@@ -18,15 +18,17 @@
 use std::path::Path;
 use windjammer::wjsl::transpile_wjsl;
 
-fn game_shaders_available() -> bool {
+fn game_shaders_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders")
-        .exists()
+        .join("../windjammer-game/windjammer-game-core/src/shaders")
+}
+
+fn game_shaders_available() -> bool {
+    game_shaders_dir().exists()
 }
 
 fn transpile_shader(filename: &str) -> String {
-    let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders");
+    let shader_dir = game_shaders_dir();
     let source = std::fs::read_to_string(shader_dir.join(filename))
         .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
     windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
@@ -34,8 +36,7 @@ fn transpile_shader(filename: &str) -> String {
 }
 
 fn read_shader_source(filename: &str) -> String {
-    let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders");
+    let shader_dir = game_shaders_dir();
     let source = std::fs::read_to_string(shader_dir.join(filename))
         .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
     windjammer::wjsl::resolve_includes(&source, &shader_dir, &mut Vec::new())
@@ -371,5 +372,34 @@ fn test_wjsl_gbuffer_struct_consistency() {
     assert_eq!(
         rm_struct, dn_struct,
         "Raymarch and Denoise GBufferPixel must match"
+    );
+}
+
+/// TDD: Every top-level game shader in src/shaders/ must transpile (roadmap: 27+ passes).
+#[test]
+fn test_all_top_level_game_shaders_transpile() {
+    if !game_shaders_available() {
+        eprintln!("SKIP: windjammer-game shaders not available");
+        return;
+    }
+    let dir = game_shaders_dir();
+    let mut count = 0usize;
+    for entry in std::fs::read_dir(&dir).expect("read src/shaders") {
+        let entry = entry.expect("dir entry");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("wjsl") {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("shader filename");
+        transpile_shader(name);
+        count += 1;
+    }
+    assert!(
+        count >= 27,
+        "expected at least 27 top-level .wjsl shaders, found {}",
+        count
     );
 }

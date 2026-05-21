@@ -91,28 +91,60 @@ impl<'a> BodyParser<'a> {
             self.parse_block()?;
         } else if matches!(self.current, Token::Semicolon) {
             self.advance();
+        } else if matches!(self.current, Token::Break | Token::Continue | Token::Discard) {
+            self.advance();
+            if matches!(self.current, Token::Semicolon) {
+                self.advance();
+            }
         } else if matches!(self.current, Token::Ident(_)) {
-            // Could be assignment (x = ...), compound assignment (x += ...), or field assignment (x.y = ...)
-            // Parse the left-hand side (lvalue: identifier with optional field/array access)
-            let _lhs_ty = self.parse_lvalue()?;
-            
-            if matches!(self.current, Token::Assign 
-                        | Token::PlusAssign | Token::MinusAssign 
-                        | Token::StarAssign | Token::SlashAssign
-                        | Token::PercentAssign | Token::AndAssign 
-                        | Token::OrAssign | Token::XorAssign
-                        | Token::ShlAssign | Token::ShrAssign) {
-                // It's an assignment or compound assignment
-                self.advance(); // consume assignment operator
-                let _rhs = self.parse_expr()?;
+            let name = self.expect_ident()?;
+            if matches!(self.current, Token::LParen) {
+                let _ = self.parse_function_call(&name)?;
                 self.expect_semicolon()?;
-                // TODO: Type check that rhs matches lhs type
             } else {
-                // Not an assignment - error
-                return Err(self.error_at(format!(
-                    "Unexpected expression statement. Expected assignment or control flow. Token after expression: {:?}",
-                    self.current
-                )));
+                let mut ty = self
+                    .symbols
+                    .get(&name)
+                    .ok_or_else(|| anyhow!("Unknown identifier '{}'", name))?
+                    .clone();
+                loop {
+                    if matches!(self.current, Token::Dot) {
+                        self.advance();
+                        let member = self.expect_ident()?;
+                        ty = self.get_swizzle_or_field_type(&ty, &member)?;
+                    } else if matches!(self.current, Token::LBracket) {
+                        self.advance();
+                        let _index_ty = self.parse_expr()?;
+                        self.expect(Token::RBracket)?;
+                        ty = element_type_for_index(&ty)?;
+                    } else {
+                        break;
+                    }
+                }
+                let _lhs_ty = ty;
+                if matches!(
+                    self.current,
+                    Token::Assign
+                        | Token::PlusAssign
+                        | Token::MinusAssign
+                        | Token::StarAssign
+                        | Token::SlashAssign
+                        | Token::PercentAssign
+                        | Token::AndAssign
+                        | Token::OrAssign
+                        | Token::XorAssign
+                        | Token::ShlAssign
+                        | Token::ShrAssign
+                ) {
+                    self.advance();
+                    let _rhs = self.parse_expr()?;
+                    self.expect_semicolon()?;
+                } else {
+                    return Err(self.error_at(format!(
+                        "Unexpected expression statement. Expected assignment or control flow. Token after expression: {:?}",
+                        self.current
+                    )));
+                }
             }
         } else {
             // Unrecognized token - FAIL LOUDLY
