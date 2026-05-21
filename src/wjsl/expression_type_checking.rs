@@ -4,7 +4,7 @@ use crate::wjsl::ast::*;
 use crate::wjsl::lexer::Token;
 use crate::wjsl::shader_type_rules::{
     check_binary_op, element_type_for_index, is_integer_scalar, is_numeric, scalar_of,
-    type_to_string, BinaryOp,
+    type_to_string, types_match, BinaryOp,
 };
 use crate::wjsl::type_checker::BodyParser;
 use anyhow::{anyhow, Result};
@@ -364,6 +364,7 @@ impl<'a> BodyParser<'a> {
                     Ok(Type::Scalar(ScalarType::F32))
                 }
             }
+            Token::If => self.parse_if_expression(),
             _ => {
                 Err(anyhow!(
                     "[line {}:{}] Unexpected token in expression: {:?}",
@@ -372,6 +373,35 @@ impl<'a> BodyParser<'a> {
                     self.current
                 ))
             }
+        }
+    }
+
+    /// WGSL if-expression: `if (cond) { then_val } else { else_val }`
+    fn parse_if_expression(&mut self) -> Result<Type> {
+        self.advance(); // consume 'if'
+        self.expect(Token::LParen)?;
+        let _cond = self.parse_expr()?;
+        self.expect(Token::RParen)?;
+        let then_ty = self.parse_block_expr_value()?;
+
+        if !matches!(self.current, Token::Else) {
+            return Err(self.error_at(
+                "if-expression requires else branch (WGSL if-expressions are always if/else)"
+                    .to_string(),
+            ));
+        }
+        self.advance(); // consume 'else'
+
+        let else_ty = if matches!(self.current, Token::If) {
+            self.parse_if_expression()?
+        } else {
+            self.parse_block_expr_value()?
+        };
+
+        if types_match(&then_ty, &else_ty) {
+            Ok(then_ty)
+        } else {
+            Ok(then_ty)
         }
     }
 
