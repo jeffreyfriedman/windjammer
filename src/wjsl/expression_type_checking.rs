@@ -348,8 +348,6 @@ impl<'a> BodyParser<'a> {
                 }
             }
             _ => {
-                eprintln!("[DEBUG parse_primary] UNEXPECTED TOKEN: {:?} at line {}:{}", 
-                          self.current, self.current_line, self.current_column);
                 Err(anyhow!(
                     "[line {}:{}] Unexpected token in expression: {:?}",
                     self.current_line,

@@ -32,7 +32,6 @@ impl<'a> BodyParser<'a> {
     /// Parse a single statement (let, var, return, if, for, assignment, etc.)
     /// This is used by both parse_and_check() and parse_block() to ensure consistency
     fn parse_single_statement(&mut self, return_type: Option<&ReturnType>) -> Result<()> {
-        eprintln!("[DEBUG parse_single_statement] Current token: {:?}", self.current);
         if matches!(self.current, Token::Let) {
             self.advance();
             if matches!(self.current, Token::Mut) {
@@ -95,9 +94,7 @@ impl<'a> BodyParser<'a> {
         } else if matches!(self.current, Token::Ident(_)) {
             // Could be assignment (x = ...), compound assignment (x += ...), or field assignment (x.y = ...)
             // Parse the left-hand side (lvalue: identifier with optional field/array access)
-            eprintln!("[DEBUG] About to parse lvalue, current token: {:?}", self.current);
             let _lhs_ty = self.parse_lvalue()?;
-            eprintln!("[DEBUG] After parse_lvalue, current token: {:?}", self.current);
             
             if matches!(self.current, Token::Assign 
                         | Token::PlusAssign | Token::MinusAssign 
