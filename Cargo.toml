@@ -3107,6 +3107,10 @@ name = "wjsl_hud_overlay_test"
 path = "tests/parser/wjsl_hud_overlay_test.rs"
 
 [[test]]
+name = "wjsl_if_expression_test"
+path = "tests/parser/wjsl_if_expression_test.rs"
+
+[[test]]
 name = "wjsl_include_test"
 path = "tests/parser/wjsl_include_test.rs"
 
