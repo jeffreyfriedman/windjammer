@@ -369,10 +369,14 @@ impl<'a> Parser<'a> {
 
         let mut fields = Vec::new();
         while !matches!(self.current, Token::RBrace | Token::Eof) {
-            // Optional @align(N) or @size(N)
             let mut align = None;
             let mut size = None;
-            while matches!(self.current, Token::AtAlign | Token::AtSize) {
+            let mut location = None;
+            let mut builtin = None;
+            while matches!(
+                self.current,
+                Token::AtAlign | Token::AtSize | Token::AtLocation | Token::AtBuiltin
+            ) {
                 if matches!(self.current, Token::AtAlign) {
                     self.advance();
                     self.expect(Token::LParen)?;
@@ -381,11 +385,27 @@ impl<'a> Parser<'a> {
                         self.advance();
                     }
                     self.expect(Token::RParen)?;
-                } else {
+                } else if matches!(self.current, Token::AtSize) {
                     self.advance();
                     self.expect(Token::LParen)?;
                     if let Token::IntLiteral(n) = self.current {
                         size = Some(n as u32);
+                        self.advance();
+                    }
+                    self.expect(Token::RParen)?;
+                } else if matches!(self.current, Token::AtLocation) {
+                    self.advance();
+                    self.expect(Token::LParen)?;
+                    if let Token::IntLiteral(n) = self.current {
+                        location = Some(n as u32);
+                        self.advance();
+                    }
+                    self.expect(Token::RParen)?;
+                } else {
+                    self.advance();
+                    self.expect(Token::LParen)?;
+                    if let Token::Ident(s) = &self.current {
+                        builtin = Some(s.clone());
                         self.advance();
                     }
                     self.expect(Token::RParen)?;
@@ -400,6 +420,8 @@ impl<'a> Parser<'a> {
                 ty,
                 align,
                 size,
+                location,
+                builtin,
             });
 
             // Optional trailing comma
@@ -410,6 +432,29 @@ impl<'a> Parser<'a> {
 
         self.expect(Token::RBrace)?;
         Ok(StructDecl { name, fields })
+    }
+
+    fn parse_storage_access_mode(&mut self) -> StorageAccess {
+        if matches!(self.current, Token::Comma) {
+            self.advance();
+        }
+        if matches!(self.current, Token::ReadWrite) {
+            self.advance();
+            StorageAccess::ReadWrite
+        } else if matches!(self.current, Token::Read) {
+            self.advance();
+            if matches!(self.current, Token::Write) {
+                self.advance();
+                StorageAccess::ReadWrite
+            } else {
+                StorageAccess::Read
+            }
+        } else if matches!(self.current, Token::Write) {
+            self.advance();
+            StorageAccess::Write
+        } else {
+            StorageAccess::ReadWrite
+        }
     }
 
     fn parse_binding_fixed(&mut self) -> Result<Binding> {
@@ -424,23 +469,7 @@ impl<'a> Parser<'a> {
             (name, BindingKind::Uniform(ty))
         } else if matches!(self.current, Token::Storage) {
             self.advance();
-            let access = if matches!(self.current, Token::ReadWrite) {
-                self.advance();
-                StorageAccess::ReadWrite
-            } else if matches!(self.current, Token::Read) {
-                self.advance();
-                if matches!(self.current, Token::Write) {
-                    self.advance();
-                    StorageAccess::ReadWrite
-                } else {
-                    StorageAccess::Read
-                }
-            } else if matches!(self.current, Token::Write) {
-                self.advance();
-                StorageAccess::Write
-            } else {
-                StorageAccess::ReadWrite
-            };
+            let access = self.parse_storage_access_mode();
             let name = self.expect_ident()?;
             self.expect(Token::Colon)?;
             let ty = self.parse_type()?;
@@ -486,9 +515,77 @@ impl<'a> Parser<'a> {
                 name,
                 kind: BindingKind::Sampler,
             });
+        } else if matches!(self.current, Token::Var) {
+            self.advance();
+            if matches!(self.current, Token::LAngle) {
+                self.expect(Token::LAngle)?;
+                let (name, kind) = if matches!(self.current, Token::Uniform) {
+                    self.advance();
+                    self.expect(Token::RAngle)?;
+                    let name = self.expect_ident()?;
+                    self.expect(Token::Colon)?;
+                    let ty = self.parse_type()?;
+                    self.expect(Token::Semicolon)?;
+                    (name, BindingKind::Uniform(ty))
+                } else if matches!(self.current, Token::Storage) {
+                    self.advance();
+                    let access = self.parse_storage_access_mode();
+                    self.expect(Token::RAngle)?;
+                    let name = self.expect_ident()?;
+                    self.expect(Token::Colon)?;
+                    let ty = self.parse_type()?;
+                    self.expect(Token::Semicolon)?;
+                    (
+                        name,
+                        BindingKind::Storage {
+                            access_mode: access,
+                            ty,
+                        },
+                    )
+                } else {
+                    return Err(anyhow!(
+                        "Expected 'uniform' or 'storage' in var<...> binding, found {:?}",
+                        self.current
+                    ));
+                };
+                return Ok(Binding {
+                    group,
+                    binding,
+                    name,
+                    kind,
+                });
+            }
+            let name = self.expect_ident()?;
+            self.expect(Token::Colon)?;
+            let ty = self.parse_type()?;
+            self.expect(Token::Semicolon)?;
+            let kind = match &ty {
+                Type::Texture2D(s) => BindingKind::Texture {
+                    texture_type: TextureType::Texture2D(*s),
+                },
+                Type::TextureCube(s) => BindingKind::Texture {
+                    texture_type: TextureType::TextureCube(*s),
+                },
+                Type::Texture3D(s) => BindingKind::Texture {
+                    texture_type: TextureType::Texture3D(*s),
+                },
+                Type::Sampler => BindingKind::Sampler,
+                _ => {
+                    return Err(anyhow!(
+                        "var binding must be texture_2d, texture_cube, texture_3d, or sampler, got {:?}",
+                        ty
+                    ));
+                }
+            };
+            return Ok(Binding {
+                group,
+                binding,
+                name,
+                kind,
+            });
         } else {
             return Err(anyhow!(
-                "Expected uniform, storage, texture_2d, or sampler, found {:?}",
+                "Expected uniform, storage, texture_2d, sampler, or var, found {:?}",
                 self.current
             ));
         };
@@ -823,23 +920,28 @@ impl<'a> Parser<'a> {
                     } else {
                         return Err(anyhow!("Expected workgroup x"));
                     };
-                    self.expect(Token::Comma)?;
-                    let y = if let Token::IntLiteral(n) = self.current {
-                        self.advance();
-                        n as u32
-                    } else {
-                        return Err(anyhow!("Expected workgroup y"));
-                    };
-                    let z = if matches!(self.current, Token::RParen) {
-                        1u32
+                    let (y, z) = if matches!(self.current, Token::RParen) {
+                        (1u32, 1u32)
                     } else {
                         self.expect(Token::Comma)?;
-                        if let Token::IntLiteral(n) = self.current {
+                        let y = if let Token::IntLiteral(n) = self.current {
                             self.advance();
                             n as u32
                         } else {
-                            return Err(anyhow!("Expected workgroup z"));
-                        }
+                            return Err(anyhow!("Expected workgroup y"));
+                        };
+                        let z = if matches!(self.current, Token::RParen) {
+                            1u32
+                        } else {
+                            self.expect(Token::Comma)?;
+                            if let Token::IntLiteral(n) = self.current {
+                                self.advance();
+                                n as u32
+                            } else {
+                                return Err(anyhow!("Expected workgroup z"));
+                            }
+                        };
+                        (y, z)
                     };
                     self.expect(Token::RParen)?;
                     Some((x, y, z))
