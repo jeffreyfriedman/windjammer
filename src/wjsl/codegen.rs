@@ -87,6 +87,12 @@ impl WjslCodegen {
             if let Some(size) = f.size {
                 out.push_str(&format!("@size({}) ", size));
             }
+            if let Some(loc) = f.location {
+                out.push_str(&format!("@location({}) ", loc));
+            }
+            if let Some(builtin) = &f.builtin {
+                out.push_str(&format!("@builtin({}) ", builtin));
+            }
             out.push_str(&format!("{}: ", f.name));
             out.push_str(&self.type_to_wgsl(&f.ty));
             out.push_str(",\n");
