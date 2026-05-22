@@ -11,7 +11,9 @@ use crate::CompilationTarget;
 
 impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_private: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut seen_pub: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut out_lines: Vec<String> = Vec::new();
         for line in block.lines() {
             let trimmed = line.trim();
@@ -30,6 +32,11 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 out_lines.push(line.to_string());
                 continue;
+            };
+            let seen = if is_pub {
+                &mut seen_pub
+            } else {
+                &mut seen_private
             };
             let rest = after_use.trim().trim_end_matches(';').trim();
             if rest.contains("::*") {

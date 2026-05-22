@@ -899,9 +899,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .map(|af| af.inferred_ownership.contains_key("self"))
                 .unwrap_or(false);
             let accesses_fields = if !self.current_struct_fields.is_empty() {
-                let ctx = self_analysis::AnalysisContext::new(
+                let local_bindings = self_analysis::collect_local_bindings(&func.body);
+                let ctx = self_analysis::AnalysisContext::with_locals(
                     &func.parameters,
                     &self.current_struct_fields,
+                    &local_bindings,
                 );
                 self_analysis::function_accesses_fields(&ctx, func)
                     || self_analysis::function_mutates_fields(&ctx, func)

@@ -3323,6 +3323,10 @@ name = "bug_self_subfield_copy_read_test"
 path = "tests/regression/bug_self_subfield_copy_read_test.rs"
 
 [[test]]
+name = "playtest_harness_migration_bugs_test"
+path = "tests/regression/playtest_harness_migration_bugs_test.rs"
+
+[[test]]
 name = "bug_static_method_call_int_cast_test"
 path = "tests/regression/bug_static_method_call_int_cast_test.rs"
 
