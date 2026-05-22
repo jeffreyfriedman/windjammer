@@ -121,7 +121,13 @@ impl AutoCloneAnalysis {
 
         match stmt {
             Statement::Let { pattern, value, .. } => {
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
+                // Field reads in let bindings move non-Copy sub-values (partial move).
+                let value_kind = if matches!(value, Expression::FieldAccess { .. }) {
+                    UsageKind::Move
+                } else {
+                    UsageKind::Read
+                };
+                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
 
                 if let Pattern::Identifier(name) = pattern {
                     map.entry(name.clone()).or_default().push(Usage {

@@ -122,8 +122,12 @@ impl<'ast> CodeGenerator<'ast> {
             && !is_constructor
         {
             // Check if function body mutates any struct fields
-            let ctx =
-                self_analysis::AnalysisContext::new(&func.parameters, &self.current_struct_fields);
+            let local_bindings = self_analysis::collect_local_bindings(&func.body);
+            let ctx = self_analysis::AnalysisContext::with_locals(
+                &func.parameters,
+                &self.current_struct_fields,
+                &local_bindings,
+            );
             let mutates = self_analysis::function_mutates_fields(&ctx, func);
             let accesses = self_analysis::function_accesses_fields(&ctx, func);
             if mutates {
