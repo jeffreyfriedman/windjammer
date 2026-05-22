@@ -1,0 +1,77 @@
+// Conformance Test: std::json (serde_json backend via windjammer_runtime)
+//
+// EXPECTED OUTPUT:
+// [json_parse] name=Alice age=30 active=true
+// [json_stringify] roundtrip ok
+// [json_array] len=3
+// [json_all] PASSED
+
+use std::json
+
+fn test_json_parse_and_get_fields() {
+    let text = "{\"name\":\"Alice\",\"age\":30,\"active\":true}"
+    match json::parse(text) {
+        Ok(v) => {
+            let mut name = ""
+            let mut age = 0
+            let mut active = false
+            if json::is_object(v) {
+                if let Some(name_val) = json::get(v, "name") {
+                    if let Some(s) = json::as_str(name_val) {
+                        name = s
+                    }
+                }
+                if let Some(age_val) = json::get(v, "age") {
+                    if let Some(n) = json::as_i64(age_val) {
+                        age = n as int
+                    }
+                }
+                if let Some(active_val) = json::get(v, "active") {
+                    if let Some(b) = json::as_bool(active_val) {
+                        active = b
+                    }
+                }
+            }
+            println("[json_parse] name=${name} age=${age} active=${active}")
+        }
+        Err(e) => {
+            println("[json_parse] FAIL: ${e}")
+        }
+    }
+}
+
+fn test_json_stringify_roundtrip() {
+    let text = "{\"x\":1,\"y\":2}"
+    match json::parse(text) {
+        Ok(v) => {
+            match json::stringify(v) {
+                Ok(out) => {
+                    match json::parse(out) {
+                        Ok(_) => println("[json_stringify] roundtrip ok"),
+                        Err(e) => println("[json_stringify] FAIL reparsing: ${e}"),
+                    }
+                }
+                Err(e) => println("[json_stringify] FAIL stringify: ${e}"),
+            }
+        }
+        Err(e) => println("[json_stringify] FAIL parse: ${e}"),
+    }
+}
+
+fn test_json_array_len() {
+    let text = "[1,2,3]"
+    match json::parse(text) {
+        Ok(v) => {
+            let n = json::len(v)
+            println("[json_array] len=${n}")
+        }
+        Err(e) => println("[json_array] FAIL: ${e}"),
+    }
+}
+
+fn main() {
+    test_json_parse_and_get_fields()
+    test_json_stringify_roundtrip()
+    test_json_array_len()
+    println("[json_all] PASSED")
+}

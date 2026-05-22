@@ -4260,6 +4260,7 @@ dependencies = [
  "js-sys",
  "log",
  "mime_guess",
+ "once_cell",
  "rand",
  "rayon",
  "regex",
