@@ -21,6 +21,15 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         use crate::parser::{Literal, MacroDelimiter};
 
+        // Macro arguments must never have context-level string coercion applied.
+        // format!("...".to_string(), ...) is invalid Rust (requires literal first arg).
+        let prev_coerce = self.coerce_string_literals_to_owned;
+        self.coerce_string_literals_to_owned = false;
+        let prev_match_arm = self.in_match_arm_needing_string;
+        self.in_match_arm_needing_string = false;
+        let prev_suppress = self.suppress_string_conversion.get();
+        self.suppress_string_conversion.set(true);
+
         // PHASE 4 OPTIMIZATION: Check for format! with capacity hints
         if name == "format" {
             if let Some(&capacity) = self.string_capacity_hints.get(&self.current_statement_idx) {
@@ -32,10 +41,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let arg_strs: Vec<String> = if args.is_empty() {
                     Vec::new()
                 } else {
-                    let prev_suppress = self.suppress_string_conversion.get();
-                    self.suppress_string_conversion.set(true);
-                    let fmt = self.generate_expression(args[0]);
-                    self.suppress_string_conversion.set(prev_suppress);
+                    let fmt = self.format_macro_template_arg(args[0]);
                     let rest: Vec<String> = args[1..]
                         .iter()
                         .map(|e| self.generate_expression(e))
@@ -45,6 +51,10 @@ impl<'ast> CodeGenerator<'ast> {
                     v.extend(rest);
                     v
                 };
+
+                self.coerce_string_literals_to_owned = prev_coerce;
+                self.in_match_arm_needing_string = prev_match_arm;
+                self.suppress_string_conversion.set(prev_suppress);
 
                 return format!(
                     "{{\n{}    let mut __s = String::with_capacity({});\n{}    write!(&mut __s, {}).unwrap();\n{}    __s\n{}}}",
@@ -65,13 +75,6 @@ impl<'ast> CodeGenerator<'ast> {
             || name == "eprint")
             && !args.is_empty()
             && matches!(&args[0], Expression::MacroInvocation { name: macro_name, .. } if macro_name == "format");
-
-        // Macro arguments must never have context-level string coercion applied.
-        // format!("...".to_string(), ...) is invalid Rust (requires literal first arg).
-        let prev_coerce = self.coerce_string_literals_to_owned;
-        self.coerce_string_literals_to_owned = false;
-        let prev_match_arm = self.in_match_arm_needing_string;
-        self.in_match_arm_needing_string = false;
 
         let arg_strs: Vec<String> = if should_flatten {
             // Flatten format! macro arguments into the print macro
@@ -103,6 +106,13 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             {
                 vec!["\"{}\"".to_string(), self.generate_expression(args[0])]
+            } else if name == "format" && !args.is_empty() {
+                let mut out = Vec::with_capacity(args.len());
+                out.push(self.format_macro_template_arg(args[0]));
+                for e in args.iter().skip(1) {
+                    out.push(self.generate_expression(e));
+                }
+                out
             } else {
                 args.iter().map(|e| self.generate_expression(e)).collect()
             }
@@ -110,6 +120,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.coerce_string_literals_to_owned = prev_coerce;
         self.in_match_arm_needing_string = prev_match_arm;
+        self.suppress_string_conversion.set(prev_suppress);
 
         let (open, close) = match delimiter {
             MacroDelimiter::Parens => ("(", ")"),
@@ -201,5 +212,19 @@ impl<'ast> CodeGenerator<'ast> {
             args.push(self.generate_expression(expr));
         }
         format!("format!(\"{}\", {})", format_str, args.join(", "))
+    }
+
+    /// First argument to `format!` must stay a string literal (never `.to_string()`).
+    pub(in crate::codegen::rust) fn format_macro_template_arg(
+        &mut self,
+        expr: &Expression<'ast>,
+    ) -> String {
+        use crate::parser::Literal;
+        if let Expression::Literal { value, .. } = expr {
+            if matches!(value, Literal::String(_)) {
+                return self.generate_literal(value);
+            }
+        }
+        self.generate_expression(expr)
     }
 }

@@ -51,42 +51,54 @@ impl<'ast> CodeGenerator<'ast> {
             } = arguments[0].1
             {
                 if inner_name == "format" {
-                    let inner: Vec<String> = inner_args
-                        .iter()
-                        .map(|a| self.generate_expression(a))
-                        .collect();
+                    let mut inner: Vec<String> = Vec::with_capacity(inner_args.len());
+                    if !inner_args.is_empty() {
+                        inner.push(self.format_macro_template_arg(inner_args[0]));
+                        for a in inner_args.iter().skip(1) {
+                            inner.push(self.generate_expression(a));
+                        }
+                    }
                     return Some(format!("panic!({})", inner.join(", ")));
                 }
             }
         }
 
-        let args: Vec<String> = arguments
-            .iter()
-            .map(|(_label, arg)| {
-                let generated = self.generate_expression(arg);
-                // Deref borrowed Copy params in assert_eq!/assert_ne!
-                // to avoid E0277 (&i32 != i32 for PartialEq)
-                if matches!(func_name, "assert_eq" | "assert_ne") {
-                    if let Expression::Identifier { name, .. } = arg {
-                        if self.inferred_borrowed_params.contains(name.as_str()) {
-                            let param_type = self
-                                .current_function_params
-                                .iter()
-                                .find(|p| p.name == *name)
-                                .map(|p| &p.type_);
-                            let is_copy_ref = param_type.is_some_and(|t| {
-                                matches!(t, crate::parser::Type::Reference(inner)
-                                    if self.is_type_copy(inner))
-                            });
-                            if is_copy_ref {
-                                return format!("*{}", generated);
+        let args: Vec<String> = if func_name == "format" && !arguments.is_empty() {
+            let mut out = Vec::with_capacity(arguments.len());
+            out.push(self.format_macro_template_arg(arguments[0].1));
+            for (_label, arg) in arguments.iter().skip(1) {
+                out.push(self.generate_expression(arg));
+            }
+            out
+        } else {
+            arguments
+                .iter()
+                .map(|(_label, arg)| {
+                    let generated = self.generate_expression(arg);
+                    // Deref borrowed Copy params in assert_eq!/assert_ne!
+                    // to avoid E0277 (&i32 != i32 for PartialEq)
+                    if matches!(func_name, "assert_eq" | "assert_ne") {
+                        if let Expression::Identifier { name, .. } = arg {
+                            if self.inferred_borrowed_params.contains(name.as_str()) {
+                                let param_type = self
+                                    .current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *name)
+                                    .map(|p| &p.type_);
+                                let is_copy_ref = param_type.is_some_and(|t| {
+                                    matches!(t, crate::parser::Type::Reference(inner)
+                                        if self.is_type_copy(inner))
+                                });
+                                if is_copy_ref {
+                                    return format!("*{}", generated);
+                                }
                             }
                         }
                     }
-                }
-                generated
-            })
-            .collect();
+                    generated
+                })
+                .collect()
+        };
         Some(format!("{}!({})", func_name, args.join(", ")))
     }
 
@@ -167,7 +179,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if name == "format" && !macro_args.is_empty() {
                     // Unwrap the format! call and put its arguments directly into println!
                     // format!("text {}", var) -> println!("text {}", var)
-                    let format_str = self.generate_expression(macro_args[0]);
+                    let format_str = self.format_macro_template_arg(macro_args[0]);
                     let format_args: Vec<String> = macro_args[1..]
                         .iter()
                         .map(|arg| self.generate_expression(arg))
