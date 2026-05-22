@@ -2191,6 +2191,18 @@ name = "enum_variant_method_call_test"
 path = "tests/codegen/enum_variant_method_call_test.rs"
 
 [[test]]
+name = "trait_owned_self_render_test"
+path = "tests/codegen/trait_owned_self_render_test.rs"
+
+[[test]]
+name = "crate_module_call_no_runtime_ffi_test"
+path = "tests/codegen/crate_module_call_no_runtime_ffi_test.rs"
+
+[[test]]
+name = "render_mut_self_inference_test"
+path = "tests/codegen/render_mut_self_inference_test.rs"
+
+[[test]]
 name = "codegen_copy_type_no_clone_test"
 path = "tests/codegen/rust/codegen_copy_type_no_clone_test.rs"
 
