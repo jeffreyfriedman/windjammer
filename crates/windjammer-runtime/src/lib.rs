@@ -21,7 +21,6 @@ pub mod mime;
 pub mod profiling;
 
 // Additional stdlib modules
-#[cfg(feature = "server")]
 pub mod async_runtime;
 pub mod bench;
 pub mod cli;
@@ -49,6 +48,7 @@ pub mod random;
 pub mod regex_mod;
 pub mod setup_teardown;
 pub mod strings;
+pub mod subprocess;
 pub mod sync;
 pub mod test;
 pub mod test_output;

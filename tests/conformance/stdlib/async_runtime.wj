@@ -1,0 +1,17 @@
+// Conformance Test: std::async_runtime (tokio backend via windjammer_runtime)
+//
+// EXPECTED OUTPUT:
+// [async_sleep] ok
+// [async_all] PASSED
+
+use std::async_runtime
+
+fn test_sleep_ms_blocking() {
+    async_runtime::sleep_ms_blocking(10)
+    println("[async_sleep] ok")
+}
+
+fn main() {
+    test_sleep_ms_blocking()
+    println("[async_all] PASSED")
+}

@@ -350,6 +350,48 @@ fn conformance_closures_and_iteration() {
             eprintln!("⚠️  stdlib/closures_and_iteration.wj: {}", e);
         }
     }
+
+    let result = compile_conformance_test("stdlib/json_operations.wj");
+    match &result {
+        Ok(code) => {
+            assert!(!code.is_empty(), "Generated code should not be empty");
+            eprintln!(
+                "✅ stdlib/json_operations.wj compiled to Rust successfully ({} bytes)",
+                code.len()
+            );
+        }
+        Err(e) => {
+            eprintln!("⚠️  stdlib/json_operations.wj: {}", e);
+        }
+    }
+
+    let result = compile_conformance_test("stdlib/async_runtime.wj");
+    match &result {
+        Ok(code) => {
+            assert!(!code.is_empty(), "Generated code should not be empty");
+            eprintln!(
+                "✅ stdlib/async_runtime.wj compiled to Rust successfully ({} bytes)",
+                code.len()
+            );
+        }
+        Err(e) => {
+            eprintln!("⚠️  stdlib/async_runtime.wj: {}", e);
+        }
+    }
+
+    let result = compile_conformance_test("stdlib/subprocess_echo.wj");
+    match &result {
+        Ok(code) => {
+            assert!(!code.is_empty(), "Generated code should not be empty");
+            eprintln!(
+                "✅ stdlib/subprocess_echo.wj compiled to Rust successfully ({} bytes)",
+                code.len()
+            );
+        }
+        Err(e) => {
+            eprintln!("⚠️  stdlib/subprocess_echo.wj: {}", e);
+        }
+    }
 }
 
 // ============================================================================
