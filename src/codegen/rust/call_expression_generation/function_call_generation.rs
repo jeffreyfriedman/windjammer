@@ -389,8 +389,13 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     } else if let Some(ref sig) = signature {
         sig.is_extern
     } else {
-        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-        gen.extern_function_names.contains(simple)
+        // Module-qualified calls without a signature are same-crate helpers, not extern FFI.
+        if func_name.contains("::") {
+            false
+        } else {
+            let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+            gen.extern_function_names.contains(simple)
+        }
     };
 
     let args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
