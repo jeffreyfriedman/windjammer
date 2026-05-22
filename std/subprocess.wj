@@ -33,6 +33,14 @@ fn read_line_until_prefix(handle: SubprocessHandle, prefix: string) -> Result<st
     Err("use std::subprocess import — maps to runtime")
 }
 
+fn frames_in_agent_command(command: string) -> int {
+    1
+}
+
+fn read_agent_obs_n(handle: SubprocessHandle, count: int) -> Result<string, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
 fn kill(handle: SubprocessHandle) -> Result<(), string> {
     Err("use std::subprocess import — maps to runtime")
 }
