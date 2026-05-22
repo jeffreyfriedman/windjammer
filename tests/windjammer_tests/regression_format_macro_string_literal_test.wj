@@ -1,0 +1,20 @@
+// Regression: format("{}", n) must not emit format!("{}".to_string(), n)
+// Bug: first format template arg incorrectly gets .to_string() applied.
+
+fn int_to_str(n: int) -> string {
+    format("{}", n)
+}
+
+fn concat_template() -> string {
+    let mut out = ""
+    out = out + "id="
+    out = out + int_to_str(42)
+    out
+}
+
+fn main() {
+    let a = int_to_str(7)
+    let b = concat_template()
+    assert(a == "7", "format int")
+    assert(b == "id=42", "string concat")
+}
