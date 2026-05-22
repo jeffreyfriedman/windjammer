@@ -88,19 +88,31 @@ impl<'ast> Analyzer<'ast> {
                         continue;
                     }
 
-                    if matches!(
-                        trait_method_analysis.inferred_ownership.get("self"),
-                        Some(OwnershipMode::Owned)
-                    ) {
-                        // Consuming `self` on the trait is authoritative; do not refine from impls.
-                        updated_methods.insert(method_name, trait_method_analysis);
-                        continue;
-                    }
-
                     let trait_lookup_key = trait_name
                         .rfind("::")
                         .map(|i| &trait_name[i + 2..])
                         .unwrap_or(trait_name.as_str());
+
+                    let trait_method_returns_self = self
+                        .trait_definitions
+                        .get(trait_lookup_key)
+                        .and_then(|decl| decl.methods.iter().find(|m| m.name == method_name))
+                        .is_some_and(|m| {
+                            matches!(
+                                &m.return_type,
+                                Some(Type::Custom(name)) if name == "Self"
+                            )
+                        });
+
+                    if matches!(
+                        trait_method_analysis.inferred_ownership.get("self"),
+                        Some(OwnershipMode::Owned)
+                    ) && trait_method_returns_self
+                    {
+                        // Consuming `self` only when return mentions Self (builders/consumers).
+                        updated_methods.insert(method_name, trait_method_analysis);
+                        continue;
+                    }
                     let explicit_mut_self_contract = self
                         .trait_definitions
                         .get(trait_lookup_key)
@@ -260,6 +272,18 @@ impl<'ast> Analyzer<'ast> {
             analyzed
                 .inferred_ownership
                 .insert("self".to_string(), default_receiver);
+        }
+
+        // Object-safe traits: `fn render(self) -> string` must become `&self` in Rust signatures.
+        if trait_name.is_some() && !self.function_returns_self(func) {
+            if matches!(
+                analyzed.inferred_ownership.get("self"),
+                Some(OwnershipMode::Owned)
+            ) {
+                analyzed
+                    .inferred_ownership
+                    .insert("self".to_string(), OwnershipMode::Borrowed);
+            }
         }
 
         Ok(analyzed)
