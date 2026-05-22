@@ -21,6 +21,8 @@ pub struct AnalysisContext<'a, 'ast> {
     pub current_function_params: &'a [crate::parser::Parameter<'ast>],
     /// Fields of the current struct (if in impl block)
     pub current_struct_fields: &'a HashSet<String>,
+    /// Locals bound in this function (let / for / match) — shadow struct field names
+    pub local_variables: Option<&'a HashSet<String>>,
 }
 
 impl<'a, 'ast> AnalysisContext<'a, 'ast> {
@@ -28,7 +30,124 @@ impl<'a, 'ast> AnalysisContext<'a, 'ast> {
         Self {
             current_function_params: params,
             current_struct_fields: fields,
+            local_variables: None,
         }
+    }
+
+    pub fn with_locals(
+        params: &'a [crate::parser::Parameter<'ast>],
+        fields: &'a HashSet<String>,
+        locals: &'a HashSet<String>,
+    ) -> Self {
+        Self {
+            current_function_params: params,
+            current_struct_fields: fields,
+            local_variables: Some(locals),
+        }
+    }
+
+    fn shadows_struct_field(&self, name: &str) -> bool {
+        self.current_function_params.iter().any(|p| p.name == name)
+            || self
+                .local_variables
+                .is_some_and(|locals| locals.contains(name))
+    }
+}
+
+/// Collect identifier names bound as locals in a function body (including nested blocks).
+pub fn collect_local_bindings(body: &[&Statement]) -> HashSet<String> {
+    let mut locals = HashSet::new();
+    for stmt in body {
+        collect_locals_from_statement(stmt, &mut locals);
+    }
+    locals
+}
+
+fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>) {
+    match stmt {
+        Statement::Let {
+            pattern,
+            else_block,
+            ..
+        } => {
+            collect_locals_from_pattern(pattern, locals);
+            if let Some(block) = else_block {
+                for s in block {
+                    collect_locals_from_statement(s, locals);
+                }
+            }
+        }
+        Statement::For { pattern, body, .. } => {
+            collect_locals_from_pattern(pattern, locals);
+            for s in body {
+                collect_locals_from_statement(*s, locals);
+            }
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            for s in then_block {
+                collect_locals_from_statement(*s, locals);
+            }
+            if let Some(else_b) = else_block {
+                for s in else_b {
+                    collect_locals_from_statement(*s, locals);
+                }
+            }
+        }
+        Statement::While { body, .. }
+        | Statement::Loop { body, .. }
+        | Statement::Thread { body, .. }
+        | Statement::Async { body, .. } => {
+            for s in body {
+                collect_locals_from_statement(*s, locals);
+            }
+        }
+        Statement::Match { arms, .. } => {
+            for arm in arms {
+                collect_locals_from_pattern(&arm.pattern, locals);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_locals_from_pattern(pattern: &crate::parser::Pattern, locals: &mut HashSet<String>) {
+    use crate::parser::{EnumPatternBinding, Pattern};
+    match pattern {
+        Pattern::Identifier(name)
+        | Pattern::Ref(name)
+        | Pattern::RefMut(name)
+        | Pattern::MutBinding(name) => {
+            locals.insert(name.clone());
+        }
+        Pattern::Tuple(patterns) | Pattern::Or(patterns) => {
+            for p in patterns {
+                collect_locals_from_pattern(p, locals);
+            }
+        }
+        Pattern::Reference(inner) => {
+            collect_locals_from_pattern(inner, locals);
+        }
+        Pattern::EnumVariant(_, binding) => match binding {
+            EnumPatternBinding::None | EnumPatternBinding::Wildcard => {}
+            EnumPatternBinding::Single(name) => {
+                locals.insert(name.clone());
+            }
+            EnumPatternBinding::Tuple(patterns) => {
+                for p in patterns {
+                    collect_locals_from_pattern(p, locals);
+                }
+            }
+            EnumPatternBinding::Struct(fields, _) => {
+                for (_, p) in fields {
+                    collect_locals_from_pattern(p, locals);
+                }
+            }
+        },
+        Pattern::Wildcard | Pattern::Literal(_) => {}
     }
 }
 
@@ -404,10 +523,8 @@ fn is_self_field_chain(expr: &Expression) -> bool {
 pub fn expression_accesses_fields(ctx: &AnalysisContext, expr: &Expression) -> bool {
     match expr {
         Expression::Identifier { name, .. } => {
-            // Check if this is a field name, but NOT a parameter name
-            // Parameters shadow fields, so if it's a parameter, it's not a field access
-            let is_param = ctx.current_function_params.iter().any(|p| p.name == *name);
-            !is_param && ctx.current_struct_fields.contains(name)
+            // Parameters and locals shadow struct fields — only bare field names imply self.
+            !ctx.shadows_struct_field(name) && ctx.current_struct_fields.contains(name)
         }
         Expression::FieldAccess { object, .. } => {
             // Check for self.field or nested field access
