@@ -115,13 +115,15 @@ impl<'ast> Analyzer<'ast> {
                         .any(|arm| self.match_arm_some_calls_mut_method_on_binding(arm, registry))
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block
-                    .iter()
-                    .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
+                self.expression_passes_self_field_to_mut_method_arg(condition, registry)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry))
                     || else_block.as_ref().is_some_and(|b| {
                         b.iter().any(|s| {
                             self.statement_mutates_through_self_option_scrutinee(s, registry)
@@ -134,6 +136,48 @@ impl<'ast> Analyzer<'ast> {
             Statement::For { body, .. } => body
                 .iter()
                 .any(|s| self.statement_mutates_through_self_option_scrutinee(s, registry)),
+            _ => false,
+        }
+    }
+
+    /// `if choice.is_available(world, player)` where `world` came from `if let Some(world) = self.world`.
+    fn expression_passes_self_field_to_mut_method_arg(
+        &self,
+        expr: &Expression,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
+        let Some(reg) = registry else {
+            return false;
+        };
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => arguments.iter().enumerate().any(|(i, (_, a))| {
+                self.expression_is_self_field_access(a)
+                    && self.method_call_argument_expects_mut_borrow(object, method, i, reg)
+            }),
+            Expression::Call { function, arguments, .. } => {
+                if let Expression::Identifier { name, .. } = &**function {
+                    if name == "is_available" || name.ends_with("::is_available") {
+                        return arguments.iter().enumerate().any(|(i, (_, a))| {
+                            self.expression_is_self_field_access(a)
+                                && reg
+                                    .get_signature(name)
+                                    .or_else(|| reg.get_signature("Choice::is_available"))
+                                    .and_then(|sig| sig.param_ownership.get(i))
+                                    .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
+                        });
+                    }
+                }
+                false
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_self_field_to_mut_method_arg(left, registry)
+                    || self.expression_passes_self_field_to_mut_method_arg(right, registry)
+            }
             _ => false,
         }
     }
@@ -154,6 +198,98 @@ impl<'ast> Analyzer<'ast> {
             return false;
         }
         self.expr_calls_mut_self_method_on_identifier(arm.body, binding, registry)
+            || self.binding_passed_as_mut_method_argument(arm.body, binding, registry)
+    }
+
+    /// `if let Some(world) = self.world { choice.is_available(world, …) }` needs `&mut self`.
+    fn binding_passed_as_mut_method_argument(
+        &self,
+        expr: &Expression,
+        binding: &str,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
+        let Some(reg) = registry else {
+            return false;
+        };
+        match expr {
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_binding_passed_as_mut_method_argument(s, binding, reg)
+            }),
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => arguments.iter().enumerate().any(|(i, (_, a))| {
+                matches!(a, Expression::Identifier { name, .. } if name == binding)
+                    && self.method_call_argument_expects_mut_borrow(object, method, i, reg)
+            }),
+            _ => false,
+        }
+    }
+
+    fn statement_binding_passed_as_mut_method_argument(
+        &self,
+        stmt: &Statement,
+        binding: &str,
+        reg: &super::SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.binding_passed_as_mut_method_argument(expr, binding, Some(reg))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.binding_passed_as_mut_method_argument(arm.body, binding, Some(reg))
+            }),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.binding_passed_as_mut_method_argument(condition, binding, Some(reg))
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg))
+                    })
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg)),
+            Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg)),
+            _ => false,
+        }
+    }
+
+    fn method_call_argument_expects_mut_borrow(
+        &self,
+        _receiver: &Expression,
+        method: &str,
+        arg_idx: usize,
+        reg: &super::SignatureRegistry,
+    ) -> bool {
+        let sig = reg
+            .get_signature(method)
+            .or_else(|| {
+                // `choice.is_available(world, …)` — registry keys are often qualified.
+                reg.get_signature(&format!("Choice::{}", method))
+            });
+        let Some(sig) = sig else {
+            return false;
+        };
+        let param_idx = if sig.has_self_receiver {
+            arg_idx + 1
+        } else {
+            arg_idx
+        };
+        sig.param_ownership
+            .get(param_idx)
+            .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
     }
 
     pub(crate) fn expr_calls_mut_self_method_on_identifier(

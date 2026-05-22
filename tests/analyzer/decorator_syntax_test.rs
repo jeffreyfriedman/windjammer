@@ -89,6 +89,30 @@ fn test_profile_decorator_emits_tracy_zone() {
 }
 
 #[test]
+fn test_profile_decorator_on_impl_method_emits_tracy_zone() {
+    let source = r#"
+    struct Renderer {}
+
+    impl Renderer {
+        @profile("voxel_do_render_frame")
+        pub fn do_render_frame(self, dt: f32) {
+            let x = dt + 1.0;
+        }
+    }
+    "#;
+
+    let output = parse_and_generate(source);
+    println!("Generated Rust:\n{}", output);
+
+    assert!(
+        output.contains("windjammer_runtime::profiling::tracy_zone"),
+        "impl method @profile must emit tracy_zone. Got:\n{}",
+        output
+    );
+    assert!(output.contains("voxel_do_render_frame"));
+}
+
+#[test]
 fn test_requires_decorator() {
     let source = r#"
     @requires(x > 0)

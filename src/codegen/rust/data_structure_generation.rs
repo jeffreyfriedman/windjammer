@@ -184,6 +184,7 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.generating_assignment_target
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
+            && !self.in_call_argument_generation
         {
             if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                 if let Some(ref analysis) = self.auto_clone_analysis {
@@ -243,6 +244,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     | "size"
                                     | "index"
                                     | "idx"
+                                    | "root"
                                     | "vx"
                                     | "vy"
                                     | "vz"

@@ -90,78 +90,65 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Determine separator: :: for static calls, . for instance methods
+        // Determine separator: :: for static/module calls, . for instance methods
         // - Type/Module (starts with uppercase): use ::
         // - Variable (starts with lowercase): use .
         let separator = match object {
             Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
             Expression::Identifier { name, .. } => {
-                // Check for known module/crate names that should use ::
-                // Note: Avoid common variable names like "path", "config" which are used as variables
-                let known_modules = [
-                    "std",
-                    "serde_json",
-                    "serde",
-                    "tokio",
-                    "reqwest",
-                    "sqlx",
-                    "chrono",
-                    "sha2",
-                    "bcrypt",
-                    "base64",
-                    "rand",
-                    "Vec",
-                    "String",
-                    "Option",
-                    "Result",
-                    "Box",
-                    "Arc",
-                    "Mutex",
-                    "Utc",
-                    "Local",
-                    "DEFAULT_COST",
-                    // Stdlib modules (avoid common variable names)
-                    "mime",
-                    "http",
-                    "fs",
-                    "strings",
-                    // NOTE: "json" removed - it's a common variable name!
-                    // Use "serde_json" for the module instead
-                    "regex",
-                    "cli",
-                    "log",
-                    "crypto",
-                    "io",
-                    "env",
-                    "time",
-                    "sync",
-                    "thread",
-                    "collections",
-                    "cmp",
-                ];
-
-                // Type or module (uppercase) vs variable (lowercase)
-                if name.chars().next().is_some_and(|c| c.is_uppercase())
-                    || name.contains('.')
-                    || known_modules.contains(&name.as_str())
-                {
-                    "::" // Vec::new(), std::fs::read(), serde_json::to_string()
+                // Enum variant paths parse as one identifier: `ShaderFile::HiZCull.to_path()`
+                if Self::is_enum_variant_qualified_path(name) {
+                    "."
                 } else {
-                    "." // x.abs(), value.method()
+                    // Check for known module/crate names that should use ::
+                    // Note: Avoid common variable names like "path", "config" which are used as variables
+                    // Only unambiguous module/type names — never short names used as variables (io, log, fs, …).
+                    let known_modules = [
+                        "std",
+                        "serde_json",
+                        "serde",
+                        "tokio",
+                        "reqwest",
+                        "sqlx",
+                        "chrono",
+                        "sha2",
+                        "bcrypt",
+                        "base64",
+                        "rand",
+                        "Vec",
+                        "String",
+                        "Option",
+                        "Result",
+                        "Box",
+                        "Arc",
+                        "Mutex",
+                        "Utc",
+                        "Local",
+                        "DEFAULT_COST",
+                    ];
+
+                    // Type or module (uppercase) vs variable (lowercase)
+                    if name.chars().next().is_some_and(|c| c.is_uppercase())
+                        || name.contains('.')
+                        || known_modules.contains(&name.as_str())
+                    {
+                        "::" // Vec::new(), std::fs::read(), serde_json::to_string()
+                    } else {
+                        "." // x.abs(), value.method()
+                    }
                 }
             }
             Expression::FieldAccess { ref object, .. } => {
-                // Check if this is a module path (e.g., std::fs) or a field access (e.g., self.count)
-                // If the object is an identifier that looks like a module, use ::
-                // Otherwise, use . for instance methods on fields
+                // Type::Variant.method() in Windjammer (enum variant receiver) must lower to
+                // `(Type::Variant).method()` in Rust — not `Type::Variant::method()`.
                 match object {
                     Expression::Identifier { name, .. }
-                        if (name.chars().next().is_some_and(|c| c.is_uppercase())
-                            || name == "std") =>
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) =>
                     {
-                        "::" // Module::path::method() -> static method
+                        "." // ShaderFile::HiZCull.to_path() → (ShaderFile::HiZCull).to_path()
                     }
-                    _ => ".", // Default to instance method
+                    Expression::Identifier { name, .. } if name == "std" => "::",
+                    _ => ".", // self.field.method()
                 }
             }
             _ => ".", // Instance method on expressions
@@ -304,5 +291,19 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         base_expr
+    }
+
+    /// `Type::Variant` in expressions is parsed as a single qualified identifier, not FieldAccess.
+    pub(in crate::codegen::rust) fn is_enum_variant_qualified_path(name: &str) -> bool {
+        let mut parts = name.split("::");
+        let type_name = parts.next();
+        let variant = parts.next();
+        parts.next().is_none()
+            && type_name.is_some_and(|t| t.chars().next().is_some_and(|c| c.is_uppercase()))
+            && variant.is_some_and(|v| {
+                !v.is_empty()
+                    && !v.starts_with('<')
+                    && v.chars().all(|c| c.is_alphanumeric() || c == '_')
+            })
     }
 }
