@@ -61,6 +61,48 @@ pub fn get<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
     value.get(key)
 }
 
+/// Type predicates (Windjammer `std::json` surface)
+pub fn is_object(value: &Value) -> bool {
+    value.is_object()
+}
+
+pub fn is_array(value: &Value) -> bool {
+    value.is_array()
+}
+
+pub fn is_string(value: &Value) -> bool {
+    value.is_string()
+}
+
+pub fn is_number(value: &Value) -> bool {
+    value.is_number()
+}
+
+pub fn is_bool(value: &Value) -> bool {
+    value.is_boolean()
+}
+
+pub fn is_null(value: &Value) -> bool {
+    value.is_null()
+}
+
+/// Value coercions
+pub fn as_str(value: &Value) -> Option<String> {
+    value.as_str().map(|s| s.to_string())
+}
+
+pub fn as_i64(value: &Value) -> Option<i64> {
+    value.as_i64()
+}
+
+pub fn as_f64(value: &Value) -> Option<f64> {
+    value.as_f64()
+}
+
+pub fn as_bool(value: &Value) -> Option<bool> {
+    value.as_bool()
+}
+
 /// Get string from object by key
 pub fn get_string(value: &Value, key: &str) -> Option<String> {
     value
@@ -176,5 +218,27 @@ mod tests {
         let empty_array = array();
         assert_eq!(len(&empty_array), 0);
         assert!(is_empty(&empty_array));
+    }
+
+    #[test]
+    fn test_type_predicates_and_coercions() {
+        let value = parse(r#"{"name":"Alice","age":30,"active":true,"nil":null}"#).unwrap();
+        assert!(is_object(&value));
+        assert!(!is_array(&value));
+
+        let name = get(&value, "name").unwrap();
+        assert!(is_string(name));
+        assert_eq!(as_str(name), Some("Alice".to_string()));
+
+        let age = get(&value, "age").unwrap();
+        assert!(is_number(age));
+        assert_eq!(as_i64(age), Some(30));
+
+        let active = get(&value, "active").unwrap();
+        assert!(is_bool(active));
+        assert_eq!(as_bool(active), Some(true));
+
+        let nil = get(&value, "nil").unwrap();
+        assert!(is_null(nil));
     }
 }
