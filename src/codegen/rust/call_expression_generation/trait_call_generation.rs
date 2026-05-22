@@ -61,7 +61,20 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         )
     };
 
-    let call_str = format!("{}.{}({})", obj_str, call_method, args.join(", "));
+    // Type constructors: Vec::new(), HashMap::with_capacity() — not instance methods.
+    let separator = match call_obj {
+        Expression::Identifier { name, .. } => {
+            if CodeGenerator::is_enum_variant_qualified_path(name)
+                || name.chars().next().is_some_and(|c| c.is_uppercase())
+            {
+                "::"
+            } else {
+                "."
+            }
+        }
+        _ => ".",
+    };
+    let call_str = format!("{}{}{}({})", obj_str, separator, call_method, args.join(", "));
 
     let is_extern_call = method_signature.as_ref().is_some_and(|sig| sig.is_extern)
         || gen

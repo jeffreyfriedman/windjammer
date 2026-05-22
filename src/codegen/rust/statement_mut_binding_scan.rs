@@ -120,13 +120,24 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type)),
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == binding
                         && self.method_mutates_via_registry_or_sig(method, binding_type)
                     {
                         return true;
                     }
+                }
+                if arguments.iter().enumerate().any(|(i, (_, a))| {
+                    matches!(a, Expression::Identifier { name, .. } if name == binding)
+                        && self.method_call_argument_expects_mut_borrow(object, method, i)
+                }) {
+                    return true;
                 }
                 self.binding_receives_mutating_call_with_sig_check(object, binding, binding_type)
             }
@@ -209,6 +220,32 @@ impl<'ast> CodeGenerator<'ast> {
                 .unwrap_or(false),
             _ => false,
         }
+    }
+
+    /// Whether argument `arg_idx` of `receiver.method(...)` expects `&mut` (e.g. `is_available(world, …)`).
+    fn method_call_argument_expects_mut_borrow(
+        &self,
+        receiver: &Expression<'ast>,
+        method: &str,
+        arg_idx: usize,
+    ) -> bool {
+        let recv_type = self.infer_expression_type(receiver);
+        let type_name = match recv_type.as_ref() {
+            Some(Type::Custom(name)) => name.as_str(),
+            _ => return false,
+        };
+        let qualified = format!("{}::{}", type_name, method);
+        let Some(sig) = self.signature_registry.get_signature(&qualified) else {
+            return false;
+        };
+        let param_idx = if sig.has_self_receiver {
+            arg_idx + 1
+        } else {
+            arg_idx
+        };
+        sig.param_ownership
+            .get(param_idx)
+            .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
     }
 
     /// Check if a method on the given type is known to mutate its receiver,

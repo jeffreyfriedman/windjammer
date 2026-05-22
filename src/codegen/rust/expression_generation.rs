@@ -644,6 +644,31 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::literals::generate_literal(lit)
             }
             Literal::Float(f) => {
+                // Struct field annotations beat float inference (avoids `100.0_f64` in `f32` slots).
+                if self.in_struct_literal_field {
+                    if let (Some(struct_name), Some(field_name)) = (
+                        &self.current_struct_literal_name,
+                        &self.current_struct_field_name,
+                    ) {
+                        if let Some(field_type) = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|fields| fields.get(field_name))
+                        {
+                            if let Some(suffix) =
+                                float_type_utilities::try_extract_float_type(field_type)
+                            {
+                                let s = f.to_string();
+                                return if !s.contains('.') && !s.contains('e') && !s.contains('E')
+                                {
+                                    format!("{}.0_{}", s, suffix)
+                                } else {
+                                    format!("{}_{}", s, suffix)
+                                };
+                            }
+                        }
+                    }
+                }
+
                 // Priority 1: Use inference engine results (most accurate)
                 if let Some(inference) = &self.float_inference {
                     use crate::type_inference::FloatType;

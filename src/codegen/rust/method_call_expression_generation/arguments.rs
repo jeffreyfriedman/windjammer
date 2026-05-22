@@ -182,11 +182,21 @@ impl<'ast> CodeGenerator<'ast> {
                 // compiler generates `filter(|__e| predicate(__e))`.
                 if i == 0
                     && crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
-                    && matches!(arg, Expression::Identifier { .. })
                 {
-                    // Bare identifier (function pointer) passed to iterator adapter -
-                    // wrap in closure so Rust's auto-deref handles &&T -> &T.
-                    arg_str = format!("|__e| {}(__e)", arg_str);
+                    if let Expression::Identifier { name, .. } = arg {
+                        // Only wrap bare function pointers — not params/locals (e.g. filter(asset_type)).
+                        let is_param = self
+                            .current_function_params
+                            .iter()
+                            .any(|p| p.name == *name);
+                        let is_local = self
+                            .local_variable_scopes
+                            .iter()
+                            .any(|scope| scope.contains(name));
+                        if !is_param && !is_local {
+                            arg_str = format!("|__e| {}(__e)", arg_str);
+                        }
+                    }
                 }
 
                 // TDD FIX: String literal ownership conversion
@@ -254,6 +264,33 @@ impl<'ast> CodeGenerator<'ast> {
                 // When passing a Phase 2 optimized &str parameter to a method expecting owned String, convert it
                 // This handles cases like: HashMap::insert(key, value) where key is &str but insert expects String
                 if let Expression::Identifier { name, .. } = arg_to_generate {
+                    let is_string_const = name.starts_with("SCOPE_")
+                        || self
+                            .auto_clone_analysis
+                            .as_ref()
+                            .is_some_and(|a| a.string_literal_vars.contains(name));
+                    let sig_param_idx = if method_signature
+                        .as_ref()
+                        .is_some_and(|s| s.has_self_receiver)
+                    {
+                        i + 1
+                    } else {
+                        i
+                    };
+                    let wants_string = method_signature.as_ref().and_then(|sig| {
+                        sig.param_types.get(sig_param_idx).map(|ty| {
+                            matches!(ty, Type::String)
+                                || matches!(ty, Type::Custom(n) if n == "string" || n == "String")
+                        })
+                    }).unwrap_or(false);
+                    // `Vec<String>::push(SCOPE_*)` — push param is generic `T`; const is `&'static str`.
+                    let needs_owned_string =
+                        wants_string || (method == "push" && is_string_const);
+                    if needs_owned_string && is_string_const && !arg_str.ends_with(".to_string()")
+                    {
+                        arg_str = format!("{}.to_string()", arg_str);
+                    }
+
                     let is_str_ref_optimized =
                         self.str_ref_optimized_params.contains(name.as_str());
 
@@ -353,6 +390,24 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // `if let Some(world) = &mut self.world` — pass owned `World`/`Entity`, not `&mut world`.
+                if let Expression::Identifier { name, .. } = arg_to_generate {
+                    if self.match_arm_bindings.contains(name.as_str()) {
+                        if let Some(ref sig) = method_signature {
+                            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            let wants_owned = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
+                                matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
+                            });
+                            if wants_owned && !arg_str.ends_with(".clone()") {
+                                let base = arg_str
+                                    .trim_start_matches("&mut ")
+                                    .trim_start_matches('&');
+                                arg_str = format!("{}.clone()", base);
+                            }
+                        }
+                    }
+                }
+
                 // AUTO-MUT-BORROW: Add &mut when parameter expects MutBorrowed
                 if let Some(ref sig) = method_signature {
                     let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
@@ -360,7 +415,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .param_ownership
                         .get(sig_param_idx)
                         .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed));
-                    if param_is_mut_borrowed {
+                    let param_wants_owned_value = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
+                        matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
+                    });
+                    if param_is_mut_borrowed && !param_wants_owned_value {
                         let is_already_mut_ref =
                             if let Expression::Identifier { name, .. } = arg {
                                 let explicit_mut_ref = self.current_function_params.iter().any(|param| {
