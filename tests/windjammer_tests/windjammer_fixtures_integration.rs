@@ -230,3 +230,7 @@ fixture!(
     regression_logger_owned_passthrough,
     "regression_logger_owned_passthrough_test.wj"
 );
+fixture!(
+    regression_format_macro_string_literal,
+    "regression_format_macro_string_literal_test.wj"
+);
