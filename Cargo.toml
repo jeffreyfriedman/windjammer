@@ -2187,6 +2187,10 @@ name = "codegen_copy_type_method_arg_test"
 path = "tests/codegen/rust/codegen_copy_type_method_arg_test.rs"
 
 [[test]]
+name = "enum_variant_method_call_test"
+path = "tests/codegen/enum_variant_method_call_test.rs"
+
+[[test]]
 name = "codegen_copy_type_no_clone_test"
 path = "tests/codegen/rust/codegen_copy_type_no_clone_test.rs"
 

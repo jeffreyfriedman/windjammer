@@ -75,6 +75,10 @@ static KNOWN_METHODS: &[MethodEntry] = &[
     m("rotate_right", MUT),
     m("set_len", MUT),
     m("push_str", MUT | STORE),
+    // ── Game engine render paths (dogfooding) ──
+    m("render_frame", MUT),
+    m("update_camera", MUT),
+    m("rebuild_shader_graph", MUT),
     m("push_front", MUT | STORE),
     m("push_back", MUT | STORE),
     m("pop_front", MUT),

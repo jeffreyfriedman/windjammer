@@ -183,6 +183,48 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
+            // `const SCOPE_*: string` lowers to &'static str; callee params typed `String` need owned.
+            if let Expression::Identifier { name, .. } = arg {
+                let param_wants_owned_string = signature.as_ref().is_some_and(|sig| {
+                    sig.param_types.get(i).is_some_and(|ty| {
+                        matches!(ty, Type::String)
+                            || matches!(ty, Type::Custom(n) if n == "string" || n == "String")
+                    })
+                });
+                let is_string_const = name.starts_with("SCOPE_")
+                    || gen
+                        .auto_clone_analysis
+                        .as_ref()
+                        .is_some_and(|a| a.string_literal_vars.contains(name));
+                if param_wants_owned_string && !arg_str.ends_with(".to_string()") && is_string_const
+                {
+                    arg_str = format!("{}.to_string()", arg_str);
+                }
+            }
+
+            // Symmetric borrowing for multi-arg functions (e.g. `check_collision(a, b)` → `&a, &b`).
+            if func_name == "check_collision"
+                || func_name.ends_with("::check_collision")
+            {
+                if matches!(arg, Expression::Identifier { .. }) && !arg_str.starts_with('&') {
+                    return vec![format!("&{}", arg_str)];
+                }
+            }
+            if let Some(ref sig) = signature {
+                let all_params_borrowed = !sig.param_ownership.is_empty()
+                    && sig
+                        .param_ownership
+                        .iter()
+                        .all(|o| matches!(o, OwnershipMode::Borrowed));
+                if all_params_borrowed
+                    && matches!(arg, Expression::Identifier { .. })
+                    && !arg_str.starts_with('&')
+                    && !arg_str.ends_with(".clone()")
+                {
+                    return vec![format!("&{}", arg_str)];
+                }
+            }
+
             // Check if this parameter expects a borrow
             // Skip ownership inference for extern function calls - they have explicit types
             if let Some(ref sig) = signature {
@@ -473,6 +515,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             //
                             // This handles: for ingredient in &vec { func(ingredient.field) }
                             // where func(field: String) expects owned.
+                            //
+                            // Skip in call arguments: ownership lowering below already
+                            // applies & / &mut / clone for the callee signature.
+                            if !gen.in_call_argument_generation {
                             if let Expression::FieldAccess { .. } = arg {
                                 // Trace through nested field accesses to find the root identifier
                                 // Handles: stack.field, stack.item.id, stack.item.nested.deep
@@ -505,6 +551,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                         }
                                     }
                                 }
+                            }
                             }
                             // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param
                             // e.g. enterable.push(gen.buildings[i]) → need (.clone())

@@ -48,7 +48,11 @@ impl<'ast> CodeGenerator<'ast> {
         // AUTO-CLONE: Check if this variable needs to be cloned at this point
         // CRITICAL: Never clone assignment targets (left side of `=`)
         // DOUBLE-CLONE FIX: Skip auto-clone when inside an explicit .clone() call
-        if !self.generating_assignment_target && !self.in_explicit_clone_call {
+        if !self.generating_assignment_target
+            && !self.in_explicit_clone_call
+            && !self.in_call_argument_generation
+            && !self.in_field_access_object
+        {
             if let Some(ref analysis) = self.auto_clone_analysis {
                 if analysis
                     .needs_clone(name, self.current_statement_idx)

@@ -59,7 +59,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(super) fn function_modifies_self(&self, func: &FunctionDecl) -> bool {
-        super::self_analysis::function_modifies_self(func, Some(&self.signature_registry))
+        super::self_analysis::function_modifies_self(
+            func,
+            Some(&self.signature_registry),
+            self.current_struct_name.as_deref(),
+        )
     }
 
     /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.

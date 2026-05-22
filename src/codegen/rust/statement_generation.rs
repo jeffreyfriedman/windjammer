@@ -559,7 +559,17 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(b) = Self::some_pattern_single_binding(&main_arm.pattern) else {
             return false;
         };
-        self.expr_binding_receives_mutating_method_call(main_arm.body, b)
+        if self.expr_binding_receives_mutating_method_call(main_arm.body, b) {
+            return true;
+        }
+        if let Some(Type::Option(inner)) = self.infer_expression_type(scrutinee) {
+            return self.binding_receives_mutating_call_with_sig_check(
+                main_arm.body,
+                b,
+                inner.as_ref(),
+            );
+        }
+        false
     }
 
     /// Check if expression is self.field (or self.field.subfield) - traces to self
@@ -627,7 +637,22 @@ impl<'ast> CodeGenerator<'ast> {
                                 return Some("usize".to_string());
                             }
                         }
-                        return Some("i64".to_string());
+                        if let Some(fields) = self.lookup_struct_field_types(base_name) {
+                            if let Some(ty) = fields.get(field.as_str()) {
+                                if matches!(ty, Type::Custom(n) if n == "usize") {
+                                    return Some("usize".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "f32") {
+                                    return Some("f32".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "i32") {
+                                    return Some("i32".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "i64" || n == "int") {
+                                    return Some("i64".to_string());
+                                }
+                            }
+                        }
                     }
                 }
             }

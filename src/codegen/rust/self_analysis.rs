@@ -92,9 +92,13 @@ pub fn function_returns_self_type(func: &FunctionDecl) -> bool {
 ///
 /// Uses the `SignatureRegistry` to look up method signatures instead of
 /// maintaining a hardcoded list of known readonly methods.
-pub fn function_modifies_self(func: &FunctionDecl, registry: Option<&SignatureRegistry>) -> bool {
+pub fn function_modifies_self(
+    func: &FunctionDecl,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
     for stmt in &func.body {
-        if statement_modifies_self(stmt, registry) {
+        if statement_modifies_self(stmt, registry, struct_name) {
             return true;
         }
     }
@@ -106,13 +110,17 @@ pub fn function_modifies_self(func: &FunctionDecl, registry: Option<&SignatureRe
 // =============================================================================
 
 /// Check if a statement modifies self
-pub fn statement_modifies_self(stmt: &Statement, registry: Option<&SignatureRegistry>) -> bool {
+pub fn statement_modifies_self(
+    stmt: &Statement,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
     match stmt {
         Statement::Assignment { target, .. } => {
             // Check if target is self.field
             expression_is_self_field_modification(target)
         }
-        Statement::Expression { expr, .. } => expression_modifies_self(expr, registry),
+        Statement::Expression { expr, .. } => expression_modifies_self(expr, registry, struct_name),
         Statement::If {
             then_block,
             else_block,
@@ -120,19 +128,25 @@ pub fn statement_modifies_self(stmt: &Statement, registry: Option<&SignatureRegi
         } => {
             then_block
                 .iter()
-                .any(|s| statement_modifies_self(s, registry))
-                || else_block
-                    .as_ref()
-                    .is_some_and(|block| block.iter().any(|s| statement_modifies_self(s, registry)))
+                .any(|s| statement_modifies_self(s, registry, struct_name))
+                || else_block.as_ref().is_some_and(|block| {
+                    block
+                        .iter()
+                        .any(|s| statement_modifies_self(s, registry, struct_name))
+                })
         }
-        Statement::While { body, .. } => body.iter().any(|s| statement_modifies_self(s, registry)),
+        Statement::While { body, .. } => body
+            .iter()
+            .any(|s| statement_modifies_self(s, registry, struct_name)),
         Statement::For { iterable, body, .. } => {
-            expression_modifies_self(iterable, registry)
-                || body.iter().any(|s| statement_modifies_self(s, registry))
+            expression_modifies_self(iterable, registry, struct_name)
+                || body
+                    .iter()
+                    .any(|s| statement_modifies_self(s, registry, struct_name))
         }
         Statement::Match { arms, .. } => arms
             .iter()
-            .any(|arm| expression_modifies_self(arm.body, registry)),
+            .any(|arm| expression_modifies_self(arm.body, registry, struct_name)),
         _ => false,
     }
 }
@@ -284,30 +298,42 @@ pub fn expression_is_self_field_modification(expr: &Expression) -> bool {
 /// 3. For unknown methods (not in stdlib and not in registry), default to **not mutating**.
 ///    The assignment-level check (`self.field = ...`) already catches actual field
 ///    mutations, so method calls that aren't known-mutating are safe to assume readonly.
-pub fn expression_modifies_self(expr: &Expression, registry: Option<&SignatureRegistry>) -> bool {
+pub fn expression_modifies_self(
+    expr: &Expression,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
     match expr {
         Expression::Block { statements, .. } => statements
             .iter()
-            .any(|s| statement_modifies_self(s, registry)),
+            .any(|s| statement_modifies_self(s, registry, struct_name)),
         Expression::MethodCall {
             object,
             method,
             arguments,
             ..
         } => {
-            if is_self_field_chain(object) {
-                if method_is_mutating(method, registry) {
-                    return true;
-                }
+            let receiver_mutates = matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                || is_self_field_chain(object);
+            if receiver_mutates && method_is_mutating(method, registry, struct_name) {
+                return true;
             }
 
             arguments
                 .iter()
-                .any(|(_, arg)| expression_modifies_self(arg, registry))
+                .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name))
         }
         Expression::Call { arguments, .. } => arguments
             .iter()
-            .any(|(_, arg)| expression_modifies_self(arg, registry)),
+            .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name)),
+        Expression::Binary { left, right, .. } => {
+            expression_modifies_self(left, registry, struct_name)
+                || expression_modifies_self(right, registry, struct_name)
+        }
+        Expression::Unary { operand, .. } => {
+            expression_modifies_self(operand, registry, struct_name)
+        }
+        Expression::Cast { expr, .. } => expression_modifies_self(expr, registry, struct_name),
         _ => false,
     }
 }
@@ -319,12 +345,29 @@ pub fn expression_modifies_self(expr: &Expression, registry: Option<&SignatureRe
 /// 1. stdlib `method_mutates_receiver` → definitively mutating (push, insert, clear, etc.)
 /// 2. SignatureRegistry lookup → use the analyzed ownership of the self receiver
 /// 3. Unknown → default to not-mutating (assignment detection covers actual field writes)
-fn method_is_mutating(method: &str, registry: Option<&SignatureRegistry>) -> bool {
+fn method_is_mutating(
+    method: &str,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
     if super::stdlib_method_traits::method_mutates_receiver(method) {
         return true;
     }
 
     if let Some(reg) = registry {
+        if let Some(ctx) = struct_name {
+            let qualified = format!("{}::{}", ctx, method);
+            if let Some(sig) = reg.get_signature(&qualified) {
+                if sig.has_self_receiver
+                    && sig
+                        .param_ownership
+                        .first()
+                        .is_some_and(|o| *o == OwnershipMode::MutBorrowed)
+                {
+                    return true;
+                }
+            }
+        }
         if let Some(sig) = lookup_method_in_registry(reg, method) {
             return sig.has_self_receiver
                 && sig
