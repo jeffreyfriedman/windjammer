@@ -275,6 +275,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 .get(&param.name)
                                 .unwrap_or(&OwnershipMode::Owned);
 
+                            if std::env::var("WJ_DEBUG_CODEGEN").is_ok() {
+                                eprintln!(
+                                    "  [CODEGEN] param={} fn={} ownership={:?} all_keys={:?}",
+                                    param.name, func.name, ownership_mode,
+                                    analyzed.inferred_ownership.keys().collect::<Vec<_>>()
+                                );
+                            }
 
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's

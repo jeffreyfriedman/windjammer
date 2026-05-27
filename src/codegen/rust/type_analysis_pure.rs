@@ -5,6 +5,7 @@ use crate::parser::Type;
 pub fn is_copy_type(ty: &Type) -> bool {
     match ty {
         Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::String => false,
         Type::Reference(_) => true,           // References are Copy
         Type::MutableReference(_) => false,   // Mutable references are not Copy
         Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)

@@ -47,17 +47,18 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             if returns_string {
-                // String literal needs .to_string()
+                // String literal needs owned String — use .into(), not .to_string() (no Rust leakage)
                 if matches!(
                     e,
                     Expression::Literal {
                         value: Literal::String(_),
                         ..
                     }
-                ) && !return_str.ends_with(".to_string()")
+                ) && !return_str.ends_with(".into()")
                     && return_str != "String::new()"
                 {
-                    return_str = format!("{}.to_string()", return_str);
+                    return_str =
+                        crate::codegen::rust::literals::string_literal_to_owned_rust(&return_str);
                 }
                 // param.clone() where param: &str → param.to_string()
                 // &str.clone() returns &str, but we need String
@@ -74,8 +75,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.contains(name) && is_string_type;
 
                             if is_borrowed_str_param {
-                                // Replace .clone() with .to_string()
-                                return_str = return_str.replace(".clone()", ".to_string()");
+                                // Replace .clone() with .into()
+                                return_str = return_str.replace(".clone()", ".into()");
                             }
                         }
                     }
@@ -138,7 +139,26 @@ impl<'ast> CodeGenerator<'ast> {
             // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
             // Never apply to &mut … — functions returning &mut T must pass the reference through
             // (e.g. return &mut self.items[i], not (&mut self.items[i]).clone()).
-            if return_str.starts_with("&")
+            let mut needs_index_return_clone = false;
+            if matches!(e, Expression::Index { .. })
+                && !return_str.ends_with(".clone()")
+                && !return_str.starts_with("&mut")
+            {
+                let expects_owned = !matches!(
+                    &self.current_function_return_type,
+                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                );
+                if expects_owned {
+                    let is_copy = self
+                        .infer_expression_type(e)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    needs_index_return_clone = !is_copy;
+                }
+            }
+            if needs_index_return_clone {
+                return_str = format!("{}.clone()", return_str);
+            } else if return_str.starts_with("&")
                 && !return_str.starts_with("&mut")
                 && !return_str.ends_with(".clone()")
             {

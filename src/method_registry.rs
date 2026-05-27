@@ -112,6 +112,10 @@ static KNOWN_METHODS: &[MethodEntry] = &[
     m("keys", ITER | COMMON),
     m("values", ITER | COMMON),
     m("binary_search", COMMON),
+    m("to_le_bytes", COMMON),
+    m("to_be_bytes", COMMON),
+    m("from_le_bytes", COMMON),
+    m("from_be_bytes", COMMON),
     // ── Iterators: read-only ──
     m("iter", ITER | COMMON),
     m("into_iter", ITER),

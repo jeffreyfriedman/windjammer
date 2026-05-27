@@ -112,14 +112,56 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_field_access_obj = self.in_field_access_object;
                 self.in_field_access_object = false;
+                let prev_in_call_arg = self.in_call_argument_generation;
+                self.in_call_argument_generation = true;
                 let prev_coerce_string_literals = self.coerce_string_literals_to_owned;
                 self.coerce_string_literals_to_owned = false;
                 let prev_match_arm_str = self.in_match_arm_needing_string;
                 self.in_match_arm_needing_string = false;
                 let mut arg_str = self.generate_expression(arg_to_generate);
-                self.coerce_string_literals_to_owned = prev_coerce_string_literals;
                 self.in_match_arm_needing_string = prev_match_arm_str;
+                self.coerce_string_literals_to_owned = prev_coerce_string_literals;
+                self.in_call_argument_generation = prev_in_call_arg;
                 self.in_field_access_object = prev_field_access_obj;
+
+                // Owned params still need `.clone()` when the arg is a non-Copy binding; suppressing
+                // auto-clone during `generate_expression` (above) skips spurious clones for
+                // `&mut` pattern bindings (e.g. `world` from `if let Some(world) = &mut self.world`).
+                let sig_param_idx_early = if method_signature
+                    .as_ref()
+                    .is_some_and(|s| s.has_self_receiver)
+                {
+                    i + 1
+                } else {
+                    i
+                };
+                if method_signature
+                    .as_ref()
+                    .and_then(|sig| sig.param_ownership.get(sig_param_idx_early))
+                    .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
+                {
+                    let is_copy = self
+                        .infer_expression_type(arg_to_generate)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    let is_mut_ref_binding = self
+                        .infer_expression_type(arg_to_generate)
+                        .as_ref()
+                        .is_some_and(|t| {
+                            matches!(t, Type::MutableReference(_))
+                                || matches!(t, Type::Reference(_))
+                        });
+                    if !is_copy
+                        && !is_mut_ref_binding
+                        && !arg_str.ends_with(".clone()")
+                        && matches!(
+                            arg_to_generate,
+                            Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                        )
+                    {
+                        arg_str = format!("{}.clone()", arg_str);
+                    }
+                }
 
                 // TDD FIX: PHASE 2 CALL-SITE OPTIMIZATION
                 // Strip unnecessary .to_string() when parameter was optimized to &str
@@ -210,6 +252,15 @@ impl<'ast> CodeGenerator<'ast> {
                 let string_literal_converted = if is_string_literal {
                     // Check what the parameter wants
 
+                    let asref_str_module = match object {
+                        Expression::Identifier { name, .. } => {
+                            self.is_imported_runtime_std_module(name)
+                        }
+                        _ => type_name
+                            .as_deref()
+                            .is_some_and(|t| self.is_imported_runtime_std_module(t)),
+                    };
+
                     // CRITICAL: Check if parameter is explicitly &str (not inferred &String)
                     // Explicit &str parameters should NOT get .to_string() conversion
                     let param_type = method_signature
@@ -222,18 +273,31 @@ impl<'ast> CodeGenerator<'ast> {
                         false
                     };
 
-                    if is_explicit_str_ref {
+                    if is_explicit_str_ref || asref_str_module {
                         // Explicit &str parameter - no conversion needed
                         false
                     } else {
                         match param_ownership {
                             Some(&OwnershipMode::Owned) | Some(&OwnershipMode::Borrowed) => {
+                                // Runtime `strings::*` and similar APIs take `AsRef<str>` — borrow, don't move.
+                                if asref_str_module {
+                                    if matches!(
+                                        arg_to_generate,
+                                        Expression::FieldAccess { .. }
+                                            | Expression::Identifier { .. }
+                                    ) && !arg_str.starts_with('&')
+                                    {
+                                        arg_str = format!("&{}", arg_str);
+                                    }
+                                    false
+                                } else {
                                 // TDD FIX: Both Owned and Borrowed string params need .to_string()
                                 // Owned → String needs .to_string()
                                 // Borrowed → &String needs .to_string() (then & is added later)
                                 // String literals are &str, must allocate to get String/&String
                                 arg_str = format!("{}.to_string()", arg_str);
                                 true // Mark that we converted
+                                }
                             }
                             _ => {
                                 // No signature info - use heuristic (fallback to old logic)
@@ -249,6 +313,34 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     false
                 };
+
+                // Runtime std modules (`strings.len(self.text)`) take `AsRef<str>` — borrow
+                // owned string fields/vars instead of moving out of `&mut self`.
+                if !is_string_literal {
+                    let asref_str_module = match object {
+                        Expression::Identifier { name, .. } => {
+                            self.is_imported_runtime_std_module(name)
+                        }
+                        _ => type_name
+                            .as_deref()
+                            .is_some_and(|t| self.is_imported_runtime_std_module(t)),
+                    };
+                    let arg_is_string = self.infer_expression_type(arg_to_generate).as_ref().is_some_and(|t| {
+                        matches!(t, Type::String)
+                            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                    });
+                    if asref_str_module
+                        && arg_is_string
+                        && matches!(
+                            arg_to_generate,
+                            Expression::FieldAccess { .. } | Expression::Identifier { .. }
+                        )
+                        && !arg_str.starts_with('&')
+                        && !arg_str.ends_with(".clone()")
+                    {
+                        arg_str = format!("&{}", arg_str);
+                    }
+                }
 
                 // TDD FIX: If we converted string literal for Borrowed parameter,
                 // we need to add & since .to_string() produces String but param wants &String
@@ -324,6 +416,36 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // AUTO .clone(): Add .clone() when needed for borrowed values
+                if let Expression::Identifier { name, .. } = arg {
+                    let sig_param_idx = if method_signature
+                        .as_ref()
+                        .is_some_and(|s| s.has_self_receiver)
+                    {
+                        i + 1
+                    } else {
+                        i
+                    };
+                    let param_is_mut_borrowed = method_signature
+                        .as_ref()
+                        .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                        .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed))
+                        || method_signature.as_ref().and_then(|sig| {
+                            sig.param_types.get(sig_param_idx).map(|t| {
+                                matches!(t, Type::MutableReference(_))
+                            })
+                        }).unwrap_or(false);
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if !param_is_mut_borrowed
+                            && analysis
+                                .needs_clone(name, self.current_statement_idx)
+                                .is_some()
+                            && !arg_str.ends_with(".clone()")
+                        {
+                            arg_str = format!("{}.clone()", arg_str);
+                        }
+                    }
+                }
+
                 if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_clone(
                     arg,
                     &arg_str,
@@ -395,10 +517,17 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.match_arm_bindings.contains(name.as_str()) {
                         if let Some(ref sig) = method_signature {
                             let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            let param_is_mut_borrowed = sig
+                                .param_ownership
+                                .get(sig_param_idx)
+                                .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed));
                             let wants_owned = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
                                 matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
                             });
-                            if wants_owned && !arg_str.ends_with(".clone()") {
+                            if wants_owned
+                                && !param_is_mut_borrowed
+                                && !arg_str.ends_with(".clone()")
+                            {
                                 let base = arg_str
                                     .trim_start_matches("&mut ")
                                     .trim_start_matches('&');
@@ -414,7 +543,10 @@ impl<'ast> CodeGenerator<'ast> {
                     let param_is_mut_borrowed = sig
                         .param_ownership
                         .get(sig_param_idx)
-                        .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed));
+                        .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed))
+                        || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                            matches!(t, Type::MutableReference(_))
+                        });
                     let param_wants_owned_value = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
                         matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
                     });

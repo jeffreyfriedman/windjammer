@@ -151,6 +151,13 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(alias_name.clone(), last_segment.clone());
                 }
             }
+            if let Item::Use { path, .. } = item {
+                if path.len() == 2 && path[0] == "std" {
+                    if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(&path[1]) {
+                        self.runtime_std_module_imports.insert(path[1].clone());
+                    }
+                }
+            }
         }
 
         // Check for stdlib modules that need special imports

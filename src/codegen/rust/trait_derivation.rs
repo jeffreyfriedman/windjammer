@@ -172,11 +172,15 @@ impl CodeGenerator<'_> {
         use crate::parser::Type;
         match ty {
             Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+            Type::String => false,
             Type::Reference(_) => true,
             Type::MutableReference(_) => false,
             Type::RawPointer { .. } => true,
             Type::Tuple(types) => types.iter().all(|t| self.is_copy_type_with_registry(t)),
             Type::Custom(name) => {
+                if self.non_copy_types_registry.contains(name.as_str()) {
+                    return false;
+                }
                 let is_primitive = crate::type_classification::is_copy_primitive(name);
                 is_primitive || self.copy_types_registry.contains(name.as_str())
             }
@@ -198,10 +202,12 @@ impl CodeGenerator<'_> {
         use crate::parser::EnumVariantData;
         variants.iter().all(|variant| match &variant.data {
             EnumVariantData::Unit => true,
-            EnumVariantData::Tuple(types) => types.iter().all(type_analysis::is_copy_type),
+            EnumVariantData::Tuple(types) => {
+                types.iter().all(|t| self.is_copy_type_with_registry(t))
+            }
             EnumVariantData::Struct(fields) => fields
                 .iter()
-                .all(|(_, field_type)| type_analysis::is_copy_type(field_type)),
+                .all(|(_, field_type)| self.is_copy_type_with_registry(field_type)),
         })
     }
 

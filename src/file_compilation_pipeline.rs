@@ -15,17 +15,31 @@ use crate::output_generation::{
     generate_main_rust_code, write_single_file_outputs, MainCodegenOutcome,
 };
 
+/// Walk up from `start` to find a directory containing `metadata.json` (typically `src/`).
+fn metadata_search_root(start: &Path) -> std::path::PathBuf {
+    let mut dir = start.to_path_buf();
+    loop {
+        if dir.join("metadata.json").exists() {
+            return dir;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    start.to_path_buf()
+}
+
 pub fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target, true);
-    // For single-file compilation, use parent directory as source root
-    let source_root = input_path.parent().unwrap_or(Path::new("."));
+    // Search upward for metadata.json so subdir single-file builds see crate signatures.
+    let source_root = metadata_search_root(input_path.parent().unwrap_or(Path::new(".")));
     let is_multi_file = false; // Single file compilation
     compile_file_with_compiler(
-        source_root,
+        &source_root,
         input_path,
         output_dir,
         &mut module_compiler,

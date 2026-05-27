@@ -254,6 +254,15 @@ impl<'ast> CodeGenerator<'ast> {
             } => self
                 .infer_expression_type(operand)
                 .map(|t| Type::MutableReference(Box::new(t))),
+            // *expr → unwrap Reference/MutableReference to get inner type
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                operand,
+                ..
+            } => self.infer_expression_type(operand).and_then(|t| match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => Some(*inner),
+                _ => Some(t),
+            }),
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall { object, method, .. } => {

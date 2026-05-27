@@ -47,7 +47,7 @@ pub fn draw_rect(&self, _x: f32, _y: f32, w: f32, h: f32, color: Color) {
 pub fn test() {
     let renderer = Renderer { handle: 0_i64 };
     let red = Color { r: 1.0_f32, g: 0.0_f32, b: 0.0_f32, a: 1.0_f32 };
-    renderer.draw_circle(100.0_f32, 100.0_f32, 50.0_f32, red);
+    renderer.draw_circle(100.0_f32, 100.0_f32, 50.0_f32, red.clone());
     renderer.draw_rect(0.0_f32, 0.0_f32, 200.0_f32, 100.0_f32, red);
 }
 

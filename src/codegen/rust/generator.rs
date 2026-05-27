@@ -195,6 +195,8 @@ pub struct CodeGenerator<'ast> {
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
+    /// Enums known to be non-Copy from library scan (e.g. `Value` with `String` variants).
+    pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
@@ -250,6 +252,9 @@ pub struct CodeGenerator<'ast> {
     /// e.g., `use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }
     /// Used to resolve qualified calls through aliases for signature lookup.
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
+    /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
+    /// Used to emit `module::fn` instead of `module.fn` for free functions.
+    pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
@@ -293,6 +298,17 @@ impl<'ast> CodeGenerator<'ast> {
         if self.recursion_depth > 0 {
             self.recursion_depth -= 1;
         }
+    }
+
+    /// True when `name` refers to an imported `use std::…` runtime module (not a local variable).
+    pub(in crate::codegen::rust) fn is_imported_runtime_std_module(&self, name: &str) -> bool {
+        if self.runtime_std_module_imports.contains(name) {
+            return true;
+        }
+        if let Some(original) = self.module_alias_map.get(name) {
+            return self.runtime_std_module_imports.contains(original);
+        }
+        false
     }
 
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -389,6 +405,7 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
+            non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
             in_struct_literal_field: false,
             in_owned_value_context: false,
@@ -408,6 +425,7 @@ impl<'ast> CodeGenerator<'ast> {
             extern_submodule_qualifiers: std::collections::HashMap::new(),
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
+            runtime_std_module_imports: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             inline_module_names: std::collections::HashSet::new(),
         }
@@ -477,6 +495,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
     pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.copy_types_registry = registry;
+    }
+
+    pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
+        self.non_copy_types_registry = registry;
     }
 
     /// Look up a method signature by receiver type and method name

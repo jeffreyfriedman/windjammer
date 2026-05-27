@@ -136,6 +136,14 @@ impl MethodCallAnalyzer {
 
         if let Expression::Identifier { name, .. } = arg {
             if match_arm_bindings.contains(name.as_str()) {
+                if let Some(var_types) = local_var_types {
+                    if let Some(ty) = var_types.get(name.as_str()) {
+                        if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                            return false;
+                        }
+                    }
+                }
+
                 if let Some(sig) = method_signature {
                     let sig_param_idx = if sig.has_self_receiver {
                         param_idx + 1

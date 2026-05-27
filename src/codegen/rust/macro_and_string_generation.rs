@@ -209,7 +209,8 @@ impl<'ast> CodeGenerator<'ast> {
         let format_str = "{}".repeat(parts.len());
         let mut args = Vec::new();
         for expr in &parts {
-            args.push(self.generate_expression(expr));
+            // format! placeholders accept &str — never emit `.into()` on literal args.
+            args.push(self.format_macro_template_arg(expr));
         }
         format!("format!(\"{}\", {})", format_str, args.join(", "))
     }

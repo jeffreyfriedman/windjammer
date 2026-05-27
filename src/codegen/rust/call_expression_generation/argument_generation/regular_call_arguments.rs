@@ -59,9 +59,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     || func_name == "Vec::reserve")
             {
                 match arg {
-                    Expression::Identifier { .. } => {
-                        // Variables: add explicit cast
-                        arg_str = format!("{} as usize", arg_str);
+                    Expression::Identifier { name, .. } => {
+                        let already_usize = gen
+                            .current_function_params
+                            .iter()
+                            .find(|p| p.name == *name)
+                            .is_some_and(|p| {
+                                matches!(&p.type_, Type::Custom(n) if n == "usize")
+                            })
+                            || gen.local_var_types.get(name).is_some_and(|t| {
+                                matches!(t, Type::Custom(n) if n == "usize")
+                            });
+                        if !already_usize {
+                            arg_str = format!("{} as usize", arg_str);
+                        }
                     }
                     Expression::Literal {
                         value: Literal::Int(val),
@@ -128,8 +139,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     ..
                 }
             ) {
+                let asref_str_runtime = func_name
+                    .split("::")
+                    .next()
+                    .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
+
                 // Check if the parameter expects an owned String
-                let should_convert = if let Some(ref sig) = signature {
+                let should_convert = if asref_str_runtime {
+                    false
+                } else if let Some(ref sig) = signature {
                     if sig.is_extern {
                         // Extern functions have explicit types; ownership inference
                         // is meaningless (empty body defaults to Borrowed).
@@ -291,7 +309,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
                                 });
 
-                                if param_is_str_ref {
+                                let asref_str_runtime = func_name
+                                    .split("::")
+                                    .next()
+                                    .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
+
+                                if param_is_str_ref || asref_str_runtime {
                                     // Parameter is explicitly &str - pass literal directly (already a &str)
                                     // "World" is already &str in Rust, no conversion needed!
                                     return vec![arg_str];
@@ -405,10 +428,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             if !expression_helpers::is_reference_expression(arg)
                                 && !is_already_mut_ref
                             {
-                                // CRITICAL FIX: Remove .clone() if present - we want to mutate the original!
-                                // &mut counter.clone() → &mut counter
-                                // When passing &mut, we're giving mutable access to the original,
-                                // not a clone. The .clone() would break mutation semantics.
                                 let mut_arg_str = if arg_str.ends_with(".clone()") {
                                     arg_str[..arg_str.len() - 8].to_string()
                                 } else {
@@ -425,10 +444,44 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     matches!(**inner, Type::Custom(ref s) if s == "str"))
                             });
                             if param_is_str_ref {
+                                // Owned String/local binding → borrow as &str via &String deref.
+                                if !expression_helpers::is_reference_expression(arg)
+                                    && !arg_str.starts_with('&')
+                                {
+                                    return vec![format!("&{}", arg_str)];
+                                }
                                 return vec![arg_str];
                             }
 
                             if let Expression::Identifier { name, .. } = arg {
+                                if let Some(ref analysis) = gen.auto_clone_analysis {
+                                    if analysis
+                                        .needs_clone(name, gen.current_statement_idx)
+                                        .is_some()
+                                        && !arg_str.ends_with(".clone()")
+                                    {
+                                        let binding_is_copy = gen
+                                            .current_function_params
+                                            .iter()
+                                            .find(|p| p.name == *name)
+                                            .is_some_and(|p| gen.is_type_copy(&p.type_))
+                                            || gen
+                                                .local_var_types
+                                                .get(name)
+                                                .is_some_and(|t| gen.is_type_copy(t));
+                                        if !binding_is_copy {
+                                            let clone_base = if arg_str.contains(" as ")
+                                                && !arg_str.starts_with('(')
+                                            {
+                                                format!("({})", arg_str)
+                                            } else {
+                                                arg_str.clone()
+                                            };
+                                            arg_str = format!("{}.clone()", clone_base);
+                                        }
+                                    }
+                                }
+
                                 // Find the parameter type
                                 let param_type = gen
                                     .current_function_params
@@ -611,6 +664,40 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 };
                             }
                         }
+                    }
+                }
+            }
+
+            // Coerce owned String → &str when callee expects explicit &str (Phase 2 / FFI wrappers).
+            // Also handle stale metadata with empty param_ownership: Windjammer `string`
+            // params lower to borrowed &str at the callee definition site.
+            if let Some(ref sig) = signature {
+                if let Some(param_ty) = sig.param_types.get(i) {
+                    let param_is_str_ref = matches!(
+                        param_ty,
+                        Type::Reference(inner)
+                            if matches!(**inner, Type::Custom(ref n) if n == "str")
+                    );
+                    let is_text_param = crate::codegen::rust::types::is_windjammer_text_type(param_ty);
+                    let callee_borrows_string = !sig.is_extern
+                        && !arg_str.contains("string_to_ffi(")
+                        && (sig
+                            .param_ownership
+                            .get(i)
+                            .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                            || (sig.param_ownership.is_empty() && is_text_param));
+                    if (param_is_str_ref || callee_borrows_string)
+                        && !arg_str.contains("string_to_ffi(")
+                        && !arg_str.starts_with('&')
+                        && !matches!(
+                            arg,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        )
+                    {
+                        arg_str = format!("&{}", arg_str);
                     }
                 }
             }
