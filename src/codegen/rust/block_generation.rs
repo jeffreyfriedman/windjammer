@@ -117,7 +117,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !expr_uses_as_str
                             && !should_suppress
                         {
-                            // String literal needs .to_string()
+                            // String literal needs owned String — use .into(), not .to_string()
                             if matches!(
                                 expr,
                                 Expression::Literal {
@@ -125,11 +125,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     ..
                                 }
                             ) && !expr_str.ends_with(".to_string()")
+                                && !expr_str.ends_with(".into()")
                                 && expr_str != "String::new()"
                             {
-                                expr_str = format!("{}.to_string()", expr_str);
+                                expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
+                                    &expr_str,
+                                );
                             }
-                            // param.clone() where param: &str → param.to_string()
+                            // param.clone() where param: &str → param.into()
                             // &str.clone() returns &str, but we need String
                             else if expr_str.ends_with(".clone()") {
                                 if let Expression::MethodCall { method, object, .. } = expr {
@@ -140,9 +143,9 @@ impl<'ast> CodeGenerator<'ast> {
                                                 self.inferred_borrowed_params.contains(name);
 
                                             if is_borrowed_str_param {
-                                                // Replace .clone() with .to_string()
+                                                // Replace .clone() with .into()
                                                 expr_str =
-                                                    expr_str.replace(".clone()", ".to_string()");
+                                                    expr_str.replace(".clone()", ".into()");
                                             }
                                         }
                                     }
@@ -190,6 +193,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 if let Some(inner) = self.infer_expression_type(expr) {
                                     if !self.is_type_copy(&inner) {
                                         expr_str = format!("({}).clone()", expr_str);
+                                    }
+                                }
+                            }
+                        }
+
+                        // E0507: bare `vec[i]` implicit return of non-Copy owned value
+                        if matches!(expr, Expression::Index { .. })
+                            && !expr_str.ends_with(".clone()")
+                            && !expr_str.starts_with('&')
+                        {
+                            let expects_owned = !matches!(
+                                &self.current_function_return_type,
+                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                            );
+                            if expects_owned {
+                                if let Some(inner) = self.infer_expression_type(expr) {
+                                    if !self.is_type_copy(&inner) {
+                                        expr_str = format!("{}.clone()", expr_str);
                                     }
                                 }
                             }
@@ -303,7 +324,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !expr_uses_as_str
                                 && !should_suppress
                             {
-                                // String literal needs .to_string()
+                                // String literal needs owned String — use .into(), not .to_string()
                                 if matches!(
                                     expr,
                                     Expression::Literal {
@@ -311,11 +332,14 @@ impl<'ast> CodeGenerator<'ast> {
                                         ..
                                     }
                                 ) && !expr_str.ends_with(".to_string()")
+                                    && !expr_str.ends_with(".into()")
                                     && expr_str != "String::new()"
                                 {
-                                    expr_str = format!("{}.to_string()", expr_str);
+                                    expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
+                                        &expr_str,
+                                    );
                                 }
-                                // param.clone() where param: &str → param.to_string()
+                                // param.clone() where param: &str → param.into()
                                 // &str.clone() returns &str, but we need String
                                 // Check if expression is identifier.clone() and identifier is a borrowed string param
                                 else if expr_str.ends_with(".clone()") {
@@ -327,9 +351,9 @@ impl<'ast> CodeGenerator<'ast> {
                                                     self.inferred_borrowed_params.contains(name);
 
                                                 if is_borrowed_str_param {
-                                                    // Replace .clone() with .to_string()
+                                                    // Replace .clone() with .into()
                                                     expr_str = expr_str
-                                                        .replace(".clone()", ".to_string()");
+                                                        .replace(".clone()", ".into()");
                                                 }
                                             }
                                         }
@@ -541,12 +565,12 @@ impl<'ast> CodeGenerator<'ast> {
                 self.indent_level += 1;
 
                 // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
-                let needs_string_conversion_from_type =
-                    string_utilities::return_type_expects_owned_string(
+                let needs_string_conversion_from_type = self.coerce_string_literals_to_owned
+                    || string_utilities::return_type_expects_owned_string(
                         &self.current_function_return_type,
-                    ) || arms.iter().any(|arm| {
-                        string_analysis::expression_produces_string(arm.body)
-                            || arm_string_analysis::arm_returns_converted_string(arm.body)
+                    )
+                    || arms.iter().any(|arm| {
+                        string_utilities::match_arm_needs_string_ascription(&arm.body)
                     });
 
                 // Set context flag BEFORE generating arms
@@ -705,8 +729,14 @@ impl<'ast> CodeGenerator<'ast> {
                     if any_arm_produces_string
                         && *is_string_literal
                         && !final_arm_str.ends_with(".to_string()")
+                        && !final_arm_str.ends_with(".into()")
+                        && final_arm_str != "String::new()"
                     {
-                        output.push_str(&format!("{}.to_string()", final_arm_str));
+                        output.push_str(
+                            &crate::codegen::rust::literals::string_literal_to_owned_rust(
+                                &final_arm_str,
+                            ),
+                        );
                     } else {
                         output.push_str(&final_arm_str);
                     }
@@ -767,8 +797,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     ..
                                 }
                             );
-                            if is_string_literal && !expr_str.ends_with(".to_string()") {
-                                expr_str = format!("{}.to_string()", expr_str);
+                            if is_string_literal
+                                && !expr_str.ends_with(".to_string()")
+                                && !expr_str.ends_with(".into()")
+                                && expr_str != "String::new()"
+                            {
+                                expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
+                                    &expr_str,
+                                );
                             }
                         }
 

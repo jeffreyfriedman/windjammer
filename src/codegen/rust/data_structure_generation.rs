@@ -10,18 +10,44 @@
 
 use crate::parser::{Expression, Type};
 
-use super::{ast_utilities, float_type_utilities, CodeGenerator};
+use super::{ast_utilities, float_type_utilities, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn generate_tuple(
         &mut self,
         elements: &[&Expression<'ast>],
     ) -> String {
+        let return_tuple_types = match &self.current_function_return_type {
+            Some(Type::Tuple(types)) => Some(types.clone()),
+            _ => None,
+        };
         let expr_strs: Vec<String> = elements
             .iter()
-            .map(|e| {
+            .enumerate()
+            .map(|(i, e)| {
                 let mut s = self.generate_expression(e);
-                if !s.ends_with(".clone()") && !s.ends_with(".to_string()") {
+                if matches!(
+                    e,
+                    Expression::Literal {
+                        value: crate::parser::Literal::String(_),
+                        ..
+                    }
+                ) {
+                    let needs_owned = return_tuple_types
+                        .as_ref()
+                        .and_then(|types| types.get(i))
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+                    if needs_owned
+                        && !s.ends_with(".clone()")
+                        && !s.ends_with(".to_string()")
+                        && !s.ends_with(".into()")
+                        && s != "String::new()"
+                    {
+                        s = crate::codegen::rust::literals::string_literal_to_owned_rust(&s);
+                    }
+                }
+                if !s.ends_with(".clone()") && !s.ends_with(".to_string()") && !s.ends_with(".into()")
+                {
                     let ty = self.infer_expression_type(e);
                     let needs_clone = ty.as_ref().is_some_and(|t| match t {
                         Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -184,7 +210,6 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.generating_assignment_target
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
-            && !self.in_call_argument_generation
         {
             if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                 if let Some(ref analysis) = self.auto_clone_analysis {
@@ -340,7 +365,6 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
             && !self.in_borrow_context
-            && !self.in_call_argument_generation
         {
             let object_has_index = matches!(object, Expression::Index { .. })
                 || matches!(object, Expression::FieldAccess { object: inner, .. }
@@ -349,6 +373,21 @@ impl<'ast> CodeGenerator<'ast> {
             if object_has_index && !field_is_copy_by_type {
                 return format!("{}.clone()", base_expr);
             }
+        }
+
+        // Reference binding field access: `let step = &items[i]; step.str_value` in owned contexts.
+        if !self.generating_assignment_target
+            && !self.in_explicit_clone_call
+            && !self.in_field_access_object
+            && !self.in_borrow_context
+            && (self.in_call_argument_generation
+                || self.in_struct_literal_field
+                || self.in_owned_value_context)
+            && self.field_access_root_is_behind_reference(expr_to_generate)
+            && !field_is_copy_by_type
+            && !base_expr.ends_with(".clone()")
+        {
+            return format!("{}.clone()", base_expr);
         }
 
         base_expr
@@ -369,6 +408,9 @@ impl<'ast> CodeGenerator<'ast> {
         // CONTEXT-SENSITIVE INFERENCE: Set struct literal context for float type inference
         let prev_struct_name = self.current_struct_literal_name.clone();
         self.current_struct_literal_name = Some(name.to_string());
+
+        let identifier_usage_counts =
+            crate::codegen::rust::expression_helpers::count_identifier_usages_in_fields(fields);
 
         // Generate field assignments
         let field_str: Vec<String> = fields
@@ -403,38 +445,85 @@ impl<'ast> CodeGenerator<'ast> {
                         value: Literal::String(_),
                         ..
                     }
-                ) && !expr_str.ends_with(".to_string()") {
-                    expr_str = format!("{}.to_string()", expr_str);
+                ) && !string_utilities::already_owned_string_expr(&expr_str) {
+                    expr_str = string_utilities::coerce_expr_to_owned_string(&expr_str);
                 }
 
-                // CRITICAL: Auto-convert &str parameters to String for struct fields
-                // Pattern: fn create(name: &str) -> User { User { name: name } }
-                // When struct field is String but parameter is &str, add .to_string()
+                // Auto-convert borrowed string parameters to owned String for struct fields.
+                // Windjammer `string` params are already Rust `String` — only coerce `&str`/reference params.
                 if let Expression::Identifier { name: id, .. } = expr {
-                    let is_string_param = self.current_function_params.iter().any(|p| {
+                    let is_borrowed_string_param = self.current_function_params.iter().any(|p| {
                         if p.name != *id {
                             return false;
                         }
                         match &p.type_ {
-                            Type::String => true,
-                            Type::Custom(ref name) if name == "string" => true,
-                            Type::Reference(inner) => {
-                                matches!(**inner, Type::String)
-                                    || matches!(**inner, Type::Custom(ref name) if name == "str" || name == "string")
-                            }
+                            Type::Reference(inner) => matches!(**inner, Type::String)
+                                || matches!(**inner, Type::Custom(ref name) if name == "str" || name == "string"),
                             _ => false,
                         }
                     });
 
-                    if is_string_param && !expr_str.contains(".to_string()") {
+                    if is_borrowed_string_param
+                        && !string_utilities::already_owned_string_expr(&expr_str)
+                    {
                         let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
                         if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
                             if let Some(field_type) = field_types.get(field_name) {
                                 let field_is_string = matches!(field_type, Type::String)
                                     || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
                                 if field_is_string {
-                                    expr_str = format!("{}.to_string()", expr_str);
+                                    expr_str = string_utilities::coerce_expr_to_owned_string(&expr_str);
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Windjammer `string` params inferred as borrowed (`&String`/`&str`) need
+                // `.clone()` when assigned to owned String struct fields.
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if self.inferred_borrowed_params.contains(id) {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                            if let Some(field_type) = field_types.get(field_name) {
+                                let field_is_string = matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
+                                if field_is_string && !expr_str.ends_with(".clone()") {
+                                    expr_str = format!("{}.clone()", expr_str);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Iterator binding `for label in &self.tracked_labels` → `&String` into `String` field
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if self.borrowed_iterator_vars.contains(id) {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                            if let Some(field_type) = field_types.get(field_name) {
+                                let field_is_string = matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
+                                if field_is_string && !expr_str.ends_with(".clone()") {
+                                    expr_str = format!("{}.clone()", expr_str);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // For-loop iterator `for x in &vec`: field access in struct literal needs clone.
+                if let Expression::FieldAccess { object, .. } = expr {
+                    if let Expression::Identifier { name: obj_name, .. } = &**object {
+                        if self.borrowed_iterator_vars.contains(obj_name)
+                            && !expr_str.ends_with(".clone()")
+                        {
+                            let is_copy = self
+                                .infer_expression_type(expr)
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if !is_copy {
+                                expr_str = format!("{}.clone()", expr_str);
                             }
                         }
                     }
@@ -479,6 +568,19 @@ impl<'ast> CodeGenerator<'ast> {
                 // (no .to_string(), .clone(), etc. conversions)
                 if let Expression::Identifier { name: id, .. } = expr {
                     if id == field_name && expr_str == *field_name {
+                        let used_multiple_times = identifier_usage_counts
+                            .get(id)
+                            .is_some_and(|count| *count > 1);
+                        if used_multiple_times {
+                            let is_copy = self
+                                .current_function_params
+                                .iter()
+                                .find(|p| p.name == *id)
+                                .is_some_and(|p| self.is_type_copy(&p.type_));
+                            if !is_copy {
+                                return format!("{}: {}.clone()", field_name, field_name);
+                            }
+                        }
                         // Shorthand: User { name } instead of User { name: name }
                         // Only safe when no type conversion was needed
                         return field_name.clone();

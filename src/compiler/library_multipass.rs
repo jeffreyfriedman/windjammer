@@ -53,6 +53,27 @@ fn find_stdlib_dir() -> Option<PathBuf> {
     None
 }
 
+/// Match a step-2 metadata key (`Type::method`) to the converged multipass registry entry.
+fn resolve_converged_local_signature<'a>(
+    registry: &'a SignatureRegistry,
+    name: &str,
+) -> Option<&'a crate::analyzer::FunctionSignature> {
+    if let Some(sig) = registry.get_signature(name) {
+        return Some(sig);
+    }
+    if let Some((ty, method)) = name.rsplit_once("::") {
+        let suffix = format!("::{ty}::{method}");
+        if let Some((_, sig)) = registry
+            .signatures
+            .iter()
+            .find(|(k, _)| k.ends_with(&suffix))
+        {
+            return Some(sig);
+        }
+    }
+    registry.find_signature_ending_with(name)
+}
+
 /// TDD FIX: Build library with global multi-pass analysis
 /// Solves cross-file transitive mutability inference
 #[allow(clippy::too_many_arguments)]
@@ -217,6 +238,8 @@ pub(crate) fn build_library_multipass(
 
     let (mut global_copy_structs, local_struct_names) =
         super::library_copy_registry::collect_global_copy_structs_for_library(&sources);
+    let global_non_copy_enums =
+        super::library_copy_registry::collect_non_copy_enums_for_library(&sources);
 
     // Load Copy structs AND function signatures from dependency crate metadata.
     // Function signatures provide ownership info for cross-crate calls (e.g.,
@@ -262,7 +285,17 @@ pub(crate) fn build_library_multipass(
     // module-qualified ownership info (e.g., draw::draw_text → Borrowed) is
     // available from the very first analysis pass.
     let mut global_registry = dep_registry;
+    // Drop dependency metadata for types defined in this crate so local inference wins.
+    // Handles module-qualified keys like `dialogue::tree::DialogueNodeTree::get_node`.
+    crate::metadata::drop_dependency_signatures_for_local_types(
+        &mut global_registry.signatures,
+        &local_struct_names,
+    );
     crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &mut global_registry);
+    crate::metadata::drop_dependency_signatures_for_local_types(
+        &mut global_registry.signatures,
+        &local_struct_names,
+    );
     let mut global_float_signatures: HashMap<
         String,
         (
@@ -485,6 +518,7 @@ pub(crate) fn build_library_multipass(
 
             let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
             analyzer.set_global_struct_field_types(global_struct_fields.clone());
+            analyzer.set_struct_defining_module_paths(struct_defining_module_paths.clone());
             let (_, file_registry, _) = analyzer
                 .analyze_program_with_global_signatures(&program, &global_registry)
                 .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
@@ -650,7 +684,7 @@ pub(crate) fn build_library_multipass(
     let mut global_int_inference = IntInference::new();
     global_int_inference.set_global_function_signatures(global_float_signatures.clone());
     global_int_inference.set_global_struct_field_types(&global_struct_fields);
-    global_int_inference.set_struct_defining_module_paths(struct_defining_module_paths);
+    global_int_inference.set_struct_defining_module_paths(struct_defining_module_paths.clone());
     global_int_inference.set_module_re_exports(module_re_exports);
 
     for (file, source) in &sources {
@@ -757,6 +791,8 @@ pub(crate) fn build_library_multipass(
     };
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
+    let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
+        HashMap::new();
     for (file, source) in sources.iter() {
         // Final parse
         let mut lexer = Lexer::new(source);
@@ -778,6 +814,7 @@ pub(crate) fn build_library_multipass(
 
         let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
         analyzer.set_global_struct_field_types(global_struct_fields.clone());
+        analyzer.set_struct_defining_module_paths(struct_defining_module_paths.clone());
 
         // Rust leakage linter
         if enable_lint {
@@ -827,8 +864,17 @@ pub(crate) fn build_library_multipass(
         let mut full_registry = global_registry.clone();
         full_registry.merge(&registry);
         let registry_snapshot = full_registry.clone();
+        for (name, sig) in &registry_snapshot.signatures {
+            if !sig.param_ownership.is_empty()
+                && (crate::metadata::signature_targets_local_struct(name, &local_struct_names)
+                    || (!name.contains("::") && crate_metadata.functions.contains_key(name)))
+            {
+                local_converged_sigs.insert(name.clone(), sig.clone());
+            }
+        }
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
         codegen.set_copy_types_registry(global_copy_structs.clone());
+        codegen.set_non_copy_types_registry(global_non_copy_enums.clone());
         codegen.set_global_struct_field_types(global_struct_fields.clone());
         codegen.set_output_file(&output_file);
         codegen.set_source_file(file);
@@ -919,8 +965,35 @@ pub(crate) fn build_library_multipass(
         }
     }
 
-    // Emit metadata.json
-    if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {
+    // Emit metadata.json — refresh ONLY locally-defined function signatures from the
+    // converged registry. Dumping the full merged registry (engine + game) creates
+    // circular 11MB metadata pollution on the next build.
+    if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty())
+    {
+        let local_keys: Vec<String> = crate_metadata.functions.keys().cloned().collect();
+        for name in local_keys {
+            let sig = local_converged_sigs
+                .get(&name)
+                .or_else(|| {
+                    local_converged_sigs
+                        .iter()
+                        .find(|(k, _)| k.ends_with(&format!("::{name}")))
+                        .map(|(_, v)| v)
+                })
+                .or_else(|| resolve_converged_local_signature(&global_registry, &name));
+            if let Some(sig) = sig {
+                let (is_associated, parent_type) =
+                    if let Some(struct_name) = crate::metadata::struct_name_from_method_key(&name) {
+                        (true, Some(struct_name.to_string()))
+                    } else {
+                        (false, None)
+                    };
+                crate_metadata.functions.insert(
+                    name,
+                    metadata_function_sig_from_analyzer(sig, is_associated, parent_type),
+                );
+            }
+        }
         let metadata_path = output.join("metadata.json");
         let metadata_json = serde_json::to_string_pretty(&crate_metadata)?;
         super::cache_management::write_if_changed(&metadata_path, &metadata_json)?;

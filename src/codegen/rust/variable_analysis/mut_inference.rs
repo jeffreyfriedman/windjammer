@@ -234,9 +234,16 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 i
             };
-            let Some(&OwnershipMode::MutBorrowed) = sig.param_ownership.get(pidx) else {
+            let needs_mut_borrow = sig
+                .param_ownership
+                .get(pidx)
+                .is_some_and(|&o| o == OwnershipMode::MutBorrowed)
+                || sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(t, crate::parser::Type::MutableReference(_))
+                });
+            if !needs_mut_borrow {
                 continue;
-            };
+            }
             let matches_var = |e: &Expression| match e {
                 Expression::Identifier { name, .. } => name == var_name,
                 Expression::Unary {

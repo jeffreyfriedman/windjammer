@@ -1,5 +1,6 @@
 //! `Call(FieldAccess)` lowering: treat as method call with signature-aware arguments.
 
+use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
 use super::super::CodeGenerator;
@@ -43,13 +44,21 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             }
         });
 
-    let args: Vec<String> = if let Some(ref sig) = method_signature {
+    let runtime_module = match call_obj {
+        Expression::Identifier { name, .. } if gen.is_imported_runtime_std_module(name) => {
+            Some(name.as_str())
+        }
+        _ => None,
+    };
+
+    let mut args: Vec<String> = if let Some(ref sig) = method_signature {
         argument_generation::field_access_method_args_with_signature(
             gen,
             sig,
             call_method,
             &method_signature,
             &type_name,
+            runtime_module,
             arguments,
         )
     } else {
@@ -57,15 +66,51 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             gen,
             call_method,
             &type_name,
+            runtime_module,
             arguments,
         )
     };
+
+    // Post-process module-qualified calls: borrow owned String args when the registry
+    // says the callee takes `string` by borrow (lowers to `&str` in Rust).
+    let effective_sig = method_signature.clone().or_else(|| {
+        gen.signature_registry.get_signature(call_method).cloned()
+    });
+    if let Some(ref sig) = effective_sig {
+        let callee_is_extern = sig.is_extern
+            || gen
+                .signature_registry
+                .get_signature(call_method)
+                .is_some_and(|s| s.is_extern);
+        args = args
+            .iter()
+            .enumerate()
+            .map(|(i, arg_str)| {
+                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                let borrow = !callee_is_extern
+                    && !arg_str.contains("string_to_ffi(")
+                    && sig
+                        .param_ownership
+                        .get(sig_param_idx)
+                        .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                    && sig.param_types.get(sig_param_idx).is_some_and(
+                        crate::codegen::rust::types::is_windjammer_text_type,
+                    );
+                if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
+                    format!("&{arg_str}")
+                } else {
+                    arg_str.clone()
+                }
+            })
+            .collect();
+    }
 
     // Type constructors: Vec::new(), HashMap::with_capacity() — not instance methods.
     let separator = match call_obj {
         Expression::Identifier { name, .. } => {
             if CodeGenerator::is_enum_variant_qualified_path(name)
                 || name.chars().next().is_some_and(|c| c.is_uppercase())
+                || gen.is_imported_runtime_std_module(name)
             {
                 "::"
             } else {

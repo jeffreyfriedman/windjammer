@@ -52,6 +52,16 @@ impl SignatureRegistry {
             {
                 self.collision_keys.insert(name.clone());
             }
+            // For qualified names (Type::method), protect a method signature
+            // (has_self_receiver=true) from being overwritten by a standalone function
+            // (has_self_receiver=false). This prevents metadata/analysis ordering races
+            // from losing the correct &mut self inference.
+            if name.contains("::")
+                && existing.has_self_receiver
+                && !sig.has_self_receiver
+            {
+                return;
+            }
         }
         self.signatures.insert(name, sig);
     }
@@ -64,6 +74,10 @@ impl SignatureRegistry {
     /// from different modules (namespace collision).
     pub fn has_collision(&self, name: &str) -> bool {
         self.collision_keys.contains(name)
+    }
+
+    pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
+        self.signatures.iter()
     }
 
     /// Fallback lookup: find a signature whose key ends with `::name`.

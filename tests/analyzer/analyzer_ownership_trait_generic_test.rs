@@ -152,7 +152,10 @@ fn main() {
         generated
     );
     assert!(
-        generated.contains("name: name.to_string()") || generated.contains("name.to_string()"),
+        generated.contains("name: name.to_string()")
+            || generated.contains("name.to_string()")
+            || generated.contains("name: name.into()")
+            || generated.contains("name.into()"),
         "struct literal should convert &str parameter to String field. Got:\n{}",
         generated
     );

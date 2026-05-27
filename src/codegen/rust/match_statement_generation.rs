@@ -749,8 +749,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             );
 
-            if needs_string_conversion && is_string_literal && !arm_str.ends_with(".to_string()") {
-                arm_str = format!("{}.to_string()", arm_str);
+            if needs_string_conversion
+                && is_string_literal
+                && !string_utilities::already_owned_string_expr(&arm_str)
+            {
+                arm_str = string_utilities::coerce_expr_to_owned_string(&arm_str);
             }
 
             output.push_str(&arm_str);

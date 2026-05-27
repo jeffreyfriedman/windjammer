@@ -27,6 +27,16 @@ pub fn generate_literal(lit: &Literal) -> String {
     }
 }
 
+/// Coerce a Rust string literal expression (`"foo"`) to owned `String` without `.to_string()`.
+/// Windjammer user code never writes `.to_string()`; generated Rust uses `.into()` instead.
+pub fn string_literal_to_owned_rust(literal_expr: &str) -> String {
+    if literal_expr == "\"\"" {
+        "String::new()".to_string()
+    } else {
+        format!("{}.into()", literal_expr)
+    }
+}
+
 /// Escape special characters in strings for Rust string literals
 fn escape_string(s: &str) -> String {
     s.chars()

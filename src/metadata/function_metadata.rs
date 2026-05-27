@@ -67,26 +67,41 @@ fn ownership_mode_from_meta_str(s: &str) -> Option<OwnershipMode> {
     }
 }
 
-/// Convert loaded metadata to an analyzer signature when `param_ownership` is present (new format).
+/// Convert loaded metadata to an analyzer signature.
+/// When `param_ownership` is missing (legacy metadata), infer defaults:
+/// Windjammer `string` → Borrowed, everything else → Owned.
 pub fn try_analyzer_signature_from_metadata(
     name: &str,
     meta_sig: &FunctionSignature,
 ) -> Option<AnalyzerFunctionSignature> {
-    if meta_sig.param_ownership.is_empty() {
-        return None;
-    }
     let mut param_types = Vec::with_capacity(meta_sig.params.len());
     for p in &meta_sig.params {
         let ty = ModuleMetadata::deserialize_type(p)?;
         param_types.push(ty);
     }
-    if param_types.len() != meta_sig.param_ownership.len() {
-        return None;
-    }
-    let mut param_ownership = Vec::with_capacity(meta_sig.param_ownership.len());
-    for o in &meta_sig.param_ownership {
-        param_ownership.push(ownership_mode_from_meta_str(o)?);
-    }
+
+    let param_ownership = if meta_sig.param_ownership.is_empty() {
+        param_types
+            .iter()
+            .map(|ty| {
+                if crate::codegen::rust::types::is_windjammer_text_type(ty) {
+                    OwnershipMode::Borrowed
+                } else {
+                    OwnershipMode::Owned
+                }
+            })
+            .collect()
+    } else {
+        if param_types.len() != meta_sig.param_ownership.len() {
+            return None;
+        }
+        let mut modes = Vec::with_capacity(meta_sig.param_ownership.len());
+        for o in &meta_sig.param_ownership {
+            modes.push(ownership_mode_from_meta_str(o)?);
+        }
+        modes
+    };
+
     let return_type = meta_sig
         .return_type
         .as_ref()

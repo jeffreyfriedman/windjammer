@@ -126,15 +126,31 @@ pub(crate) fn build_type_defining_modules_for_library(
     Ok(map)
 }
 
-/// Find dependency metadata directories by walking up from the file's parent directory.
+/// Find dependency metadata roots for cross-crate inference.
+///
+/// Merge order matters: non-`engine` metadata is loaded first, then `engine` last so
+/// converged engine `param_ownership` wins over stale copies embedded in a game's own
+/// `metadata.json` from a prior build.
 pub(crate) fn find_dependency_metadata_roots(
     file_parent: &Path,
     external_paths: &HashMap<String, PathBuf>,
 ) -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
-    for path in external_paths.values() {
-        roots.push(path.clone());
+    let engine_path = external_paths.get("engine").cloned();
+    for (name, path) in external_paths {
+        if name != "engine" {
+            roots.push(path.clone());
+        }
+    }
+    if let Some(engine) = engine_path {
+        roots.push(engine);
+    }
+
+    // When explicit engine metadata is provided, skip walking sibling `src/` trees —
+    // they contain per-file `.wj.meta` caches that can overwrite converged signatures.
+    if external_paths.contains_key("engine") {
+        return roots;
     }
 
     let canonical =

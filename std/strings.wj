@@ -1,84 +1,130 @@
-// std/strings - String manipulation utilities
-// Simplified version without closures/iterators for v0.6.0
+// std/strings — String manipulation and parsing (idiomatic Windjammer API).
+//
+// Implementation: windjammer_runtime::strings (Rust backend, hidden from users).
+// Import: use std::strings
+//
+// Function-style API maps directly to runtime; no Rust method leakage in user code.
 
 // === CASE CONVERSION ===
 
-// Convert to uppercase
-fn to_upper(s: &string) -> string {
-    s.to_uppercase()
+fn to_upper(s: string) -> string {
+    s
 }
 
-// Convert to lowercase
-fn to_lower(s: &string) -> string {
-    s.to_lowercase()
+fn to_lower(s: string) -> string {
+    s
 }
 
 // === WHITESPACE ===
 
-// Trim whitespace from both ends
-fn trim(s: &string) -> string {
-    s.trim()
+fn trim(s: string) -> string {
+    s
 }
 
-// Trim whitespace from start
-fn trim_start(s: &string) -> string {
-    s.trim_start()
+fn trim_start(s: string) -> string {
+    s
 }
 
-// Trim whitespace from end
-fn trim_end(s: &string) -> string {
-    s.trim_end()
+fn trim_end(s: string) -> string {
+    s
+}
+
+// === SPLIT / JOIN ===
+
+fn split(s: string, delimiter: string) -> Vec<string> {
+    vec![s]
+}
+
+fn split_lines(text: string) -> Vec<string> {
+    vec![text]
+}
+
+fn split_whitespace(line: string) -> Vec<string> {
+    vec![line]
+}
+
+fn join(parts: Vec<string>, delimiter: string) -> string {
+    ""
+}
+
+/// Unicode characters in a string.
+fn chars(s: string) -> Vec<char> {
+    vec![]
+}
+
+/// Build a string from character codepoints.
+fn from_chars(parts: Vec<char>) -> string {
+    ""
+}
+
+/// Substring by character indices `[start, end)`.
+fn substring_chars(s: string, start: usize, end: usize) -> string {
+    ""
+}
+
+// === PARSING (line-oriented text formats: .wjscene, CSV, config) ===
+
+fn parse_i32(s: string) -> i32 {
+    0
+}
+
+fn parse_f32(s: string) -> f32 {
+    0.0
+}
+
+fn parse_bool(s: string) -> bool {
+    false
+}
+
+/// ASCII byte at character index (for line-oriented parsers).
+fn byte_at(s: string, index: usize) -> u8 {
+    0u8
 }
 
 // === CHECKING ===
 
-// Check if string is empty
-fn is_empty(s: &string) -> bool {
-    s.is_empty()
+fn is_empty(s: string) -> bool {
+    true
 }
 
-// Check if string starts with prefix
-fn starts_with(s: &string, prefix: &string) -> bool {
-    s.starts_with(prefix)
+fn starts_with(s: string, prefix: string) -> bool {
+    false
 }
 
-// Check if string ends with suffix
-fn ends_with(s: &string, suffix: &string) -> bool {
-    s.ends_with(suffix)
+fn ends_with(s: string, suffix: string) -> bool {
+    false
 }
 
-// Check if string contains substring
-fn contains(s: &string, substring: &string) -> bool {
-    s.contains(substring)
+fn contains(s: string, substring: string) -> bool {
+    false
 }
 
 // === REPLACEMENT ===
 
-// Replace all occurrences
-fn replace(s: &string, from: &string, to: &string) -> string {
-    s.replace(from, to)
+fn replace(s: string, from: string, to: string) -> string {
+    s
 }
 
-// Replace first N occurrences
-fn replacen(s: &string, from: &string, to: &string, count: usize) -> string {
-    s.replacen(from, to, count)
+fn replacen(s: string, from: string, to: string, count: usize) -> string {
+    s
 }
 
 // === LENGTH ===
 
-// Get string length in bytes
-fn len(s: &string) -> usize {
-    s.len()
+fn len(s: string) -> usize {
+    0
 }
 
-// Get string length in characters
-fn char_count(s: &string) -> usize {
-    s.chars().count()
+fn char_count(s: string) -> usize {
+    0
+}
+
+fn substring(s: string, start: usize, end: usize) -> string {
+    ""
 }
 
 // === REPEAT ===
 
-// Repeat string N times
-fn repeat(s: &string, n: usize) -> string {
-    s.repeat(n)
+fn repeat(s: string, n: usize) -> string {
+    s
 }

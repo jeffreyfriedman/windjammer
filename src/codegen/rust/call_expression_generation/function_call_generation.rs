@@ -398,7 +398,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         }
     };
 
-    let args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
+    let mut args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
         gen,
         func_name,
         func_str.as_str(),
@@ -407,6 +407,33 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         signature_from_simple_fallback,
         is_extern_call,
     );
+
+    // Borrow owned String args when registry says callee takes borrowed `string` (&str in Rust).
+    // Never borrow `string_to_ffi(...)` — extern FFI expects owned FfiString.
+    if let Some(ref sig) = signature {
+        args = args
+            .iter()
+            .enumerate()
+            .map(|(i, arg_str)| {
+                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                let borrow = !is_extern_call
+                    && !sig.is_extern
+                    && !arg_str.contains("string_to_ffi(")
+                    && sig
+                        .param_ownership
+                        .get(sig_param_idx)
+                        .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                    && sig.param_types.get(sig_param_idx).is_some_and(
+                        crate::codegen::rust::types::is_windjammer_text_type,
+                    );
+                if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
+                    format!("&{arg_str}")
+                } else {
+                    arg_str.clone()
+                }
+            })
+            .collect();
+    }
 
     // TDD FIX (Bug #3): Extract format!() macros in arguments to temp variables
     // The args vec has already been generated as Rust strings

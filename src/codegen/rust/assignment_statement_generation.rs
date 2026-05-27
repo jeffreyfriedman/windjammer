@@ -296,10 +296,43 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) {
-            value_str = format!("{}.to_string()", value_str);
+            value_str = crate::codegen::rust::literals::string_literal_to_owned_rust(&value_str);
+        }
+
+        // Vec<T>[i] → owned String field: clone the element, not borrow it.
+        if matches!(value, Expression::Index { .. }) {
+            let target_type = self.infer_expression_type(target);
+            let expects_owned = !matches!(
+                target_type.as_ref(),
+                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+            );
+            if expects_owned
+                && !value_str.ends_with(".clone()")
+                && !value_str.ends_with(".into()")
+                && !value_str.ends_with(".to_string()")
+            {
+                let elem_type = self.infer_expression_type(value);
+                if elem_type.as_ref().is_some_and(|t| !self.is_type_copy(t)) {
+                    if value_str.starts_with('&') {
+                        let base = value_str.trim_start_matches('&').trim();
+                        value_str = format!("{}.clone()", base);
+                    } else {
+                        value_str = format!("{}.clone()", value_str);
+                    }
+                }
+            }
         }
 
         if let Expression::Identifier { ref name, .. } = value {
+            if let Some(ref analysis) = self.auto_clone_analysis {
+                if analysis
+                    .needs_clone(name, self.current_statement_idx)
+                    .is_some()
+                    && !value_str.ends_with(".clone()")
+                {
+                    value_str = format!("{}.clone()", value_str);
+                }
+            }
             if self.inferred_borrowed_params.contains(name) {
                 let target_type = self.infer_expression_type(target);
                 let assignment_target_is_text = target_type
@@ -308,8 +341,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if assignment_target_is_text
                     && !value_str.contains(".clone()")
                     && !value_str.contains(".to_string()")
+                    && !value_str.contains(".into()")
                 {
-                    value_str = format!("{}.to_string()", value_str);
+                    value_str = format!("{}.into()", value_str);
                 }
             }
             // E0308 FIX: match-bound variables from &/&mut scrutinees are references.

@@ -234,19 +234,25 @@ impl<'ast> Analyzer<'ast> {
                         let is_copy = self.is_copy_type(&param.type_);
 
                         if is_copy {
-                            if self.is_mutated(&param.name, &func.body, registry)
-                                || matches!(
-                                    self.infer_passthrough_ownership(
-                                        &param.name,
-                                        &param.type_,
-                                        &func.body,
-                                        registry,
-                                        &func.name,
-                                        func,
-                                    ),
-                                    Some(OwnershipMode::MutBorrowed)
-                                )
-                            {
+                            let mutated = self.is_mutated(&param.name, &func.body, registry, Some(&param.type_));
+                            let passthrough_mut = matches!(
+                                self.infer_passthrough_ownership(
+                                    &param.name,
+                                    &param.type_,
+                                    &func.body,
+                                    registry,
+                                    &func.name,
+                                    func,
+                                ),
+                                Some(OwnershipMode::MutBorrowed)
+                            );
+                            if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
+                                eprintln!(
+                                    "  [OWNERSHIP-COPY] {} in {}: is_copy=true mutated={} passthrough_mut={} (type: {:?})",
+                                    param.name, func.name, mutated, passthrough_mut, param.type_
+                                );
+                            }
+                            if mutated || passthrough_mut {
                                 OwnershipMode::MutBorrowed
                             } else {
                                 OwnershipMode::Owned
@@ -303,7 +309,7 @@ impl<'ast> Analyzer<'ast> {
         // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
         let mut mutated_parameters = HashSet::new();
         for param in &func.parameters {
-            if self.is_mutated(&param.name, &func.body, registry) {
+            if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
                 mutated_parameters.insert(param.name.clone());
             }
         }
@@ -549,6 +555,16 @@ impl<'ast> Analyzer<'ast> {
                     _ => {
                         // Not an explicit reference, use inference
                     }
+                }
+
+                if Self::is_windjammer_text_param_type(&param.type_)
+                    && self.is_only_hashmap_lookup_key_param(
+                        &param.name,
+                        &func.decl.body,
+                        &func.decl,
+                    )
+                {
+                    return OwnershipMode::Borrowed;
                 }
 
                 let inferred = func

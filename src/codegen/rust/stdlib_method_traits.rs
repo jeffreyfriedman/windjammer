@@ -25,3 +25,36 @@ pub fn is_index_taking_method(method: &str) -> bool {
 pub fn is_closure_taking_method(method: &str) -> bool {
     crate::method_registry::is_closure_taking_method(method)
 }
+
+/// Module names from `use std::…` that map to `windjammer_runtime::*` imports.
+/// Calls must use `module::fn`, not `module.fn`.
+/// Do not include common variable names (e.g. `dialog`, `log`, `io`).
+pub fn is_runtime_std_module(name: &str) -> bool {
+    matches!(
+        name,
+        "strings"
+            | "json"
+            | "time"
+            | "math"
+            | "random"
+            | "http"
+            | "mime"
+            | "subprocess"
+            | "async_runtime"
+            | "async"
+            | "cli"
+            | "crypto"
+            | "csv"
+            | "db"
+            | "regex"
+            | "testing"
+            | "game"
+            | "env"
+    )
+}
+
+/// Runtime std modules whose Rust implementations take `AsRef<str>` for Windjammer `string` params.
+/// String literals must pass through as `&str` — no `.to_string()` / `&"-".to_string()`.
+pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
+    matches!(module, "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env")
+}

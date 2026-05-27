@@ -5,6 +5,80 @@ use crate::parser::*;
 
 use super::super::super::{expression_helpers, expression_utilities, CodeGenerator};
 
+/// Borrow owned String arguments when the callee's `string` param lowers to `&str`.
+fn coerce_string_arg_for_borrowed_callee<'ast>(
+    sig: &crate::analyzer::FunctionSignature,
+    sig_param_idx: usize,
+    arg: &'ast Expression<'ast>,
+    mut arg_str: String,
+) -> String {
+    if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
+        let param_is_str_ref = matches!(
+            param_ty,
+            Type::Reference(inner)
+                if matches!(**inner, Type::Custom(ref n) if n == "str")
+        );
+        let is_text_param =
+            crate::codegen::rust::types::is_windjammer_text_type(param_ty);
+        let callee_borrows_string = !sig.is_extern
+            && !arg_str.contains("string_to_ffi(")
+            && sig
+                .param_ownership
+                .get(sig_param_idx)
+                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+            || (sig.param_ownership.is_empty() && is_text_param && !sig.is_extern);
+        if (param_is_str_ref || callee_borrows_string)
+            && !arg_str.starts_with('&')
+            && !matches!(
+                arg,
+                Expression::Literal {
+                    value: Literal::String(_),
+                    ..
+                }
+            )
+        {
+            arg_str = format!("&{arg_str}");
+        }
+    }
+    arg_str
+}
+
+/// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
+fn borrow_runtime_std_str_arg<'ast>(
+    gen: &CodeGenerator<'ast>,
+    runtime_module: Option<&str>,
+    type_name: &Option<String>,
+    arg: &'ast Expression<'ast>,
+    arg_str: String,
+) -> String {
+    let asref_str_module = runtime_module
+        .or_else(|| {
+            type_name
+                .as_deref()
+                .filter(|t| gen.is_imported_runtime_std_module(t))
+        })
+        .is_some_and(
+            super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
+        );
+    let arg_is_string = gen.infer_expression_type(arg).as_ref().is_some_and(|t| {
+        matches!(t, Type::String)
+            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+    });
+    if asref_str_module
+        && arg_is_string
+        && matches!(
+            arg,
+            Expression::FieldAccess { .. } | Expression::Identifier { .. }
+        )
+        && !arg_str.starts_with('&')
+        && !arg_str.ends_with(".clone()")
+    {
+        format!("&{arg_str}")
+    } else {
+        arg_str
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     gen: &mut CodeGenerator<'ast>,
@@ -12,6 +86,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     call_method: &str,
     method_signature: &Option<crate::analyzer::FunctionSignature>,
     type_name: &Option<String>,
+    runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
     arguments
@@ -59,7 +134,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     )
                                 });
 
-                            if !param_is_str_ref {
+                            let asref_str_module = runtime_module
+                                .or_else(|| {
+                                    type_name
+                                        .as_deref()
+                                        .filter(|t| gen.is_imported_runtime_std_module(t))
+                                })
+                                .is_some_and(
+                                    super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                                );
+
+                            if !param_is_str_ref && !asref_str_module {
                                 let param_is_string =
                                     sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                         matches!(t, Type::String)
@@ -157,6 +242,15 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 })
                         );
                         if is_str_lit || is_str_param {
+                            let asref_str_module = runtime_module
+                                .or_else(|| {
+                                    type_name
+                                        .as_deref()
+                                        .filter(|t| gen.is_imported_runtime_std_module(t))
+                                })
+                                .is_some_and(
+                                    super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                                );
                             let is_explicit_str_ref = sig.param_types.get(sig_param_idx).is_some_and(
                                 |t| {
                                     matches!(t, Type::Reference(inner) if
@@ -165,7 +259,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     )
                                 },
                             );
-                            if !is_explicit_str_ref {
+                            if !is_explicit_str_ref && !asref_str_module {
                                 arg_str = format!("{}.to_string()", arg_str);
                             }
                         }
@@ -227,6 +321,40 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 }
             }
 
+            arg_str = borrow_runtime_std_str_arg(
+                gen,
+                runtime_module,
+                type_name,
+                arg_to_generate,
+                arg_str,
+            );
+
+            // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
+            if sig
+                .param_ownership
+                .get(sig_param_idx)
+                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                && sig.param_types.get(sig_param_idx).is_some_and(
+                    crate::codegen::rust::types::is_windjammer_text_type,
+                )
+                && !arg_str.starts_with('&')
+                && matches!(
+                    arg_to_generate,
+                    Expression::Identifier { .. }
+                        | Expression::FieldAccess { .. }
+                        | Expression::MethodCall { .. }
+                )
+            {
+                arg_str = format!("&{arg_str}");
+            }
+
+            arg_str = coerce_string_arg_for_borrowed_callee(
+                sig,
+                sig_param_idx,
+                arg_to_generate,
+                arg_str,
+            );
+
             vec![arg_str]
         })
         .collect()
@@ -237,6 +365,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     gen: &mut CodeGenerator<'ast>,
     call_method: &str,
     type_name: &Option<String>,
+    runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
     let fallback_sig = type_name
@@ -286,8 +415,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                         })
             );
             if is_string_literal || is_str_param {
-                let needs_to_string =
-                    crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
+                let asref_str_module = runtime_module
+                    .or_else(|| {
+                        type_name
+                            .as_deref()
+                            .filter(|t| gen.is_imported_runtime_std_module(t))
+                    })
+                    .is_some_and(
+                        super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                    );
+                let needs_to_string = !asref_str_module
+                    && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
                         i,
                         call_method,
                         &fallback_sig,
@@ -335,6 +473,44 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     arg_str,
                     string_literal_converted_here,
                 );
+            }
+            arg_str = borrow_runtime_std_str_arg(
+                gen,
+                runtime_module,
+                type_name,
+                arg_to_generate,
+                arg_str,
+            );
+            if let Some(ref fb_sig) = fallback_sig {
+                let fb_idx = if fb_sig.has_self_receiver { i + 1 } else { i };
+                arg_str = coerce_string_arg_for_borrowed_callee(
+                    fb_sig,
+                    fb_idx,
+                    arg_to_generate,
+                    arg_str,
+                );
+            } else {
+                // No signature in registry (peer file not yet built): borrow non-Copy
+                // args for module-qualified calls — Windjammer `string` lowers to &str.
+                let is_non_copy_value = gen
+                    .infer_expression_type(arg_to_generate)
+                    .as_ref()
+                    .is_none_or(|t| !gen.is_type_copy(t));
+                if is_non_copy_value
+                    && !super::super::super::stdlib_method_traits::is_common_stdlib_method(
+                        call_method,
+                    )
+                    && !arg_str.starts_with('&')
+                    && !matches!(
+                        arg_to_generate,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    )
+                {
+                    arg_str = format!("&{arg_str}");
+                }
             }
             arg_str
         })
