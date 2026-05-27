@@ -140,7 +140,13 @@ impl AutoCloneAnalysis {
             }
             Statement::Assignment { target, value, .. } => {
                 Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map);
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
+                // Owned identifiers move on assignment; loop bodies may assign the same
+                // param on every iteration (E0382 without `.clone()` at the use site).
+                let value_kind = match value {
+                    Expression::Identifier { .. } => UsageKind::Move,
+                    _ => UsageKind::Read,
+                };
+                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
             }
             Statement::Return {
                 value: Some(expr), ..
@@ -415,7 +421,32 @@ impl AutoCloneAnalysis {
             var_name.contains('.') || var_name.contains('(') || var_name.contains('[');
 
         if definition_idx.is_none() && !is_complex_expr {
-            // Variable not defined in this scope (parameter, etc.) and not a complex expression
+            // Parameters have no Definition in the body, but moves still need `.clone()`
+            // when the parameter is used again later (e.g. `affected.push(changed_file)`
+            // then `nodes[i].file_path == changed_file`), or inside loops.
+            let moves: Vec<&Usage> = usages
+                .iter()
+                .filter(|u| u.is_move && u.kind != UsageKind::Definition)
+                .collect();
+            let total_uses: Vec<&Usage> = usages
+                .iter()
+                .filter(|u| u.kind != UsageKind::Definition)
+                .collect();
+            for move_usage in &moves {
+                let has_later_use = total_uses
+                    .iter()
+                    .any(|u| u.statement_idx > move_usage.statement_idx);
+                let same_stmt_moves = moves
+                    .iter()
+                    .filter(|m| m.statement_idx == move_usage.statement_idx)
+                    .count();
+                if has_later_use || same_stmt_moves > 1 || move_usage.in_loop {
+                    self.clone_sites.insert(
+                        (var_name.to_string(), move_usage.statement_idx),
+                        CloneReason::MovedButUsedLater,
+                    );
+                }
+            }
             return;
         }
 
@@ -495,8 +526,11 @@ impl AutoCloneAnalysis {
                 let root_used_later = root_usages.iter().any(|u| {
                     u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
                 });
+                let field_used_later = field_usages.iter().any(|u| {
+                    u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
+                });
 
-                if root_used_later {
+                if root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
                         CloneReason::MovedButUsedLater,

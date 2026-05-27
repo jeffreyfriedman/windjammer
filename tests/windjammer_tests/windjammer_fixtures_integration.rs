@@ -234,3 +234,4 @@ fixture!(
     regression_format_macro_string_literal,
     "regression_format_macro_string_literal_test.wj"
 );
+fixture!(stdlib_strings_parse, "stdlib_strings_parse_test.wj");

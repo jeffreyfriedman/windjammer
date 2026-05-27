@@ -9,7 +9,7 @@
 
 use crate::parser::*;
 
-use super::CodeGenerator;
+use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a let statement
@@ -311,8 +311,8 @@ impl<'ast> CodeGenerator<'ast> {
                             ..
                         } if !s.is_empty()
                     ) || matches!(value, Expression::Identifier { .. });
-                    if should_convert && !value_str.ends_with(".to_string()") {
-                        value_str = format!("{}.to_string()", value_str);
+                    if should_convert && !string_utilities::already_owned_string_expr(&value_str) {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                     if let Expression::Literal {
                         value: Literal::String(s),
@@ -349,6 +349,8 @@ impl<'ast> CodeGenerator<'ast> {
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
+                } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
+                    output.push_str(": String");
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -379,8 +381,8 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     if s.is_empty() {
                         value_str = "String::new()".to_string();
-                    } else if !value_str.ends_with(".to_string()") {
-                        value_str = format!("{}.to_string()", value_str);
+                    } else if !string_utilities::already_owned_string_expr(&value_str) {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                 }
 
@@ -450,11 +452,13 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         if s.is_empty() {
                             value_str = "String::new()".to_string();
-                        } else {
-                            value_str = format!("{}.to_string()", value_str);
+                        } else if !string_utilities::already_owned_string_expr(&value_str) {
+                            value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                         }
-                    } else if matches!(value, Expression::Identifier { .. }) {
-                        value_str = format!("{}.to_string()", value_str);
+                    } else if matches!(value, Expression::Identifier { .. })
+                        && !string_utilities::already_owned_string_expr(&value_str)
+                    {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                 }
 
@@ -479,6 +483,8 @@ impl<'ast> CodeGenerator<'ast> {
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
+                } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
+                    output.push_str(": String");
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -508,7 +514,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     )
                 {
-                    value_str = format!("{}.to_string()", value_str);
+                    if !string_utilities::already_owned_string_expr(&value_str) {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
+                    }
                 }
 
                 // E0507: `let x = self.field` through `&self`/`&mut self`:

@@ -3231,6 +3231,10 @@ name = "bug_extern_fn_pub_test"
 path = "tests/regression/bug_extern_fn_pub_test.rs"
 
 [[test]]
+name = "bug_extern_fn_string_expr_arg_test"
+path = "tests/regression/bug_extern_fn_string_expr_arg_test.rs"
+
+[[test]]
 name = "bug_f32_f64_explicit_cast_test"
 path = "tests/regression/bug_f32_f64_explicit_cast_test.rs"
 
@@ -3275,6 +3279,10 @@ name = "bug_multifile_self_field_mutation_test"
 path = "tests/regression/bug_multifile_self_field_mutation_test.rs"
 
 [[test]]
+name = "bug_multipass_self_ownership_convergence_test"
+path = "tests/regression/bug_multipass_self_ownership_convergence_test.rs"
+
+[[test]]
 name = "bug_multipass_ownership_test"
 path = "tests/regression/bug_multipass_ownership_test.rs"
 
@@ -3289,6 +3297,82 @@ path = "tests/regression/bug_nested_field_access_test.rs"
 [[test]]
 name = "bug_nested_field_borrowed_test"
 path = "tests/regression/bug_nested_field_borrowed_test.rs"
+
+[[test]]
+name = "bug_no_manual_unsafe_extern_test"
+path = "tests/regression/bug_no_manual_unsafe_extern_test.rs"
+
+[[test]]
+name = "bug_std_strings_scene_parser_test"
+path = "tests/regression/bug_std_strings_scene_parser_test.rs"
+
+[[test]]
+name = "bug_std_strings_parse_api_test"
+path = "tests/regression/bug_std_strings_parse_api_test.rs"
+
+[[test]]
+name = "bug_no_to_string_literal_leakage_test"
+path = "tests/regression/bug_no_to_string_literal_leakage_test.rs"
+
+[[test]]
+name = "bug_match_arm_string_no_double_convert_test"
+path = "tests/regression/bug_match_arm_string_no_double_convert_test.rs"
+
+[[test]]
+name = "bug_untyped_let_string_ascription_test"
+path = "tests/regression/bug_untyped_let_string_ascription_test.rs"
+
+[[test]]
+name = "bug_index_owned_method_receiver_test"
+path = "tests/regression/bug_index_owned_method_receiver_test.rs"
+
+[[test]]
+name = "bug_library_index_owned_method_receiver_test"
+path = "tests/regression/bug_library_index_owned_method_receiver_test.rs"
+
+[[test]]
+name = "bug_copy_field_to_le_bytes_owned_param_test"
+path = "tests/regression/bug_copy_field_to_le_bytes_owned_param_test.rs"
+
+[[test]]
+name = "bug_usize_with_capacity_cast_clone_test"
+path = "tests/regression/bug_usize_with_capacity_cast_clone_test.rs"
+
+[[test]]
+name = "bug_metadata_borrowed_param_ownership_test"
+path = "tests/regression/bug_metadata_borrowed_param_ownership_test.rs"
+
+[[test]]
+name = "bug_cross_crate_borrowed_method_call_test"
+path = "tests/regression/bug_cross_crate_borrowed_method_call_test.rs"
+
+[[test]]
+name = "bug_struct_literal_string_param_reuse_test"
+path = "tests/regression/bug_struct_literal_string_param_reuse_test.rs"
+
+[[test]]
+name = "bug_to_gpu_buffer_not_mut_borrow_test"
+path = "tests/regression/bug_to_gpu_buffer_not_mut_borrow_test.rs"
+
+[[test]]
+name = "bug_local_readonly_method_not_mut_borrow_test"
+path = "tests/regression/bug_local_readonly_method_not_mut_borrow_test.rs"
+
+[[test]]
+name = "bug_stale_game_metadata_overwrites_engine_test"
+path = "tests/regression/bug_stale_game_metadata_overwrites_engine_test.rs"
+
+[[test]]
+name = "bug_hashmap_get_node_string_borrowed_test"
+path = "tests/regression/bug_hashmap_get_node_string_borrowed_test.rs"
+
+[[test]]
+name = "bug_extern_fn_string_to_ffi_no_borrow_test"
+path = "tests/regression/bug_extern_fn_string_to_ffi_no_borrow_test.rs"
+
+[[test]]
+name = "bug_module_string_borrow_call_test"
+path = "tests/regression/bug_module_string_borrow_call_test.rs"
 
 [[test]]
 name = "bug_option_unwrap_borrow_test"
@@ -3319,8 +3403,16 @@ name = "bug_redundant_as_str_test"
 path = "tests/regression/bug_redundant_as_str_test.rs"
 
 [[test]]
+name = "bug_self_field_method_call_mut_inference_test"
+path = "tests/regression/bug_self_field_method_call_mut_inference_test.rs"
+
+[[test]]
 name = "bug_self_subfield_copy_read_test"
 path = "tests/regression/bug_self_subfield_copy_read_test.rs"
+
+[[test]]
+name = "bug_transitive_self_mut_orchestrator_test"
+path = "tests/regression/bug_transitive_self_mut_orchestrator_test.rs"
 
 [[test]]
 name = "playtest_harness_migration_bugs_test"

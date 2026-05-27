@@ -106,7 +106,8 @@ fn main() {
     );
     assert!(
         generated.contains("self.data.value = value.clone()")
-            || generated.contains("self.data.value = value.to_string()"),
+            || generated.contains("self.data.value = value.to_string()")
+            || generated.contains("self.data.value = value.into()"),
         "Should clone/convert &String to String for owned field. Got:\n{}",
         generated
     );

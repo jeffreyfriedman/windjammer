@@ -23,31 +23,27 @@ impl<'ast> CodeGenerator<'ast> {
         if method == "clone" {
             self.in_explicit_clone_call = true;
         }
+        // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
+        // since those methods already produce an owned value.
+        let prev_coerce = self.coerce_string_literals_to_owned;
+        if matches!(method, "to_string" | "to_owned" | "clone") {
+            self.coerce_string_literals_to_owned = false;
+        }
         let mut obj_str = self.generate_expression_with_precedence(object);
+        self.coerce_string_literals_to_owned = prev_coerce;
         self.in_field_access_object = prev_field_access;
         self.in_explicit_clone_call = prev_explicit_clone;
-        // E0507: `collection[i].method(args)` when the method consumes `self` (owned receiver)
-        // must clone the element: `self.tracks[i].clone().sample(t)` (otherwise move out of &Vec).
-        if matches!(object, Expression::Index { .. }) {
-            if let Some(recv_ty) = self.infer_expression_type(object) {
-                if !self.is_type_copy(&recv_ty) {
-                    if let Some(tn) = Self::type_to_name(&recv_ty) {
-                        let qualified = format!("{}::{}", tn, method);
-                        let sig_opt = self
-                            .signature_registry
-                            .get_signature(&qualified)
-                            .or_else(|| self.signature_registry.get_signature(method));
-                        if let Some(sig) = sig_opt {
-                            if sig.has_self_receiver
-                                && sig.param_ownership.first()
-                                    == Some(&crate::analyzer::OwnershipMode::Owned)
-                                && !obj_str.ends_with(".clone()")
-                            {
-                                obj_str = format!("{}.clone()", obj_str);
-                            }
-                        }
-                    }
-                }
+        // E0507: `collection[i].method(args)` on non-Copy elements must clone before the call.
+        // Rust cannot move out of a Vec index. Even when the registry says `&self`, library
+        // multipass metadata can disagree with the emitted receiver (`self` vs `&self`), so
+        // always clone indexed non-Copy receivers (extra clone on `&self` methods is correct).
+        if matches!(object, Expression::Index { .. }) && !obj_str.ends_with(".clone()") {
+            let is_copy = self
+                .infer_expression_type(object)
+                .as_ref()
+                .is_some_and(|t| self.is_type_copy(t));
+            if !is_copy {
+                obj_str = format!("{}.clone()", obj_str);
             }
         }
 
@@ -55,7 +51,10 @@ impl<'ast> CodeGenerator<'ast> {
         // and the variable is a borrowed iterator variable (from `for x in &collection`).
         // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
         if let Expression::Identifier { name, .. } = object {
-            if self.borrowed_iterator_vars.contains(name) && method != "clone" {
+            let is_borrowed_iter = self.borrowed_iterator_vars.contains(name) && method != "clone";
+            let is_mut_borrowed_param = self.inferred_mut_borrowed_params.contains(name)
+                && method != "clone";
+            if is_borrowed_iter || is_mut_borrowed_param {
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
                         if let Some(tn) = Self::type_to_name(&recv_ty) {
@@ -72,7 +71,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     obj_str = format!("{}.clone()", obj_str);
                                 }
+                            } else if is_borrowed_iter && !is_mut_borrowed_param && !obj_str.ends_with(".clone()") {
+                                // Unknown signature on borrowed iterator var — clone conservatively (E0507).
+                                obj_str = format!("{}.clone()", obj_str);
                             }
+                            // For &mut params with unknown signatures, do NOT clone.
+                            // &mut refs can call &self and &mut self methods without cloning.
                         }
                     }
                 }
@@ -126,5 +130,36 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         obj_str
+    }
+
+    /// True when the resolved method signature takes `&self` or `&mut self` (not owned `self`).
+    /// Unknown signatures return false so index elements are cloned before the call (E0507-safe).
+    fn method_call_receiver_is_ref(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+    ) -> bool {
+        let Some(recv_ty) = self.infer_expression_type(object) else {
+            return false;
+        };
+        let Some(tn) = Self::type_to_name(&recv_ty) else {
+            return false;
+        };
+        let qualified = format!("{tn}::{method}");
+        let sig_opt = self
+            .signature_registry
+            .get_signature(&qualified)
+            .or_else(|| self.signature_registry.get_signature(method));
+        let Some(sig) = sig_opt else {
+            return false;
+        };
+        if !sig.has_self_receiver {
+            return false;
+        }
+        matches!(
+            sig.param_ownership.first(),
+            Some(crate::analyzer::OwnershipMode::Borrowed
+                | crate::analyzer::OwnershipMode::MutBorrowed)
+        )
     }
 }

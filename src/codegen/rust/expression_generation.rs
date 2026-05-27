@@ -8,6 +8,7 @@
 //! - Closures, blocks, match expressions
 //! - Cast, try, await, range expressions
 
+use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
 use super::constant_folding;
@@ -390,26 +391,37 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str: String,
         string_literal_converted: bool,
     ) -> String {
+        let callee_wants_borrowed_str = |sig: &crate::analyzer::FunctionSignature, idx: usize| {
+            sig.param_ownership
+                .get(idx)
+                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                && sig.param_types.get(idx).is_some_and(
+                    crate::codegen::rust::types::is_windjammer_text_type,
+                )
+        };
+
         if string_literal_converted {
             return arg_str;
         }
         if arg_str.starts_with('&') {
             return arg_str;
         }
-        if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+        let wants_str = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
             method_signature,
             sig_param_idx,
-        ) {
+        ) || method_signature
+            .as_ref()
+            .is_some_and(|sig| callee_wants_borrowed_str(sig, sig_param_idx));
+        if !wants_str {
             return arg_str;
         }
-        if let Expression::FieldAccess { .. } = arg_to_generate {
-            if self
-                .infer_expression_type(arg_to_generate)
-                .as_ref()
-                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
-            {
-                return format!("&{}", arg_str);
-            }
+        if matches!(
+            arg_to_generate,
+            Expression::FieldAccess { .. }
+                | Expression::Identifier { .. }
+                | Expression::MethodCall { .. }
+        ) {
+            return format!("&{arg_str}");
         }
         arg_str
     }
@@ -617,13 +629,11 @@ impl<'ast> CodeGenerator<'ast> {
         match lit {
             Literal::String(s) => {
                 if s.is_empty() && self.should_coerce_string_literal_to_owned() {
-                    // Use `"".to_string()` (not `String::new()`) so implicit-return / match-arm
-                    // post-processing does not append another `.to_string()` (E0308 / redundant call).
-                    "\"\".to_string()".to_string()
+                    crate::codegen::rust::literals::string_literal_to_owned_rust("\"\"")
                 } else {
                     let base = crate::codegen::rust::literals::generate_literal(lit);
                     if self.should_coerce_string_literal_to_owned() {
-                        format!("{}.to_string()", base)
+                        crate::codegen::rust::literals::string_literal_to_owned_rust(&base)
                     } else {
                         base
                     }

@@ -8,7 +8,13 @@ use std::path::Path;
 
 mod crate_metadata;
 mod function_metadata;
+mod signature_filters;
 mod type_metadata;
+
+pub use signature_filters::{
+    drop_dependency_signatures_for_local_types, signature_targets_local_struct,
+    struct_name_from_method_key,
+};
 
 pub use crate_metadata::{meta_cache_path, meta_cache_root, CrateMetadata};
 pub use function_metadata::{

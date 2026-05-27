@@ -46,6 +46,14 @@ impl<'ast> Analyzer<'ast> {
         self.global_struct_field_types = types;
     }
 
+    /// Module paths for each struct name (enables `dialogue::tree::DialogueNodeTree` field lookup).
+    pub fn set_struct_defining_module_paths(
+        &mut self,
+        paths: HashMap<String, Vec<Vec<String>>>,
+    ) {
+        self.struct_defining_module_paths = paths;
+    }
+
     /// TDD FIX: Remove a struct from the Copy set (e.g., when local definition differs from metadata)
     pub fn unregister_copy_struct(&mut self, name: &str) {
         self.copy_structs.remove(name);

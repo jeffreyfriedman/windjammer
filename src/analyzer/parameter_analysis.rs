@@ -75,8 +75,17 @@ impl<'ast> Analyzer<'ast> {
 
         // Multi-pass registry-aware inference
 
+        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed.
+        // Match scrutinees like `match self.nodes.get(id)` must not infer Owned for `id`
+        // when passthrough collides on bare `get` from unrelated types.
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
         // 1. Check if parameter is mutated (uses registry for method call detection)
-        if self.is_mutated(param_name, body, registry) {
+        if self.is_mutated(param_name, body, registry, Some(param_type)) {
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -179,7 +188,22 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        // 8. Default ownership: Borrowed (THE WINDJAMMER WAY!)
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
+        // 8. HashMap lookup keys — pin Borrowed after registry-dependent steps.
+        // Large engine metadata can flip passthrough/is_mutated heuristics on later
+        // convergence passes; the body fact (only used as HashMap key) is authoritative.
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
+        // 9. Default ownership: Borrowed (THE WINDJAMMER WAY!)
         //
         // **PHILOSOPHY**: The compiler does the work, not the user.
         // - Default to **Borrowed** for read-only parameters

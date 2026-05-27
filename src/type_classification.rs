@@ -95,6 +95,20 @@ pub fn is_stdlib_container(name: &str) -> bool {
     )
 }
 
+/// Returns true if the given `Type` is a stdlib container or wrapper.
+/// Used by mutation detection to decide whether known-mutating heuristics
+/// (like `push`, `insert`, `clear`) should apply even when a qualified
+/// registry lookup missed.
+pub fn is_stdlib_collection_or_wrapper(ty: &crate::parser::ast::types::Type) -> bool {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Vec(_) | Type::Option(_) | Type::Result(_, _) | Type::String => true,
+        Type::Parameterized(name, _) | Type::Custom(name) => is_stdlib_container(name),
+        Type::Array(_, _) => true,
+        _ => false,
+    }
+}
+
 /// Large collection types (high heap allocation cost, never Copy).
 pub fn is_large_collection(name: &str) -> bool {
     matches!(

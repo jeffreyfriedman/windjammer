@@ -131,6 +131,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if name.chars().next().is_some_and(|c| c.is_uppercase())
                         || name.contains('.')
                         || known_modules.contains(&name.as_str())
+                        || self.is_imported_runtime_std_module(name)
                     {
                         "::" // Vec::new(), std::fs::read(), serde_json::to_string()
                     } else {
