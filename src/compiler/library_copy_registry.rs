@@ -57,10 +57,12 @@ pub(crate) fn collect_global_copy_structs_for_library(
         global_copy_structs: &mut HashSet<String>,
         copy_enums: &mut HashSet<String>,
         struct_names: &mut HashSet<String>,
+        explicit_non_copy: &mut HashSet<String>,
     ) {
         for item in items {
             match item {
                 Item::Struct { decl, .. } => {
+                    let has_derive = decl.decorators.iter().any(|d| d.name == "derive");
                     let has_copy = decl.decorators.iter().any(|d| {
                         d.name == "derive"
                             && d.arguments.iter().any(|(_, arg)| {
@@ -76,6 +78,9 @@ pub(crate) fn collect_global_copy_structs_for_library(
                     });
                     if has_copy {
                         global_copy_structs.insert(decl.name.clone());
+                    } else if has_derive {
+                        // Struct has explicit @derive(...) without Copy — opt-out
+                        explicit_non_copy.insert(decl.name.clone());
                     }
                 }
                 Item::Enum { decl, .. } => {
@@ -94,6 +99,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
                         global_copy_structs,
                         copy_enums,
                         struct_names,
+                        explicit_non_copy,
                     );
                 }
                 _ => {}
@@ -105,6 +111,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
     let mut global_copy_structs = HashSet::new();
     let mut copy_enums = HashSet::new();
     let mut struct_names = HashSet::new();
+    let mut explicit_non_copy = HashSet::new();
 
     for (file, source) in sources {
         let mut lexer = Lexer::new(source);
@@ -124,6 +131,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
             &mut global_copy_structs,
             &mut copy_enums,
             &mut struct_names,
+            &mut explicit_non_copy,
         );
     }
 
@@ -137,7 +145,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
     loop {
         let mut changed = false;
         for (name, variants) in &structs_by_name {
-            if global_copy_structs.contains(name) {
+            if global_copy_structs.contains(name) || explicit_non_copy.contains(name) {
                 continue;
             }
 

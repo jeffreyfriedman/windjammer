@@ -1,5 +1,7 @@
 //! Program-level analysis: module items, multi-pass convergence, and per-pass registry updates.
 
+use std::collections::HashSet;
+
 use crate::parser::*;
 
 use super::{AnalyzedFunction, Analyzer, OwnershipMode, ProgramAnalysisResult, SignatureRegistry};
@@ -141,8 +143,10 @@ impl<'ast> Analyzer<'ast> {
         // Single forward pass fails when struct A references Copy struct B but B is declared
         // later in the file; empty structs must be Copy (same as Rust / trait_derivation).
         let mut struct_infos: Vec<(String, Vec<Type>)> = Vec::new();
+        let mut explicit_non_copy: HashSet<String> = HashSet::new();
         for item in &program.items {
             if let Item::Struct { decl, .. } = item {
+                let has_derive = decl.decorators.iter().any(|d| d.name == "derive");
                 let has_copy_derive = decl.decorators.iter().any(|decorator| {
                     decorator.name == "derive"
                         && decorator.arguments.iter().any(|(_, arg)| {
@@ -155,6 +159,8 @@ impl<'ast> Analyzer<'ast> {
                 });
                 if has_copy_derive {
                     self.copy_structs.insert(decl.name.clone());
+                } else if has_derive {
+                    explicit_non_copy.insert(decl.name.clone());
                 }
                 struct_infos.push((
                     decl.name.clone(),
@@ -166,7 +172,7 @@ impl<'ast> Analyzer<'ast> {
         for _ in 0..MAX_COPY_STRUCT_PASSES {
             let mut changed = false;
             for (name, field_types) in &struct_infos {
-                if self.copy_structs.contains(name) {
+                if self.copy_structs.contains(name) || explicit_non_copy.contains(name) {
                     continue;
                 }
                 let all_copy =

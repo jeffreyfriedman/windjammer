@@ -26,14 +26,16 @@ impl<'ast> CodeGenerator<'ast> {
             _ => self.generate_expression(expr),
         };
         // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
-        // When the cast source is a borrowed parameter, auto-deref first.
+        // When the cast source is a borrowed parameter or a borrowed match arm
+        // binding, auto-deref first.
         if let Expression::Identifier { name, .. } = expr {
-            let is_borrowed_param = self.inferred_borrowed_params.contains(name)
+            let is_borrowed = self.inferred_borrowed_params.contains(name)
+                || self.borrowed_iterator_vars.contains(&name.to_string())
                 || self.current_function_params.iter().any(|p| {
                     p.name == *name
                         && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
                 });
-            if is_borrowed_param && !expr_str.starts_with('*') {
+            if is_borrowed && !expr_str.starts_with('*') {
                 expr_str = format!("*{}", expr_str);
             }
         }
