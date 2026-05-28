@@ -3,7 +3,7 @@
 /// Enables type inference across file boundaries by emitting and loading
 /// function signatures, struct fields, and trait implementations.
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 mod crate_metadata;
@@ -231,13 +231,20 @@ fn merge_single_wj_meta_file(
         return;
     };
     function_metadata::merge_module_metadata_signatures(&mod_meta, registry);
+    let meta_copy_set: HashSet<&str> = mod_meta.copy_structs.iter().map(|s| s.as_str()).collect();
     copy_structs.extend(mod_meta.copy_structs.iter().cloned());
     for (struct_name, fields) in &mod_meta.structs {
-        let field_types: Vec<String> = fields.values().cloned().collect();
-        all_struct_fields
-            .entry(struct_name.clone())
-            .or_default()
-            .push(field_types);
+        // Only add field info for structs the upstream crate marked as Copy.
+        // Types that opted out (e.g., @derive(Debug, Clone) without Copy, or
+        // types with Drop impls) must not be re-inferred as Copy based solely
+        // on their field types.
+        if meta_copy_set.contains(struct_name.as_str()) {
+            let field_types: Vec<String> = fields.values().cloned().collect();
+            all_struct_fields
+                .entry(struct_name.clone())
+                .or_default()
+                .push(field_types);
+        }
     }
 }
 

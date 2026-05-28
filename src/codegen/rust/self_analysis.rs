@@ -175,6 +175,139 @@ pub fn function_mutates_fields(ctx: &AnalysisContext, func: &FunctionDecl) -> bo
     false
 }
 
+/// Variable names bound directly from `self` (`let mut result = self`, `let result = self`).
+fn collect_self_derived_locals(func: &FunctionDecl) -> HashSet<String> {
+    use crate::parser::Pattern;
+    let mut locals = HashSet::new();
+    for stmt in &func.body {
+        if let Statement::Let { pattern, value, .. } = stmt {
+            let name = match pattern {
+                Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(n.as_str()),
+                _ => None,
+            };
+            if let Some(name) = name {
+                if matches!(value, Expression::Identifier { name: n, .. } if n == "self") {
+                    locals.insert(name.to_string());
+                }
+            }
+        }
+    }
+    locals
+}
+
+fn function_returns_named_identifier(func: &FunctionDecl, id: &str) -> bool {
+    let Some(last_stmt) = func.body.last() else {
+        return false;
+    };
+    match last_stmt {
+        Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Expression { expr, .. } => {
+            matches!(expr, Expression::Identifier { name, .. } if name == id)
+        }
+        _ => false,
+    }
+}
+
+/// Check if the body consumes `self` by value — i.e., uses bare `self` (not `self.field`)
+/// as a struct literal field, function argument, or other value position.
+pub fn function_consumes_self(func: &FunctionDecl) -> bool {
+    for stmt in &func.body {
+        if statement_consumes_self(stmt) {
+            return true;
+        }
+    }
+    false
+}
+
+fn expression_is_bare_self(expr: &Expression) -> bool {
+    matches!(expr, Expression::Identifier { name, .. } if name == "self")
+}
+
+fn expression_consumes_self(expr: &Expression) -> bool {
+    match expr {
+        Expression::StructLiteral { fields, .. } => {
+            fields.iter().any(|(_, val)| expression_is_bare_self(val))
+        }
+        Expression::Block { statements, .. } => {
+            statements.iter().any(|s| statement_consumes_self(s))
+        }
+        _ => false,
+    }
+}
+
+fn statement_consumes_self(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Return { value: Some(expr), .. } => {
+            expression_is_bare_self(expr) || expression_consumes_self(expr)
+        }
+        Statement::Expression { expr, .. } => {
+            expression_is_bare_self(expr) || expression_consumes_self(expr)
+        }
+        Statement::Let { value, .. } => {
+            expression_is_bare_self(value) || expression_consumes_self(value)
+        }
+        Statement::If { then_block, else_block, .. } => {
+            then_block.iter().any(|s| statement_consumes_self(s))
+                || else_block.as_ref().is_some_and(|b| b.iter().any(|s| statement_consumes_self(s)))
+        }
+        Statement::Match { arms, .. } => {
+            arms.iter().any(|arm| {
+                expression_is_bare_self(arm.body) || expression_consumes_self(arm.body)
+            })
+        }
+        _ => false,
+    }
+}
+
+/// Fluent builder: `let mut result = self; result.field = x; result`
+pub fn function_flows_self_through_local(func: &FunctionDecl) -> bool {
+    let derived = collect_self_derived_locals(func);
+    derived
+        .iter()
+        .any(|name| function_returns_named_identifier(func, name))
+}
+
+fn expression_modifies_derived_local(expr: &Expression, derived: &HashSet<String>) -> bool {
+    match expr {
+        Expression::FieldAccess { object, .. } => {
+            if let Expression::Identifier { name, .. } = &**object {
+                derived.contains(name)
+            } else {
+                expression_modifies_derived_local(object, derived)
+            }
+        }
+        Expression::Index { object, .. } => expression_modifies_derived_local(object, derived),
+        _ => false,
+    }
+}
+
+fn statement_modifies_derived_local(stmt: &Statement, derived: &HashSet<String>) -> bool {
+    match stmt {
+        Statement::Assignment { target, .. } => expression_modifies_derived_local(target, derived),
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_modifies_derived_local(s, derived))
+                || else_block.as_ref().is_some_and(|block| {
+                    block
+                        .iter()
+                        .any(|s| statement_modifies_derived_local(s, derived))
+                })
+        }
+        Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+            body.iter()
+                .any(|s| statement_modifies_derived_local(s, derived))
+        }
+        _ => false,
+    }
+}
+
 /// Check if a function returns Self (for builder pattern detection)
 pub fn function_returns_self_type(func: &FunctionDecl) -> bool {
     use crate::parser::{Expression, Statement, Type};
@@ -218,6 +351,28 @@ pub fn function_modifies_self(
 ) -> bool {
     for stmt in &func.body {
         if statement_modifies_self(stmt, registry, struct_name) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Like [`function_modifies_self`], but also treats mutations on locals assigned from `self`
+/// (fluent `let mut result = self; result.field = x`) as self modification.
+pub fn function_modifies_self_or_derived_local(
+    func: &FunctionDecl,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    if function_modifies_self(func, registry, struct_name) {
+        return true;
+    }
+    let derived = collect_self_derived_locals(func);
+    if derived.is_empty() {
+        return false;
+    }
+    for stmt in &func.body {
+        if statement_modifies_derived_local(stmt, &derived) {
             return true;
         }
     }

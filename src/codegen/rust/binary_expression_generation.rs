@@ -552,15 +552,18 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: XOR logic for borrowed/owned mismatch ONLY when BOTH sides are tracked
             // Skip when one side is untracked (closure param, etc.) - likely BOTH are borrowed
             // ALSO skip when one side is explicit deref - handle in balance_eq_operands_for_rust
-            // ALSO skip when one side is match arm binding - these are OWNED Copy values, never refs
+            // ALSO skip when one side is match arm binding that is NOT borrowed (owned Copy values)
+            // Match arm bindings from ref scrutinee (e.g. match &self) ARE borrowed — deref them.
             // ALSO skip when one side is explicit &str parameter - Rust handles &str comparisons natively
+            let left_skip_match = left_is_match_binding && !left_is_borrowed;
+            let right_skip_match = right_is_match_binding && !right_is_borrowed;
             if left_is_tracked
                 && right_is_tracked
                 && left_is_borrowed != right_is_borrowed
                 && !left_is_explicit_deref
                 && !right_is_explicit_deref
-                && !left_is_match_binding
-                && !right_is_match_binding
+                && !left_skip_match
+                && !right_skip_match
                 && !left_is_explicit_str_ref
                 && !right_is_explicit_str_ref
             {

@@ -12,6 +12,7 @@ pub fn is_windjammer_text_type(t: &Type) -> bool {
             t,
             Type::Custom(name) if matches!(name.as_str(), "string" | "String" | "str")
         )
+        || matches!(t, Type::Reference(inner) if is_windjammer_text_type(inner))
 }
 
 /// In owned container slots (`Vec<string>`, `Option<string>`, `HashMap` values, etc.),

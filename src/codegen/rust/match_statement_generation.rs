@@ -452,6 +452,9 @@ impl<'ast> CodeGenerator<'ast> {
                             } else {
                                 format!("*{}", value_str)
                             }
+                        } else if root_name == "self" {
+                            // self is already &Self — no extra & needed.
+                            value_str
                         } else {
                             // Non-Copy type behind shared ref: need & prefix to prevent
                             // moving out of the borrow. Match ergonomics will auto-ref bindings.
