@@ -30,15 +30,39 @@ impl FloatInference {
             }
         }
 
-        if (method == "min" || method == "max") && arguments.len() == 1 {
+        const SELF_ARG_METHODS: &[&str] = &[
+            "min", "max", "clamp", "copysign", "atan2", "hypot", "powf",
+        ];
+        if SELF_ARG_METHODS.contains(&method) {
             let receiver_id = self.get_expr_id(object);
-            let arg_id = self.get_expr_id(arguments[0].1);
-
-            self.constraints.push(Constraint::MustMatch(
-                receiver_id,
-                arg_id,
-                format!(".{}() argument must match receiver type", method),
-            ));
+            for (_label, arg) in arguments.iter() {
+                let arg_id = self.get_expr_id(arg);
+                self.constraints.push(Constraint::MustMatch(
+                    receiver_id,
+                    arg_id,
+                    format!(".{}() argument must match receiver type", method),
+                ));
+            }
+            if let Some(ref float_ty) = method_return_type {
+                for (_label, arg) in arguments.iter() {
+                    let arg_id = self.get_expr_id(arg);
+                    match float_ty {
+                        FloatType::F32 => {
+                            self.constraints.push(Constraint::MustBeF32(
+                                arg_id,
+                                format!(".{}() arg must be f32 (matches receiver)", method),
+                            ));
+                        }
+                        FloatType::F64 => {
+                            self.constraints.push(Constraint::MustBeF64(
+                                arg_id,
+                                format!(".{}() arg must be f64 (matches receiver)", method),
+                            ));
+                        }
+                        FloatType::Unknown => {}
+                    }
+                }
+            }
         }
 
         let method_sig = self

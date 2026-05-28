@@ -18,12 +18,49 @@ impl<'ast> CodeGenerator<'ast> {
         if !returns_self_type {
             return false;
         }
-        // Exclude clone/copy factory methods that create a new instance rather than
-        // flowing `self` through. These need `&self` to avoid E0507.
-        !matches!(
-            func.name.as_str(),
-            "clone" | "copy" | "duplicate" | "deep_clone" | "clone_from"
+
+        // Builder / consuming pattern: method flows `self` through or mutates while building.
+        // Read-only factories (snapshot, clone, etc.) construct a NEW instance from cloned
+        // fields and must use `&self` — not a hardcoded name list.
+        if self.function_returns_self_type(func) {
+            return true;
+        }
+        if super::self_analysis::function_flows_self_through_local(func) {
+            return true;
+        }
+        if self.function_modifies_self(func) {
+            return true;
+        }
+        false
+    }
+
+    pub(super) fn function_modifies_self_or_derived(&self, func: &FunctionDecl) -> bool {
+        super::self_analysis::function_modifies_self_or_derived_local(
+            func,
+            Some(&self.signature_registry),
+            self.current_struct_name.as_deref(),
         )
+    }
+
+    /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
+    ///
+    /// Read-only factories that return a new struct instance (snapshot, clone, etc.) need
+    /// `&self`. Builder patterns that flow or mutate `self` need owned/`mut self`.
+    pub(super) fn owned_self_receiver(&self, func: &FunctionDecl) -> &'static str {
+        let body_modifies = self.function_modifies_self_or_derived(func);
+        let returns_impl_struct = self.method_returns_impl_struct(func);
+        let consumes_self = super::self_analysis::function_consumes_self(func);
+        if body_modifies && returns_impl_struct {
+            "mut self"
+        } else if body_modifies {
+            "&mut self"
+        } else if returns_impl_struct {
+            "self"
+        } else if consumes_self {
+            "self"
+        } else {
+            "&self"
+        }
     }
 
     pub(super) fn function_returns_self_type(&self, func: &FunctionDecl) -> bool {

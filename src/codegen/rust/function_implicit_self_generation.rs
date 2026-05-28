@@ -72,9 +72,12 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             if let Some(ownership) = ownership {
-                let body_modifies = self.function_modifies_self(&analyzed.decl);
-                let returns_self = self.method_returns_impl_struct(&analyzed.decl);
+                let body_modifies = self.function_modifies_self_or_derived(&analyzed.decl);
+                let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
                 let self_param = match ownership {
+                    OwnershipMode::Borrowed if !self.in_trait_impl && consumes_self => {
+                        if body_modifies { "mut self" } else { "self" }
+                    }
                     OwnershipMode::Borrowed => {
                         if body_modifies {
                             "&mut self"
@@ -82,16 +85,15 @@ impl<'ast> CodeGenerator<'ast> {
                             "&self"
                         }
                     }
+                    OwnershipMode::MutBorrowed if !self.in_trait_impl && consumes_self => {
+                        if body_modifies { "mut self" } else { "self" }
+                    }
                     OwnershipMode::MutBorrowed => "&mut self",
                     OwnershipMode::Owned => {
-                        if body_modifies && returns_self {
-                            "mut self"
-                        } else if body_modifies {
-                            "&mut self"
-                        } else if returns_self {
+                        if self.in_trait_impl {
                             "self"
                         } else {
-                            "&self"
+                            self.owned_self_receiver(&analyzed.decl)
                         }
                     }
                 };

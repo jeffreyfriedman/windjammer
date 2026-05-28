@@ -115,6 +115,47 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // PRE-PASS: Populate copy_types_registry for all structs/enums whose fields
+        // are all Copy. Iterates until stable so transitive dependencies resolve
+        // regardless of declaration order.
+        {
+            let mut changed = true;
+            while changed {
+                changed = false;
+                for item in &program.items {
+                    match item {
+                        Item::Struct { decl: s, .. } => {
+                            if self.copy_types_registry.contains(&s.name)
+                                || self.types_with_drop.contains(&s.name)
+                            {
+                                continue;
+                            }
+                            let all_types: Vec<&Type> =
+                                if let Some(ref tf) = s.tuple_fields {
+                                    tf.iter().collect()
+                                } else {
+                                    s.fields.iter().map(|f| &f.field_type).collect()
+                                };
+                            if all_types.iter().all(|t| self.is_copy_type_with_registry(t)) {
+                                self.copy_types_registry.insert(s.name.clone());
+                                changed = true;
+                            }
+                        }
+                        Item::Enum { decl: e, .. } => {
+                            if self.copy_types_registry.contains(&e.name) {
+                                continue;
+                            }
+                            if self.all_enum_variants_are_copy(&e.variants) {
+                                self.copy_types_registry.insert(e.name.clone());
+                                changed = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
             if let Item::BoundAlias { name, traits, .. } = item {

@@ -231,6 +231,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(ty) = self.local_var_types.get(name) {
                     return matches!(ty, Type::Reference(_) | Type::MutableReference(_));
                 }
+                if name == "self" && self.inferred_borrowed_params.contains("self") {
+                    return true;
+                }
                 false
             }
             Expression::FieldAccess { object, .. } => {

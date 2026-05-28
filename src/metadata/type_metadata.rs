@@ -145,8 +145,15 @@ impl ModuleMetadata {
                 let inner = &s[7..s.len() - 1];
                 Self::deserialize_type(inner).map(|t| Type::Option(Box::new(t)))
             }
+            s if s.starts_with("Reference(") && s.ends_with(')') => {
+                let inner = &s[10..s.len() - 1];
+                Self::deserialize_type(inner).map(|t| Type::Reference(Box::new(t)))
+            }
+            s if s.starts_with("MutableReference(") && s.ends_with(')') => {
+                let inner = &s[17..s.len() - 1];
+                Self::deserialize_type(inner).map(|t| Type::MutableReference(Box::new(t)))
+            }
             s if s.starts_with("Custom(") => {
-                // Custom("TypeName") - extract the inner string
                 let rest = s
                     .strip_prefix("Custom(\"")
                     .and_then(|r| r.strip_suffix("\")"));
