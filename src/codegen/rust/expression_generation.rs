@@ -415,12 +415,11 @@ impl<'ast> CodeGenerator<'ast> {
         if !wants_str {
             return arg_str;
         }
-        if matches!(
-            arg_to_generate,
-            Expression::FieldAccess { .. }
-                | Expression::Identifier { .. }
-                | Expression::MethodCall { .. }
-        ) {
+        // When callee expects &str and arg produces an owned String, add &.
+        // &String auto-derefs to &str. Only skip for bare string literals
+        // (already &str) which are handled by string_literal_converted above.
+        let is_bare_str_literal = arg_str.starts_with('"') && !arg_str.ends_with(".to_string()");
+        if !is_bare_str_literal {
             return format!("&{arg_str}");
         }
         arg_str

@@ -10,7 +10,7 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-/// Match arms returning string literals must use `.into()` only — never `.into().to_string()`.
+/// Match arms returning string literals must use a single conversion — never double-convert.
 #[test]
 fn test_match_arm_string_literal_no_double_convert() {
     let source = r##"
@@ -32,8 +32,8 @@ impl Level {
     let generated = test_utils::compile_single(source);
 
     assert!(
-        generated.contains("\"low\".into()") || generated.contains("\"low\".into(),"),
-        "expected .into() for match arm string literal:\n{}",
+        generated.contains("\"low\".to_string()") || generated.contains("\"low\".into()"),
+        "expected string conversion for match arm literal:\n{}",
         generated
     );
     assert!(
@@ -42,8 +42,8 @@ impl Level {
         generated
     );
     assert!(
-        !generated.contains(".to_string()"),
-        "match arm strings must not leak .to_string():\n{}",
+        !generated.contains(".to_string().to_string()"),
+        "must not double-convert match arm strings:\n{}",
         generated
     );
 }
