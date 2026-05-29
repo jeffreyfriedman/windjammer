@@ -1,30 +1,36 @@
-// Test file for closures - Windjammer auto-moves all closures
-// No explicit 'move' keyword needed - the compiler handles it!
+// Test file for closure move inference
+// The compiler automatically adds `move` when the closure captures outer variables.
+// No explicit `move` keyword needed — the compiler infers it.
 
-fn test_closure_basic() {
+fn test_closure_captures_outer() {
     let x = 42
     
-    // Closure - compiler automatically generates `move`
-    // User just writes the simple syntax
+    // Captures `x` from outer scope → compiler adds `move`
     let closure = || x + 1
     
-    // Use the closure
     let result = closure()
 }
 
-fn test_closure_with_params() {
+fn test_closure_with_param_and_capture() {
     let offset = 10
     
-    // Closure with parameters - still auto-moves
+    // Captures `offset` from outer scope → compiler adds `move`
     let add_offset = |n| n + offset
     
     let result = add_offset(5)
 }
 
+fn test_pure_closure_no_capture() {
+    // No captures — only uses its own parameter → no `move`
+    let double = |x| x * 2
+    
+    let result = double(5)
+}
+
 fn test_thread_block() {
     let x = 42
     
-    // Thread blocks already auto-move - this is the Windjammer way!
+    // Thread blocks always use move (closure escapes scope)
     thread {
         let y = x + 1
     }

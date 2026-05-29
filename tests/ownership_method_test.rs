@@ -385,12 +385,14 @@ impl Inventory {
         generated
     );
 
-    // The manually-written closure in count_not_matching should pass through unchanged
-    // (it already IS a closure, no wrapping needed)
+    // The manually-written closure in count_not_matching should pass through as a closure.
+    // Since it captures `predicate` from the enclosing scope, the compiler adds `move`.
     assert!(
-        generated.contains("|e| !predicate(e)") || generated.contains("|e| !(predicate(e))"),
-        "Manually written closure should pass through unchanged.\n\
-         Generated:\n{}",
+        generated.contains("|e| !predicate(e)")
+            || generated.contains("|e| !(predicate(e))")
+            || generated.contains("move |e| !predicate(e)")
+            || generated.contains("move |e| !(predicate(e))"),
+        "Manually written closure should be preserved (with possible move). Generated:\n{}",
         generated
     );
 }
