@@ -28,12 +28,14 @@ pub fn generate_literal(lit: &Literal) -> String {
 }
 
 /// Coerce a Rust string literal expression (`"foo"`) to owned `String` without `.to_string()`.
-/// Windjammer user code never writes `.to_string()`; generated Rust uses `.into()` instead.
+/// Convert a string literal to an owned `String` expression in Rust.
+/// Uses `.to_string()` instead of `.into()` because `.into()` requires type inference
+/// context which fails in match arms, tuple destructuring, and other complex positions.
 pub fn string_literal_to_owned_rust(literal_expr: &str) -> String {
     if literal_expr == "\"\"" {
         "String::new()".to_string()
     } else {
-        format!("{}.into()", literal_expr)
+        format!("{}.to_string()", literal_expr)
     }
 }
 

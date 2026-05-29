@@ -171,18 +171,29 @@ impl<'ast> CodeGenerator<'ast> {
                 //
                 // IMPORTANT: Only strip for &str parameters, NOT &String parameters!
                 // &String parameters still need .to_string() (creates String, then borrows it)
+                let mut to_string_stripped_for_str_param = false;
                 if let Some(ref sig) = method_signature {
                     let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
                     if let Some(param_type) = sig.param_types.get(sig_param_idx) {
-                        // Check if parameter is specifically &str (not &String!)
                         let param_is_str_slice_ref = if let Type::Reference(inner) = param_type {
                             matches!(&**inner, Type::Custom(name) if name == "str")
                         } else {
                             false
                         };
-                        if param_is_str_slice_ref && arg_str.ends_with(".to_string()") {
-                            // Strip .to_string() - &str accepts string literals directly
-                            arg_str = arg_str[..arg_str.len() - 12].to_string();
+                        if param_is_str_slice_ref {
+                            if arg_str.ends_with(".to_string()") {
+                                arg_str = arg_str[..arg_str.len() - 12].to_string();
+                                to_string_stripped_for_str_param = true;
+                            } else if arg_str.ends_with(".into()") {
+                                arg_str = arg_str[..arg_str.len() - 7].to_string();
+                                to_string_stripped_for_str_param = true;
+                            }
+                            // Strip .into() from nested expressions (match arms, if-else blocks)
+                            // where string literals were coerced to String but callee wants &str.
+                            if arg_str.contains(".into()") {
+                                arg_str = arg_str.replace(".into()", "");
+                                to_string_stripped_for_str_param = true;
+                            }
                         }
                     }
                 }
@@ -577,7 +588,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // AUTO-REF: Add & when parameter expects reference but arg is owned
-                if !string_literal_converted {
+                // Skip when .to_string() was stripped for &str param — the result is
+                // already a bare literal/value that is &str, adding & would create &&str.
+                if !string_literal_converted && !to_string_stripped_for_str_param {
                     // Use `arg_to_generate` (after stripping explicit `&` for map keys / owned params)
                     // so `should_add_ref` sees `key` not `&key` — otherwise the Unary(Ref) early-return
                     // skips HashMap `str` key handling and we emit `get(&key)` for `key: &str` (E0277).
@@ -620,7 +633,7 @@ impl<'ast> CodeGenerator<'ast> {
                         idx,
                         arg_to_generate,
                         arg_str,
-                        string_literal_converted,
+                        string_literal_converted || to_string_stripped_for_str_param,
                     );
                 }
 
