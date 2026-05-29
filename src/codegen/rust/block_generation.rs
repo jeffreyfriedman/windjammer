@@ -143,9 +143,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                 self.inferred_borrowed_params.contains(name);
 
                                             if is_borrowed_str_param {
-                                                // Replace .clone() with .into()
                                                 expr_str =
-                                                    expr_str.replace(".clone()", ".into()");
+                                                    expr_str.replace(".clone()", ".to_string()");
                                             }
                                         }
                                     }
@@ -351,9 +350,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                     self.inferred_borrowed_params.contains(name);
 
                                                 if is_borrowed_str_param {
-                                                    // Replace .clone() with .into()
                                                     expr_str = expr_str
-                                                        .replace(".clone()", ".into()");
+                                                        .replace(".clone()", ".to_string()");
                                                 }
                                             }
                                         }

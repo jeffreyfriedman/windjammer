@@ -75,8 +75,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.contains(name) && is_string_type;
 
                             if is_borrowed_str_param {
-                                // Replace .clone() with .into()
-                                return_str = return_str.replace(".clone()", ".into()");
+                                return_str = return_str.replace(".clone()", ".to_string()");
                             }
                         }
                     }

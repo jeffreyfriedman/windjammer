@@ -343,7 +343,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !value_str.contains(".to_string()")
                     && !value_str.contains(".into()")
                 {
-                    value_str = format!("{}.into()", value_str);
+                    value_str = format!("{}.to_string()", value_str);
                 }
             }
             // E0308 FIX: match-bound variables from &/&mut scrutinees are references.
