@@ -42,6 +42,38 @@ pub fn cast_int_to_float(s: &str, expr: &Expression, target: &str) -> String {
     }
 }
 
+/// Auto-cast an integer call argument to float when the parameter expects f32/f64.
+///
+/// Returns `true` (and mutates `arg_str`) if a cast was applied.
+/// Skips if the arg string already contains ` as f32`/` as f64`.
+pub fn maybe_cast_int_arg_to_float(
+    arg_str: &mut String,
+    arg_expr: &Expression,
+    param_type: &Type,
+    arg_type: Option<&Type>,
+) -> bool {
+    let param_is_f32 = matches!(param_type, Type::Custom(n) if n == "f32");
+    let param_is_f64 = matches!(param_type, Type::Custom(n) if n == "f64");
+    if !param_is_f32 && !param_is_f64 {
+        return false;
+    }
+
+    let arg_is_int = arg_type.is_some_and(|t| {
+        matches!(t, Type::Int)
+            || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
+    });
+    if !arg_is_int {
+        return false;
+    }
+    if arg_str.contains(" as f32") || arg_str.contains(" as f64") {
+        return false;
+    }
+
+    let target = if param_is_f32 { "f32" } else { "f64" };
+    *arg_str = cast_int_to_float(arg_str, arg_expr, target);
+    true
+}
+
 /// Peel off the outermost reference layer from a type.
 /// Returns the inner type if wrapped in Type::Reference, otherwise returns the type unchanged.
 pub fn peel_reference_layer(t: &Type) -> &Type {

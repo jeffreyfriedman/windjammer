@@ -643,38 +643,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 // Better to let Rust compiler catch the error than guess wrong
             }
 
-            // AUTO-CAST int → float: regular Call path
-            // Skip when the signature key has a collision (different types registered
-            // the same function name with different param types). The auto-cast
-            // cannot be trusted when the looked-up signature may be from a different
-            // type in another module.
+            // AUTO-CAST int → float: when parameter expects f32/f64 but argument is int.
+            // Skip when signature has a collision (different types with same name).
             if let Some(ref sig) = signature {
                 let has_collision = gen.signature_registry.has_collision(func_name)
                     || gen.signature_registry.has_collision(func_str);
                 if !has_collision {
                     if let Some(param_ty) = sig.param_types.get(i) {
-                        let param_is_f32 = matches!(param_ty, Type::Custom(n) if n == "f32");
-                        let param_is_f64 = matches!(param_ty, Type::Custom(n) if n == "f64");
-                        if param_is_f32 || param_is_f64 {
-                            let arg_ty = gen.infer_expression_type(arg);
-                            let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
-                                matches!(t, Type::Int)
-                                    || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
-                            });
-                            if arg_is_int
-                                && !arg_str.contains(" as f32")
-                                && !arg_str.contains(" as f64")
-                            {
-                                let target = if param_is_f32 { "f32" } else { "f64" };
-                                arg_str = if arg_str.contains(' ')
-                                    || matches!(arg, Expression::Binary { .. })
-                                {
-                                    format!("({}) as {}", arg_str, target)
-                                } else {
-                                    format!("{} as {}", arg_str, target)
-                                };
-                            }
-                        }
+                        let arg_ty = gen.infer_expression_type(arg);
+                        crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(
+                            &mut arg_str, arg, param_ty, arg_ty.as_ref(),
+                        );
                     }
                 }
             }

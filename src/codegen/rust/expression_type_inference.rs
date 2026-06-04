@@ -342,10 +342,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // Final fallback: try simple method name
-                self.signature_registry
-                    .get_signature(method)
-                    .and_then(|sig| sig.return_type.clone())
+                // No type context available — don't do bare lookup to avoid
+                // picking a different type's method (e.g., "new" → wrong type).
+                None
             }
             // Block expression: infer from the last statement's expression
             // Handles: let x = { if cond { 64.0 } else { 32.0 } }
