@@ -757,14 +757,16 @@ fn method_is_mutating(
     false
 }
 
-/// Look up a method in the signature registry. Methods are registered under
-/// multiple keys (e.g., "TypeName::method", "method"), so we try the
-/// unqualified name which matches any type's method.
+/// Look up a method in the signature registry by suffix match.
+/// Only used as a conservative fallback when the struct context is unknown.
+/// Returns Some if ANY type's method with this name exists — conservative for
+/// mutation checks (false positive is safe, false negative is not).
 fn lookup_method_in_registry<'a>(
     registry: &'a SignatureRegistry,
     method: &str,
 ) -> Option<&'a crate::analyzer::FunctionSignature> {
-    registry.get_signature(method)
+    registry.find_signature_ending_with(&format!("::{}", method))
+        .or_else(|| registry.get_signature(method))
 }
 
 fn is_self_field_chain(expr: &Expression) -> bool {

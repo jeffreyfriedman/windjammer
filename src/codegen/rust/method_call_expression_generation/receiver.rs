@@ -60,10 +60,32 @@ impl<'ast> CodeGenerator<'ast> {
                     if !self.is_type_copy(&recv_ty) {
                         if let Some(tn) = Self::type_to_name(&recv_ty) {
                             let qualified = format!("{}::{}", tn, method);
-                            let sig_opt = self
-                                .signature_registry
-                                .get_signature(&qualified)
-                                .or_else(|| self.signature_registry.get_signature(method));
+                            let sig_opt = self.signature_registry.get_signature(&qualified)
+                                .or_else(|| {
+                                    let base = tn.split('<').next().unwrap_or(&tn);
+                                    if base != tn {
+                                        let base_q = format!("{base}::{method}");
+                                        self.signature_registry.get_signature(&base_q)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .or_else(|| {
+                                    // For `Box<dyn Trait>`, extract the trait name from
+                                    // the Parameterized type and look up `Trait::method`.
+                                    Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
+                                        let trait_q = format!("{trait_name}::{method}");
+                                        self.signature_registry.get_signature(&trait_q)
+                                    })
+                                })
+                                .or_else(|| {
+                                    // Suffix match: find any `::method` in the registry.
+                                    // Conservative for ownership check (any mutating method
+                                    // prevents spurious clone).
+                                    self.signature_registry.find_signature_ending_with(
+                                        &format!("::{method}")
+                                    )
+                                });
                             if let Some(sig) = sig_opt {
                                 if sig.has_self_receiver
                                     && sig.param_ownership.first()
@@ -147,10 +169,27 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let qualified = format!("{tn}::{method}");
-        let sig_opt = self
-            .signature_registry
-            .get_signature(&qualified)
-            .or_else(|| self.signature_registry.get_signature(method));
+        let sig_opt = self.signature_registry.get_signature(&qualified)
+            .or_else(|| {
+                let base = tn.split('<').next().unwrap_or(&tn);
+                if base != tn {
+                    let base_q = format!("{base}::{method}");
+                    self.signature_registry.get_signature(&base_q)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
+                    let trait_q = format!("{trait_name}::{method}");
+                    self.signature_registry.get_signature(&trait_q)
+                })
+            })
+            .or_else(|| {
+                self.signature_registry.find_signature_ending_with(
+                    &format!("::{method}")
+                )
+            });
         let Some(sig) = sig_opt else {
             return false;
         };
@@ -162,5 +201,21 @@ impl<'ast> CodeGenerator<'ast> {
             Some(crate::analyzer::OwnershipMode::Borrowed
                 | crate::analyzer::OwnershipMode::MutBorrowed)
         )
+    }
+
+    /// Extract the trait name from `Box<dyn Trait>`, `dyn Trait`, or `TraitObject("Trait")`.
+    fn extract_dyn_trait_name(ty: &crate::parser::Type) -> Option<&str> {
+        use crate::parser::Type;
+        match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::extract_dyn_trait_name(inner)
+            }
+            Type::Parameterized(name, params) if name == "Box" => {
+                params.first().and_then(|inner| Self::extract_dyn_trait_name(inner))
+            }
+            Type::TraitObject(name) => Some(name.as_str()),
+            Type::Custom(name) => name.strip_prefix("dyn "),
+            _ => None,
+        }
     }
 }

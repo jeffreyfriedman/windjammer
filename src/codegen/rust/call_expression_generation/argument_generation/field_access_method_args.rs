@@ -286,6 +286,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 }
             }
 
+            // AUTO-CAST int → float
             let qualified_key = type_name
                 .as_ref()
                 .map(|tn| format!("{}::{}", tn, call_method));
@@ -295,29 +296,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 || gen.signature_registry.has_collision(call_method);
             if !has_collision {
                 if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
-                    let param_is_f32 = matches!(param_ty, Type::Custom(n) if n == "f32");
-                    let param_is_f64 = matches!(param_ty, Type::Custom(n) if n == "f64");
-                    if param_is_f32 || param_is_f64 {
-                        let arg_ty = gen.infer_expression_type(arg);
-                        let arg_is_int = arg_ty.as_ref().is_some_and(|t| {
-                            matches!(t, Type::Int)
-                                || matches!(
-                                    t,
-                                    Type::Custom(n) if crate::type_classification::is_integer_type(n)
-                                )
-                        });
-                        if arg_is_int && !arg_str.contains(" as f32") && !arg_str.contains(" as f64")
-                        {
-                            let target = if param_is_f32 { "f32" } else { "f64" };
-                            arg_str = if arg_str.contains(' ')
-                                || matches!(arg, Expression::Binary { .. })
-                            {
-                                format!("({}) as {}", arg_str, target)
-                            } else {
-                                format!("{} as {}", arg_str, target)
-                            };
-                        }
-                    }
+                    let arg_ty = gen.infer_expression_type(arg);
+                    crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(
+                        &mut arg_str, arg, param_ty, arg_ty.as_ref(),
+                    );
                 }
             }
 
