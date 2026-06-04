@@ -15,8 +15,10 @@
 //! Goal: 10x+ memory compression for sparse voxel grids
 //! Tests: OctreeNode, grid-to-octree conversion, memory efficiency
 
+use assert_cmd::Command as AssertCommand;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let _tmp = tempfile::tempdir().unwrap();
@@ -36,6 +38,7 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg("octree.wj")
         .current_dir(&test_dir)
         .output()
@@ -48,8 +51,27 @@ fn compile_and_run(source: &str, _test_name: &str) -> (bool, String) {
         return (false, format!("STDERR:\n{}\nSTDOUT:\n{}", stderr, stdout));
     }
 
-    // Run the compiled binary (cargo builds to target/debug/)
-    let binary_path = test_dir.join("build/target/debug/octree");
+    let build_dir = test_dir.join("build");
+    let cargo_output = AssertCommand::new("cargo")
+        .arg("build")
+        .current_dir(&build_dir)
+        .timeout(Duration::from_secs(120))
+        .output()
+        .expect("Failed to run cargo build");
+
+    let cargo_stderr = String::from_utf8_lossy(&cargo_output.stderr).to_string();
+    let cargo_stdout = String::from_utf8_lossy(&cargo_output.stdout).to_string();
+    if !cargo_output.status.success() {
+        return (
+            false,
+            format!(
+                "cargo build failed:\nSTDERR:\n{}\nSTDOUT:\n{}",
+                cargo_stderr, cargo_stdout
+            ),
+        );
+    }
+
+    let binary_path = build_dir.join("target/debug/octree");
     let run_output = std::process::Command::new(&binary_path)
         .current_dir(&test_dir)
         .output();

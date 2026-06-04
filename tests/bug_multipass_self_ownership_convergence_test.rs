@@ -77,8 +77,13 @@ impl Orchestrator {
     );
 
     assert!(
-        orch_rs.contains("fn read_value(&self"),
-        "Cross-file: read_value() calls self.sub.get_value() which only reads -- should be &self.\nGenerated orchestrator.rs:\n{}",
+        orch_rs.contains("fn read_value(&self") || orch_rs.contains("fn read_value(self"),
+        "Cross-file: read_value() calls self.sub.get_value() which only reads -- should be &self or self (Copy types get self).\nGenerated orchestrator.rs:\n{}",
+        orch_rs
+    );
+    assert!(
+        !orch_rs.contains("fn read_value(&mut self"),
+        "Cross-file: read_value() should NOT be &mut self (only reads).\nGenerated orchestrator.rs:\n{}",
         orch_rs
     );
 }

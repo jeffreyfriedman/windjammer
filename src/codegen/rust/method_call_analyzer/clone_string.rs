@@ -113,30 +113,10 @@ impl MethodCallAnalyzer {
             }
         }
 
-        let is_stdlib_method = matches!(
-            method,
-            "push"
-                | "insert"
-                | "draw_text"
-                | "set_title"
-                | "set_text"
-                | "set_label"
-                | "log"
-                | "print"
-        );
-
-        if is_stdlib_method {
-            return matches!(
-                (method, param_idx),
-                ("push", 0)
-                    | ("insert", 0)
-                    | ("draw_text", 0)
-                    | ("set_title", 0)
-                    | ("set_text", 0)
-                    | ("set_label", 0)
-                    | ("log", 0)
-                    | ("print", 0),
-            );
+        if matches!(method, "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill")
+            && param_idx == 0
+        {
+            return true;
         }
 
         if let Some(sig) = method_signature {
@@ -165,7 +145,7 @@ impl MethodCallAnalyzer {
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>
     pub fn should_add_cloned(method: &str, _return_type: &Option<Type>) -> bool {
-        super::super::stdlib_method_traits::is_map_key_method(method)
-            || matches!(method, "first" | "last")
+        matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
+            || matches!(method, "unwrap" | "first" | "last")
     }
 }

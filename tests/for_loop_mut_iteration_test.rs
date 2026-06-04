@@ -20,7 +20,7 @@ fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path:
     fs::write(&wj_file, wj_code).expect("write test.wj");
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", wj_file.to_str().unwrap()])
+        .args(["build", "--no-cargo", wj_file.to_str().unwrap()])
         .current_dir(test_dir)
         .output()
         .expect("Failed to run wj build");

@@ -126,8 +126,13 @@ impl Item {
 
     let generated = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
-        generated.contains("fn get(&self)"),
-        "Should infer &self for read-only method, got:\n{}",
+        generated.contains("fn get(&self)") || generated.contains("fn get(self)"),
+        "Should infer &self or self (Copy) for read-only method, got:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn get(&mut self)"),
+        "Read-only method should not get &mut self, got:\n{}",
         generated
     );
 }

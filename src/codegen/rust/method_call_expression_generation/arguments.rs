@@ -51,8 +51,8 @@ impl<'ast> CodeGenerator<'ast> {
                     .and_then(|sig| sig.param_ownership.get(sig_param_idx))
                     .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
 
-                const AUTO_BORROW_METHODS: &[&str] = &["push_str", "extend_from_slice"];
-                let is_auto_borrow_target = AUTO_BORROW_METHODS.contains(&method) && i == 0;
+                let is_auto_borrow_target =
+                    matches!(method, "push_str" | "extend_from_slice") && i == 0;
 
                 let prev_suppress = self.suppress_borrowed_clone;
                 if (param_expects_borrowed || is_auto_borrow_target)
@@ -154,6 +154,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if !is_copy
                         && !is_mut_ref_binding
                         && !arg_str.ends_with(".clone()")
+                        && !Self::is_enum_variant_or_constructor(arg_to_generate)
                         && matches!(
                             arg_to_generate,
                             Expression::Identifier { .. } | Expression::FieldAccess { .. }
@@ -237,16 +238,12 @@ impl<'ast> CodeGenerator<'ast> {
                     && crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
                 {
                     if let Expression::Identifier { name, .. } = arg {
-                        // Only wrap bare function pointers — not params/locals (e.g. filter(asset_type)).
-                        let is_param = self
-                            .current_function_params
-                            .iter()
-                            .any(|p| p.name == *name);
-                        let is_local = self
-                            .local_variable_scopes
-                            .iter()
-                            .any(|scope| scope.contains(name));
-                        if !is_param && !is_local {
+                        // Wrap function pointer parameters: iter adapters expect FnMut(&&T),
+                        // but fn(&T) -> bool does not auto-deref (E0631).
+                        let is_fn_ptr_param = self.current_function_params.iter().any(|p| {
+                            p.name == *name && matches!(p.type_, Type::FunctionPointer { .. })
+                        });
+                        if is_fn_ptr_param {
                             arg_str = format!("|__e| {}(__e)", arg_str);
                         }
                     }
@@ -387,8 +384,12 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                     }).unwrap_or(false);
                     // `Vec<String>::push(SCOPE_*)` — push param is generic `T`; const is `&'static str`.
-                    let needs_owned_string =
-                        wants_string || (method == "push" && is_string_const);
+                    let needs_owned_string = wants_string
+                        || (matches!(
+                            method,
+                            "push" | "insert" | "extend" | "append" | "push_front" | "push_back"
+                                | "add" | "fill"
+                        ) && is_string_const);
                     if needs_owned_string && is_string_const && !arg_str.ends_with(".to_string()")
                     {
                         arg_str = format!("{}.to_string()", arg_str);
@@ -445,8 +446,26 @@ impl<'ast> CodeGenerator<'ast> {
                                 matches!(t, Type::MutableReference(_))
                             })
                         }).unwrap_or(false);
+                    let param_is_borrowed_map_key = i == 0
+                        && crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
+                        && (method_signature
+                            .as_ref()
+                            .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                            .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                            || self.borrowed_iterator_vars.contains(name));
+                    // Borrowed iterator vars (for x in &vec) are already references.
+                    // Cloning them produces owned values, changing the type. Skip
+                    // auto-clone when the return type indicates we're collecting refs.
+                    let is_borrowed_iter_collecting_refs =
+                        self.borrowed_iterator_vars.contains(name)
+                            && matches!(
+                                &self.current_function_return_type,
+                                Some(Type::Vec(inner)) if matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
+                            );
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if !param_is_mut_borrowed
+                            && !param_is_borrowed_map_key
+                            && !is_borrowed_iter_collecting_refs
                             && analysis
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
@@ -483,11 +502,16 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .and_then(|sig| sig.param_ownership.get(sig_param_idx))
                         .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
-                        || (method == "push" && i == 0);
+                        || (matches!(
+                            method,
+                            "push" | "insert" | "extend" | "append" | "push_front" | "push_back"
+                                | "add" | "fill"
+                        ) && i == 0);
                     if param_expects_owned && !arg_str.ends_with(".clone()") {
                         let inferred = self.infer_expression_type(arg);
                         let is_copy = inferred.as_ref().is_some_and(|t| self.is_type_copy(t));
-                        if is_copy {
+                        let is_value_constructor = Self::is_enum_variant_or_constructor(arg);
+                        if is_copy || is_value_constructor {
                             if arg_str.starts_with("&") {
                                 arg_str = arg_str
                                     .strip_prefix('&')
@@ -495,7 +519,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     .to_string();
                             }
                         } else {
-                            // Non-Copy or unknown type: clone to prevent E0507
                             if arg_str.starts_with("&") {
                                 arg_str = format!("({}).clone()", arg_str);
                             } else {
@@ -639,9 +662,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // AUTO-BORROW: Methods that take &T or &[T] should auto-borrow
                 // when given owned values. Eliminates Rust leakage in .wj files.
-                let auto_borrow_methods = ["push_str", "extend_from_slice"];
-                let map_key_methods = ["remove", "get", "contains_key", "entry"];
-                let is_map_method = map_key_methods.contains(&method)
+                let is_auto_borrow = matches!(method, "push_str" | "extend_from_slice");
+                let is_map_method = matches!(
+                    method,
+                    "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
+                )
                     && i == 0
                     && {
                         let obj_ty = self.infer_expression_type(object);
@@ -649,7 +674,7 @@ impl<'ast> CodeGenerator<'ast> {
                             Type::Parameterized(base, _) if base == "HashMap" || base == "BTreeMap" || base == "Map"
                         ))
                     };
-                if (auto_borrow_methods.contains(&method) || is_map_method) && i == 0 {
+                if (is_auto_borrow || is_map_method) && i == 0 {
                     let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
                     let arg_already_ref = {
                         let arg_ty = self.infer_expression_type(arg);
@@ -661,7 +686,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.contains(&name.to_string()),
                             _ => false,
                         };
-                        ty_is_ref || param_is_borrowed
+                        let is_borrowed_iter = match arg {
+                            Expression::Identifier { name, .. } =>
+                                self.borrowed_iterator_vars.contains(name),
+                            _ => false,
+                        };
+                        ty_is_ref || param_is_borrowed || is_borrowed_iter
                     };
                     if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                         let needs_borrow = matches!(arg,
@@ -678,9 +708,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // AUTO-CAST int → float: when parameter expects f32/f64 but argument is int
                 // Skip when signature has a collision (different types with same name).
                 {
-                    let effective_sig = method_signature.as_ref()
-                        .or_else(|| self.signature_registry.get_signature(method));
-                    let has_collision = self.signature_registry.has_collision(method);
+                    let effective_sig = method_signature.as_ref();
+                    let qualified_method = self.infer_type_name(object)
+                        .map(|tn| format!("{}::{}", tn, method));
+                    let has_collision = qualified_method.as_deref()
+                        .is_some_and(|q| self.signature_registry.has_collision(q))
+                        || self.signature_registry.has_collision(method);
                     if let Some(sig) = effective_sig {
                         let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
                         if !has_collision {
@@ -715,5 +748,29 @@ impl<'ast> CodeGenerator<'ast> {
             .collect();
 
         (args_vec, prev_float_target)
+    }
+
+    fn is_enum_variant_or_constructor(expr: &Expression) -> bool {
+        match expr {
+            Expression::StructLiteral { .. } => true,
+            Expression::Identifier { name, .. } => {
+                Self::is_enum_variant_qualified_path(name)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } if arguments.is_empty() => {
+                if let Expression::FieldAccess { object, .. } = &**function {
+                    matches!(&**object, Expression::Identifier { name, .. } if name.chars().next().is_some_and(|c| c.is_uppercase()))
+                } else {
+                    false
+                }
+            }
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name.chars().next().is_some_and(|c| c.is_uppercase()))
+            }
+            _ => false,
+        }
     }
 }

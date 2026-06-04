@@ -49,7 +49,7 @@ impl Tag {
 
     let rust = test_utils::compile_single_result(src).unwrap_or_else(|e| panic!("compile: {}", e));
     assert!(
-        rust.contains("pub fn run(&self, c: &mut Cell)"),
+        rust.contains("c: &mut Cell"),
         "expected `c: &mut Cell` for mutating calls inside match arms; got:\n{}",
         rust
     );

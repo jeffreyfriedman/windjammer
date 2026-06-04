@@ -31,7 +31,7 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = left
         {
-            if method == "len" && arguments.is_empty() {
+            if matches!(method.as_str(), "len" | "capacity" | "count") && arguments.is_empty() {
                 // Check if comparing to 0
                 if let Expression::Literal {
                     value: Literal::Int(0),
@@ -471,7 +471,9 @@ impl<'ast> CodeGenerator<'ast> {
                         && (self.inferred_borrowed_params.contains(name.as_str())
                             || self.borrowed_iterator_vars.contains(name))
                 }
-                Expression::MethodCall { method, .. } => method == "as_str",
+                Expression::MethodCall { method, .. } => {
+                    super::rust_stdlib_annotations::is_strip_redundant(method)
+                }
                 _ => false,
             };
 
@@ -481,7 +483,9 @@ impl<'ast> CodeGenerator<'ast> {
                         && (self.inferred_borrowed_params.contains(name.as_str())
                             || self.borrowed_iterator_vars.contains(name))
                 }
-                Expression::MethodCall { method, .. } => method == "as_str",
+                Expression::MethodCall { method, .. } => {
+                    super::rust_stdlib_annotations::is_strip_redundant(method)
+                }
                 _ => false,
             };
 

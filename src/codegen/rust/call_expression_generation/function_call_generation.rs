@@ -119,7 +119,10 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 if !is_explicit_ref {
                     gen.in_owned_value_context = true;
                 }
+                let prev_in_call_arg = gen.in_call_argument_generation;
+                gen.in_call_argument_generation = true;
                 let result = gen.generate_expression(arg);
+                gen.in_call_argument_generation = prev_in_call_arg;
                 gen.in_owned_value_context = prev_owned_context;
                 result
             })
@@ -237,165 +240,84 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         return format!("{}({})", func_str, args.join(", "));
     }
 
-    // Look up signature and clone it to avoid borrow conflicts
-    // THE WINDJAMMER WAY: Try qualified name first, then simple name
-    // e.g., "Sound::new" -> try "Sound::new", then "new"
-
-    // TDD FIX: Function pointer signature extraction
-    // When calling a function pointer parameter (e.g., has_item(arg1, arg2)),
-    // extract the signature from the parameter's type instead of the registry
-    let mut signature = if let Some(param) = gen
+    // Function pointer signature extraction: when calling a function pointer
+    // parameter (e.g., has_item(arg1, arg2)), build the signature from the
+    // parameter's type instead of registry lookup.
+    let mut signature = gen
         .current_function_params
         .iter()
         .find(|p| p.name == func_name)
-    {
-        // Check if this parameter is a function pointer
-        if let Type::FunctionPointer {
-            params,
-            return_type,
-        } = &param.type_
-        {
-            // TDD FIX: Build signature from function pointer type
-            // CRITICAL: Match the conversion logic in types.rs type_to_rust()!
-            // fn(string, i32) in Windjammer → fn(&String, i32) in Rust
-            //
-            // Conversion rules (from types.rs lines 148-160):
-            // - Type::String → "&String" → Borrowed
-            // - Type::Custom("string") → "&String" → Borrowed
-            // - Type::Reference(_) → "&T" → Borrowed
-            // - Copy types (Int, Bool, etc.) → owned → Owned
-            // - Everything else → as-is (keep explicit types)
-            let param_ownership: Vec<OwnershipMode> = params
-                .iter()
-                .map(|ty| {
-                    match ty {
-                        // Idiomatic Windjammer: string parameters are borrowed (types.rs:151)
+        .and_then(|param| {
+            if let Type::FunctionPointer {
+                params,
+                return_type,
+            } = &param.type_
+            {
+                let param_ownership: Vec<OwnershipMode> = params
+                    .iter()
+                    .map(|ty| match ty {
                         Type::String => OwnershipMode::Borrowed,
                         Type::Custom(name) if name == "string" => OwnershipMode::Borrowed,
-                        // Explicit references - borrowed (types.rs:154)
                         Type::Reference(_) | Type::MutableReference(_) => OwnershipMode::Borrowed,
-                        // Copy types - owned (types.rs:156-157)
                         Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => {
                             OwnershipMode::Owned
                         }
                         Type::Custom(name)
                             if matches!(
                                 name.as_str(),
-                                "i32"
-                                    | "i64"
-                                    | "u32"
-                                    | "u64"
-                                    | "f32"
-                                    | "f64"
-                                    | "bool"
-                                    | "char"
-                                    | "usize"
-                                    | "isize"
+                                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "bool"
+                                    | "char" | "usize" | "isize"
                             ) =>
                         {
                             OwnershipMode::Owned
                         }
-                        // Everything else - keep as-is (types.rs:159)
-                        // For non-Copy custom types, default is as-is, which means Owned in this context
-                        // (the analyzer will have determined the correct type already)
                         _ => OwnershipMode::Owned,
-                    }
-                })
-                .collect();
+                    })
+                    .collect();
 
-            Some(crate::analyzer::FunctionSignature {
-                name: func_name.to_string(),
-                param_types: params.clone(),
-                param_ownership,
-                return_type: return_type.as_ref().map(|t| (**t).clone()),
-                return_ownership: OwnershipMode::Owned, // Functions return owned by default
-                has_self_receiver: false,
-                is_extern: false,
-            })
-        } else {
-            // Not a function pointer - try registry
-            gen.signature_registry.get_signature(func_name).cloned()
-        }
-    } else {
-        // Not a parameter - try registry lookup
-        let direct = gen.signature_registry.get_signature(func_name).cloned();
-        direct.or_else(|| {
-            if let Some(pos) = func_name.rfind("::") {
-                let qualifier = &func_name[..pos];
-                let simple_name = &func_name[pos + 2..];
-                let is_type_qualifier = qualifier.chars().next().is_some_and(|c| c.is_uppercase());
-                if is_type_qualifier {
-                    gen.signature_registry.get_signature(simple_name).cloned()
-                } else {
-                    // For module-qualified calls (e.g., draw::draw_text),
-                    // try progressively shorter qualified names.
-                    // Do NOT fall back to simple name - it may collide
-                    // with a different module's function with the same name.
-                    let parts: Vec<&str> = func_name.split("::").collect();
-                    let mut found = None;
-                    for start in (0..parts.len().saturating_sub(1)).rev() {
-                        let candidate = parts[start..].join("::");
-                        if let Some(sig) = gen.signature_registry.get_signature(&candidate) {
-                            found = Some(sig.clone());
-                            break;
-                        }
-                    }
-                    found
-                }
+                Some(crate::analyzer::FunctionSignature {
+                    name: func_name.to_string(),
+                    param_types: params.clone(),
+                    param_ownership,
+                    return_type: return_type.as_ref().map(|t| (**t).clone()),
+                    return_ownership: OwnershipMode::Owned,
+                    has_self_receiver: false,
+                    is_extern: false,
+                })
             } else {
                 None
             }
-        })
-    };
+        });
 
-    // For module-qualified calls (e.g., gpu::load_compute_shader_from_file),
-    // the signature lookup above may fail. Try resolving through module aliases
-    // first (e.g., `use crate::ffi::gpu_safe as gpu` → try gpu_safe::func),
-    // then fall back to the simple name.
-    let mut signature_from_simple_fallback = false;
-    if signature.is_none() && func_name.contains("::") {
-        let qualifier = func_name.split("::").next().unwrap_or("");
-        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-
-        // Try resolving through module alias map first
-        if let Some(original_module) = gen.module_alias_map.get(qualifier) {
-            let resolved_name = format!("{}::{}", original_module, simple);
-            if let Some(resolved_sig) = gen.signature_registry.get_signature(&resolved_name) {
-                signature = Some(resolved_sig.clone());
-            }
-        }
-
-        // If alias resolution didn't work, try simple-name fallback
-        // with arg count validation to avoid name collisions.
-        if signature.is_none() {
-            if let Some(found) = gen
-                .signature_registry
-                .find_signature_by_name_and_arg_count(simple, arguments.len())
-            {
-                signature = Some(found.clone());
-                signature_from_simple_fallback = true;
-            }
+    // Unified signature resolution: single resolver with no bare unqualified lookups.
+    let mut resolved_via_fallback = false;
+    if signature.is_none() {
+        let resolved = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+            &gen.signature_registry,
+            func_name,
+            None,
+            arguments.len(),
+            &gen.module_alias_map,
+        );
+        if let Some(r) = resolved {
+            resolved_via_fallback = matches!(
+                r.resolution_method,
+                crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
+            );
+            signature = Some(r.sig);
         }
     }
 
-    // Check if this is an extern function call for unsafe wrapping + FFI str handling.
-    // TDD FIX: When a signature was found via simple-name fallback for a
-    // module-qualified call (e.g. vnode_ffi::vnode_element), suppress extern
-    // detection ONLY when the signature is NOT explicitly extern. If the
-    // signature has is_extern=true, the function really is extern (e.g.
-    // input::input_is_key_pressed) and must be wrapped in unsafe.
-    let is_extern_call = if signature_from_simple_fallback && func_name.contains("::") {
+    // Extern detection: resolved signature is authoritative. For fallback
+    // resolutions on module-qualified calls, only trust explicit is_extern.
+    let is_extern_call = if resolved_via_fallback && func_name.contains("::") {
         signature.as_ref().is_some_and(|sig| sig.is_extern)
     } else if let Some(ref sig) = signature {
         sig.is_extern
+    } else if func_name.contains("::") {
+        false
     } else {
-        // Module-qualified calls without a signature are same-crate helpers, not extern FFI.
-        if func_name.contains("::") {
-            false
-        } else {
-            let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-            gen.extern_function_names.contains(simple)
-        }
+        gen.extern_function_names.contains(func_name)
     };
 
     let mut args: Vec<String> = super::argument_generation::collect_regular_function_arguments(
@@ -404,7 +326,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         func_str.as_str(),
         arguments,
         &signature,
-        signature_from_simple_fallback,
+        resolved_via_fallback,
         is_extern_call,
     );
 
@@ -427,7 +349,28 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         crate::codegen::rust::types::is_windjammer_text_type,
                     );
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
-                    format!("&{arg_str}")
+                    let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {
+                        if let Expression::Identifier { name, .. } = arg_expr {
+                            gen.inferred_borrowed_params.contains(&name.to_string())
+                                || gen.str_ref_optimized_params.contains(&name.to_string())
+                                || gen.current_function_params.iter().any(|param| {
+                                    param.name == *name
+                                        && matches!(
+                                            &param.type_,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                })
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if arg_already_ref {
+                        arg_str.clone()
+                    } else {
+                        format!("&{arg_str}")
+                    }
                 } else {
                     arg_str.clone()
                 }

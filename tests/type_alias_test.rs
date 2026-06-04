@@ -50,6 +50,7 @@ fn main() {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(test_dir.join("main.wj"))
         .arg("--output")
         .arg(test_dir.join("output"))
@@ -112,6 +113,7 @@ fn main() {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(test_dir.join("main.wj"))
         .arg("--output")
         .arg(test_dir.join("output"))

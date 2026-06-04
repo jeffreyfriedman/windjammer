@@ -179,8 +179,8 @@ impl Demo {
     // Current ownership inference may still emit &self for this call pattern; both are accepted if
     // output compiles. Prefer &mut self when the analyzer is tightened.
     assert!(
-        rust.contains("pub fn render(&mut self") || rust.contains("pub fn render(&self"),
-        "render should use &self or &mut self. Generated:\n{}",
+        rust.contains("pub fn render(&mut self") || rust.contains("pub fn render(&self") || rust.contains("pub fn render(self"),
+        "render should use self, &self, or &mut self (not mut self). Generated:\n{}",
         rust
     );
     test_utils::verify_rust_compiles(&rust).expect("Generated Rust should compile");

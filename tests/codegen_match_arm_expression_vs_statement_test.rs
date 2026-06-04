@@ -46,9 +46,9 @@ fn main() {
     let wj_file = output_dir.join("test.wj");
     fs::write(&wj_file, code).unwrap();
 
-    // Compile
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)
@@ -61,13 +61,9 @@ fn main() {
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Read generated Rust
     let rust_file = output_dir.join("test.rs");
     let rust_code = fs::read_to_string(rust_file).unwrap();
-    println!("Generated Rust:\n{}", rust_code);
 
-    // Should NOT have semicolons after the values (expression context)
-    // Float/int inference may add suffixes like 42_i32
     let has_value_without_semicolon = rust_code.contains("42\n")
         || rust_code.contains("42 }")
         || rust_code.contains("42_i32\n")
@@ -83,8 +79,6 @@ fn main() {
         "Match arm in expression context should NOT have semicolon:\n{}",
         rust_code
     );
-
-    println!("✅ Match arms in expression context have no semicolons");
 }
 
 #[test]
@@ -116,9 +110,9 @@ fn main() {
     let wj_file = output_dir.join("test.wj");
     fs::write(&wj_file, code).unwrap();
 
-    // Compile
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)
@@ -131,18 +125,12 @@ fn main() {
         String::from_utf8_lossy(&result.stderr)
     );
 
-    // Read generated Rust
     let rust_file = output_dir.join("test.rs");
     let rust_code = fs::read_to_string(rust_file).unwrap();
-    println!("Generated Rust:\n{}", rust_code);
 
-    // SHOULD have semicolons (statement context, void return)
-    // Int inference may add _i32 suffix
     assert!(
         rust_code.contains("do_something(42);") || rust_code.contains("do_something(42_i32);"),
         "Match arm in statement context should have semicolon. Got:\n{}",
         rust_code
     );
-
-    println!("✅ Match arms in statement context have semicolons");
 }

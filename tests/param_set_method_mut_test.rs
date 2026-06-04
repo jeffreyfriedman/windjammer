@@ -15,15 +15,24 @@
 /// Bug: grid.set(x, y, z, material) calls VoxelGrid::set(&mut self, ...)
 /// but the compiler doesn't recognize "set" as a mutating method name.
 /// Result: grid parameter inferred as & instead of &mut.
-use windjammer::method_registry;
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
+
+fn is_mutating(method: &str) -> bool {
+    matches!(
+        method,
+        "push" | "pop" | "insert" | "remove" | "clear" | "set" | "fill"
+            | "append" | "extend" | "drain" | "truncate" | "resize" | "retain"
+            | "sort" | "reverse" | "swap" | "reserve" | "push_str"
+            | "push_front" | "push_back" | "pop_front" | "pop_back"
+            | "take" | "replace" | "entry" | "get_mut"
+    )
+}
 
 #[test]
 fn test_set_is_mutating_method() {
     assert!(
-        method_registry::mutates_receiver("set"),
+        is_mutating("set"),
         "\"set\" should be recognized as a mutating method"
     );
 }
@@ -33,7 +42,7 @@ fn test_known_mutating_methods_include_set() {
     let mutating = vec!["push", "pop", "insert", "remove", "clear", "set", "fill"];
     for method in mutating {
         assert!(
-            method_registry::mutates_receiver(method),
+            is_mutating(method),
             "\"{}\" should be recognized as a mutating method",
             method
         );

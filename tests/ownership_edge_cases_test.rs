@@ -68,8 +68,13 @@ impl Widget {
 
     let rs = fs::read_to_string(build.join("ids/widget.rs")).expect("widget.rs");
     assert!(
-        rs.contains("fn id(&self)"),
-        "WidgetId is Copy-shaped across files; id() should take &self. Got:\n{}",
+        rs.contains("fn id(&self)") || rs.contains("fn id(self)"),
+        "WidgetId is Copy-shaped across files; id() should take &self or self (Copy types get self by value). Got:\n{}",
+        rs
+    );
+    assert!(
+        !rs.contains("fn id(&mut self"),
+        "WidgetId getter must NOT be &mut self. Got:\n{}",
         rs
     );
 }

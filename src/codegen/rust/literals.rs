@@ -27,16 +27,23 @@ pub fn generate_literal(lit: &Literal) -> String {
     }
 }
 
-/// Coerce a Rust string literal expression (`"foo"`) to owned `String` without `.to_string()`.
 /// Convert a string literal to an owned `String` expression in Rust.
-/// Uses `.to_string()` instead of `.into()` because `.into()` requires type inference
-/// context which fails in match arms, tuple destructuring, and other complex positions.
+/// Uses `String::from()` which works in all contexts (match arms, tuple
+/// destructuring, return position) without leaking `.to_string()`.
 pub fn string_literal_to_owned_rust(literal_expr: &str) -> String {
     if literal_expr == "\"\"" {
         "String::new()".to_string()
     } else {
-        format!("{}.to_string()", literal_expr)
+        format!("String::from({})", literal_expr)
     }
+}
+
+/// Returns true if the expression is already an owned `String` (no further conversion needed).
+pub fn is_already_owned_string(expr: &str) -> bool {
+    expr.ends_with(".to_string()")
+        || expr.ends_with(".into()")
+        || expr.starts_with("String::from(")
+        || expr == "String::new()"
 }
 
 /// Escape special characters in strings for Rust string literals

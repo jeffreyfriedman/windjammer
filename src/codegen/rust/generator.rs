@@ -60,6 +60,9 @@ pub struct CodeGenerator<'ast> {
     // Local index within the current block (0-based enumerate index).
     // Used by variable_is_only_field_accessed and other block-relative analyses.
     pub(crate) current_block_local_idx: usize,
+    // OPTION TAKE/REPLACE: Block-local indices of statements to skip because
+    // they were folded into a preceding `.take()` or `.replace()`.
+    pub(crate) skip_block_indices: std::collections::HashSet<usize>,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
@@ -353,6 +356,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_statement_idx: 0,
             auto_clone_counter: 0,
             current_block_local_idx: 0,
+            skip_block_indices: std::collections::HashSet::new(),
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),

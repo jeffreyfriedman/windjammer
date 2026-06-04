@@ -273,34 +273,22 @@ impl<'ast> Analyzer<'ast> {
                         // No extra conservative block needed for self methods.
                         let _ = is_self_method;
 
-                        // SPECIAL CASE: Vec<String>::contains needs &String
-                        // This is a Rust stdlib method, not in our signature registry
-                        if method == "contains" && idx == 0 {
+                        if super::stdlib_method_traits::is_slice_search_method(method) && idx == 0 {
                             return true;
                         }
 
-                        // SPECIAL CASE: Vec<String>::push needs String (owned), not &str
-                        if method == "push" && idx == 0 {
+                        if super::stdlib_method_traits::is_storage_method(method) && idx == 0 {
                             return true;
                         }
 
-                        // SPECIAL CASE: HashMap::insert consumes both key and value
-                        if method == "insert" && (idx == 0 || idx == 1) {
+                        if method == "insert" && idx == 1 {
                             return true;
                         }
 
                         // SPECIAL CASE: HashMap::get/remove/contains_key need &String
                         // because codegen adds & to the argument. Using &str would
                         // produce &&str which violates String: Borrow<&str>.
-                        if matches!(
-                            method.as_ref(),
-                            "get"
-                                | "get_mut"
-                                | "remove"
-                                | "contains_key"
-                                | "get_key_value"
-                                | "entry"
-                        ) && idx == 0
+                        if super::stdlib_method_traits::is_map_key_method(method) && idx == 0
                         {
                             return true;
                         }

@@ -169,8 +169,8 @@ impl Game {
     let code = test_utils::compile_single(source);
 
     assert!(
-        code.contains("fn get_player_spawn(&self)"),
-        "get_player_spawn should use &self since Vec3 is Copy. Got:\n{}",
+        code.contains("fn get_player_spawn(&self)") || code.contains("fn get_player_spawn(self)"),
+        "get_player_spawn should use &self or self (Copy types get self by value). Got:\n{}",
         code
     );
 

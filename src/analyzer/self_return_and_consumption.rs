@@ -61,6 +61,125 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Check if bare `self` is consumed anywhere in the body (not just as a return value).
+    /// Catches patterns like `let x = self` which moves self into a local variable.
+    pub(super) fn function_body_consumes_bare_self(&self, func: &FunctionDecl) -> bool {
+        func.body
+            .iter()
+            .any(|stmt| self.statement_consumes_bare_self(stmt))
+    }
+
+    fn statement_consumes_bare_self(&self, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => {
+                matches!(value, Expression::Identifier { name, .. } if name == "self")
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_consumes_bare_self(s))
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| b.iter().any(|s| self.statement_consumes_bare_self(s)))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements
+                        .iter()
+                        .any(|s| self.statement_consumes_bare_self(s))
+                } else {
+                    false
+                }
+            }),
+            _ => false,
+        }
+    }
+
+    /// Check if `self` is passed as receiver to a method that takes owned self.
+    /// e.g., `self.input_uniform(buffer)` where `input_uniform` takes `self` (owned).
+    pub(super) fn function_calls_consuming_method_on_self(
+        &self,
+        func: &FunctionDecl,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        func.body
+            .iter()
+            .any(|stmt| self.statement_calls_consuming_method_on_self(stmt, registry, func.parent_type.as_deref()))
+    }
+
+    fn statement_calls_consuming_method_on_self(
+        &self,
+        stmt: &Statement,
+        registry: &super::SignatureRegistry,
+        parent_type: Option<&str>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_consuming_method_on_self(expr, registry, parent_type)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_calls_consuming_method_on_self(expr, registry, parent_type),
+            Statement::Let { value, .. } => {
+                self.expression_calls_consuming_method_on_self(value, registry, parent_type)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_calls_consuming_method_on_self(s, registry, parent_type))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.statement_calls_consuming_method_on_self(s, registry, parent_type))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_calls_consuming_method_on_self(
+        &self,
+        expr: &Expression,
+        registry: &super::SignatureRegistry,
+        parent_type: Option<&str>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object, method, ..
+            } => {
+                let is_self_receiver =
+                    matches!(&**object, Expression::Identifier { name, .. } if name == "self");
+                if is_self_receiver {
+                    if let Some(pt) = parent_type {
+                        let key = format!("{}::{}", pt, method);
+                        if let Some(sig) = registry.get_signature(&key) {
+                            if sig.has_self_receiver
+                                && sig
+                                    .param_ownership
+                                    .first()
+                                    .is_some_and(|o| *o == super::OwnershipMode::Owned)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                self.expression_calls_consuming_method_on_self(object, registry, parent_type)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_calls_consuming_method_on_self(s, registry, parent_type)),
+            _ => false,
+        }
+    }
+
     /// Check if `self` is used as a match scrutinee (match self { ... })
     /// AND the match arms actually consume values from self.
     ///
@@ -72,12 +191,87 @@ impl<'ast> Analyzer<'ast> {
     ///   match self { Value::Int(v) => v as f32 } → needs `self` (v is used)
     ///   match self { Condition::HasItem(_) => false } → needs `&self` (literal returned)
     pub(super) fn function_matches_on_self(&self, func: &FunctionDecl) -> bool {
-        for stmt in &func.body {
-            if self.statement_matches_on_self_consuming(stmt) {
-                return true;
-            }
+        func.body
+            .iter()
+            .any(|stmt| self.statement_matches_on_self_consuming(stmt))
+    }
+
+    /// Explicit `self` + `for x in self.field` + method calls on the loop variable.
+    ///
+    /// Value iteration over a field moves elements; that requires an owned receiver when the
+    /// loop body dispatches methods on each element (e.g. `cond.check()`). Read-only loops
+    /// (`println`, comparisons) keep `&self` + `&self.field`.
+    ///
+    /// Implicit-self methods (e.g. `fn is_available(state) { for c in self.conditions }`) are
+    /// unchanged — see `e0507` evaluate test.
+    pub(super) fn function_explicit_self_for_loops_self_field_by_value(
+        &self,
+        func: &FunctionDecl,
+    ) -> bool {
+        let explicit_self = func.parameters.iter().any(|p| {
+            p.name == "self" && !matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
+        });
+        if !explicit_self {
+            return false;
         }
-        false
+        func.body.iter().any(|stmt| {
+            self.statement_for_loop_over_self_field_calls_method_on_binding(stmt)
+        })
+    }
+
+    fn statement_for_loop_over_self_field_calls_method_on_binding(
+        &self,
+        stmt: &Statement,
+    ) -> bool {
+        match stmt {
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } => {
+                if !self.expression_is_self_field(iterable) {
+                    return body.iter().any(|s| {
+                        self.statement_for_loop_over_self_field_calls_method_on_binding(s)
+                    });
+                }
+                let loop_var = match pattern {
+                    Pattern::Identifier(name) => name.clone(),
+                    Pattern::Tuple(pats) => {
+                        return pats.iter().any(|p| {
+                            if let Pattern::Identifier(name) = p {
+                                body.iter().any(|s| {
+                                    self.statement_calls_method_on_var(s, name)
+                                })
+                            } else {
+                                false
+                            }
+                        });
+                    }
+                    _ => return false,
+                };
+                body.iter().any(|s| self.statement_calls_method_on_var(s, &loop_var))
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.statement_for_loop_over_self_field_calls_method_on_binding(s)
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| self.statement_for_loop_over_self_field_calls_method_on_binding(s))
+                })
+            }
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body.iter().any(|s| {
+                self.statement_for_loop_over_self_field_calls_method_on_binding(s)
+            }),
+            _ => false,
+        }
     }
 
     /// Check if function iterates over self.field and calls consuming methods on elements.
@@ -92,12 +286,9 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
-        for stmt in &func.body {
-            if self.statement_consumes_self_field_elements(stmt, registry) {
-                return true;
-            }
-        }
-        false
+        func.body
+            .iter()
+            .any(|stmt| self.statement_consumes_self_field_elements(stmt, registry))
     }
 
     pub(crate) fn statement_consumes_self_field_elements(
@@ -112,20 +303,25 @@ impl<'ast> Analyzer<'ast> {
                 body,
                 ..
             } => {
-                // Check if iterable is self.field (e.g., self.conditions)
                 if !self.expression_is_self_field(iterable) {
                     return false;
                 }
 
-                // Get the loop variable name from pattern
                 let loop_var = match pattern {
                     Pattern::Identifier(name) => name.clone(),
                     _ => return false,
                 };
 
-                // Check if loop body calls consuming methods on loop_var
-                body.iter()
-                    .any(|s| self.statement_calls_consuming_method_on_var(s, &loop_var, registry))
+                let elem_type = self.resolve_for_loop_element_type(iterable);
+
+                body.iter().any(|s| {
+                    self.statement_calls_consuming_method_on_var_typed(
+                        s,
+                        &loop_var,
+                        elem_type.as_ref(),
+                        registry,
+                    )
+                })
             }
             Statement::If {
                 then_block,
@@ -159,10 +355,33 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    pub(crate) fn statement_calls_consuming_method_on_var(
+    /// Resolve the element type of a `self.field` iterable.
+    /// e.g. `self.conditions` where `conditions: Vec<Cond>` → `Some(Type::Custom("Cond"))`
+    fn resolve_for_loop_element_type(&self, iterable: &Expression) -> Option<Type> {
+        if let Expression::FieldAccess { field, .. } = iterable {
+            let field_type = self.lookup_field_type_for_self(field)?;
+            Self::vec_element_type(&field_type)
+        } else {
+            None
+        }
+    }
+
+    fn vec_element_type(ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Vec(inner) => Some(inner.as_ref().clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::vec_element_type(inner)
+            }
+            _ => None,
+        }
+    }
+
+    /// Type-qualified version: uses element type for `Type::method` registry lookup.
+    pub(crate) fn statement_calls_consuming_method_on_var_typed(
         &self,
         stmt: &Statement,
         var_name: &str,
+        elem_type: Option<&Type>,
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match stmt {
@@ -172,7 +391,9 @@ impl<'ast> Analyzer<'ast> {
             }
             | Statement::Let { value: expr, .. }
             | Statement::Assignment { value: expr, .. } => {
-                self.expression_calls_consuming_method_on_var(expr, var_name, registry)
+                self.expression_calls_consuming_method_on_var_typed(
+                    expr, var_name, elem_type, registry,
+                )
             }
             Statement::If {
                 condition,
@@ -180,24 +401,36 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                self.expression_calls_consuming_method_on_var(condition, var_name, registry)
-                    || then_block.iter().any(|s| {
-                        self.statement_calls_consuming_method_on_var(s, var_name, registry)
+                self.expression_calls_consuming_method_on_var_typed(
+                    condition, var_name, elem_type, registry,
+                ) || then_block.iter().any(|s| {
+                    self.statement_calls_consuming_method_on_var_typed(
+                        s, var_name, elem_type, registry,
+                    )
+                }) || else_block.as_ref().is_some_and(|body| {
+                    body.iter().any(|s| {
+                        self.statement_calls_consuming_method_on_var_typed(
+                            s, var_name, elem_type, registry,
+                        )
                     })
-                    || else_block.as_ref().is_some_and(|body| {
-                        body.iter().any(|s| {
-                            self.statement_calls_consuming_method_on_var(s, var_name, registry)
-                        })
-                    })
+                })
             }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Loop { body, .. } => body.iter().any(|s| {
+                self.statement_calls_consuming_method_on_var_typed(
+                    s, var_name, elem_type, registry,
+                )
+            }),
             _ => false,
         }
     }
 
-    pub(crate) fn expression_calls_consuming_method_on_var(
+    pub(crate) fn expression_calls_consuming_method_on_var_typed(
         &self,
         expr: &Expression,
         var_name: &str,
+        elem_type: Option<&Type>,
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
         match expr {
@@ -205,6 +438,19 @@ impl<'ast> Analyzer<'ast> {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
                         if let Some(reg) = registry {
+                            // Type-qualified lookup first (e.g. "Cond::check")
+                            if let Some(type_name) = elem_type.and_then(|t| match t {
+                                Type::Custom(n) => Some(n.as_str()),
+                                _ => None,
+                            }) {
+                                let qualified = format!("{}::{}", type_name, method);
+                                if let Some(sig) = reg.get_signature(&qualified) {
+                                    return sig.has_self_receiver
+                                        && sig.param_ownership.first()
+                                            == Some(&super::OwnershipMode::Owned);
+                                }
+                            }
+                            // Fallback: bare method name
                             if let Some(sig) = reg
                                 .get_signature(method)
                                 .or_else(|| reg.find_signature_ending_with(method))
@@ -220,17 +466,102 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
             Expression::Binary { left, right, .. } => {
-                self.expression_calls_consuming_method_on_var(left, var_name, registry)
-                    || self.expression_calls_consuming_method_on_var(right, var_name, registry)
+                self.expression_calls_consuming_method_on_var_typed(
+                    left, var_name, elem_type, registry,
+                ) || self.expression_calls_consuming_method_on_var_typed(
+                    right, var_name, elem_type, registry,
+                )
             }
             Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
-                self.expression_calls_consuming_method_on_var(arg, var_name, registry)
+                self.expression_calls_consuming_method_on_var_typed(
+                    arg, var_name, elem_type, registry,
+                )
+            }),
+            Expression::Unary { operand, .. } => self
+                .expression_calls_consuming_method_on_var_typed(
+                    operand, var_name, elem_type, registry,
+                ),
+            _ => false,
+        }
+    }
+
+    /// True when the statement tree calls any instance method on `var_name`.
+    pub(crate) fn statement_calls_method_on_var(&self, stmt: &Statement, var_name: &str) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. } => {
+                self.expression_calls_method_on_var(expr, var_name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_calls_method_on_var(condition, var_name)
+                    || then_block.iter().any(|s| self.statement_calls_method_on_var(s, var_name))
+                    || else_block.as_ref().is_some_and(|body| {
+                        body.iter()
+                            .any(|s| self.statement_calls_method_on_var(s, var_name))
+                    })
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_calls_method_on_var(s, var_name)),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn expression_calls_method_on_var(
+        &self,
+        expr: &Expression,
+        var_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == var_name {
+                        return true;
+                    }
+                }
+                self.expression_calls_method_on_var(object, var_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_calls_method_on_var(left, var_name)
+                    || self.expression_calls_method_on_var(right, var_name)
+            }
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expression_calls_method_on_var(arg, var_name)
             }),
             Expression::Unary { operand, .. } => {
-                self.expression_calls_consuming_method_on_var(operand, var_name, registry)
+                self.expression_calls_method_on_var(operand, var_name)
             }
             _ => false,
         }
+    }
+
+    pub(crate) fn statement_calls_consuming_method_on_var(
+        &self,
+        stmt: &Statement,
+        var_name: &str,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
+        self.statement_calls_consuming_method_on_var_typed(stmt, var_name, None, registry)
+    }
+
+    pub(crate) fn expression_calls_consuming_method_on_var(
+        &self,
+        expr: &Expression,
+        var_name: &str,
+        registry: Option<&super::SignatureRegistry>,
+    ) -> bool {
+        self.expression_calls_consuming_method_on_var_typed(expr, var_name, None, registry)
     }
 
     pub(crate) fn statement_matches_on_self_consuming(&self, stmt: &Statement) -> bool {
@@ -358,10 +689,27 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_uses_variables_consuming(inner, vars)
             }
 
-            // Binary operations might consume (depends on the variable being used)
-            Expression::Binary { left, right, .. } => {
-                self.expression_uses_variables_consuming(left, vars)
-                    || self.expression_uses_variables_consuming(right, vars)
+            // Comparison operators (>=, <=, ==, !=, >, <) work via references
+            // (PartialOrd/PartialEq traits) and do NOT consume operands.
+            // Arithmetic ops (+, -, *, /) can consume for non-Copy types,
+            // so we only skip for comparisons.
+            Expression::Binary { left, op, right, .. } => {
+                use crate::parser::ast::operators::BinaryOp;
+                let is_comparison = matches!(
+                    op,
+                    BinaryOp::Eq
+                        | BinaryOp::Ne
+                        | BinaryOp::Lt
+                        | BinaryOp::Le
+                        | BinaryOp::Gt
+                        | BinaryOp::Ge
+                );
+                if is_comparison {
+                    false
+                } else {
+                    self.expression_uses_variables_consuming(left, vars)
+                        || self.expression_uses_variables_consuming(right, vars)
+                }
             }
 
             // Method calls consume self if self is a bound var
@@ -633,9 +981,30 @@ impl<'ast> Analyzer<'ast> {
     pub(crate) fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
-            Expression::StructLiteral { name, .. } if name == type_name => true,
+            Expression::StructLiteral { name, fields, .. } if name == type_name => {
+                // Snapshot/clone-factory pattern: if ANY field value clones a non-Copy
+                // self field (e.g., `self.name.clone()`), this method only reads from
+                // self and constructs an independent instance — not a consuming builder.
+                !self.struct_literal_clones_self_fields(fields)
+            }
             _ => false,
         }
+    }
+
+    /// True when at least one field value in the struct literal is a clone of
+    /// a self field (e.g., `self.name.clone()`). This indicates a
+    /// snapshot/factory pattern that should use `&self`, not owned `self`.
+    fn struct_literal_clones_self_fields(
+        &self,
+        fields: &[(String, &Expression)],
+    ) -> bool {
+        fields.iter().any(|(_, value)| {
+            matches!(value,
+                Expression::MethodCall { method, object, .. }
+                if matches!(method.as_str(), "clone" | "to_owned" | "to_vec")
+                && self.expression_is_self_field_access(object)
+            )
+        })
     }
 
     /// Check if a function uses a specific identifier (e.g., "self")

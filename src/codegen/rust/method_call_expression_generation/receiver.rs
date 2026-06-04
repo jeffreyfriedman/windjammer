@@ -26,7 +26,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
         // since those methods already produce an owned value.
         let prev_coerce = self.coerce_string_literals_to_owned;
-        if matches!(method, "to_string" | "to_owned" | "clone") {
+        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter") || method == "to_string" {
             self.coerce_string_literals_to_owned = false;
         }
         let mut obj_str = self.generate_expression_with_precedence(object);
@@ -51,9 +51,10 @@ impl<'ast> CodeGenerator<'ast> {
         // and the variable is a borrowed iterator variable (from `for x in &collection`).
         // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
         if let Expression::Identifier { name, .. } = object {
-            let is_borrowed_iter = self.borrowed_iterator_vars.contains(name) && method != "clone";
+            let is_type_preserving = matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter");
+            let is_borrowed_iter = self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
             let is_mut_borrowed_param = self.inferred_mut_borrowed_params.contains(name)
-                && method != "clone";
+                && !is_type_preserving;
             if is_borrowed_iter || is_mut_borrowed_param {
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
@@ -97,7 +98,7 @@ impl<'ast> CodeGenerator<'ast> {
         //   node.children.unwrap() where node is &Node → ERROR: cannot move from &Option
         //   node.children.clone().unwrap() → ✅ OK
         // THE WINDJAMMER WAY: Users write .unwrap() naturally, compiler handles ownership
-        if method == "unwrap" {
+        if matches!(method, "unwrap" | "first" | "last") {
             // Check if object is a field access (node.children) that needs clone
             let needs_clone = if let Expression::FieldAccess {
                 object: field_obj, ..

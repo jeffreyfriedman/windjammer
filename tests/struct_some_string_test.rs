@@ -32,14 +32,15 @@ fn test_struct_field_some_string_literal() {
     }
     "#;
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
-    // Some("root") should convert to Some("root".to_string()) (codegen may emit an extra .to_string())
     assert!(
-        generated.contains(r#"Some("root".to_string()"#),
+        generated.contains(r#"Some("root".to_string()"#)
+            || generated.contains(r#"Some(String::from("root")"#),
         "Some with string literal should auto-convert in struct field: {}",
         generated
     );
     assert!(
-        generated.contains(r#"name: "default".to_string()"#),
+        generated.contains(r#"name: "default".to_string()"#)
+            || generated.contains(r#"name: String::from("default")"#),
         "Direct string literal field should also convert: {}",
         generated
     );
@@ -61,9 +62,9 @@ fn test_struct_field_ok_string_literal() {
     }
     "#;
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
-    // Ok("success") may have an extra .to_string() in expansion
     assert!(
-        generated.contains(r#"Ok("success".to_string()"#),
+        generated.contains(r#"Ok("success".to_string()"#)
+            || generated.contains(r#"Ok(String::from("success")"#),
         "Ok with string literal should auto-convert in struct field: {}",
         generated
     );

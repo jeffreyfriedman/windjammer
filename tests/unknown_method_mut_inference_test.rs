@@ -126,14 +126,15 @@ pub fn count_items(data: Data) -> i32 {
     );
 }
 
-/// When a non-self parameter has a method called on it that is NOT in the method registry
-/// and NOT in the signature registry, it should be treated as potentially mutating.
-/// This catches external Rust type methods like VoxelGPURenderer::add_primitive().
+/// When a non-self parameter has a method called on it that is NOT in the
+/// SignatureRegistry AND the param type is unknown, conservatively infer &mut.
+/// When the param type IS known (user type), rely on multi-pass convergence
+/// and default to &self (safe for single-pass, correct in multi-pass).
 #[test]
-fn test_unknown_method_assumes_mutation() {
+fn test_unknown_method_on_typed_param_defaults_borrowed() {
     let source = r#"
 pub struct Grid {
-    pub size: i32,
+    pub name: String,
 }
 
 pub fn process(grid: Grid) {
@@ -143,8 +144,8 @@ pub fn process(grid: Grid) {
     let output = compile_wj_to_rust(source);
 
     assert!(
-        output.contains("grid: &mut Grid"),
-        "Unknown method on parameter should infer &mut (conservative). Got:\n{}",
+        output.contains("grid: &Grid"),
+        "Unknown method on typed user param defaults to borrowed (multi-pass will refine). Got:\n{}",
         output
     );
 }

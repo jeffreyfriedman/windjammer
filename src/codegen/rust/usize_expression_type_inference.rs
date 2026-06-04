@@ -64,22 +64,19 @@ impl<'ast> CodeGenerator<'ast> {
     /// Used for auto-casting between i32 and usize in comparisons
     pub(crate) fn expression_produces_usize(&self, expr: &Expression) -> bool {
         match expr {
-            // .len() returns usize
             Expression::MethodCall { method, .. } => {
-                if method == "len" || method == "count" || method == "capacity" {
+                if matches!(method.as_str(), "len" | "capacity" | "count") {
                     return true;
                 }
-                // Fallback: check via type inference
                 self.infer_expression_type_is_usize(expr)
             }
-            // Postfix `obj.len()` parses as Call(FieldAccess(obj, "len"), []), not MethodCall.
             Expression::Call {
                 function,
                 arguments,
                 ..
             } if arguments.is_empty() => {
                 if let Expression::FieldAccess { field, .. } = function {
-                    if field == "len" || field == "count" || field == "capacity" {
+                    if matches!(field.as_str(), "len" | "capacity" | "count") {
                         return true;
                     }
                 }

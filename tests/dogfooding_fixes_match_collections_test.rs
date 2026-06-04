@@ -152,10 +152,10 @@ impl Config {
     let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
-    // String literals assigned to String fields should get .to_string()
+    // String literals assigned to String fields should be converted to String
     assert!(
-        generated.contains(".to_string()"),
-        "Should add .to_string() for string literal field assignment: {}",
+        generated.contains(".to_string()") || generated.contains("String::from("),
+        "Should convert string literal for String field assignment: {}",
         generated
     );
 }

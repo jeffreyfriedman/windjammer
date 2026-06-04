@@ -25,6 +25,7 @@ fn compile_wj(source: &str, args: &[&str]) -> String {
 
     let mut cmd = Command::new(&wj);
     cmd.arg("build")
+        .arg("--no-cargo")
         .arg(src_dir.join("test.wj"))
         .arg("--output")
         .arg(&out_dir);

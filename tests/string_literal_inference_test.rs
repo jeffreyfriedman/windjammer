@@ -37,13 +37,14 @@ fn test_match_arm_string_inference() {
 
     let generated = result.unwrap();
 
-    // Should generate .to_string() automatically
     assert!(
-        generated.contains("\"has value\".to_string()"),
+        generated.contains("\"has value\".to_string()")
+            || generated.contains("String::from(\"has value\")"),
         "Expected match arm to convert string literal to String"
     );
     assert!(
-        generated.contains("\"empty\".to_string()"),
+        generated.contains("\"empty\".to_string()")
+            || generated.contains("String::from(\"empty\")"),
         "Expected match arm to convert string literal to String"
     );
 }
@@ -67,8 +68,14 @@ fn test_nested_match_string_inference() {
     );
 
     let generated = result.unwrap();
-    assert!(generated.contains("\"selected\".to_string()"));
-    assert!(generated.contains("\"normal\".to_string()"));
+    assert!(
+        generated.contains("\"selected\".to_string()")
+            || generated.contains("String::from(\"selected\")")
+    );
+    assert!(
+        generated.contains("\"normal\".to_string()")
+            || generated.contains("String::from(\"normal\")")
+    );
 }
 
 #[test]
@@ -87,8 +94,14 @@ fn test_if_else_string_inference() {
     );
 
     let generated = result.unwrap();
-    assert!(generated.contains("\"active\".to_string()"));
-    assert!(generated.contains("\"inactive\".to_string()"));
+    assert!(
+        generated.contains("\"active\".to_string()")
+            || generated.contains("String::from(\"active\")")
+    );
+    assert!(
+        generated.contains("\"inactive\".to_string()")
+            || generated.contains("String::from(\"inactive\")")
+    );
 }
 
 #[test]
@@ -115,8 +128,14 @@ fn test_struct_field_string_inference() {
     );
 
     let generated = result.unwrap();
-    assert!(generated.contains("name: \"default\".to_string()"));
-    assert!(generated.contains("Some(\"root\".to_string()"));
+    assert!(
+        generated.contains("name: \"default\".to_string()")
+            || generated.contains("name: String::from(\"default\")")
+    );
+    assert!(
+        generated.contains("Some(\"root\".to_string()")
+            || generated.contains("Some(String::from(\"root\")")
+    );
 }
 
 #[test]
@@ -136,7 +155,10 @@ fn test_option_some_string_inference() {
     assert!(result.is_ok(), "Option::Some should infer .to_string()");
 
     let generated = result.unwrap();
-    assert!(generated.contains("Some(\"parent_id\".to_string())"));
+    assert!(
+        generated.contains("Some(\"parent_id\".to_string())")
+            || generated.contains("Some(String::from(\"parent_id\")")
+    );
 }
 
 #[test]
@@ -156,8 +178,14 @@ fn test_result_string_inference() {
     assert!(result.is_ok(), "Result Ok/Err should infer .to_string()");
 
     let generated = result.unwrap();
-    assert!(generated.contains("Ok(\"valid\".to_string())"));
-    assert!(generated.contains("Err(\"invalid\".to_string())"));
+    assert!(
+        generated.contains("Ok(\"valid\".to_string())")
+            || generated.contains("Ok(String::from(\"valid\")")
+    );
+    assert!(
+        generated.contains("Err(\"invalid\".to_string())")
+            || generated.contains("Err(String::from(\"invalid\")")
+    );
 }
 
 #[test]
@@ -176,8 +204,13 @@ fn test_ternary_like_match_string_inference() {
     );
 
     let generated = result.unwrap();
-    assert!(generated.contains("\"🌟 Root\".to_string()"));
-    assert!(generated.contains("\"\".to_string()"));
+    assert!(
+        generated.contains("\"🌟 Root\".to_string()")
+            || generated.contains("String::from(\"🌟 Root\")")
+    );
+    assert!(
+        generated.contains("\"\".to_string()") || generated.contains("String::new()")
+    );
 }
 
 #[test]
@@ -205,9 +238,18 @@ fn test_match_with_blocks_string_inference() {
     );
 
     let generated = result.unwrap();
-    assert!(generated.contains("\"large\".to_string()"));
-    assert!(generated.contains("\"small\".to_string()"));
-    assert!(generated.contains("\"empty\".to_string()"));
+    assert!(
+        generated.contains("\"large\".to_string()")
+            || generated.contains("String::from(\"large\")")
+    );
+    assert!(
+        generated.contains("\"small\".to_string()")
+            || generated.contains("String::from(\"small\")")
+    );
+    assert!(
+        generated.contains("\"empty\".to_string()")
+            || generated.contains("String::from(\"empty\")")
+    );
 }
 
 #[test]
@@ -227,7 +269,8 @@ fn test_no_inference_for_str_return() {
 
     let generated = result.unwrap();
     assert!(
-        !generated.contains("\"static\".to_string()"),
+        !generated.contains("\"static\".to_string()")
+            && !generated.contains("String::from(\"static\")"),
         "Should not convert to String when &str is expected"
     );
     assert!(generated.contains("\"static\""));

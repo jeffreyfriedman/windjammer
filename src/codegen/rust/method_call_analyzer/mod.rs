@@ -191,7 +191,8 @@ impl MethodCallAnalyzer {
 
         if matches!(arg, Expression::MethodCall { .. }) {
             let is_map_key_method =
-                crate::method_registry::is_map_key_method(method) && param_idx == 0;
+                matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
+                    && param_idx == 0;
             let is_known_map = receiver_type_name.is_some_and(|n| {
                 let base = n.split('<').next().unwrap_or(n);
                 crate::type_classification::is_map_type(base)
@@ -223,10 +224,9 @@ impl MethodCallAnalyzer {
             }
         }
 
-        let is_hashmap_key_method = matches!(
-            method,
-            "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
-        ) && param_idx == 0;
+        let is_hashmap_key_method =
+            matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
+                && param_idx == 0;
 
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
@@ -294,19 +294,13 @@ impl MethodCallAnalyzer {
             }
         }
 
-        let is_stdlib_method = crate::method_registry::is_known_stdlib_method(method);
-
-        if is_stdlib_method {
-            let ctx = MethodCallContext {
-                usize_variables,
-                current_function_params,
-                borrowed_iterator_vars,
-                inferred_borrowed_params,
-            };
-            return Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name);
-        }
-
-        false
+        let ctx = MethodCallContext {
+            usize_variables,
+            current_function_params,
+            borrowed_iterator_vars,
+            inferred_borrowed_params,
+        };
+        Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name)
     }
 }
 

@@ -110,7 +110,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } = value
                 {
-                    if method == "as_str"
+                    if super::rust_stdlib_annotations::is_strip_redundant(method)
                         && arguments.is_empty()
                         && self.expression_produces_str_ref(object)
                     {
@@ -351,7 +351,7 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = value
         {
-            if method == "as_str"
+            if super::rust_stdlib_annotations::is_strip_redundant(method)
                 && arguments.is_empty()
                 && self.expression_produces_str_ref(object)
             {
@@ -366,7 +366,7 @@ impl<'ast> CodeGenerator<'ast> {
         } = value
         {
             if let Expression::FieldAccess { object, field, .. } = &**function {
-                if field == "as_str"
+                if super::rust_stdlib_annotations::is_strip_redundant(field)
                     && arguments.is_empty()
                     && self.expression_produces_str_ref(object)
                 {

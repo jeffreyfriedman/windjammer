@@ -23,11 +23,17 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_body = self.current_function_body.clone();
         let saved_idx = self.current_statement_idx;
         let saved_local_idx = self.current_block_local_idx;
+        let saved_skips = std::mem::take(&mut self.skip_block_indices);
         self.current_function_body = stmts.to_vec();
         for (i, stmt) in stmts.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
             self.current_block_local_idx = i;
             self.auto_clone_counter += 1;
+
+            // Skip statements folded into a preceding .take() or .replace()
+            if self.skip_block_indices.contains(&i) {
+                continue;
+            }
 
             let is_last = i == len - 1;
             // TDD: Track if this is the last statement (used by If handler)
@@ -117,16 +123,13 @@ impl<'ast> CodeGenerator<'ast> {
                             && !expr_uses_as_str
                             && !should_suppress
                         {
-                            // String literal needs owned String — use .into(), not .to_string()
                             if matches!(
                                 expr,
                                 Expression::Literal {
                                     value: Literal::String(_),
                                     ..
                                 }
-                            ) && !expr_str.ends_with(".to_string()")
-                                && !expr_str.ends_with(".into()")
-                                && expr_str != "String::new()"
+                            ) && !crate::codegen::rust::literals::is_already_owned_string(&expr_str)
                             {
                                 expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
                                     &expr_str,
@@ -330,9 +333,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         value: Literal::String(_),
                                         ..
                                     }
-                                ) && !expr_str.ends_with(".to_string()")
-                                    && !expr_str.ends_with(".into()")
-                                    && expr_str != "String::new()"
+                                ) && !crate::codegen::rust::literals::is_already_owned_string(&expr_str)
                                 {
                                     expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
                                         &expr_str,
@@ -441,6 +442,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
+        self.skip_block_indices = saved_skips;
         output
     }
 
@@ -726,9 +728,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // Auto-convert string literals to String when other arms return String
                     if any_arm_produces_string
                         && *is_string_literal
-                        && !final_arm_str.ends_with(".to_string()")
-                        && !final_arm_str.ends_with(".into()")
-                        && final_arm_str != "String::new()"
+                        && !crate::codegen::rust::literals::is_already_owned_string(&final_arm_str)
                     {
                         output.push_str(
                             &crate::codegen::rust::literals::string_literal_to_owned_rust(
@@ -796,9 +796,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             );
                             if is_string_literal
-                                && !expr_str.ends_with(".to_string()")
-                                && !expr_str.ends_with(".into()")
-                                && expr_str != "String::new()"
+                                && !crate::codegen::rust::literals::is_already_owned_string(&expr_str)
                             {
                                 expr_str = crate::codegen::rust::literals::string_literal_to_owned_rust(
                                     &expr_str,

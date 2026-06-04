@@ -52,6 +52,7 @@ fn main() {
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let _output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--target")
         .arg("rust")
@@ -151,6 +152,7 @@ fn main() {}
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let _output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--target")
         .arg("rust")
@@ -239,6 +241,7 @@ fn main() {
     let wj_binary = env!("CARGO_BIN_EXE_wj");
     let _output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--target")
         .arg("rust")

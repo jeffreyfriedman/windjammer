@@ -10,6 +10,9 @@ impl IntInference {
         let left_id = self.get_expr_id(left);
         let right_id = self.get_expr_id(right);
 
+        let left_is_literal = matches!(left, Expression::Literal { value: crate::parser::Literal::Int(_), .. });
+        let right_is_literal = matches!(right, Expression::Literal { value: crate::parser::Literal::Int(_), .. });
+
         match op {
             BinaryOp::Add
             | BinaryOp::Sub
@@ -21,26 +24,11 @@ impl IntInference {
             | BinaryOp::BitXor
             | BinaryOp::Shl
             | BinaryOp::Shr => {
-                // TDD FIX REMOVED: Don't create MustMatch for binary ops!
-                // This caused backward propagation:
-                //   let n = data.len() as i32  // n is i32
-                //   let idx = n / 2  // This creates MustMatch(n, 2)
-                //   // Then 2 gets inferred as i32 from context
-                //   // OR if written as `n / 2_usize`, MustMatch makes n become usize!
-                //
-                // Instead, we let each operand keep its declared type and insert casts
-                // during code generation when needed.
-                //
-                // self.constraints.push(IntConstraint::MustMatch(...)); ← REMOVED
-
-                // TDD: items.len() - 1 / items.len() + k → literal must be usize (Rust len is usize)
                 if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
                     let left_is_len =
                         matches!(left, Expression::MethodCall { method, .. } if method == "len");
                     let right_is_len =
                         matches!(right, Expression::MethodCall { method, .. } if method == "len");
-                    let left_is_literal = matches!(left, Expression::Literal { .. });
-                    let right_is_literal = matches!(right, Expression::Literal { .. });
                     if left_is_len && right_is_literal {
                         self.constraints.push(IntConstraint::MustBe(
                             right_id,
@@ -57,9 +45,7 @@ impl IntInference {
                     }
                 }
 
-                // TDD FIX: Don't propagate types bidirectionally in binary ops.
-                // Each side keeps its own type. Code generation will insert casts.
-                // (Lines 54-144 REMOVED)
+                self.propagate_typed_operand_to_literal(left, right, left_id, right_id, left_is_literal, right_is_literal, "arithmetic");
             }
             BinaryOp::Eq
             | BinaryOp::Ne
@@ -67,21 +53,10 @@ impl IntInference {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                // TDD FIX REMOVED: Don't create MustMatch for comparisons!
-                // Same issue as arithmetic - causes backward propagation.
-                // Code generation will insert casts when types don't match.
-                //
-                // self.constraints.push(IntConstraint::MustMatch(...)); ← REMOVED
-
-                // TDD FIX: When comparing with .len() (returns usize), constrain literal to usize
-                // e.g., items.len() > 0 → 0 should be usize, not i32
                 let left_is_len =
                     matches!(left, Expression::MethodCall { method, .. } if method == "len");
                 let right_is_len =
                     matches!(right, Expression::MethodCall { method, .. } if method == "len");
-                let left_is_literal = matches!(left, Expression::Literal { .. });
-                let right_is_literal = matches!(left, Expression::Literal { .. });
-
                 if left_is_len && right_is_literal {
                     self.constraints.push(IntConstraint::MustBe(
                         right_id,
@@ -97,14 +72,51 @@ impl IntInference {
                     ));
                 }
 
-                // TDD FIX: Don't propagate types in comparisons.
-                // Each side keeps its declared type. Code generation handles type conversion.
-                // (Lines 182-272 REMOVED)
+                self.propagate_typed_operand_to_literal(left, right, left_id, right_id, left_is_literal, right_is_literal, "comparison");
             }
             _ => {}
         }
 
         self.collect_expression_constraints(left, return_type);
         self.collect_expression_constraints(right, return_type);
+    }
+
+    /// One-directional propagation: when one operand of a binary op is a typed
+    /// expression (field access, variable, etc.) and the other is an unsuffixed
+    /// int literal, constrain the literal to match the typed operand's type.
+    /// This avoids the bidirectional MustMatch that caused backward propagation bugs.
+    fn propagate_typed_operand_to_literal<'ast>(
+        &mut self,
+        left: &'ast Expression<'ast>,
+        right: &'ast Expression<'ast>,
+        left_id: ExprId,
+        right_id: ExprId,
+        left_is_literal: bool,
+        right_is_literal: bool,
+        _context: &str,
+    ) {
+        if right_is_literal && !left_is_literal {
+            if let Some(int_type) = self.resolve_expression_int_type(left) {
+                self.constraints.push(IntConstraint::MustBe(
+                    right_id,
+                    int_type,
+                    format!("literal must match typed operand"),
+                ));
+            }
+        }
+        if left_is_literal && !right_is_literal {
+            if let Some(int_type) = self.resolve_expression_int_type(right) {
+                self.constraints.push(IntConstraint::MustBe(
+                    left_id,
+                    int_type,
+                    format!("literal must match typed operand"),
+                ));
+            }
+        }
+    }
+
+    fn resolve_expression_int_type<'ast>(&self, expr: &Expression<'ast>) -> Option<IntType> {
+        let ty = self.infer_type_from_expression(expr)?;
+        self.extract_nested_int_type(&ty)
     }
 }

@@ -16,7 +16,9 @@ pub use signature_filters::{
     struct_name_from_method_key,
 };
 
-pub use crate_metadata::{meta_cache_path, meta_cache_root, CrateMetadata};
+pub use crate_metadata::{
+    load_struct_field_types_from_file, meta_cache_path, meta_cache_root, CrateMetadata,
+};
 pub use function_metadata::{
     metadata_function_sig_from_analyzer, try_analyzer_signature_from_metadata, FunctionSignature,
 };

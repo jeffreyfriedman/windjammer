@@ -121,26 +121,22 @@ impl<'ast> Analyzer<'ast> {
             let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
 
             let self_ownership = if returns_self {
-                // Builder pattern: mut self (owned)
                 OwnershipMode::Owned
             } else if body_moves_fields {
-                // Body moves non-Copy self fields (e.g., Foo { f: self.bindings }) → must own
+                OwnershipMode::Owned
+            } else if self.function_body_consumes_bare_self(func) {
+                OwnershipMode::Owned
+            } else if self.function_calls_consuming_method_on_self(func, registry) {
                 OwnershipMode::Owned
             } else if self.function_matches_on_self(func) {
-                // TDD FIX for E0606: match self { ... } consumes self
                 OwnershipMode::Owned
             } else if self.function_consumes_self_field_elements(func, Some(registry)) {
-                // TDD FIX for E0507: for item in self.items { item.consume() }
-                // Iterating over self.field and calling consuming methods requires owned self
                 OwnershipMode::Owned
             } else if modifies_fields {
-                // Mutating method: &mut self
                 OwnershipMode::MutBorrowed
             } else if self.is_used_in_binary_op("self", &func.body) {
-                // Copy types in operators: self (owned)
                 OwnershipMode::Owned
             } else {
-                // Read-only: &self
                 OwnershipMode::Borrowed
             };
 
@@ -189,41 +185,34 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            // WINDJAMMER FIX: Do NOT make self Owned for returning non-Copy fields.
-                            // Getters like `fn id(self) -> String { self.id }` should be &self
-                            // with the codegen auto-cloning the returned field. This prevents
-                            // cascading E0382 at callsites.
                             let body_moves_fields =
                                 self.function_body_moves_non_copy_self_fields(func);
 
                             if returns_self || body_moves_fields {
                                 OwnershipMode::Owned
                             } else if self.function_moves_self_into_return(func) {
-                                // self is moved into a struct literal or returned directly
+                                OwnershipMode::Owned
+                            } else if self.function_body_consumes_bare_self(func) {
+                                OwnershipMode::Owned
+                            } else if self.function_calls_consuming_method_on_self(func, registry)
+                            {
                                 OwnershipMode::Owned
                             } else if self.function_matches_on_self(func) {
-                                // TDD FIX for E0606: match self { ... } consumes self
-                                // Match expressions move the scrutinee value, requiring owned self
                                 OwnershipMode::Owned
                             } else if self
                                 .function_consumes_self_field_elements(func, Some(registry))
                             {
-                                // TDD FIX for E0507: for item in self.items { item.consume() }
+                                OwnershipMode::Owned
+                            } else if self
+                                .function_explicit_self_for_loops_self_field_by_value(func)
+                            {
                                 OwnershipMode::Owned
                             } else if modifies_fields {
-                                // Mutating method that doesn't return self: use `&mut self`
                                 OwnershipMode::MutBorrowed
                             } else {
-                                // Check if self is used in binary operations (for Copy types like Vec2, Vec3)
-                                // If self is used in operators (self.x * other.y, etc.), keep it owned
-                                // This is especially important for math operations on Copy types
                                 if self.is_used_in_binary_op("self", &func.body) {
                                     OwnershipMode::Owned
                                 } else {
-                                    // Default to borrowed for read-only methods
-                                    // This is correct whether or not the method accesses self.fields
-                                    // - If it accesses fields: &self works because we only read
-                                    // - If it doesn't access self at all: &self is fine, no need to consume
                                     OwnershipMode::Borrowed
                                 }
                             }

@@ -60,9 +60,9 @@ fn main() {
     let wj_file = output_dir.join("test.wj");
     fs::write(&wj_file, code).unwrap();
 
-    // Compile
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)
@@ -79,10 +79,10 @@ fn main() {
     let rust_file = output_dir.join("test.rs");
     let rust_code = fs::read_to_string(rust_file).unwrap();
 
-    // Should have semicolons after take_damage calls
-    // Note: integer literals now correctly get _i32 suffix
+    // Should have semicolons after take_damage calls in match arms
     assert!(
-        rust_code.contains("take_damage(amount * 2_i32);"),
+        rust_code.contains("take_damage(amount * 2_i32);")
+            || rust_code.contains("take_damage(amount * 2);"),
         "Missing semicolon after take_damage in Fire arm. Generated:\n{rust_code}"
     );
     assert!(

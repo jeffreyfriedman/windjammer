@@ -1,0 +1,158 @@
+{
+  "module_path": "Option",
+  "structs": {},
+  "functions": {
+    "Option::unwrap": {
+      "params": ["Custom(\"Option\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Option::unwrap_or": {
+      "params": ["Custom(\"Option\")", "Custom(\"T\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::unwrap_or_else": {
+      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::unwrap_or_default": {
+      "params": ["Custom(\"Option\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Option::expect": {
+      "params": ["Custom(\"Option\")", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Option::is_some": {
+      "params": ["Reference(Custom(\"Option\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Option::is_none": {
+      "params": ["Reference(Custom(\"Option\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Option::map": {
+      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"U\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::and_then": {
+      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"U\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::or_else": {
+      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::ok_or": {
+      "params": ["Custom(\"Option\")", "Custom(\"E\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::ok_or_else": {
+      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::take": {
+      "params": ["MutableReference(Custom(\"Option\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Option::replace": {
+      "params": ["MutableReference(Custom(\"Option\"))", "Custom(\"T\")"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::get_or_insert": {
+      "params": ["MutableReference(Custom(\"Option\"))", "Custom(\"T\")"],
+      "return_type": "MutableReference(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::get_or_insert_with": {
+      "params": ["MutableReference(Custom(\"Option\"))", "Custom(\"Fn\")"],
+      "return_type": "MutableReference(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Option::as_ref": {
+      "params": ["Reference(Custom(\"Option\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Option::as_deref": {
+      "params": ["Reference(Custom(\"Option\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Option::clone": {
+      "params": ["Reference(Custom(\"Option\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Option",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

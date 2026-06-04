@@ -34,6 +34,7 @@ fn compile_wj(source: &str) -> String {
 
     let output = Command::new(wj_bin)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&src_dir)
         .arg("--output")
         .arg(&out_dir)
