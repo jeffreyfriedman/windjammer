@@ -55,6 +55,7 @@ fn test_capacity(capacity: i32, expected: i32) {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(test_dir.join("test_cases.wj"))
         .output()
         .expect("Failed to run wj build");
@@ -111,6 +112,7 @@ fn test_basic() {
     let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let output = std::process::Command::new(&wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg(test_dir.join("simple_test.wj"))
         .output()
         .expect("Failed to run wj build");

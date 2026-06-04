@@ -27,7 +27,8 @@ pub fn labels() -> string {
     let generated = test_utils::compile_single(source);
 
     assert!(
-        generated.contains("let en_code: String = \"en\".into()"),
+        generated.contains("let en_code: String = \"en\".into()")
+            || generated.contains("let en_code: String = String::from(\"en\")"),
         "string literal let needs : String ascription:\n{}",
         generated
     );
@@ -37,7 +38,9 @@ pub fn labels() -> string {
         generated
     );
     assert!(
-        !generated.contains(".into().to_string()"),
+        !generated.contains(".into().to_string()")
+            && !generated.contains("String::from(\"en\").into()")
+            && !generated.contains("String::from(\"en\").to_string()"),
         "must not double-convert:\n{}",
         generated
     );

@@ -309,12 +309,26 @@ pub fn build_project_ext(
 
         let registry_snapshot = registry.clone();
 
+        let mut cross_crate_field_types = HashMap::new();
+        for (_crate_name, meta_path) in &external_paths {
+            let fields = crate::metadata::load_struct_field_types_from_file(meta_path);
+            for (struct_name, field_map) in fields {
+                cross_crate_field_types
+                    .entry(struct_name)
+                    .or_insert_with(HashMap::new)
+                    .extend(field_map);
+            }
+        }
+
         let mut codegen = CodeGenerator::new(registry, target);
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);
         codegen.set_int_inference(int_inference);
         codegen.set_inferred_bounds(inferred_bounds_map);
+        if !cross_crate_field_types.is_empty() {
+            codegen.set_global_struct_field_types(cross_crate_field_types);
+        }
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
 
         let output_file = if wj_files.len() > 1 && library {

@@ -106,6 +106,7 @@ struct Sprite {
 
     let output = Command::new(&wj_compiler)
         .arg("build")
+        .arg("--no-cargo")
         .arg(temp_dir.join("src"))
         .arg("-o")
         .arg(&lib_output)

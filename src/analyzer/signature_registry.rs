@@ -42,7 +42,29 @@ impl SignatureRegistry {
             eprintln!("Continuing with empty registry - may generate incorrect borrows");
         }
 
+        // Load Rust stdlib type signatures from shipped .wj.meta files.
+        // These provide type-qualified ownership info (e.g. Vec::push → &mut self, T)
+        // so the compiler doesn't need hard-coded method name tables.
+        Self::load_stdlib_meta(&mut registry);
+
         registry
+    }
+
+    fn load_stdlib_meta(registry: &mut Self) {
+        use std::path::Path;
+
+        // Locate stdlib_meta/ relative to the compiler binary or crate root
+        let candidates = [
+            Path::new("stdlib_meta").to_path_buf(),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("stdlib_meta"),
+        ];
+
+        for dir in &candidates {
+            if dir.is_dir() {
+                crate::metadata::merge_wj_meta_signatures_from_dir(dir, registry);
+                return;
+            }
+        }
     }
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {

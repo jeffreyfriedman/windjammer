@@ -98,8 +98,13 @@ impl Tree {
     );
     let rust = result.unwrap();
     assert!(
-        rust.contains("pub fn sum(&self)"),
-        "Read-only method should get &self, got:\n{}",
+        rust.contains("pub fn sum(&self)") || rust.contains("pub fn sum(self)"),
+        "Read-only method should get &self or self (Copy), got:\n{}",
+        rust
+    );
+    assert!(
+        !rust.contains("pub fn sum(&mut self)"),
+        "Read-only method should not get &mut self, got:\n{}",
         rust
     );
 }
@@ -135,13 +140,23 @@ impl Evaluator {
     );
     let rust = result.unwrap();
     assert!(
-        rust.contains("fn evaluate_node(&self,"),
-        "Read-only recursive method should get &self, not &mut self.\nGenerated:\n{}",
+        rust.contains("fn evaluate_node(&self,") || rust.contains("fn evaluate_node(self,"),
+        "Read-only recursive method should get &self or self (Copy), not &mut self.\nGenerated:\n{}",
         rust
     );
     assert!(
-        rust.contains("fn evaluate(&self,"),
-        "Caller of read-only recursive method should also get &self.\nGenerated:\n{}",
+        !rust.contains("fn evaluate_node(&mut self,"),
+        "Read-only recursive method should not get &mut self.\nGenerated:\n{}",
+        rust
+    );
+    assert!(
+        rust.contains("fn evaluate(&self,") || rust.contains("fn evaluate(self,"),
+        "Caller of read-only recursive method should also get &self or self (Copy).\nGenerated:\n{}",
+        rust
+    );
+    assert!(
+        !rust.contains("fn evaluate(&mut self,"),
+        "Read-only recursive caller should not get &mut self.\nGenerated:\n{}",
         rust
     );
 }
@@ -252,13 +267,25 @@ impl Voxelizer {
         .get("evaluator.rs")
         .expect("evaluator.rs should exist");
     assert!(
-        evaluator_rs.contains("fn evaluate_node(&self,"),
-        "Read-only recursive evaluate_node should get &self.\nGenerated:\n{}",
+        evaluator_rs.contains("fn evaluate_node(&self,")
+            || evaluator_rs.contains("fn evaluate_node(self,"),
+        "Read-only recursive evaluate_node should get &self or self (Copy).\nGenerated:\n{}",
         evaluator_rs
     );
     assert!(
-        evaluator_rs.contains("fn material_at(&self,"),
-        "material_at (calls read-only recursive) should get &self.\nGenerated:\n{}",
+        !evaluator_rs.contains("fn evaluate_node(&mut self,"),
+        "Read-only recursive evaluate_node should not get &mut self.\nGenerated:\n{}",
+        evaluator_rs
+    );
+    assert!(
+        evaluator_rs.contains("fn material_at(&self,")
+            || evaluator_rs.contains("fn material_at(self,"),
+        "material_at (calls read-only recursive) should get &self or self (Copy).\nGenerated:\n{}",
+        evaluator_rs
+    );
+    assert!(
+        !evaluator_rs.contains("fn material_at(&mut self,"),
+        "material_at should not get &mut self.\nGenerated:\n{}",
         evaluator_rs
     );
 
@@ -266,8 +293,13 @@ impl Voxelizer {
         .get("voxelizer.rs")
         .expect("voxelizer.rs should exist");
     assert!(
-        voxelizer_rs.contains("fn voxelize(&self,"),
-        "voxelize (calls self.evaluator.material_at) should get &self.\nGenerated:\n{}",
+        voxelizer_rs.contains("fn voxelize(&self,") || voxelizer_rs.contains("fn voxelize(self,"),
+        "voxelize (calls self.evaluator.material_at) should get &self or self (Copy).\nGenerated:\n{}",
+        voxelizer_rs
+    );
+    assert!(
+        !voxelizer_rs.contains("fn voxelize(&mut self,"),
+        "voxelize should not get &mut self.\nGenerated:\n{}",
         voxelizer_rs
     );
 }

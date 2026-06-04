@@ -89,6 +89,7 @@ fn test_struct_init_in_for_loop() {
 
     let output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg("main.wj")
         .current_dir(&test_dir)
         .output()

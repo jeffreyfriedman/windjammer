@@ -66,9 +66,9 @@ pub fn greet(name: string) -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // Mutable string should have .to_string()
     assert!(
-        generated.contains(r#""Hello, ".to_string()"#),
+        generated.contains(r#""Hello, ".to_string()"#)
+            || generated.contains(r#"String::from("Hello, ")"#),
         "Mutable string should be String. Generated:\n{}",
         generated
     );
@@ -171,9 +171,10 @@ pub fn status_message(code: i32) -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // All arms should be converted to String since return type is string
-    let ok_converted = generated.contains(r#""OK".to_string()"#);
-    let warning_converted = generated.contains(r#""Warning".to_string()"#);
+    let ok_converted = generated.contains(r#""OK".to_string()"#)
+        || generated.contains(r#"String::from("OK")"#);
+    let warning_converted = generated.contains(r#""Warning".to_string()"#)
+        || generated.contains(r#"String::from("Warning")"#);
 
     assert!(
         ok_converted && warning_converted,
@@ -198,9 +199,9 @@ pub fn format_value(opt: Option<string>) -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // The None arm should be .to_string() to match Some(s)
     assert!(
-        generated.contains(r#""default".to_string()"#),
+        generated.contains(r#""default".to_string()"#)
+            || generated.contains(r#"String::from("default")"#),
         "None arm should be converted to String. Generated:\n{}",
         generated
     );
@@ -223,9 +224,9 @@ pub fn get_name() -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // Return should have .to_string()
     assert!(
-        generated.contains(r#""Alice".to_string()"#),
+        generated.contains(r#""Alice".to_string()"#)
+            || generated.contains(r#"String::from("Alice")"#),
         "Return literal should be String. Generated:\n{}",
         generated
     );
@@ -244,9 +245,9 @@ pub fn get_version() -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // Implicit return should have .to_string()
     assert!(
-        generated.contains(r#""1.0.0".to_string()"#),
+        generated.contains(r#""1.0.0".to_string()"#)
+            || generated.contains(r#"String::from("1.0.0")"#),
         "Implicit return should be String. Generated:\n{}",
         generated
     );
@@ -361,9 +362,9 @@ pub fn get_colors() -> Vec<string> {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // push() to Vec<String> should have .to_string()
     assert!(
-        generated.contains(r#""red".to_string()"#),
+        generated.contains(r#""red".to_string()"#)
+            || generated.contains(r#"String::from("red")"#),
         "Vec::push should convert literal. Generated:\n{}",
         generated
     );
@@ -392,14 +393,15 @@ pub fn classify(n: i32) -> string {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // All branches should be .to_string()
     assert!(
-        generated.contains(r#""positive".to_string()"#),
+        generated.contains(r#""positive".to_string()"#)
+            || generated.contains(r#"String::from("positive")"#),
         "If branch should be String. Generated:\n{}",
         generated
     );
     assert!(
-        generated.contains(r#""zero".to_string()"#),
+        generated.contains(r#""zero".to_string()"#)
+            || generated.contains(r#"String::from("zero")"#),
         "Else branch should be String. Generated:\n{}",
         generated
     );

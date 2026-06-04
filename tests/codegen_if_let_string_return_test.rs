@@ -45,6 +45,7 @@ fn main() {
     // Compile
     let result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg(&wj_file)
         .arg("--output")
         .arg(output_dir)

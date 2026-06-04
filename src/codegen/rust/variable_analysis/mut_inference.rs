@@ -197,7 +197,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        return !crate::method_registry::is_known_readonly_method(method);
+                        let recv_type = self.infer_type_name(object);
+                        return !crate::codegen::rust::stdlib_method_traits::is_known_readonly_qualified(
+                            method,
+                            recv_type.as_deref(),
+                            &self.signature_registry,
+                        );
                     }
                 }
                 false
@@ -334,10 +339,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        if self.is_mutating_method(method) {
-                            return true;
-                        }
-
+                        // PRIORITY 1: Type-qualified SignatureRegistry lookup
                         let type_name = self
                             .current_function_params
                             .iter()
@@ -354,7 +356,7 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                             .or_else(|| self.infer_local_var_type_from_body(var_name));
 
-                        if let Some(type_name) = type_name {
+                        if let Some(ref type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
                             if let Some(sig) =
                                 self.signature_registry.get_signature(&qualified_name)
@@ -372,10 +374,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            // Generic type param: resolve trait bounds and
-                            // check if any bound trait declares &mut self
+                            // Generic type param: resolve trait bounds
                             for (tp_name, bounds) in &self.current_function_type_bounds {
-                                if tp_name == &type_name {
+                                if tp_name == type_name {
                                     for bound_trait in bounds {
                                         let trait_qualified =
                                             format!("{}::{}", bound_trait, method);
@@ -398,6 +399,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
+                        }
+
+                        // PRIORITY 2: Fallback to method_registry for stdlib methods
+                        if self.is_mutating_method(method) {
+                            return true;
                         }
                     }
                 }
@@ -446,7 +452,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn is_mutating_method(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        crate::codegen::rust::stdlib_method_traits::method_mutates_receiver(method)
     }
 
     pub(crate) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {

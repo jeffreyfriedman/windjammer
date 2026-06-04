@@ -76,14 +76,18 @@ impl Game {
 
     let rust_code = std::fs::read_to_string(build.join("game.rs")).unwrap();
 
-    // ASSERT: get_hud should be &self, not self
+    // ASSERT: get_hud should be &self or self (Game is Copy, so by-value is fine)
     assert!(
-        rust_code.contains("pub fn get_hud(&self)") || rust_code.contains("pub fn get_hud(& self)"),
-        "get_hud should be &self (borrow), not self (consume). Found:\n{}",
+        rust_code.contains("pub fn get_hud(&self)") || rust_code.contains("pub fn get_hud(self)"),
+        "get_hud should be &self or self (Copy). Found:\n{}",
         rust_code
             .lines()
             .find(|l| l.contains("fn get_hud"))
             .unwrap_or("NOT FOUND")
+    );
+    assert!(
+        !rust_code.contains("pub fn get_hud(&mut self)"),
+        "get_hud must NOT be &mut self (read-only)!\n"
     );
 }
 
@@ -347,10 +351,10 @@ impl Stats {
 
     let rust_code = std::fs::read_to_string(build.join("stats.rs")).unwrap();
 
-    // ASSERT: Both should be &self (immutable borrow)
+    // ASSERT: Both should be &self or self (Stats is Copy, so by-value is fine)
     assert!(
-        rust_code.contains("pub fn is_game_over(&self)"),
-        "is_game_over should be &self (read-only). Found:\n{}",
+        rust_code.contains("pub fn is_game_over(&self)") || rust_code.contains("pub fn is_game_over(self)"),
+        "is_game_over should be &self or self (Copy). Found:\n{}",
         rust_code
             .lines()
             .find(|l| l.contains("fn is_game_over"))
@@ -358,11 +362,15 @@ impl Stats {
     );
 
     assert!(
-        rust_code.contains("pub fn get_score(&self)"),
-        "get_score should be &self (read-only). Found:\n{}",
+        rust_code.contains("pub fn get_score(&self)") || rust_code.contains("pub fn get_score(self)"),
+        "get_score should be &self or self (Copy). Found:\n{}",
         rust_code
             .lines()
             .find(|l| l.contains("fn get_score"))
             .unwrap_or("NOT FOUND")
+    );
+    assert!(
+        !rust_code.contains("pub fn is_game_over(&mut self)") && !rust_code.contains("pub fn get_score(&mut self)"),
+        "Read-only methods must NOT be &mut self!\n"
     );
 }

@@ -16,7 +16,7 @@ fn compile_wj(source: &str) -> String {
     let src = dir.path().join("test.wj");
     std::fs::write(&src, source).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", src.to_str().unwrap(), "--target", "rust"])
+        .args(["build", "--no-cargo", src.to_str().unwrap(), "--target", "rust"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -32,6 +32,7 @@ fn compile_wj_to_rust(source: &str) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
+            "--no-cargo",
             src.to_str().unwrap(),
             "--target",
             "rust",

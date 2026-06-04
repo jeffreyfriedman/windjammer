@@ -55,6 +55,7 @@ fn test_no_shorthand_when_type_conversion_needed() {
 
     let output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg("main.wj")
         .current_dir(&test_dir)
         .output()

@@ -150,10 +150,10 @@ pub fn caller(r: &string) -> usize {
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
     // Phase 2 string optimization converts both `s: string` and `r: &string` params
-    // to `&str`, so no clone is needed — takes_string(r) is valid since both are &str.
-    // Accept either .clone() (pre-optimization) or direct pass (post-optimization).
+    // to `&str`, so no clone is needed — takes_string(r) or takes_string(&r) is valid.
+    // Accept .clone() (pre-optimization), direct pass, or auto-borrow (post-optimization).
     assert!(
-        result.contains(".clone()") || result.contains("takes_string(r)"),
+        result.contains(".clone()") || result.contains("takes_string(r)") || result.contains("takes_string(&r)"),
         "Non-Copy borrowed to owned param needs clone or Phase 2 optimization. Got:\n{}",
         result
     );

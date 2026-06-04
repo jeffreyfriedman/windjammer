@@ -210,6 +210,43 @@ fn function_returns_named_identifier(func: &FunctionDecl, id: &str) -> bool {
     }
 }
 
+/// Check if the body uses `match self { ... }` which moves the value.
+pub fn function_matches_on_self(func: &FunctionDecl) -> bool {
+    func.body.iter().any(|stmt| statement_matches_on_self(stmt))
+}
+
+fn statement_matches_on_self(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Match { value, .. } => expression_is_bare_self(value),
+        Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+            expression_contains_match_on_self(expr)
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block.iter().any(|s| statement_matches_on_self(s))
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| statement_matches_on_self(s)))
+        }
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Loop { body, .. } => body.iter().any(|s| statement_matches_on_self(s)),
+        _ => false,
+    }
+}
+
+fn expression_contains_match_on_self(expr: &Expression) -> bool {
+    match expr {
+        Expression::Block { statements, .. } => {
+            statements.iter().any(|s| statement_matches_on_self(s))
+        }
+        _ => false,
+    }
+}
+
 /// Check if the body consumes `self` by value — i.e., uses bare `self` (not `self.field`)
 /// as a struct literal field, function argument, or other value position.
 pub fn function_consumes_self(func: &FunctionDecl) -> bool {
@@ -219,6 +256,72 @@ pub fn function_consumes_self(func: &FunctionDecl) -> bool {
         }
     }
     false
+}
+
+/// Check if the function iterates over a `self.field` (consuming the field)
+/// without just calling `.clone()` on elements. This pattern requires owned `self`.
+/// e.g. `for cond in self.conditions { if !cond.check() { ... } }`
+pub fn function_iterates_self_field_consuming(func: &FunctionDecl) -> bool {
+    func.body
+        .iter()
+        .any(|stmt| statement_iterates_self_field(stmt))
+}
+
+fn statement_iterates_self_field(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::For {
+            iterable, body, ..
+        } => {
+            let is_self_field = matches!(
+                iterable,
+                Expression::FieldAccess { object, .. }
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            );
+            if is_self_field {
+                // Only count as consuming if the body doesn't just clone elements
+                // (snapshot pattern uses for+clone → should be &self)
+                !body.iter().all(|s| statement_only_clones_element(s))
+            } else {
+                // Check nested statements
+                body.iter().any(|s| statement_iterates_self_field(s))
+            }
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_iterates_self_field(s))
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| statement_iterates_self_field(s)))
+        }
+        _ => false,
+    }
+}
+
+fn statement_only_clones_element(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
+            expression_only_clones(expr)
+        }
+        _ => false,
+    }
+}
+
+fn expression_only_clones(expr: &Expression) -> bool {
+    match expr {
+        Expression::MethodCall { method, .. }
+            if matches!(method.as_str(), "clone" | "to_owned" | "to_vec" | "into_iter")
+                || matches!(
+                    method.as_str(),
+                    "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add"
+                        | "fill"
+                ) => true,
+        _ => false,
+    }
 }
 
 fn expression_is_bare_self(expr: &Expression) -> bool {

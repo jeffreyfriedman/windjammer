@@ -10,7 +10,7 @@ pub fn expression_produces_usize(expr: &Expression) -> bool {
         Expression::MethodCall {
             method,
             ..
-        } if method == "len" || method == "count" || method == "capacity"
+        } if matches!(method.as_str(), "len" | "capacity" | "count")
     ) || matches!(
         expr,
         Expression::Call {
@@ -21,7 +21,7 @@ pub fn expression_produces_usize(expr: &Expression) -> bool {
             && matches!(
                 function,
                 Expression::FieldAccess { field, .. }
-                    if field == "len" || field == "count" || field == "capacity"
+                    if matches!(field.as_str(), "len" | "capacity" | "count")
             )
     )
 }

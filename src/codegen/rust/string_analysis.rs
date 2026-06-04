@@ -175,7 +175,7 @@ pub fn expression_produces_string(expr: &Expression) -> bool {
 pub fn expression_has_as_str(expr: &Expression) -> bool {
     match expr {
         Expression::MethodCall { method, object, .. } => {
-            method == "as_str" || expression_has_as_str(object)
+            super::rust_stdlib_annotations::is_strip_redundant(method) || expression_has_as_str(object)
         }
         Expression::Block { statements, .. } => block_has_as_str(statements),
         Expression::FieldAccess { object, .. } => expression_has_as_str(object),

@@ -39,14 +39,12 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                     if needs_owned
                         && !s.ends_with(".clone()")
-                        && !s.ends_with(".to_string()")
-                        && !s.ends_with(".into()")
-                        && s != "String::new()"
+                        && !crate::codegen::rust::literals::is_already_owned_string(&s)
                     {
                         s = crate::codegen::rust::literals::string_literal_to_owned_rust(&s);
                     }
                 }
-                if !s.ends_with(".clone()") && !s.ends_with(".to_string()") && !s.ends_with(".into()")
+                if !s.ends_with(".clone()") && !crate::codegen::rust::literals::is_already_owned_string(&s)
                 {
                     let ty = self.infer_expression_type(e);
                     let needs_clone = ty.as_ref().is_some_and(|t| match t {
@@ -226,6 +224,9 @@ impl<'ast> CodeGenerator<'ast> {
                         if !is_copy {
                             // Type inference failed — fall back to name heuristic
                             // Fields like x, y, z, width, height are almost always Copy
+                            // Fallback: field names that are universally numeric
+                            // primitives across all domains (coordinates, dimensions,
+                            // color channels, booleans). No game-specific names here.
                             let is_likely_copy_field = matches!(
                                 field,
                                 "x" | "y"
@@ -260,7 +261,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     | "selected"
                                     | "focused"
                                     | "id"
-                                    | "type"
                                     | "kind"
                                     | "priority"
                                     | "level"
@@ -269,18 +269,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     | "size"
                                     | "index"
                                     | "idx"
-                                    | "root"
                                     | "vx"
                                     | "vy"
                                     | "vz"
                                     | "dx"
                                     | "dy"
                                     | "dz"
-                                    | "health"
-                                    | "damage"
-                                    | "score"
-                                    | "lives"
-                                    | "frame"
                             );
                             if !is_likely_copy_field {
                                 return format!("{}.clone()", base_expr);

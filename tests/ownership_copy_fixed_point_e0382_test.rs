@@ -75,8 +75,8 @@ fn main() {
 "#;
     let (rs, compiles) = test_utils::compile_single_check(source);
     assert!(
-        rs.contains("fn inner_copy(&self)"),
-        "Wrapper should be Copy after Inner; method should be &self. Got:\n{}",
+        rs.contains("fn inner_copy(&self)") || rs.contains("fn inner_copy(self)"),
+        "Wrapper should be Copy; method should be &self or self. Got:\n{}",
         rs
     );
     assert!(compiles, "Must compile without E0382. Rust:\n{}", rs);

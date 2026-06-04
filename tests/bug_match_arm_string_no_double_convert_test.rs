@@ -32,17 +32,17 @@ impl Level {
     let generated = test_utils::compile_single(source);
 
     assert!(
-        generated.contains("\"low\".to_string()") || generated.contains("\"low\".into()"),
+        generated.contains("\"low\".to_string()")
+            || generated.contains("\"low\".into()")
+            || generated.contains("String::from(\"low\")"),
         "expected string conversion for match arm literal:\n{}",
         generated
     );
     assert!(
-        !generated.contains(".into().to_string()"),
-        "must not double-convert match arm strings:\n{}",
-        generated
-    );
-    assert!(
-        !generated.contains(".to_string().to_string()"),
+        !generated.contains(".into().to_string()")
+            && !generated.contains(".to_string().to_string()")
+            && !generated.contains("String::from(\"low\").into()")
+            && !generated.contains("String::from(\"low\").to_string()"),
         "must not double-convert match arm strings:\n{}",
         generated
     );

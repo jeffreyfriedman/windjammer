@@ -44,22 +44,34 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
     ///
-    /// Read-only factories that return a new struct instance (snapshot, clone, etc.) need
-    /// `&self`. Builder patterns that flow or mutate `self` need owned/`mut self`.
+    /// The analyzer sets Owned for several reasons: match-on-self, consuming field
+    /// iteration, builder pattern, returning Self type, bare self consumption,
+    /// consuming method calls on self, non-Copy field moves, etc.
+    /// Codegen refines Owned into the appropriate Rust receiver:
+    /// - `mut self` — builder pattern (modifies + returns Self)
+    /// - `&mut self` — mutates fields only (e.g., set field to None, increment)
+    /// - `self` — all other Owned cases (the analyzer already validated consumption)
     pub(super) fn owned_self_receiver(&self, func: &FunctionDecl) -> &'static str {
         let body_modifies = self.function_modifies_self_or_derived(func);
         let returns_impl_struct = self.method_returns_impl_struct(func);
-        let consumes_self = super::self_analysis::function_consumes_self(func);
+
         if body_modifies && returns_impl_struct {
             "mut self"
         } else if body_modifies {
             "&mut self"
-        } else if returns_impl_struct {
-            "self"
-        } else if consumes_self {
-            "self"
         } else {
-            "&self"
+            "self"
+        }
+    }
+
+    /// Check if the struct currently being implemented is a Copy type.
+    /// For Copy types, `self` (by value) is preferred over `&self` since
+    /// the copy is trivially cheap and avoids unnecessary indirection.
+    pub(super) fn current_struct_is_copy(&self) -> bool {
+        if let Some(ref name) = self.current_struct_name {
+            self.is_type_copy(&Type::Custom(name.clone()))
+        } else {
+            false
         }
     }
 

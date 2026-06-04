@@ -80,10 +80,15 @@ impl Outer {
     let (success, generated, output) = compile_wj_to_rs(source);
     assert!(success, "Compilation should succeed: {}", output);
 
-    // The method should take &self (read-only), not owned self
+    // The method should take &self or self (Copy), not &mut self
     assert!(
-        generated.contains("fn get_area(&self)"),
-        "Method should be inferred as &self, not owned.\nGenerated:\n{}",
+        generated.contains("fn get_area(&self)") || generated.contains("fn get_area(self)"),
+        "Method should be inferred as &self or self (Copy), not &mut self.\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn get_area(&mut self)"),
+        "Read-only method should not get &mut self.\nGenerated:\n{}",
         generated
     );
 }

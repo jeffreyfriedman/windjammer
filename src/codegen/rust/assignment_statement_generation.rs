@@ -308,8 +308,7 @@ impl<'ast> CodeGenerator<'ast> {
             );
             if expects_owned
                 && !value_str.ends_with(".clone()")
-                && !value_str.ends_with(".into()")
-                && !value_str.ends_with(".to_string()")
+                && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
             {
                 let elem_type = self.infer_expression_type(value);
                 if elem_type.as_ref().is_some_and(|t| !self.is_type_copy(t)) {
@@ -340,10 +339,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                 if assignment_target_is_text
                     && !value_str.contains(".clone()")
-                    && !value_str.contains(".to_string()")
-                    && !value_str.contains(".into()")
+                    && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
                 {
-                    value_str = format!("{}.to_string()", value_str);
+                    value_str = format!("{}.into()", value_str);
                 }
             }
             // E0308 FIX: match-bound variables from &/&mut scrutinees are references.

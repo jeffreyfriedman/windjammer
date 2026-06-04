@@ -1,0 +1,374 @@
+{
+  "module_path": "Vec",
+  "structs": {},
+  "functions": {
+    "Vec::push": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::pop": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::insert": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::remove": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::clear": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::append": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::extend": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::drain": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::truncate": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::resize": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::retain": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::sort": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::sort_by": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::sort_by_key": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::sort_unstable": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::sort_unstable_by": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::dedup": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::reverse": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::swap": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::swap_remove": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::reserve": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::with_capacity": {
+      "params": ["Custom(\"usize\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false
+    },
+    "Vec::shrink_to_fit": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::split_off": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::fill": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::rotate_left": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::rotate_right": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::set_len": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::extend_from_slice": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Reference(Custom(\"T\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::len": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::is_empty": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::contains": {
+      "params": ["Reference(Custom(\"Vec\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::first": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::last": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::capacity": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::binary_search": {
+      "params": ["Reference(Custom(\"Vec\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::iter": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::iter_mut": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::into_iter": {
+      "params": ["Custom(\"Vec\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::windows": {
+      "params": ["Reference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::chunks": {
+      "params": ["Reference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::clone": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::to_vec": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::as_slice": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Reference(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::as_ptr": {
+      "params": ["Reference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"ptr\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::as_mut_ptr": {
+      "params": ["MutableReference(Custom(\"Vec\"))"],
+      "return_type": "Custom(\"ptr\")",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

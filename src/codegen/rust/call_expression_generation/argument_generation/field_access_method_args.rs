@@ -368,17 +368,18 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
-    let fallback_sig = type_name
+    let qualified_name = type_name
         .as_ref()
         .map(|tn| format!("{}::{}", tn, call_method))
-        .and_then(|q| gen.signature_registry.get_signature(&q).cloned())
-        .or_else(|| {
-            if super::super::super::stdlib_method_traits::is_common_stdlib_method(call_method) {
-                None
-            } else {
-                gen.signature_registry.get_signature(call_method).cloned()
-            }
-        });
+        .unwrap_or_else(|| call_method.to_string());
+    let fallback_sig = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+        &gen.signature_registry,
+        &qualified_name,
+        type_name.as_deref(),
+        arguments.len(),
+        &gen.module_alias_map,
+    )
+    .map(|r| r.sig);
 
     arguments
         .iter()
@@ -490,26 +491,29 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     arg_str,
                 );
             } else {
-                // No signature in registry (peer file not yet built): borrow non-Copy
-                // args for module-qualified calls — Windjammer `string` lowers to &str.
-                let is_non_copy_value = gen
-                    .infer_expression_type(arg_to_generate)
-                    .as_ref()
-                    .is_none_or(|t| !gen.is_type_copy(t));
-                if is_non_copy_value
-                    && !super::super::super::stdlib_method_traits::is_common_stdlib_method(
-                        call_method,
-                    )
-                    && !arg_str.starts_with('&')
-                    && !matches!(
-                        arg_to_generate,
-                        Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        }
-                    )
-                {
-                    arg_str = format!("&{arg_str}");
+                // No signature: only borrow when type_name is known (instance
+                // call on a resolved receiver). Without a signature we can't
+                // tell if the callee takes owned or borrowed, so being
+                // conservative and skipping the borrow for unknown methods
+                // avoids incorrect `&` on owned params (e.g. Vec::push).
+                let is_instance_call = type_name.is_some();
+                if is_instance_call {
+                    let is_non_copy_value = gen
+                        .infer_expression_type(arg_to_generate)
+                        .as_ref()
+                        .is_none_or(|t| !gen.is_type_copy(t));
+                    if is_non_copy_value
+                        && !arg_str.starts_with('&')
+                        && !matches!(
+                            arg_to_generate,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        )
+                    {
+                        arg_str = format!("&{arg_str}");
+                    }
                 }
             }
             arg_str

@@ -81,8 +81,13 @@ impl GameState {
     );
 
     assert!(
-        generated.contains("fn render(&self"),
-        "render() only reads -- should stay &self.\nGenerated:\n{}",
+        generated.contains("fn render(&self") || generated.contains("fn render(self"),
+        "render() only reads -- should be &self or self (Copy types get self by value).\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn render(&mut self"),
+        "render() only reads -- must NOT be &mut self.\nGenerated:\n{}",
         generated
     );
 }

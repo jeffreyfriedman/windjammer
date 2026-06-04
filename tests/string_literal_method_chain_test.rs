@@ -17,23 +17,30 @@ fn compile_wj(code: &str) -> String {
     let wj_path = dir.path().join("test.wj");
     std::fs::write(&wj_path, code).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_windjammer"))
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
-        .arg("--path")
-        .arg(&wj_path)
-        .arg("--output")
-        .arg(dir.path())
+        .arg("--no-cargo")
         .arg("--library")
+        .arg("test.wj")
+        .current_dir(dir.path())
         .output()
         .expect("failed to run wj compiler");
 
-    let rs_path = dir.path().join("test.rs");
-    if rs_path.exists() {
-        std::fs::read_to_string(&rs_path).unwrap()
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("No .rs output. stderr: {}", stderr);
+    if !output.status.success() {
+        panic!(
+            "wj build failed. stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
+
+    let rs_path = dir.path().join("build/test.rs");
+    std::fs::read_to_string(&rs_path).unwrap_or_else(|_| {
+        panic!(
+            "No .rs output at {}. stderr: {}",
+            rs_path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    })
 }
 
 /// Bug: String literals passed to chained method calls don't get .to_string() conversion.

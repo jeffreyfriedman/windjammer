@@ -92,11 +92,12 @@ pub fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
     }
 }
 
-/// Generated Rust already produces an owned `String` (no second `.to_string()` pass).
+/// Generated Rust already produces an owned `String` (no second conversion pass).
 pub fn already_owned_string_expr(expr_str: &str) -> bool {
     expr_str.ends_with(".to_string()")
         || expr_str.ends_with(".into()")
         || expr_str.ends_with(".clone()")
+        || expr_str.starts_with("String::from(")
         || expr_str == "String::new()"
 }
 
@@ -108,5 +109,5 @@ pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     if expr_str.starts_with('"') {
         return crate::codegen::rust::literals::string_literal_to_owned_rust(expr_str);
     }
-    format!("{}.into()", expr_str)
+    format!("{}.to_string()", expr_str)
 }

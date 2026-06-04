@@ -51,6 +51,7 @@ fn main() {
     let output = Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&test_file)
         .output()
         .expect("Failed to execute wj build");
@@ -128,6 +129,7 @@ fn main() {
     let output = Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&test_file)
         .output()
         .expect("Failed to execute wj build");
