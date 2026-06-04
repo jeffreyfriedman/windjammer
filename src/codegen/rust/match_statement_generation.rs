@@ -490,27 +490,12 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
-                // TDD FIX: Don't add .as_str() if value_str already has it OR if it's already &str
-                // value_str may have been simplified (redundant .as_str() removed)
-                if !value_str.ends_with(".as_str()") {
-                    // Check if the simplified value_str is an identifier that's already &str
-                    let is_borrowed_param = self.inferred_borrowed_params.contains(&value_str);
-                    let is_string_type_param = self.current_function_params.iter().any(|p| {
-                        p.name == value_str
-                            && (matches!(p.type_, crate::parser::Type::String)
-                                || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "str" || n == "string" || n == "&str"))
-                    });
-                    if is_borrowed_param || is_string_type_param {
-                        // Already &str, don't add .as_str()
-                        output.push_str(&value_str);
-                    } else {
-                        // Not &str, add .as_str()
-                        output.push_str(&format!("{}.as_str()", value_str));
-                    }
-                } else {
-                    // Already has .as_str()
-                    output.push_str(&value_str);
-                }
+                let scrutinee = crate::codegen::rust::string_utilities::maybe_append_as_str_for_match(
+                    &value_str,
+                    &self.inferred_borrowed_params,
+                    &self.current_function_params,
+                );
+                output.push_str(&scrutinee);
             } else {
                 output.push_str(&value_str);
             }

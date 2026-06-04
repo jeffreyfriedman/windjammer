@@ -38,10 +38,9 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|types| types.get(i))
                         .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                     if needs_owned
-                        && !s.ends_with(".clone()")
-                        && !crate::codegen::rust::literals::is_already_owned_string(&s)
+                        && !crate::codegen::rust::string_utilities::already_owned_string_expr(&s)
                     {
-                        s = crate::codegen::rust::literals::string_literal_to_owned_rust(&s);
+                        s = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&s);
                     }
                 }
                 if !s.ends_with(".clone()") && !crate::codegen::rust::literals::is_already_owned_string(&s)
@@ -629,86 +628,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut idx_str = self.generate_expression(index);
 
-        // WINDJAMMER PHILOSOPHY: Auto-cast to usize for array indexing
-        // Rust requires usize for indexing, but Windjammer uses int (i64)
-        // Handle cases:
-        // 1. Simple identifier: arr[idx] -> arr[idx as usize]
-        // 2. Integer literal: arr[0] -> arr[0 as usize]
-        // 3. Cast to int/i64: arr[x as int] -> arr[x as usize]
-        // 4. Parenthesized cast: arr[(x as int)] -> arr[x as usize]
-        // 5. Already usize: don't double-cast
-        let final_idx = if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
-            // Replace (... as i64/int) with (... as usize)
-            let base = idx_str
-                .trim_end_matches("as i64)")
-                .trim_end_matches("as int)")
-                .trim()
-                .trim_start_matches('(')
-                .trim();
-            format!("{} as usize", base)
-        } else if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
-            // Replace ... as i64/int with ... as usize
-            let base = idx_str
-                .trim_end_matches("as i64")
-                .trim_end_matches("as int")
-                .trim();
-            format!("{} as usize", base)
-        } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
-            // TDD FIX: Auto-cast ANY integer expression to usize (unless already cast)
-            // Handles:
-            // - Identifiers: items[i] → items[i as usize]
-            // - Literals: items[0] → items[0] (Rust infers)
-            // - Binary: items[i + 1] → items[(i + 1) as usize]  ← NEWLY FIXED!
-            // - Method calls: items[get_index()] → items[get_index() as usize]
-            //
-            // Skip cast only if:
-            // 1. Already has cast: items[i as usize]
-            // 2. Expression produces usize: items[vec.len()]
-            // 3. Identifier tracked as usize: for i in 0..10 { items[i] }
-            // 4. Non-negative literal: items[0] (Rust infers)
-
-            // Check special cases where cast is NOT needed
-            let needs_cast = match index {
-                Expression::Identifier { name, .. } => {
-                    // Skip if tracked as usize variable
-                    !self.usize_variables.contains(name)
-                }
-                Expression::Literal {
-                    value: Literal::Int(n),
-                    ..
-                } => {
-                    // Non-negative int literals: Rust infers usize from index context.
-                    // Strip any type suffix the inference engine may have added
-                    // (e.g. `0_usize` → `0`), since the indexing context is enough.
-                    if *n >= 0 {
-                        let suffixes = ["_usize", "_i32", "_i64", "_u32", "_u64"];
-                        for s in &suffixes {
-                            if idx_str.ends_with(s) {
-                                idx_str = idx_str[..idx_str.len() - s.len()].to_string();
-                                break;
-                            }
-                        }
-                    }
-                    *n < 0
-                }
-                _ => true, // All other expressions need cast
-            };
-
-            if needs_cast {
-                // TDD FIX: Add parens for complex expressions to prevent precedence issues
-                // `i + 1` → `(i + 1) as usize` (not `i + 1 as usize` which is parsed as `i + (1 as usize)`)
-                let needs_parens = matches!(index, Expression::Binary { .. });
-                if needs_parens {
-                    format!("({}) as usize", idx_str)
-                } else {
-                    format!("{} as usize", idx_str)
-                }
-            } else {
-                idx_str
-            }
-        } else {
-            idx_str
-        };
+        self.maybe_cast_index_to_usize(&mut idx_str, index);
+        let final_idx = idx_str;
 
         let base_expr = format!("{}[{}]", obj_str, final_idx);
 

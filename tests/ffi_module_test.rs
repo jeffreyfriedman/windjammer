@@ -22,6 +22,8 @@
 use std::fs;
 use tempfile::TempDir;
 
+use crate::test_utils::cargo_check_generated;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_ffi_module_declaration() {
@@ -90,24 +92,7 @@ pub fn get_window_width() -> i64 {
         "Generated code should import ffi module"
     );
 
-    // Verify it compiles with rustc
-    let cargo_output = std::process::Command::new("cargo")
-        .arg("build")
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        println!("Cargo build failed:\n{}", stderr);
-
-        // Check for specific FFI errors
-        if stderr.contains("unresolved import `crate::ffi`") {
-            panic!("FFI module not declared in lib.rs");
-        }
-
-        panic!("Generated Rust should compile");
-    }
+    cargo_check_generated(&output_dir);
 }
 
 #[test]

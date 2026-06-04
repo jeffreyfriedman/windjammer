@@ -333,10 +333,10 @@ impl<'ast> CodeGenerator<'ast> {
                             .as_deref()
                             .is_some_and(|t| self.is_imported_runtime_std_module(t)),
                     };
-                    let arg_is_string = self.infer_expression_type(arg_to_generate).as_ref().is_some_and(|t| {
-                        matches!(t, Type::String)
-                            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-                    });
+                    let arg_is_string = self
+                        .infer_expression_type(arg_to_generate)
+                        .as_ref()
+                        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t));
                     if asref_str_module
                         && arg_is_string
                         && matches!(
@@ -364,11 +364,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // When passing a Phase 2 optimized &str parameter to a method expecting owned String, convert it
                 // This handles cases like: HashMap::insert(key, value) where key is &str but insert expects String
                 if let Expression::Identifier { name, .. } = arg_to_generate {
-                    let is_string_const = name.starts_with("SCOPE_")
-                        || self
-                            .auto_clone_analysis
-                            .as_ref()
-                            .is_some_and(|a| a.string_literal_vars.contains(name));
+                    let is_string_const = crate::codegen::rust::string_utilities::is_string_const_identifier(
+                        name,
+                        self.auto_clone_analysis.as_ref(),
+                    );
                     let sig_param_idx = if method_signature
                         .as_ref()
                         .is_some_and(|s| s.has_self_receiver)
@@ -379,8 +378,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     let wants_string = method_signature.as_ref().and_then(|sig| {
                         sig.param_types.get(sig_param_idx).map(|ty| {
-                            matches!(ty, Type::String)
-                                || matches!(ty, Type::Custom(n) if n == "string" || n == "String")
+                            crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                         })
                     }).unwrap_or(false);
                     // `Vec<String>::push(SCOPE_*)` — push param is generic `T`; const is `&'static str`.
@@ -600,12 +598,13 @@ impl<'ast> CodeGenerator<'ast> {
                             && !is_already_mut_ref
                         {
                             if arg_str.ends_with(".clone()") {
-                                arg_str = arg_str[..arg_str.len() - 8].to_string();
+                                arg_str.truncate(arg_str.len() - 8);
                             }
                             if arg_str.starts_with("&") && !arg_str.starts_with("&mut ") {
                                 arg_str = arg_str[1..].to_string();
                             }
-                            arg_str = format!("&mut {}", arg_str);
+                            crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
+                                .apply(&mut arg_str);
                         }
                     }
                 }

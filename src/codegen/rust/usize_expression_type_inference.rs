@@ -235,4 +235,83 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         }
     }
+
+    /// Cast a `usize`-producing expression to the target int type when needed.
+    ///
+    /// Handles: `expr` → `(expr) as i64`, `(expr) as i32`, or no-op when target
+    /// is already `usize` or unknown.
+    pub(in crate::codegen::rust) fn maybe_cast_usize_to_int_target(
+        &self,
+        expr_str: &mut String,
+        expr: &Expression<'ast>,
+        target_type: Option<&str>,
+    ) {
+        if !self.expression_produces_usize(expr) {
+            return;
+        }
+        match target_type {
+            Some("usize") => {}
+            Some("int") | Some("i64") => {
+                *expr_str = format!("{} as i64", expr_str);
+            }
+            Some("i32") => {
+                *expr_str = format!("{} as i32", expr_str);
+            }
+            _ => {}
+        }
+    }
+
+    /// Cast an index expression to `usize` if needed for Rust array/Vec indexing.
+    ///
+    /// Handles: int→usize cast, i64/int cast rewrite, usize variable skip,
+    /// non-negative literal skip, binary expression parenthesization.
+    pub(in crate::codegen::rust) fn maybe_cast_index_to_usize(
+        &self,
+        idx_str: &mut String,
+        index: &Expression<'ast>,
+    ) {
+        if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
+            let base = idx_str
+                .trim_end_matches("as i64)")
+                .trim_end_matches("as int)")
+                .trim()
+                .trim_start_matches('(')
+                .trim();
+            *idx_str = format!("{} as usize", base);
+        } else if idx_str.ends_with("as i64") || idx_str.ends_with("as int") {
+            let base = idx_str
+                .trim_end_matches("as i64")
+                .trim_end_matches("as int")
+                .trim();
+            *idx_str = format!("{} as usize", base);
+        } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
+            let needs_cast = match index {
+                Expression::Identifier { name, .. } => !self.usize_variables.contains(name),
+                Expression::Literal {
+                    value: Literal::Int(n),
+                    ..
+                } => {
+                    if *n >= 0 {
+                        let suffixes = ["_usize", "_i32", "_i64", "_u32", "_u64"];
+                        for s in &suffixes {
+                            if idx_str.ends_with(s) {
+                                idx_str.truncate(idx_str.len() - s.len());
+                                break;
+                            }
+                        }
+                    }
+                    *n < 0
+                }
+                _ => true,
+            };
+            if needs_cast {
+                let needs_parens = matches!(index, Expression::Binary { .. });
+                if needs_parens {
+                    *idx_str = format!("({}) as usize", idx_str);
+                } else {
+                    *idx_str = format!("{} as usize", idx_str);
+                }
+            }
+        }
+    }
 }

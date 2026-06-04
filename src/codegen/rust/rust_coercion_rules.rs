@@ -73,9 +73,43 @@ impl RustCoercionRules {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Coercion {
-    None,      // No change needed
-    Deref,     // Add *expr
-    Clone,     // Add expr.clone()
-    Borrow,    // Add &expr
-    BorrowMut, // Add &mut expr
+    None,
+    Deref,
+    Clone,
+    Borrow,
+    BorrowMut,
+}
+
+impl Coercion {
+    /// Apply this coercion to a generated expression string.
+    /// Handles idempotency: won't double-borrow, double-clone, etc.
+    pub fn apply(self, expr_str: &mut String) {
+        match self {
+            Coercion::None => {}
+            Coercion::Deref => {
+                if !expr_str.starts_with('*') {
+                    *expr_str = format!("*{}", expr_str);
+                }
+            }
+            Coercion::Clone => {
+                if !expr_str.ends_with(".clone()") {
+                    *expr_str = format!("{}.clone()", expr_str);
+                }
+            }
+            Coercion::Borrow => {
+                if !expr_str.starts_with('&') {
+                    *expr_str = format!("&{}", expr_str);
+                }
+            }
+            Coercion::BorrowMut => {
+                if !expr_str.starts_with("&mut ") {
+                    if expr_str.starts_with('&') {
+                        *expr_str = format!("&mut {}", &expr_str[1..]);
+                    } else {
+                        *expr_str = format!("&mut {}", expr_str);
+                    }
+                }
+            }
+        }
+    }
 }

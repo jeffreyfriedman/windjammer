@@ -20,6 +20,8 @@
 use std::fs;
 use tempfile::TempDir;
 
+use crate::test_utils::cargo_check_generated;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_signature_updates_on_regeneration() {
@@ -91,24 +93,7 @@ impl GameLoop for MyGame {
         "Impl should have &mut self"
     );
 
-    // Verify it compiles
-    let cargo_output = std::process::Command::new("cargo")
-        .arg("build")
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        println!("Cargo build failed:\n{}", stderr);
-
-        // Check for E0053 errors specifically
-        if stderr.contains("error[E0053]") {
-            panic!("E0053: Trait signature mismatch - cross-file inference not working");
-        }
-
-        panic!("Generated Rust code should compile");
-    }
+    cargo_check_generated(&output_dir);
 }
 
 #[test]
@@ -173,26 +158,5 @@ impl GameLoop for MyGame {
     // it should infer the most permissive (which is & if only reading)
     // Since we're reading input.mouse_x, the inference should determine if Input needs &
 
-    // Verify it compiles without E0053 errors
-    let cargo_output = std::process::Command::new("cargo")
-        .arg("build")
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-
-        if stderr.contains("error[E0053]") {
-            println!("E0053 error found:\n{}", stderr);
-            panic!("Trait parameter inference failed - signature mismatch");
-        }
-
-        println!("Other compilation error:\n{}", stderr);
-    }
-
-    assert!(
-        cargo_output.status.success(),
-        "Generated code should compile"
-    );
+    cargo_check_generated(&output_dir);
 }

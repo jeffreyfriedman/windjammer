@@ -616,16 +616,12 @@ impl<'ast> CodeGenerator<'ast> {
         // Int: Check IntInference first (i32, i64, u32, etc.)
         // Float: Check FloatInference (f32, f64)
         match lit {
-            Literal::String(s) => {
-                if s.is_empty() && self.should_coerce_string_literal_to_owned() {
-                    crate::codegen::rust::literals::string_literal_to_owned_rust("\"\"")
+            Literal::String(_) => {
+                let base = crate::codegen::rust::literals::generate_literal(lit);
+                if self.should_coerce_string_literal_to_owned() {
+                    crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&base)
                 } else {
-                    let base = crate::codegen::rust::literals::generate_literal(lit);
-                    if self.should_coerce_string_literal_to_owned() {
-                        crate::codegen::rust::literals::string_literal_to_owned_rust(&base)
-                    } else {
-                        base
-                    }
+                    base
                 }
             }
             Literal::IntSuffixed(i, suffix) => {

@@ -296,7 +296,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) {
-            value_str = crate::codegen::rust::literals::string_literal_to_owned_rust(&value_str);
+            value_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&value_str);
         }
 
         // Vec<T>[i] → owned String field: clone the element, not borrow it.
@@ -373,19 +373,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if self.expression_produces_usize(value) {
+        {
             let target_type = self.get_assignment_target_type(target);
-
-            match target_type.as_deref() {
-                Some("usize") => {}
-                Some("int") | Some("i64") => {
-                    value_str = format!("(({}) as i64)", value_str);
-                }
-                Some("i32") => {
-                    value_str = format!("(({}) as i32)", value_str);
-                }
-                _ => {}
-            }
+            self.maybe_cast_usize_to_int_target(
+                &mut value_str,
+                value,
+                target_type.as_deref(),
+            );
         }
 
         output.push_str(&value_str);

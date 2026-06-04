@@ -29,7 +29,7 @@ categories = ["development-tools", "compilers"]
 readme = "README.md"
 rust-version.workspace = true
 autobins = false
-autotests = true
+autotests = false
 exclude = [
     "test_output_*",
     "examples/*/build_output",
@@ -97,6 +97,10 @@ tempfile = "3.0"
 assert_cmd = "2.0"
 criterion = "0.5"
 serde_json = "1.0"
+
+[[test]]
+name = "all"
+path = "tests/all.rs"
 
 [[bench]]
 name = "string_optimization_bench"
