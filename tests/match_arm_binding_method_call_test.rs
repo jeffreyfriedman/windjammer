@@ -39,6 +39,8 @@
 use std::fs;
 use std::process::Command;
 
+use crate::test_utils::cargo_check_generated;
+
 fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     let test_root = tempfile::tempdir().expect("tempdir");
     let test_dir = test_root.path();
@@ -112,17 +114,7 @@ impl Inventory {
         generated_code
     );
 
-    let manifest = build_dir.join("Cargo.toml");
-    let cargo_output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
-        .output()
-        .expect("Failed to run cargo build");
-
-    assert!(
-        cargo_output.status.success(),
-        "Generated Rust code failed to compile:\n{}",
-        String::from_utf8_lossy(&cargo_output.stderr)
-    );
+    cargo_check_generated(&build_dir);
 }
 
 #[test]
@@ -164,15 +156,5 @@ pub fn handle_event(event: Event, manager: DialogManager) -> bool {
         generated_code
     );
 
-    let manifest = build_dir.join("Cargo.toml");
-    let cargo_output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
-        .output()
-        .expect("Failed to run cargo build");
-
-    assert!(
-        cargo_output.status.success(),
-        "Generated Rust code failed to compile:\n{}",
-        String::from_utf8_lossy(&cargo_output.stderr)
-    );
+    cargo_check_generated(&build_dir);
 }

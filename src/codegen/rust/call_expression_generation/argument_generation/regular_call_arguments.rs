@@ -110,8 +110,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         // generation produces "label.to_string()", then we added another
                         // → string_to_ffi(label.to_string().to_string()). Fix: If arg_str
                         // already ends with .to_string(), don't add another.
-                        if matches!(param_type, Type::String)
-                            || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
+                        if crate::codegen::rust::string_utilities::param_is_owned_string_type(param_type)
                         {
                             let inner = if arg_str.ends_with(".to_string()") {
                                 arg_str.clone()
@@ -146,16 +145,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     false
                 } else if let Some(ref sig) = signature {
                     if sig.is_extern {
-                        // Extern functions have explicit types; ownership inference
-                        // is meaningless (empty body defaults to Borrowed).
-                        // Convert if parameter type is String.
                         sig.param_types.get(i).is_some_and(|ty| {
-                            matches!(ty, Type::String)
-                                || matches!(ty, Type::Custom(name) if name == "string" || name == "String")
+                            crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                         })
                     } else if sig.param_types.get(i).is_some_and(|ty| {
-                        matches!(ty, Type::Reference(inner) if
-                            matches!(**inner, Type::Custom(ref s) if s == "str"))
+                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
                     }) {
                         // Parameter type is &str (string optimization inferred this).
                         // String literals are already &str in Rust — no .to_string() needed.
@@ -202,15 +196,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             if let Expression::Identifier { name, .. } = arg {
                 let param_wants_owned_string = signature.as_ref().is_some_and(|sig| {
                     sig.param_types.get(i).is_some_and(|ty| {
-                        matches!(ty, Type::String)
-                            || matches!(ty, Type::Custom(n) if n == "string" || n == "String")
+                        crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                     })
                 });
-                let is_string_const = name.starts_with("SCOPE_")
-                    || gen
-                        .auto_clone_analysis
-                        .as_ref()
-                        .is_some_and(|a| a.string_literal_vars.contains(name));
+                let is_string_const = crate::codegen::rust::string_utilities::is_string_const_identifier(
+                    name,
+                    gen.auto_clone_analysis.as_ref(),
+                );
                 if param_wants_owned_string && !arg_str.ends_with(".to_string()") && is_string_const
                 {
                     arg_str = format!("{}.to_string()", arg_str);
@@ -317,7 +309,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 // In the AST, `string` parameters are Type::String (converted to &String by codegen)
                                 // Explicit `&str` parameters are Type::Reference(Custom("str"))
                                 let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
-                                    matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                                 });
 
                                 let asref_str_runtime = func_name
@@ -326,20 +318,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
 
                                 if param_is_str_ref || asref_str_runtime {
-                                    // Parameter is explicitly &str - pass literal directly (already a &str)
-                                    // "World" is already &str in Rust, no conversion needed!
                                     return vec![arg_str];
                                 } else {
-                                    // Parameter is Type::String (becomes &String in Rust)
-                                    // Check if it's actually a String type
                                     let param_is_string = sig.param_types.get(i).is_some_and(|t| {
-                                        matches!(t, Type::String) || matches!(t, Type::Custom(ref name) if name == "string")
+                                        crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
                                     });
                                     if param_is_string {
-                                        // Convert &str literal to &String: "World" → &"World".to_string()
                                         return vec![format!("&{}.to_string()", arg_str)];
                                     } else {
-                                        // Non-string type - pass directly
                                         return vec![arg_str];
                                     }
                                 }
@@ -408,7 +394,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 && !is_temp_variable
                                 && !is_user_closure_param
                             {
-                                return vec![format!("&{}", arg_str)];
+                                crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
+                                    .apply(&mut arg_str);
+                                return vec![arg_str];
                             } else {
                                 return vec![arg_str];
                             }
@@ -435,24 +423,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     false
                                 };
 
-                            // Insert &mut if not already a reference
                             if !expression_helpers::is_reference_expression(arg)
                                 && !is_already_mut_ref
                             {
-                                let mut_arg_str = if arg_str.ends_with(".clone()") {
-                                    arg_str[..arg_str.len() - 8].to_string()
-                                } else {
-                                    arg_str
-                                };
-                                return vec![format!("&mut {}", mut_arg_str)];
+                                if arg_str.ends_with(".clone()") {
+                                    arg_str.truncate(arg_str.len() - 8);
+                                }
+                                crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
+                                    .apply(&mut arg_str);
+                                return vec![arg_str];
                             }
                         }
                         OwnershipMode::Owned => {
-                            // String optimization override: param_types may say &str
-                            // while param_ownership is stale as Owned. Trust param_types.
                             let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
-                                matches!(t, Type::Reference(inner) if
-                                    matches!(**inner, Type::Custom(ref s) if s == "str"))
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             });
                             if param_is_str_ref {
                                 // Owned String/local binding → borrow as &str via &String deref.

@@ -111,3 +111,117 @@ pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     }
     format!("{}.to_string()", expr_str)
 }
+
+// =============================================================================
+// Shared call-site string coercion predicates
+//
+// These are used by the three argument-lowering pipelines:
+//   regular_call_arguments.rs, method_call_expression_generation/arguments.rs,
+//   field_access_method_args.rs
+// =============================================================================
+
+/// Parameter type is explicitly `&str` (not `&String`).
+/// This indicates the callee wants a string slice — string literals can be passed directly.
+pub fn param_is_rust_str_ref(param_type: &Type) -> bool {
+    matches!(
+        param_type,
+        Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+    )
+}
+
+/// Parameter type is an owned Windjammer `string` / Rust `String`.
+pub fn param_is_owned_string_type(param_type: &Type) -> bool {
+    matches!(param_type, Type::String)
+        || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
+}
+
+/// Identifier is a string constant (`SCOPE_*` or a variable bound to a string literal).
+pub fn is_string_const_identifier(
+    name: &str,
+    auto_clone: Option<&crate::auto_clone::AutoCloneAnalysis>,
+) -> bool {
+    name.starts_with("SCOPE_")
+        || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
+}
+
+/// Callee borrows a string parameter: Rust will receive `&str` or `&String`.
+/// True when the signature explicitly marks the param as `Borrowed`, or when
+/// no ownership metadata exists but the param type is a Windjammer text type
+/// (default borrow for `string` params in non-extern functions).
+pub fn callee_borrows_string_param(
+    sig: &crate::analyzer::FunctionSignature,
+    sig_param_idx: usize,
+) -> bool {
+    if sig.is_extern {
+        return false;
+    }
+    let is_text = sig
+        .param_types
+        .get(sig_param_idx)
+        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+
+    sig.param_ownership
+        .get(sig_param_idx)
+        .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed))
+        || (sig.param_ownership.is_empty() && is_text)
+}
+
+/// When `expr_str` ends with `.clone()` and the cloned identifier is a borrowed
+/// string parameter, rewrite `.clone()` to `.to_string()`. Cloning a `&str`
+/// produces another `&str`; `.to_string()` produces an owned `String`.
+///
+/// Returns `true` if a rewrite happened.
+pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
+    expr_str: &mut String,
+    expr: &Expression<'ast>,
+    borrowed_params: &std::collections::HashSet<String>,
+    function_params: &[crate::parser::Parameter<'ast>],
+) -> bool {
+    if !expr_str.ends_with(".clone()") {
+        return false;
+    }
+    let ident_name: Option<&str> = match expr {
+        Expression::MethodCall { method, object, .. } if method == "clone" => match &**object {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(name) = ident_name {
+        let is_string_type = function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(p.type_, Type::String)
+                    || matches!(p.type_, Type::Custom(ref n) if n == "string"))
+        });
+        let is_borrowed = borrowed_params.contains(name);
+        if is_borrowed && is_string_type {
+            *expr_str = expr_str.replace(".clone()", ".to_string()");
+            return true;
+        }
+    }
+    false
+}
+
+/// Append `.as_str()` to a match scrutinee when the match contains string literal
+/// patterns. Skips if the expression is already `&str` (a borrowed param or a
+/// param typed as `string`/`str`/`&str`).
+pub fn maybe_append_as_str_for_match(
+    value_str: &str,
+    borrowed_params: &std::collections::HashSet<String>,
+    function_params: &[crate::parser::Parameter],
+) -> String {
+    if value_str.ends_with(".as_str()") {
+        return value_str.to_string();
+    }
+    let is_already_str_ref = borrowed_params.contains(value_str)
+        || function_params.iter().any(|p| {
+            p.name == value_str
+                && (matches!(p.type_, Type::String)
+                    || matches!(p.type_, Type::Custom(ref n) if n == "str" || n == "string" || n == "&str"))
+        });
+    if is_already_str_ref {
+        value_str.to_string()
+    } else {
+        format!("{}.as_str()", value_str)
+    }
+}

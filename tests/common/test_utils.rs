@@ -20,9 +20,74 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use tempfile::TempDir;
 use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
+
+/// Serializes cargo invocations so parallel test threads don't fight over
+/// the shared target directory's lock file.
+static CARGO_LOCK: Mutex<()> = Mutex::new(());
+
+/// Shared target directory for integration tests that spawn `cargo`.
+/// Caching deps here avoids recompiling `windjammer-runtime`, `serde`, etc.
+/// from scratch in every fresh temp directory.
+fn shared_cargo_target_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("wj_integration_verify")
+}
+
+/// Type-check generated Rust code via `cargo check` with a shared dependency cache.
+///
+/// The `build_dir` must contain a `Cargo.toml` (the Windjammer compiler generates one
+/// when `--no-cargo` is NOT passed, or the test can write one manually).
+///
+/// Panics with the compiler's stderr on failure.
+pub fn cargo_check_generated(build_dir: &Path) {
+    let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let shared_target = shared_cargo_target_dir();
+
+    let output = Command::new("cargo")
+        .current_dir(build_dir)
+        .env("CARGO_TARGET_DIR", &shared_target)
+        .args(["check", "--quiet"])
+        .output()
+        .unwrap_or_else(|e| panic!("failed to spawn cargo check: {}", e));
+
+    assert!(
+        output.status.success(),
+        "cargo check failed in {}.\nstderr:\n{}",
+        build_dir.display(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Full `cargo build` of generated Rust code with a shared dependency cache.
+///
+/// Use when the test needs to **run** the resulting binary (e.g. `voxel_octree_test`).
+/// Returns the shared target directory so callers can find the binary at
+/// `<returned_path>/debug/<crate_name>`.
+pub fn cargo_build_generated(build_dir: &Path) -> PathBuf {
+    let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let shared_target = shared_cargo_target_dir();
+
+    let output = Command::new("cargo")
+        .current_dir(build_dir)
+        .env("CARGO_TARGET_DIR", &shared_target)
+        .args(["build", "--quiet"])
+        .output()
+        .unwrap_or_else(|e| panic!("failed to spawn cargo build: {}", e));
+
+    assert!(
+        output.status.success(),
+        "cargo build failed in {}.\nstderr:\n{}",
+        build_dir.display(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    shared_target
+}
 
 // =============================================================================
 // Single-file compilation (library API — fast, no subprocess)
