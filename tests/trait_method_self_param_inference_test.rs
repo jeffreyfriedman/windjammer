@@ -143,10 +143,16 @@ impl Vec2 {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: Non-trait methods can infer &self for read-only access
+    // ASSERT: Non-trait methods can infer &self or self for read-only access
+    // Vec2 is Copy, so self (by value) is equally correct
     assert!(
-        generated.contains("length(&self)"),
-        "Non-trait read-only method should infer &self!\nGenerated:\n{}",
+        generated.contains("length(&self)") || generated.contains("length(self)"),
+        "Non-trait read-only method should infer &self or self (Copy)!\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("length(&mut self)"),
+        "Read-only method must NOT be &mut self!\nGenerated:\n{}",
         generated
     );
 }

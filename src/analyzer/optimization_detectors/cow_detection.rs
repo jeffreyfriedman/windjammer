@@ -124,6 +124,6 @@ impl<'ast> Analyzer<'ast> {
     }
 
     pub(in crate::analyzer) fn is_mutating_method(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        super::super::stdlib_method_traits::method_mutates_receiver(method)
     }
 }

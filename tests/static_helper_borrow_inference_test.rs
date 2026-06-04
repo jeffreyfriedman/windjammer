@@ -217,9 +217,9 @@ impl Builder {
         .expect("Generated .rs file not found");
 
     // grid in build() should be &mut Grid because fill_at calls grid.set which is &mut self
+    // Builder is Copy, so self may be `self` (by value) instead of `&self`
     assert!(
-        generated.contains("fn build(&mut self, grid: &mut Grid)")
-            || generated.contains("fn build(&self, grid: &mut Grid"),
+        generated.contains("grid: &mut Grid"),
         "Expected build() to have grid: &mut Grid.\n\
          Static helper fill_at mutates grid, so build should infer &mut.\n\
          Generated code:\n{}",

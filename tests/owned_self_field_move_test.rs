@@ -78,11 +78,16 @@ impl Counter {
 "#,
     );
 
-    // int is Copy, so reading self.value works fine with &self
-    // The compiler can (and should) use &self here for efficiency
+    // int is Copy, so reading self.value works with &self or self (by value)
     assert!(
-        generated.contains("fn get_value(&self) -> i64"),
-        "Expected &self when returning Copy field. Got:\n{}",
+        generated.contains("fn get_value(&self) -> i64")
+            || generated.contains("fn get_value(self) -> i64"),
+        "Expected &self or self (Copy) when returning Copy field. Got:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn get_value(&mut self)"),
+        "Read-only getter should not get &mut self. Got:\n{}",
         generated
     );
 }

@@ -40,7 +40,6 @@ pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iter
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod metadata; // Cross-module type inference metadata
-pub mod method_registry;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)

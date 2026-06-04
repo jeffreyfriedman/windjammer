@@ -160,7 +160,9 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             arguments,
             ..
         } => {
-            if method == "clone" && clone_receiver_is_self_dense_path(object) {
+            if matches!(method.as_str(), "clone" | "to_owned" | "to_vec" | "into_iter")
+                && clone_receiver_is_self_dense_path(object)
+            {
                 return true;
             }
             if expr_may_need_generic_clone_bound(object) {

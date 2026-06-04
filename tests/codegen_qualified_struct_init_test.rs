@@ -58,6 +58,7 @@ fn test_qualified_struct_init_simple() {
 
     let output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg("main.wj")
         .current_dir(&test_dir)
         .output()
@@ -150,6 +151,7 @@ fn test_qualified_struct_init_in_loop() {
 
     let output = Command::new(wj_binary)
         .arg("build")
+        .arg("--no-cargo")
         .arg("main.wj")
         .current_dir(&test_dir)
         .output()

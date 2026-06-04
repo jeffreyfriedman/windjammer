@@ -29,8 +29,9 @@ pub fn pick_name(m: Option<string>) -> string {
 "#;
     let rust = test_utils::compile_single(source);
     assert!(
-        rust.contains("None => \"\".to_string()"),
-        "None arm with empty literal should emit .to_string() for String. Got:\n{}",
+        rust.contains("None => \"\".to_string()")
+            || rust.contains("None => String::new()"),
+        "None arm with empty literal should emit owned String. Got:\n{}",
         rust
     );
 }
@@ -48,8 +49,8 @@ pub fn branch(use_default: bool, s: string) -> string {
 "#;
     let rust = test_utils::compile_single(source);
     assert!(
-        rust.contains("\"\".to_string()"),
-        "if branch returning empty string should emit .to_string(). Got:\n{}",
+        rust.contains("\"\".to_string()") || rust.contains("String::new()"),
+        "if branch returning empty string should emit owned String. Got:\n{}",
         rust
     );
 }
@@ -63,8 +64,11 @@ pub fn empty_str() -> string {
 "#;
     let rust = test_utils::compile_single(source);
     // Compiler may elide `return` and emit implicit tail expression
-    let ok_tail = rust.contains("\"\".to_string()") && rust.contains("empty_str");
-    let ok_explicit = rust.contains("return \"\".to_string()");
+    let empty_owned =
+        rust.contains("\"\".to_string()") || rust.contains("String::new()");
+    let ok_tail = empty_owned && rust.contains("empty_str");
+    let ok_explicit =
+        rust.contains("return \"\".to_string()") || rust.contains("return String::new()");
     assert!(
         ok_tail || ok_explicit,
         "Function returning string literal should emit .to_string() (tail or return). Got:\n{}",

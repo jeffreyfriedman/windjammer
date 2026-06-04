@@ -78,10 +78,7 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 // clone(), to_owned(), etc. preserve the receiver type.
-                if matches!(
-                    method.as_str(),
-                    "clone" | "to_owned" | "to_vec" | "into"
-                ) {
+                if super::stdlib_method_traits::is_type_preserving(method) {
                     return self.infer_receiver_type_base(inner, func);
                 }
                 None
@@ -810,10 +807,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     fn is_hashmap_lookup_method(method: &str) -> bool {
-        matches!(
-            method,
-            "get" | "get_mut" | "contains_key" | "remove" | "get_key_value" | "entry"
-        )
+        super::stdlib_method_traits::is_map_key_method(method)
     }
 
     fn collect_non_lookup_param_uses(

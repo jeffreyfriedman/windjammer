@@ -81,6 +81,8 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipMode::Borrowed => {
                         if body_modifies {
                             "&mut self"
+                        } else if !self.in_trait_impl && self.current_struct_is_copy() {
+                            "self"
                         } else {
                             "&self"
                         }
@@ -142,8 +144,12 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.insert("self".to_string());
                 }
             } else if accesses {
-                params.push("&self".to_string());
-                self.inferred_borrowed_params.insert("self".to_string());
+                if !self.in_trait_impl && self.current_struct_is_copy() {
+                    params.push("self".to_string());
+                } else {
+                    params.push("&self".to_string());
+                    self.inferred_borrowed_params.insert("self".to_string());
+                }
             }
         }
     }

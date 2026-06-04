@@ -213,62 +213,57 @@ fn create(pos: Vec3) -> Emitter {
 /// TDD: Consumer file without local definition should detect signature collision
 /// and avoid incorrect auto-cast.
 ///
-/// This simulates the EXACT multi-file bug: consumer file doesn't define the type,
-/// relies on global registry, but global has the WRONG signature winning.
+/// This simulates the EXACT multi-file bug: two files define conflicting
+/// `Emitter::new` signatures. When a consumer file calls `Emitter::new(1.0, 30)`,
+/// the collision should prevent incorrect auto-cast of `30` to `f32`.
 #[test]
 fn test_signature_collision_consumer_wrong_sig_wins() {
-    // Consumer file that calls Emitter::new without defining it
-    let source = r#"
+    let files = &[
+        (
+            "effects.wj",
+            r#"
+struct Vec3 { x: f32, y: f32, z: f32 }
+
+struct Emitter { pos: Vec3, max_particles: i32 }
+
+impl Emitter {
+    fn new(pos: Vec3, max_particles: i32) -> Emitter {
+        Emitter { pos: pos, max_particles: max_particles }
+    }
+}
+"#,
+        ),
+        (
+            "particles.wj",
+            r#"
+struct Emitter { rate: f32, lifetime: f32 }
+
+impl Emitter {
+    fn new(rate: f32, lifetime: f32) -> Emitter {
+        Emitter { rate: rate, lifetime: lifetime }
+    }
+}
+"#,
+        ),
+        (
+            "consumer.wj",
+            r#"
 fn create() {
     let e = Emitter::new(1.0, 30)
 }
-"#;
-    let mut global_sigs = analyzer::SignatureRegistry::new();
+"#,
+        ),
+    ];
 
-    // First registration: correct signature from effects/particle_emitter.wj
-    global_sigs.add_function(
-        "Emitter::new".to_string(),
-        FunctionSignature {
-            name: "new".to_string(),
-            param_types: vec![
-                Type::Custom("Vec3".to_string()),
-                Type::Custom("i32".to_string()),
-            ],
-            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-            return_type: Some(Type::Custom("Emitter".to_string())),
-            return_ownership: OwnershipMode::Owned,
-            has_self_receiver: false,
-            is_extern: false,
-        },
-    );
-
-    // Second registration: WRONG signature from particles/emitter.wj (this one WINS)
-    // This OVERWRITES the first. The collision should be detected.
-    global_sigs.add_function(
-        "Emitter::new".to_string(),
-        FunctionSignature {
-            name: "new".to_string(),
-            param_types: vec![
-                Type::Custom("f32".to_string()),
-                Type::Custom("f32".to_string()),
-            ],
-            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-            return_type: Some(Type::Custom("Emitter".to_string())),
-            return_ownership: OwnershipMode::Owned,
-            has_self_receiver: false,
-            is_extern: false,
-        },
-    );
-
-    let rust_code = test_utils::compile_single(source);
+    let results = test_utils::compile_project(files);
+    let consumer_rs = results.get("consumer.rs").expect("consumer.rs not generated");
 
     // 30 should NOT be cast to f32 because there's a collision on "Emitter::new"
-    // Even though the current winning signature says (f32, f32), the collision flag
-    // should prevent the auto-cast since we can't be sure which signature is right.
+    // (two different files define Emitter with different param types).
     assert!(
-        !rust_code.contains("30 as f32"),
+        !consumer_rs.contains("30 as f32"),
         "Integer 30 should NOT be cast to f32 when signature has collision.\nGenerated:\n{}",
-        rust_code
+        consumer_rs
     );
 }
 

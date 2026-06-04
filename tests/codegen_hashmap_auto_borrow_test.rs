@@ -50,6 +50,7 @@ fn main() {
     let output = Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg("hashmap_test.wj")
         .output()
         .expect("Failed to execute wj build");
@@ -130,6 +131,7 @@ fn main() {
     let output = Command::new(&wj_binary)
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg("hashmap_get.wj")
         .output()
         .expect("Failed to execute wj build");

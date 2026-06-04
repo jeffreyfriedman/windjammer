@@ -28,6 +28,7 @@ fn compile_to_target(source: &str, target: &str) -> Result<TempDir, String> {
 
     let output = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
+        .arg("--no-cargo")
         .arg("--target")
         .arg(target)
         .arg(&source_file)

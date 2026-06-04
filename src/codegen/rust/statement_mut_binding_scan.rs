@@ -105,7 +105,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        super::stdlib_method_traits::method_mutates_receiver(method)
     }
 
     /// Like `expr_binding_receives_mutating_method_call` but also consults
@@ -251,7 +251,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Check if a method on the given type is known to mutate its receiver,
     /// using both the stdlib method registry and the signature registry.
     fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
-        if crate::method_registry::mutates_receiver(method) {
+        if super::stdlib_method_traits::method_mutates_receiver(method) {
             return true;
         }
         let type_name = match receiver_type {

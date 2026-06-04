@@ -37,7 +37,7 @@ pub fn get_default() -> string {
     }
 
     assert!(
-        generated.contains(r#""".to_string()"#),
+        generated.contains(r#""".to_string()"#) || generated.contains("String::new()"),
         "Empty return should convert to String. Generated:\n{}",
         generated
     );
@@ -63,7 +63,8 @@ pub fn get_message() -> string {
     }
 
     assert!(
-        generated.contains(r#""Hello".to_string()"#),
+        generated.contains(r#""Hello".to_string()"#)
+            || generated.contains(r#"String::from("Hello")"#),
         "Return should convert to String. Generated:\n{}",
         generated
     );

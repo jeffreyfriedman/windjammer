@@ -31,6 +31,7 @@ fn compile_and_check(test_name: &str, wj_source: &str, expected_patterns: &[&str
     let output = Command::new(test_utils::wj_binary())
         .current_dir(&test_dir)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&test_file)
         .output()
         .expect("Failed to execute wj build");

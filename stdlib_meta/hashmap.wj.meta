@@ -1,0 +1,174 @@
+{
+  "module_path": "HashMap",
+  "structs": {},
+  "functions": {
+    "HashMap::insert": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Custom(\"K\")", "Custom(\"V\")"],
+      "return_type": "Option(Custom(\"V\"))",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "HashMap::remove": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(Custom(\"V\"))",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::clear": {
+      "params": ["MutableReference(Custom(\"HashMap\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::entry": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Custom(\"K\")"],
+      "return_type": "Custom(\"Entry\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "HashMap::get": {
+      "params": ["Reference(Custom(\"HashMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(Reference(Custom(\"V\")))",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::get_mut": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(MutableReference(Custom(\"V\")))",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::get_key_value": {
+      "params": ["Reference(Custom(\"HashMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::contains_key": {
+      "params": ["Reference(Custom(\"HashMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::len": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::is_empty": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::keys": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::values": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::values_mut": {
+      "params": ["MutableReference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::iter": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::iter_mut": {
+      "params": ["MutableReference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::into_iter": {
+      "params": ["Custom(\"HashMap\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "HashMap::clone": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashMap::retain": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "HashMap::with_capacity": {
+      "params": ["Custom(\"usize\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false
+    },
+    "HashMap::reserve": {
+      "params": ["MutableReference(Custom(\"HashMap\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "HashMap::capacity": {
+      "params": ["Reference(Custom(\"HashMap\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "HashMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

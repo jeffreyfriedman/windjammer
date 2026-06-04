@@ -52,11 +52,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // TDD FIX: Cast int arguments to usize for stdlib methods
             // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
             // Vec::with_capacity(10) where 10: int literal → Vec::with_capacity(10_usize)
-            if i == 0
-                && (func_name == "Vec::with_capacity"
-                    || func_name == "HashMap::with_capacity"
-                    || func_name == "String::with_capacity"
-                    || func_name == "Vec::reserve")
+            let method_part = func_name.rsplit("::").next().unwrap_or(func_name);
+            if i == 0 && matches!(method_part, "with_capacity" | "reserve")
             {
                 match arg {
                     Expression::Identifier { name, .. } => {
@@ -220,14 +217,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
-            // Symmetric borrowing for multi-arg functions (e.g. `check_collision(a, b)` → `&a, &b`).
-            if func_name == "check_collision"
-                || func_name.ends_with("::check_collision")
-            {
-                if matches!(arg, Expression::Identifier { .. }) && !arg_str.starts_with('&') {
-                    return vec![format!("&{}", arg_str)];
-                }
-            }
             if let Some(ref sig) = signature {
                 let all_params_borrowed = !sig.param_ownership.is_empty()
                     && sig
@@ -239,7 +228,29 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     && !arg_str.starts_with('&')
                     && !arg_str.ends_with(".clone()")
                 {
-                    return vec![format!("&{}", arg_str)];
+                    let already_ref = if let Expression::Identifier { name, .. } = arg {
+                        let n = name.to_string();
+                        gen.inferred_borrowed_params.contains(&n)
+                            || gen.str_ref_optimized_params.contains(&n)
+                            || gen.current_function_params.iter().any(|param| {
+                                param.name == *name
+                                    && matches!(
+                                        &param.type_,
+                                        crate::parser::ast::types::Type::Reference(_)
+                                            | crate::parser::ast::types::Type::MutableReference(_)
+                                    )
+                            })
+                    } else {
+                        false
+                    };
+                    let is_user_closure_param = if let Expression::Identifier { name, .. } = arg {
+                        gen.in_user_written_closure && gen.user_closure_params.contains(name)
+                    } else {
+                        false
+                    };
+                    if !already_ref && !is_user_closure_param {
+                        return vec![format!("&{}", arg_str)];
+                    }
                 }
             }
 
@@ -686,9 +697,24 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             .get(i)
                             .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
                             || (sig.param_ownership.is_empty() && is_text_param));
+                    let arg_already_ref =
+                        if let Expression::Identifier { name, .. } = arg {
+                            gen.inferred_borrowed_params.contains(&name.to_string())
+                                || gen.str_ref_optimized_params.contains(&name.to_string())
+                                || gen.current_function_params.iter().any(|param| {
+                                    param.name == *name
+                                        && matches!(
+                                            &param.type_,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                })
+                        } else {
+                            false
+                        };
                     if (param_is_str_ref || callee_borrows_string)
                         && !arg_str.contains("string_to_ffi(")
                         && !arg_str.starts_with('&')
+                        && !arg_already_ref
                         && !matches!(
                             arg,
                             Expression::Literal {

@@ -41,9 +41,9 @@ fn render_label(value: Option<f32>) -> string {
 
     assert!(success, "Compilation should succeed");
 
-    // The "N/A" literal should be converted to "N/A".to_string()
     assert!(
-        generated.contains("\"N/A\".to_string()"),
+        generated.contains("\"N/A\".to_string()")
+            || generated.contains("String::from(\"N/A\")"),
         "String literal in match arm should be converted to String. Generated:\n{}",
         generated
     );

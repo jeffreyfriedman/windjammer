@@ -115,7 +115,7 @@ impl<'ast> Analyzer<'ast> {
                         },
                     ..
                 } => {
-                    let is_storage_method = crate::method_registry::is_storage_method(method);
+                    let is_storage_method = super::super::stdlib_method_traits::is_storage_method(method);
 
                     if is_storage_method {
                         // Check for storage method calls on ANY object:

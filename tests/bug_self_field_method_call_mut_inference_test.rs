@@ -134,8 +134,13 @@ impl Player {
         .expect("Windjammer compilation should succeed");
 
     assert!(
-        generated.contains("fn is_alive(&self"),
-        "is_alive() only reads via self.stats.get_hp() -- should remain &self.\nGenerated:\n{}",
+        generated.contains("fn is_alive(&self") || generated.contains("fn is_alive(self"),
+        "is_alive() only reads -- should be &self or self (Copy types get self by value).\nGenerated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn is_alive(&mut self"),
+        "is_alive() only reads -- must NOT be &mut self.\nGenerated:\n{}",
         generated
     );
 }

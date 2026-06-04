@@ -104,10 +104,10 @@ impl Tilemap {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: Regular method should have self parameter
+    // ASSERT: Regular method should have self parameter (Copy types use self by value)
     assert!(
-        generated.contains("get_width(&self)"),
-        "Regular method should have &self parameter!\nGenerated:\n{}",
+        generated.contains("get_width(&self)") || generated.contains("get_width(self)"),
+        "Regular method should have self parameter!\nGenerated:\n{}",
         generated
     );
 }

@@ -54,8 +54,7 @@ impl<'ast> CodeGenerator<'ast> {
                         value: Literal::String(_),
                         ..
                     }
-                ) && !return_str.ends_with(".into()")
-                    && return_str != "String::new()"
+                ) && !crate::codegen::rust::literals::is_already_owned_string(&return_str)
                 {
                     return_str =
                         crate::codegen::rust::literals::string_literal_to_owned_rust(&return_str);

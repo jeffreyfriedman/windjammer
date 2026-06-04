@@ -1,6 +1,7 @@
 //! `Call(FieldAccess)` lowering: treat as method call with signature-aware arguments.
 
 use crate::analyzer::OwnershipMode;
+use crate::codegen::rust::call_signature_resolution;
 use crate::parser::*;
 
 use super::super::CodeGenerator;
@@ -15,34 +16,52 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> String {
     let prev_explicit_clone = gen.in_explicit_clone_call;
-    if call_method == "clone" {
+    if matches!(call_method, "clone" | "to_owned" | "to_vec" | "into_iter") {
         gen.in_explicit_clone_call = true;
     }
     let mut obj_str = gen.generate_expression(call_obj);
     gen.in_explicit_clone_call = prev_explicit_clone;
 
-    if call_method == "clone" && obj_str.ends_with(".clone()") {
+    if matches!(call_method, "clone" | "to_owned" | "to_vec" | "into_iter")
+        && obj_str.ends_with(".clone()")
+    {
         obj_str = obj_str[..obj_str.len() - 8].to_string();
     }
 
     let type_name = gen.infer_type_name(call_obj);
-    let method_signature = type_name
+
+    // Build qualified name for the resolver. Try inferred type first,
+    // then fall back to the identifier itself (handles both `Emitter::new`
+    // where Emitter is a type, and `gpu::load_shader` where gpu is a module).
+    let qualified_name = type_name
         .as_ref()
         .map(|tn| format!("{}::{}", tn, call_method))
-        .and_then(|q| gen.signature_registry.get_signature(&q).cloned())
         .or_else(|| {
-            if let Expression::Identifier { name: mod_name, .. } = call_obj {
-                let qualified = format!("{}::{}", mod_name, call_method);
-                if let Some(sig) = gen.signature_registry.get_signature(&qualified) {
-                    return Some(sig.clone());
-                }
-            }
-            if super::super::stdlib_method_traits::is_common_stdlib_method(call_method) {
-                None
+            if let Expression::Identifier { name, .. } = call_obj {
+                Some(format!("{}::{}", name, call_method))
             } else {
-                gen.signature_registry.get_signature(call_method).cloned()
+                None
             }
         });
+
+    let resolved = qualified_name.as_deref().and_then(|name| {
+        call_signature_resolution::resolve_call_signature(
+            &gen.signature_registry,
+            name,
+            type_name.as_deref(),
+            arguments.len(),
+            &gen.module_alias_map,
+        )
+        // Reject suffix matches when we have a type qualifier — finding
+        // OtherType::new when we asked for Emitter::new is wrong.
+        .filter(|r| {
+            !matches!(
+                r.resolution_method,
+                call_signature_resolution::ResolutionMethod::ArgCountValidated
+            )
+        })
+    });
+    let method_signature = resolved.as_ref().map(|r| r.sig.clone());
 
     let runtime_module = match call_obj {
         Expression::Identifier { name, .. } if gen.is_imported_runtime_std_module(name) => {
@@ -71,17 +90,10 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         )
     };
 
-    // Post-process module-qualified calls: borrow owned String args when the registry
-    // says the callee takes `string` by borrow (lowers to `&str` in Rust).
-    let effective_sig = method_signature.clone().or_else(|| {
-        gen.signature_registry.get_signature(call_method).cloned()
-    });
-    if let Some(ref sig) = effective_sig {
-        let callee_is_extern = sig.is_extern
-            || gen
-                .signature_registry
-                .get_signature(call_method)
-                .is_some_and(|s| s.is_extern);
+    // Borrow owned String args when the resolved signature says the callee
+    // takes `string` by borrow (lowers to `&str` in Rust).
+    if let Some(ref sig) = method_signature {
+        let callee_is_extern = sig.is_extern;
         args = args
             .iter()
             .enumerate()
@@ -122,10 +134,6 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     let call_str = format!("{}{}{}({})", obj_str, separator, call_method, args.join(", "));
 
     let is_extern_call = method_signature.as_ref().is_some_and(|sig| sig.is_extern)
-        || gen
-            .signature_registry
-            .get_signature(call_method)
-            .is_some_and(|sig| sig.is_extern)
         || gen.extern_function_names.contains(call_method);
 
     if is_extern_call && !gen.in_unsafe_block {

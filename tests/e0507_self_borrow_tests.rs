@@ -160,8 +160,6 @@ impl Character {
 }
 "#;
     let output = compile_wj(source);
-    // Should generate self.weapon.take() or equivalent
-    // The method modifies self.weapon (sets to None) and takes the old value
     assert!(
         output.contains("self.weapon.take()")
             || output.contains("std::mem::take(&mut self.weapon)")
@@ -169,10 +167,17 @@ impl Character {
         "Option field move-out from &mut self should use .take(). Got:\n{}",
         output
     );
+    // The redundant `self.weapon = None` must NOT appear — it's folded into .take()
+    assert!(
+        !output.contains("self.weapon = None"),
+        "Redundant assignment after .take() should be eliminated. Got:\n{}",
+        output
+    );
 }
 
 /// When assigning self.field (Option type) and then immediately overwriting it,
-/// the "swap" pattern should also use .take() (equip pattern).
+/// the "swap" pattern should use .replace() — the idiomatic Rust for Option swap.
+/// `let prev = self.weapon; self.weapon = Some(w)` → `let prev = self.weapon.replace(w)`
 #[test]
 fn test_option_field_equip_swap_pattern() {
     let source = r#"
@@ -195,19 +200,27 @@ impl Character {
 "#;
     let output = compile_wj(source);
     assert!(
-        output.contains("self.weapon.take()")
+        output.contains("self.weapon.replace(w)")
+            || output.contains("self.weapon.take()")
             || output.contains("std::mem::replace(&mut self.weapon"),
-        "Option field swap from &mut self should use .take() or mem::replace. Got:\n{}",
+        "Option field swap should use .replace(), .take(), or mem::replace. Got:\n{}",
+        output
+    );
+    // The redundant `self.weapon = Some(w)` must NOT appear — it's folded into .replace()
+    assert!(
+        !output.contains("self.weapon = Some(w)"),
+        "Redundant assignment after .replace() should be eliminated. Got:\n{}",
         output
     );
 }
 
-/// When iterating &self.conditions (because outer method is &self), calling a
-/// method that takes owned self on the loop variable should auto-clone.
+/// When an enum method uses `match self` but arms only compare/ignore bound
+/// values (no consuming moves), the compiler should infer &self and use match
+/// ergonomics. No auto-clone is needed at call sites.
 /// Reproduces the breach-protocol dialog.wj pattern: is_available(&self) calls
-/// condition.evaluate(self) inside a for-loop.
+/// condition.evaluate(state) inside a for-loop.
 #[test]
-fn test_borrowed_value_method_call_auto_clones() {
+fn test_enum_match_self_non_consuming_arms_infers_borrowed() {
     let source = r#"
 enum Condition {
     HasGold(i32)
@@ -232,9 +245,6 @@ struct Rule {
 }
 
 impl Rule {
-    // is_available reads self only (is_empty + for-loop), so compiler infers &self.
-    // The for-loop gives &Condition refs. Calling evaluate(self) on &Condition
-    // needs auto-clone.
     pub fn is_available(state: GameState) -> bool {
         if self.conditions.is_empty() {
             return true
@@ -249,11 +259,65 @@ impl Rule {
 }
 "#;
     let output = compile_wj(source);
-    // The method should be inferred as &self, for-loop iterates &self.conditions,
-    // and calling owned-self method on borrowed ref should insert .clone()
+    // evaluate's match arms only compare bound values (non-consuming) so infer &self
     assert!(
-        output.contains("condition.clone().evaluate"),
-        "Should auto-clone when calling owned-self method on borrowed loop variable. Got:\n{}",
+        output.contains("fn evaluate(&self"),
+        "Enum match with non-consuming arms should infer &self. Got:\n{}",
+        output
+    );
+    // Rule::is_available should be &self too
+    assert!(
+        output.contains("fn is_available(&self"),
+        "is_available should be &self. Got:\n{}",
+        output
+    );
+    // No auto-clone needed: evaluate takes &self, loop variable is &Condition
+    assert!(
+        !output.contains("condition.clone().evaluate"),
+        "No auto-clone needed when evaluate takes &self. Got:\n{}",
+        output
+    );
+}
+
+/// When an enum method's match arms MOVE a non-Copy bound value out (e.g.,
+/// returning it), the compiler must infer `self` (owned). Call sites on
+/// borrowed loop variables then need auto-clone.
+#[test]
+fn test_enum_match_self_consuming_arms_needs_auto_clone() {
+    let source = r#"
+enum Payload {
+    Text(string)
+    Empty
+}
+
+impl Payload {
+    pub fn extract(self) -> string {
+        match self {
+            Payload::Text(value) => value,
+            Payload::Empty => "",
+        }
+    }
+}
+
+struct MessageQueue {
+    payloads: Vec<Payload>
+}
+
+impl MessageQueue {
+    pub fn extract_all() -> Vec<string> {
+        let mut result = Vec::new()
+        for payload in self.payloads {
+            result.push(payload.extract())
+        }
+        result
+    }
+}
+"#;
+    let output = compile_wj(source);
+    // extract moves `value` (String) out of the enum — must be self (owned)
+    assert!(
+        output.contains("fn extract(self") || output.contains("fn extract(mut self"),
+        "Enum match that moves non-Copy bound value should infer owned self. Got:\n{}",
         output
     );
 }

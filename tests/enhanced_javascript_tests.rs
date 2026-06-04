@@ -370,6 +370,7 @@ fn test_cli_flags_minify() {
     let wj_path = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_path)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&source_file)
         .arg("--target=javascript")
         .arg("--minify")
@@ -391,6 +392,7 @@ fn test_cli_flags_tree_shake() {
     let wj_path = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_path)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&source_file)
         .arg("--target=javascript")
         .arg("--tree-shake")
@@ -411,6 +413,7 @@ fn test_cli_flags_all_enhanced_features() {
     let wj_path = env!("CARGO_BIN_EXE_wj");
     let output = Command::new(wj_path)
         .arg("build")
+        .arg("--no-cargo")
         .arg(&source_file)
         .arg("--target=javascript")
         .arg("--minify")

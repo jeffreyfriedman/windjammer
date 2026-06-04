@@ -26,6 +26,7 @@ mod self_field_mutation;
 mod self_mutating_calls;
 mod self_return_and_consumption;
 mod signature_registry;
+pub mod stdlib_method_traits;
 mod string_optimization;
 mod trait_analysis;
 mod type_checking;

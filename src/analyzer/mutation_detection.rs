@@ -265,7 +265,7 @@ impl<'ast> Analyzer<'ast> {
         }
         if let Expression::MethodCall { object, method, .. } = expr {
             if self.is_in_receiver_chain(binding, object) {
-                return !crate::method_registry::is_known_readonly_method(method);
+                return !super::stdlib_method_traits::is_known_readonly(method);
             }
         }
         false
@@ -465,12 +465,12 @@ impl<'ast> Analyzer<'ast> {
                         crate::type_classification::is_stdlib_collection_or_wrapper(ty)
                     });
                     if !qualified_attempted || is_stdlib_type {
-                        if crate::method_registry::mutates_receiver(method) {
+                        if super::stdlib_method_traits::method_mutates_receiver(method) {
                             return true;
                         }
                     }
 
-                    if crate::method_registry::is_known_readonly_method(method) {
+                    if super::stdlib_method_traits::is_known_readonly(method) {
                         return false;
                     }
 
@@ -588,9 +588,8 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Known read-only methods that always take &self (not &mut self).
-    /// Delegates to the centralized method_registry — single source of truth.
     pub(super) fn is_known_readonly_method(method: &str) -> bool {
-        crate::method_registry::is_known_readonly_method(method)
+        super::stdlib_method_traits::is_known_readonly(method)
     }
 
     /// Check if the parameter is the receiver of method calls that could potentially mutate.

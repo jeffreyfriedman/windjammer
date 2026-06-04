@@ -309,6 +309,20 @@ pub(crate) fn build_library_multipass(
     > = HashMap::new();
     let mut struct_defining_module_paths: HashMap<String, Vec<Vec<String>>> = HashMap::new();
 
+    // Load typed struct field types from dependency metadata for nested field
+    // chain resolution (e.g., self.renderer.voxel_renderer → VoxelGPURenderer).
+    for (_crate_name, meta_path) in external_paths {
+        let fields = crate::metadata::load_struct_field_types_from_file(meta_path);
+        for (struct_name, field_map) in fields {
+            if !local_struct_names.contains(&struct_name) {
+                global_struct_fields
+                    .entry(struct_name)
+                    .or_default()
+                    .extend(field_map);
+            }
+        }
+    }
+
     for (file, source) in &sources {
         // Parse with proper lifetime (program borrows source)
         let mut lexer = Lexer::new(source);
