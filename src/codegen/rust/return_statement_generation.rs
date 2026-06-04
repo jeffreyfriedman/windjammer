@@ -54,34 +54,20 @@ impl<'ast> CodeGenerator<'ast> {
                         value: Literal::String(_),
                         ..
                     }
-                ) && !crate::codegen::rust::literals::is_already_owned_string(&return_str)
+                ) && !crate::codegen::rust::string_utilities::already_owned_string_expr(&return_str)
                 {
                     return_str =
-                        crate::codegen::rust::literals::string_literal_to_owned_rust(&return_str);
+                        crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&return_str);
                 }
-                // param.clone() where param: &str → param.to_string()
-                // &str.clone() returns &str, but we need String
-                else if let Expression::MethodCall { method, object, .. } = e {
-                    if method == "clone" {
-                        if let Expression::Identifier { name, .. } = &**object {
-                            // Check if this identifier is a borrowed string parameter
-                            let is_string_type = self.current_function_params.iter().any(|p| {
-                                p.name == *name
-                                    && (matches!(p.type_, Type::String)
-                                        || matches!(p.type_, Type::Custom(ref n) if n == "string"))
-                            });
-                            let is_borrowed_str_param =
-                                self.inferred_borrowed_params.contains(name) && is_string_type;
-
-                            if is_borrowed_str_param {
-                                return_str = return_str.replace(".clone()", ".to_string()");
-                            }
-                        }
-                    }
+                else {
+                    crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                        &mut return_str,
+                        e,
+                        &self.inferred_borrowed_params,
+                        &self.current_function_params,
+                    );
                 }
-                // self.field needs .clone() when self is borrowed
-                // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
-                else if let Expression::FieldAccess { object, .. } = e {
+                if let Expression::FieldAccess { object, .. } = e {
                     if let Expression::Identifier { name: obj_name, .. } = &**object {
                         if obj_name == "self" && !return_str.ends_with(".clone()") {
                             let self_is_borrowed = self.current_function_params.iter().any(|p| {
@@ -102,17 +88,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // FIXED: Auto-cast usize to i64 when function returns int
-            // WINDJAMMER PHILOSOPHY: Compiler handles type conversions automatically
-            let returns_int = match &self.current_function_return_type {
-                Some(Type::Int) => true,
-                Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
-                _ => false,
-            };
-
-            if returns_int && self.expression_produces_usize(e) {
-                // .len() returns usize, but function expects i64 - auto-cast!
-                return_str = format!("{} as i64", return_str);
+            {
+                let target = match &self.current_function_return_type {
+                    Some(Type::Int) => Some("int"),
+                    Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                    _ => None,
+                };
+                self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
             }
 
             let returns_option_owned = self.returns_option_owned_type();

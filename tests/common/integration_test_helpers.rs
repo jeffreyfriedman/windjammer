@@ -144,8 +144,11 @@ impl MultiFileTest {
 
         let _guard = CARGO_CHECK_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
+        let shared_target = shared_cargo_target_dir();
+
         let status = Command::new("cargo")
             .current_dir(&self.build_dir)
+            .env("CARGO_TARGET_DIR", &shared_target)
             .args(["check", "--quiet"])
             .status()
             .unwrap_or_else(|e| panic!("failed to spawn cargo check: {}", e));
@@ -239,4 +242,11 @@ name = "wj_multi_file_integration_verify"
 /// Resolves `crates/windjammer-runtime` from the `windjammer` crate root (`CARGO_MANIFEST_DIR`).
 fn windjammer_runtime_path_for_integration_tests() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime")
+}
+
+/// Shared target directory so integration tests don't rebuild deps from scratch.
+fn shared_cargo_target_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("wj_integration_verify")
 }

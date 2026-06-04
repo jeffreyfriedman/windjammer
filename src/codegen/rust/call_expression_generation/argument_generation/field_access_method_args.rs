@@ -12,22 +12,12 @@ fn coerce_string_arg_for_borrowed_callee<'ast>(
     arg: &'ast Expression<'ast>,
     mut arg_str: String,
 ) -> String {
+    use crate::codegen::rust::string_utilities;
     if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
-        let param_is_str_ref = matches!(
-            param_ty,
-            Type::Reference(inner)
-                if matches!(**inner, Type::Custom(ref n) if n == "str")
-        );
-        let is_text_param =
-            crate::codegen::rust::types::is_windjammer_text_type(param_ty);
-        let callee_borrows_string = !sig.is_extern
-            && !arg_str.contains("string_to_ffi(")
-            && sig
-                .param_ownership
-                .get(sig_param_idx)
-                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-            || (sig.param_ownership.is_empty() && is_text_param && !sig.is_extern);
-        if (param_is_str_ref || callee_borrows_string)
+        let param_is_str_ref = string_utilities::param_is_rust_str_ref(param_ty);
+        let callee_borrows = !arg_str.contains("string_to_ffi(")
+            && string_utilities::callee_borrows_string_param(sig, sig_param_idx);
+        if (param_is_str_ref || callee_borrows)
             && !arg_str.starts_with('&')
             && !matches!(
                 arg,
@@ -60,10 +50,10 @@ fn borrow_runtime_std_str_arg<'ast>(
         .is_some_and(
             super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
         );
-    let arg_is_string = gen.infer_expression_type(arg).as_ref().is_some_and(|t| {
-        matches!(t, Type::String)
-            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-    });
+    let arg_is_string = gen
+        .infer_expression_type(arg)
+        .as_ref()
+        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t));
     if asref_str_module
         && arg_is_string
         && matches!(
@@ -207,15 +197,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         if !expression_helpers::is_reference_expression(arg_to_generate)
                             && !is_already_mut_ref
                         {
-                            let mut mut_arg_str = if arg_str.ends_with(".clone()") {
-                                arg_str[..arg_str.len() - 8].to_string()
-                            } else {
-                                arg_str
-                            };
-                            if mut_arg_str.starts_with("&") && !mut_arg_str.starts_with("&mut ") {
-                                mut_arg_str = mut_arg_str[1..].to_string();
+                            if arg_str.ends_with(".clone()") {
+                                arg_str.truncate(arg_str.len() - 8);
                             }
-                            arg_str = format!("&mut {}", mut_arg_str);
+                            if arg_str.starts_with("&") && !arg_str.starts_with("&mut ") {
+                                arg_str = arg_str[1..].to_string();
+                            }
+                            crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
+                                .apply(&mut arg_str);
                         }
                     }
                     OwnershipMode::Owned => {

@@ -39,11 +39,10 @@ pub fn string_literal_to_owned_rust(literal_expr: &str) -> String {
 }
 
 /// Returns true if the expression is already an owned `String` (no further conversion needed).
+///
+/// Equivalent to [`crate::codegen::rust::string_utilities::already_owned_string_expr`].
 pub fn is_already_owned_string(expr: &str) -> bool {
-    expr.ends_with(".to_string()")
-        || expr.ends_with(".into()")
-        || expr.starts_with("String::from(")
-        || expr == "String::new()"
+    crate::codegen::rust::string_utilities::already_owned_string_expr(expr)
 }
 
 /// Escape special characters in strings for Rust string literals

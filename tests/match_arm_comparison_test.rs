@@ -13,6 +13,8 @@
 use std::fs;
 use std::process::Command;
 
+use crate::test_utils::cargo_check_generated;
+
 /// Keeps temp dir alive for the rest of the test (drop order: tuple first field last if we use `_root` binding).
 fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     let test_root = tempfile::tempdir().expect("tempdir");
@@ -112,17 +114,7 @@ pub fn main() {
         generated_code
     );
 
-    let manifest = build_dir.join("Cargo.toml");
-    let cargo_output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        println!("Generated Rust code:\n{}", generated_code);
-        panic!("Cargo build failed:\n{}", stderr);
-    }
+    cargo_check_generated(&build_dir);
 }
 
 #[test]
@@ -173,17 +165,7 @@ pub fn main() {
         generated_code
     );
 
-    let manifest = build_dir.join("Cargo.toml");
-    let cargo_output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        println!("Generated Rust code:\n{}", generated_code);
-        panic!("Cargo build failed:\n{}", stderr);
-    }
+    cargo_check_generated(&build_dir);
 }
 
 #[test]
@@ -227,18 +209,5 @@ pub fn main() {
 "#;
 
     let (_root, build_dir) = setup_wj_build_and_build_dir(wj_code);
-
-    let manifest = build_dir.join("Cargo.toml");
-    let cargo_output = Command::new("cargo")
-        .args(["build", "--manifest-path", manifest.to_str().unwrap()])
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        let rs_file = build_dir.join("test.rs");
-        let generated_code = fs::read_to_string(&rs_file).unwrap();
-        println!("Generated Rust code:\n{}", generated_code);
-        panic!("Cargo build failed:\n{}", stderr);
-    }
+    cargo_check_generated(&build_dir);
 }

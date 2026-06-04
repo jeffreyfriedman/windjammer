@@ -28,6 +28,8 @@
 use std::fs;
 use tempfile::TempDir;
 
+use crate::test_utils::cargo_check_generated;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_module_imports_within_directory() {
@@ -123,18 +125,7 @@ pub mod world
         "Import should use crate:: path or super:: with pub mod declaration"
     );
 
-    // Verify the generated Rust actually compiles
-    let cargo_output = std::process::Command::new("cargo")
-        .arg("build")
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to run cargo build");
-
-    if !cargo_output.status.success() {
-        let stderr = String::from_utf8_lossy(&cargo_output.stderr);
-        println!("Cargo build failed:\n{}", stderr);
-        panic!("Generated Rust code should compile");
-    }
+    cargo_check_generated(&output_dir);
 }
 
 #[test]
@@ -185,16 +176,5 @@ pub use crate::math::vec2::Vec2
         "Prelude should re-export Vec2"
     );
 
-    // Verify cargo build works
-    let cargo_output = std::process::Command::new("cargo")
-        .arg("build")
-        .current_dir(&output_dir)
-        .output()
-        .expect("Failed to run cargo build");
-
-    assert!(
-        cargo_output.status.success(),
-        "Generated Rust should compile. stderr: {}",
-        String::from_utf8_lossy(&cargo_output.stderr)
-    );
+    cargo_check_generated(&output_dir);
 }
