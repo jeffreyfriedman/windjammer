@@ -886,6 +886,9 @@ mod doc_comments_test;
 #[path = "dogfooding_comprehensive_test.rs"]
 mod dogfooding_comprehensive_test;
 
+#[path = "dogfood_engine_ownership_test.rs"]
+mod dogfood_engine_ownership_test;
+
 #[path = "dogfooding_fixes_match_collections_test.rs"]
 mod dogfooding_fixes_match_collections_test;
 

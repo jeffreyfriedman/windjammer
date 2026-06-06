@@ -36,6 +36,12 @@ pub(super) fn ref_from_signature_registries(
 
                     if param_is_str_ref {
                         if let Expression::Identifier { name, .. } = arg {
+                            let is_already_str_ref = is_str_type_param(name, current_function_params)
+                                || inferred_borrowed_params.contains(name.as_str());
+                            if is_already_str_ref {
+                                return Some(false);
+                            }
+
                             if let Some(local_types) = local_var_types {
                                 if let Some(var_type) = local_types.get(name.as_str()) {
                                     if crate::codegen::rust::types::is_windjammer_text_type(
@@ -66,6 +72,9 @@ pub(super) fn ref_from_signature_registries(
                                     return Some(false);
                                 }
                                 if borrowed_iterator_vars.contains(name.as_str()) {
+                                    return Some(false);
+                                }
+                                if is_str_type_param(name, current_function_params) {
                                     return Some(false);
                                 }
                             }
@@ -88,6 +97,12 @@ pub(super) fn ref_from_signature_registries(
 
                     if param_is_str_ref {
                         if let Expression::Identifier { name, .. } = arg {
+                            let is_already_str_ref = is_str_type_param(name, current_function_params)
+                                || inferred_borrowed_params.contains(name.as_str());
+                            if is_already_str_ref {
+                                return Some(false);
+                            }
+
                             if let Some(local_types) = local_var_types {
                                 if let Some(var_type) = local_types.get(name.as_str()) {
                                     if crate::codegen::rust::types::is_windjammer_text_type(
@@ -120,6 +135,9 @@ pub(super) fn ref_from_signature_registries(
                                 if borrowed_iterator_vars.contains(name.as_str()) {
                                     return Some(false);
                                 }
+                                if is_str_type_param(name, current_function_params) {
+                                    return Some(false);
+                                }
                             }
                             return Some(true);
                         }
@@ -130,4 +148,13 @@ pub(super) fn ref_from_signature_registries(
     }
 
     None
+}
+
+/// Checks if a named parameter has a type that already lowers to a Rust reference.
+fn is_str_type_param(name: &str, params: &[Parameter]) -> bool {
+    params.iter().any(|p| {
+        p.name == name
+            && (matches!(&p.type_, Type::Custom(s) if s == "str")
+                || matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_)))
+    })
 }

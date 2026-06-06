@@ -109,7 +109,22 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                         crate::codegen::rust::types::is_windjammer_text_type,
                     );
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
-                    format!("&{arg_str}")
+                    let arg_is_str_param = arguments.get(i).is_some_and(|(_, arg_expr)| {
+                        if let Expression::Identifier { name, .. } = *arg_expr {
+                            gen.current_function_params.iter().any(|p|
+                                p.name == *name && argument_generation::param_type_is_already_ref(&p.type_))
+                        } else if let Expression::Unary { op: UnaryOp::Ref, operand, .. } = *arg_expr {
+                            if let Expression::Identifier { name, .. } = &**operand {
+                                gen.current_function_params.iter().any(|p|
+                                    p.name == *name && argument_generation::param_type_is_already_ref(&p.type_))
+                            } else { false }
+                        } else { false }
+                    });
+                    if arg_is_str_param {
+                        arg_str.clone()
+                    } else {
+                        format!("&{arg_str}")
+                    }
                 } else {
                     arg_str.clone()
                 }

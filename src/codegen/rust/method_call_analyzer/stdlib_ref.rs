@@ -12,6 +12,7 @@ impl MethodCallAnalyzer {
         ctx: &MethodCallContext<'_, '_>,
         arg_count: usize,
         receiver_type_name: Option<&str>,
+        local_var_types: Option<&std::collections::HashMap<String, Type>>,
     ) -> bool {
         let usize_variables = ctx.usize_variables;
         let current_function_params = ctx.current_function_params;
@@ -74,7 +75,7 @@ impl MethodCallAnalyzer {
             }
 
             if super::super::stdlib_method_traits::is_map_key_method(method)
-                && Self::is_copy_type(arg, usize_variables, current_function_params)
+                && Self::is_copy_type_with_locals(arg, usize_variables, current_function_params, local_var_types)
             {
                 let arg_name = if let Expression::Identifier { name, .. } = arg {
                     Some(name.as_str())
@@ -120,7 +121,7 @@ impl MethodCallAnalyzer {
             return true;
         }
 
-        if Self::is_copy_type(arg, usize_variables, current_function_params) {
+        if Self::is_copy_type_with_locals(arg, usize_variables, current_function_params, local_var_types) {
             return false;
         }
 
