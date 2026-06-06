@@ -12,22 +12,15 @@
 
 /// TDD test for for-loop ownership inference
 ///
-/// Bug: For-loops always borrow elements (&T) even when methods need owned (T).
-///
-/// Example that should work:
-/// ```windjammer
-/// for item in items {
-///     item.consume_self()  // Method needs `self` (owned)
-/// }
-/// ```
-///
-/// Current behavior: Compiler infers `&item`, method call fails with E0507
-/// Expected behavior: Compiler should infer owned `item` when method requires it
+/// Pattern: `match self { Enum::Variant(v) => v > 0 }` — Rust's match ergonomics
+/// allow matching on `&self` with auto-deref, so these methods don't need to consume.
+/// The compiler should infer `&self` for both the enum method and the iterating method,
+/// producing borrowed iteration that compiles correctly.
 use std::fs;
 use std::process::Command;
 
 #[test]
-fn test_for_loop_infers_owned_when_method_consumes() {
+fn test_for_loop_match_self_enum_borrows_correctly() {
     let source = r#"
 enum Cond {
     HasGold(i32),
@@ -91,23 +84,28 @@ impl Node {
 
     println!("Generated code:\n{}", generated);
 
-    // The key assertion: Method should consume self (owned) not borrow
-    // Because it iterates over self.conditions and calls consuming methods
+    // check() only reads fields via match — Rust match ergonomics handles &self
     assert!(
-        generated.contains("pub fn all_pass(self) -> bool"),
-        "Method all_pass should be inferred as consuming self (owned), not borrowing.\nGenerated:\n{}",
+        generated.contains("fn check(&self)"),
+        "check should be &self (match on enum doesn't require consuming), got:\n{}",
         generated
     );
 
-    // For-loop should consume, not borrow
+    // all_pass should borrow since check doesn't consume
     assert!(
-        generated.contains("for cond in self.conditions {")
-            && !generated.contains("for cond in &self.conditions"),
-        "For-loop should consume self.conditions (not borrow) when elements are consumed.\nGenerated:\n{}",
+        generated.contains("fn all_pass(&self)"),
+        "all_pass should be &self since check is &self, got:\n{}",
         generated
     );
 
-    // Compile with rustc
+    // For-loop should borrow
+    assert!(
+        generated.contains("for cond in &self.conditions"),
+        "For-loop should borrow self.conditions, got:\n{}",
+        generated
+    );
+
+    // Compile with rustc — the critical check
     let rustc_output = Command::new("rustc")
         .arg(&rust_file)
         .arg("--crate-type")

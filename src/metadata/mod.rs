@@ -84,6 +84,7 @@ pub fn merge_wj_meta_signatures_from_dir(
         &mut copy_structs,
         &mut all_struct_fields,
     );
+    load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
     type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
 }
 
@@ -110,6 +111,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
         &mut copy_structs,
         &mut all_struct_fields,
     );
+    load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
     type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
     for name in &copy_structs {
         analyzer.register_copy_struct(name);
@@ -142,6 +144,11 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
             &mut all_struct_fields,
         );
     }
+    // Project-root metadata.json is the authoritative source (full multi-pass
+    // analysis). Load it last so it overrides stale per-file .wj.meta entries.
+    for root in roots {
+        load_project_root_metadata(root, registry, &mut copy_structs, &mut all_struct_fields);
+    }
     type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
     for name in &copy_structs {
         analyzer.register_copy_struct(name);
@@ -150,6 +157,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
 
 /// Public accessor for `merge_wj_meta_signatures_from_dir_inner` (used by compiler multipass).
 /// Scans both the cache directory and the source root for `.wj.meta` files.
+/// Loads the project-root `metadata.json` last as authoritative source.
 pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
@@ -166,6 +174,7 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
         );
     }
     merge_wj_meta_signatures_from_dir_inner(root, registry, copy_structs, all_struct_fields);
+    load_project_root_metadata(root, registry, copy_structs, all_struct_fields);
 }
 
 fn merge_wj_meta_signatures_from_dir_inner(
@@ -212,6 +221,28 @@ fn merge_wj_meta_signatures_from_dir_inner(
         {
             crate_metadata::merge_crate_metadata_file(
                 &path,
+                registry,
+                copy_structs,
+                all_struct_fields,
+            );
+        }
+    }
+}
+
+/// Load the project-root `metadata.json` as the final authoritative step.
+/// This ensures crate-level metadata (from a full multi-pass analysis) overrides
+/// any stale per-file `.wj.meta` entries that may have incorrect ownership inference.
+fn load_project_root_metadata(
+    root: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    if let Some(project_root) = crate_metadata::find_project_root(root) {
+        let meta_path = project_root.join("metadata.json");
+        if meta_path.exists() {
+            crate_metadata::merge_crate_metadata_file(
+                &meta_path,
                 registry,
                 copy_structs,
                 all_struct_fields,

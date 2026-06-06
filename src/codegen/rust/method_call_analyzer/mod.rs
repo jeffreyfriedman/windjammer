@@ -300,7 +300,7 @@ impl MethodCallAnalyzer {
             borrowed_iterator_vars,
             inferred_borrowed_params,
         };
-        Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name)
+        Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name, local_var_types)
     }
 }
 

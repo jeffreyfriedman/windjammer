@@ -146,6 +146,13 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 }
                             }
                         } else if !is_user_closure_param {
+                            let param_already_ref = if let Expression::Identifier { name, .. } = arg_to_generate {
+                                gen.current_function_params.iter().any(|p|
+                                    p.name == *name && param_type_is_already_ref(&p.type_))
+                            } else { false };
+                            if param_already_ref {
+                                // str / &string / &T params are already references in Rust — never add &
+                            } else {
                             let should_ref =
                                 crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                                     arg_to_generate,
@@ -166,6 +173,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 );
                             if should_ref {
                                 arg_str = format!("&{}", arg_str);
+                            }
                             }
                         }
 
@@ -490,4 +498,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             arg_str
         })
         .collect()
+}
+
+/// Returns true when the Windjammer parameter type already lowers to a Rust
+/// reference (`&str`, `&String`, `&T`), so callers should NOT prepend `&`.
+pub(in crate::codegen::rust) fn param_type_is_already_ref(ty: &crate::parser::Type) -> bool {
+    use crate::parser::Type;
+    matches!(ty, Type::Custom(s) if s == "str")
+        || matches!(ty, Type::Reference(_) | Type::MutableReference(_))
 }
