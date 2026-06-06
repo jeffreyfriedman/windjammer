@@ -572,13 +572,14 @@ impl<'ast> CodeGenerator<'ast> {
                 // AUTO-MUT-BORROW: Add &mut when parameter expects MutBorrowed
                 if let Some(ref sig) = method_signature {
                     let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
-                    let param_is_mut_borrowed = sig
+                    let ownership_is_mut = sig
                         .param_ownership
                         .get(sig_param_idx)
-                        .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed))
-                        || sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                            matches!(t, Type::MutableReference(_))
-                        });
+                        .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed));
+                    let type_is_mut_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                        matches!(t, Type::MutableReference(_))
+                    });
+                    let param_is_mut_borrowed = ownership_is_mut || type_is_mut_ref;
                     let param_wants_owned_value = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
                         matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
                     });
@@ -613,9 +614,6 @@ impl<'ast> CodeGenerator<'ast> {
                 // Skip when .to_string() was stripped for &str param — the result is
                 // already a bare literal/value that is &str, adding & would create &&str.
                 if !string_literal_converted && !to_string_stripped_for_str_param {
-                    // Use `arg_to_generate` (after stripping explicit `&` for map keys / owned params)
-                    // so `should_add_ref` sees `key` not `&key` — otherwise the Unary(Ref) early-return
-                    // skips HashMap `str` key handling and we emit `get(&key)` for `key: &str` (E0277).
                     let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                         arg_to_generate,
                         &arg_str,
@@ -680,17 +678,26 @@ impl<'ast> CodeGenerator<'ast> {
                         let ty_is_ref = arg_ty.as_ref().is_some_and(|t| matches!(t,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) || matches!(t, Type::Custom(n) if n == "&str"));
-                        let param_is_borrowed = match arg {
+                        let param_is_borrowed = match arg_to_generate {
                             Expression::Identifier { name, .. } =>
                                 self.inferred_borrowed_params.contains(&name.to_string()),
                             _ => false,
                         };
-                        let is_borrowed_iter = match arg {
+                        let is_borrowed_iter = match arg_to_generate {
                             Expression::Identifier { name, .. } =>
                                 self.borrowed_iterator_vars.contains(name),
                             _ => false,
                         };
-                        ty_is_ref || param_is_borrowed || is_borrowed_iter
+                        let param_is_ref_type = match arg_to_generate {
+                            Expression::Identifier { name, .. } =>
+                                self.current_function_params.iter().any(|p|
+                                    p.name == *name && (
+                                        matches!(&p.type_, Type::Custom(s) if s == "str")
+                                        || matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+                                    )),
+                            _ => false,
+                        };
+                        ty_is_ref || param_is_borrowed || is_borrowed_iter || param_is_ref_type
                     };
                     if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                         let needs_borrow = matches!(arg,

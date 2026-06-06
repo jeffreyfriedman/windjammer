@@ -203,10 +203,6 @@ impl<'ast> Analyzer<'ast> {
                                 .function_consumes_self_field_elements(func, Some(registry))
                             {
                                 OwnershipMode::Owned
-                            } else if self
-                                .function_explicit_self_for_loops_self_field_by_value(func)
-                            {
-                                OwnershipMode::Owned
                             } else if modifies_fields {
                                 OwnershipMode::MutBorrowed
                             } else {

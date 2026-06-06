@@ -57,6 +57,7 @@ pub fn main() {
         .arg("build")
         .arg("--no-cargo")
         .arg(&test_file)
+        .current_dir(temp_dir.path())
         .output()
         .unwrap();
 
@@ -68,7 +69,7 @@ pub fn main() {
         stderr
     );
 
-    let generated = fs::read_to_string("build/test.rs")
+    let generated = fs::read_to_string(temp_dir.path().join("build/test.rs"))
         .expect("Generated Rust file should exist at build/test.rs");
 
     assert!(
@@ -115,6 +116,7 @@ pub fn main() {
         .arg("build")
         .arg("--no-cargo")
         .arg(&test_file)
+        .current_dir(temp_dir.path())
         .output()
         .unwrap();
 
@@ -126,7 +128,7 @@ pub fn main() {
         stderr
     );
 
-    let generated = fs::read_to_string("build/test.rs")
+    let generated = fs::read_to_string(temp_dir.path().join("build/test.rs"))
         .expect("Generated Rust file should exist at build/test.rs");
 
     assert!(

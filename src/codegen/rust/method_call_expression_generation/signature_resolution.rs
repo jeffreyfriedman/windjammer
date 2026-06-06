@@ -28,11 +28,12 @@ impl<'ast> CodeGenerator<'ast> {
             // module-alias). Arg-count-validated suffix matches could pick a
             // completely different type's method (e.g. str::contains when we
             // asked for String::contains), which causes wrong coercion.
-            return resolved
+            let result = resolved
                 .filter(|r| {
                     !matches!(r.resolution_method, ResolutionMethod::ArgCountValidated)
                 })
                 .map(|r| r.sig);
+            return result;
         }
 
         // No receiver type known: only suffix-match with arg-count validation.
