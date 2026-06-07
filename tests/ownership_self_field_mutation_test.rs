@@ -18,7 +18,7 @@
 // Current behavior: Infers &self (WRONG!)
 // Expected behavior: Infers &mut self (CORRECT!)
 //
-// This is causing 7+ E0596 errors in Breach Protocol game.
+// This pattern causes E0596 errors when self.field.method() requires &mut self.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

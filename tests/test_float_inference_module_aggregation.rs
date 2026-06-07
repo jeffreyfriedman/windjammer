@@ -27,7 +27,7 @@
 //! 1. Add debug logging in float_inference.rs: eprintln!("DEBUG: Type conflict at expr seq_id={} ({}:{})", ...)
 //! 2. Check inference state: Is expr_id_cache/next_seq_id shared between module files?
 //! 3. Fix reset logic: Clear FloatInference state between files if needed
-//! 4. Verify: test passes + breach-protocol builds
+//! 4. Verify: test passes + multi-file builds succeed
 
 use std::fs;
 use tempfile::TempDir;
@@ -40,7 +40,7 @@ fn test_two_files_with_f32_params_no_conflict_compiler() {
     let pkg_dir = temp_dir.path().join("pkg");
     fs::create_dir_all(&pkg_dir).unwrap();
 
-    // File 1: Base type with f32 method (matches breach-protocol companion pattern)
+    // File 1: Base type with f32 method (companion-style update pattern)
     fs::write(
         pkg_dir.join("base.wj"),
         r#"

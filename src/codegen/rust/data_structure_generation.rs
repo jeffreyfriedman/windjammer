@@ -691,25 +691,29 @@ impl<'ast> CodeGenerator<'ast> {
             // Fallback: Type-based handling for Vec<NonCopy>[idx]
             // E0507 fix: vec[idx] for String tries to move → use &vec[idx] (borrow)
             // When owned value needed (struct literal): vec[idx].clone()
-            let needs_borrow_or_clone = self
+            let element_resolution = self
                 .infer_expression_type(object)
                 .as_ref()
                 .and_then(|obj_ty| Self::peeled_collection_element_type(obj_ty))
-                .map(|elem_type| !self.is_type_copy(elem_type))
-                .unwrap_or_else(|| {
-                    // Unknown element type: avoid `&vec[i]` for untyped Vecs filled with Copy
-                    // values (e.g. `Vec::with_capacity` + `push(0 as u8)`), which produced
-                    // `&u8` vs integer literal E0277. Non-Copy unknown vecs: annotate or use
-                    // patterns that infer element type; E0507 is preferable to silent wrong refs.
-                    false
-                });
+                .map(|elem_type| (true, !self.is_type_copy(elem_type)));
 
-            if needs_borrow_or_clone {
-                if force_clone_for_owned_context {
+            match element_resolution {
+                Some((_, true)) => {
+                    if force_clone_for_owned_context {
+                        return format!("{}.clone()", base_expr);
+                    } else {
+                        return format!("&{}", base_expr);
+                    }
+                }
+                Some((_, false)) => {
+                    // Copy type — bare indexing is fine
+                }
+                None => {
+                    // Unknown element type: use .clone() as a safe default.
+                    // .clone() works for both Copy (trivial copy) and non-Copy
+                    // (deep clone). Avoids E0507 without changing the expression
+                    // type the way & would.
                     return format!("{}.clone()", base_expr);
-                } else {
-                    // Default: auto-borrow (zero-cost, idiomatic)
-                    return format!("&{}", base_expr);
                 }
             }
         }

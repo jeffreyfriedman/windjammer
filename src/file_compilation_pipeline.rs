@@ -392,7 +392,7 @@ fn compile_file_impl(
     // Provide cross-file struct field types for nested field chain resolution
     module_compiler
         .analyzer
-        .set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+        .set_global_struct_field_types(std::sync::Arc::new(module_compiler.global_struct_field_types.clone()));
 
     // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {
@@ -478,17 +478,7 @@ fn compile_file_impl(
         }
     }
 
-    // Infer trait bounds
-    let mut inference_engine = inference::InferenceEngine::new();
-    let mut inferred_bounds_map = std::collections::HashMap::new();
-    for item in &program.items {
-        if let parser::Item::Function { decl: func, .. } = item {
-            let bounds = inference_engine.infer_function_bounds(func);
-            if !bounds.is_empty() {
-                inferred_bounds_map.insert(func.name.clone(), bounds);
-            }
-        }
-    }
+    let inferred_bounds_map = inference::collect_inferred_bounds(&program.items);
 
     match generate_main_rust_code(
         target,

@@ -72,7 +72,7 @@ fn compile_wj_to_rust(source: &str) -> String {
 /// must be wrapped in unsafe blocks. The compiler was incorrectly suppressing extern
 /// detection for all module-qualified calls that were resolved via simple-name fallback.
 ///
-/// Real example from breach-protocol:
+/// Real example from game dogfooding:
 ///   input::input_is_key_pressed(input::KEY_W)
 /// Generated: input::input_is_key_pressed(input::KEY_W)  // Missing unsafe!
 /// Should be: (unsafe { input::input_is_key_pressed(input::KEY_W) })

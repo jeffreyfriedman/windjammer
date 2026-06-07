@@ -14,7 +14,7 @@
 //
 // Bug: Multi-pass works WITHIN impl blocks but NOT ACROSS files
 //
-// Example (breach-protocol):
+// Example (cross-file game logic):
 //   File 1: input/keyboard.wj
 //     KeyboardState::update_key(self) mutates self.keys → &mut self
 //
@@ -34,7 +34,7 @@ use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_cross_file_transitive_mutation() {
-    // This test reproduces the exact breach-protocol pattern
+    // This test reproduces a cross-file transitive mutation pattern
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");

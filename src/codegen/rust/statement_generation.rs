@@ -612,14 +612,29 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if base == "&mut " {
-            // For Copy inner types, strip &mut UNLESS the body calls
-            // mutating methods on the binding.  Copy values auto-copy on
-            // destructure, so comparisons/arithmetic/returns work with owned
-            // T.  But if the body calls methods that take &mut self on the
-            // binding, we need &mut to (a) compile and (b) propagate
-            // mutations back through self.field.
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
+                // For Copy inner types, strip &mut UNLESS the body calls
+                // mutating methods on the binding.
                 if self.is_type_copy(&inner) {
+                    let body_mutates = some_arm
+                        .and_then(|arm| {
+                            Self::some_pattern_single_binding(&arm.pattern).map(|b| {
+                                self.binding_receives_mutating_call_with_sig_check(
+                                    arm.body, b, &inner,
+                                )
+                            })
+                        })
+                        .unwrap_or(false);
+                    if !body_mutates {
+                        return "";
+                    }
+                }
+                // TDD FIX: For non-Copy types, also strip &mut when the body does
+                // NOT mutate the binding directly (i.e., no method calls with &mut self
+                // on the binding). When the binding is only passed as an owned argument
+                // to other functions, we need an owned value, not a &mut reference.
+                // The auto-clone logic will add .clone() to the scrutinee when needed.
+                if !self.is_type_copy(&inner) {
                     let body_mutates = some_arm
                         .and_then(|arm| {
                             Self::some_pattern_single_binding(&arm.pattern).map(|b| {

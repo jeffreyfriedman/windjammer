@@ -226,21 +226,22 @@ impl MethodCallAnalyzer {
 
         let is_hashmap_key_method =
             matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
-                && param_idx == 0;
+                && param_idx == 0
+                && receiver_type_name.is_some_and(|n| {
+                    let base = n.split('<').next().unwrap_or(n);
+                    crate::type_classification::is_map_type(base)
+                });
 
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
-                let is_string_type =
-                    |t: &Type| crate::codegen::rust::types::is_windjammer_text_type(t);
-                let is_wj_str_param = current_function_params.iter().any(|param| {
-                    param.name == *name && matches!(&param.type_, Type::Custom(s) if s == "str")
-                });
-                let is_borrowed_string_param = current_function_params
-                    .iter()
-                    .any(|param| param.name == *name && is_string_type(&param.type_))
-                    && inferred_borrowed_params.contains(name);
-
-                if is_wj_str_param || is_borrowed_string_param {
+                if current_function_params.iter().any(|param| {
+                    param.name == *name
+                        && crate::codegen::rust::types::param_generates_as_rust_ref(
+                            &param.type_,
+                            &param.name,
+                            inferred_borrowed_params,
+                        )
+                }) {
                     return false;
                 }
             }
@@ -249,7 +250,11 @@ impl MethodCallAnalyzer {
         if let Expression::Identifier { name, .. } = arg {
             if current_function_params.iter().any(|param| {
                 param.name == *name
-                    && matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
+                    && crate::codegen::rust::types::param_generates_as_rust_ref(
+                        &param.type_,
+                        &param.name,
+                        inferred_borrowed_params,
+                    )
             }) {
                 return false;
             }

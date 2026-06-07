@@ -294,12 +294,8 @@ impl<'ast> Analyzer<'ast> {
                         }
 
                         // Check if this method expects &String or String (owned) for this parameter position
-                        if let Some(sig) = registry
-                            .get_signature(method)
-                            .or_else(|| registry.find_signature_ending_with(method))
-                        {
-                            let sig_idx = if sig.has_self_receiver { idx + 1 } else { idx };
-                            if let Some(param_type) = sig.param_types.get(sig_idx) {
+                        if let Some(sig) = registry.lookup_method(method) {
+                            if let Some(param_type) = sig.param_type_for_arg(idx) {
                                 if self.type_is_string_ref_not_str(param_type) {
                                     return true;
                                 }
@@ -320,10 +316,7 @@ impl<'ast> Analyzer<'ast> {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == param_name {
                         // param.method() - check if method needs &String receiver
-                        if let Some(sig) = registry
-                            .get_signature(method)
-                            .or_else(|| registry.find_signature_ending_with(method))
-                        {
+                        if let Some(sig) = registry.lookup_method(method) {
                             // Check all parameter types in the signature
                             for param_type in &sig.param_types {
                                 if self.type_is_string_ref_not_str(param_type) {
@@ -376,8 +369,7 @@ impl<'ast> Analyzer<'ast> {
                             for (i, arg) in arguments.iter().enumerate() {
                                 let arg_expr = &arg.1;
                                 if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                    let sig_idx = if sig.has_self_receiver { i + 1 } else { i };
-                                    if let Some(param_type) = sig.param_types.get(sig_idx) {
+                                    if let Some(param_type) = sig.param_type_for_arg(i) {
                                         if self.type_is_string_ref_not_str(param_type) {
                                             return true;
                                         }

@@ -16,7 +16,7 @@
 /// Pattern: Field access in binary op doesn't constrain the literal
 /// Expected: Literal should match the field type
 ///
-/// Example from breach-protocol:
+/// Example from game dogfooding:
 /// ```windjammer
 /// pub struct Grid { pub cell_size: f32 }
 /// impl Grid {

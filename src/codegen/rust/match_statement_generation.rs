@@ -140,7 +140,31 @@ impl<'ast> CodeGenerator<'ast> {
                     ""
                 };
                 let value_str = if scrutinee_ref_prefix.is_empty() {
-                    value_str
+                    // TDD FIX: When scrutinee is a non-Copy Option field on borrowed/mut-borrowed
+                    // self, and we stripped the &/&mut prefix (because binding is used as owned),
+                    // we need .clone() to avoid moving out of the borrow.
+                    if self.match_scrutinee_is_self_field(value) {
+                        if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
+                            if !self.is_type_copy(&inner) {
+                                let root = self.root_identifier_of_field_or_index_chain(value);
+                                let is_behind_borrow = root.is_some_and(|r| {
+                                    r == "self" || self.inferred_borrowed_params.contains(r)
+                                        || self.inferred_mut_borrowed_params.contains(r)
+                                });
+                                if is_behind_borrow {
+                                    format!("{}.clone()", value_str)
+                                } else {
+                                    value_str
+                                }
+                            } else {
+                                value_str
+                            }
+                        } else {
+                            value_str
+                        }
+                    } else {
+                        value_str
+                    }
                 } else if scrutinee_ref_prefix == "&mut "
                     && value_str.starts_with('&')
                     && !value_str.starts_with("&mut")

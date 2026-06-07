@@ -291,6 +291,34 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
     }
 }
 
+/// Whether a named function parameter already generates as a Rust reference (`&str`,
+/// `&T`, `&mut T`), so callers should NOT prepend another `&`.
+///
+/// This covers three cases:
+///  1. Explicit `Reference` / `MutableReference` in the AST type.
+///  2. `Custom("str")` — legacy pre-normalization `str` that maps to `&str`.
+///  3. The ownership analyzer has inferred the parameter as borrowed
+///     (`inferred_borrowed_params` contains the name) — the formal Rust parameter
+///     becomes `&str` (for text types) or `&T` (for structs/enums).
+///
+/// **Why text types need special attention:** After parser normalization, `str`
+/// becomes `Type::String`. When the ownership analyzer infers a `Type::String`
+/// parameter as borrowed, the formal parameter generates as `&str` in Rust.
+/// All three representations (`Custom("str")`, `String` + borrowed,
+/// `Reference(String)`) produce `&str` — this function unifies them.
+///
+/// All call-sites that decide whether to add `&` to a method argument MUST use
+/// this function instead of ad-hoc inline checks.
+pub fn param_generates_as_rust_ref(
+    param_type: &Type,
+    param_name: &str,
+    inferred_borrowed_params: &std::collections::HashSet<String>,
+) -> bool {
+    matches!(param_type, Type::Custom(s) if s == "str")
+        || matches!(param_type, Type::Reference(_) | Type::MutableReference(_))
+        || inferred_borrowed_params.contains(param_name)
+}
+
 /// Check if a type contains any references (including nested in Option, Result, etc.)
 pub fn type_contains_reference(type_: &Type) -> bool {
     match type_ {
@@ -467,5 +495,63 @@ mod tests {
             )),
             "Box<dyn System>"
         );
+    }
+
+    // =========================================================================
+    // param_generates_as_rust_ref tests
+    // =========================================================================
+
+    #[test]
+    fn test_param_ref_explicit_reference() {
+        let borrowed = std::collections::HashSet::new();
+        assert!(param_generates_as_rust_ref(
+            &Type::Reference(Box::new(Type::Custom("Config".into()))),
+            "cfg",
+            &borrowed,
+        ));
+    }
+
+    #[test]
+    fn test_param_ref_custom_str() {
+        let borrowed = std::collections::HashSet::new();
+        assert!(param_generates_as_rust_ref(
+            &Type::Custom("str".into()),
+            "key",
+            &borrowed,
+        ));
+    }
+
+    #[test]
+    fn test_param_ref_type_string_inferred_borrowed() {
+        let mut borrowed = std::collections::HashSet::new();
+        borrowed.insert("key".to_string());
+        assert!(param_generates_as_rust_ref(&Type::String, "key", &borrowed));
+    }
+
+    #[test]
+    fn test_param_ref_type_string_not_borrowed() {
+        let borrowed = std::collections::HashSet::new();
+        assert!(!param_generates_as_rust_ref(&Type::String, "key", &borrowed));
+    }
+
+    #[test]
+    fn test_param_ref_owned_struct_not_borrowed() {
+        let borrowed = std::collections::HashSet::new();
+        assert!(!param_generates_as_rust_ref(
+            &Type::Custom("Config".into()),
+            "cfg",
+            &borrowed,
+        ));
+    }
+
+    #[test]
+    fn test_param_ref_struct_inferred_borrowed() {
+        let mut borrowed = std::collections::HashSet::new();
+        borrowed.insert("cfg".to_string());
+        assert!(param_generates_as_rust_ref(
+            &Type::Custom("Config".into()),
+            "cfg",
+            &borrowed,
+        ));
     }
 }

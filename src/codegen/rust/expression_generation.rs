@@ -294,7 +294,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // (Call(FieldAccess) path — same logic as MethodCall path)
                     if let Some(ref r) = resolved_sig {
                         let sig = &r.sig;
-                        let sig_param_idx = if sig.has_self_receiver { idx + 1 } else { idx };
+                        let sig_param_idx = sig.arg_param_index(idx);
                         if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
                             match ownership {
                                 crate::analyzer::OwnershipMode::Owned => {

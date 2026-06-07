@@ -98,7 +98,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             .iter()
             .enumerate()
             .map(|(i, arg_str)| {
-                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                let sig_param_idx = sig.arg_param_index(i);
                 let borrow = !callee_is_extern
                     && !arg_str.contains("string_to_ffi(")
                     && sig
@@ -111,12 +111,10 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
                     let arg_is_str_param = arguments.get(i).is_some_and(|(_, arg_expr)| {
                         if let Expression::Identifier { name, .. } = *arg_expr {
-                            gen.current_function_params.iter().any(|p|
-                                p.name == *name && argument_generation::param_type_is_already_ref(&p.type_))
+                            gen.identifier_already_ref(name)
                         } else if let Expression::Unary { op: UnaryOp::Ref, operand, .. } = *arg_expr {
                             if let Expression::Identifier { name, .. } = &**operand {
-                                gen.current_function_params.iter().any(|p|
-                                    p.name == *name && argument_generation::param_type_is_already_ref(&p.type_))
+                                gen.identifier_already_ref(name)
                             } else { false }
                         } else { false }
                     });

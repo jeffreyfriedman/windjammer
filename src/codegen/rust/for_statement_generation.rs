@@ -48,7 +48,8 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
 
-        let needs_borrow = self.should_borrow_for_iteration(iterable);
+        let needs_borrow = self.should_borrow_for_iteration(iterable)
+            || self.self_field_iterable_needs_borrow(iterable, body);
         let needs_mut_borrow = needs_mut && needs_borrow;
 
         let iterable_already_mut_ref = matches!(
@@ -111,14 +112,21 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level += 1;
 
-        // TDD FIX: Track ALL bound variables in tuple patterns for explicit deref fix
-        // For `for (id, value) in items`, both `id` and `value` need to be tracked
+        // TDD FIX: Track bound variables in tuple patterns for explicit deref fix.
+        // IMPORTANT: When the iterable uses .enumerate(), the index variable (first
+        // tuple element) is always `usize` (owned, Copy) — NOT a reference.
+        // Only the value variable inherits the borrowed status from the iterator.
+        let mut borrowed_bindings_added: Vec<String> = Vec::new();
         if is_borrowed_iterator {
+            let enumerate_index_var = Self::extract_enumerate_index_var(iterable, pattern);
             let mut all_bindings = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut all_bindings);
             for var in all_bindings {
+                if Some(&var) == enumerate_index_var.as_ref() {
+                    continue;
+                }
                 self.borrowed_iterator_vars.insert(var.clone());
-                // Track mutable borrows separately for compound assignment deref
+                borrowed_bindings_added.push(var.clone());
                 if needs_mut_borrow {
                     self.mut_borrowed_iterator_vars.insert(var);
                 }
@@ -182,14 +190,19 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_block_local_idx = saved_local_idx;
 
         if is_borrowed_iterator {
-            if let Some(var) = &loop_var {
+            for var in &borrowed_bindings_added {
                 self.borrowed_iterator_vars.remove(var);
+                self.mut_borrowed_iterator_vars.remove(var);
             }
         }
         if is_owned_string_iterator {
             if let Some(var) = &loop_var {
                 self.owned_string_iterator_vars.remove(var);
             }
+        }
+        // Clean up local_var_types for all pattern bindings, not just simple loop_var
+        for var in &borrowed_bindings_added {
+            self.local_var_types.remove(var);
         }
         if let Some(var) = &loop_var {
             self.local_var_types.remove(var);
@@ -200,5 +213,26 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&self.indent());
         output.push_str("}\n");
         output
+    }
+
+    /// If the iterable is `.enumerate()` and the pattern is a tuple, return
+    /// the first binding name (the index variable) which is always `usize`.
+    fn extract_enumerate_index_var(
+        iterable: &Expression<'ast>,
+        pattern: &Pattern<'ast>,
+    ) -> Option<String> {
+        let is_enumerate = matches!(
+            iterable,
+            Expression::MethodCall { method, .. } if method == "enumerate"
+        );
+        if !is_enumerate {
+            return None;
+        }
+        if let Pattern::Tuple(elements) = pattern {
+            if let Some(Pattern::Identifier(name)) = elements.first() {
+                return Some(name.clone());
+            }
+        }
+        None
     }
 }

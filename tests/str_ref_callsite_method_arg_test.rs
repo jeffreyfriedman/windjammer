@@ -206,7 +206,7 @@ fn main() {}
     );
 }
 
-/// Mirror breach-protocol merchant → inventory forwarding + dual has_item loops (buy_item + execute_trade edge cases).
+/// Mirror merchant → inventory forwarding + dual has_item loops (buy_item + execute_trade edge cases).
 #[test]
 fn str_ref_forwarding_merchant_inventory_and_duplicate_field_calls() {
     let code = r#"

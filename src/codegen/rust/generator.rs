@@ -123,6 +123,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) borrowed_iterator_vars: std::collections::HashSet<String>,
     // Track variables bound in for-loops with &mut iteration (need * for compound assignments)
     pub(crate) mut_borrowed_iterator_vars: std::collections::HashSet<String>,
+    // When true, emit `get_mut` instead of `get` for the next HashMap method call.
+    // Set by statement_generation when a let-binding from .get() has a mutated downstream value.
+    pub(crate) upgrade_get_to_get_mut: bool,
     // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
     // These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
@@ -265,6 +268,11 @@ pub struct CodeGenerator<'ast> {
     /// Used by generate_use to add `self::` prefix for `pub use` re-exports
     /// of items from inline sibling modules (Rust requires `self::` for these).
     pub(crate) inline_module_names: std::collections::HashSet<String>,
+    /// Methods whose self receiver was upgraded from Borrowed to MutBorrowed
+    /// during codegen (body-modification analysis). Used to update registry
+    /// before writing metadata so cross-file builds see correct ownership.
+    /// Key: qualified method name (e.g., "UnifiedRenderer::render_mesh").
+    pub(crate) self_receiver_upgrades: std::collections::HashMap<String, OwnershipMode>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -374,6 +382,7 @@ impl<'ast> CodeGenerator<'ast> {
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
             mut_borrowed_iterator_vars: std::collections::HashSet::new(),
+            upgrade_get_to_get_mut: false,
             match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
@@ -432,6 +441,7 @@ impl<'ast> CodeGenerator<'ast> {
             runtime_std_module_imports: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             inline_module_names: std::collections::HashSet::new(),
+            self_receiver_upgrades: std::collections::HashMap::new(),
         }
     }
 
@@ -678,6 +688,22 @@ impl<'ast> CodeGenerator<'ast> {
         gen
     }
 
+    /// Apply codegen self-receiver upgrades to a registry snapshot.
+    /// When codegen determines a method needs `&mut self` (via body-modification
+    /// analysis) but the analyzer only inferred `Borrowed`, update the registry
+    /// so metadata reflects the actual generated code for cross-file builds.
+    pub fn apply_self_receiver_upgrades(&self, registry: &mut SignatureRegistry) {
+        for (qualified_name, upgrade_mode) in &self.self_receiver_upgrades {
+            if let Some(sig) = registry.signatures.get_mut(qualified_name) {
+                if sig.has_self_receiver && !sig.param_ownership.is_empty() {
+                    if sig.param_ownership[0] != *upgrade_mode {
+                        sig.param_ownership[0] = *upgrade_mode;
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn indent(&self) -> String {
         "    ".repeat(self.indent_level)
     }
@@ -850,6 +876,63 @@ impl<'ast> CodeGenerator<'ast> {
             ("patch", _) => "axum::routing::patch".to_string(),
             // Pass through other decorators as-is
             (other, _) => other.to_string(),
+        }
+    }
+
+    /// Whether a named identifier (from `current_function_params`) already generates
+    /// as a Rust reference, accounting for all three ref-tracking systems:
+    ///  - `inferred_borrowed_params` (analyzer ownership inference)
+    ///  - `str_ref_optimized_params` (Phase 2 string→&str optimization)
+    ///  - explicit `Reference`/`MutableReference`/`Custom("str")` AST types
+    pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
+        self.str_ref_optimized_params.contains(name)
+            || self.current_function_params.iter().any(|p| {
+                p.name == name
+                    && crate::codegen::rust::types::param_generates_as_rust_ref(
+                        &p.type_,
+                        &p.name,
+                        &self.inferred_borrowed_params,
+                    )
+            })
+    }
+
+    /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.
+    ///
+    /// Returns the (possibly cloned) expression string. Skips the clone when:
+    /// - The binding is already cloned (ends with `.clone()`)
+    /// - The binding's type implements `Copy`
+    ///
+    /// This consolidates the identical check previously duplicated in
+    /// `regular_call_arguments`, `function_call_generation`, and other
+    /// argument-generation paths.
+    pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
+        let dominated = self
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
+
+        if !dominated || arg_str.ends_with(".clone()") {
+            return arg_str.to_string();
+        }
+
+        let binding_is_copy = self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| self.is_type_copy(&p.type_))
+            || self
+                .local_var_types
+                .get(name)
+                .is_some_and(|t| self.is_type_copy(t));
+
+        if binding_is_copy {
+            return arg_str.to_string();
+        }
+
+        if arg_str.contains(" as ") && !arg_str.starts_with('(') {
+            format!("({}).clone()", arg_str)
+        } else {
+            format!("{}.clone()", arg_str)
         }
     }
 }

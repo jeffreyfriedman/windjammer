@@ -45,10 +45,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
                 // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
                 // Fix: Suppress clone when param expects Borrowed -> just add & to field
-                let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
                 let param_expects_borrowed = method_signature
                     .as_ref()
-                    .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                    .and_then(|sig| sig.param_ownership_for_arg(i))
                     .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
 
                 let is_auto_borrow_target =
@@ -93,7 +92,7 @@ impl<'ast> CodeGenerator<'ast> {
                             arg
                         }
                     } else if let Some(ref sig) = method_signature {
-                        let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                        let sig_param_idx = sig.arg_param_index(i);
                         let param_is_owned = sig
                             .param_ownership
                             .get(sig_param_idx)
@@ -127,17 +126,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // Owned params still need `.clone()` when the arg is a non-Copy binding; suppressing
                 // auto-clone during `generate_expression` (above) skips spurious clones for
                 // `&mut` pattern bindings (e.g. `world` from `if let Some(world) = &mut self.world`).
-                let sig_param_idx_early = if method_signature
-                    .as_ref()
-                    .is_some_and(|s| s.has_self_receiver)
-                {
-                    i + 1
-                } else {
-                    i
-                };
                 if method_signature
                     .as_ref()
-                    .and_then(|sig| sig.param_ownership.get(sig_param_idx_early))
+                    .and_then(|sig| sig.param_ownership_for_arg(i))
                     .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
                 {
                     let is_copy = self
@@ -174,7 +165,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // &String parameters still need .to_string() (creates String, then borrows it)
                 let mut to_string_stripped_for_str_param = false;
                 if let Some(ref sig) = method_signature {
-                    let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                    let sig_param_idx = sig.arg_param_index(i);
                     if let Some(param_type) = sig.param_types.get(sig_param_idx) {
                         let param_is_str_slice_ref = if let Type::Reference(inner) = param_type {
                             matches!(&**inner, Type::Custom(name) if name == "str")
@@ -253,10 +244,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // Windjammer philosophy: "sword" should work whether parameter wants String or &String
                 // CRITICAL: Do NOT convert for explicit &str parameters! Only for inferred &String.
                 let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
-                let sig_param_idx = if method_signature.as_ref().is_some_and(|s| s.has_self_receiver) { i + 1 } else { i };
                 let param_ownership = method_signature
                     .as_ref()
-                    .and_then(|sig| sig.param_ownership.get(sig_param_idx));
+                    .and_then(|sig| sig.param_ownership_for_arg(i));
                 let string_literal_converted = if is_string_literal {
                     // Check what the parameter wants
 
@@ -269,11 +259,9 @@ impl<'ast> CodeGenerator<'ast> {
                             .is_some_and(|t| self.is_imported_runtime_std_module(t)),
                     };
 
-                    // CRITICAL: Check if parameter is explicitly &str (not inferred &String)
-                    // Explicit &str parameters should NOT get .to_string() conversion
                     let param_type = method_signature
                         .as_ref()
-                        .and_then(|sig| sig.param_types.get(sig_param_idx));
+                        .and_then(|sig| sig.param_type_for_arg(i));
                     let is_explicit_str_ref = if let Some(Type::Reference(inner)) = param_type {
                         matches!(**inner, Type::String) ||
                         matches!(**inner, Type::Custom(ref s) if s == "str")
@@ -368,16 +356,8 @@ impl<'ast> CodeGenerator<'ast> {
                         name,
                         self.auto_clone_analysis.as_ref(),
                     );
-                    let sig_param_idx = if method_signature
-                        .as_ref()
-                        .is_some_and(|s| s.has_self_receiver)
-                    {
-                        i + 1
-                    } else {
-                        i
-                    };
                     let wants_string = method_signature.as_ref().and_then(|sig| {
-                        sig.param_types.get(sig_param_idx).map(|ty| {
+                        sig.param_type_for_arg(i).map(|ty| {
                             crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                         })
                     }).unwrap_or(false);
@@ -397,17 +377,10 @@ impl<'ast> CodeGenerator<'ast> {
                         self.str_ref_optimized_params.contains(name.as_str());
 
                     if is_str_ref_optimized {
-                        let sig_param_idx = if method_signature
-                            .as_ref()
-                            .is_some_and(|s| s.has_self_receiver)
-                        {
-                            i + 1
-                        } else {
-                            i
-                        };
+                        let param_idx_for_sig = method_signature.as_ref().map_or(i, |s| s.arg_param_index(i));
                         if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
                             method_signature,
-                            sig_param_idx,
+                            param_idx_for_sig,
                         ) {
                             let expects_owned = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
                                 i,
@@ -427,20 +400,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // AUTO .clone(): Add .clone() when needed for borrowed values
                 if let Expression::Identifier { name, .. } = arg {
-                    let sig_param_idx = if method_signature
-                        .as_ref()
-                        .is_some_and(|s| s.has_self_receiver)
-                    {
-                        i + 1
-                    } else {
-                        i
-                    };
                     let param_is_mut_borrowed = method_signature
                         .as_ref()
-                        .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                        .and_then(|sig| sig.param_ownership_for_arg(i))
                         .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed))
                         || method_signature.as_ref().and_then(|sig| {
-                            sig.param_types.get(sig_param_idx).map(|t| {
+                            sig.param_type_for_arg(i).map(|t| {
                                 matches!(t, Type::MutableReference(_))
                             })
                         }).unwrap_or(false);
@@ -448,7 +413,7 @@ impl<'ast> CodeGenerator<'ast> {
                         && crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
                         && (method_signature
                             .as_ref()
-                            .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                            .and_then(|sig| sig.param_ownership_for_arg(i))
                             .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
                             || self.borrowed_iterator_vars.contains(name));
                     // Borrowed iterator vars (for x in &vec) are already references.
@@ -464,6 +429,8 @@ impl<'ast> CodeGenerator<'ast> {
                         if !param_is_mut_borrowed
                             && !param_is_borrowed_map_key
                             && !is_borrowed_iter_collecting_refs
+                            && !param_expects_borrowed
+                            && !is_auto_borrow_target
                             && analysis
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
@@ -492,13 +459,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // should_add_clone handles Identifier/FieldAccess; Index needs explicit check
                 // Vec::push uses stdlib heuristics (method_signature=None) - param 0 expects Owned
                 if let Expression::Index { .. } = arg {
-                    let sig_param_idx = method_signature
-                        .as_ref()
-                        .map(|s| if s.has_self_receiver { i + 1 } else { i })
-                        .unwrap_or(i);
                     let param_expects_owned = method_signature
                         .as_ref()
-                        .and_then(|sig| sig.param_ownership.get(sig_param_idx))
+                        .and_then(|sig| sig.param_ownership_for_arg(i))
                         .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
                         || (matches!(
                             method,
@@ -534,7 +497,7 @@ impl<'ast> CodeGenerator<'ast> {
                 //   &ingredient.item_id          ← borrows directly (correct)
                 // Strip the .clone() so should_add_ref can add & cleanly.
                 if let Some(ref sig) = method_signature {
-                    let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                    let sig_param_idx = sig.arg_param_index(i);
                     let param_is_borrowed = sig
                         .param_ownership
                         .get(sig_param_idx)
@@ -548,7 +511,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Identifier { name, .. } = arg_to_generate {
                     if self.match_arm_bindings.contains(name.as_str()) {
                         if let Some(ref sig) = method_signature {
-                            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                            let sig_param_idx = sig.arg_param_index(i);
                             let param_is_mut_borrowed = sig
                                 .param_ownership
                                 .get(sig_param_idx)
@@ -571,7 +534,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // AUTO-MUT-BORROW: Add &mut when parameter expects MutBorrowed
                 if let Some(ref sig) = method_signature {
-                    let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                    let sig_param_idx = sig.arg_param_index(i);
                     let ownership_is_mut = sig
                         .param_ownership
                         .get(sig_param_idx)
@@ -629,7 +592,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(&self.local_var_types),
                         Some(&self.stdlib_method_signatures),
                         Some(&self.method_signatures_by_type),
-                        &self.match_arm_bindings, // TDD FIX: Pass match arm bindings for E0308 fix
+                        &self.match_arm_bindings,
                     );
                     if should_ref {
                         if let Expression::Cast { .. } = arg_to_generate {
@@ -678,11 +641,6 @@ impl<'ast> CodeGenerator<'ast> {
                         let ty_is_ref = arg_ty.as_ref().is_some_and(|t| matches!(t,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) || matches!(t, Type::Custom(n) if n == "&str"));
-                        let param_is_borrowed = match arg_to_generate {
-                            Expression::Identifier { name, .. } =>
-                                self.inferred_borrowed_params.contains(&name.to_string()),
-                            _ => false,
-                        };
                         let is_borrowed_iter = match arg_to_generate {
                             Expression::Identifier { name, .. } =>
                                 self.borrowed_iterator_vars.contains(name),
@@ -691,13 +649,11 @@ impl<'ast> CodeGenerator<'ast> {
                         let param_is_ref_type = match arg_to_generate {
                             Expression::Identifier { name, .. } =>
                                 self.current_function_params.iter().any(|p|
-                                    p.name == *name && (
-                                        matches!(&p.type_, Type::Custom(s) if s == "str")
-                                        || matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
-                                    )),
+                                    p.name == *name && crate::codegen::rust::types::param_generates_as_rust_ref(
+                                        &p.type_, &p.name, &self.inferred_borrowed_params)),
                             _ => false,
                         };
-                        ty_is_ref || param_is_borrowed || is_borrowed_iter || param_is_ref_type
+                        ty_is_ref || is_borrowed_iter || param_is_ref_type
                     };
                     if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                         let needs_borrow = matches!(arg,
@@ -720,7 +676,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|q| self.signature_registry.has_collision(q))
                         || self.signature_registry.has_collision(method);
                     if let Some(sig) = effective_sig {
-                        let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                        let sig_param_idx = sig.arg_param_index(i);
                         if !has_collision {
                             if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
                                 let arg_ty = self.infer_expression_type(arg);

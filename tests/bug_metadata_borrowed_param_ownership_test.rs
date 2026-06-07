@@ -12,7 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 /// Library `metadata.json` must carry converged `param_ownership`, not step-2 placeholders.
-/// Cross-crate callers (breach-protocol → engine) rely on Borrowed for read-only Vec params.
+/// Cross-crate callers (game → engine) rely on Borrowed for read-only Vec params.
 #[test]
 fn test_library_metadata_json_includes_borrowed_param_ownership() {
     let tmp = TempDir::new().expect("tempdir");

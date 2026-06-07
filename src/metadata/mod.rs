@@ -17,7 +17,8 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    load_struct_field_types_from_file, meta_cache_path, meta_cache_root, CrateMetadata,
+    load_merged_external_struct_fields, load_struct_field_types_from_file, meta_cache_path,
+    meta_cache_root, CrateMetadata,
 };
 pub use function_metadata::{
     metadata_function_sig_from_analyzer, try_analyzer_signature_from_metadata, FunctionSignature,
@@ -279,6 +280,104 @@ fn merge_single_wj_meta_file(
                 .push(field_types);
         }
     }
+}
+
+/// Build a ModuleMetadata from analyzed program items and a converged signature registry.
+/// This extracts function/impl/struct/trait metadata from the AST using the registry.
+/// Used by both single-file and multipass compilation pipelines.
+pub fn collect_analyzed_module_metadata(
+    module_name: &str,
+    program: &crate::parser::Program,
+    registry: &crate::analyzer::SignatureRegistry,
+    copy_structs: Vec<String>,
+) -> ModuleMetadata {
+    use crate::parser::ast::core::Item;
+
+    let mut meta = ModuleMetadata::new(module_name.to_string());
+    for item in &program.items {
+        match item {
+            Item::Function { decl, .. } => {
+                if let Some(sig) = registry.get_signature(&decl.name) {
+                    meta.functions.insert(
+                        decl.name.clone(),
+                        metadata_function_sig_from_analyzer(sig, false, None),
+                    );
+                }
+            }
+            Item::Impl { block, .. } => {
+                for func_decl in &block.functions {
+                    let full_name = format!("{}::{}", block.type_name, func_decl.name);
+                    if let Some(sig) = registry.get_signature(&full_name) {
+                        meta.functions.insert(
+                            full_name,
+                            metadata_function_sig_from_analyzer(
+                                sig,
+                                true,
+                                Some(block.type_name.clone()),
+                            ),
+                        );
+                    }
+                }
+            }
+            Item::Struct { decl, .. } => {
+                let mut fields = HashMap::new();
+                for field in &decl.fields {
+                    fields.insert(
+                        field.name.clone(),
+                        ModuleMetadata::serialize_type(&field.field_type),
+                    );
+                }
+                meta.structs.insert(decl.name.clone(), fields);
+            }
+            Item::Trait { decl, .. } => {
+                for method in &decl.methods {
+                    let full_name = format!("{}::{}", decl.name, method.name);
+                    if let Some(sig) = registry.get_signature(&full_name) {
+                        meta.functions.insert(
+                            full_name,
+                            metadata_function_sig_from_analyzer(
+                                sig,
+                                true,
+                                Some(decl.name.clone()),
+                            ),
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    meta.copy_structs = copy_structs;
+    meta
+}
+
+/// Write a ModuleMetadata to the .wj.meta cache file for the given source path.
+pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std::io::Result<()> {
+    let meta_path = meta_cache_path(source_file);
+    if let Some(parent) = meta_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(meta) {
+        crate::compiler::write_if_changed(&meta_path, &json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    }
+    Ok(())
+}
+
+/// Emit per-file `.wj.meta` for a compiled module.
+/// Shared by both `compilation_pipeline` and `library_multipass`.
+pub fn emit_module_meta_for_file(
+    source_file: &Path,
+    program: &crate::parser::Program,
+    registry: &crate::analyzer::SignatureRegistry,
+    copy_structs: Vec<String>,
+) {
+    let module_name = source_file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+    let meta = collect_analyzed_module_metadata(module_name, program, registry, copy_structs);
+    let _ = write_module_meta_cache(source_file, &meta);
 }
 
 #[cfg(test)]

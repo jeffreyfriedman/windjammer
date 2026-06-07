@@ -17,7 +17,7 @@
 // not self), the analyzer fails to propagate the callee's &mut inference
 // back to the caller's parameter.
 //
-// Specific pattern from breach-protocol:
+// Specific pattern from game dogfooding:
 //   pub fn spawn_next_wave(..., grid: VoxelGrid, mannequin: MannequinCache, ...) {
 //       mannequin.clear(grid, ox, fy + 1, oz)    // grid is arg #2 of clear()
 //       mannequin.place(grid, vx, fy + 1, vz, mat)  // grid is arg #2 of place()
@@ -225,7 +225,7 @@ pub fn process(grid: Grid, cache: Cache, count: i32) {
     );
 }
 
-/// Reproduce the exact breach-protocol spawn_next_wave pattern:
+/// Reproduce a spawn_next_wave-style pattern:
 /// - Many parameters (8)
 /// - grid passed to method args (cache.clear/place) which mutate it
 /// - grid ALSO passed to a free function (convert) which only reads it

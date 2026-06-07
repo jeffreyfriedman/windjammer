@@ -9,12 +9,38 @@ use super::OwnershipMode;
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: String,
-    pub param_types: Vec<Type>, // ADDED: Store actual parameter types for smart inference
+    pub param_types: Vec<Type>,
     pub param_ownership: Vec<OwnershipMode>,
-    pub return_type: Option<Type>, // ADDED: Store return type for smart inference
+    pub return_type: Option<Type>,
     pub return_ownership: OwnershipMode,
-    pub has_self_receiver: bool, // True if first parameter is self/&self/&mut self
-    pub is_extern: bool,         // True if this is an extern function (FFI)
+    pub has_self_receiver: bool,
+    pub is_extern: bool,
+}
+
+impl FunctionSignature {
+    /// Map a call-site argument index to the corresponding parameter index,
+    /// accounting for implicit `self` receivers.
+    ///
+    /// When `has_self_receiver` is true, `param_ownership[0]` and
+    /// `param_types[0]` correspond to `self`, so the first user-supplied
+    /// argument maps to index 1.
+    pub fn arg_param_index(&self, arg_index: usize) -> usize {
+        if self.has_self_receiver {
+            arg_index + 1
+        } else {
+            arg_index
+        }
+    }
+
+    /// Get the ownership mode for a call-site argument, accounting for `self`.
+    pub fn param_ownership_for_arg(&self, arg_index: usize) -> Option<&OwnershipMode> {
+        self.param_ownership.get(self.arg_param_index(arg_index))
+    }
+
+    /// Get the type for a call-site argument, accounting for `self`.
+    pub fn param_type_for_arg(&self, arg_index: usize) -> Option<&Type> {
+        self.param_types.get(self.arg_param_index(arg_index))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +128,16 @@ impl SignatureRegistry {
         self.signatures.iter()
     }
 
+    /// Look up a method by name, trying exact match first then falling back to
+    /// a qualified name ending with `::name`.
+    ///
+    /// This is the canonical lookup most call sites should use instead of
+    /// `get_signature(m).or_else(|| find_signature_ending_with(m))`.
+    pub fn lookup_method(&self, name: &str) -> Option<&FunctionSignature> {
+        self.get_signature(name)
+            .or_else(|| self.find_signature_ending_with(name))
+    }
+
     /// Fallback lookup: find a signature whose key ends with `::name`.
     /// Used when a method call is recorded as bare "method" but registered as "Type::method".
     pub fn find_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
@@ -146,6 +182,35 @@ impl SignatureRegistry {
             }
         }
         None
+    }
+
+    /// Register module-qualified aliases for all signatures in `source`.
+    /// For each unqualified name, registers `file_stem::name` and optionally
+    /// `module_path::name` to support cross-file lookups.
+    pub fn register_module_aliases(
+        &mut self,
+        source: &SignatureRegistry,
+        file_stem: &str,
+        module_path: &str,
+    ) {
+        if file_stem.is_empty() {
+            return;
+        }
+        for (name, sig) in &source.signatures {
+            if !name.contains("::") {
+                self.add_function(format!("{}::{}", file_stem, name), sig.clone());
+            }
+            if !module_path.is_empty() {
+                self.add_function(format!("{}::{}", module_path, name), sig.clone());
+            }
+        }
+    }
+
+    /// Check if a signature's ownership has changed compared to a reference registry.
+    pub fn ownership_changed(old: &FunctionSignature, new: &FunctionSignature) -> bool {
+        old.param_ownership != new.param_ownership
+            || old.return_ownership != new.return_ownership
+            || old.has_self_receiver != new.has_self_receiver
     }
 
     /// BUG #8 FIX: Merge signatures from another registry.

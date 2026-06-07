@@ -65,7 +65,7 @@ fn compile_wj_to_rust(source: &str) -> String {
 /// method might mutate the receiver. Currently it defaults to & (Borrowed), causing
 /// E0596 "cannot borrow `*param` as mutable, as it is behind a `&` reference".
 ///
-/// Real example from breach-protocol:
+/// Real example from game dogfooding:
 ///   fn add_station_mesh_primitives(renderer: VoxelGPURenderer) {
 ///       renderer.add_primitive(...)  // add_primitive takes &mut self
 ///   }

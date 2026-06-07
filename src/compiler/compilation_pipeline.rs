@@ -5,7 +5,7 @@ use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
 use crate::linter::rust_leakage::RustLeakageLinter;
 use crate::metadata::{
-    meta_cache_path, metadata_function_sig_from_analyzer, CrateMetadata, FunctionSignature,
+    CrateMetadata, FunctionSignature,
     ModuleMetadata,
 };
 use crate::parser::ast::core::Item;
@@ -249,7 +249,7 @@ pub fn build_project_ext(
         analyzer_pass2
             .check_forbidden_rust_patterns(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
-        let (analyzed_functions, registry, _) = analyzer_pass2
+        let (analyzed_functions, mut registry, _) = analyzer_pass2
             .analyze_program_with_global_signatures(&program, &global_signatures)
             .map_err(|e| anyhow::anyhow!("Second-pass analysis error: {}", e))?;
 
@@ -258,6 +258,17 @@ pub fn build_project_ext(
         analyzer
             .infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        // Update registry with refined trait method signatures from impl inference.
+        // infer_trait_signatures_from_impls may upgrade trait methods (e.g. &self → &mut self)
+        // based on impl bodies. Propagate these to the registry so .wj.meta has correct data.
+        for (trait_name, methods) in &analyzer.analyzed_trait_methods {
+            for (method_name, analyzed_func) in methods {
+                let sig = analyzer.build_signature(analyzed_func);
+                let qualified_name = format!("{}::{}", trait_name, method_name);
+                registry.add_function(qualified_name, sig);
+            }
+        }
 
         let mut float_inference = FloatInference::new();
         if !external_paths.is_empty() {
@@ -288,37 +299,12 @@ pub fn build_project_ext(
             ));
         }
 
-        let mut trait_inference = crate::inference::InferenceEngine::new();
-        let mut inferred_bounds_map = std::collections::HashMap::new();
-        for item in &program.items {
-            if let Item::Function { decl: func, .. } = item {
-                let bounds = trait_inference.infer_function_bounds(func);
-                if !bounds.is_empty() {
-                    inferred_bounds_map.insert(func.name.clone(), bounds);
-                }
-            }
-            if let Item::Impl { block, .. } = item {
-                for func in &block.functions {
-                    let bounds = trait_inference.infer_function_bounds(func);
-                    if !bounds.is_empty() {
-                        inferred_bounds_map.insert(func.name.clone(), bounds);
-                    }
-                }
-            }
-        }
+        let inferred_bounds_map = crate::inference::collect_inferred_bounds(&program.items);
 
-        let registry_snapshot = registry.clone();
+        let mut registry_snapshot = registry.clone();
 
-        let mut cross_crate_field_types = HashMap::new();
-        for (_crate_name, meta_path) in &external_paths {
-            let fields = crate::metadata::load_struct_field_types_from_file(meta_path);
-            for (struct_name, field_map) in fields {
-                cross_crate_field_types
-                    .entry(struct_name)
-                    .or_insert_with(HashMap::new)
-                    .extend(field_map);
-            }
-        }
+        let cross_crate_field_types =
+            crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
         let mut codegen = CodeGenerator::new(registry, target);
         codegen.set_source_file(file);
@@ -330,6 +316,7 @@ pub fn build_project_ext(
             codegen.set_global_struct_field_types(cross_crate_field_types);
         }
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
+        codegen.apply_self_receiver_upgrades(&mut registry_snapshot);
 
         let output_file = if wj_files.len() > 1 && library {
             let base_path = if path.is_file() {
@@ -376,57 +363,9 @@ pub fn build_project_ext(
         write_if_changed(&output_file, &rust_code)?;
 
         if target == CompilationTarget::Rust {
-            let module_name = file
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
-            let mut meta = ModuleMetadata::new(module_name.to_string());
-            for item in &program.items {
-                match item {
-                    Item::Function { decl, .. } => {
-                        if let Some(sig) = registry_snapshot.get_signature(&decl.name) {
-                            meta.functions.insert(
-                                decl.name.clone(),
-                                metadata_function_sig_from_analyzer(sig, false, None),
-                            );
-                        }
-                    }
-                    Item::Impl { block, .. } => {
-                        for func_decl in &block.functions {
-                            let full_name = format!("{}::{}", block.type_name, func_decl.name);
-                            if let Some(sig) = registry_snapshot.get_signature(&full_name) {
-                                meta.functions.insert(
-                                    full_name,
-                                    metadata_function_sig_from_analyzer(
-                                        sig,
-                                        true,
-                                        Some(block.type_name.clone()),
-                                    ),
-                                );
-                            }
-                        }
-                    }
-                    Item::Struct { decl, .. } => {
-                        let mut fields = std::collections::HashMap::new();
-                        for field in &decl.fields {
-                            fields.insert(
-                                field.name.clone(),
-                                ModuleMetadata::serialize_type(&field.field_type),
-                            );
-                        }
-                        meta.structs.insert(decl.name.clone(), fields);
-                    }
-                    _ => {}
-                }
-            }
-            meta.copy_structs = analyzer.get_copy_structs();
-            let meta_path = meta_cache_path(file);
-            if let Some(parent) = meta_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(json) = serde_json::to_string_pretty(&meta) {
-                let _ = write_if_changed(&meta_path, &json);
-            }
+            crate::metadata::emit_module_meta_for_file(
+                file, &program, &registry_snapshot, analyzer.get_copy_structs(),
+            );
         }
     }
 

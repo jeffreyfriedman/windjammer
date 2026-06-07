@@ -37,12 +37,7 @@ impl MethodCallAnalyzer {
                 }
 
                 if let Some(sig) = method_signature {
-                    let sig_param_idx = if sig.has_self_receiver {
-                        param_idx + 1
-                    } else {
-                        param_idx
-                    };
-                    if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+                    if let Some(&ownership) = sig.param_ownership_for_arg(param_idx) {
                         if matches!(ownership, OwnershipMode::Owned) {
                             return true;
                         }
@@ -52,12 +47,7 @@ impl MethodCallAnalyzer {
         }
 
         if let Some(sig) = method_signature {
-            let sig_param_idx = if sig.has_self_receiver {
-                param_idx + 1
-            } else {
-                param_idx
-            };
-            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+            if let Some(&ownership) = sig.param_ownership_for_arg(param_idx) {
                 if matches!(ownership, OwnershipMode::Borrowed) {
                     return false;
                 }
@@ -79,7 +69,7 @@ impl MethodCallAnalyzer {
                                     current_function_params,
                                 ) {
                                     let param_is_copy =
-                                        sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                        sig.param_type_for_arg(param_idx).is_some_and(|t| {
                                             crate::codegen::rust::type_analysis::is_copy_type(t)
                                         });
                                     if !param_is_copy {
@@ -103,12 +93,8 @@ impl MethodCallAnalyzer {
         method_signature: &Option<crate::analyzer::FunctionSignature>,
     ) -> bool {
         if let Some(sig) = method_signature {
-            let sig_param_idx = if sig.has_self_receiver {
-                param_idx + 1
-            } else {
-                param_idx
-            };
-            if Self::callee_param_is_rust_str_slice(method_signature, sig_param_idx) {
+            let resolved_idx = sig.arg_param_index(param_idx);
+            if Self::callee_param_is_rust_str_slice(method_signature, resolved_idx) {
                 return false;
             }
         }
@@ -120,12 +106,7 @@ impl MethodCallAnalyzer {
         }
 
         if let Some(sig) = method_signature {
-            let sig_param_idx = if sig.has_self_receiver {
-                param_idx + 1
-            } else {
-                param_idx
-            };
-            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
+            if let Some(&ownership) = sig.param_ownership_for_arg(param_idx) {
                 return matches!(ownership, OwnershipMode::Owned);
             }
         }

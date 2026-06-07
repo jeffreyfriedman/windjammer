@@ -23,14 +23,14 @@ use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_dt_f32_consistency_no_float_inference_errors() {
-    // Simulates breach-protocol: main passes dt to game.update(dt: f32)
+    // Simulates a game loop: main passes dt to game.update(dt: f32)
     // and showcase.update(dt: f32). All must use f32.
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");
     std::fs::create_dir_all(&src).unwrap();
 
-    // Game struct (like BreachProtocolGame)
+    // Top-level game struct holding delta time
     std::fs::write(
         src.join("game.wj"),
         r#"

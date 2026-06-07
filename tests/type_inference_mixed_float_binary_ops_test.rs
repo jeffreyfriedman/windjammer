@@ -19,7 +19,7 @@
 /// Error Pattern from game (83 occurrences):
 /// error[E0277]: cannot multiply `f32` by `f64`
 ///
-/// Examples from breach-protocol:
+/// Examples from game dogfooding:
 /// - `self.x * 0.5` where `self.x: f32`
 /// - `velocity * dt` where `velocity: Vec3` (f32 components), `dt: f64`
 /// - `radius * 2.0` where `radius: f32`

@@ -5,7 +5,7 @@ use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
 use crate::linter::rust_leakage::RustLeakageLinter;
 use crate::metadata::{
-    meta_cache_path, metadata_function_sig_from_analyzer, CrateMetadata, FunctionSignature,
+    metadata_function_sig_from_analyzer, CrateMetadata, FunctionSignature,
     ModuleMetadata,
 };
 use crate::parser::ast::core::Item;
@@ -227,6 +227,24 @@ pub(crate) fn build_library_multipass(
         return Ok(());
     }
 
+    // PERFORMANCE: Parse all files once upfront and reuse ASTs across all pipeline
+    // phases. Previously each file was re-parsed 9-10 times. The Parser owns arenas
+    // (expr_arena, stmt_arena, pattern_arena) that Program references borrow from,
+    // so parsers must be kept alive as long as their programs are used.
+    let mut parsers: Vec<Parser> = Vec::with_capacity(sources.len());
+    let mut parsed_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources.len());
+    for (file, source) in &sources {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser =
+            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+        let program = parser
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        parsed_programs.push(program);
+        parsers.push(parser);
+    }
+
     let src_base: PathBuf = {
         let raw = if base_path.is_file() {
             base_path.parent().unwrap_or(base_path).to_path_buf()
@@ -311,27 +329,12 @@ pub(crate) fn build_library_multipass(
 
     // Load typed struct field types from dependency metadata for nested field
     // chain resolution (e.g., self.renderer.voxel_renderer → VoxelGPURenderer).
-    for (_crate_name, meta_path) in external_paths {
-        let fields = crate::metadata::load_struct_field_types_from_file(meta_path);
-        for (struct_name, field_map) in fields {
-            if !local_struct_names.contains(&struct_name) {
-                global_struct_fields
-                    .entry(struct_name)
-                    .or_default()
-                    .extend(field_map);
-            }
-        }
-    }
+    global_struct_fields.extend(
+        crate::metadata::load_merged_external_struct_fields(external_paths, Some(&local_struct_names))
+    );
 
-    for (file, source) in &sources {
-        // Parse with proper lifetime (program borrows source)
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let program = &parsed_programs[i];
 
         // Collect metadata for library emission
         let mut module_meta = ModuleMetadata::new(
@@ -495,24 +498,15 @@ pub(crate) fn build_library_multipass(
         // to avoid collisions when two files have the same stem name.
         let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let module_path = file_module.join("::");
-        if !file_stem.is_empty() {
-            for (name, sig) in &registry.signatures {
-                // Register under file_stem::name (e.g., abilities::draw_text)
-                if !name.contains("::") {
-                    let qualified = format!("{}::{}", file_stem, name);
-                    global_registry.add_function(qualified, sig.clone());
-                }
-                // Also register under full module path for disambiguation
-                // (e.g., combat::abilities::Ability::activate)
-                if !module_path.is_empty() {
-                    let full_qualified = format!("{}::{}", module_path, name);
-                    global_registry.add_function(full_qualified, sig.clone());
-                }
-            }
-        }
+        global_registry.register_module_aliases(&registry, file_stem, &module_path);
     }
 
     // Step 3: Global multi-pass iteration until convergence
+    // Wrap read-only data in Arc for O(1) sharing across all files (avoids O(n) deep clones).
+    let global_struct_fields = std::sync::Arc::new(global_struct_fields);
+    let struct_defining_module_paths = std::sync::Arc::new(struct_defining_module_paths);
+    let global_copy_structs = std::sync::Arc::new(global_copy_structs);
+
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
 
@@ -520,19 +514,14 @@ pub(crate) fn build_library_multipass(
         let mut new_registry = global_registry.clone();
 
         // Re-analyze ALL files with current global registry
-        for (file, source) in &sources {
-            // Re-parse (lifetime scoped to this iteration)
-            let mut lexer = Lexer::new(source);
-            let tokens = lexer.tokenize_with_locations();
-            let mut parser =
-                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-            let program = parser
-                .parse()
-                .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+        for (i, (file, _source)) in sources.iter().enumerate() {
+            let program = &parsed_programs[i];
 
-            let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
-            analyzer.set_global_struct_field_types(global_struct_fields.clone());
-            analyzer.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+            let mut analyzer = Analyzer::for_library_pass(
+                (*global_copy_structs).clone(),
+                global_struct_fields.clone(),
+                struct_defining_module_paths.clone(),
+            );
             let (_, file_registry, _) = analyzer
                 .analyze_program_with_global_signatures(&program, &global_registry)
                 .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
@@ -550,30 +539,25 @@ pub(crate) fn build_library_multipass(
                     .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
-                match global_registry.signatures.get(name) {
-                    None => {
-                        new_registry.signatures.insert(name.clone(), sig.clone());
-                    }
-                    Some(old_sig) => {
-                        if sig.param_ownership != old_sig.param_ownership
-                            || sig.return_ownership != old_sig.return_ownership
-                            || sig.has_self_receiver != old_sig.has_self_receiver
-                        {
-                            new_registry.signatures.insert(name.clone(), sig.clone());
-                            // Keep ALL module-qualified aliases in sync.
-                            // When a Type::method entry changes (e.g., Ability::activate
-                            // gets player corrected from Owned→MutBorrowed), the
-                            // module-qualified alias (combat_abilities::Ability::activate)
-                            // must also be updated. Without this, the codegen's collision
-                            // fallback finds the stale step 2 entry.
-                            if !file_stem.is_empty() {
-                                let qualified = format!("{}::{}", file_stem, name);
-                                new_registry.signatures.insert(qualified, sig.clone());
-                                if !module_path.is_empty() {
-                                    let full_qualified = format!("{}::{}", module_path, name);
-                                    new_registry.signatures.insert(full_qualified, sig.clone());
-                                }
-                            }
+                let should_insert = match global_registry.signatures.get(name) {
+                    None => true,
+                    Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
+                };
+                if should_insert {
+                    new_registry.signatures.insert(name.clone(), sig.clone());
+                    // Keep module-qualified aliases in sync when ownership changes
+                    if !file_stem.is_empty() {
+                        if !name.contains("::") {
+                            new_registry.add_function(
+                                format!("{}::{}", file_stem, name),
+                                sig.clone(),
+                            );
+                        }
+                        if !module_path.is_empty() {
+                            new_registry.add_function(
+                                format!("{}::{}", module_path, name),
+                                sig.clone(),
+                            );
                         }
                     }
                 }
@@ -581,24 +565,12 @@ pub(crate) fn build_library_multipass(
         }
 
         // Convergence check: did any signatures change in this pass?
-        let mut changed = false;
-        for (name, sig) in &new_registry.signatures {
+        let changed = new_registry.signatures.iter().any(|(name, sig)| {
             match global_registry.signatures.get(name) {
-                None => {
-                    changed = true;
-                    break;
-                }
-                Some(old_sig) => {
-                    if sig.param_ownership != old_sig.param_ownership
-                        || sig.return_ownership != old_sig.return_ownership
-                        || sig.has_self_receiver != old_sig.has_self_receiver
-                    {
-                        changed = true;
-                        break;
-                    }
-                }
+                None => true,
+                Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
             }
-        }
+        });
 
         if !changed || pass_number >= MAX_GLOBAL_PASSES {
             global_registry = new_registry;
@@ -612,14 +584,8 @@ pub(crate) fn build_library_multipass(
     // Collect `pub use` re-exports from every file first so `use super::*` / `use crate::...::*`
     // can resolve struct field types (glob has no explicit type path).
     let mut module_re_exports: HashMap<String, HashMap<String, String>> = HashMap::new();
-    for (file, source) in &sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let program = &parsed_programs[i];
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         crate::type_inference::struct_field_registry::merge_module_reexports_from_items(
@@ -665,22 +631,16 @@ pub(crate) fn build_library_multipass(
     }
     global_float_inference.set_global_function_signatures(global_float_signatures.clone());
     global_float_inference.set_global_struct_field_types(&global_struct_fields);
-    global_float_inference.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+    global_float_inference.set_struct_defining_module_paths((*struct_defining_module_paths).clone());
     global_float_inference.set_module_re_exports(module_re_exports.clone());
 
     // Collect constraints from ALL files into one FloatInference instance
-    for (file, source) in &sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let program = &parsed_programs[i];
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         global_float_inference.set_current_file_module_path(file_module);
-        global_float_inference.infer_program(&program);
+        global_float_inference.infer_program(program);
     }
 
     // Check for float inference errors
@@ -698,21 +658,15 @@ pub(crate) fn build_library_multipass(
     let mut global_int_inference = IntInference::new();
     global_int_inference.set_global_function_signatures(global_float_signatures.clone());
     global_int_inference.set_global_struct_field_types(&global_struct_fields);
-    global_int_inference.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+    global_int_inference.set_struct_defining_module_paths((*struct_defining_module_paths).clone());
     global_int_inference.set_module_re_exports(module_re_exports);
 
-    for (file, source) in &sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let program = &parsed_programs[i];
         let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
             .unwrap_or_default();
         global_int_inference.set_current_file_module_path(file_module);
-        global_int_inference.infer_program(&program);
+        global_int_inference.infer_program(program);
     }
 
     if !global_int_inference.errors.is_empty() {
@@ -738,11 +692,10 @@ pub(crate) fn build_library_multipass(
     // Runs on a separate thread with a large stack because the merged program (~3000 items)
     // can produce deep recursive analysis.
     let global_analyzed_trait_methods = {
-        let global_copy_structs_clone = global_copy_structs.clone();
-        let sources_for_thread: Vec<(std::path::PathBuf, String)> = sources
-            .iter()
-            .map(|(p, s)| (p.clone(), s.clone()))
-            .collect();
+        let global_copy_structs_clone = (*global_copy_structs).clone();
+        // The trait inference thread needs its own parsed programs since Program borrows
+        // from Parser arenas (can't send references across threads). Re-parse on thread.
+        let sources_for_thread: Vec<(PathBuf, String)> = sources.clone();
 
         let handle = std::thread::Builder::new()
             .name("trait-inference".to_string())
@@ -750,43 +703,29 @@ pub(crate) fn build_library_multipass(
             .spawn(move || -> Result<HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>, String> {
                 let mut shared_analyzer = Analyzer::new_with_copy_structs(global_copy_structs_clone);
 
-                // Parse ALL files upfront and keep parsers alive. The parser's arena owns AST
-                // nodes; dropping a parser frees its arena, invalidating any `&'ast` references.
-                // Previously, parsers were created in a loop and dropped each iteration, causing
-                // use-after-free (SIGSEGV) when `all_items` held dangling arena references.
-                let mut parsers: Vec<Parser> = Vec::with_capacity(sources_for_thread.len());
-                let mut programs: Vec<crate::parser::Program<'_>> = Vec::with_capacity(sources_for_thread.len());
-
-                for (_file, source) in &sources_for_thread {
+                let mut thread_parsers: Vec<Parser> = Vec::with_capacity(sources_for_thread.len());
+                let mut thread_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources_for_thread.len());
+                for (file, source) in &sources_for_thread {
                     let mut lexer = Lexer::new(source);
                     let tokens = lexer.tokenize_with_locations();
-                    let parser = Parser::new_with_source(
-                        tokens,
-                        String::new(),
-                        source.clone(),
-                    );
-                    parsers.push(parser);
+                    let mut parser = Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+                    let program = parser.parse().map_err(|e| format!("Parse error in {}: {}", file.display(), e))?;
+                    thread_programs.push(program);
+                    thread_parsers.push(parser);
                 }
 
-                for parser in &mut parsers {
-                    if let Ok(program) = parser.parse() {
-                        programs.push(program);
-                    }
-                }
-
-                for program in &programs {
+                for program in &thread_programs {
                     shared_analyzer.register_traits_from_program(program)
                         .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
                 }
 
                 let mut all_items = Vec::new();
-                for program in programs {
+                for program in thread_programs {
                     all_items.extend(program.items);
                 }
 
                 let merged_program = crate::parser::Program { items: all_items };
                 shared_analyzer.infer_trait_signatures_from_impls(&merged_program)?;
-                // parsers (and their arenas) are dropped here, AFTER analysis is complete
                 Ok(shared_analyzer.analyzed_trait_methods.clone())
             })
             .map_err(|e| anyhow::anyhow!("Failed to spawn trait inference thread: {}", e))?;
@@ -807,28 +746,29 @@ pub(crate) fn build_library_multipass(
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
-    for (file, source) in sources.iter() {
-        // Final parse
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let mut program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        // Use cached parse. For files that need mod item stripping, clone just the items vec.
+        let needs_strip = file.parent()
+            .and_then(|p| filtered_modules_by_dir.get(p))
+            .is_some();
 
-        // Strip Item::Mod entries for modules that were filtered out (e.g., shaders).
-        // This prevents generating invalid `pub mod X;` declarations in the first
-        // place, rather than cleaning them up post-hoc.
-        if let Some(parent_dir) = file.parent() {
-            if let Some(filtered_names) = filtered_modules_by_dir.get(parent_dir) {
-                program.items = super::strip_filtered_mod_items(program.items, filtered_names);
+        let program: std::borrow::Cow<'_, crate::parser::Program<'static>> = if needs_strip {
+            let mut cloned = parsed_programs[i].clone();
+            if let Some(parent_dir) = file.parent() {
+                if let Some(filtered_names) = filtered_modules_by_dir.get(parent_dir) {
+                    cloned.items = super::strip_filtered_mod_items(cloned.items, filtered_names);
+                }
             }
-        }
+            std::borrow::Cow::Owned(cloned)
+        } else {
+            std::borrow::Cow::Borrowed(&parsed_programs[i])
+        };
 
-        let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
-        analyzer.set_global_struct_field_types(global_struct_fields.clone());
-        analyzer.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+        let mut analyzer = Analyzer::for_library_pass(
+            (*global_copy_structs).clone(),
+            global_struct_fields.clone(),
+            struct_defining_module_paths.clone(),
+        );
 
         // Rust leakage linter
         if enable_lint {
@@ -877,7 +817,15 @@ pub(crate) fn build_library_multipass(
         // so that method calls to other files' types resolve correctly for auto-borrowing.
         let mut full_registry = global_registry.clone();
         full_registry.merge(&registry);
-        let registry_snapshot = full_registry.clone();
+        // Also register trait methods under TraitName::method for cross-file meta lookup.
+        for (trait_name, methods) in &merged_trait_methods {
+            for (method_name, analyzed_func) in methods {
+                let sig = analyzer.build_signature(analyzed_func);
+                let qualified_name = format!("{}::{}", trait_name, method_name);
+                full_registry.add_function(qualified_name, sig);
+            }
+        }
+        let mut registry_snapshot = full_registry.clone();
         for (name, sig) in &registry_snapshot.signatures {
             if !sig.param_ownership.is_empty()
                 && (crate::metadata::signature_targets_local_struct(name, &local_struct_names)
@@ -887,9 +835,9 @@ pub(crate) fn build_library_multipass(
             }
         }
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
-        codegen.set_copy_types_registry(global_copy_structs.clone());
+        codegen.set_copy_types_registry((*global_copy_structs).clone());
         codegen.set_non_copy_types_registry(global_non_copy_enums.clone());
-        codegen.set_global_struct_field_types(global_struct_fields.clone());
+        codegen.set_global_struct_field_types((*global_struct_fields).clone());
         codegen.set_output_file(&output_file);
         codegen.set_source_file(file);
         codegen.set_library_source_root(src_base.clone());
@@ -899,83 +847,17 @@ pub(crate) fn build_library_multipass(
         codegen.set_float_inference(global_float_inference.clone());
         codegen.set_int_inference(global_int_inference.clone());
 
-        // Trait bound inference for this file's functions
-        let mut trait_inference = crate::inference::InferenceEngine::new();
-        let mut inferred_bounds_map = std::collections::HashMap::new();
-        for item in &program.items {
-            if let Item::Function { decl: func, .. } = item {
-                let bounds = trait_inference.infer_function_bounds(func);
-                if !bounds.is_empty() {
-                    inferred_bounds_map.insert(func.name.clone(), bounds);
-                }
-            }
-            if let Item::Impl { block, .. } = item {
-                for func in &block.functions {
-                    let bounds = trait_inference.infer_function_bounds(func);
-                    if !bounds.is_empty() {
-                        inferred_bounds_map.insert(func.name.clone(), bounds);
-                    }
-                }
-            }
-        }
+        let inferred_bounds_map = crate::inference::collect_inferred_bounds(&program.items);
         codegen.set_inferred_bounds(inferred_bounds_map);
 
         let rust_code = codegen.generate_program(&program, &analyzed_functions);
+        codegen.apply_self_receiver_upgrades(&mut registry_snapshot);
         super::cache_management::write_if_changed(&output_file, &rust_code)?;
 
-        // Write .wj.meta with inferred ownership for cross-file calls
         if target == CompilationTarget::Rust {
-            let module_name = file
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
-            let mut meta = ModuleMetadata::new(module_name.to_string());
-            for item in &program.items {
-                match item {
-                    Item::Function { decl, .. } => {
-                        if let Some(sig) = registry_snapshot.get_signature(&decl.name) {
-                            meta.functions.insert(
-                                decl.name.clone(),
-                                metadata_function_sig_from_analyzer(sig, false, None),
-                            );
-                        }
-                    }
-                    Item::Impl { block, .. } => {
-                        for func_decl in &block.functions {
-                            let full_name = format!("{}::{}", block.type_name, func_decl.name);
-                            if let Some(sig) = registry_snapshot.get_signature(&full_name) {
-                                meta.functions.insert(
-                                    full_name,
-                                    metadata_function_sig_from_analyzer(
-                                        sig,
-                                        true,
-                                        Some(block.type_name.clone()),
-                                    ),
-                                );
-                            }
-                        }
-                    }
-                    Item::Struct { decl, .. } => {
-                        let mut fields = std::collections::HashMap::new();
-                        for field in &decl.fields {
-                            fields.insert(
-                                field.name.clone(),
-                                ModuleMetadata::serialize_type(&field.field_type),
-                            );
-                        }
-                        meta.structs.insert(decl.name.clone(), fields);
-                    }
-                    _ => {}
-                }
-            }
-            meta.copy_structs = analyzer.get_copy_structs();
-            let meta_path = meta_cache_path(file);
-            if let Some(parent) = meta_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(json) = serde_json::to_string_pretty(&meta) {
-                let _ = super::cache_management::write_if_changed(&meta_path, &json);
-            }
+            crate::metadata::emit_module_meta_for_file(
+                file, &program, &registry_snapshot, analyzer.get_copy_structs(),
+            );
         }
     }
 

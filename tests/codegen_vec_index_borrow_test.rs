@@ -17,7 +17,7 @@
 /// Fix: Generate &vec[idx] (auto-borrow) for non-Copy - zero-cost, idiomatic
 ///      Generate vec[idx].clone() only when owned value needed (e.g. struct literal)
 ///
-/// Discovered via dogfooding: breach-protocol save_manager.wj (split returns Vec<String>)
+/// Discovered via dogfooding: a file containing split() returning Vec<String>
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
