@@ -24,14 +24,14 @@ impl MethodCallAnalyzer {
                 &p.name == name && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
             });
             let is_borrowed_iter_var = borrowed_iterator_vars.contains(name);
-            let is_rust_str_param = current_function_params.iter().any(|p| {
+            let param_is_ref = current_function_params.iter().any(|p| {
                 p.name == *name
-                    && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                        || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                            && inferred_borrowed_params.contains(name)))
+                    && crate::codegen::rust::types::param_generates_as_rust_ref(
+                        &p.type_, &p.name, inferred_borrowed_params,
+                    )
             });
 
-            is_ref_param || is_borrowed_iter_var || is_rust_str_param
+            is_ref_param || is_borrowed_iter_var || param_is_ref
         } else {
             false
         };
@@ -59,13 +59,9 @@ impl MethodCallAnalyzer {
                 if let Expression::Identifier { name, .. } = arg {
                     let is_already_ref = current_function_params.iter().any(|p| {
                         p.name == *name
-                            && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                || matches!(
-                                    &p.type_,
-                                    Type::Reference(_) | Type::MutableReference(_)
-                                )
-                                || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                    && inferred_borrowed_params.contains(name)))
+                            && crate::codegen::rust::types::param_generates_as_rust_ref(
+                                &p.type_, &p.name, inferred_borrowed_params,
+                            )
                     });
                     if is_already_ref {
                         return false;
@@ -94,11 +90,10 @@ impl MethodCallAnalyzer {
                 if looks_like_hashmap_key {
                     if let Some(name) = arg_name {
                         let is_already_map_key_ref = current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                    || (crate::codegen::rust::types::is_windjammer_text_type(
-                                        &p.type_,
-                                    ) && inferred_borrowed_params.contains(name)))
+                            p.name == name
+                                && crate::codegen::rust::types::param_generates_as_rust_ref(
+                                    &p.type_, &p.name, inferred_borrowed_params,
+                                )
                         });
                         if is_already_map_key_ref {
                             return false;

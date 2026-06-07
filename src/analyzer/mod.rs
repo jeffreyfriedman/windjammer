@@ -5,6 +5,7 @@
 use crate::auto_clone::AutoCloneAnalysis;
 use crate::parser::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 mod borrow_analysis;
 mod cache_locality;
@@ -278,9 +279,11 @@ pub struct Analyzer<'ast> {
     self_impl_context: Option<ImplSelfFieldContext<'ast>>,
     /// Cross-file struct field type registry for nested field chain resolution.
     /// Maps struct_name → { field_name → Type }.
-    global_struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
+    global_struct_field_types: Arc<HashMap<String, HashMap<String, Type>>>,
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
-    struct_defining_module_paths: HashMap<String, Vec<Vec<String>>>,
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
+    struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -294,8 +297,8 @@ impl<'ast> Analyzer<'ast> {
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
             self_impl_context: None,
-            global_struct_field_types: HashMap::new(),
-            struct_defining_module_paths: HashMap::new(),
+            global_struct_field_types: Arc::new(HashMap::new()),
+            struct_defining_module_paths: Arc::new(HashMap::new()),
         }
     }
 

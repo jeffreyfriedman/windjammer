@@ -249,23 +249,20 @@ impl<'ast> Analyzer<'ast> {
             // 3. Simple name from qualified (e.g., "place_marker" from "station_builder::place_marker")
             //    This handles cross-crate calls where metadata stores the simple name
             //    but the call site uses the module-qualified name.
-            let sig = match registry.get_signature(func_name) {
+            let sig = match registry.lookup_method(func_name) {
                 Some(s) => s,
-                None => match registry.find_signature_ending_with(func_name) {
-                    Some(s) => s,
-                    None => {
-                        if let Some(simple) = func_name.rsplit("::").next() {
-                            if simple != func_name {
-                                match registry.get_signature(simple) {
-                                    Some(s) => s,
-                                    None => continue,
-                                }
-                            } else {
-                                continue;
+                None => {
+                    if let Some(simple) = func_name.rsplit("::").next() {
+                        if simple != func_name {
+                            match registry.get_signature(simple) {
+                                Some(s) => s,
+                                None => continue,
                             }
                         } else {
                             continue;
                         }
+                    } else {
+                        continue;
                     }
                 },
             };

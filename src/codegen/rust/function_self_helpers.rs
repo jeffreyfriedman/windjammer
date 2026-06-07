@@ -115,6 +115,33 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    /// Record when codegen upgrades a self receiver beyond what the analyzer inferred.
+    /// For example, when analyzer says Borrowed but body analysis detects mutation,
+    /// codegen generates &mut self. This must be recorded so metadata reflects the
+    /// actual generated code for cross-file builds.
+    pub(super) fn record_self_receiver_upgrade(
+        &mut self,
+        func_name: &str,
+        analyzer_ownership: Option<OwnershipMode>,
+        actual_receiver: &str,
+    ) {
+        let actual_mode = match actual_receiver {
+            "&mut self" | "mut self" => OwnershipMode::MutBorrowed,
+            "&self" => OwnershipMode::Borrowed,
+            "self" => OwnershipMode::Owned,
+            _ => return,
+        };
+
+        let analyzer_mode = analyzer_ownership.unwrap_or(OwnershipMode::Borrowed);
+        if actual_mode == OwnershipMode::MutBorrowed && analyzer_mode == OwnershipMode::Borrowed {
+            if let Some(struct_name) = &self.current_struct_name {
+                let qualified = format!("{}::{}", struct_name, func_name);
+                self.self_receiver_upgrades
+                    .insert(qualified, OwnershipMode::MutBorrowed);
+            }
+        }
+    }
+
     /// E0053 FIX: Get effective self ownership - trait's when in trait impl, else analyzed's.
     /// Impl methods MUST match trait signature exactly.
     ///
@@ -162,7 +189,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Choose self ownership based on known trait conventions:
                 // - Operator traits (Add, Sub, etc.) require consuming self
                 // - Derive traits (Display, Debug, etc.) require &self
-                // - Custom traits: use body analysis (matches trait declaration heuristic)
+                // - Custom traits: check signature registry first, then body analysis
                 let base_trait = trait_name
                     .rfind("::")
                     .map(|i| &trait_name[i + 2..])
@@ -173,17 +200,18 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if crate::type_classification::is_ref_receiver_trait(base_trait) {
                         OwnershipMode::Borrowed
                     } else {
-                        // For custom cross-file traits, use body analysis first.
-                        // If body analysis found explicit ownership (mutation detected
-                        // or read-only access confirmed), use that.
-                        if let Some(body_ownership) =
+                        // Check signature registry for the trait method's self ownership.
+                        // This handles cross-file trait impls where metadata was loaded.
+                        let registry_ownership = self.lookup_trait_method_ownership_in_registry(
+                            trait_name, func_name,
+                        );
+                        if let Some(reg_own) = registry_ownership {
+                            reg_own
+                        } else if let Some(body_ownership) =
                             analyzed.inferred_ownership.get("self").copied()
                         {
                             body_ownership
                         } else {
-                            // No body analysis result - match the trait declaration heuristic:
-                            // methods WITH a return type default to &self,
-                            // methods WITHOUT default to &mut self.
                             if analyzed.decl.return_type.is_some() {
                                 OwnershipMode::Borrowed
                             } else {
@@ -196,6 +224,48 @@ impl<'ast> CodeGenerator<'ast> {
         }
         analyzed.inferred_ownership.get("self").copied()
     }
+
+    /// Look up a trait method's self-ownership in the signature registry.
+    /// Checks patterns like "TraitName::method", "module::TraitName::method", etc.
+    fn lookup_trait_method_ownership_in_registry(
+        &self,
+        trait_name: &str,
+        method_name: &str,
+    ) -> Option<OwnershipMode> {
+        let base_trait = trait_name
+            .rfind("::")
+            .map(|i| &trait_name[i + 2..])
+            .unwrap_or(trait_name);
+
+        // Try various qualified name patterns
+        let patterns = [
+            format!("{}::{}", base_trait, method_name),
+            format!("{}::{}", trait_name, method_name),
+        ];
+
+        for pattern in &patterns {
+            if let Some(sig) = self.signature_registry.get_signature(pattern) {
+                if sig.has_self_receiver {
+                    if let Some(&ownership) = sig.param_ownership.first() {
+                        return Some(ownership);
+                    }
+                }
+            }
+        }
+
+        // Also try suffix matching for fully qualified paths
+        let suffix = format!("{}::{}", base_trait, method_name);
+        for (key, sig) in &self.signature_registry.signatures {
+            if key.ends_with(&suffix) && sig.has_self_receiver {
+                if let Some(&ownership) = sig.param_ownership.first() {
+                    return Some(ownership);
+                }
+            }
+        }
+
+        None
+    }
+
     /// WINDJAMMER LIFETIME INFERENCE: Determine if a function needs explicit lifetime annotations.
     ///
     /// Rust's lifetime elision rules handle most cases:

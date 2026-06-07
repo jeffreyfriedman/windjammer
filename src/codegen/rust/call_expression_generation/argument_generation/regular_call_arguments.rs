@@ -221,17 +221,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     && !arg_str.ends_with(".clone()")
                 {
                     let already_ref = if let Expression::Identifier { name, .. } = arg {
-                        let n = name.to_string();
-                        gen.inferred_borrowed_params.contains(&n)
-                            || gen.str_ref_optimized_params.contains(&n)
-                            || gen.current_function_params.iter().any(|param| {
-                                param.name == *name
-                                    && matches!(
-                                        &param.type_,
-                                        crate::parser::ast::types::Type::Reference(_)
-                                            | crate::parser::ast::types::Type::MutableReference(_)
-                                    )
-                            })
+                        gen.identifier_already_ref(name)
                     } else {
                         false
                     };
@@ -449,33 +439,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
 
                             if let Expression::Identifier { name, .. } = arg {
-                                if let Some(ref analysis) = gen.auto_clone_analysis {
-                                    if analysis
-                                        .needs_clone(name, gen.current_statement_idx)
-                                        .is_some()
-                                        && !arg_str.ends_with(".clone()")
-                                    {
-                                        let binding_is_copy = gen
-                                            .current_function_params
-                                            .iter()
-                                            .find(|p| p.name == *name)
-                                            .is_some_and(|p| gen.is_type_copy(&p.type_))
-                                            || gen
-                                                .local_var_types
-                                                .get(name)
-                                                .is_some_and(|t| gen.is_type_copy(t));
-                                        if !binding_is_copy {
-                                            let clone_base = if arg_str.contains(" as ")
-                                                && !arg_str.starts_with('(')
-                                            {
-                                                format!("({})", arg_str)
-                                            } else {
-                                                arg_str.clone()
-                                            };
-                                            arg_str = format!("{}.clone()", clone_base);
-                                        }
-                                    }
-                                }
+                                arg_str = gen.maybe_auto_clone(name, &arg_str);
 
                                 // Find the parameter type
                                 let param_type = gen
@@ -622,9 +586,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                 }
             } else {
-                // No signature found - don't auto-clone!
-                // Without signature info, we can't know if destination wants Owned or Borrowed
-                // Better to let Rust compiler catch the error than guess wrong
+                // No signature found — still check auto-clone analysis.
+                // The auto-clone analysis tracks data flow (value moved then
+                // used later) independently of callee signatures (Some has no
+                // registry entry).
+                if let Expression::Identifier { name, .. } = arg {
+                    arg_str = gen.maybe_auto_clone(name, &arg_str);
+                }
             }
 
             // AUTO-CAST int → float: when parameter expects f32/f64 but argument is int.
@@ -662,15 +630,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             || (sig.param_ownership.is_empty() && is_text_param));
                     let arg_already_ref =
                         if let Expression::Identifier { name, .. } = arg {
-                            gen.inferred_borrowed_params.contains(&name.to_string())
-                                || gen.str_ref_optimized_params.contains(&name.to_string())
-                                || gen.current_function_params.iter().any(|param| {
-                                    param.name == *name
-                                        && matches!(
-                                            &param.type_,
-                                            Type::Reference(_) | Type::MutableReference(_)
-                                        )
-                                })
+                            gen.identifier_already_ref(name)
                         } else {
                             false
                         };

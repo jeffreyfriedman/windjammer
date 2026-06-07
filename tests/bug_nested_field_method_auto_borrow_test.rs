@@ -146,11 +146,11 @@ pub struct UnifiedRenderer {
         r#"
 use engine::rendering::gpu_renderer::{UnifiedRenderer, VoxelGPURenderer}
 
-pub struct BreachGame {
+pub struct MainApp {
     pub renderer: UnifiedRenderer,
 }
 
-impl BreachGame {
+impl MainApp {
     pub fn init(self) {
         let mut light_data: Vec<f32> = Vec::new()
         light_data.push(1.0)

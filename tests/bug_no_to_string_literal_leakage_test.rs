@@ -19,7 +19,7 @@ pub fn greet(name: string) -> string {
 }
 
 pub fn make_label() -> string {
-    "Sample Game"
+    "Hello World"
 }
 
 pub fn empty_label() -> string {

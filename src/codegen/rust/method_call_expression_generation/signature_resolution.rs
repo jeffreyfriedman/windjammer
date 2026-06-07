@@ -38,6 +38,11 @@ impl<'ast> CodeGenerator<'ast> {
 
         // No receiver type known: only suffix-match with arg-count validation.
         // Never do bare `get_signature(method)` — it could pick any type's method.
+        // Skip `remove` specifically because it has incompatible semantics across types:
+        // Vec::remove(usize) takes owned index, HashMap::remove(&K) takes borrowed key.
+        if method == "remove" {
+            return None;
+        }
         self.signature_registry
             .find_signature_by_name_and_arg_count(method, arguments.len())
             .cloned()

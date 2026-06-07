@@ -180,6 +180,26 @@ pub fn resolve_call_signature(
         }
     }
 
+    // Step 7: Bare unqualified name with collision — try arg-count disambiguation.
+    // For imported free functions like `check_collision(a, b)`, the registry may have
+    // multiple entries (e.g., `collision2d::check_collision` with 2 args and
+    // `Tilemap::check_collision` with 4 args). Find the one matching our arg count
+    // but only for non-self-receiver entries (free functions, not methods).
+    if !func_name.contains("::") {
+        let suffix = format!("::{}", func_name);
+        for (key, sig) in registry.all_signatures() {
+            if key.ends_with(&suffix) && !sig.has_self_receiver && validate_arg_count(sig, arg_count)
+            {
+                return Some(ResolvedSignature {
+                    sig: sig.clone(),
+                    qualified_key: key.clone(),
+                    resolution_method: ResolutionMethod::ArgCountValidated,
+                    has_collision: true,
+                });
+            }
+        }
+    }
+
     None
 }
 

@@ -121,6 +121,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.inferred_mut_borrowed_params.remove("self");
                                 }
                             }
+                            self.record_self_receiver_upgrade(
+                                &func.name,
+                                eff_ownership,
+                                self_str,
+                            );
                             return self_str.to_string();
                         }
                         // Owned parameters are always mutable in Windjammer
@@ -255,6 +260,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.inferred_mut_borrowed_params.remove("self");
                                 }
                             }
+                            let eff = self.get_effective_self_ownership(&func.name, analyzed);
+                            self.record_self_receiver_upgrade(
+                                &func.name,
+                                eff,
+                                self_str,
+                            );
                             return self_str.to_string();
                         }
 

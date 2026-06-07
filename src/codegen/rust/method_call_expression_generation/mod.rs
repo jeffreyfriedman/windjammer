@@ -30,18 +30,26 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let obj_str = self.mc_build_method_receiver_string(object, method);
-        let method_signature = self.mc_resolve_method_call_signature(object, method, arguments);
+        // TDD FIX: Upgrade HashMap.get() to get_mut() when the bound value is mutated downstream
+        let effective_method = if method == "get" && self.upgrade_get_to_get_mut {
+            self.upgrade_get_to_get_mut = false;
+            "get_mut"
+        } else {
+            method
+        };
+
+        let obj_str = self.mc_build_method_receiver_string(object, effective_method);
+        let method_signature = self.mc_resolve_method_call_signature(object, effective_method, arguments);
         let type_name = self.infer_type_name(object);
         let (args, prev_float) = self.mc_build_method_call_arg_strings(
             object,
-            method,
+            effective_method,
             arguments,
             &method_signature,
             type_name,
         );
         self.mc_finalize_method_call_expression(
-            object, method, type_args, arguments, obj_str, args, prev_float,
+            object, effective_method, type_args, arguments, obj_str, args, prev_float,
         )
     }
 }

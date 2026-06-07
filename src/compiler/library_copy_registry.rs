@@ -5,38 +5,14 @@ use crate::parser::{Expression, Item, Parser};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-/// Copy-shape check for library PASS 0 (mirrors `main.rs` `is_type_copy_quick`).
+/// Copy-shape check for library PASS 0.
+/// Delegates to the canonical implementation in `type_classification`.
 fn is_type_copy_quick_for_library(
     ty: &crate::parser::Type,
     copy_structs: &HashSet<String>,
     copy_enums: &HashSet<String>,
 ) -> bool {
-    use crate::parser::Type;
-    match ty {
-        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-        Type::Reference(_) => true,
-        Type::MutableReference(_) => false,
-        Type::Tuple(types) => types
-            .iter()
-            .all(|t| is_type_copy_quick_for_library(t, copy_structs, copy_enums)),
-        Type::Option(inner) => is_type_copy_quick_for_library(inner, copy_structs, copy_enums),
-        Type::Result(ok, err) => {
-            is_type_copy_quick_for_library(ok, copy_structs, copy_enums)
-                && is_type_copy_quick_for_library(err, copy_structs, copy_enums)
-        }
-        Type::Array(inner, _) => is_type_copy_quick_for_library(inner, copy_structs, copy_enums),
-        Type::Vec(_) | Type::String => false,
-        Type::RawPointer { pointee, .. } => {
-            is_type_copy_quick_for_library(pointee.as_ref(), copy_structs, copy_enums)
-        }
-        Type::FunctionPointer { .. } => true,
-        Type::Custom(name) => {
-            copy_structs.contains(name)
-                || copy_enums.contains(name)
-                || crate::type_classification::is_copy_primitive(name)
-        }
-        _ => false,
-    }
+    crate::type_classification::is_type_copy_with_registries(ty, copy_structs, copy_enums)
 }
 
 /// Discover Copy structs/enums across all library sources (including nested `mod` items).

@@ -20,7 +20,7 @@ use tempfile::TempDir;
 /// is a Copy type passed by value (owned), the compiler incorrectly
 /// infers & (reference) instead of owned.
 ///
-/// Example from sample-game:
+/// Example from game dogfooding:
 /// - External crate: game_host_core::physics::collision::AABB
 /// - Method: pub fn intersects_aabb(&self, other: AABB) -> bool
 /// - Call: future_box.intersects_aabb(wall)

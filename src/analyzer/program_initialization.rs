@@ -42,16 +42,32 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Set the global struct field types for cross-file nested field chain resolution.
-    pub fn set_global_struct_field_types(&mut self, types: HashMap<String, HashMap<String, Type>>) {
+    /// Accepts Arc to enable O(1) sharing across many files without deep cloning.
+    pub fn set_global_struct_field_types(&mut self, types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>) {
         self.global_struct_field_types = types;
     }
 
     /// Module paths for each struct name (enables `dialogue::tree::DialogueNodeTree` field lookup).
+    /// Accepts Arc to enable O(1) sharing across many files without deep cloning.
     pub fn set_struct_defining_module_paths(
         &mut self,
-        paths: HashMap<String, Vec<Vec<String>>>,
+        paths: std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
     ) {
         self.struct_defining_module_paths = paths;
+    }
+
+    /// Factory for library multipass: creates an Analyzer pre-configured with shared
+    /// cross-file data (Copy structs, struct fields, module paths). Uses Arc to
+    /// avoid deep cloning when called once per file across 649+ files.
+    pub fn for_library_pass(
+        copy_structs: HashSet<String>,
+        struct_fields: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
+        module_paths: std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
+    ) -> Self {
+        let mut analyzer = Self::new_with_copy_structs(copy_structs);
+        analyzer.global_struct_field_types = struct_fields;
+        analyzer.struct_defining_module_paths = module_paths;
+        analyzer
     }
 
     /// TDD FIX: Remove a struct from the Copy set (e.g., when local definition differs from metadata)

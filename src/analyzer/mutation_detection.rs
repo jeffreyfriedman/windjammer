@@ -514,14 +514,9 @@ impl<'ast> Analyzer<'ast> {
                 {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
-                            if let Some(sig) = registry
-                                .get_signature(method)
-                                .or_else(|| registry.find_signature_ending_with(method))
-                            {
-                                let adj = if sig.has_self_receiver { i + 1 } else { i };
+                            if let Some(sig) = registry.lookup_method(method) {
                                 if sig
-                                    .param_ownership
-                                    .get(adj)
+                                    .param_ownership_for_arg(i)
                                     .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
                                 {
                                     return true;

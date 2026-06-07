@@ -93,7 +93,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             gen.coerce_string_literals_to_owned = prev_coerce_string_literals;
             gen.in_match_arm_needing_string = prev_match_arm_str;
 
-            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+            let sig_param_idx = sig.arg_param_index(i);
 
             if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
                 match ownership {
@@ -147,8 +147,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             }
                         } else if !is_user_closure_param {
                             let param_already_ref = if let Expression::Identifier { name, .. } = arg_to_generate {
-                                gen.current_function_params.iter().any(|p|
-                                    p.name == *name && param_type_is_already_ref(&p.type_))
+                                gen.identifier_already_ref(name)
                             } else { false };
                             if param_already_ref {
                                 // str / &string / &T params are already references in Rust — never add &
@@ -462,10 +461,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 arg_str,
             );
             if let Some(ref fb_sig) = fallback_sig {
-                let fb_idx = if fb_sig.has_self_receiver { i + 1 } else { i };
                 arg_str = coerce_string_arg_for_borrowed_callee(
                     fb_sig,
-                    fb_idx,
+                    fb_sig.arg_param_index(i),
                     arg_to_generate,
                     arg_str,
                 );
@@ -500,10 +498,3 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
         .collect()
 }
 
-/// Returns true when the Windjammer parameter type already lowers to a Rust
-/// reference (`&str`, `&String`, `&T`), so callers should NOT prepend `&`.
-pub(in crate::codegen::rust) fn param_type_is_already_ref(ty: &crate::parser::Type) -> bool {
-    use crate::parser::Type;
-    matches!(ty, Type::Custom(s) if s == "str")
-        || matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-}

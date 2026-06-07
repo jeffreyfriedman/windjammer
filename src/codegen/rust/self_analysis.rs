@@ -12,7 +12,7 @@
 // These functions are used by the ownership inference system to determine
 // whether methods need `&self`, `&mut self`, or `self` parameters.
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
-use crate::parser::{Expression, FunctionDecl, Statement};
+use crate::parser::{Expression, FunctionDecl, Pattern, Statement};
 use std::collections::HashSet;
 
 /// Context needed for field/self analysis
@@ -115,7 +115,7 @@ fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>)
 }
 
 fn collect_locals_from_pattern(pattern: &crate::parser::Pattern, locals: &mut HashSet<String>) {
-    use crate::parser::{EnumPatternBinding, Pattern};
+    use crate::parser::EnumPatternBinding;
     match pattern {
         Pattern::Identifier(name)
         | Pattern::Ref(name)
@@ -177,7 +177,6 @@ pub fn function_mutates_fields(ctx: &AnalysisContext, func: &FunctionDecl) -> bo
 
 /// Variable names bound directly from `self` (`let mut result = self`, `let result = self`).
 fn collect_self_derived_locals(func: &FunctionDecl) -> HashSet<String> {
-    use crate::parser::Pattern;
     let mut locals = HashSet::new();
     for stmt in &func.body {
         if let Statement::Let { pattern, value, .. } = stmt {
@@ -462,6 +461,7 @@ pub fn function_modifies_self(
 
 /// Like [`function_modifies_self`], but also treats mutations on locals assigned from `self`
 /// (fluent `let mut result = self; result.field = x`) as self modification.
+/// Also detects indirect mutation through `self.field.get()` → match → mutate pattern.
 pub fn function_modifies_self_or_derived_local(
     func: &FunctionDecl,
     registry: Option<&SignatureRegistry>,
@@ -471,13 +471,350 @@ pub fn function_modifies_self_or_derived_local(
         return true;
     }
     let derived = collect_self_derived_locals(func);
-    if derived.is_empty() {
+    if !derived.is_empty() {
+        for stmt in &func.body {
+            if statement_modifies_derived_local(stmt, &derived) {
+                return true;
+            }
+        }
+    }
+    self_field_get_binding_is_mutated(func, registry, struct_name)
+}
+
+// =============================================================================
+// Indirect Mutation Through HashMap.get() Detection
+// =============================================================================
+
+/// Detect indirect mutation of `self` through `self.field.get(key)` patterns.
+///
+/// Pattern: `let x = self.field.get(key)` followed by mutation of the bound
+/// variable from `match x { Some(y) => y.mutating_method() }`.
+/// This implies `self.field` needs mutable access, therefore `self` needs `&mut`.
+fn self_field_get_binding_is_mutated(
+    func: &FunctionDecl,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    let get_bindings = collect_self_field_get_bindings(func);
+    if get_bindings.is_empty() {
         return false;
     }
     for stmt in &func.body {
-        if statement_modifies_derived_local(stmt, &derived) {
+        if match_or_if_let_mutates_get_binding(stmt, &get_bindings, registry, struct_name) {
             return true;
         }
+    }
+    false
+}
+
+/// Collect local variables that are assigned from `self.field.get(...)`.
+fn collect_self_field_get_bindings(func: &FunctionDecl) -> HashSet<String> {
+    let mut bindings = HashSet::new();
+    for stmt in &func.body {
+        if let Statement::Let { pattern, value, .. } = stmt {
+            let name = match pattern {
+                Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(n.as_str()),
+                _ => None,
+            };
+            if let Some(name) = name {
+                if is_self_field_get_call(value) {
+                    bindings.insert(name.to_string());
+                }
+            }
+        }
+    }
+    bindings
+}
+
+/// Check if an expression is `self.field.get(...)`.
+pub fn is_self_field_get_call(expr: &Expression) -> bool {
+    if let Expression::MethodCall {
+        object, method, ..
+    } = expr
+    {
+        method == "get" && is_self_field_chain(object)
+    } else {
+        false
+    }
+}
+
+/// Check if a method name is known to be read-only (no mutation).
+pub fn is_known_readonly_method_name(method: &str) -> bool {
+    matches!(
+        method,
+        "len"
+            | "is_empty"
+            | "contains"
+            | "contains_key"
+            | "get"
+            | "first"
+            | "last"
+            | "iter"
+            | "keys"
+            | "values"
+            | "clone"
+            | "to_string"
+            | "as_str"
+            | "display"
+            | "fmt"
+            | "eq"
+            | "ne"
+            | "cmp"
+            | "partial_cmp"
+            | "hash"
+            | "bone_count"
+    )
+}
+
+/// Check if a statement contains a match/if-let that binds a get-result
+/// variable and mutates the bound value.
+fn match_or_if_let_mutates_get_binding(
+    stmt: &Statement,
+    get_bindings: &HashSet<String>,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    match stmt {
+        Statement::Match { value, arms, .. } => {
+            let scrutinee_var = match value {
+                Expression::Identifier { name, .. } => Some(name.as_str()),
+                _ => None,
+            };
+            if scrutinee_var.is_some_and(|v| get_bindings.contains(v)) {
+                for arm in arms.iter() {
+                    if let Some(binding) = extract_some_binding(&arm.pattern) {
+                        if match_arm_body_mutates_var(
+                            arm.body,
+                            binding,
+                            registry,
+                            struct_name,
+                        ) {
+                            return true;
+                        }
+                    }
+                    if let Some(bindings) = extract_tuple_some_bindings(&arm.pattern) {
+                        for binding in &bindings {
+                            if match_arm_body_mutates_var(
+                                arm.body,
+                                binding,
+                                registry,
+                                struct_name,
+                            ) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle tuple scrutinee: match (a_opt, b_opt) { (Some(a), Some(b)) => ... }
+            if let Expression::Tuple { elements, .. } = *value {
+                for elem in elements.iter() {
+                    if let Expression::Identifier { name, .. } = elem {
+                        if get_bindings.contains(name.as_str()) {
+                            for arm in arms.iter() {
+                                if let Some(binding) = find_binding_for_var_in_tuple_match(value, name, &arm.pattern) {
+                                    if match_arm_body_mutates_var(
+                                        arm.body,
+                                        binding,
+                                        registry,
+                                        struct_name,
+                                    ) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            arms.iter().any(|arm| {
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements.iter().any(|s| {
+                        match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)
+                    })
+                } else {
+                    false
+                }
+            })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)
+                    })
+                })
+        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)),
+        _ => false,
+    }
+}
+
+/// Extract binding name from `Some(x)` pattern.
+pub fn extract_some_binding<'a>(pattern: &'a Pattern<'a>) -> Option<&'a str> {
+    if let Pattern::EnumVariant(variant, binding) = pattern {
+        if variant == "Some" || variant.ends_with("::Some") {
+            if let crate::parser::EnumPatternBinding::Single(name) = binding {
+                return Some(name.as_str());
+            }
+        }
+    }
+    None
+}
+
+/// Extract binding names from tuple patterns like `(Some(a), Some(b))`.
+pub fn extract_tuple_some_bindings<'a>(pattern: &'a Pattern<'a>) -> Option<Vec<&'a str>> {
+    if let Pattern::Tuple(elements) = pattern {
+        let mut bindings = Vec::new();
+        for elem in elements {
+            if let Some(name) = extract_some_binding(elem) {
+                bindings.push(name);
+            }
+        }
+        if !bindings.is_empty() {
+            return Some(bindings);
+        }
+    }
+    None
+}
+
+/// Given a tuple scrutinee `(a, b, c)` and a variable name, find which position in the
+/// tuple the variable occupies. If found, extract the `Some(binding)` name from the
+/// corresponding position in the tuple pattern.
+///
+/// Used by both `let_statement_generation.rs` and `self_analysis.rs` for get→get_mut upgrade
+/// and self-mutation detection through tuple match patterns.
+pub fn find_binding_for_var_in_tuple_match<'a>(
+    scrutinee: &Expression,
+    var_name: &str,
+    arm_pattern: &'a Pattern<'a>,
+) -> Option<&'a str> {
+    if let Expression::Tuple { elements, .. } = scrutinee {
+        let position = elements.iter().position(|e| {
+            matches!(e, Expression::Identifier { name, .. } if name == var_name)
+        })?;
+        if let Pattern::Tuple(pat_elements) = arm_pattern {
+            let pat_at_pos = pat_elements.get(position)?;
+            return extract_some_binding(pat_at_pos);
+        }
+    }
+    None
+}
+
+/// Check if a match arm body expression mutates a given variable.
+fn match_arm_body_mutates_var(
+    body: &Expression,
+    var_name: &str,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    match body {
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_mutates_var(s, var_name, registry, struct_name)),
+        Expression::MethodCall {
+            object, method, ..
+        } => {
+            if expression_is_var(object, var_name) {
+                return method_is_mutating(method, registry, struct_name);
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Check if a statement mutates a given variable (direct assignment or mutating method call).
+fn statement_mutates_var(
+    stmt: &Statement,
+    var_name: &str,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    match stmt {
+        Statement::Assignment { target, .. } => {
+            expression_references_variable_or_field(target, var_name)
+        }
+        Statement::Expression { expr, .. } => {
+            expr_mutates_var(expr, var_name, registry, struct_name)
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_mutates_var(s, var_name, registry, struct_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_mutates_var(s, var_name, registry, struct_name))
+                })
+        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| statement_mutates_var(s, var_name, registry, struct_name)),
+        Statement::Match { arms, .. } => arms.iter().any(|arm| {
+            if let Expression::Block { statements, .. } = arm.body {
+                statements
+                    .iter()
+                    .any(|s| statement_mutates_var(s, var_name, registry, struct_name))
+            } else {
+                expr_mutates_var(arm.body, var_name, registry, struct_name)
+            }
+        }),
+        _ => false,
+    }
+}
+
+/// Check if an expression contains a mutating method call on a variable.
+fn expr_mutates_var(
+    expr: &Expression,
+    var_name: &str,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
+    match expr {
+        Expression::MethodCall {
+            object, method, ..
+        } => {
+            if expression_is_var(object, var_name)
+                || expression_is_field_of_var(object, var_name)
+            {
+                if method_is_mutating(method, registry, struct_name) {
+                    return true;
+                }
+            }
+            false
+        }
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_mutates_var(s, var_name, registry, struct_name)),
+        _ => false,
+    }
+}
+
+fn expression_is_var(expr: &Expression, var_name: &str) -> bool {
+    matches!(expr, Expression::Identifier { name, .. } if name == var_name)
+}
+
+fn expression_is_field_of_var(expr: &Expression, var_name: &str) -> bool {
+    if let Expression::FieldAccess { object, .. } = expr {
+        return expression_is_var(object, var_name);
     }
     false
 }
@@ -739,7 +1076,9 @@ fn method_is_mutating(
                     && sig
                         .param_ownership
                         .first()
-                        .is_some_and(|o| *o == OwnershipMode::MutBorrowed)
+                        .is_some_and(|o| {
+                            *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
+                        })
                 {
                     return true;
                 }
@@ -750,7 +1089,9 @@ fn method_is_mutating(
                 && sig
                     .param_ownership
                     .first()
-                    .is_some_and(|o| *o == OwnershipMode::MutBorrowed);
+                    .is_some_and(|o| {
+                        *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
+                    });
         }
     }
 
@@ -765,8 +1106,7 @@ fn lookup_method_in_registry<'a>(
     registry: &'a SignatureRegistry,
     method: &str,
 ) -> Option<&'a crate::analyzer::FunctionSignature> {
-    registry.find_signature_ending_with(&format!("::{}", method))
-        .or_else(|| registry.get_signature(method))
+    registry.lookup_method(method)
 }
 
 fn is_self_field_chain(expr: &Expression) -> bool {

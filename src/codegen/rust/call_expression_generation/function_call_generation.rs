@@ -227,7 +227,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         {
                             format!("{}.clone()", result)
                         } else {
-                            result
+                            gen.maybe_auto_clone(name, &result)
                         }
                     } else {
                         result
@@ -337,7 +337,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             .iter()
             .enumerate()
             .map(|(i, arg_str)| {
-                let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                let sig_param_idx = sig.arg_param_index(i);
                 let borrow = !is_extern_call
                     && !sig.is_extern
                     && !arg_str.contains("string_to_ffi(")
@@ -351,15 +351,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
                     let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {
                         if let Expression::Identifier { name, .. } = arg_expr {
-                            gen.inferred_borrowed_params.contains(&name.to_string())
-                                || gen.str_ref_optimized_params.contains(&name.to_string())
-                                || gen.current_function_params.iter().any(|param| {
-                                    param.name == *name
-                                        && matches!(
-                                            &param.type_,
-                                            Type::Reference(_) | Type::MutableReference(_)
-                                        )
-                                })
+                            gen.identifier_already_ref(name)
                         } else {
                             false
                         }

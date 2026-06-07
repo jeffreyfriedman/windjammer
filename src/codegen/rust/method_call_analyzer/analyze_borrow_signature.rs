@@ -44,9 +44,9 @@ pub(super) fn ref_from_known_method_signature(
             if let Expression::Identifier { name: arg_name, .. } = arg {
                 let already_rust_str = current_function_params.iter().any(|p| {
                     p.name == *arg_name
-                        && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                            || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                && inferred_borrowed_params.contains(arg_name)))
+                        && crate::codegen::rust::types::param_generates_as_rust_ref(
+                            &p.type_, &p.name, inferred_borrowed_params,
+                        )
                 });
                 if already_rust_str {
                     return Some(false);
@@ -73,9 +73,9 @@ pub(super) fn ref_from_known_method_signature(
     if let Expression::Identifier { name: arg_name, .. } = arg {
         let already_rust_str = current_function_params.iter().any(|p| {
             p.name == *arg_name
-                && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                    || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                        && inferred_borrowed_params.contains(arg_name)))
+                && crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &p.type_, &p.name, inferred_borrowed_params,
+                )
         });
         if already_rust_str {
             return Some(false);
