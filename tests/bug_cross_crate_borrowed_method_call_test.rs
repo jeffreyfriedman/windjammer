@@ -11,7 +11,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Simulates breach-protocol calling engine `upload_svo(svo)` with metadata-loaded signatures.
+/// Simulates a game crate calling engine `upload_svo(svo)` with metadata-loaded signatures.
 #[test]
 fn test_cross_crate_borrowed_vec_method_call_adds_ref() {
     let tmp = TempDir::new().expect("tempdir");

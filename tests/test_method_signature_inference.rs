@@ -151,7 +151,7 @@ impl KeyboardState {
 
 #[test]
 fn test_method_calling_mutating_method_on_field() {
-    // This reproduces the breach-protocol bug:
+    // This reproduces a cross-file keyboard polling bug:
     // poll_keyboard_input(self) calls self.keyboard.update_key(...)
     // Should infer &mut self because it mutates self.keyboard
 
@@ -204,7 +204,7 @@ impl Game {
     }
     
     // CRITICAL TEST: Private method calling mutating method on field
-    // This reproduces the exact breach-protocol pattern
+    // This reproduces a cross-file transitive mutation pattern
     fn private_poll(self) {
         self.keyboard.update_key(5, true)
     }

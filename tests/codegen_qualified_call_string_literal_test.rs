@@ -110,7 +110,7 @@ impl Game {
 /// for "draw_text" with Owned ownership, the qualified call should NOT
 /// blindly use the unqualified fallback signature.
 ///
-/// This reproduces the real bug: when compiling breach-protocol/src/game.wj,
+/// This reproduces the real bug: when compiling a game entry file,
 /// windjammer-game's api.wj.meta has draw_text with Owned, but the actual
 /// draw module uses Borrowed. The simple-name fallback picks up the wrong one.
 #[test]

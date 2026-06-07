@@ -133,7 +133,7 @@ pub fn try_use(res: Resource, needed: f32) -> bool {
 
 #[test]
 fn test_multi_file_cross_type_method_mutation_detected() {
-    // This is the actual breach-protocol pattern:
+    // This is a cross-file method mutation pattern:
     // player/state.wj defines PlayerState::use_energy (mutates self)
     // combat/abilities.wj defines Ability::activate(player: PlayerState) calling player.use_energy()
     // entry.wj calls self.ability.activate(self.player)
@@ -239,7 +239,7 @@ impl Game {
 
 #[test]
 fn test_multi_file_collision_correct_mut_borrow() {
-    // Reproduces the breach-protocol bug: TWO types named Ability with activate()
+    // Reproduces a name-collision bug: TWO types named Ability with activate()
     // in different modules, causing name collision in the signature registry.
     // combat/abilities.wj: Ability::activate(self, player: PlayerState) -> bool
     // rpg/abilities.wj:    Ability::activate(self) -> bool (no player param)

@@ -533,7 +533,10 @@ impl<'ast> Analyzer<'ast> {
                         // Add trait methods to analyzed list so codegen can access ownership info
                         // They won't be generated as standalone functions (codegen skips trait methods)
                         let signature = self.build_signature(&analyzed_func);
-                        registry.add_function(func.name.clone(), signature);
+                        registry.add_function(func.name.clone(), signature.clone());
+                        // Also register as TraitName::method for cross-file meta lookup
+                        let qualified_name = format!("{}::{}", decl.name, func.name);
+                        registry.add_function(qualified_name, signature);
                         analyzed.push(analyzed_func);
                     }
                 }

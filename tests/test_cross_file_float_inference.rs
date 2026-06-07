@@ -14,7 +14,7 @@
 //
 // Bug: Float literals in function calls don't infer from cross-file signatures
 //
-// Example from breach-protocol:
+// Example from cross-file game logic:
 //   File 1: combat_system.wj
 //     impl CombatStats { pub fn new(health: f32, damage: f32) -> CombatStats }
 //
@@ -28,7 +28,7 @@ use windjammer::{build_project_ext, CompilationTarget};
 
 #[test]
 fn test_cross_file_function_arg_inference() {
-    // Reproduce exact breach-protocol pattern
+    // Reproduce a cross-file float inference pattern
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");
     let build = temp.path().join("build");

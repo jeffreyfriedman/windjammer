@@ -16,7 +16,7 @@
 /// Pattern: match Some(v) => *v (f32), None => literal defaults to f64
 /// Expected: Both arms should have same type (unify to f32)
 ///
-/// Example from breach-protocol:
+/// Example from game dogfooding:
 /// ```windjammer
 /// let g_score: HashMap<(i32, i32), f32> = HashMap::new();
 /// let score = match g_score.get(&(x, y)) {

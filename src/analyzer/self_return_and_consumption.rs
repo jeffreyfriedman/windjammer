@@ -451,10 +451,7 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                             // Fallback: bare method name
-                            if let Some(sig) = reg
-                                .get_signature(method)
-                                .or_else(|| reg.find_signature_ending_with(method))
-                            {
+                            if let Some(sig) = reg.lookup_method(method) {
                                 return sig.has_self_receiver
                                     && sig.param_ownership.first()
                                         == Some(&super::OwnershipMode::Owned);
@@ -947,7 +944,7 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         let suffix = format!("::{}", type_name);
-        for (key, fields) in &self.global_struct_field_types {
+        for (key, fields) in self.global_struct_field_types.iter() {
             if key.ends_with(&suffix) || key == type_name {
                 if let Some(field_type) = fields.get(field) {
                     return Some(field_type.clone());

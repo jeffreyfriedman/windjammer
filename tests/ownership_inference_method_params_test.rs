@@ -13,7 +13,7 @@
 /// TDD: Test that ownership inference correctly infers &mut for parameters
 /// used in method calls that require &mut self
 ///
-/// Bug discovered during Breach Protocol dogfooding:
+/// Bug discovered during game dogfooding:
 /// When a parameter is passed to a method that requires &mut, the compiler
 /// should infer that the parameter itself needs &mut.
 #[path = "common/test_utils.rs"]

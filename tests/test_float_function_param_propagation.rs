@@ -28,7 +28,7 @@ mod test_utils;
 
 #[test]
 fn test_f32_param_propagates_to_literals() {
-    // Matches breach-protocol settings/performance.wj update() method exactly
+    // Matches a settings module update(dt: f32) method pattern
     let source = r#"
 pub struct PerformanceStats {
     pub frame_count: u64,
@@ -81,7 +81,7 @@ pub fn compute(timestamp: f64) {
     );
 }
 
-/// Multi-file build: mimics breach-protocol structure with settings/performance.wj
+/// Multi-file build: mimics a multi-file settings module structure
 #[test]
 fn test_f32_param_in_multi_file_build() {
     use std::fs;
@@ -91,13 +91,13 @@ fn test_f32_param_in_multi_file_build() {
     let settings_dir = test_dir.join("settings");
     fs::create_dir_all(&settings_dir).expect("Failed to create settings dir");
 
-    // Create mod.wj (like breach-protocol)
+    // Create mod.wj for a multi-file module
     let mod_content = r#"
 pub mod performance
 "#;
     fs::write(settings_dir.join("mod.wj"), mod_content).expect("Failed to write mod.wj");
 
-    // Create performance.wj (exact copy of breach-protocol's update method)
+    // Create performance.wj with an update(dt: f32) method
     let perf_content = r#"
 pub struct PerformanceStats {
     pub frame_count: u64,
@@ -119,7 +119,7 @@ impl PerformanceStats {
     let output_dir = test_dir.join("build");
     fs::create_dir_all(&output_dir).expect("Failed to create output dir");
 
-    // Build from directory (like wj build breach-protocol)
+    // Build from directory (multi-file project build)
     let result = build_project(&settings_dir, &output_dir, CompilationTarget::Rust, true);
 
     let rust = match result {

@@ -17,7 +17,7 @@
 //! layouts where byte-order matters (to_bytes() serializes in declaration order,
 //! but without repr(C) the actual memory layout could differ).
 //!
-//! Root cause of persistent orange rendering in Breach Protocol: material colors
+//! Root cause of persistent incorrect material rendering: material colors
 //! and lighting parameters were scrambled by field reordering.
 //!
 //! Fix: The Windjammer compiler now emits #[repr(C)] on ALL struct definitions,

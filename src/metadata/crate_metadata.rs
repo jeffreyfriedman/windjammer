@@ -149,6 +149,25 @@ pub fn load_struct_field_types_from_file(
     extract_struct_field_types(&crate_meta)
 }
 
+/// Load and merge external struct field types from dependency metadata files.
+/// Shared by both `compilation_pipeline` and `library_multipass` to avoid
+/// duplicated metadata loading loops.
+pub fn load_merged_external_struct_fields(
+    external_paths: &HashMap<String, std::path::PathBuf>,
+    exclude_local: Option<&std::collections::HashSet<String>>,
+) -> HashMap<String, HashMap<String, Type>> {
+    let mut merged: HashMap<String, HashMap<String, Type>> = HashMap::new();
+    for (_crate_name, meta_path) in external_paths {
+        let fields = load_struct_field_types_from_file(meta_path);
+        for (struct_name, field_map) in fields {
+            if exclude_local.map_or(true, |locals| !locals.contains(&struct_name)) {
+                merged.entry(struct_name).or_default().extend(field_map);
+            }
+        }
+    }
+    merged
+}
+
 pub(in crate::metadata) fn merge_crate_metadata_file(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,

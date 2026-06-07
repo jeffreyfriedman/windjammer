@@ -12,7 +12,7 @@
 
 //! TDD: E0507/E0596 ownership inference for Option patterns and get_mut
 //!
-//! Fixes for breach-protocol:
+//! Fixes for game dogfooding:
 //! - E0507: if let Some(x) = self.field with &self → generate &self.field
 //! - E0507: self.field.map(...) with &self → generate self.field.as_ref().map(...)
 //! - E0596: self.nodes.get_mut(id) → infer &mut self

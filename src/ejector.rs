@@ -6,7 +6,7 @@
 
 use crate::{analyzer, codegen, inference, lexer, parser, CompilationTarget};
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -192,17 +192,7 @@ impl Ejector {
             .analyze_program(&program)
             .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
-        // Infer trait bounds
-        let mut inference_engine = inference::InferenceEngine::new();
-        let mut inferred_bounds_map = HashMap::new();
-        for item in &program.items {
-            if let parser::Item::Function { decl: func, .. } = item {
-                let bounds = inference_engine.infer_function_bounds(func);
-                if !bounds.is_empty() {
-                    inferred_bounds_map.insert(func.name.clone(), bounds);
-                }
-            }
-        }
+        let inferred_bounds_map = inference::collect_inferred_bounds(&program.items);
 
         // WINDJAMMER PHILOSOPHY: Expression-level float type inference
         // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing

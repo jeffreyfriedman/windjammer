@@ -12,7 +12,7 @@
 
 //! TDD Test: Cross-module ownership for complex nested field patterns
 //!
-//! Tests the EXACT pattern that blocked refactoring BreachProtocolGame:
+//! Tests the EXACT pattern that blocked refactoring a large game struct:
 //! - Struct with multiple non-Copy fields
 //! - Free function that mutates sub-fields (player.health = ...)
 //! - Multiple self.field arguments to one function call
@@ -124,7 +124,7 @@ impl Game {
 #[test]
 fn test_multiple_self_fields_to_cross_module_fn() {
     // Pattern: multiple self.fields passed to a free function
-    // This is the BreachProtocolGame pattern: spawn_next_wave(self.grid, self.enemies, self.wave)
+    // Pattern: spawn_next_wave(self.grid, self.enemies, self.wave)
     let files = &[
         (
             "spawning.wj",
@@ -155,13 +155,13 @@ use crate::VoxelGrid
 use crate::Enemy
 use crate::spawning
 
-pub struct BreachGame {
+pub struct MainApp {
     pub grid: VoxelGrid,
     pub enemies: Vec<Enemy>,
     pub wave: i32,
 }
 
-impl BreachGame {
+impl MainApp {
     pub fn update(self) {
         spawning::spawn_next_wave(self.grid, self.enemies, self.wave)
     }

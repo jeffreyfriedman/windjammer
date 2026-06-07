@@ -299,7 +299,7 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         for (i, (_label, arg)) in arguments.iter().enumerate() {
-            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+            let sig_param_idx = sig.arg_param_index(i);
 
             let mut_borrow_via_ownership = sig
                 .param_ownership

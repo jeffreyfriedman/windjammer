@@ -1,0 +1,6 @@
+
+fn double(x: int) -> int { x * 2 }
+fn main() {
+    let result = 5 |> double
+    println!("Result: ${result}")
+}

@@ -217,7 +217,7 @@ impl Character {
 /// When an enum method uses `match self` but arms only compare/ignore bound
 /// values (no consuming moves), the compiler should infer &self and use match
 /// ergonomics. No auto-clone is needed at call sites.
-/// Reproduces the breach-protocol dialog.wj pattern: is_available(&self) calls
+/// Reproduces a dialog system pattern: is_available(&self) calls
 /// condition.evaluate(state) inside a for-loop.
 #[test]
 fn test_enum_match_self_non_consuming_arms_infers_borrowed() {

@@ -18,7 +18,7 @@
 // `mutate(self.grid)`, the call site generates `self.grid` (owned) or
 // `self.grid.clone()` instead of `&mut self.grid`.
 //
-// This is the root cause of the breach-protocol SOLID extraction failure:
+// This is the root cause of cross-module SOLID extraction failures:
 // extracting methods to free functions in separate modules produces ownership
 // mismatches between call sites and function signatures.
 //

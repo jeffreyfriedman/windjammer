@@ -141,7 +141,7 @@ pub fn validate_combat() {
 
 /// Test the real-world scenario: a long function with many statements before
 /// the SystemCoverage usage, compiled as a library with multiple files.
-/// This reproduces the actual breach-protocol/playtest_validation.wj pattern
+/// This reproduces a playtest validation pattern
 /// where type inference fails for local variables deep in long functions.
 #[test]
 fn test_string_coercion_deep_in_long_function_multifile_library() {

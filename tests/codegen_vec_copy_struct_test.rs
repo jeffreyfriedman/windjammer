@@ -13,7 +13,7 @@
 /// TDD Test: Vec indexing with Copy structs (Vec3, AABB) should NOT add &
 ///
 /// Bug: Vec indexing auto-borrowed Copy types (Vec3, AABB) causing E0308
-///      "expected Vec3, found &Vec3" errors in breach-protocol
+///      "expected Vec3, found &Vec3" errors in game dogfooding
 ///
 /// Root Cause: is_copy_type only checked primitives, not user structs with
 ///             @derive(Copy) or structs with all-Copy fields

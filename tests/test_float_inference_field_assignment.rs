@@ -14,7 +14,7 @@
 //
 // Bug: Float literals assigned to f32 fields generate _f64 suffix
 //
-// Example from breach-protocol:
+// Example from game dogfooding:
 //   struct Companion { pub attack_damage: f32 }
 //   companion.attack_damage = 40.0  // Generates 40.0_f64, expects f32
 //

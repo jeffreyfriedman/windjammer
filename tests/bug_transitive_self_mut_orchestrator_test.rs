@@ -14,7 +14,7 @@
 /// None of these perform direct `self.field = ...` assignments in the orchestrator,
 /// so the analyzer infers &self instead of &mut self.
 ///
-/// This is the dominant pattern causing ~599 E0596 errors in breach-protocol.
+/// This is the dominant pattern causing many E0596 errors in large game codebases.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

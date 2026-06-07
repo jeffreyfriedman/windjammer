@@ -23,7 +23,7 @@ mod test_utils;
 
 #[test]
 fn test_method_calling_field_mutating_method() {
-    // Exact pattern from breach-protocol faction.wj
+    // Exact pattern from a faction reputation loop
     let code = r#"
 pub struct Faction {
     pub reputation: f32,
@@ -138,8 +138,8 @@ impl EventLog {
 }
 
 #[test]
-fn test_breach_protocol_faction_pattern() {
-    // Exact pattern from breach-protocol: while loop with if, calling adjust_reputation
+fn test_faction_loop_mutation_pattern() {
+    // Exact pattern: while loop with if, calling adjust_reputation
     let code = r#"
 pub enum FactionId {
     A,
@@ -184,7 +184,7 @@ impl FactionSystem {
     let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
-        "Breach-protocol faction pattern should compile:\n{}",
+        "Faction loop mutation pattern should compile:\n{}",
         result.err().unwrap_or_default()
     );
 

@@ -14,7 +14,7 @@
 //
 // Bug: Float literals passed to f32 parameters generate _f64 suffix
 //
-// Example from breach-protocol:
+// Example from game dogfooding:
 //   fn new(health: f32, damage: f32) -> Stats { ... }
 //   Stats::new(100.0, 50.0)  // Generates 100.0_f64, 50.0_f64 - WRONG!
 //
