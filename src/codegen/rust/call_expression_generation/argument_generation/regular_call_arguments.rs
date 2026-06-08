@@ -24,30 +24,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // Without this, `process_property(prop.name, prop.value).as_str()` would
             // leak in_field_access_object from the MethodCall handler into prop.name/prop.value,
             // suppressing necessary .clone() calls.
-            let prev_field_access_obj = gen.in_field_access_object;
-            gen.in_field_access_object = false;
-
-            // TDD FIX: Set call argument context to suppress premature .clone()
-            // The FieldAccess handler normally adds .clone() for borrowed iterator vars,
-            // but in call arguments, we need to let the ownership check below decide
-            let prev_in_call_arg = gen.in_call_argument_generation;
-            gen.in_call_argument_generation = true;
-
-            // Return/match contexts set `coerce_string_literals_to_owned` and
-            // `in_match_arm_needing_string` for the outer expression; nested call
-            // arguments must use only parameter-type conversion (below), not context
-            // coercion — avoids `"x".to_string().to_string()` and wrong `.to_string()`
-            // on &str params, and prevents format!("...".to_string(), ...) in match arms.
-            let prev_coerce_string_literals = gen.coerce_string_literals_to_owned;
-            gen.coerce_string_literals_to_owned = false;
-            let prev_match_arm_str = gen.in_match_arm_needing_string;
-            gen.in_match_arm_needing_string = false;
+            let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg);
-            gen.coerce_string_literals_to_owned = prev_coerce_string_literals;
-            gen.in_match_arm_needing_string = prev_match_arm_str;
-
-            gen.in_call_argument_generation = prev_in_call_arg;
-            gen.in_field_access_object = prev_field_access_obj;
+            gen.restore_arg_gen_scope(scope);
 
             // TDD FIX: Cast int arguments to usize for stdlib methods
             // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
@@ -359,15 +338,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             let is_temp_variable = arg_str.starts_with("_temp")
                                 && arg_str.chars().skip(5).all(|c| c.is_numeric());
 
-                            // TDD FIX: IDIOMATIC WINDJAMMER - Strip .clone() if present!
-                            // When destination wants Borrowed, pass &field, NOT &field.clone()
-                            // Example: has_item(ingredient.item_id) with has_item(item_id: string)
-                            // Should generate: has_item(&ingredient.item_id)
-                            // NOT: has_item(&ingredient.item_id.clone())
-                            // The .clone() may have been added by generate_expression for borrowed iterator vars
-                            if arg_str.ends_with(".clone()") {
-                                arg_str = arg_str[..arg_str.len() - 8].to_string();
-                            }
+                            // Strip .clone() when destination wants Borrowed — pass &field, not &field.clone()
+                            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
 
                             // Insert & if not already a reference and not a string literal and not a temp var
                             // THE WINDJAMMER WAY: Preserve user-written closure params
@@ -392,37 +364,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                         OwnershipMode::MutBorrowed if !has_ownership_collision => {
-                            // TDD FIX: Don't add &mut if arg is already a &mut parameter
-                            // Covers both explicitly declared &mut params AND
-                            // params inferred as &mut through ownership analysis
-                            let is_already_mut_ref =
-                                if let Expression::Identifier { name, .. } = arg {
-                                    // Check 1: Explicit &mut in AST type
-                                    let explicit_mut_ref = gen.current_function_params.iter().any(|param| {
-                                        param.name == *name
-                                            && matches!(
-                                                &param.type_,
-                                                Type::MutableReference(_)
-                                            )
-                                    });
-                                    // Check 2: Inferred &mut through ownership analysis
-                                    let inferred_mut_ref =
-                                        gen.inferred_mut_borrowed_params.contains(name.as_str());
-                                    explicit_mut_ref || inferred_mut_ref
-                                } else {
-                                    false
-                                };
-
-                            if !expression_helpers::is_reference_expression(arg)
-                                && !is_already_mut_ref
-                            {
-                                if arg_str.ends_with(".clone()") {
-                                    arg_str.truncate(arg_str.len() - 8);
-                                }
-                                crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
-                                    .apply(&mut arg_str);
-                                return vec![arg_str];
-                            }
+                            crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                                arg,
+                                &mut arg_str,
+                                &gen.current_function_params,
+                                &gen.inferred_mut_borrowed_params,
+                            );
+                            return vec![arg_str];
                         }
                         OwnershipMode::Owned => {
                             let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
@@ -518,64 +466,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 }
                             }
 
-                            // TDD FIX: AUTO-CLONE for borrowed_param.field
-                            // When passing ingredient.item_id where ingredient is borrowed,
-                            // we need to clone() IF destination wants Owned.
-                            //
-                            // We're ALREADY in OwnershipMode::Owned block,
-                            // so destination wants owned. Safe to add .clone().
-                            //
-                            // This handles: for ingredient in &vec { func(ingredient.field) }
-                            // where func(field: String) expects owned.
-                            //
-                            // Skip in call arguments: ownership lowering below already
-                            // applies & / &mut / clone for the callee signature.
                             if !gen.in_call_argument_generation {
-                            if let Expression::FieldAccess { .. } = arg {
-                                // Trace through nested field accesses to find the root identifier
-                                // Handles: stack.field, stack.item.id, stack.item.nested.deep
-                                let root_name = gen.extract_root_identifier(arg);
-                                if let Some(name) = root_name {
-                                    let is_borrowed_iterator_var =
-                                        gen.borrowed_iterator_vars.contains(&name);
-                                    let is_explicitly_borrowed =
-                                        gen.current_function_params.iter().any(|p| {
-                                            p.name == name
-                                                && matches!(
-                                                    p.ownership,
-                                                    crate::parser::OwnershipHint::Ref
-                                                )
-                                        });
-                                    let is_inferred_borrowed =
-                                        gen.inferred_borrowed_params.contains(&name);
-
-                                    if (is_borrowed_iterator_var
-                                        || is_explicitly_borrowed
-                                        || is_inferred_borrowed)
-                                        && !arg_str.ends_with(".clone()")
-                                    {
-                                        let is_copy = gen
-                                            .infer_expression_type(arg)
-                                            .as_ref()
-                                            .is_some_and(|t| gen.is_type_copy(t));
-                                        if !is_copy {
-                                            arg_str = format!("{}.clone()", arg_str);
-                                        }
-                                    }
-                                }
+                                gen.maybe_clone_borrowed_field_for_owned_param(arg, &mut arg_str);
                             }
-                            }
-                            // DOGFOODING FIX: Vec indexing &vec[idx] passed to owned param
-                            // e.g. enterable.push(gen.buildings[i]) → need (.clone())
-                            if let Expression::Index { .. } = arg {
-                                if arg_str.starts_with("&") && !arg_str.ends_with(".clone()") {
-                                    if let Some(inner) = gen.infer_expression_type(arg) {
-                                        if !gen.is_type_copy(&inner) {
-                                            arg_str = format!("({}).clone()", arg_str);
-                                        }
-                                    }
-                                }
-                            }
+                            gen.maybe_clone_index_for_owned_param(arg, &mut arg_str);
                         }
                         _ => {
                             // Collision guard triggered: Borrowed or MutBorrowed

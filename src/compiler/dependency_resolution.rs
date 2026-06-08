@@ -1,8 +1,6 @@
 //! Dependency metadata roots, filesystem discovery, and type/submodule maps for library builds.
 
-use crate::lexer::Lexer;
 use crate::parser::ast::core::Item;
-use crate::parser::Parser;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -75,13 +73,7 @@ pub(crate) fn build_extern_submodule_qualifier_map(
     }
 
     for (file, source) in sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let (_parser, program) = super::parse_wj_source(file, source)?;
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
@@ -108,13 +100,7 @@ pub(crate) fn build_type_defining_modules_for_library(
 ) -> Result<HashMap<String, Vec<Vec<String>>>> {
     let mut map: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for (file, source) in sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let (_parser, program) = super::parse_wj_source(file, source)?;
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
