@@ -82,6 +82,16 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // Strip explicit & when operand is already a reference type
+                // (e.g., user writes `&key` but key: str → &str, so &key = &&str)
+                if matches!(op, UnaryOp::Ref) {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        if self.identifier_already_ref(name) {
+                            return self.generate_expression_immut(operand);
+                        }
+                    }
+                }
+
                 let op_str = match op {
                     UnaryOp::Not => "!",
                     UnaryOp::Neg => "-",
