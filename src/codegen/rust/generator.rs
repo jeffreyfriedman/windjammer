@@ -935,4 +935,175 @@ impl<'ast> CodeGenerator<'ast> {
             format!("{}.clone()", arg_str)
         }
     }
+
+    /// Apply owned-String tail coercion to an implicit-return or explicit-return expression.
+    ///
+    /// When a function returns `String`, this converts string literals to owned form,
+    /// rewrites borrowed-param `.clone()` to `.to_string()`, and clones `self.field`
+    /// when `self` is borrowed. Used by block implicit returns and `return` statements.
+    ///
+    /// `respect_suppress`: if true, checks `suppress_string_conversion` and `.as_str()` usage.
+    pub(crate) fn apply_owned_string_tail_coercion(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+        respect_suppress: bool,
+    ) {
+        let returns_string = super::string_utilities::return_type_expects_owned_string(
+            &self.current_function_return_type,
+        );
+        let in_match_needing_string = self.in_match_arm_needing_string;
+
+        if !returns_string && !in_match_needing_string {
+            return;
+        }
+
+        if respect_suppress {
+            if expr_str.contains(".as_str()") {
+                return;
+            }
+            if self.suppress_string_conversion.get() {
+                return;
+            }
+        }
+
+        if matches!(
+            expr,
+            crate::parser::Expression::Literal {
+                value: crate::parser::Literal::String(_),
+                ..
+            }
+        ) && !super::string_utilities::already_owned_string_expr(expr_str)
+        {
+            *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
+        } else {
+            super::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                expr_str,
+                expr,
+                &self.inferred_borrowed_params,
+                &self.current_function_params,
+            );
+        }
+
+        self.maybe_clone_borrowed_self_field(expr_str, expr);
+    }
+
+    /// If `expr` is `self.field` and `self` is borrowed, append `.clone()` for non-Copy fields.
+    pub(crate) fn maybe_clone_borrowed_self_field(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+    ) {
+        if let crate::parser::Expression::FieldAccess { object, .. } = expr {
+            if let crate::parser::Expression::Identifier { name: obj_name, .. } = &**object {
+                if obj_name == "self" && !expr_str.ends_with(".clone()") {
+                    let self_is_borrowed = self.current_function_params.iter().any(|p| {
+                        p.name == "self"
+                            && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    });
+                    if self_is_borrowed {
+                        let is_copy = self
+                            .infer_expression_type(expr)
+                            .as_ref()
+                            .is_some_and(|t| self.is_type_copy(t));
+                        if !is_copy {
+                            *expr_str = format!("{}.clone()", expr_str);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Clone a FieldAccess argument whose root identifier is borrowed when the callee expects Owned.
+    ///
+    /// Traces through nested field accesses (e.g. `stack.item.id`) to find the root,
+    /// then checks if it's borrowed (iterator var, inferred borrow, or explicit `Ref` hint).
+    /// Appends `.clone()` for non-Copy types that don't already have it.
+    pub(crate) fn maybe_clone_borrowed_field_for_owned_param(
+        &self,
+        arg: &crate::parser::Expression,
+        arg_str: &mut String,
+    ) -> bool {
+        if let crate::parser::Expression::FieldAccess { .. } = arg {
+            let root_name = self.extract_root_identifier(arg);
+            if let Some(ref name) = root_name {
+                let is_borrowed_iter = self.borrowed_iterator_vars.contains(name);
+                let is_explicit_ref = self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                });
+                let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
+
+                if (is_borrowed_iter || is_explicit_ref || is_inferred_borrowed)
+                    && !arg_str.ends_with(".clone()")
+                {
+                    let is_copy = self
+                        .infer_expression_type(arg)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    if !is_copy {
+                        *arg_str = format!("{}.clone()", arg_str);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Clone a Vec-index expression (`&vec[i]`) when the callee expects Owned and the element is non-Copy.
+    pub(crate) fn maybe_clone_index_for_owned_param(
+        &self,
+        arg: &crate::parser::Expression,
+        arg_str: &mut String,
+    ) -> bool {
+        if let crate::parser::Expression::Index { .. } = arg {
+            if arg_str.starts_with('&') && !arg_str.ends_with(".clone()") {
+                if let Some(inner) = self.infer_expression_type(arg) {
+                    if !self.is_type_copy(&inner) {
+                        *arg_str = format!("({}).clone()", arg_str);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Enter argument-generation scope. Saves context flags that must be
+    /// restored after `generate_expression` returns so that nested calls
+    /// don't leak context into the outer expression.
+    ///
+    /// Drop the returned guard to restore the previous flag values.
+    pub(crate) fn arg_gen_scope(&mut self) -> ArgGenScope {
+        let saved = ArgGenScope {
+            in_field_access_object: self.in_field_access_object,
+            in_call_argument_generation: self.in_call_argument_generation,
+            coerce_string_literals_to_owned: self.coerce_string_literals_to_owned,
+            in_match_arm_needing_string: self.in_match_arm_needing_string,
+        };
+        self.in_field_access_object = false;
+        self.in_call_argument_generation = true;
+        self.coerce_string_literals_to_owned = false;
+        self.in_match_arm_needing_string = false;
+        saved
+    }
+
+    /// Restore context flags saved by `arg_gen_scope`.
+    pub(crate) fn restore_arg_gen_scope(&mut self, scope: ArgGenScope) {
+        self.in_field_access_object = scope.in_field_access_object;
+        self.in_call_argument_generation = scope.in_call_argument_generation;
+        self.coerce_string_literals_to_owned = scope.coerce_string_literals_to_owned;
+        self.in_match_arm_needing_string = scope.in_match_arm_needing_string;
+    }
+}
+
+/// Saved state of argument-generation context flags.
+/// Created by `CodeGenerator::arg_gen_scope()` and consumed by `restore_arg_gen_scope()`.
+pub(crate) struct ArgGenScope {
+    in_field_access_object: bool,
+    in_call_argument_generation: bool,
+    coerce_string_literals_to_owned: bool,
+    in_match_arm_needing_string: bool,
 }

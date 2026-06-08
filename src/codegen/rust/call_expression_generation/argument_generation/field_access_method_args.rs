@@ -3,7 +3,7 @@
 use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
-use super::super::super::{expression_helpers, expression_utilities, CodeGenerator};
+use super::super::super::{expression_utilities, CodeGenerator};
 
 /// Borrow owned String arguments when the callee's `string` param lowers to `&str`.
 fn coerce_string_arg_for_borrowed_callee<'ast>(
@@ -85,13 +85,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
         .flat_map(|(i, (_label, arg))| {
             let arg_to_generate =
                 expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
-            let prev_coerce_string_literals = gen.coerce_string_literals_to_owned;
-            gen.coerce_string_literals_to_owned = false;
-            let prev_match_arm_str = gen.in_match_arm_needing_string;
-            gen.in_match_arm_needing_string = false;
+            let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
-            gen.coerce_string_literals_to_owned = prev_coerce_string_literals;
-            gen.in_match_arm_needing_string = prev_match_arm_str;
+            gen.restore_arg_gen_scope(scope);
 
             let sig_param_idx = sig.arg_param_index(i);
 
@@ -186,34 +182,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         );
                     }
                     OwnershipMode::MutBorrowed => {
-                        let is_already_mut_ref =
-                            if let Expression::Identifier { name, .. } = arg_to_generate {
-                                let explicit_mut_ref =
-                                    gen.current_function_params.iter().any(|param| {
-                                        param.name == *name
-                                            && matches!(
-                                                &param.type_,
-                                                crate::parser::Type::MutableReference(_)
-                                            )
-                                    });
-                                let inferred_mut_ref =
-                                    gen.inferred_mut_borrowed_params.contains(name.as_str());
-                                explicit_mut_ref || inferred_mut_ref
-                            } else {
-                                false
-                            };
-                        if !expression_helpers::is_reference_expression(arg_to_generate)
-                            && !is_already_mut_ref
-                        {
-                            if arg_str.ends_with(".clone()") {
-                                arg_str.truncate(arg_str.len() - 8);
-                            }
-                            if arg_str.starts_with("&") && !arg_str.starts_with("&mut ") {
-                                arg_str = arg_str[1..].to_string();
-                            }
-                            crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
-                                .apply(&mut arg_str);
-                        }
+                        crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                            arg_to_generate,
+                            &mut arg_str,
+                            &gen.current_function_params,
+                            &gen.inferred_mut_borrowed_params,
+                        );
                     }
                     OwnershipMode::Owned => {
                         let is_str_lit = matches!(
@@ -260,25 +234,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 arg_str = format!("{}.to_string()", arg_str);
                             }
                         }
-                        if let Expression::FieldAccess {
-                            object: field_obj,
-                            ..
-                        } = arg_to_generate
-                        {
-                            if let Expression::Identifier { name, .. } = &**field_obj {
-                                let is_borrowed = gen.borrowed_iterator_vars.contains(name)
-                                    || gen.inferred_borrowed_params.contains(name);
-                                if is_borrowed && !arg_str.ends_with(".clone()") {
-                                    let is_copy = gen
-                                        .infer_expression_type(arg_to_generate)
-                                        .as_ref()
-                                        .is_some_and(|t| gen.is_type_copy(t));
-                                    if !is_copy {
-                                        arg_str = format!("{}.clone()", arg_str);
-                                    }
-                                }
-                            }
-                        }
+                        gen.maybe_clone_borrowed_field_for_owned_param(arg_to_generate, &mut arg_str);
                     }
                 }
             }
@@ -366,13 +322,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
         .map(|(i, (_label, arg))| {
             let arg_to_generate =
                 expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
-            let prev_coerce_string_literals = gen.coerce_string_literals_to_owned;
-            gen.coerce_string_literals_to_owned = false;
-            let prev_match_arm_str = gen.in_match_arm_needing_string;
-            gen.in_match_arm_needing_string = false;
+            let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
-            gen.coerce_string_literals_to_owned = prev_coerce_string_literals;
-            gen.in_match_arm_needing_string = prev_match_arm_str;
+            gen.restore_arg_gen_scope(scope);
 
             let is_string_literal = matches!(
                 arg_to_generate,

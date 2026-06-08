@@ -38,55 +38,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // WINDJAMMER PHILOSOPHY: Auto-convert string literals in return statements
-            // when the function returns String
-            let returns_string = match &self.current_function_return_type {
-                Some(Type::String) => true,
-                Some(Type::Custom(name)) if name == "String" => true,
-                _ => false,
-            };
-
-            if returns_string {
-                // String literal needs owned String — use .into(), not .to_string() (no Rust leakage)
-                if matches!(
-                    e,
-                    Expression::Literal {
-                        value: Literal::String(_),
-                        ..
-                    }
-                ) && !crate::codegen::rust::string_utilities::already_owned_string_expr(&return_str)
-                {
-                    return_str =
-                        crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&return_str);
-                }
-                else {
-                    crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut return_str,
-                        e,
-                        &self.inferred_borrowed_params,
-                        &self.current_function_params,
-                    );
-                }
-                if let Expression::FieldAccess { object, .. } = e {
-                    if let Expression::Identifier { name: obj_name, .. } = &**object {
-                        if obj_name == "self" && !return_str.ends_with(".clone()") {
-                            let self_is_borrowed = self.current_function_params.iter().any(|p| {
-                                p.name == "self"
-                                    && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                            });
-                            if self_is_borrowed {
-                                let is_copy = self
-                                    .infer_expression_type(e)
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t));
-                                if !is_copy {
-                                    return_str = format!("{}.clone()", return_str);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            self.apply_owned_string_tail_coercion(&mut return_str, e, false);
 
             {
                 let target = match &self.current_function_return_type {

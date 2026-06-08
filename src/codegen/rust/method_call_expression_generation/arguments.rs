@@ -109,19 +109,9 @@ impl<'ast> CodeGenerator<'ast> {
                     arg // Not a & expression — keep as-is
                 };
 
-                let prev_field_access_obj = self.in_field_access_object;
-                self.in_field_access_object = false;
-                let prev_in_call_arg = self.in_call_argument_generation;
-                self.in_call_argument_generation = true;
-                let prev_coerce_string_literals = self.coerce_string_literals_to_owned;
-                self.coerce_string_literals_to_owned = false;
-                let prev_match_arm_str = self.in_match_arm_needing_string;
-                self.in_match_arm_needing_string = false;
+                let scope = self.arg_gen_scope();
                 let mut arg_str = self.generate_expression(arg_to_generate);
-                self.in_match_arm_needing_string = prev_match_arm_str;
-                self.coerce_string_literals_to_owned = prev_coerce_string_literals;
-                self.in_call_argument_generation = prev_in_call_arg;
-                self.in_field_access_object = prev_field_access_obj;
+                self.restore_arg_gen_scope(scope);
 
                 // Owned params still need `.clone()` when the arg is a non-Copy binding; suppressing
                 // auto-clone during `generate_expression` (above) skips spurious clones for
@@ -502,8 +492,8 @@ impl<'ast> CodeGenerator<'ast> {
                         .param_ownership
                         .get(sig_param_idx)
                         .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
-                    if param_is_borrowed && arg_str.ends_with(".clone()") {
-                        arg_str = arg_str[..arg_str.len() - 8].to_string();
+                    if param_is_borrowed {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     }
                 }
 
@@ -547,29 +537,12 @@ impl<'ast> CodeGenerator<'ast> {
                         matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
                     });
                     if param_is_mut_borrowed && !param_wants_owned_value {
-                        let is_already_mut_ref =
-                            if let Expression::Identifier { name, .. } = arg {
-                                let explicit_mut_ref = self.current_function_params.iter().any(|param| {
-                                    param.name == *name
-                                        && matches!(&param.type_, Type::MutableReference(_))
-                                });
-                                let inferred_mut_ref = self.inferred_mut_borrowed_params.contains(name.as_str());
-                                explicit_mut_ref || inferred_mut_ref
-                            } else {
-                                false
-                            };
-                        if !expression_helpers::is_reference_expression(arg)
-                            && !is_already_mut_ref
-                        {
-                            if arg_str.ends_with(".clone()") {
-                                arg_str.truncate(arg_str.len() - 8);
-                            }
-                            if arg_str.starts_with("&") && !arg_str.starts_with("&mut ") {
-                                arg_str = arg_str[1..].to_string();
-                            }
-                            crate::codegen::rust::rust_coercion_rules::Coercion::BorrowMut
-                                .apply(&mut arg_str);
-                        }
+                        crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                            arg,
+                            &mut arg_str,
+                            &self.current_function_params,
+                            &self.inferred_mut_borrowed_params,
+                        );
                     }
                 }
 

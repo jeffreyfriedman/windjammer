@@ -102,71 +102,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
-                        // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
-                        // BUT: Don't convert if:
-                        // 1. The expression explicitly uses .as_str() (user wants &str)
-                        // 2. A sibling branch in an if-else uses .as_str() (type consistency)
-                        let returns_string = string_utilities::return_type_expects_owned_string(
-                            &self.current_function_return_type,
-                        );
-
-                        // Also check if we're in a match arm that needs string conversion
-                        let in_match_needing_string = self.in_match_arm_needing_string;
-
-                        // Check if the expression explicitly returns &str via .as_str()
-                        let expr_uses_as_str = expr_str.contains(".as_str()");
-
-                        // Check if we should suppress conversion (sibling branch has .as_str())
-                        let should_suppress = self.suppress_string_conversion.get();
-
-                        if (returns_string || in_match_needing_string)
-                            && !expr_uses_as_str
-                            && !should_suppress
-                        {
-                            if matches!(
-                                expr,
-                                Expression::Literal {
-                                    value: Literal::String(_),
-                                    ..
-                                }
-                            ) && !crate::codegen::rust::string_utilities::already_owned_string_expr(&expr_str)
-                            {
-                                expr_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
-                                    &expr_str,
-                                );
-                            }
-                            else {
-                                string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                                    &mut expr_str,
-                                    expr,
-                                    &self.inferred_borrowed_params,
-                                    &self.current_function_params,
-                                );
-                            }
-                            if let Expression::FieldAccess { object, .. } = expr {
-                                if let Expression::Identifier { name: obj_name, .. } = &**object {
-                                    if obj_name == "self" && !expr_str.ends_with(".clone()") {
-                                        let self_is_borrowed =
-                                            self.current_function_params.iter().any(|p| {
-                                                p.name == "self"
-                                                    && matches!(
-                                                        p.ownership,
-                                                        crate::parser::OwnershipHint::Ref
-                                                    )
-                                            });
-                                        if self_is_borrowed {
-                                            let is_copy = self
-                                                .infer_expression_type(expr)
-                                                .as_ref()
-                                                .is_some_and(|t| self.is_type_copy(t));
-                                            if !is_copy {
-                                                expr_str = format!("{}.clone()", expr_str);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        self.apply_owned_string_tail_coercion(&mut expr_str, expr, true);
 
                         // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return
                         // Applies to all return types (SaveSlot, Option<String>, etc.), not just String
@@ -297,66 +233,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            // WINDJAMMER PHILOSOPHY: Auto-convert implicit returns when function returns String
-                            // Same logic as Statement::Expression implicit returns
-                            let returns_string = string_utilities::return_type_expects_owned_string(
-                                &self.current_function_return_type,
-                            );
-
-                            let in_match_needing_string = self.in_match_arm_needing_string;
-                            let expr_uses_as_str = expr_str.contains(".as_str()");
-                            let should_suppress = self.suppress_string_conversion.get();
-
-                            if (returns_string || in_match_needing_string)
-                                && !expr_uses_as_str
-                                && !should_suppress
-                            {
-                                // String literal needs owned String — use .into(), not .to_string()
-                                if matches!(
-                                    expr,
-                                    Expression::Literal {
-                                        value: Literal::String(_),
-                                        ..
-                                    }
-                                ) && !crate::codegen::rust::string_utilities::already_owned_string_expr(&expr_str)
-                                {
-                                    expr_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
-                                        &expr_str,
-                                    );
-                                }
-                                else {
-                                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                                        &mut expr_str,
-                                        expr,
-                                        &self.inferred_borrowed_params,
-                                        &self.current_function_params,
-                                    );
-                                }
-                                if let Expression::FieldAccess { object, .. } = expr {
-                                    if let Expression::Identifier { name: obj_name, .. } = &**object
-                                    {
-                                        if obj_name == "self" && !expr_str.ends_with(".clone()") {
-                                            let self_is_borrowed =
-                                                self.current_function_params.iter().any(|p| {
-                                                    p.name == "self"
-                                                        && matches!(
-                                                            p.ownership,
-                                                            crate::parser::OwnershipHint::Ref
-                                                        )
-                                                });
-                                            if self_is_borrowed {
-                                                let is_copy = self
-                                                    .infer_expression_type(expr)
-                                                    .as_ref()
-                                                    .is_some_and(|t| self.is_type_copy(t));
-                                                if !is_copy {
-                                                    expr_str = format!("{}.clone()", expr_str);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            self.apply_owned_string_tail_coercion(&mut expr_str, expr, true);
 
                             {
                                 let target = match &self.current_function_return_type {
