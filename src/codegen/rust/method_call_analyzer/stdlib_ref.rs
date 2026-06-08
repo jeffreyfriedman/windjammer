@@ -30,8 +30,9 @@ impl MethodCallAnalyzer {
                         &p.type_, &p.name, inferred_borrowed_params,
                     )
             });
+            let is_str_ref_optimized = ctx.str_ref_optimized_params.contains(name.as_str());
 
-            is_ref_param || is_borrowed_iter_var || param_is_ref
+            is_ref_param || is_borrowed_iter_var || param_is_ref || is_str_ref_optimized
         } else {
             false
         };

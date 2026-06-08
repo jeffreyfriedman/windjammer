@@ -19,6 +19,7 @@ pub struct MethodCallContext<'a, 'ast> {
     pub current_function_params: &'a [Parameter<'ast>],
     pub borrowed_iterator_vars: &'a HashSet<String>,
     pub inferred_borrowed_params: &'a HashSet<String>,
+    pub str_ref_optimized_params: &'a HashSet<String>,
 }
 
 /// Analyzes method calls to determine what automatic conversions are needed
@@ -71,6 +72,7 @@ impl MethodCallAnalyzer {
             >,
         >,
         match_arm_bindings: &HashSet<String>,
+        str_ref_optimized_params: &HashSet<String>,
     ) -> bool {
         let is_string_literal = matches!(
             arg,
@@ -304,6 +306,7 @@ impl MethodCallAnalyzer {
             current_function_params,
             borrowed_iterator_vars,
             inferred_borrowed_params,
+            str_ref_optimized_params,
         };
         Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name, local_var_types)
     }
