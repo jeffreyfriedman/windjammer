@@ -92,6 +92,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Strip explicit & when operand is already a reference type
+        // (e.g., user writes `&key` but key: str → &str, so &key = &&str)
+        if matches!(op, crate::parser::UnaryOp::Ref) {
+            if let Expression::Identifier { name, .. } = operand {
+                if self.identifier_already_ref(name) {
+                    return self.generate_expression(operand);
+                }
+            }
+        }
+
         let op_str = operators::unary_op_to_rust(op);
 
         // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
