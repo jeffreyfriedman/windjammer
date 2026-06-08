@@ -408,3 +408,16 @@ impl<'ast> RustLeakageLinter<'ast> {
         self.collector.diagnostics()
     }
 }
+
+/// Run the Rust leakage linter on a program and emit diagnostics to stderr.
+pub fn run_lint_if_enabled(enable_lint: bool, file: &std::path::Path, program: &Program) {
+    if !enable_lint {
+        return;
+    }
+    let file_name = file.to_string_lossy().to_string();
+    let mut linter = RustLeakageLinter::new(&file_name);
+    linter.lint_program(program);
+    for diag in linter.diagnostics() {
+        eprintln!("{}", diag);
+    }
+}

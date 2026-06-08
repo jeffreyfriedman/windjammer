@@ -282,6 +282,93 @@ fn merge_single_wj_meta_file(
     }
 }
 
+/// Build pre-analysis metadata from AST items only (no registry needed).
+/// Used during library compilation to seed `CrateMetadata` before ownership analysis.
+pub fn collect_ast_skeleton_metadata(
+    program: &crate::parser::Program,
+) -> ModuleMetadata {
+    use crate::parser::ast::core::Item;
+
+    let mut meta = ModuleMetadata::new(String::new());
+    for item in &program.items {
+        match item {
+            Item::Struct { decl, .. } => {
+                let mut fields = HashMap::new();
+                for field in &decl.fields {
+                    fields.insert(
+                        field.name.clone(),
+                        ModuleMetadata::serialize_type(&field.field_type),
+                    );
+                }
+                meta.structs.insert(decl.name.clone(), fields);
+            }
+            Item::Function { decl, .. } => {
+                meta.functions.insert(
+                    decl.name.clone(),
+                    FunctionSignature {
+                        params: decl
+                            .parameters
+                            .iter()
+                            .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                            .collect(),
+                        return_type: decl
+                            .return_type
+                            .as_ref()
+                            .map(ModuleMetadata::serialize_type),
+                        is_associated: false,
+                        parent_type: None,
+                        param_ownership: vec![],
+                        has_self_receiver: false,
+                        is_extern: decl.is_extern,
+                    },
+                );
+            }
+            Item::Impl { block, .. } => {
+                for func_decl in &block.functions {
+                    let full_name = format!("{}::{}", block.type_name, func_decl.name);
+                    meta.functions.insert(
+                        full_name,
+                        FunctionSignature {
+                            params: func_decl
+                                .parameters
+                                .iter()
+                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                .collect(),
+                            return_type: func_decl
+                                .return_type
+                                .as_ref()
+                                .map(ModuleMetadata::serialize_type),
+                            is_associated: true,
+                            parent_type: Some(block.type_name.clone()),
+                            param_ownership: vec![],
+                            has_self_receiver: false,
+                            is_extern: false,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    meta
+}
+
+/// Collect pre-analysis metadata from the AST and merge it into a CrateMetadata.
+/// Derives the `module_path` from the file stem.
+pub fn merge_file_skeleton_into_crate(
+    crate_metadata: &mut CrateMetadata,
+    file: &std::path::Path,
+    program: &crate::parser::Program,
+) {
+    let mut module_meta = collect_ast_skeleton_metadata(program);
+    module_meta.module_path = file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    crate_metadata.merge_module(&module_meta);
+}
+
 /// Build a ModuleMetadata from analyzed program items and a converged signature registry.
 /// This extracts function/impl/struct/trait metadata from the AST using the registry.
 /// Used by both single-file and multipass compilation pipelines.

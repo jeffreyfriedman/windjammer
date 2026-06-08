@@ -670,4 +670,20 @@ impl<'ast> Analyzer<'ast> {
             is_extern: func.decl.is_extern,
         }
     }
+
+    /// Register all analyzed trait methods into a signature registry under
+    /// `TraitName::method_name` keys.
+    pub fn register_trait_methods_in_registry(
+        &self,
+        trait_methods: &std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction<'_>>>,
+        registry: &mut super::SignatureRegistry,
+    ) {
+        for (trait_name, methods) in trait_methods {
+            for (method_name, analyzed_func) in methods {
+                let sig = self.build_signature(analyzed_func);
+                let qualified_name = format!("{}::{}", trait_name, method_name);
+                registry.add_function(qualified_name, sig);
+            }
+        }
+    }
 }
