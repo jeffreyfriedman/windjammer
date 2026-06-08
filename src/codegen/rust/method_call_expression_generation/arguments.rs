@@ -593,6 +593,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(&self.stdlib_method_signatures),
                         Some(&self.method_signatures_by_type),
                         &self.match_arm_bindings,
+                        &self.str_ref_optimized_params,
                     );
                     if should_ref {
                         if let Expression::Cast { .. } = arg_to_generate {
@@ -653,7 +654,16 @@ impl<'ast> CodeGenerator<'ast> {
                                         &p.type_, &p.name, &self.inferred_borrowed_params)),
                             _ => false,
                         };
-                        ty_is_ref || is_borrowed_iter || param_is_ref_type
+                        // Also check str_ref_optimized_params: parameters that
+                        // the analyzer marked for &str optimization generate as
+                        // references in Rust even if inferred_borrowed_params
+                        // hasn't been synced for them.
+                        let param_is_str_ref_optimized = match arg_to_generate {
+                            Expression::Identifier { name, .. } =>
+                                self.str_ref_optimized_params.contains(name.as_str()),
+                            _ => false,
+                        };
+                        ty_is_ref || is_borrowed_iter || param_is_ref_type || param_is_str_ref_optimized
                     };
                     if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                         let needs_borrow = matches!(arg,

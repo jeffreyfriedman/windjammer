@@ -393,6 +393,22 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.starts_with('&') {
             return arg_str;
         }
+        // If the argument is already a reference (str_ref_optimized param or
+        // inferred borrowed), adding & would create &&str.
+        if let Expression::Identifier { name, .. } = arg_to_generate {
+            if self.str_ref_optimized_params.contains(name.as_str())
+                || self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && crate::codegen::rust::types::param_generates_as_rust_ref(
+                            &p.type_,
+                            &p.name,
+                            &self.inferred_borrowed_params,
+                        )
+                })
+            {
+                return arg_str;
+            }
+        }
         let wants_str = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
             method_signature,
             sig_param_idx,
