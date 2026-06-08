@@ -3,11 +3,7 @@
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
 use crate::lexer::Lexer;
-use crate::linter::rust_leakage::RustLeakageLinter;
-use crate::metadata::{
-    metadata_function_sig_from_analyzer, CrateMetadata, FunctionSignature,
-    ModuleMetadata,
-};
+use crate::metadata::{metadata_function_sig_from_analyzer, CrateMetadata};
 use crate::parser::ast::core::Item;
 use crate::parser::Parser;
 use crate::type_inference::{FloatInference, IntInference};
@@ -234,13 +230,7 @@ pub(crate) fn build_library_multipass(
     let mut parsers: Vec<Parser> = Vec::with_capacity(sources.len());
     let mut parsed_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources.len());
     for (file, source) in &sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let program = parser
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+        let (parser, program) = super::parse_wj_source(file, source)?;
         parsed_programs.push(program);
         parsers.push(parser);
     }
@@ -336,74 +326,7 @@ pub(crate) fn build_library_multipass(
     for (i, (file, _source)) in sources.iter().enumerate() {
         let program = &parsed_programs[i];
 
-        // Collect metadata for library emission
-        let mut module_meta = ModuleMetadata::new(
-            file.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string(),
-        );
-        for item in &program.items {
-            match item {
-                Item::Struct { decl, .. } => {
-                    let mut fields = HashMap::new();
-                    for field in &decl.fields {
-                        fields.insert(
-                            field.name.clone(),
-                            ModuleMetadata::serialize_type(&field.field_type),
-                        );
-                    }
-                    module_meta.structs.insert(decl.name.clone(), fields);
-                }
-                Item::Function { decl, .. } => {
-                    module_meta.functions.insert(
-                        decl.name.clone(),
-                        FunctionSignature {
-                            params: decl
-                                .parameters
-                                .iter()
-                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
-                                .collect(),
-                            return_type: decl
-                                .return_type
-                                .as_ref()
-                                .map(ModuleMetadata::serialize_type),
-                            is_associated: false,
-                            parent_type: None,
-                            param_ownership: vec![],
-                            has_self_receiver: false,
-                            is_extern: decl.is_extern,
-                        },
-                    );
-                }
-                Item::Impl { block, .. } => {
-                    for func_decl in &block.functions {
-                        let full_name = format!("{}::{}", block.type_name, func_decl.name);
-                        module_meta.functions.insert(
-                            full_name,
-                            FunctionSignature {
-                                params: func_decl
-                                    .parameters
-                                    .iter()
-                                    .map(|p| ModuleMetadata::serialize_type(&p.type_))
-                                    .collect(),
-                                return_type: func_decl
-                                    .return_type
-                                    .as_ref()
-                                    .map(ModuleMetadata::serialize_type),
-                                is_associated: true,
-                                parent_type: Some(block.type_name.clone()),
-                                param_ownership: vec![],
-                                has_self_receiver: false,
-                                is_extern: false,
-                            },
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-        crate_metadata.merge_module(&module_meta);
+        crate::metadata::merge_file_skeleton_into_crate(&mut crate_metadata, file, program);
 
         // Collect function signatures for float inference
         for item in &program.items {
@@ -643,16 +566,7 @@ pub(crate) fn build_library_multipass(
         global_float_inference.infer_program(program);
     }
 
-    // Check for float inference errors
-    if !global_float_inference.errors.is_empty() {
-        for error in &global_float_inference.errors {
-            eprintln!("Float inference error: {}", error);
-        }
-        return Err(anyhow::anyhow!(
-            "Float type inference failed: {} error(s)",
-            global_float_inference.errors.len()
-        ));
-    }
+    super::bail_on_inference_errors(&global_float_inference.errors, "Float", None)?;
 
     // Step 4A2: Global int inference pass (same architecture as float)
     let mut global_int_inference = IntInference::new();
@@ -669,15 +583,7 @@ pub(crate) fn build_library_multipass(
         global_int_inference.infer_program(program);
     }
 
-    if !global_int_inference.errors.is_empty() {
-        for error in &global_int_inference.errors {
-            eprintln!("Int inference error: {}", error);
-        }
-        return Err(anyhow::anyhow!(
-            "Int type inference failed: {} error(s)",
-            global_int_inference.errors.len()
-        ));
-    }
+    super::bail_on_inference_errors(&global_int_inference.errors, "Int", None)?;
 
     let type_defining_modules =
         super::dependency_resolution::build_type_defining_modules_for_library(&sources, &src_base)?;
@@ -770,15 +676,7 @@ pub(crate) fn build_library_multipass(
             struct_defining_module_paths.clone(),
         );
 
-        // Rust leakage linter
-        if enable_lint {
-            let file_name = file.to_string_lossy().to_string();
-            let mut rust_leakage = RustLeakageLinter::new(&file_name);
-            rust_leakage.lint_program(&program);
-            for diag in rust_leakage.diagnostics() {
-                eprintln!("{}", diag);
-            }
-        }
+        crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program);
 
         // Register traits so per-file analysis can resolve trait contracts
         analyzer
@@ -808,23 +706,14 @@ pub(crate) fn build_library_multipass(
         // In library mode, mod.wj output goes to _mod_items.rs so --module-file doesn't overwrite it.
         let output_file =
             crate::project_paths::resolve_wj_output_path_library(&src_base, file, output)?;
-        if let Some(parent) = output_file.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        super::ensure_output_parent_dir(&output_file)?;
 
         // Library-style modules: `use super::*` + automatic sibling `use super::Type` imports.
         // Use the global registry (all cross-file signatures) merged with the per-file registry
         // so that method calls to other files' types resolve correctly for auto-borrowing.
         let mut full_registry = global_registry.clone();
         full_registry.merge(&registry);
-        // Also register trait methods under TraitName::method for cross-file meta lookup.
-        for (trait_name, methods) in &merged_trait_methods {
-            for (method_name, analyzed_func) in methods {
-                let sig = analyzer.build_signature(analyzed_func);
-                let qualified_name = format!("{}::{}", trait_name, method_name);
-                full_registry.add_function(qualified_name, sig);
-            }
-        }
+        analyzer.register_trait_methods_in_registry(&merged_trait_methods, &mut full_registry);
         let mut registry_snapshot = full_registry.clone();
         for (name, sig) in &registry_snapshot.signatures {
             if !sig.param_ownership.is_empty()
@@ -847,18 +736,17 @@ pub(crate) fn build_library_multipass(
         codegen.set_float_inference(global_float_inference.clone());
         codegen.set_int_inference(global_int_inference.clone());
 
-        let inferred_bounds_map = crate::inference::collect_inferred_bounds(&program.items);
-        codegen.set_inferred_bounds(inferred_bounds_map);
-
-        let rust_code = codegen.generate_program(&program, &analyzed_functions);
-        codegen.apply_self_receiver_upgrades(&mut registry_snapshot);
-        super::cache_management::write_if_changed(&output_file, &rust_code)?;
-
-        if target == CompilationTarget::Rust {
-            crate::metadata::emit_module_meta_for_file(
-                file, &program, &registry_snapshot, analyzer.get_copy_structs(),
-            );
-        }
+        super::apply_inferred_bounds_to_codegen(&mut codegen, &program);
+        super::write_generated_rust_and_meta(
+            &mut codegen,
+            &program,
+            &analyzed_functions,
+            &mut registry_snapshot,
+            &output_file,
+            file,
+            analyzer.get_copy_structs(),
+            target,
+        )?;
     }
 
     // Emit metadata.json — refresh ONLY locally-defined function signatures from the
@@ -890,9 +778,7 @@ pub(crate) fn build_library_multipass(
                 );
             }
         }
-        let metadata_path = output.join("metadata.json");
-        let metadata_json = serde_json::to_string_pretty(&crate_metadata)?;
-        super::cache_management::write_if_changed(&metadata_path, &metadata_json)?;
+        super::write_crate_metadata_json(output, &crate_metadata)?;
     }
 
     // Generate mod.rs (and lib.rs) so individual module files are tied
@@ -906,28 +792,7 @@ pub(crate) fn build_library_multipass(
     }
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
-    if target == CompilationTarget::Rust {
-        // Clean stale nested Cargo.toml files left by older compiler versions.
-        // Only the root Cargo.toml is valid; nested ones confuse Cargo into
-        // treating subdirectories as separate packages (cyclic dependency errors).
-        super::cache_management::clean_nested_cargo_toml(output);
-
-        let source_dir = if base_path.is_file() {
-            base_path.parent().unwrap_or(base_path)
-        } else {
-            base_path
-        };
-        crate::cargo_toml::generate_single_file_cargo_toml(output, source_dir, target)?;
-    }
-
-    if target == CompilationTarget::Wasm {
-        let source_dir = if base_path.is_file() {
-            base_path.parent().unwrap_or(base_path)
-        } else {
-            base_path
-        };
-        crate::cargo_toml::generate_wasm_cargo_toml(output, source_dir)?;
-    }
+    super::generate_cargo_manifests(base_path, output, target, true)?;
 
     Ok(())
 }

@@ -30,6 +30,149 @@ pub fn is_shader_file(program: &crate::parser::Program) -> bool {
     false
 }
 
+/// Bail with a formatted error if a type inference pass produced errors.
+/// `kind` is "Float" or "Int", `context` is an optional file path for single-file mode.
+pub(crate) fn bail_on_inference_errors(
+    errors: &[String],
+    kind: &str,
+    context: Option<&std::path::Path>,
+) -> anyhow::Result<()> {
+    if errors.is_empty() {
+        return Ok(());
+    }
+    for error in errors {
+        if let Some(path) = context {
+            eprintln!("{} inference error in {}: {}", kind, path.display(), error);
+        } else {
+            eprintln!("{} inference error: {}", kind, error);
+        }
+    }
+    let ctx = context
+        .map(|p| format!(" in {}", p.display()))
+        .unwrap_or_default();
+    Err(anyhow::anyhow!(
+        "{} type inference failed{}: {} error(s)",
+        kind,
+        ctx,
+        errors.len()
+    ))
+}
+
+/// Generate Cargo.toml and/or wasm manifest for the output directory.
+/// Resolves `source_dir` from `input_path` (file → parent, dir → as-is).
+/// When `clean_nested` is true, removes stale nested Cargo.toml files first.
+pub(crate) fn generate_cargo_manifests(
+    input_path: &std::path::Path,
+    output: &std::path::Path,
+    target: crate::CompilationTarget,
+    clean_nested: bool,
+) -> anyhow::Result<()> {
+    let source_dir = if input_path.is_file() {
+        input_path.parent().unwrap_or(input_path)
+    } else {
+        input_path
+    };
+    if target == crate::CompilationTarget::Rust {
+        if clean_nested {
+            cache_management::clean_nested_cargo_toml(output);
+        }
+        crate::cargo_toml::generate_single_file_cargo_toml(output, source_dir, target)?;
+    }
+    if target == crate::CompilationTarget::Wasm {
+        crate::cargo_toml::generate_wasm_cargo_toml(output, source_dir)?;
+    }
+    Ok(())
+}
+
+/// Parse a `.wj` source string into a `(Parser, Program)` pair.
+///
+/// Returns both the parser (which owns the AST arenas) and the program.
+/// The caller must keep the `Parser` alive as long as the `Program` is used,
+/// since `Program` references borrow from the parser's arenas.
+pub(crate) fn parse_wj_source(
+    file: &std::path::Path,
+    source: &str,
+) -> anyhow::Result<(crate::parser::Parser, crate::parser::Program<'static>)> {
+    let mut lexer = crate::lexer::Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = crate::parser::Parser::new_with_source(
+        tokens,
+        file.to_string_lossy().to_string(),
+        source.to_string(),
+    );
+    let program = parser
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
+    Ok((parser, program))
+}
+
+/// Emit parser warnings to stderr in the standard format.
+pub(crate) fn emit_parser_warnings(parser: &crate::parser::Parser) {
+    for w in parser.warnings() {
+        eprintln!(
+            "warning: {} [{}:{}:{}]",
+            w.message,
+            w.file.as_deref().unwrap_or("<unknown>"),
+            w.line.unwrap_or(0),
+            w.column.unwrap_or(0),
+        );
+    }
+}
+
+/// Ensure the parent directory of an output file exists.
+pub(crate) fn ensure_output_parent_dir(output_file: &std::path::Path) -> anyhow::Result<()> {
+    if let Some(parent) = output_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+/// Generate the final Rust code, apply self-receiver upgrades, write the output,
+/// and emit `.wj.meta` metadata when targeting Rust.
+pub(crate) fn write_generated_rust_and_meta<'ast>(
+    codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
+    program: &crate::parser::Program<'ast>,
+    analyzed_functions: &[crate::analyzer::AnalyzedFunction<'ast>],
+    registry_snapshot: &mut crate::analyzer::SignatureRegistry,
+    output_file: &std::path::Path,
+    source_file: &std::path::Path,
+    copy_structs: Vec<String>,
+    target: crate::CompilationTarget,
+) -> anyhow::Result<()> {
+    let rust_code = codegen.generate_program(program, analyzed_functions);
+    codegen.apply_self_receiver_upgrades(registry_snapshot);
+    cache_management::write_if_changed(output_file, &rust_code)?;
+    if target == crate::CompilationTarget::Rust {
+        crate::metadata::emit_module_meta_for_file(
+            source_file,
+            program,
+            registry_snapshot,
+            copy_structs,
+        );
+    }
+    Ok(())
+}
+
+/// Serialize and incrementally write `CrateMetadata` as `metadata.json` in the output dir.
+pub(crate) fn write_crate_metadata_json(
+    output: &std::path::Path,
+    metadata: &crate::metadata::CrateMetadata,
+) -> anyhow::Result<()> {
+    let metadata_path = output.join("metadata.json");
+    let metadata_json = serde_json::to_string_pretty(metadata)?;
+    cache_management::write_if_changed(&metadata_path, &metadata_json)?;
+    Ok(())
+}
+
+/// Collect inferred bounds from a program and apply them to the code generator.
+pub(crate) fn apply_inferred_bounds_to_codegen<'ast>(
+    codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
+    program: &crate::parser::Program<'ast>,
+) {
+    let inferred_bounds_map = crate::inference::collect_inferred_bounds(&program.items);
+    codegen.set_inferred_bounds(inferred_bounds_map);
+}
+
 /// Remove `Item::Mod` entries whose names are in `filtered_modules` before codegen.
 pub fn strip_filtered_mod_items<'ast>(
     items: Vec<crate::parser::ast::core::Item<'ast>>,
