@@ -854,7 +854,7 @@ fn test_enumerate_adds_iter() {
     let code = test_utils::compile_single(
         r#"
 struct Item {
-    name: String,
+    name: string,
     value: i32,
 }
 

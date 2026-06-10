@@ -46,12 +46,12 @@ fn test_lib_module_no_conflict() -> Result<()> {
         &lib_wj,
         r#"
 struct LibConfig {
-    name: String,
+    name: string,
     version: i32,
 }
 
 impl LibConfig {
-    fn new(name: String) -> LibConfig {
+    fn new(name: string) -> LibConfig {
         LibConfig {
             name: name,
             version: 1,
@@ -131,7 +131,7 @@ fn test_window_module_no_conflict() -> Result<()> {
         &window_wj,
         r#"
 struct Window {
-    title: String,
+    title: string,
     width: i32,
     height: i32,
 }

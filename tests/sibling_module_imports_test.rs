@@ -26,12 +26,12 @@ fn test_sibling_module_type_usage() {
     // Module 1: Define a type
     let user_wj = r#"
 pub struct User {
-    name: String,
+    name: string,
     age: i32
 }
 
 impl User {
-    pub fn new(name: String, age: i32) -> User {
+    pub fn new(name: string, age: i32) -> User {
         User { name, age }
     }
 }

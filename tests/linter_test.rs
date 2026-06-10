@@ -206,7 +206,7 @@ impl Counter {
     }
 }
 
-fn process(data: String) -> String {
+fn process(data: string) -> string {
     data
 }
 "#;
@@ -300,7 +300,7 @@ fn test_extern_fn_no_warning() {
     let source = r#"
 extern fn rust_callback(data: &str) -> i32;
 
-pub fn call_rust(s: String) -> i32 {
+pub fn call_rust(s: string) -> i32 {
     rust_callback(s)
 }
 "#;

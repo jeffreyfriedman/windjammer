@@ -56,7 +56,7 @@ pub trait GameLoop {
 }
 
 pub struct GameLoopConfig {
-    pub window_title: String,
+    pub window_title: string,
     pub window_width: int,
     pub window_height: int,
 }

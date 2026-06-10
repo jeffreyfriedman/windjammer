@@ -10,7 +10,7 @@ mod registry_lookup;
 mod stdlib_ref;
 
 use crate::analyzer::OwnershipMode;
-use crate::parser::{Expression, Literal, Parameter, Type};
+use crate::parser::{Expression, Literal, OwnershipHint, Parameter, Type};
 use std::collections::HashSet;
 
 /// Context for method call analysis, grouping related parameter collections
@@ -24,6 +24,28 @@ pub struct MethodCallContext<'a, 'ast> {
 
 /// Analyzes method calls to determine what automatic conversions are needed
 pub struct MethodCallAnalyzer;
+
+/// Whether a named argument already generates as a Rust reference at the call site.
+fn arg_identifier_already_generates_as_rust_ref(
+    name: &str,
+    current_function_params: &[Parameter],
+    inferred_borrowed_params: &HashSet<String>,
+    str_ref_optimized_params: &HashSet<String>,
+    borrowed_iterator_vars: &HashSet<String>,
+) -> bool {
+    if borrowed_iterator_vars.contains(name) || str_ref_optimized_params.contains(name) {
+        return true;
+    }
+    current_function_params.iter().any(|param| {
+        param.name == name
+            && (matches!(param.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
+                || crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &param.type_,
+                    &param.name,
+                    inferred_borrowed_params,
+                ))
+    })
+}
 
 impl MethodCallAnalyzer {
     /// True when codegen spells the callee's formal parameter `sig_param_idx` as `&str` in Rust
@@ -174,6 +196,20 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // Must run before registry_lookup: stdlib signatures say HashMap.get wants `&K`, but
+        // `key: str` / `key: &string` already spell as `&str` in Rust — adding `&` → &&str.
+        if let Expression::Identifier { name, .. } = arg {
+            if arg_identifier_already_generates_as_rust_ref(
+                name,
+                current_function_params,
+                inferred_borrowed_params,
+                str_ref_optimized_params,
+                borrowed_iterator_vars,
+            ) {
+                return false;
+            }
+        }
+
         if let Some(receiver_type) = receiver_type_name {
             if let Some(decision) = registry_lookup::ref_from_signature_registries(
                 receiver_type,
@@ -186,6 +222,7 @@ impl MethodCallAnalyzer {
                 current_function_params,
                 borrowed_iterator_vars,
                 inferred_borrowed_params,
+                str_ref_optimized_params,
             ) {
                 return decision;
             }
@@ -236,29 +273,15 @@ impl MethodCallAnalyzer {
 
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
-                if current_function_params.iter().any(|param| {
-                    param.name == *name
-                        && crate::codegen::rust::types::param_generates_as_rust_ref(
-                            &param.type_,
-                            &param.name,
-                            inferred_borrowed_params,
-                        )
-                }) {
+                if arg_identifier_already_generates_as_rust_ref(
+                    name,
+                    current_function_params,
+                    inferred_borrowed_params,
+                    str_ref_optimized_params,
+                    borrowed_iterator_vars,
+                ) {
                     return false;
                 }
-            }
-        }
-
-        if let Expression::Identifier { name, .. } = arg {
-            if current_function_params.iter().any(|param| {
-                param.name == *name
-                    && crate::codegen::rust::types::param_generates_as_rust_ref(
-                        &param.type_,
-                        &param.name,
-                        inferred_borrowed_params,
-                    )
-            }) {
-                return false;
             }
         }
 

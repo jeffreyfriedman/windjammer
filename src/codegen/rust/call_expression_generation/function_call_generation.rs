@@ -315,7 +315,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     } else if let Some(ref sig) = signature {
         sig.is_extern
     } else if func_name.contains("::") {
-        false
+        // Module-qualified call without a resolved signature — check if the
+        // base name (after the last `::`) is a known extern function. This
+        // handles cross-module extern calls like `api::gpu_create_buffer()`
+        // where signature resolution may miss the extern flag.
+        let base_name = func_name.rsplit("::").next().unwrap_or(func_name);
+        gen.extern_function_names.contains(base_name)
     } else {
         gen.extern_function_names.contains(func_name)
     };

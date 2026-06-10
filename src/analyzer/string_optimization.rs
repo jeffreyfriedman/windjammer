@@ -285,13 +285,9 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        // SPECIAL CASE: HashMap::get/remove/contains_key need &String
-                        // because codegen adds & to the argument. Using &str would
-                        // produce &&str which violates String: Borrow<&str>.
-                        if super::stdlib_method_traits::is_map_key_method(method) && idx == 0
-                        {
-                            return true;
-                        }
+                        // HashMap/BTreeMap key methods take `&K`; codegen passes `key` directly
+                        // when the parameter already generates as `&str`/`&String` — no &String
+                        // requirement here (that caused circular &&str bugs).
 
                         // Check if this method expects &String or String (owned) for this parameter position
                         if let Some(sig) = registry.lookup_method(method) {

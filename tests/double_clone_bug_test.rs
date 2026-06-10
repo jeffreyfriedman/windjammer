@@ -27,8 +27,8 @@ mod test_utils;
 fn test_no_double_clone_on_explicit_clone() {
     let source = r#"
 pub struct Item {
-    pub id: String,
-    pub name: String,
+    pub id: string,
+    pub name: string,
 }
 
 pub struct ItemStack {
@@ -82,8 +82,8 @@ fn test_no_double_clone_field_used_multiple_times() {
     // Field used multiple times: once with .clone(), once without
     let source = r#"
 pub struct Item {
-    pub id: String,
-    pub name: String,
+    pub id: string,
+    pub name: string,
 }
 
 pub struct Container {
@@ -116,8 +116,8 @@ fn test_no_double_clone_multi_use_in_loop() {
     // some with explicit .clone(), some for .id.clone()
     let source = r#"
 pub struct Item {
-    pub id: String,
-    pub name: String,
+    pub id: string,
+    pub name: string,
 }
 
 pub struct ItemStack {
@@ -134,7 +134,7 @@ impl Inventory {
         self.items.push(item)
     }
 
-    pub fn remove_item_by_id(self, id: String, qty: i32) -> bool {
+    pub fn remove_item_by_id(self, id: string, qty: i32) -> bool {
         true
     }
 }

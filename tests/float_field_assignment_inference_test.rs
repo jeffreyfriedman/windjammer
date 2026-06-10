@@ -75,7 +75,7 @@ fn test_float_match_arm_unifies_with_some_type() {
     let src = r#"
 use std::collections::HashMap
 
-fn get_score(scores: HashMap<String, f32>, key: String) -> f32 {
+fn get_score(scores: HashMap<string, f32>, key: string) -> f32 {
     match scores.get(key) {
         Some(v) => v,
         None => 0.0

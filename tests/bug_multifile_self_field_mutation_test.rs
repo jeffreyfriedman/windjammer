@@ -140,11 +140,11 @@ impl World {
             "other.wj",
             r#"
 pub struct OtherSystem {
-    pub name: String,
+    pub name: string,
 }
 
 impl OtherSystem {
-    pub fn get_name(self) -> String {
+    pub fn get_name(self) -> string {
         return self.name.clone()
     }
 }

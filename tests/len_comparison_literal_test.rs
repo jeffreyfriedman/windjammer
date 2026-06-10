@@ -49,7 +49,7 @@ fn has_items(items: Vec<i32>) -> bool {
 #[test]
 fn test_len_comparison_with_constant() {
     let test_wj = r#"
-fn is_valid_team(team: Vec<String>) -> bool {
+fn is_valid_team(team: Vec<string>) -> bool {
     team.len() >= 2
 }
 "#;

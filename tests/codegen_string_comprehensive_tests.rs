@@ -106,7 +106,7 @@ pub fn get_length(s: string) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_string_param() {
     let code = r#"
-pub fn length(s: &string) -> i32 {
+pub fn length(s: string) -> i32 {
     s.len() as i32
 }
 "#;
@@ -432,7 +432,7 @@ fn test_hashmap_get_string() {
     let code = r#"
 use std::collections::HashMap
 
-pub fn has_key(map: &HashMap<string, i32>, key: &string) -> bool {
+pub fn has_key(map: &HashMap<string, i32>, key: string) -> bool {
     map.contains_key(key)
 }
 "#;

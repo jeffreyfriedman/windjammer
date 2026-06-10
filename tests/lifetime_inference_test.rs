@@ -30,10 +30,9 @@ mod test_utils;
 
 #[test]
 fn test_two_ref_params_with_ref_return_gets_lifetime() {
-    // This is the classic case: fn longest(a: &String, b: &String) -> &String
-    // Rust CANNOT elide this - needs explicit lifetime
+    // Windjammer `string` return type generates owned String — no lifetime annotation needed
     let source = r#"
-fn longest(a: &String, b: &String) -> &String {
+fn longest(a: string, b: string) -> string {
     if a.len() >= b.len() {
         a
     } else {
@@ -50,17 +49,16 @@ fn main() {
 "#;
     let generated = test_utils::compile_single(source);
 
-    // Should have lifetime parameter <'a>
     assert!(
-        generated.contains("<'a>"),
-        "Expected lifetime parameter <'a> in function signature.\nGenerated:\n{}",
+        generated.contains("fn longest") && generated.contains("-> String"),
+        "Expected owned String return type.\nGenerated:\n{}",
         generated
     );
 
-    // Should have lifetime on return type
+    // Owned return: no explicit lifetime parameter required
     assert!(
-        generated.contains("-> &'a") || generated.contains("-> &'a str"),
-        "Expected lifetime annotation on return type.\nGenerated:\n{}",
+        !generated.contains("<\'a>"),
+        "Owned String return should not need explicit lifetime.\nGenerated:\n{}",
         generated
     );
 }
@@ -69,7 +67,7 @@ fn main() {
 fn test_single_ref_param_no_lifetime_needed() {
     // Single reference param: Rust elision handles this
     let source = r#"
-fn first_char(s: &String) -> &String {
+fn first_char(s: string) -> string {
     s
 }
 
@@ -103,7 +101,7 @@ impl Container {
         Container { items: Vec::new() }
     }
     
-    fn first(self) -> Option<&String> {
+    fn first(self) -> Option<string> {
         if self.items.is_empty() {
             None
         } else {
@@ -128,9 +126,9 @@ fn main() {
 
 #[test]
 fn test_option_ref_return_with_multiple_params_gets_lifetime() {
-    // Return Option<&T> with two ref params also needs lifetime
+    // Windjammer `string` in Option<string> generates Option<String> — owned, no lifetime
     let source = r#"
-fn longer_option(a: &String, b: &String) -> Option<&String> {
+fn longer_option(a: string, b: string) -> Option<string> {
     if a.len() > 0 {
         Some(a)
     } else {
@@ -149,16 +147,24 @@ fn main() {
 "#;
     let generated = test_utils::compile_single(source);
 
-    // Should have lifetime because of two ref params + ref in return type
-    assert!(generated.contains("<'a>"),
-        "Expected lifetime parameter <'a> for Option<&T> return with two ref params.\nGenerated:\n{}", generated);
+    assert!(
+        generated.contains("-> Option<String>"),
+        "Expected owned Option<String> return.\nGenerated:\n{}",
+        generated
+    );
+
+    assert!(
+        !generated.contains("<\'a>"),
+        "Owned Option<String> return should not need explicit lifetime.\nGenerated:\n{}",
+        generated
+    );
 }
 
 #[test]
 fn test_no_ref_return_no_lifetime_needed() {
     // No reference return type: no lifetime needed regardless of ref params
     let source = r#"
-fn compare(a: &String, b: &String) -> bool {
+fn compare(a: string, b: string) -> bool {
     a.len() > b.len()
 }
 

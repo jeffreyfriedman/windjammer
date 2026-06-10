@@ -41,8 +41,8 @@ fn test_mod_wj_trait_and_struct_codegen() {
 pub mod audio
 
 pub trait Plugin {
-    fn name(self) -> String
-    fn version(self) -> String
+    fn name(self) -> string
+    fn version(self) -> string
 }
 
 pub struct App {
@@ -63,12 +63,12 @@ impl App {
         plugin_dir.join("audio.wj"),
         r#"
 pub struct AudioPlugin {
-    pub name_str: String,
+    pub name_str: string,
 }
 
 impl AudioPlugin {
     pub fn new() -> AudioPlugin {
-        AudioPlugin { name_str: String::from("audio") }
+        AudioPlugin { name_str: "audio" }
     }
 }
 "#,
@@ -173,8 +173,8 @@ fn test_mod_wj_code_compiles_with_rustc() {
 pub mod audio
 
 pub trait Plugin {
-    fn name(self) -> String
-    fn version(self) -> String
+    fn name(self) -> string
+    fn version(self) -> string
 }
 
 pub struct App {

@@ -83,7 +83,7 @@ fn test_all_u32_struct_generates_to_bytes() {
 fn test_struct_with_string_does_not_generate_to_bytes() {
     let source = r#"
         struct UserConfig {
-            name: String,
+            name: string,
             age: u32,
         }
     "#;

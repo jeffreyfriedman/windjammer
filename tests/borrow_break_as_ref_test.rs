@@ -42,19 +42,19 @@ fn test_borrow_break_uses_as_ref_not_as_deref() {
 use std::collections::HashMap
 
 struct Item {
-    pub name: String,
+    pub name: string,
     pub value: i32,
 }
 
 impl Item {
-    fn new(name: String, value: i32) -> Item {
+    fn new(name: string, value: i32) -> Item {
         Item { name: name, value: value }
     }
 }
 
 struct Container {
-    pub items: HashMap<String, Item>,
-    pub last_accessed: Option<String>,
+    pub items: HashMap<string, Item>,
+    pub last_accessed: Option<string>,
 }
 
 impl Container {
@@ -62,11 +62,11 @@ impl Container {
         Container { items: HashMap::new(), last_accessed: None }
     }
 
-    fn get_item(&self, key: &str) -> Option<&Item> {
+    fn get_item(&self, key: string) -> Option<&Item> {
         self.items.get(key)
     }
 
-    fn access_item(&mut self, key: String) {
+    fn access_item(&mut self, key: string) {
         match self.get_item(&key) {
             Some(item) => {
                 self.last_accessed = Some(key)

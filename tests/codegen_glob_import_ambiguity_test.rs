@@ -247,12 +247,12 @@ fn test_super_glob_still_added_without_explicit_glob_imports() -> Result<()> {
         quest_dir.join("types.wj"),
         r#"
 pub struct Quest {
-    pub name: String,
+    pub name: string,
     pub completed: bool,
 }
 
 impl Quest {
-    pub fn new(name: String) -> Quest {
+    pub fn new(name: string) -> Quest {
         Quest { name: name, completed: false }
     }
 }

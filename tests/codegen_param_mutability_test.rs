@@ -27,7 +27,7 @@ mod test_utils;
 fn test_owned_param_with_mut_method_call_gets_mut_binding() {
     let source = r#"
 struct Item {
-    name: String,
+    name: string,
 }
 
 struct Loader {
@@ -35,7 +35,7 @@ struct Loader {
 }
 
 impl Loader {
-    fn load(self, name: String) -> Item {
+    fn load(self, name: string) -> Item {
         let item = Item { name: name.clone() }
         self.items.push(item.clone())
         item
@@ -59,7 +59,7 @@ fn use_loader(loader: Loader) -> Item {
 fn test_owned_param_with_mut_method_call_in_let_binding() {
     let source = r#"
 struct Asset {
-    name: String,
+    name: string,
     data: Vec<i64>,
 }
 
@@ -69,7 +69,7 @@ struct AssetLoader {
 }
 
 impl AssetLoader {
-    fn load(self, name: String, path: String) -> Asset {
+    fn load(self, name: string, path: string) -> Asset {
         self.count = self.count + 1
         let asset = Asset { name: name.clone(), data: Vec::new() }
         self.loaded.push(asset.clone())
@@ -77,7 +77,7 @@ impl AssetLoader {
     }
 }
 
-fn load_level(loader: AssetLoader, level: String) -> Vec<Asset> {
+fn load_level(loader: AssetLoader, level: string) -> Vec<Asset> {
     let mut assets: Vec<Asset> = Vec::new()
     let tilemap = loader.load("tilemap".to_string(), "levels/tilemap.json".to_string())
     let texture = loader.load("texture".to_string(), "levels/texture.png".to_string())

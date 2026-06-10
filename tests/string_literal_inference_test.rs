@@ -254,9 +254,9 @@ fn test_match_with_blocks_string_inference() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_no_inference_for_str_return() {
+fn test_string_return_infers_to_string() {
     let code = r#"
-        fn get_static() -> &str {
+        fn get_static() -> string {
             "static"
         }
     "#;
@@ -264,14 +264,14 @@ fn test_no_inference_for_str_return() {
     let result = test_utils::compile_single_result(code);
     assert!(
         result.is_ok(),
-        "Should NOT infer .to_string() when returning &str"
+        "Should infer String conversion when return type is string"
     );
 
     let generated = result.unwrap();
     assert!(
-        !generated.contains("\"static\".to_string()")
-            && !generated.contains("String::from(\"static\")"),
-        "Should not convert to String when &str is expected"
+        generated.contains("\"static\".to_string()")
+            || generated.contains("String::from(\"static\")"),
+        "string return type should convert string literals to String.\nGot:\n{}",
+        generated
     );
-    assert!(generated.contains("\"static\""));
 }

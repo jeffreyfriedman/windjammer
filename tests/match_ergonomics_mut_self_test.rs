@@ -131,12 +131,12 @@ impl Camera2D {
 fn test_if_let_option_non_copy_keeps_mut_ref() {
     let source = r#"
 struct Search {
-    pub query: String,
+    pub query: string,
 }
 
 impl Search {
     pub fn update(self, dt: f32) {
-        self.query = String::from("test")
+        self.query = "test"
     }
 }
 

@@ -65,7 +65,7 @@ fn compile_wj(source: &str) -> String {
 fn test_string_literal_to_method_expecting_string() {
     let source = r#"
 struct Registry {
-    items: Vec<String>,
+    items: Vec<string>,
 }
 
 impl Registry {
@@ -73,7 +73,7 @@ impl Registry {
         Registry { items: Vec::new() }
     }
 
-    pub fn add_item(self, name: String) -> i32 {
+    pub fn add_item(self, name: string) -> i32 {
         self.items.push(name)
         self.items.len() as i32
     }

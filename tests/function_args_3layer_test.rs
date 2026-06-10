@@ -30,7 +30,7 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_fn_arg_auto_borrow() {
     let src = r#"
-pub fn takes_ref(s: &string) {}
+pub fn takes_ref(s: string) {}
 pub fn caller(s: string) {
     takes_ref(s)
 }
@@ -101,17 +101,19 @@ pub fn caller(x: &i32) {
 fn test_fn_arg_noncopy_needs_clone() {
     let src = r#"
 pub fn takes_owned(s: string) {}
-pub fn caller(s: &string) {
+pub fn caller(s: string) {
     takes_owned(s)
 }
 "#;
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // May use .clone() or ownership inference may change param to &str
+    // Read-only string params infer &str; call may pass &s, s, or clone
     assert!(
-        result.contains(".clone()") || result.contains("takes_owned(s)"),
-        "Borrowed to owned param. Got:\n{}",
+        result.contains(".clone()")
+            || result.contains("takes_owned(s)")
+            || result.contains("takes_owned(&s)"),
+        "String param coercion at call site. Got:\n{}",
         result
     );
 }
@@ -144,7 +146,7 @@ pub fn caller() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_fn_arg_string_literal_to_borrowed() {
     let src = r#"
-pub fn takes_ref(s: &string) {}
+pub fn takes_ref(s: string) {}
 pub fn caller() {
     takes_ref("hello")
 }
@@ -230,7 +232,7 @@ fn test_fn_arg_borrowed_field_noncopy() {
     // Explicit & to ensure correct type - 3-layer handles & when needed
     let src = r#"
 pub struct Item { pub name: string }
-pub fn takes_name(name: &string) {}
+pub fn takes_name(name: string) {}
 pub fn caller(items: &Vec<Item>) {
     takes_name(&items[0].name)
 }
@@ -247,8 +249,8 @@ pub fn caller(items: &Vec<Item>) {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_fn_arg_mixed_ownership() {
     let src = r#"
-pub fn mixed(a: &i32, b: i32, c: &string) {}
-pub fn caller(x: &i32, y: i32, z: &string) {
+pub fn mixed(a: &i32, b: i32, c: string) {}
+pub fn caller(x: &i32, y: i32, z: string) {
     mixed(x, y, z)
 }
 "#;
@@ -301,7 +303,7 @@ fn test_fn_arg_for_loop_borrowed() {
     // Explicit & for field from borrowed iterator - 3-layer handles coercion
     let src = r#"
 pub struct Item { pub id: string }
-pub fn process(id: &string) {}
+pub fn process(id: string) {}
 pub fn caller(items: &Vec<Item>) {
     for item in items {
         process(&item.id)
@@ -321,7 +323,7 @@ pub fn caller(items: &Vec<Item>) {
 fn test_fn_arg_format_macro() {
     // format! returns String; greet takes &str - 3-layer adds & when needed
     let src = r#"
-pub fn greet(msg: &string) {}
+pub fn greet(msg: string) {}
 pub fn caller(name: string) {
     let s = format!("Hello {}", name)
     greet(s)
@@ -400,7 +402,7 @@ pub fn caller(n: i32) {
 fn test_fn_arg_temp_var_no_borrow() {
     let src = r#"
 pub fn takes_string(s: string) {}
-pub fn caller(name: &string) {
+pub fn caller(name: string) {
     let msg = format!("Hello {}", name)
     takes_string(msg)
 }

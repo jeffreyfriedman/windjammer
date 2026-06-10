@@ -28,7 +28,7 @@ fn test_void_return_preserves_semicolon() {
             self.items.insert(key, value);
         }
         
-        pub fn remove(&mut self, key: &string) {
+        pub fn remove(&mut self, key: string) {
             self.items.remove(key);
         }
     }

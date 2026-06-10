@@ -244,17 +244,29 @@ pub(crate) fn build_library_multipass(
         std::fs::canonicalize(&raw).unwrap_or(raw)
     };
 
-    let (mut global_copy_structs, local_struct_names) =
+    // Dependency metadata roots (needed for both freshness check and analysis)
+    let dep_roots =
+        super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
+
+    // INCREMENTAL: Whole-crate fast path — if no .wj file has changed and dep
+    // metadata is also unchanged, skip the entire transpilation pipeline.
+    if super::cache_management::all_sources_fresh(&sources, &src_base, output, &dep_roots) {
+        let user_count = sources.len() - needed_stdlib_modules.len();
+        eprintln!(
+            "✓ All {} source files up to date, skipping transpilation",
+            user_count
+        );
+        return Ok(());
+    }
+
+    let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs) =
         super::library_copy_registry::collect_global_copy_structs_for_library(&sources);
     let global_non_copy_enums =
         super::library_copy_registry::collect_non_copy_enums_for_library(&sources);
 
-    // Load Copy structs AND function signatures from dependency crate metadata.
-    // Function signatures provide ownership info for cross-crate calls (e.g.,
-    // voxelgrid_to_svo64_flat from windjammer-game-core). The metadata includes
-    // module-qualified names for unambiguous lookup.
-    let dep_roots =
-        super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
+    // Merge explicit non-Copy structs with non-Copy enums for codegen registry
+    let mut global_non_copy_types = global_non_copy_enums.clone();
+    global_non_copy_types.extend(explicit_non_copy_structs.iter().cloned());
     let mut dep_registry = SignatureRegistry::new();
     {
         let mut dep_copy_structs = Vec::new();
@@ -650,6 +662,22 @@ pub(crate) fn build_library_multipass(
     };
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
+    //
+    // INCREMENTAL (Phase 2): Compute dirty files to skip codegen for unchanged sources.
+    // Analysis still runs for ALL files (needed for metadata.json convergence),
+    // but the expensive codegen + write is skipped for files whose source hasn't changed.
+    let (dirty_indices, skipped_count) =
+        super::cache_management::compute_dirty_files(&sources, &src_base, output);
+    let dirty_set: HashSet<usize> = dirty_indices.into_iter().collect();
+    if skipped_count > 0 {
+        eprintln!(
+            "⚡ Incremental: {}/{} files unchanged, regenerating {} dirty files",
+            skipped_count,
+            sources.len(),
+            dirty_set.len()
+        );
+    }
+
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
     for (i, (file, _source)) in sources.iter().enumerate() {
@@ -723,9 +751,15 @@ pub(crate) fn build_library_multipass(
                 local_converged_sigs.insert(name.clone(), sig.clone());
             }
         }
+        // INCREMENTAL: Skip codegen for unchanged files. Analysis above still ran
+        // so local_converged_sigs are correct for metadata.json emission.
+        if !dirty_set.contains(&i) && output_file.exists() {
+            continue;
+        }
+
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
         codegen.set_copy_types_registry((*global_copy_structs).clone());
-        codegen.set_non_copy_types_registry(global_non_copy_enums.clone());
+        codegen.set_non_copy_types_registry(global_non_copy_types.clone());
         codegen.set_global_struct_field_types((*global_struct_fields).clone());
         codegen.set_output_file(&output_file);
         codegen.set_source_file(file);

@@ -23,12 +23,12 @@ mod test_utils;
 fn test_push_str_with_string_field() {
     let source = r#"
 struct Menu {
-    class: String,
+    class: string,
 }
 
 impl Menu {
-    pub fn render() -> String {
-        let mut html = String::new()
+    pub fn render() -> string {
+        let mut html = ""
         html.push_str("<div class=\"")
         html.push_str(self.class)
         html.push_str("\">")
@@ -59,8 +59,8 @@ impl Menu {
 #[test]
 fn test_push_str_with_string_variable() {
     let source = r#"
-pub fn concat(a: String, b: String) -> String {
-    let mut result = String::new()
+pub fn concat(a: string, b: string) -> string {
+    let mut result = ""
     result.push_str(a)
     result.push_str(b)
     result
@@ -81,8 +81,8 @@ pub fn concat(a: String, b: String) -> String {
 #[test]
 fn test_push_str_with_format_result() {
     let source = r#"
-pub fn format_message(name: String, age: i32) -> String {
-    let mut result = String::new()
+pub fn format_message(name: string, age: i32) -> string {
+    let mut result = ""
     result.push_str(format!("Name: {}", name))
     result.push_str(format!(", Age: {}", age))
     result

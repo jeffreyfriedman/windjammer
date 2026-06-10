@@ -88,15 +88,15 @@ fn test_trait_impl_field_return_uses_borrowed_self() {
     // semantics from "getter" semantics when the body is identical.
     let source = r#"
 pub trait Consumable {
-    fn consume(self) -> String
+    fn consume(self) -> string
 }
 
 pub struct Data {
-    value: String,
+    value: string,
 }
 
 impl Consumable for Data {
-    fn consume(self) -> String {
+    fn consume(self) -> string {
         self.value
     }
 }

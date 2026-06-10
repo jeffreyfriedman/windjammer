@@ -104,7 +104,7 @@ impl TextInput {
 }
 
 fn main() {
-    let mut input = TextInput { text: String::from("hello"), cursor_position: 3 }
+    let mut input = TextInput { text: "hello", cursor_position: 3 }
     input.delete_char()
     println("{}", input.cursor_position)
 }

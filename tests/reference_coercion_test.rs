@@ -62,7 +62,7 @@ pub fn main() -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_borrow_owned_string_to_ref_param() {
     let code = r#"
-pub fn print_len(s: &string) -> usize {
+pub fn print_len(s: string) -> usize {
     s.len()
 }
 
@@ -436,7 +436,7 @@ pub fn has_item(items: Vec<i32>, search: i32) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_literal_no_double_ref() {
     let code = r#"
-pub fn check(s: &str) -> bool {
+pub fn check(s: string) -> bool {
     s.len() > 0
 }
 

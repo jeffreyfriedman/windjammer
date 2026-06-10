@@ -21,7 +21,7 @@ mod test_utils;
 fn test_string_literal_to_str_param_no_conversion() {
     // BUG: Compiler incorrectly adds .to_string() when function expects &str
     let code = r#"
-    pub fn process(text: &str) -> int {
+    pub fn process(text: string) -> int {
         return text.len() as int
     }
     
@@ -76,7 +76,7 @@ fn test_method_call_with_str_param() {
     pub struct Loader;
     
     impl Loader {
-        pub fn load(&self, path: &str) -> int {
+        pub fn load(&self, path: string) -> int {
             return path.len() as int
         }
     }
@@ -132,7 +132,7 @@ fn test_string_param_needs_conversion() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_str_and_string_params() {
     let code = r#"
-    pub fn process_str(text: &str) -> int {
+    pub fn process_str(text: string) -> int {
         return text.len() as int
     }
     

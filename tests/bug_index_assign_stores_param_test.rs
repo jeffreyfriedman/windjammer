@@ -24,7 +24,7 @@ mod test_utils;
 fn test_index_assign_with_some_constructor() {
     let source = r#"
 pub struct Item {
-    pub name: String,
+    pub name: string,
     pub stackable: bool,
     pub weight: f32,
 }

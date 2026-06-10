@@ -117,9 +117,9 @@ pub fn make_pair(x: &i32, y: &i32) -> Point {
 #[test]
 fn test_tuple_struct_borrowed_string_args() {
     let src = r#"
-pub struct Label(String)
+pub struct Label(string)
 
-pub fn wrap(s: &String) -> Label {
+pub fn wrap(s: string) -> Label {
     Label(s)
 }
 "#;
@@ -130,7 +130,7 @@ pub fn wrap(s: &String) -> Label {
 #[test]
 fn test_tuple_struct_with_string_literal() {
     let src = r#"
-pub struct Tag(String)
+pub struct Tag(string)
 
 pub fn default_tag() -> Tag {
     Tag("default")

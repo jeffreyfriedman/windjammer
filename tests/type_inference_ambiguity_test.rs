@@ -385,16 +385,16 @@ fn test_some_turbofish_from_return_type() {
     // dialogue/manager pattern: return Some(node.text()) when fn -> Option<String>
     let source = r#"
 struct Node {
-    text: String,
+    text: string,
 }
 
 impl Node {
-    pub fn text(self) -> String {
+    pub fn text(self) -> string {
         self.text
     }
 }
 
-pub fn get_text(node: Option<Node>) -> Option<String> {
+pub fn get_text(node: Option<Node>) -> Option<string> {
     match node {
         Some(n) => Some(n.text()),
         None => None,

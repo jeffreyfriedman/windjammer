@@ -57,7 +57,7 @@ pub fn test() -> i32 {
 fn test_auto_ref_option_arg() {
     // Method expects &Option<String> but we pass Option<String>
     let code = r#"
-pub fn display_optional(value: &Option<string>) -> string {
+pub fn display_optional(value: Option<string>) -> string {
     match value {
         Some(s) => s.clone(),
         None => "empty".to_string(),

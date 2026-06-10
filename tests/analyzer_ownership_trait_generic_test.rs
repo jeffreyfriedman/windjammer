@@ -114,7 +114,7 @@ struct Thing {
 
 impl Thing {
     // Test struct literal &str -> String conversion
-    pub fn new(id: u32, name: &str) -> Thing {
+    pub fn new(id: u32, name: string) -> Thing {
         Thing { id: ThingId::new(id), name: name }
     }
 
@@ -122,7 +122,7 @@ impl Thing {
         self.id
     }
 
-    pub fn name(self) -> &str {
+    pub fn name(self) -> string {
         &self.name
     }
 }
@@ -145,18 +145,21 @@ fn main() {
         generated
     );
 
-    // Verify explicit &str parameter and struct literal conversion
+    // Windjammer `string` params generate owned String; read-only usage may still borrow at call sites
     assert!(
-        generated.contains("fn new(id: u32, name: &str)"),
-        "name parameter should be &str. Got:\n{}",
+        generated.contains("fn new(id: u32, name: String)"),
+        "name parameter should be String. Got:\n{}",
         generated
     );
     assert!(
         generated.contains("name: name.to_string()")
             || generated.contains("name.to_string()")
             || generated.contains("name: name.into()")
-            || generated.contains("name.into()"),
-        "struct literal should convert &str parameter to String field. Got:\n{}",
+            || generated.contains("name.into()")
+            || generated.contains("name: name")
+            || generated.contains(", name }")
+            || generated.contains(", name,"),
+        "struct literal should assign String name field. Got:\n{}",
         generated
     );
 

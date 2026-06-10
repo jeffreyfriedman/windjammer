@@ -497,8 +497,8 @@ pub fn main() {}
 #[cfg_attr(tarpaulin, ignore)]
 fn test_for_loop_string_compound_assign_needs_borrow() {
     let src = r#"
-pub fn concat(parts: Vec<String>) -> String {
-    let mut result = String::new()
+pub fn concat(parts: Vec<string>) -> string {
+    let mut result = ""
     for part in parts {
         result += part
     }

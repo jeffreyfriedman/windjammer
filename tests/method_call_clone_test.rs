@@ -27,16 +27,16 @@ mod test_utils;
 fn test_method_call_on_borrowed_ref_in_for_loop() {
     let source = r#"
 struct Item {
-    pub name: String,
+    pub name: string,
     pub value: i32,
 }
 
 impl Item {
-    fn new(name: String, value: i32) -> Item {
+    fn new(name: string, value: i32) -> Item {
         Item { name: name, value: value }
     }
     
-    fn get_name(self) -> &String {
+    fn get_name(self) -> string {
         &self.name
     }
 }
@@ -73,12 +73,12 @@ fn main() {
 fn test_method_call_in_match_on_borrowed_ref() {
     let source = r#"
 struct Entity {
-    pub name: String,
+    pub name: string,
     pub health: f32,
 }
 
 impl Entity {
-    fn new(name: String, health: f32) -> Entity {
+    fn new(name: string, health: f32) -> Entity {
         Entity { name: name, health: health }
     }
     

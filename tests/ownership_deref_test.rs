@@ -70,7 +70,7 @@ pub fn main() {}
 #[test]
 fn test_clone_result_is_owned() {
     let src = r#"
-pub struct Data { value: String }
+pub struct Data { value: string }
 pub fn make(d: &Data) -> Data {
     Data { value: d.value.clone() }
 }
@@ -271,7 +271,7 @@ pub fn main() {}
 #[test]
 fn test_push_borrowed_needs_clone() {
     let src = r#"
-pub fn build(items: &Vec<String>) -> Vec<String> {
+pub fn build(items: &Vec<string>) -> Vec<string> {
     let mut out = Vec::new()
     for item in items {
         out.push(item)
@@ -303,8 +303,8 @@ pub fn main() {}
 #[test]
 fn test_field_access_non_copy_on_borrowed() {
     let src = r#"
-pub struct Data { name: String }
-pub fn get_name(d: &Data) -> String {
+pub struct Data { name: string }
+pub fn get_name(d: &Data) -> string {
     d.name
 }
 pub fn main() {}
@@ -404,7 +404,7 @@ pub fn main() {}
 #[test]
 fn test_some_borrowed_value() {
     let src = r#"
-pub fn wrap(s: &String) -> Option<String> {
+pub fn wrap(s: string) -> Option<string> {
     Some(s)
 }
 pub fn main() {}
@@ -412,8 +412,9 @@ pub fn main() {}
     let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
     assert!(
-        result.contains(".clone()") || result.contains(".to_string()"),
-        "Borrowed to owned"
+        result.contains("Some(s)") || result.contains(".clone()") || result.contains(".to_string()"),
+        "Owned string param wraps in Some(). Got:\n{}",
+        result
     );
 }
 

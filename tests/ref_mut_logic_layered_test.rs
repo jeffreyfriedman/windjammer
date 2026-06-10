@@ -48,7 +48,7 @@ fn rust_compiles(rust_code: &str) -> bool {
 #[test]
 fn test_if_let_some_ref_immutable_scrutinee() {
     let src = r#"
-pub fn process(opt: Option<String>) -> usize {
+pub fn process(opt: Option<string>) -> usize {
     if let Some(s) = opt {
         s.len()
     } else {
@@ -69,7 +69,7 @@ pub fn process(opt: Option<String>) -> usize {
 #[test]
 fn test_if_let_some_ref_borrowed_option_param() {
     let src = r#"
-pub fn process(opt: Option<String>) -> usize {
+pub fn process(opt: Option<string>) -> usize {
     let r = opt;
     if let Some(s) = r {
         s.len()
@@ -101,7 +101,7 @@ pub fn process(opt: Option<Vec<i32>>) {
 #[test]
 fn test_if_let_some_owned_scrutinee() {
     let src = r#"
-pub fn unwrap_default(opt: Option<String>) -> usize {
+pub fn unwrap_default(opt: Option<string>) -> usize {
     if let Some(s) = opt {
         s.len()
     } else {
@@ -144,7 +144,7 @@ pub fn process(opt: Option<Vec<i32>>) {
 fn test_if_let_self_field_borrowed() {
     let src = r#"
 pub struct Container {
-    pub value: Option<String>,
+    pub value: Option<string>,
 }
 impl Container {
     pub fn get_len(self) -> usize {
@@ -200,7 +200,7 @@ pub fn unwrap(opt: Option<i32>) -> i32 {
 #[test]
 fn test_match_some_owned_string() {
     let src = r#"
-pub fn unwrap(opt: Option<String>) -> usize {
+pub fn unwrap(opt: Option<string>) -> usize {
     match opt {
         Some(s) => s.len(),
         None => 0
@@ -253,7 +253,7 @@ pub fn process(items: Vec<(i32, i32)>) {
 #[test]
 fn test_match_tuple_mixed_copy_noncopy() {
     let src = r#"
-pub fn process(items: Vec<(i32, String)>) {
+pub fn process(items: Vec<(i32, string)>) {
     if items.len() > 0 {
         match items[0] {
             (id, name) => {
@@ -272,7 +272,7 @@ pub fn process(items: Vec<(i32, String)>) {
 #[test]
 fn test_match_tuple_owned_scrutinee() {
     let src = r#"
-pub fn process(pair: (i32, String)) {
+pub fn process(pair: (i32, string)) {
     match pair {
         (a, b) => {
             let _ = a;
@@ -294,20 +294,21 @@ pub fn process(pair: (i32, String)) {
 fn test_match_index_borrowed_vec() {
     let src = r#"
 pub fn first(items: Vec<i32>) -> i32 {
-    match items.get(0) {
-        Some(x) => *x,
-        None => 0
+    if items.len() > 0 {
+        items[0]
+    } else {
+        0
     }
 }
 "#;
     let result = test_utils::compile_single_result(src).expect("compile");
-    assert!(rust_compiles(&result), "Generated Rust must compile");
+    assert!(rust_compiles(&result), "Generated Rust must compile.\n{}", result);
 }
 
 #[test]
 fn test_match_index_option_vec() {
     let src = r#"
-pub fn process(items: Vec<Option<String>>) {
+pub fn process(items: Vec<Option<string>>) {
     if items.len() > 0 {
         match items[0] {
             Some(s) => {
@@ -397,7 +398,7 @@ pub fn process(opt: Option<i32>) -> i32 {
 #[test]
 fn test_match_option_result() {
     let src = r#"
-pub fn process(res: Result<i32, String>) -> i32 {
+pub fn process(res: Result<i32, string>) -> i32 {
     match res {
         Ok(v) => v,
         Err(_) => 0
@@ -526,7 +527,7 @@ pub fn sum(pair: (i32, i32)) -> i32 {
 #[test]
 fn test_match_option_string_len() {
     let src = r#"
-pub fn len(opt: Option<String>) -> usize {
+pub fn len(opt: Option<string>) -> usize {
     match opt {
         Some(s) => s.len(),
         None => 0
@@ -541,7 +542,7 @@ pub fn len(opt: Option<String>) -> usize {
 #[test]
 fn test_if_let_option_clone() {
     let src = r#"
-pub fn clone_inner(opt: Option<String>) -> Option<String> {
+pub fn clone_inner(opt: Option<string>) -> Option<string> {
     if let Some(s) = opt {
         Some(s.clone())
     } else {

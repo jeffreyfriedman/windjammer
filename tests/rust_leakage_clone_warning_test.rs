@@ -36,7 +36,7 @@ fn lint_source(source: &str) -> Vec<String> {
 #[test]
 fn test_clone_in_wj_produces_warning() {
     let source = r#"
-pub struct Foo { pub name: String }
+pub struct Foo { pub name: string }
 pub fn do_stuff(items: Vec<Foo>) -> Vec<Foo> {
     let first = items[0].clone()
     let mut result: Vec<Foo> = Vec::new()
@@ -77,9 +77,9 @@ pub fn get_value(foo: Foo) -> i32 {
 #[test]
 fn test_clone_in_method_produces_warning() {
     let source = r#"
-pub struct Data { pub items: Vec<String> }
+pub struct Data { pub items: Vec<string> }
 impl Data {
-    pub fn get_first(self) -> String {
+    pub fn get_first(self) -> string {
         self.items[0].clone()
     }
 }

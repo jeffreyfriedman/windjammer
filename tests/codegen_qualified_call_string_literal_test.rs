@@ -197,11 +197,11 @@ fn test_string_literal_in_type_qualified_call_with_owned_param() {
     // Create a struct with a constructor that takes an owned String
     let source = r#"
 pub struct Label {
-    pub text: String,
+    pub text: string,
 }
 
 impl Label {
-    pub fn new(text: String) -> Label {
+    pub fn new(text: string) -> Label {
         Label { text: text }
     }
 }

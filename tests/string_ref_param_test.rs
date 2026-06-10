@@ -130,7 +130,7 @@ pub fn warn(msg: string) {
 fn test_method_borrowed_string_param() {
     let source = r#"
 pub struct Logger {
-    pub prefix: String,
+    pub prefix: string,
 }
 
 impl Logger {

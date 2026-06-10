@@ -27,7 +27,7 @@ fn test_format_string_passed_to_str_param() {
     // When format!() (producing String) is passed to a function expecting &str,
     // the generated Rust should auto-borrow with &
     let source = r#"
-fn greet(name: &str) {
+fn greet(name: string) {
     println!("Hello, {}!", name)
 }
 
@@ -53,7 +53,7 @@ fn main() {
 fn test_string_literal_to_str_param_no_extra_borrow() {
     // String literals are already &str in Rust, no extra borrowing needed
     let source = r#"
-fn greet(name: &str) {
+fn greet(name: string) {
     println!("Hello, {}!", name)
 }
 
