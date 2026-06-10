@@ -55,7 +55,7 @@ fn main() {
 fn test_enum_with_string_field_no_copy_derive() {
     let source = r#"
 enum Event {
-    Message { text: String },
+    Message { text: string },
     Score { value: i32 },
     Quit,
 }

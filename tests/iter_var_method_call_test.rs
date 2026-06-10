@@ -53,7 +53,7 @@ fn test_iter_var_comparison_with_struct_field() {
     }
     impl ThemeSwitcher {
         pub fn render(self) -> string {
-            let mut output = String::new()
+            let mut output = ""
             for t in self.themes {
                 let selected = if t == self.current_theme { "selected" } else { "" }
                 output.push_str(selected)

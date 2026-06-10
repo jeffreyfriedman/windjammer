@@ -10,6 +10,7 @@
     feature = "interpreter_tests",
     feature = "conformance_tests",
     feature = "integration_tests",
+    feature = "skip_fixtures",
 )))]
 
 #[path = "common/test_utils.rs"]
@@ -17,13 +18,24 @@ mod test_utils;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
 
-/// Nested `cargo test` crates share the user's package cache; parallel runs hammer the cache lock.
+const FIXTURE_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Shared target directory so fixture tests don't recompile windjammer-runtime
+/// from scratch every time. This is the single biggest performance win.
+fn shared_fixture_target_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("wj_fixture_verify")
+}
+
+/// Serialize fixture cargo invocations to avoid lock-file contention.
 static FIXTURE_SUITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn serialized_fixture_suite<T>(f: impl FnOnce() -> T) -> T {
@@ -110,11 +122,38 @@ path = "tests/generated_fixture.rs"
     );
     fs::write(root.join("Cargo.toml"), cargo_toml).unwrap();
 
-    let output = Command::new("cargo")
+    let shared_target = shared_fixture_target_dir();
+    let mut child = Command::new("cargo")
         .current_dir(root)
-        .args(["test", "-j", "1", "--test", "generated_fixture"])
-        .output()
+        .env("CARGO_TARGET_DIR", &shared_target)
+        .args(["test", "--test", "generated_fixture"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .unwrap_or_else(|e| panic!("failed to spawn cargo test: {e}"));
+
+    let deadline = Instant::now() + FIXTURE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!(
+                        "cargo test TIMED OUT after {}s for fixture {}",
+                        FIXTURE_TIMEOUT.as_secs(),
+                        src_path.display()
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            Err(e) => panic!("error waiting for cargo test: {e}"),
+        }
+    }
+
+    let output = child.wait_with_output()
+        .unwrap_or_else(|e| panic!("failed to collect output: {e}"));
 
     if output.status.success() {
         return;

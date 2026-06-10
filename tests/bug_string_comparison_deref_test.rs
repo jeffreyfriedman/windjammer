@@ -27,17 +27,17 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_comparison_no_extra_deref() {
     let source = r#"
-fn check_name(name: &String, target: &String) -> bool {
+fn check_name(name: string, target: string) -> bool {
     name == target
 }
 
-fn check_str(a: &str, b: &str) -> bool {
+fn check_str(a: string, b: string) -> bool {
     a == b
 }
 
 fn main() {
-    let s1 = String::from("hello")
-    let s2 = String::from("world")
+    let s1 = "hello"
+    let s2 = "world"
     let result = check_name(&s1, &s2)
     
     let result2 = check_str("foo", "bar")
@@ -91,7 +91,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_comparison_in_loop() {
     let source = r#"
-fn find_match(items: &Vec<String>, target: &String) -> bool {
+fn find_match(items: Vec<string>, target: string) -> bool {
     for item in items.iter() {
         if item == target {
             return true
@@ -164,7 +164,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_str_comparison() {
     let source = r#"
-fn has_tag(tags: &Vec<String>, tag: &str) -> bool {
+fn has_tag(tags: Vec<string>, tag: string) -> bool {
     for t in tags.iter() {
         if t == tag {
             return true
@@ -215,10 +215,10 @@ fn main() {
 fn test_owned_vs_borrowed_comparison() {
     let source = r#"
 struct Member {
-    id: String,
+    id: string,
 }
 
-fn find_member(members: &Vec<Member>, target_id: &String) -> bool {
+fn find_member(members: &Vec<Member>, target_id: string) -> bool {
     for m in members.iter() {
         if m.id == target_id {
             return true

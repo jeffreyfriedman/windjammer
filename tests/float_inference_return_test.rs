@@ -183,7 +183,7 @@ pub fn opt() -> Option<f32> {
 #[test]
 fn test_result_f32_return() {
     let source = r#"
-pub fn res() -> Result<f32, String> {
+pub fn res() -> Result<f32, string> {
     Ok(1.0)
 }
 "#;

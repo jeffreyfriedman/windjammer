@@ -123,7 +123,7 @@ pub fn draw_text(text: string, x: f32) {
     fs::write(
         src.join("hud.wj"),
         r#"
-pub fn draw_text(text: String, x: f32) {
+pub fn draw_text(text: string, x: f32) {
     println!("{} at {}", text, x)
 }
 "#,

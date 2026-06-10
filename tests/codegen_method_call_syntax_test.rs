@@ -31,14 +31,14 @@ fn test_method_calls_use_dot_not_colon_colon() {
     fs::write(
         &test_file,
         r#"fn test_json_variable() {
-    let mut json = String::from("{")
+    let mut json = "{"
     json.push_str("test")
     json.push_str("}")
     json
 }
 
 fn test_other_variable() {
-    let mut result = String::from("hello")
+    let mut result = "hello"
     result.push_str(" world")
     result
 }
@@ -133,7 +133,7 @@ fn test_method_calls_on_self_fields() {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            json: String::from(""),
+            json: "",
         }
     }
 

@@ -33,7 +33,7 @@ fn test_hashmap_contains_key_auto_borrow() {
     let test_content = r#"
 use std::collections::HashMap;
 
-fn check_user(users: &HashMap<i64, String>, user_id: i64) -> bool {
+fn check_user(users: &HashMap<i64, string>, user_id: i64) -> bool {
     users.contains_key(user_id)
 }
 
@@ -110,7 +110,7 @@ fn test_hashmap_get_auto_borrow() {
     let test_content = r#"
 use std::collections::HashMap;
 
-fn get_user_name(users: &HashMap<i64, String>, user_id: i64) -> String {
+fn get_user_name(users: &HashMap<i64, string>, user_id: i64) -> string {
     if let Some(name) = users.get(user_id) {
         name.clone()
     } else {

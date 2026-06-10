@@ -61,7 +61,7 @@ pub struct Editor {
 impl Editor {
     pub fn render(self) -> string {
         let opts = vec!["a".to_string(), "b".to_string()]
-        let mut result = String::new()
+        let mut result = ""
         for o in opts {
             let selected = if o == self.value { "selected" } else { "" }
             result = result + selected
@@ -93,7 +93,7 @@ pub struct Serializer {
 
 impl Serializer {
     pub fn serialize(self) -> string {
-        let mut json = String::new()
+        let mut json = ""
         json.push_str(format!("name: {}", self.name))
         json
     }
@@ -135,7 +135,7 @@ pub struct Foo {
 
 impl Foo {
     pub fn render(self) -> string {
-        let mut result = String::new()
+        let mut result = ""
         match self.kind {
             Kind::Items { data: items } => {
                 for item in items {

@@ -42,7 +42,7 @@ fn test_vec_triangle_index_let_binding() {
     // Pattern: let t0 = tris[start as usize] when Triangle is non-Copy (has String)
     let source = r#"
 pub struct Vec3 { pub x: f32, pub y: f32, pub z: f32 }
-pub struct Triangle { pub v0: Vec3, pub v1: Vec3, pub v2: Vec3, pub id: String }
+pub struct Triangle { pub v0: Vec3, pub v1: Vec3, pub v2: Vec3, pub id: string }
 impl Triangle {
     pub fn bounds(self) -> (Vec3, Vec3) {
         (self.v0, self.v2)
@@ -72,7 +72,7 @@ pub fn compute_bounds(tris: Vec<Triangle>, start: i32, end: i32) -> (Vec3, Vec3)
 fn test_vec_index_assignment_rhs() {
     // Pattern: self.keyframes[i] = self.keyframes[j] (swap) - Keyframe non-Copy
     let source = r#"
-pub struct Keyframe { pub time: f32, pub name: String }
+pub struct Keyframe { pub time: f32, pub name: string }
 pub struct Clip { pub keyframes: Vec<Keyframe> }
 impl Clip {
     pub fn sort_keyframes(self) {
@@ -142,13 +142,13 @@ fn test_shared_ref_from_option_get() {
     // NOTE: This may pass via signature lookup (method_takes_owned_self) or fallback heuristic
     let source = r#"
 pub enum QuestState { Active, Completed }
-pub struct Quest { pub state: QuestState, pub title: String }
+pub struct Quest { pub state: QuestState, pub title: string }
 impl Quest {
-    pub fn into_title(self) -> String { self.title }
+    pub fn into_title(self) -> string { self.title }
 }
 pub struct Manager { pub quests: HashMap<u32, Quest> }
 impl Manager {
-    pub fn get_quest_title(self, id: u32) -> Option<String> {
+    pub fn get_quest_title(self, id: u32) -> Option<string> {
         if let Some(q) = self.quests.get(&id) {
             Some(q.into_title())
         } else {

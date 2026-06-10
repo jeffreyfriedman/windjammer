@@ -82,11 +82,11 @@ fn test_float_inference_multi_file_with_f32_param() {
         r#"
 pub struct Companion {
     pub health: f32,
-    pub name: String
+    pub name: string
 }
 
 impl Companion {
-    pub fn new(name: String) -> Companion {
+    pub fn new(name: string) -> Companion {
         Companion {
             health: 100.0,
             name: name

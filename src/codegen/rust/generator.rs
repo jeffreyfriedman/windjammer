@@ -885,15 +885,23 @@ impl<'ast> CodeGenerator<'ast> {
     ///  - `str_ref_optimized_params` (Phase 2 string→&str optimization)
     ///  - explicit `Reference`/`MutableReference`/`Custom("str")` AST types
     pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
-        self.str_ref_optimized_params.contains(name)
-            || self.current_function_params.iter().any(|p| {
-                p.name == name
-                    && crate::codegen::rust::types::param_generates_as_rust_ref(
-                        &p.type_,
-                        &p.name,
-                        &self.inferred_borrowed_params,
-                    )
-            })
+        if self.borrowed_iterator_vars.contains(name) {
+            return true;
+        }
+        if self.str_ref_optimized_params.contains(name) {
+            return true;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(
+                    p.ownership,
+                    crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
+                ) || crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &p.type_,
+                    &p.name,
+                    &self.inferred_borrowed_params,
+                ))
+        })
     }
 
     /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.

@@ -76,12 +76,12 @@ impl Vec2 {
         src_dir.join("game.wj"),
         r#"
 pub struct Game {
-    pub name: String,
+    pub name: string,
     pub running: bool,
 }
 
 impl Game {
-    pub fn new(name: String) -> Game {
+    pub fn new(name: string) -> Game {
         Game { name: name, running: false }
     }
 }

@@ -26,7 +26,7 @@ fn test_let_binding_with_mut_method_call() {
     let source = r#"
 pub struct Loader {
     count: i32,
-    items: Vec<String>,
+    items: Vec<string>,
 }
 
 impl Loader {
@@ -34,15 +34,15 @@ impl Loader {
         Loader { count: 0, items: Vec::new() }
     }
 
-    pub fn load(self, name: String, size: i32) -> String {
+    pub fn load(self, name: string, size: i32) -> string {
         self.count = self.count + 1
         self.items.push(name.clone())
         name
     }
 }
 
-pub fn load_stuff(loader: Loader) -> Vec<String> {
-    let mut results: Vec<String> = Vec::new()
+pub fn load_stuff(loader: Loader) -> Vec<string> {
+    let mut results: Vec<string> = Vec::new()
     let a = loader.load("first".to_string(), 100)
     let b = loader.load("second".to_string(), 200)
     results.push(a)

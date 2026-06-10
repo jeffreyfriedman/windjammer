@@ -23,7 +23,7 @@ mod test_utils;
 fn test_struct_with_vec_impl_trait_field_skips_debug_clone_derive() {
     let source = r#"
 pub trait Plugin {
-    fn name(self) -> str
+    fn name(self) -> string
 }
 
 pub struct App {

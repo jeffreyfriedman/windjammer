@@ -406,16 +406,7 @@ impl<'ast> CodeGenerator<'ast> {
         // If the argument is already a reference (str_ref_optimized param or
         // inferred borrowed), adding & would create &&str.
         if let Expression::Identifier { name, .. } = arg_to_generate {
-            if self.str_ref_optimized_params.contains(name.as_str())
-                || self.current_function_params.iter().any(|p| {
-                    p.name == *name
-                        && crate::codegen::rust::types::param_generates_as_rust_ref(
-                            &p.type_,
-                            &p.name,
-                            &self.inferred_borrowed_params,
-                        )
-                })
-            {
+            if self.identifier_already_ref(name) {
                 return arg_str;
             }
         }

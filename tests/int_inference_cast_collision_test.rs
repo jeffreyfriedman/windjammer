@@ -149,7 +149,7 @@ fn test_cast_with_method_call() {
     fs::write(
         &test_file,
         r#"
-fn get_len(s: String) -> i32 {
+fn get_len(s: string) -> i32 {
     return (s.len() as i32)
 }
 "#,

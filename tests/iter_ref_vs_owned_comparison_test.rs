@@ -44,7 +44,7 @@ impl Widget {
     pub fn render(self) -> string {
         match self.widget_type {
             WidgetType::Dropdown { options: opts } => {
-                let mut result = String::new()
+                let mut result = ""
                 for o in opts {
                     if o == self.value {
                         result.push_str("selected")
@@ -131,7 +131,7 @@ impl Widget {
     pub fn find_selected(self) -> string {
         match self.widget_type {
             WidgetType::Dropdown { options: opts } => {
-                let mut result = String::new()
+                let mut result = ""
                 for o in opts {
                     if o == self.value {
                         result = "found"

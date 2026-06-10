@@ -40,20 +40,20 @@ fn test_tryop_method_call_keeps_param_owned() {
     // loader.load(...)? — .load() is potentially mutating, so loader should stay Owned
     let source = r#"
 struct AssetLoader {
-    pub base_path: String,
+    pub base_path: string,
 }
 
 impl AssetLoader {
-    fn new(path: String) -> AssetLoader {
+    fn new(path: string) -> AssetLoader {
         AssetLoader { base_path: path }
     }
 
-    fn load(&mut self, name: String) -> Result<String, String> {
+    fn load(&mut self, name: string) -> Result<string, string> {
         Ok(name)
     }
 }
 
-fn load_game(loader: AssetLoader) -> Result<String, String> {
+fn load_game(loader: AssetLoader) -> Result<string, string> {
     let result = loader.load("tilemap".to_string())?
     Ok(result)
 }
@@ -93,11 +93,11 @@ struct Payload {
     pub items: Vec<i32>,
 }
 
-fn process(data: Payload) -> Result<i32, String> {
+fn process(data: Payload) -> Result<i32, string> {
     Ok(data.items.len() as i32)
 }
 
-fn run(data: Payload) -> Result<i32, String> {
+fn run(data: Payload) -> Result<i32, string> {
     let result = process(data)?
     Ok(result)
 }

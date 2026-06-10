@@ -98,7 +98,7 @@ pub fn wrap(v: i32) -> Wrapper {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_function_arg_auto_borrow() {
     let src = r#"
-pub fn takes_ref(s: &string) {}
+pub fn takes_ref(s: string) {}
 pub fn caller(s: string) {
     takes_ref(s)
 }
@@ -142,7 +142,7 @@ pub fn caller(r: &i32) -> i32 {
 fn test_function_arg_owned_needs_clone() {
     let src = r#"
 pub fn takes_string(s: string) -> usize { s.len() }
-pub fn caller(r: &string) -> usize {
+pub fn caller(r: string) -> usize {
     takes_string(r)
 }
 "#;
@@ -419,7 +419,7 @@ pub fn double(opt: &Option<i32>) -> Option<i32> {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_string_concat_borrowed() {
     let src = r#"
-pub fn greet(name: &string) -> string {
+pub fn greet(name: string) -> string {
     "Hello, " + name
 }
 "#;
@@ -431,7 +431,7 @@ pub fn greet(name: &string) -> string {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_clone_preserved() {
     let src = r#"
-pub fn dup(s: &string) -> string {
+pub fn dup(s: string) -> string {
     s.clone()
 }
 "#;
@@ -516,7 +516,7 @@ pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_string_len() {
     let src = r#"
-pub fn len(s: &string) -> usize {
+pub fn len(s: string) -> usize {
     s.len()
 }
 "#;
@@ -575,7 +575,7 @@ impl S {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_format_macro_arg() {
     let src = r#"
-pub fn msg(name: &string) -> string {
+pub fn msg(name: string) -> string {
     format!("Hello {}", name)
 }
 "#;

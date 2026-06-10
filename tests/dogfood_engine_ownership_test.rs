@@ -596,7 +596,7 @@ struct SaveData {
 
 impl SaveData {
     pub fn serialize(self) -> string {
-        let mut out = String::new()
+        let mut out = ""
         for (k, v) in self.bool_fields {
             let val = if v { "true" } else { "false" }
             out.push_str(val)

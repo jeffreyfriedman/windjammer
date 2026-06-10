@@ -29,7 +29,7 @@ fn test_extern_fn_call_no_ownership_inference() {
     let source = r#"
 extern fn render_text(text: String, x: f32, y: f32)
 
-pub fn draw_text(label: &str, x: f32, y: f32) {
+pub fn draw_text(label: string, x: f32, y: f32) {
     render_text(label.to_string(), x, y)
 }
 "#;
@@ -87,7 +87,7 @@ fn test_extern_fn_no_double_to_string() {
     let source = r#"
 extern fn render_text(text: String, x: f32, y: f32)
 
-pub fn draw_text(label: &str, x: f32, y: f32) {
+pub fn draw_text(label: string, x: f32, y: f32) {
     render_text(label.to_string(), x, y)
 }
 "#;

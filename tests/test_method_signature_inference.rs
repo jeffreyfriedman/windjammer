@@ -269,15 +269,15 @@ fn test_field_return_uses_borrowed_self_with_clone() {
         src.join("wrapper.wj"),
         r#"
 pub struct Wrapper {
-    pub value: String
+    pub value: string
 }
 
 impl Wrapper {
-    pub fn new(v: String) -> Wrapper {
+    pub fn new(v: string) -> Wrapper {
         Wrapper { value: v }
     }
 
-    pub fn into_inner(self) -> String {
+    pub fn into_inner(self) -> string {
         self.value
     }
 }

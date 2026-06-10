@@ -50,7 +50,7 @@ pub fn get_value(opt: Option<f32>) -> f32 {
 #[test]
 fn test_match_result_with_wildcard() {
     let source = r#"
-pub fn unwrap_or_zero(res: Result<f32, String>) -> f32 {
+pub fn unwrap_or_zero(res: Result<f32, string>) -> f32 {
     match res {
         Ok(val) => val,
         _ => 0.0,

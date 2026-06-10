@@ -28,7 +28,7 @@ fn test_vec_remove_on_self_field_infers_usize() {
         &test_file,
         r#"
 struct Entry {
-    message: String,
+    message: string,
 }
 
 struct Console {
@@ -88,7 +88,7 @@ fn test_vec_remove_on_nested_self_field_infers_usize() {
         &test_file,
         r#"
 struct Action {
-    name: String,
+    name: string,
 }
 
 struct UndoManager {

@@ -46,16 +46,16 @@ pub fn check_positive(x: i32) -> bool {
 #[test]
 fn test_multiple_early_returns() {
     let code = r#"
-pub fn classify(x: i32) -> String {
+pub fn classify(x: i32) -> string {
     if x < 0 {
-        return String::from("negative");
+        return "negative";
     }
     
     if x == 0 {
-        return String::from("zero");
+        return "zero";
     }
     
-    String::from("positive")
+    "positive"
 }
 "#;
 

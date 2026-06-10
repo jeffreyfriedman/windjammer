@@ -146,11 +146,11 @@ impl Outer {
 fn test_mixed_mut_and_readonly_subsystems() {
     let source = r#"
 pub struct Config {
-    pub name: String,
+    pub name: string,
 }
 
 impl Config {
-    pub fn get_name(self) -> String {
+    pub fn get_name(self) -> string {
         return self.name.clone()
     }
 }

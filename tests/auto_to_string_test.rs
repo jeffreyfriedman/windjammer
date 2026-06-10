@@ -113,7 +113,7 @@ fn test_str_param_no_conversion() {
     }
     
     impl Text {
-        pub fn starts_with(&self, prefix: &str) -> bool {
+        pub fn starts_with(&self, prefix: string) -> bool {
             return self.content.starts_with(prefix)
         }
     }
@@ -164,7 +164,7 @@ fn test_multiple_string_params() {
 fn test_mixed_str_and_string_params() {
     // TDD: Mixed &str and String parameters
     let code = r#"
-    pub fn process(name: string, suffix: &str) -> string {
+    pub fn process(name: string, suffix: string) -> string {
         return name + suffix
     }
     

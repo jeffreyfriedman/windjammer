@@ -100,11 +100,11 @@ fn test_if_let_with_mutable_ref() {
 use std::collections::HashMap
 
 pub struct Registry {
-    pub items: HashMap<String, i32>,
+    pub items: HashMap<string, i32>,
 }
 
 impl Registry {
-    pub fn increment(self, key: String) {
+    pub fn increment(self, key: string) {
         if let Some(val) = self.items.get_mut(&key) {
             *val = *val + 1
         }
@@ -126,7 +126,7 @@ impl Registry {
 fn test_real_match_not_converted() {
     // A real match with multiple meaningful arms should NOT be converted to if-let
     let source = r#"
-pub fn describe(opt: Option<i32>) -> String {
+pub fn describe(opt: Option<i32>) -> string {
     match opt {
         Some(v) => format!("Value: {}", v),
         None => "Nothing".to_string(),

@@ -32,7 +32,7 @@ fn test_read_only_self_method_gets_borrow() {
 struct Timer {
     elapsed: f32,
     duration: f32,
-    label: String,
+    label: string,
 }
 
 impl Timer {
@@ -75,7 +75,7 @@ struct Camera {
     shake_timer: f32,
     shake_duration: f32,
     shake_amount: f32,
-    name: String,
+    name: string,
 }
 
 impl Camera {
@@ -119,7 +119,7 @@ fn test_mutating_method_gets_mut_borrow() {
 struct Timer {
     elapsed: f32,
     duration: f32,
-    name: String,
+    name: string,
 }
 
 impl Timer {
@@ -162,7 +162,7 @@ struct Shaker {
     timer: f32,
     duration: f32,
     offset: f32,
-    label: String,
+    label: string,
 }
 
 impl Shaker {

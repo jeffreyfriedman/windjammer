@@ -23,7 +23,7 @@ struct Uniform {
 }
 
 struct PassBuilder {
-    name: String,
+    name: string,
     dispatch_x: u32,
 }
 
@@ -72,7 +72,7 @@ fn test_method_moving_non_copy_field_mid_body() {
     // This is NOT the return expression, it's a let binding mid-body.
     let source = r#"
 struct Binding {
-    name: String,
+    name: string,
 }
 
 struct PassDef {
@@ -159,7 +159,7 @@ fn test_read_only_method_stays_borrowed() {
     let source = r#"
 struct Data {
     count: i32,
-    name: String,
+    name: string,
 }
 
 impl Data {

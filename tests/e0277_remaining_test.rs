@@ -50,11 +50,11 @@ fn rustc_check(rs: &str) -> (bool, String) {
 fn test_tuple_destructure_string_compare_owned_param() {
     let src = r#"
 pub struct DialogueState {
-    pub relationships: Vec<(String, i32)>,
+    pub relationships: Vec<(string, i32)>,
 }
 
 impl DialogueState {
-    pub fn get_relationship(self, npc: String) -> i32 {
+    pub fn get_relationship(self, npc: string) -> i32 {
         for i in 0..self.relationships.len() {
             let (name, score) = self.relationships[i]
             if name == npc {

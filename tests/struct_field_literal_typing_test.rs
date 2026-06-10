@@ -102,7 +102,7 @@ fn test_vec_of_structs_u32_literals() {
     let source = r#"
 pub struct Choice {
     pub id: u32,
-    pub text: String
+    pub text: string
 }
 
 pub fn choices() -> Vec<Choice> {

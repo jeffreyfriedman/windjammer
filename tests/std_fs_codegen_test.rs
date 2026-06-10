@@ -18,7 +18,7 @@ fn test_std_fs_qualified_path_compiles() {
     // Qualified std::fs::read_to_string should pass through as valid Rust
     let output = test_utils::compile_single(
         r#"
-fn read_file(path: String) -> String {
+fn read_file(path: string) -> string {
     let content = std::fs::read_to_string(path)
     content
 }
@@ -38,7 +38,7 @@ fn test_use_std_fs_generates_import() {
         r#"
 use std::fs
 
-fn read_file(path: String) -> String {
+fn read_file(path: string) -> string {
     let content = fs::read_to_string(path)
     content
 }
@@ -56,7 +56,7 @@ fn read_file(path: String) -> String {
 fn test_std_fs_write_qualified() {
     let output = test_utils::compile_single(
         r#"
-fn write_file(path: String, data: String) {
+fn write_file(path: string, data: string) {
     std::fs::write(path, data)
 }
 "#,

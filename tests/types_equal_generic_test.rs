@@ -73,15 +73,15 @@ fn check(value: Option<i32>) -> i32 {
 fn test_vec_of_string_passthrough_ownership() {
     let output = test_utils::compile_single(
         r#"
-fn join_strings(parts: Vec<String>) -> String {
-    let mut result = String::new()
+fn join_strings(parts: Vec<string>) -> string {
+    let mut result = ""
     for part in parts {
         result.push_str(part)
     }
     result
 }
 
-fn merge(items: Vec<String>) -> String {
+fn merge(items: Vec<string>) -> string {
     join_strings(items)
 }
 "#,

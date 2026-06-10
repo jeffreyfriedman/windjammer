@@ -55,12 +55,12 @@ fn test_user_defined_readonly_method_infers_ref_self() {
     // Neither should trigger &mut self
     let source = r#"
 struct Player {
-    name: String,
+    name: string,
     health: i32,
 }
 
 impl Player {
-    fn new(name: String, health: i32) -> Player {
+    fn new(name: string, health: i32) -> Player {
         Player { name, health }
     }
 
@@ -68,7 +68,7 @@ impl Player {
         self.health
     }
 
-    fn name(self) -> String {
+    fn name(self) -> string {
         self.name
     }
 
@@ -207,7 +207,7 @@ impl Config {
 
 struct App {
     config: Config,
-    name: String,
+    name: string,
 }
 
 impl App {

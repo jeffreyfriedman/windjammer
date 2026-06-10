@@ -115,9 +115,24 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // PRE-PASS: Collect structs that explicitly opt out of Copy via @derive() without Copy.
+        // When a user writes @derive(Debug, Clone) without Copy, that's an intentional opt-out.
+        for item in &program.items {
+            if let Item::Struct { decl: s, .. } = item {
+                let has_derive_without_copy = s.decorators.iter().any(|d| {
+                    d.name == "derive" && !d.arguments.iter().any(|(_, arg)| {
+                        matches!(arg, Expression::Identifier { name, .. } if name == "Copy")
+                    })
+                });
+                if has_derive_without_copy {
+                    self.non_copy_types_registry.insert(s.name.clone());
+                }
+            }
+        }
+
         // PRE-PASS: Populate copy_types_registry for all structs/enums whose fields
         // are all Copy. Iterates until stable so transitive dependencies resolve
-        // regardless of declaration order.
+        // regardless of declaration order. Respects explicit non-Copy opt-outs.
         {
             let mut changed = true;
             while changed {
@@ -127,6 +142,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Item::Struct { decl: s, .. } => {
                             if self.copy_types_registry.contains(&s.name)
                                 || self.types_with_drop.contains(&s.name)
+                                || self.non_copy_types_registry.contains(&s.name)
                             {
                                 continue;
                             }

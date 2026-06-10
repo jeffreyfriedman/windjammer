@@ -43,7 +43,7 @@ pub fn pick(parts: Vec<string>, cond: bool) -> string {
 fn test_if_else_both_literal_returns_str_no_owned_coercion() {
     // -> str maps to Rust `&str`; both arms should stay `&'static str`, no `.to_string()`.
     let source = r#"
-pub fn two_literals(cond: bool) -> str {
+pub fn two_literals(cond: bool) -> string {
     if cond {
         "hello"
     } else {

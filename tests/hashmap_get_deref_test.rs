@@ -47,7 +47,7 @@ fn test_hashmap_get_match_no_double_deref() {
 use std::map::Map
 
 pub struct Data {
-    pub values: Map<String, i32>,
+    pub values: Map<string, i32>,
 }
 
 impl Data {

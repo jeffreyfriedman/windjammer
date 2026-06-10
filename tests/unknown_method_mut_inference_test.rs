@@ -134,7 +134,7 @@ pub fn count_items(data: Data) -> i32 {
 fn test_unknown_method_on_typed_param_defaults_borrowed() {
     let source = r#"
 pub struct Grid {
-    pub name: String,
+    pub name: string,
 }
 
 pub fn process(grid: Grid) {
@@ -156,11 +156,11 @@ pub fn process(grid: Grid) {
 fn test_field_read_only_stays_borrowed() {
     let source = r#"
 pub struct Config {
-    pub name: String,
+    pub name: string,
     pub enabled: bool,
 }
 
-pub fn describe(config: Config) -> String {
+pub fn describe(config: Config) -> string {
     config.name
 }
 "#;

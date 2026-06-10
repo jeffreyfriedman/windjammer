@@ -102,7 +102,7 @@ struct Manager {
 
 struct App {
     manager: Manager,
-    name: String
+    name: string
 }
 "#;
 

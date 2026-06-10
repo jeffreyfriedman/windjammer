@@ -38,8 +38,8 @@ fn parse_and_generate(code: &str) -> String {
 #[test]
 fn test_push_str_auto_borrows_variable() {
     let source = r#"
-    fn build_html() -> String {
-        let mut html = String::new()
+    fn build_html() -> string {
+        let mut html = ""
         let title = "Hello"
         html.push_str(title)
         html
@@ -57,12 +57,12 @@ fn test_push_str_auto_borrows_variable() {
 fn test_push_str_auto_borrows_field_access() {
     let source = r#"
     struct Page {
-        title: String,
+        title: string,
     }
 
     impl Page {
-        fn render(self) -> String {
-            let mut html = String::new()
+        fn render(self) -> string {
+            let mut html = ""
             html.push_str(self.title)
             html
         }
@@ -97,8 +97,8 @@ fn test_extend_from_slice_auto_borrows() {
 #[test]
 fn test_push_str_literal_no_double_borrow() {
     let source = r#"
-    fn build() -> String {
-        let mut s = String::new()
+    fn build() -> string {
+        let mut s = ""
         s.push_str("hello")
         s
     }

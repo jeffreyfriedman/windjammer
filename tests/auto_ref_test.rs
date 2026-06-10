@@ -226,7 +226,7 @@ fn test_custom_method_with_ref_param() {
     }
     
     impl Validator {
-        pub fn check(&self, pattern: &str) -> bool {
+        pub fn check(&self, pattern: string) -> bool {
             return pattern.len() > 0
         }
     }
@@ -254,7 +254,7 @@ fn test_custom_method_with_ref_param() {
     }
     
     impl Validator {
-        pub fn check(&self, pattern: &str) -> bool {
+        pub fn check(&self, pattern: string) -> bool {
             return pattern.len() > 0
         }
     }

@@ -17,11 +17,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use tempfile::TempDir;
 use windjammer::{build_project_ext, CompilationTarget};
+
+const CARGO_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Serializes `cargo check` invocations to reduce flakes when the suite runs with high parallelism.
 static CARGO_CHECK_LOCK: Mutex<()> = Mutex::new(());
@@ -146,18 +149,43 @@ impl MultiFileTest {
 
         let shared_target = shared_cargo_target_dir();
 
-        let status = Command::new("cargo")
+        let mut child = Command::new("cargo")
             .current_dir(&self.build_dir)
             .env("CARGO_TARGET_DIR", &shared_target)
             .args(["check", "--quiet"])
-            .status()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .unwrap_or_else(|e| panic!("failed to spawn cargo check: {}", e));
 
+        let deadline = Instant::now() + CARGO_TIMEOUT;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        panic!(
+                            "cargo check TIMED OUT after {}s in {}",
+                            CARGO_TIMEOUT.as_secs(),
+                            self.build_dir.display()
+                        );
+                    }
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                Err(e) => panic!("error waiting for cargo check: {}", e),
+            }
+        }
+
+        let output = child.wait_with_output()
+            .unwrap_or_else(|e| panic!("failed to collect cargo check output: {}", e));
+
         assert!(
-            status.success(),
-            "cargo check failed in {} (see stdout/stderr above if --quiet hid details); \
-             try running `cargo check` in that directory with RUST_BACKTRACE=1",
-            self.build_dir.display()
+            output.status.success(),
+            "cargo check failed in {}.\nstderr:\n{}",
+            self.build_dir.display(),
+            String::from_utf8_lossy(&output.stderr),
         );
     }
 }

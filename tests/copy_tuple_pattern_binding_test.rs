@@ -47,7 +47,7 @@ pub fn process(items: Vec<(i32, i32, f32)>) -> i32 {
 #[test]
 fn test_tuple_destructure_mixed_copy_noncopy() {
     let src = r#"
-pub fn process(items: Vec<(i32, String)>) -> i32 {
+pub fn process(items: Vec<(i32, string)>) -> i32 {
     let (id, name) = items[0]
     id
 }

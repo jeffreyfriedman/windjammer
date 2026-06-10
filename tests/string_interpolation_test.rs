@@ -18,7 +18,7 @@ mod test_utils;
 #[test]
 fn test_string_interpolation_compiles_to_format() {
     let source = r#"
-pub fn greet(name: String) -> String {
+pub fn greet(name: string) -> string {
     "Hello, ${name}!"
 }
 "#;
@@ -38,7 +38,7 @@ pub fn greet(name: String) -> String {
 #[test]
 fn test_format_macro_emits_deprecation_warning() {
     let source = r#"
-pub fn greet(name: String) -> String {
+pub fn greet(name: string) -> string {
     format!("Hello, {}", name)
 }
 "#;
@@ -59,7 +59,7 @@ pub fn greet(name: String) -> String {
 #[test]
 fn test_interpolation_no_warning() {
     let source = r#"
-pub fn greet(name: String) -> String {
+pub fn greet(name: string) -> string {
     "Hello, ${name}!"
 }
 "#;
@@ -75,7 +75,7 @@ pub fn greet(name: String) -> String {
 #[test]
 fn test_interpolation_with_expression() {
     let source = r#"
-pub fn describe(x: i32, y: i32) -> String {
+pub fn describe(x: i32, y: i32) -> string {
     "Point(${x}, ${y})"
 }
 "#;
@@ -95,11 +95,11 @@ pub fn describe(x: i32, y: i32) -> String {
 fn test_interpolation_with_field_access() {
     let source = r#"
 pub struct Player {
-    pub name: String,
+    pub name: string,
     pub score: i32,
 }
 
-pub fn status(p: Player) -> String {
+pub fn status(p: Player) -> string {
     "${p.name}: ${p.score} points"
 }
 "#;

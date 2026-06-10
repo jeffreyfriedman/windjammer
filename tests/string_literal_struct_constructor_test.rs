@@ -52,7 +52,7 @@ struct Sound {
 }
 
 impl Sound {
-    pub fn load(path: &str) -> Sound {
+    pub fn load(path: string) -> Sound {
         Sound { handle: 0 }
     }
 }
@@ -96,7 +96,7 @@ struct Sound {
 }
 
 impl Sound {
-    pub fn new(path: &str) -> Sound {
+    pub fn new(path: string) -> Sound {
         Sound { path: path.to_string() }
     }
 }
@@ -125,18 +125,21 @@ impl Library {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: Should NOT add .to_string() for &str parameters in vec! macro
+    // ASSERT: string params are owned String — literals should convert via .to_string()
     assert!(
-        !generated.contains("\"jump.ogg\".to_string()"),
-        "Compiler should NOT add .to_string() when function expects &str!"
+        generated.contains("\"jump.ogg\".to_string()")
+            || generated.contains("String::from(\"jump.ogg\")"),
+        "Compiler SHOULD add .to_string() for owned string parameters!"
     );
     assert!(
-        !generated.contains("\"land.ogg\".to_string()"),
-        "Compiler should NOT add .to_string() when function expects &str!"
+        generated.contains("\"land.ogg\".to_string()")
+            || generated.contains("String::from(\"land.ogg\")"),
+        "Compiler SHOULD add .to_string() for owned string parameters!"
     );
     assert!(
-        !generated.contains("\"coin.ogg\".to_string()"),
-        "Compiler should NOT add .to_string() when function expects &str!"
+        generated.contains("\"coin.ogg\".to_string()")
+            || generated.contains("String::from(\"coin.ogg\")"),
+        "Compiler SHOULD add .to_string() for owned string parameters!"
     );
 }
 

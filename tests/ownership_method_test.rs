@@ -227,12 +227,12 @@ pub fn remove_items(slots: &mut Vec<Option<ItemStack>>, quantity: u32) -> u32 {
 fn test_borrow_conflict_match_self_method_with_arm_mutation() {
     let source = r#"
 pub struct SceneManager {
-    scene_stack: Vec<String>,
-    paused_scenes: HashSet<String>,
+    scene_stack: Vec<string>,
+    paused_scenes: HashSet<string>,
 }
 
 impl SceneManager {
-    pub fn current_scene_id(self) -> Option<&str> {
+    pub fn current_scene_id(self) -> Option<string> {
         if self.scene_stack.len() > 0 {
             Some(&self.scene_stack[self.scene_stack.len() - 1])
         } else {

@@ -1,6 +1,6 @@
 //! Type-registry–based hints for whether a method argument needs `&` (stdlib + user signatures).
 
-use crate::parser::{Expression, Parameter, Type};
+use crate::parser::{Expression, OwnershipHint, Parameter, Type};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -22,6 +22,7 @@ pub(super) fn ref_from_signature_registries(
     current_function_params: &[Parameter],
     borrowed_iterator_vars: &HashSet<String>,
     inferred_borrowed_params: &HashSet<String>,
+    str_ref_optimized_params: &HashSet<String>,
 ) -> Option<bool> {
     let stdlib_sigs = stdlib_signatures?;
     let base_type = receiver_type.split('<').next().unwrap_or(receiver_type);
@@ -53,6 +54,7 @@ pub(super) fn ref_from_signature_registries(
                     current_function_params,
                     inferred_borrowed_params,
                     borrowed_iterator_vars,
+                    str_ref_optimized_params,
                 ) {
                     return Some(false);
                 }
@@ -114,14 +116,19 @@ fn arg_already_ref(
     current_function_params: &[Parameter],
     inferred_borrowed_params: &HashSet<String>,
     borrowed_iterator_vars: &HashSet<String>,
+    str_ref_optimized_params: &HashSet<String>,
 ) -> bool {
+    if str_ref_optimized_params.contains(name) {
+        return true;
+    }
     if current_function_params.iter().any(|p| {
         p.name == name
-            && crate::codegen::rust::types::param_generates_as_rust_ref(
-                &p.type_,
-                &p.name,
-                inferred_borrowed_params,
-            )
+            && (matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
+                || crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &p.type_,
+                    &p.name,
+                    inferred_borrowed_params,
+                ))
     }) {
         return true;
     }
