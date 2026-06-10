@@ -123,11 +123,11 @@ pub mod components {
         src_dir.join("app.rs"),
         r#"// Hand-written app module (top-level in src/lib.rs)
 pub struct App {
-    pub name: String,
+    pub name: string,
 }
 
 impl App {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: string) -> Self {
         Self { name }
     }
 }
@@ -262,7 +262,7 @@ fn test_sibling_hand_written_modules_are_discovered() {
     fs::create_dir_all(&components_dir).unwrap();
     fs::write(
         components_dir.join("platform.rs"),
-        r#"pub fn get_platform_name() -> String {
+        r#"pub fn get_platform_name() -> string {
     "test".to_string()
 }
 "#,

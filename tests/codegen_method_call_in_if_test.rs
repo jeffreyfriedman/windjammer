@@ -28,7 +28,7 @@ fn test_method_calls_in_if_blocks() {
     fs::write(
         &test_file,
         r#"fn test_if_method_calls() -> string {
-    let mut json = String::from("{")
+    let mut json = "{"
     
     let pretty = true
     if pretty {

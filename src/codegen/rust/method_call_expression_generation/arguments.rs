@@ -604,39 +604,35 @@ impl<'ast> CodeGenerator<'ast> {
                     && i == 0
                     && {
                         let obj_ty = self.infer_expression_type(object);
-                        obj_ty.as_ref().is_some_and(|t| matches!(t,
-                            Type::Parameterized(base, _) if base == "HashMap" || base == "BTreeMap" || base == "Map"
-                        ))
+                        obj_ty.as_ref().is_some_and(|t| match t {
+                            Type::Parameterized(base, _)
+                                if base == "HashMap" || base == "BTreeMap" || base == "Map" =>
+                            {
+                                true
+                            }
+                            Type::Reference(inner) | Type::MutableReference(inner) => matches!(
+                                &**inner,
+                                Type::Parameterized(base, _)
+                                    if base == "HashMap" || base == "BTreeMap" || base == "Map"
+                            ),
+                            _ => false,
+                        })
                     };
                 if (is_auto_borrow || is_map_method) && i == 0 {
                     let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
-                    let arg_already_ref = {
-                        let arg_ty = self.infer_expression_type(arg);
-                        let ty_is_ref = arg_ty.as_ref().is_some_and(|t| matches!(t,
-                            Type::Reference(_) | Type::MutableReference(_)
-                        ) || matches!(t, Type::Custom(n) if n == "&str"));
-                        let is_borrowed_iter = match arg_to_generate {
-                            Expression::Identifier { name, .. } =>
-                                self.borrowed_iterator_vars.contains(name),
-                            _ => false,
-                        };
-                        let param_is_ref_type = match arg_to_generate {
-                            Expression::Identifier { name, .. } =>
-                                self.current_function_params.iter().any(|p|
-                                    p.name == *name && crate::codegen::rust::types::param_generates_as_rust_ref(
-                                        &p.type_, &p.name, &self.inferred_borrowed_params)),
-                            _ => false,
-                        };
-                        // Also check str_ref_optimized_params: parameters that
-                        // the analyzer marked for &str optimization generate as
-                        // references in Rust even if inferred_borrowed_params
-                        // hasn't been synced for them.
-                        let param_is_str_ref_optimized = match arg_to_generate {
-                            Expression::Identifier { name, .. } =>
-                                self.str_ref_optimized_params.contains(name.as_str()),
-                            _ => false,
-                        };
-                        ty_is_ref || is_borrowed_iter || param_is_ref_type || param_is_str_ref_optimized
+                    let arg_already_ref = match arg_to_generate {
+                        Expression::Identifier { name, .. } => self.identifier_already_ref(name),
+                        _ => {
+                            let arg_ty = self.infer_expression_type(arg);
+                            arg_ty.as_ref().is_some_and(|t| {
+                                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    || matches!(t, Type::Custom(n) if n == "&str")
+                            }) || match arg_to_generate {
+                                Expression::Identifier { name, .. } =>
+                                    self.borrowed_iterator_vars.contains(name),
+                                _ => false,
+                            }
+                        }
                     };
                     if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
                         let needs_borrow = matches!(arg,

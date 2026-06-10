@@ -128,7 +128,7 @@ struct Builder {
 
 impl Builder {
     fn new() -> Builder {
-        Builder { value: String::new() }
+        Builder { value: "" }
     }
     
     // Builder pattern: consumes self, returns self

@@ -47,7 +47,7 @@ pub fn process() -> i32 {
 fn test_let_from_param_registered() {
     // let x = param where param is borrowed - x should be usable
     let src = r#"
-pub fn process(data: str) -> int {
+pub fn process(data: string) -> int {
     let x = data
     x.len() as int
 }

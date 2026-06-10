@@ -86,11 +86,11 @@ pub struct Scenes {
 }
 
 impl Scenes {
-    pub fn is_registered(self, name: str) -> bool {
+    pub fn is_registered(self, name: string) -> bool {
         self.names.contains(name)
     }
 
-    pub fn set_active(self, name: str) {
+    pub fn set_active(self, name: string) {
         if self.is_registered(name) {
             self.names.insert(name.to_string())
         }

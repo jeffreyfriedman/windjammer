@@ -32,18 +32,18 @@ fn test_enumerate_index_not_dereferenced_in_if_condition() {
     let code = compile_single(
         r#"
 struct BreadcrumbItem {
-    label: String,
+    label: string,
     active: bool,
 }
 
 struct Breadcrumb {
     items: Vec<BreadcrumbItem>,
-    separator: String,
+    separator: string,
 }
 
 impl Breadcrumb {
-    fn render(self) -> String {
-        let mut html = String::new()
+    fn render(self) -> string {
+        let mut html = ""
         for (i, item) in self.items.iter().enumerate() {
             if i > 0 {
                 html.push_str(self.separator)
@@ -78,7 +78,7 @@ fn test_enumerate_index_not_dereferenced_in_cast() {
     let code = compile_single(
         r#"
 struct Step {
-    label: String,
+    label: string,
     completed: bool,
 }
 
@@ -88,8 +88,8 @@ struct Stepper {
 }
 
 impl Stepper {
-    fn render(self) -> String {
-        let mut html = String::new()
+    fn render(self) -> string {
+        let mut html = ""
         for (step_index, step) in self.steps.iter().enumerate() {
             let step_index = step_index as i32
             if step_index == self.current_step {
@@ -124,12 +124,12 @@ fn test_borrowed_iteration_push_str_no_clone() {
     let code = compile_single(
         r#"
 struct Column {
-    children: Vec<String>,
+    children: Vec<string>,
 }
 
 impl Column {
-    fn render(self) -> String {
-        let mut html = String::new()
+    fn render(self) -> string {
+        let mut html = ""
         html.push_str("<div>")
         for child in self.children {
             html.push_str(child)

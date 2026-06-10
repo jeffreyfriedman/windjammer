@@ -38,7 +38,7 @@ pub use system::DialogueChoice
         r#"
 pub struct DialogueChoice {
     pub id: u32,
-    pub text: String
+    pub text: string
 }
 "#,
     )
@@ -136,7 +136,7 @@ pub use system::DialogueChoice
         r#"
 pub struct DialogueChoice {
     pub id: u32,
-    pub text: String
+    pub text: string
 }
 
 pub struct OtherDup {
@@ -151,7 +151,7 @@ pub struct OtherDup {
         src.join("dialogue").join("legacy.wj"),
         r#"
 pub struct DialogueChoice {
-    pub text: String
+    pub text: string
 }
 "#,
     )

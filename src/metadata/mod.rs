@@ -44,6 +44,11 @@ pub struct ModuleMetadata {
     #[serde(default)]
     pub copy_structs: Vec<String>,
 
+    /// Structs that explicitly opted out of Copy via @derive() without Copy.
+    /// Prevents metadata inference from falsely marking them as Copy.
+    #[serde(default)]
+    pub non_copy_structs: Vec<String>,
+
     /// Version for compatibility checking
     pub version: String,
 }
@@ -56,6 +61,7 @@ impl ModuleMetadata {
             structs: HashMap::new(),
             trait_impls: HashMap::new(),
             copy_structs: Vec::new(),
+            non_copy_structs: Vec::new(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
@@ -435,6 +441,22 @@ pub fn collect_analyzed_module_metadata(
         }
     }
     meta.copy_structs = copy_structs;
+
+    // Collect structs that explicitly opted out of Copy via @derive() without Copy
+    for item in &program.items {
+        if let Item::Struct { decl, .. } = item {
+            let has_derive_without_copy = decl.decorators.iter().any(|d| {
+                d.name == "derive"
+                    && !d.arguments.iter().any(|(_, arg)| {
+                        matches!(arg, crate::parser::Expression::Identifier { name, .. } if name == "Copy")
+                    })
+            });
+            if has_derive_without_copy {
+                meta.non_copy_structs.push(decl.name.clone());
+            }
+        }
+    }
+
     meta
 }
 

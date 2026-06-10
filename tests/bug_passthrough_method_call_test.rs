@@ -21,7 +21,7 @@ mod test_utils;
 fn test_passthrough_to_self_field_method() {
     let source = r#"
 pub struct Item {
-    pub name: String,
+    pub name: string,
     pub weight: f32,
 }
 

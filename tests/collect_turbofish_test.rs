@@ -45,7 +45,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
 fn test_collect_uses_let_binding_type() {
     let source = r#"
 pub struct TextInput {
-    pub text: String,
+    pub text: string,
 }
 
 impl TextInput {
@@ -75,7 +75,7 @@ impl TextInput {
 #[test]
 fn test_collect_with_mut_let_binding_type() {
     let source = r#"
-pub fn split_chars(text: String) -> i32 {
+pub fn split_chars(text: string) -> i32 {
     let mut chars: Vec<char> = text.chars().collect()
     chars.len() as i32
 }

@@ -71,6 +71,9 @@ codegen_tests = []
 interpreter_tests = []
 conformance_tests = []
 integration_tests = []
+# Skip slow fixture integration tests (cargo test subprocesses).
+# Use for fast iteration: cargo test --release --test all --features skip_fixtures
+skip_fixtures = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

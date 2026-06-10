@@ -32,7 +32,7 @@ pub struct Droppable {
 
 impl Droppable {
     pub fn new(tag: i32) -> Droppable {
-        Droppable { tag, label: String::new() }
+        Droppable { tag, label: "" }
     }
 }
 

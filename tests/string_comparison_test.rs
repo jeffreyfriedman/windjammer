@@ -304,7 +304,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_string_vs_str() {
     let source = r#"
-fn compare(a: String, b: &str) -> bool {
+fn compare(a: string, b: string) -> bool {
     a == b
 }
 
@@ -330,7 +330,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_str_vs_literal() {
     let source = r#"
-fn check(s: &str) -> bool {
+fn check(s: string) -> bool {
     s == "hello"
 }
 
@@ -351,10 +351,10 @@ fn main() {
 fn test_explicit_ref_struct_field() {
     let source = r#"
 struct User {
-    pub name: String,
+    pub name: string,
 }
 
-fn check(user: &User, target: &str) -> bool {
+fn check(user: &User, target: string) -> bool {
     user.name == target
 }
 
@@ -375,7 +375,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_str_in_condition() {
     let source = r#"
-fn process(cmd: &str) -> bool {
+fn process(cmd: string) -> bool {
     if cmd == "quit" {
         return true
     }

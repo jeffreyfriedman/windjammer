@@ -25,7 +25,7 @@ use tempfile::TempDir;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_format_macro_simple() {
     let source = r#"
-fn test_format() -> String {
+fn test_format() -> string {
     let x = 42
     format!("The answer is {}", x)
 }
@@ -71,7 +71,7 @@ fn test_format() -> String {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_format_macro_in_function_call() {
     let source = r#"
-fn log_message(msg: String) {
+fn log_message(msg: string) {
     // Just a test function
 }
 

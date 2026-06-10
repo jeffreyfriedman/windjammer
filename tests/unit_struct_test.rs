@@ -43,7 +43,7 @@ fn test_unit_struct_with_impl() {
     pub struct Logger;
     
     impl Logger {
-        pub fn log(&self, message: &str) -> int {
+        pub fn log(&self, message: string) -> int {
             return message.len() as int
         }
     }

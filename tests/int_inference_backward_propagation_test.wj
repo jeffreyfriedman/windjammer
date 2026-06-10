@@ -12,7 +12,7 @@ fn test_array_index_backward_propagation() {
 }
 
 fn test_loop_index_backward_propagation() {
-    let items: Vec<String> = Vec::new()
+    let items: Vec<string> = Vec::new()
     
     // Bug: i inferred as I32 in loop, but used as array index
     // Expected: i should be Usize

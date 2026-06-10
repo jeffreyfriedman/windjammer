@@ -58,7 +58,7 @@ fn add_item(items: Vec<i32>, value: i32) {
 fn test_mutated_and_returned_string_should_be_owned() {
     let output = test_utils::compile_single(
         r#"
-fn append_and_return(s: String, suffix: String) -> String {
+fn append_and_return(s: string, suffix: string) -> string {
     s.push_str(suffix)
     s
 }

@@ -22,7 +22,7 @@ fn test_if_else_ref_field_vs_literal() {
         color: string,
     }
     impl Rating {
-        pub fn get_color(&self, filled: bool) -> &str {
+        pub fn get_color(&self, filled: bool) -> string {
             if filled {
                 &self.color
             } else {
@@ -54,7 +54,7 @@ fn test_if_else_ref_vs_literal_in_let() {
     struct Config {
         name: string,
     }
-    pub fn get_display_name(config: &Config, use_default: bool) -> &str {
+    pub fn get_display_name(config: &Config, use_default: bool) -> string {
         let name = if use_default {
             &config.name
         } else {

@@ -83,7 +83,7 @@ fn get_cost(node: Node) -> f32 {
 #[test]
 fn test_result_f32_match_err_arm_literal() {
     let source = r#"
-fn parse_or_default(result: Result<f32, String>) -> f32 {
+fn parse_or_default(result: Result<f32, string>) -> f32 {
     match result {
         Ok(v) => v,
         Err(_) => 0.0,

@@ -17,7 +17,7 @@ fn test_vec_remove_with_usize() {
 }
 
 fn test_vec_remove_with_loop_index() {
-    let mut items: Vec<String> = Vec::new()
+    let mut items: Vec<string> = Vec::new()
     items.push("a")
     items.push("b")
     items.push("c")

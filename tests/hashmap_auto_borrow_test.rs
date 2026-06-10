@@ -48,11 +48,11 @@ fn test_hashmap_remove_auto_borrows_key() {
 use std::map::Map
 
 pub struct Cache {
-    pub items: Map<String, i32>,
+    pub items: Map<string, i32>,
 }
 
 impl Cache {
-    pub fn remove_item(self, key: String) {
+    pub fn remove_item(self, key: string) {
         self.items.remove(key)
     }
 }

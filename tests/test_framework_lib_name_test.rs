@@ -51,12 +51,12 @@ path = "src/lib.rs"
     // Create a simple Windjammer file
     let wj_content = r#"
 struct Player {
-    name: String,
+    name: string,
     health: i32
 }
 
 impl Player {
-    fn new(name: String) -> Player {
+    fn new(name: string) -> Player {
         Player { name, health: 100 }
     }
 }

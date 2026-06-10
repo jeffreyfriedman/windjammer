@@ -56,7 +56,7 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_string_type_honored() {
     let source = r#"
-fn greet(name: &string) {
+fn greet(name: string) {
     println!("Hello, {}", name)
 }
 

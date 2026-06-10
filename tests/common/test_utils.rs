@@ -19,11 +19,43 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
+
+/// Default timeout for subprocess calls (cargo check, cargo build, cargo test).
+const SUBPROCESS_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Run a `Command` with a timeout. Kills the child and returns an error if the
+/// deadline is exceeded. This prevents the test suite from hanging indefinitely
+/// when a cargo subprocess gets stuck on a lock file or compilation loop.
+fn run_with_timeout(mut cmd: Command, timeout: Duration) -> std::io::Result<Output> {
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(_status) => return child.wait_with_output(),
+            None => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("subprocess timed out after {}s", timeout.as_secs()),
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
+    }
+}
 
 /// Serializes cargo invocations so parallel test threads don't fight over
 /// the shared target directory's lock file.
@@ -48,12 +80,13 @@ pub fn cargo_check_generated(build_dir: &Path) {
     let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let shared_target = shared_cargo_target_dir();
 
-    let output = Command::new("cargo")
-        .current_dir(build_dir)
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(build_dir)
         .env("CARGO_TARGET_DIR", &shared_target)
-        .args(["check", "--quiet"])
-        .output()
-        .unwrap_or_else(|e| panic!("failed to spawn cargo check: {}", e));
+        .args(["check", "--quiet"]);
+
+    let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
+        .unwrap_or_else(|e| panic!("cargo check failed to run: {}", e));
 
     assert!(
         output.status.success(),
@@ -72,12 +105,13 @@ pub fn cargo_build_generated(build_dir: &Path) -> PathBuf {
     let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let shared_target = shared_cargo_target_dir();
 
-    let output = Command::new("cargo")
-        .current_dir(build_dir)
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(build_dir)
         .env("CARGO_TARGET_DIR", &shared_target)
-        .args(["build", "--quiet"])
-        .output()
-        .unwrap_or_else(|e| panic!("failed to spawn cargo build: {}", e));
+        .args(["build", "--quiet"]);
+
+    let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
+        .unwrap_or_else(|e| panic!("cargo build failed to run: {}", e));
 
     assert!(
         output.status.success(),

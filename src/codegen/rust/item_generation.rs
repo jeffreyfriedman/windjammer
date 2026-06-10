@@ -136,13 +136,17 @@ impl<'ast> CodeGenerator<'ast> {
                     Self::collect_derive_trait_identifiers(expr, &mut traits);
                 }
                 if !traits.is_empty() {
+                    let user_requested_copy = traits.iter().any(|t| t == "Copy");
+                    let mut inferred = self.infer_derivable_traits(s);
+                    if !user_requested_copy {
+                        inferred.retain(|t| t != "Copy");
+                    }
                     let merged = CodeGenerator::merge_standard_derive_traits(
                         traits,
-                        self.infer_derivable_traits(s),
+                        inferred,
                     );
                     output.push_str(&format!("#[derive({})]\n", merged.join(", ")));
 
-                    // TDD FIX: Register this struct as Copy if derived (explicit or inferred)
                     if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
                     }
@@ -286,8 +290,10 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(")]\n");
                 }
             }
-            // Respect field visibility from source
-            let pub_keyword = if field.is_pub {
+            // In Windjammer, pub struct implies pub fields — the language doesn't
+            // have Rust-style per-field privacy.  If the user explicitly marked the
+            // struct pub, every field is accessible from sibling modules.
+            let pub_keyword = if field.is_pub || s.is_pub {
                 "pub "
             } else {
                 ""

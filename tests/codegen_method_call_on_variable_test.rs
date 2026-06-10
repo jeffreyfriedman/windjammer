@@ -39,7 +39,7 @@ fn parse_and_generate(code: &str) -> String {
 fn test_method_call_on_variable_not_module_path() {
     let source = r#"
 fn test() {
-    let mut json = String::from("{")
+    let mut json = "{"
     json.push_str("hello")
     json.push_str(&format!("world"))
 }
@@ -61,7 +61,7 @@ fn test() {
 fn test_method_call_on_various_variable_names() {
     let source = r#"
 fn test() {
-    let mut data = String::new()
+    let mut data = ""
     data.push_str("test")
     
     let mut result = Vec::new()

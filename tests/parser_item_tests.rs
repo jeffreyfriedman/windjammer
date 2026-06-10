@@ -214,7 +214,7 @@ pub struct Prefab {
 
 #[test]
 fn test_struct_nested_type() {
-    let item = first_item("struct Container { items: Vec<String> }");
+    let item = first_item("struct Container { items: Vec<string> }");
     assert!(matches!(item, Item::Struct { .. }));
 }
 
@@ -240,7 +240,7 @@ fn test_enum_with_data() {
 
 #[test]
 fn test_enum_struct_variants() {
-    let item = first_item("enum Message { Text { content: String }, Image { url: String } }");
+    let item = first_item("enum Message { Text { content: string }, Image { url: string } }");
     assert!(matches!(item, Item::Enum { .. }));
 }
 
@@ -302,7 +302,7 @@ fn test_impl_with_methods() {
 fn test_impl_trait() {
     let code = r#"
     impl Display for Point {
-        fn fmt(&self) -> String {
+        fn fmt(&self) -> string {
             "point"
         }
     }
@@ -350,7 +350,7 @@ fn test_trait_with_methods() {
     let code = r#"
     trait Animal {
         fn speak(&self) { }
-        fn name(&self) -> String { "unknown" }
+        fn name(&self) -> string { "unknown" }
     }
     "#;
     let item = first_item(code);
@@ -567,7 +567,7 @@ fn test_async_trait_method() {
     // Async trait methods need default implementations
     let code = r#"
     trait AsyncReader {
-        async fn read(&self) -> String { "data" }
+        async fn read(&self) -> string { "data" }
     }
     "#;
     let item = first_item(code);

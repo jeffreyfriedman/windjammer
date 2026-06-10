@@ -121,11 +121,11 @@ fn test_hashmap_usize_key_auto_borrow() {
 use std::collections::HashMap;
 
 struct SaveManager {
-    slots: HashMap<usize, String>
+    slots: HashMap<usize, string>
 }
 
 impl SaveManager {
-    fn get_save(self, slot: usize) -> Option<String> {
+    fn get_save(self, slot: usize) -> Option<string> {
         match self.slots.get(slot) {
             Some(data) => Some(data.clone()),
             None => None
@@ -152,11 +152,11 @@ fn test_hashmap_cast_key_auto_borrow() {
 use std::collections::HashMap;
 
 struct Panel {
-    names: HashMap<i64, String>
+    names: HashMap<i64, string>
 }
 
 impl Panel {
-    fn get_name(self, entity_id: i32) -> String {
+    fn get_name(self, entity_id: i32) -> string {
         match self.names.get(entity_id as i64) {
             Some(name) => name.clone(),
             None => "Unknown".to_string()
@@ -183,7 +183,7 @@ fn test_vec_remove_no_ref() {
     compile_and_check(
         "vec_remove_no_ref",
         r#"
-fn remove_at(items: Vec<String>, idx: usize) {
+fn remove_at(items: Vec<string>, idx: usize) {
     items.remove(idx)
 }
 

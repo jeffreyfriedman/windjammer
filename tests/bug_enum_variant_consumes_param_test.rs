@@ -27,10 +27,10 @@ fn test_enum_variant_constructor_consumes_param() {
     let source = r#"
 pub enum Shape {
     Circle(f32),
-    Named(String),
+    Named(string),
 }
 
-pub fn make_named(name: String) -> Shape {
+pub fn make_named(name: string) -> Shape {
     Shape::Named(name)
 }
 "#;
@@ -50,7 +50,7 @@ pub fn make_named(name: String) -> Shape {
 fn test_enum_variant_in_nested_call() {
     let source = r#"
 pub enum ObjectiveType {
-    Kill(String, i32),
+    Kill(string, i32),
 }
 
 pub struct Objective {
@@ -64,7 +64,7 @@ impl Objective {
     }
 }
 
-pub fn create_kill(enemy_type: String, count: i32) -> Objective {
+pub fn create_kill(enemy_type: string, count: i32) -> Objective {
     let desc = format!("Kill {} {}", count, enemy_type);
     Objective::new(ObjectiveType::Kill(enemy_type, count), count)
 }
@@ -87,30 +87,30 @@ fn test_enum_variant_multi_statement_with_format_reads() {
     // format!() reads before enum variant constructor storage
     let source = r#"
 pub enum ObjectiveType {
-    Kill(String, i32),
+    Kill(string, i32),
 }
 
 pub struct Quest {
-    name: String,
-    desc: String,
-    quest_giver: String,
+    name: string,
+    desc: string,
+    quest_giver: string,
 }
 
 impl Quest {
-    pub fn new(name: String, title: String, desc: String) -> Quest {
+    pub fn new(name: string, title: string, desc: string) -> Quest {
         Quest { name, desc, quest_giver: "".to_string() }
     }
     pub fn add_objective(self, obj: Objective) {}
 }
 
 pub struct Objective {
-    name: String,
-    desc: String,
+    name: string,
+    desc: string,
     count: i32,
 }
 
 impl Objective {
-    pub fn new_with_progress(name: String, desc: String, obj_type: &ObjectiveType, count: i32) -> Objective {
+    pub fn new_with_progress(name: string, desc: string, obj_type: &ObjectiveType, count: i32) -> Objective {
         Objective { name, desc, count }
     }
 }
@@ -158,28 +158,28 @@ fn test_enum_variant_with_ref_and_format_read() {
     // Exact pattern from quest.wj: parameter used in format!() AND enum variant with &
     let source = r#"
 pub enum ObjectiveType {
-    Kill(String, i32),
-    Deliver(String, String),
+    Kill(string, i32),
+    Deliver(string, string),
 }
 
 pub struct Objective {
-    name: String,
-    desc: String,
+    name: string,
+    desc: string,
     obj_type: ObjectiveType,
     count: i32,
 }
 
 impl Objective {
-    pub fn new_with_progress(name: String, desc: String, obj_type: &ObjectiveType, count: i32) -> Objective {
+    pub fn new_with_progress(name: string, desc: string, obj_type: &ObjectiveType, count: i32) -> Objective {
         Objective { name, desc, obj_type: ObjectiveType::Kill("".to_string(), 0), count }
     }
 
-    pub fn new(name: String, desc: String, obj_type: ObjectiveType) -> Objective {
+    pub fn new(name: string, desc: string, obj_type: ObjectiveType) -> Objective {
         Objective { name, desc, obj_type, count: 0 }
     }
 }
 
-pub fn create_kill_quest(enemy_type: String, count: i32) -> Objective {
+pub fn create_kill_quest(enemy_type: string, count: i32) -> Objective {
     Objective::new_with_progress(
         format!("kill_{}", enemy_type),
         format!("Kill {} {}", count, enemy_type),
@@ -188,7 +188,7 @@ pub fn create_kill_quest(enemy_type: String, count: i32) -> Objective {
     )
 }
 
-pub fn create_delivery_quest(item_id: String, recipient: String) -> Objective {
+pub fn create_delivery_quest(item_id: string, recipient: string) -> Objective {
     Objective::new(
         format!("deliver_{}", item_id),
         format!("Deliver {} to {}", item_id, recipient),
