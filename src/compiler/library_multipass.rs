@@ -263,6 +263,12 @@ pub(crate) fn build_library_multipass(
         return Ok(());
     }
 
+    if !super::cache_management::is_compiler_stamp_fresh(output) {
+        eprintln!(
+            "⟳ Compiler changed — re-transpiling all sources"
+        );
+    }
+
     let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs) =
         super::library_copy_registry::collect_global_copy_structs_for_library(&sources);
     let global_non_copy_enums =
@@ -835,6 +841,9 @@ pub(crate) fn build_library_multipass(
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
     super::generate_cargo_manifests(base_path, output, target, true)?;
+
+    // Record the compiler version so the next build can detect upgrades.
+    let _ = super::cache_management::write_compiler_stamp(output);
 
     if !deferred_lint_errors.is_empty() {
         return Err(anyhow::anyhow!(

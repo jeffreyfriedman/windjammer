@@ -275,6 +275,8 @@ pub fn build_project_ext(
 
     super::generate_cargo_manifests(path, output, target, false)?;
 
+    let _ = super::cache_management::write_compiler_stamp(output);
+
     if !deferred_lint_errors.is_empty() {
         return Err(anyhow::anyhow!(
             "Rust leakage errors:\n{}",
