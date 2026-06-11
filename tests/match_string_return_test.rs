@@ -36,13 +36,15 @@ fn test_match_string_literal_in_return_position() {
     // Match arms with string literals should be converted when function returns String
     assert!(
         generated.contains(r#""Active".to_string()"#)
-            || generated.contains(r#"string::from("Active")"#),
+            || generated.contains(r#"string::from("Active")"#)
+            || generated.contains(r#"String::from("Active")"#),
         "Match arm string literals should convert to String: {}",
         generated
     );
     assert!(
         generated.contains(r#""Inactive".to_string()"#)
-            || generated.contains(r#"string::from("Inactive")"#),
+            || generated.contains(r#"string::from("Inactive")"#)
+            || generated.contains(r#"String::from("Inactive")"#),
         "All arms should convert: {}",
         generated
     );
@@ -74,7 +76,8 @@ fn test_match_empty_string_return() {
     );
     assert!(
         generated.contains(r#""Rendered cube".to_string()"#)
-            || generated.contains(r#"string::from("Rendered cube")"#),
+            || generated.contains(r#"string::from("Rendered cube")"#)
+            || generated.contains(r#"String::from("Rendered cube")"#),
         "Non-empty match arm should convert to String: {}",
         generated
     );
