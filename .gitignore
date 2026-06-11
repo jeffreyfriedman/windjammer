@@ -14,6 +14,7 @@
 /build
 /test_output_*
 .wj-cache/
+.wj-compiler-stamp
 
 # IDE
 .vscode/

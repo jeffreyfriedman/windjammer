@@ -1,5 +1,5 @@
 //! Build cache helpers: incremental-safe writes, stale Cargo.toml cleanup,
-//! and source-level incremental compilation support.
+//! compiler-version tracking, and source-level incremental compilation support.
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -40,12 +40,18 @@ pub fn is_meta_fresh(source: &Path) -> bool {
 
 /// Compute the set of .wj files that need recompilation.
 /// A file is "dirty" if its .rs output doesn't exist or is older than the source.
+/// When the compiler binary itself has changed, ALL files are marked dirty.
 /// Returns (dirty_files, skipped_count).
 pub fn compute_dirty_files(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
 ) -> (Vec<usize>, usize) {
+    let compiler_changed = !is_compiler_stamp_fresh(output);
+    if compiler_changed {
+        return ((0..wj_files.len()).collect(), 0);
+    }
+
     let mut dirty_indices = Vec::new();
     let mut skipped = 0;
 
@@ -70,14 +76,65 @@ pub fn compute_dirty_files(
     (dirty_indices, skipped)
 }
 
+/// Stamp file name written into the output directory to track which compiler
+/// version produced the current generated files.  When the compiler binary
+/// changes (rebuild, upgrade, etc.) this stamp becomes stale and the next
+/// `wj build` automatically re-transpiles everything — no manual sync needed.
+const COMPILER_STAMP_FILE: &str = ".wj-compiler-stamp";
+
+/// Return the mtime of the currently running compiler binary, if available.
+fn compiler_binary_mtime() -> Option<SystemTime> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| std::fs::metadata(p).ok())
+        .and_then(|m| m.modified().ok())
+}
+
+/// Check whether the compiler stamp in `output` matches the current binary.
+/// Returns `false` (= stale) when:
+///   - the stamp file doesn't exist yet,
+///   - the stamp is older than the running compiler binary, or
+///   - the compiler version recorded in the stamp differs.
+pub fn is_compiler_stamp_fresh(output: &Path) -> bool {
+    let stamp_path = output.join(COMPILER_STAMP_FILE);
+    let stamp_mtime = match std::fs::metadata(&stamp_path).and_then(|m| m.modified()) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+
+    if let Some(compiler_mtime) = compiler_binary_mtime() {
+        if compiler_mtime > stamp_mtime {
+            return false;
+        }
+    }
+
+    match std::fs::read_to_string(&stamp_path) {
+        Ok(content) => content.trim() == env!("CARGO_PKG_VERSION"),
+        Err(_) => false,
+    }
+}
+
+/// Write (or refresh) the compiler stamp in the output directory.
+/// Called after a successful transpilation so subsequent builds can detect
+/// when the compiler itself has been upgraded.
+pub fn write_compiler_stamp(output: &Path) -> std::io::Result<()> {
+    let stamp_path = output.join(COMPILER_STAMP_FILE);
+    std::fs::write(&stamp_path, format!("{}\n", env!("CARGO_PKG_VERSION")))
+}
+
 /// Check if ALL source files are fresh (whole-crate fast path).
-/// Also checks dependency metadata freshness relative to the newest source mtime.
+/// Also checks dependency metadata freshness relative to the newest source mtime
+/// and whether the compiler binary itself has changed since the last build.
 pub fn all_sources_fresh(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
     dep_metadata_paths: &[PathBuf],
 ) -> bool {
+    if !is_compiler_stamp_fresh(output) {
+        return false;
+    }
+
     let mut max_dep_mtime = SystemTime::UNIX_EPOCH;
     for dep_path in dep_metadata_paths {
         if let Ok(meta) = std::fs::metadata(dep_path) {
