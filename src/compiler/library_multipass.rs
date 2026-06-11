@@ -229,8 +229,12 @@ pub(crate) fn build_library_multipass(
     // so parsers must be kept alive as long as their programs are used.
     let mut parsers: Vec<Parser> = Vec::with_capacity(sources.len());
     let mut parsed_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources.len());
+    let mut deferred_lint_errors: Vec<String> = Vec::new();
     for (file, source) in &sources {
         let (parser, program) = super::parse_wj_source(file, source)?;
+        if let Err(e) = super::emit_parser_warnings(&parser) {
+            deferred_lint_errors.push(format!("{}", e));
+        }
         parsed_programs.push(program);
         parsers.push(parser);
     }
@@ -704,7 +708,11 @@ pub(crate) fn build_library_multipass(
             struct_defining_module_paths.clone(),
         );
 
-        crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program);
+        if let Err(e) =
+            crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program)
+        {
+            deferred_lint_errors.push(e);
+        }
 
         // Register traits so per-file analysis can resolve trait contracts
         analyzer
@@ -827,6 +835,13 @@ pub(crate) fn build_library_multipass(
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
     super::generate_cargo_manifests(base_path, output, target, true)?;
+
+    if !deferred_lint_errors.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Rust leakage errors:\n{}",
+            deferred_lint_errors.join("\n")
+        ));
+    }
 
     Ok(())
 }

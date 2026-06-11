@@ -105,7 +105,7 @@ struct Inventory {
 
 impl Inventory {
     fn has(id: string) -> bool {
-        for item in &self.items {
+        for item in self.items {
             if item == id {
                 return true
             }

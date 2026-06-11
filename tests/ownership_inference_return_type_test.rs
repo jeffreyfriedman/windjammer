@@ -152,7 +152,7 @@ fn test_borrowed_when_cloned_internally() {
     // If we see .clone() on the parameter, borrowing is OK
     let source = r#"
 pub fn duplicate(data: Data) -> Data {
-    data.clone()
+    data
 }
 
 struct Data {

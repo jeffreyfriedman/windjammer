@@ -354,7 +354,7 @@ struct User {
     pub name: string,
 }
 
-fn check(user: &User, target: string) -> bool {
+fn check(user: User, target: string) -> bool {
     user.name == target
 }
 

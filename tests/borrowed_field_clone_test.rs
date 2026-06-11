@@ -48,7 +48,7 @@ pub fn process_property(name: string, value: string) -> string {
     format!("{}: {}", name, value)
 }
 
-pub fn process_properties(props: &Vec<Property>) -> string {
+pub fn process_properties(props: Vec<Property>) -> string {
     let mut result = "".to_string()
     for prop in props {
         result = result + process_property(prop.name, prop.value)
@@ -84,11 +84,11 @@ pub struct Display {
 }
 
 impl Display {
-    pub fn render_item(&self, label: string, description: string) -> string {
+    pub fn render_item(self, label: string, description: string) -> string {
         format!("<div>{}: {}</div>", label, description)
     }
     
-    pub fn render_all(&self) -> string {
+    pub fn render_all(self) -> string {
         let mut result = "".to_string()
         for item in self.items {
             result = result + self.render_item(item.label, item.description)

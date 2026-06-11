@@ -6,6 +6,25 @@ use crate::parser::*;
 use crate::codegen::rust::expression_helpers;
 use crate::codegen::rust::CodeGenerator;
 
+/// Rust stdlib methods whose closure parameter receives `&T` (not owned `T`).
+/// For these methods, closure params are references and comparisons need deref.
+fn is_ref_closure_method(method: &str) -> bool {
+    matches!(
+        method,
+        "retain"
+            | "filter"
+            | "any"
+            | "all"
+            | "find"
+            | "position"
+            | "rposition"
+            | "take_while"
+            | "skip_while"
+            | "partition"
+            | "inspect"
+    )
+}
+
 impl<'ast> CodeGenerator<'ast> {
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn mc_build_method_call_arg_strings(
@@ -109,9 +128,34 @@ impl<'ast> CodeGenerator<'ast> {
                     arg // Not a & expression — keep as-is
                 };
 
+                // TDD FIX for E0277: Methods like retain/filter/any/all pass &T to
+                // their closure, so closure params are references. Mark them as
+                // borrowed so binary comparisons (id != val) generate *id != val.
+                let closure_borrowed_params: Vec<String> =
+                    if is_ref_closure_method(method) {
+                        if let Expression::Closure { parameters, .. } = arg_to_generate {
+                            let mut added = Vec::new();
+                            for p in parameters.iter() {
+                                if !self.borrowed_iterator_vars.contains(p) {
+                                    self.borrowed_iterator_vars.insert(p.clone());
+                                    added.push(p.clone());
+                                }
+                            }
+                            added
+                        } else {
+                            Vec::new()
+                        }
+                    } else {
+                        Vec::new()
+                    };
+
                 let scope = self.arg_gen_scope();
                 let mut arg_str = self.generate_expression(arg_to_generate);
                 self.restore_arg_gen_scope(scope);
+
+                for p in &closure_borrowed_params {
+                    self.borrowed_iterator_vars.remove(p);
+                }
 
                 // Owned params still need `.clone()` when the arg is a non-Copy binding; suppressing
                 // auto-clone during `generate_expression` (above) skips spurious clones for

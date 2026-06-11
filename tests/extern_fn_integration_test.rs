@@ -20,7 +20,7 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_extern_fn_declarations() {
     let source = r#"
-extern fn printf(format: string);
+extern fn printf(format: String);
 extern fn malloc(size: int) -> int;
 extern fn free(ptr: int);
 

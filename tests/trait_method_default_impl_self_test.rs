@@ -82,7 +82,7 @@ fn test_trait_method_mutating_default_impl() {
     let source = r#"
         trait Counter {
             fn increment(self) {
-                // If this modifies state, needs &mut self
+                // If this modifies state, needs self
             }
         }
     "#;

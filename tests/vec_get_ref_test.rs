@@ -38,7 +38,7 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn get_point_x(&self, index: i32) -> f32 {
+    pub fn get_point_x(self, index: i32) -> f32 {
         let p = self.points.get(index as usize)
         match p {
             Some(point) => point.x,
@@ -81,7 +81,7 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn total_value(&self) -> i32 {
+    pub fn total_value(self) -> i32 {
         let mut total = 0
         for i in 0..self.items.len() {
             let item = self.items.get(i)
@@ -122,7 +122,7 @@ pub struct Layout {
 }
 
 impl Layout {
-    pub fn move_widget(&mut self, index: i32, dx: f32, dy: f32) {
+    pub fn move_widget(self, index: i32, dx: f32, dy: f32) {
         let w = self.widgets.get_mut(index as usize)
         match w {
             Some(widget) => {

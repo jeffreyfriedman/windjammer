@@ -27,7 +27,7 @@ fn test_int_var_compared_with_len_should_cast_len() {
     }
     
     impl Iterator {
-        pub fn has_next(&self) -> bool {
+        pub fn has_next(self) -> bool {
             return self.index < self.items.len()
         }
     }
@@ -94,7 +94,7 @@ fn test_int_field_compared_with_len_in_if() {
     }
     
     impl State {
-        pub fn is_done(&self) -> bool {
+        pub fn is_done(self) -> bool {
             if self.current >= self.data.len() {
                 return true
             }

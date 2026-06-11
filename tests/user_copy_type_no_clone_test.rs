@@ -112,7 +112,7 @@ pub struct Item {
 }
 
 pub fn use_item_twice(item: Item) -> string {
-    let name = item.name.clone()
+    let name = item.name
     name
 }
 "#;

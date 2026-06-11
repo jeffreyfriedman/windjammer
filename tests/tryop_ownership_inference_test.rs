@@ -21,7 +21,7 @@ mod test_utils;
 ///
 /// Example:
 /// ```
-/// pub fn load_game_level(loader: AssetLoader, level_name: string) -> Result<...> {
+/// pub fn load_game_level(loader: AssetLoader, level_name: String) -> Result<...> {
 ///     let tilemap = loader.load("tilemap", "path", 8192)?
 /// }
 /// ```
@@ -48,7 +48,7 @@ impl AssetLoader {
         AssetLoader { base_path: path }
     }
 
-    fn load(&mut self, name: string) -> Result<string, string> {
+    fn load(self, name: string) -> Result<string, string> {
         Ok(name)
     }
 }

@@ -49,7 +49,7 @@ fn test_as_str_on_owned_string_rejected() {
     // String → &str conversion automatically
     let code = r#"
 pub fn process(text: string) {
-    let owned = text.clone()
+    let owned = text
     println!("{}", owned.as_str())
 }
 

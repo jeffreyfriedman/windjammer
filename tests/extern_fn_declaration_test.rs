@@ -22,7 +22,7 @@ mod test_utils;
 fn test_extern_fn_simple() {
     // TDD: Simple extern function declaration
     let code = r#"
-    extern fn printf(format: &str);
+    extern fn printf(format: String);
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
@@ -47,7 +47,7 @@ fn test_extern_fn_with_return_type() {
     // TDD: Extern function with return type
     let code = r#"
     extern fn malloc(size: int) -> int;
-    extern fn strlen(s: &str) -> int;
+    extern fn strlen(s: String) -> int;
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
@@ -87,7 +87,7 @@ fn test_extern_fn_multiple_params() {
 fn test_extern_fn_used_in_code() {
     // TDD: Extern function can be called
     let code = r#"
-    extern fn printf(format: &str);
+    extern fn printf(format: String);
     
     pub fn hello() {
         printf("Hello, World!")
@@ -114,7 +114,7 @@ fn test_extern_fn_used_in_code() {
 fn test_extern_fn_multiple_declarations() {
     // TDD: Multiple extern functions
     let code = r#"
-    extern fn printf(format: &str);
+    extern fn printf(format: String);
     extern fn malloc(size: int) -> int;
     extern fn free(ptr: int);
     "#;
@@ -143,7 +143,7 @@ fn test_extern_fn_multiple_declarations() {
 fn test_extern_fn_with_generics() {
     // TDD: Extern function with generic parameters
     let code = r#"
-    extern fn process_data<T>(data: &T);
+    extern fn process_data<T>(data: T);
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");

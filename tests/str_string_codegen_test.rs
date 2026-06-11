@@ -34,7 +34,7 @@
 //! | Return type str   | -> str     | -> &str        | type_to_rust; fn->String for owned  |
 //!
 //! **Critical: fn -> str**: type_to_rust yields `-> &str`. Valid when returning
-//! literals or borrowed input. For owned/new strings, use `-> string` (String).
+//! literals or borrowed input. For owned/new strings, use `-> String` (String).
 
 use windjammer::codegen::rust::types::type_to_rust;
 use windjammer::parser::Type;

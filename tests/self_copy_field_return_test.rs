@@ -92,7 +92,7 @@ struct Player {
 
 impl Player {
     pub fn get_name(self) -> string {
-        self.name.clone()
+        self.name
     }
 }
 "#;

@@ -145,7 +145,7 @@ pub struct OtherSystem {
 
 impl OtherSystem {
     pub fn get_name(self) -> string {
-        return self.name.clone()
+        return self.name
     }
 }
 "#,

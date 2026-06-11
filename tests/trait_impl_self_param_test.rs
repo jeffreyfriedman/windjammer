@@ -65,7 +65,7 @@ fn test_trait_impl_self_param_borrowed() {
 
     let code = r#"
         trait Displayable {
-            fn display(&self) -> string
+            fn display(self) -> string
         }
         
         struct Label {
@@ -73,8 +73,8 @@ fn test_trait_impl_self_param_borrowed() {
         }
         
         impl Displayable for Label {
-            fn display(&self) -> string {
-                self.text.clone()
+            fn display(self) -> string {
+                self.text
             }
         }
     "#;
@@ -105,7 +105,7 @@ fn test_trait_impl_self_param_mutable() {
 
     let code = r#"
         trait Updatable {
-            fn update(&mut self, value: int)
+            fn update(self, value: int)
         }
         
         struct Counter {
@@ -113,7 +113,7 @@ fn test_trait_impl_self_param_mutable() {
         }
         
         impl Updatable for Counter {
-            fn update(&mut self, value: int) {
+            fn update(self, value: int) {
                 self.count = value
             }
         }

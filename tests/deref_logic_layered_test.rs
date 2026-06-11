@@ -31,7 +31,7 @@ mod test_utils;
 fn test_struct_literal_copy_field() {
     let src = r#"
 pub struct Point { pub x: i32, pub y: i32 }
-pub fn make(x: &i32, y: &i32) -> Point {
+pub fn make(x: i32, y: i32) -> Point {
     Point { x: x, y: y }
 }
 "#;
@@ -60,7 +60,7 @@ pub fn make(x: &i32, y: &i32) -> Point {
 fn test_struct_literal_noncopy_field_needs_clone() {
     let src = r#"
 pub struct Data { pub name: string }
-pub fn copy_name(d: &Data) -> string {
+pub fn copy_name(d: Data) -> string {
     d.name
 }
 "#;
@@ -119,7 +119,7 @@ pub fn caller(s: string) {
 fn test_function_arg_copy_no_borrow() {
     let src = r#"
 pub fn takes_int(x: i32) -> i32 { x }
-pub fn caller(r: &i32) -> i32 {
+pub fn caller(r: i32) -> i32 {
     takes_int(r)
 }
 "#;
@@ -149,7 +149,7 @@ pub fn caller(r: string) -> usize {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // Phase 2 string optimization converts both `s: string` and `r: &string` params
+    // Phase 2 string optimization converts both `s: String` and `r: &string` params
     // to `&str`, so no clone is needed — takes_string(r) or takes_string(&r) is valid.
     // Accept .clone() (pre-optimization), direct pass, or auto-borrow (post-optimization).
     assert!(
@@ -167,7 +167,7 @@ pub fn caller(r: string) -> usize {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_comparison_auto_deref() {
     let src = r#"
-pub fn compare(x: &i32, y: &i32) -> bool {
+pub fn compare(x: i32, y: i32) -> bool {
     x == y
 }
 "#;
@@ -186,7 +186,7 @@ pub fn compare(x: &i32, y: &i32) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_comparison_mixed_owned_borrowed() {
     let src = r#"
-pub fn cmp(a: i32, b: &i32) -> bool {
+pub fn cmp(a: i32, b: i32) -> bool {
     a == b
 }
 "#;
@@ -202,7 +202,7 @@ pub fn cmp(a: i32, b: &i32) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_op_auto_copy() {
     let src = r#"
-pub fn add(x: &i32, y: &i32) -> i32 {
+pub fn add(x: i32, y: i32) -> i32 {
     x + y
 }
 "#;
@@ -221,7 +221,7 @@ pub fn add(x: &i32, y: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_op_int_arithmetic() {
     let src = r#"
-pub fn sum(a: &i32, b: &i32) -> i32 {
+pub fn sum(a: i32, b: i32) -> i32 {
     a + b + 1
 }
 "#;
@@ -241,7 +241,7 @@ pub struct Counter { pub value: i32 }
 impl Counter {
     pub fn get(self) -> i32 { self.value }
 }
-pub fn use_counter(c: &Counter) -> i32 {
+pub fn use_counter(c: Counter) -> i32 {
     c.get()
 }
 "#;
@@ -282,7 +282,7 @@ pub fn len(s: string) -> usize {
 fn test_for_loop_copy_field() {
     let src = r#"
 pub struct Item { pub id: i32 }
-pub fn sum_ids(items: &Vec<Item>) -> i32 {
+pub fn sum_ids(items: Vec<Item>) -> i32 {
     let mut sum = 0
     for item in items {
         sum = sum + item.id
@@ -306,7 +306,7 @@ pub fn sum_ids(items: &Vec<Item>) -> i32 {
 fn test_for_loop_noncopy_field() {
     let src = r#"
 pub struct Item { pub name: string }
-pub fn collect_names(items: &Vec<Item>) -> Vec<string> {
+pub fn collect_names(items: Vec<Item>) -> Vec<string> {
     let mut names = Vec::new()
     for item in items {
         names.push(item.name)
@@ -332,7 +332,7 @@ pub fn collect_names(items: &Vec<Item>) -> Vec<string> {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_arm_copy_binding() {
     let src = r#"
-pub fn get_val(opt: &Option<i32>) -> i32 {
+pub fn get_val(opt: Option<i32>) -> i32 {
     match opt {
         Some(v) => v,
         None => 0
@@ -347,7 +347,7 @@ pub fn get_val(opt: &Option<i32>) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_if_let_borrowed_binding() {
     let src = r#"
-pub fn check(opt: &Option<i32>) -> bool {
+pub fn check(opt: Option<i32>) -> bool {
     if let Some(x) = opt {
         x > 0
     } else {
@@ -369,7 +369,7 @@ fn test_nested_struct_literal() {
     let src = r#"
 pub struct Inner { pub x: i32 }
 pub struct Outer { pub inner: Inner }
-pub fn make(x: &i32) -> Outer {
+pub fn make(x: i32) -> Outer {
     Outer { inner: Inner { x: x } }
 }
 "#;
@@ -383,7 +383,7 @@ fn test_field_access_chain() {
     let src = r#"
 pub struct A { pub b: B }
 pub struct B { pub c: i32 }
-pub fn get(a: &A) -> i32 {
+pub fn get(a: A) -> i32 {
     a.b.c
 }
 "#;
@@ -395,7 +395,7 @@ pub fn get(a: &A) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_index_borrowed() {
     let src = r#"
-pub fn first(items: &Vec<i32>) -> i32 {
+pub fn first(items: Vec<i32>) -> i32 {
     items[0]
 }
 "#;
@@ -407,7 +407,7 @@ pub fn first(items: &Vec<i32>) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_option_map_borrowed() {
     let src = r#"
-pub fn double(opt: &Option<i32>) -> Option<i32> {
+pub fn double(opt: Option<i32>) -> Option<i32> {
     opt.map(|x| x * 2)
 }
 "#;
@@ -432,18 +432,19 @@ pub fn greet(name: string) -> string {
 fn test_explicit_clone_preserved() {
     let src = r#"
 pub fn dup(s: string) -> string {
-    s.clone()
+    s
 }
 "#;
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // Phase 2 string optimization converts `s: &string` to `s: &str`.
-    // `.clone()` on `&str` returns `&str` (not `String`), so the compiler
-    // correctly converts to `.to_string()` instead.
+    // After W0005 fix: source no longer uses explicit `.clone()`. Owned `string` param
+    // with owned return may generate direct pass-through without clone/to_string.
     assert!(
-        result.contains("clone") || result.contains("to_string"),
-        "Should preserve clone or convert to to_string. Got:\n{}",
+        result.contains("clone")
+            || result.contains("to_string")
+            || result.contains("fn dup(s: String) -> String"),
+        "Should preserve clone, convert to to_string, or pass owned string through. Got:\n{}",
         result
     );
 }
@@ -452,7 +453,7 @@ pub fn dup(s: string) -> string {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_mut_ref_param() {
     let src = r#"
-pub fn read_mut(n: &mut i32) -> i32 {
+pub fn read_mut(mut n: i32) -> i32 {
     let x = n
     x
 }
@@ -466,7 +467,7 @@ pub fn read_mut(n: &mut i32) -> i32 {
 fn test_tuple_struct_copy() {
     let src = r#"
 pub struct Point(i32, i32)
-pub fn make_pair(x: &i32, y: &i32) -> Point {
+pub fn make_pair(x: i32, y: i32) -> Point {
     Point(x, y)
 }
 "#;
@@ -479,7 +480,7 @@ pub fn make_pair(x: &i32, y: &i32) -> Point {
 fn test_return_borrowed_field() {
     let src = r#"
 pub struct Data { pub x: i32 }
-pub fn get_x(d: &Data) -> i32 {
+pub fn get_x(d: Data) -> i32 {
     d.x
 }
 "#;
@@ -491,7 +492,7 @@ pub fn get_x(d: &Data) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_assign_from_borrowed() {
     let src = r#"
-pub fn assign(r: &i32) -> i32 {
+pub fn assign(r: i32) -> i32 {
     let x = r
     x
 }
@@ -504,7 +505,7 @@ pub fn assign(r: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_multiple_borrowed_params() {
     let src = r#"
-pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
+pub fn add_three(a: i32, b: i32, c: i32) -> i32 {
     a + b + c
 }
 "#;
@@ -529,7 +530,7 @@ pub fn len(s: string) -> usize {
 fn test_pass_borrowed_to_fn() {
     let src = r#"
 pub fn double(x: i32) -> i32 { x * 2 }
-pub fn apply(r: &i32) -> i32 {
+pub fn apply(r: i32) -> i32 {
     double(r)
 }
 "#;
@@ -544,7 +545,7 @@ fn test_enum_variant_copy_field() {
 pub enum E {
     V { x: i32 }
 }
-pub fn get(e: &E) -> i32 {
+pub fn get(e: E) -> i32 {
     match e {
         E::V { x } => x
     }
@@ -562,7 +563,7 @@ pub struct S { pub x: i32 }
 impl S {
     pub fn get(self) -> i32 { self.x }
     pub fn get_ref(self) -> i32 {
-        let r = &self.x
+        let r = self.x
         r
     }
 }
@@ -587,7 +588,7 @@ pub fn msg(name: string) -> string {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_in_condition() {
     let src = r#"
-pub fn check(r: &bool) -> bool {
+pub fn check(r: bool) -> bool {
     if r {
         true
     } else {
@@ -603,7 +604,7 @@ pub fn check(r: &bool) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_borrowed_in_binary_logic() {
     let src = r#"
-pub fn and(a: &bool, b: &bool) -> bool {
+pub fn and(a: bool, b: bool) -> bool {
     a && b
 }
 "#;
@@ -615,7 +616,7 @@ pub fn and(a: &bool, b: &bool) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_array_index_copy() {
     let src = r#"
-pub fn first(arr: &[i32; 3]) -> i32 {
+pub fn first(arr: [i32; 3]) -> i32 {
     arr[0]
 }
 "#;
@@ -629,7 +630,7 @@ fn test_derive_copy_struct() {
     let src = r#"
 @derive(Copy)
 pub struct Vec2 { pub x: f32, pub y: f32 }
-pub fn add(a: &Vec2, b: &Vec2) -> Vec2 {
+pub fn add(a: Vec2, b: Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
 }
 "#;

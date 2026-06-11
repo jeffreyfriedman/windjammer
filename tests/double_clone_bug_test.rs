@@ -52,8 +52,8 @@ pub struct Trade {
 
 impl Trade {
     pub fn execute(self, inv: Inventory) {
-        for stack in &self.offer {
-            inv.add_item(stack.item.clone())
+        for stack in self.offer {
+            inv.add_item(stack.item)
         }
     }
 }
@@ -92,9 +92,9 @@ pub struct Container {
 
 impl Container {
     pub fn process(self) {
-        for item in &self.items {
-            let id = item.id.clone()
-            let name = item.name.clone()
+        for item in self.items {
+            let id = item.id
+            let name = item.name
         }
     }
 }
@@ -145,9 +145,9 @@ pub struct Trade {
 
 impl Trade {
     pub fn execute(self, inv: Inventory) {
-        for stack in &self.offer {
-            inv.remove_item_by_id(stack.item.id.clone(), stack.quantity)
-            inv.add_item(stack.item.clone())
+        for stack in self.offer {
+            inv.remove_item_by_id(stack.item.id, stack.quantity)
+            inv.add_item(stack.item)
         }
     }
 }

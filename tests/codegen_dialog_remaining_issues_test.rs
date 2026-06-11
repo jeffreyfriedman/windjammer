@@ -38,7 +38,7 @@ pub struct Node {
 
 impl Node {
     pub fn add_action(self, action: string) {
-        self.actions.push(action)  // Should NOT become push(&action)
+        self.actions.push(action)  // Should NOT become push(action)
     }
 }
 

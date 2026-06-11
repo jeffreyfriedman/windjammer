@@ -34,7 +34,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn remove_item(&mut self, target_id: i32) {
+    pub fn remove_item(self, target_id: i32) {
         let mut new_items = Vec::new()
         for item in self.items {
             if item.id != target_id {

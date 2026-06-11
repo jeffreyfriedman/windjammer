@@ -52,7 +52,7 @@ fn test_string_literal_to_str_param_no_conversion() {
 fn test_ffi_function_str_param() {
     // Real case: FFI functions expecting &str
     let code = r#"
-    extern fn load_sound(path: &str) -> int
+    extern fn load_sound(path: String) -> int
     
     pub fn init() -> int {
         return load_sound("assets/sound.ogg")
@@ -76,7 +76,7 @@ fn test_method_call_with_str_param() {
     pub struct Loader;
     
     impl Loader {
-        pub fn load(&self, path: string) -> int {
+        pub fn load(self, path: string) -> int {
             return path.len() as int
         }
     }
@@ -150,7 +150,7 @@ fn test_mixed_str_and_string_params() {
 
     // NEW DESIGN: Both parameters are read-only, so both infer to &str
     // - `text: &str` (explicit) → stays `&str`
-    // - `text: string` (read-only) → infers to `&str`
+    // - `text: String` (read-only) → infers to `&str`
     assert!(
         generated.contains("process_str(\"no conversion\")"),
         "String literal passed directly to explicit &str param, got:\n{}",

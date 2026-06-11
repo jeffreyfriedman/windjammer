@@ -64,7 +64,7 @@ pub fn get_message() -> string {
 
     assert!(
         generated.contains(r#""Hello".to_string()"#)
-            || generated.contains(r#"String::from("Hello")"#),
+            || generated.contains(r#"string::from("Hello")"#),
         "Return should convert to String. Generated:\n{}",
         generated
     );
@@ -81,7 +81,7 @@ pub struct Widget {
 }
 
 impl Widget {
-    pub fn render(&self) -> string {
+    pub fn render(self) -> string {
         if !self.visible {
             return ""
         }

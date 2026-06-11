@@ -40,9 +40,9 @@ fn setup_wj_build_and_build_dir(wj_code: &str) -> (tempfile::TempDir, std::path:
 #[test]
 fn test_explicit_deref_borrowed_iter_vs_owned_param() {
     // Case: *id == flag_id where id is &String (borrowed iter), flag_id is String (owned param NOT inferred as borrowed)
-    // Source declares: flag_id: string (not borrowed in declaration)
+    // Source declares: flag_id: String (not borrowed in declaration)
     // Generated: flag_id: String (owned, because inference didn't mark it borrowed)
-    // Expected: Keep * or add to other side → *id == flag_id (String == String)
+    // Expected: Keep * or add to other side → *id == flag_id (string == String)
     let wj_code = r#"
 struct GameState {
     custom_flags: Vec<(string, bool)>,

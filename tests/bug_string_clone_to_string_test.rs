@@ -31,7 +31,7 @@ impl DialogTree {
 }
 
 pub fn create_dialog(id: string) -> DialogTree {
-    DialogTree::new(id.clone())
+    DialogTree::new(id)
 }
 "#;
 
@@ -61,7 +61,7 @@ impl DialogTree {
 
 pub fn create_dialog(id: string, suffix: string) -> DialogTree {
     let full_id = format!("{}_{}", id, suffix)
-    DialogTree::new(full_id.clone())
+    DialogTree::new(full_id)
 }
 "#;
 

@@ -32,14 +32,14 @@ fn test_vec_remove_usize_no_ref() {
     // Test that Vec.remove(usize_var) does NOT add &
     // Vec.remove takes usize by value, not by reference
     let test_content = r#"
-fn remove_at_sparse_index(items: &mut Vec<i32>, sparse_index: int) -> i32 {
+fn remove_at_sparse_index(mut items: Vec<i32>, sparse_index: int) -> i32 {
     let sparse_idx_usize: usize = sparse_index as usize;
     items.remove(sparse_idx_usize)
 }
 
 fn main() {
     let mut items = vec![10, 20, 30];
-    let removed = remove_at_sparse_index(&mut items, 1);
+    let removed = remove_at_sparse_index(items, 1);
     println!("Removed: {}", removed);
 }
 "#;

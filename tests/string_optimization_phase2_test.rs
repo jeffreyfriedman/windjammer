@@ -61,7 +61,7 @@ fn test_function_with_vec_contains_uses_string_ref() {
     // TDD: Function calling Vec<String>::contains must use &String
     let code = r#"
 pub fn has_item(items: Vec<string>, id: string) -> bool {
-    items.contains(&id)
+    items.contains(id)
 }
 
 fn main() {
@@ -100,7 +100,7 @@ struct Inventory {
 
 impl Inventory {
     fn has(self, id: string) -> bool {
-        self.items.contains(&id)
+        self.items.contains(id)
     }
 }
 
@@ -142,7 +142,7 @@ fn test_mixed_parameters_granular_optimization() {
     // TDD: Different parameters in same function can have different optimizations
     let code = r#"
 pub fn process(items: Vec<string>, search: string, msg: string) -> bool {
-    if items.contains(&search) {
+    if items.contains(search) {
         println!("{}", msg)
         true
     } else {

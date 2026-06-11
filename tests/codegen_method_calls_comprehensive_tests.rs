@@ -40,12 +40,12 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
 }
 
-pub fn use_counter(c: &Counter) -> i32 {
+pub fn use_counter(c: Counter) -> i32 {
     c.get()
 }
 "#;
@@ -63,11 +63,11 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
     
-    pub fn double(&self) -> i32 {
+    pub fn double(self) -> i32 {
         self.get() * 2
     }
 }
@@ -90,12 +90,12 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn increment(&mut self) {
+    pub fn increment(self) {
         self.value += 1
     }
 }
 
-pub fn use_counter(c: &mut Counter) {
+pub fn use_counter(mut c: Counter) {
     c.increment()
 }
 "#;
@@ -113,7 +113,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn set(&mut self, v: i32) -> &mut Builder {
+    pub fn set(self, v: i32) -> &mut Builder {
         self.value = v;
         self
     }
@@ -224,7 +224,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn contains(&self, value: &i32) -> bool {
+    pub fn contains(self, value: i32) -> bool {
         self.items.contains(value)
     }
 }
@@ -256,7 +256,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn add(&mut self, item: Item) {
+    pub fn add(self, item: Item) {
         self.items.push(item)
     }
 }
@@ -277,8 +277,8 @@ impl Container {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_vec() {
     let code = r#"
-pub fn chain_example(items: &Vec<i32>) -> i32 {
-    items.iter().filter(|x| **x > 0).count() as i32
+pub fn chain_example(items: Vec<i32>) -> i32 {
+    items.filter(|x| *x > 0).count() as i32
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -293,7 +293,7 @@ pub fn chain_example(items: &Vec<i32>) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_chaining_string() {
     let code = r#"
-pub fn chain_string(s: &string) -> string {
+pub fn chain_string(s: string) -> string {
     s.trim().to_uppercase()
 }
 "#;
@@ -319,7 +319,7 @@ pub struct Inner {
 }
 
 impl Inner {
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
 }
@@ -330,7 +330,7 @@ pub struct Outer {
 }
 
 impl Outer {
-    pub fn get_inner_value(&self) -> i32 {
+    pub fn get_inner_value(self) -> i32 {
         self.inner.get()
     }
 }
@@ -353,12 +353,12 @@ pub struct Container<T> {
 }
 
 impl<T: Clone> Container<T> {
-    pub fn get(&self) -> T {
-        self.value.clone()
+    pub fn get(self) -> T {
+        self.value
     }
 }
 
-pub fn use_container(c: &Container<i32>) -> i32 {
+pub fn use_container(c: Container<i32>) -> i32 {
     c.get()
 }
 "#;
@@ -384,12 +384,12 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn value_ref(&self) -> &i32 {
-        &self.value
+    pub fn value_ref(self) -> &i32 {
+        self.value
     }
 }
 
-pub fn get_ref(c: &Container) -> i32 {
+pub fn get_ref(c: Container) -> i32 {
     *c.value_ref()
 }
 "#;
@@ -415,12 +415,12 @@ pub struct Calculator {
 }
 
 impl Calculator {
-    pub fn add_multiply(&self, a: i32, b: i32) -> i32 {
+    pub fn add_multiply(self, a: i32, b: i32) -> i32 {
         self.base + a * b
     }
 }
 
-pub fn use_calc(c: &Calculator) -> i32 {
+pub fn use_calc(c: Calculator) -> i32 {
     c.add_multiply(2, 3)
 }
 "#;
@@ -452,7 +452,7 @@ pub fn abs_value(n: i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_on_string() {
     let code = r#"
-pub fn string_len(s: &string) -> usize {
+pub fn string_len(s: string) -> usize {
     s.len()
 }
 "#;

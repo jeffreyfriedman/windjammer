@@ -23,7 +23,7 @@ mod test_utils;
 #[test]
 fn test_option_pattern_if_let_borrows_self_field() {
     // E0507 fix: if let Some(stack) = self.weapon with &self must use &self.weapon.
-    // `name: string` keeps ItemStats/ItemStack non-Copy; Copy-only Option fields may use
+    // `name: String` keeps ItemStats/ItemStack non-Copy; Copy-only Option fields may use
     // `self.weapon` without `&` (see effective_option_scrutinee_ref_prefix).
     let source = r#"
 pub struct ItemStack {

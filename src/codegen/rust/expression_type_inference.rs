@@ -414,6 +414,11 @@ impl<'ast> CodeGenerator<'ast> {
                     // Instance call: Call(FieldAccess(receiver, method), args) — same return type
                     // rules as MethodCall so we do not fall through to unqualified `acos` → f64.
                     let recv_ty = self.infer_expression_type(object);
+                    if let Some(ref ot) = recv_ty {
+                        if let Some(ret) = Self::stdlib_method_return_type(ot, field) {
+                            return Some(ret);
+                        }
+                    }
                     if let Some(t) = Self::rust_primitive_float_method_return_type(
                         recv_ty.as_ref(),
                         field.as_str(),

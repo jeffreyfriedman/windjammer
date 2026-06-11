@@ -109,8 +109,8 @@ pub fn process_owned(items: Vec<i32>) -> Vec<i32> {
 fn test_for_iter_mut() {
     // iter_mut() for in-place mutation
     let code = r#"
-pub fn double_all(items: &mut Vec<i32>) {
-    for item in items.iter_mut() {
+pub fn double_all(mut items: Vec<i32>) {
+    for item in items {
         *item = *item * 2
     }
 }
@@ -173,7 +173,7 @@ fn test_while_let() {
     let code = r#"
 pub fn sum_optional(items: Vec<i32>) -> i32 {
     let mut sum = 0
-    let mut iter = items.into_iter()
+    let mut iter = items
     while let Some(item) = iter.next() {
         sum += item
     }
@@ -192,7 +192,7 @@ pub fn sum_optional(items: Vec<i32>) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_loop_with_break() {
     let code = r#"
-pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
+pub fn find_first(items: Vec<i32>, target: i32) -> i32 {
     let mut index = 0
     for item in items {
         if *item == target {
@@ -211,7 +211,7 @@ pub fn find_first(items: &Vec<i32>, target: i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_loop_with_continue() {
     let code = r#"
-pub fn sum_positive(items: &Vec<i32>) -> i32 {
+pub fn sum_positive(items: Vec<i32>) -> i32 {
     let mut sum = 0
     for item in items {
         if *item < 0 {
@@ -303,7 +303,7 @@ pub fn multiply(a: i32, b: i32) -> i32 {
 fn test_iter_map() {
     let code = r#"
 pub fn double_all(items: Vec<i32>) -> Vec<i32> {
-    items.iter().map(|x| x * 2).collect()
+    items.map(|x| x * 2).collect()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -316,7 +316,7 @@ fn test_iter_filter() {
     // Use iter().cloned() for simpler type handling
     let code = r#"
 pub fn only_positive(items: Vec<i32>) -> Vec<i32> {
-    items.iter().filter(|x| **x > 0).cloned().collect()
+    items.filter(|x| *x > 0).collect()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -328,7 +328,7 @@ pub fn only_positive(items: Vec<i32>) -> Vec<i32> {
 fn test_iter_fold() {
     let code = r#"
 pub fn sum_all(items: Vec<i32>) -> i32 {
-    items.iter().fold(0, |acc, x| acc + x)
+    items.fold(0, |acc, x| acc + x)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -340,7 +340,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
 fn test_iter_chain() {
     let code = r#"
 pub fn double_filter_sum(items: Vec<i32>) -> i32 {
-    items.iter()
+    items
         .map(|x| x * 2)
         .filter(|x| *x > 5)
         .sum()
@@ -359,7 +359,7 @@ pub fn double_filter_sum(items: Vec<i32>) -> i32 {
 fn test_enumerate_basic() {
     let code = r#"
 pub fn find_index(items: Vec<i32>, target: i32) -> i32 {
-    for (i, item) in items.iter().enumerate() {
+    for (i, item) in items.enumerate() {
         if *item == target {
             return i as i32
         }
@@ -405,10 +405,10 @@ pub struct Item {
     value: i32,
 }
 
-pub fn copy_all(items: &Vec<Item>) -> Vec<Item> {
+pub fn copy_all(items: Vec<Item>) -> Vec<Item> {
     let mut result = Vec::new()
     for item in items {
-        result.push(item.clone())
+        result.push(item)
     }
     result
 }

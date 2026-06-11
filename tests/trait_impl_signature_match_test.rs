@@ -50,13 +50,13 @@ fn compile_rust(code: &str) -> (bool, String) {
 fn test_trait_impl_matches_trait_signature_f32() {
     let code = r#"
 pub trait GameLoop {
-    fn update(&mut self, delta: f32) {}
+    fn update(self, delta: f32) {}
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(&mut self, delta: f32) {
+    fn update(self, delta: f32) {
         let _used = delta + 1.0
     }
 }
@@ -118,15 +118,15 @@ pub struct Input { pub key: int }
 pub struct RenderContext { pub width: int }
 
 pub trait GameLoop {
-    fn update(&mut self, input: Input) {}
-    fn render(&self, ctx: RenderContext) {}
+    fn update(self, input: Input) {}
+    fn render(self, ctx: RenderContext) {}
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(&mut self, input: Input) {}
-    fn render(&self, ctx: RenderContext) {}
+    fn update(self, input: Input) {}
+    fn render(self, ctx: RenderContext) {}
 }
 "#;
 

@@ -68,7 +68,7 @@ fn main() {
 fn test_clone_trait_inferred() {
     let source = r#"
 fn dup<T>(item: T) -> T {
-    item.clone()
+    item
 }
 
 fn main() {
@@ -92,7 +92,7 @@ fn test_multiple_bounds_inferred() {
     let source = r#"
 fn clone_and_print<T>(item: T) -> T {
     println!("{:?}", item)
-    item.clone()
+    item
 }
 
 fn main() {

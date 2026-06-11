@@ -67,7 +67,7 @@ impl Game {
     }
     
     // Level 2: Calls method that performs transitive mutation
-    // THIS IS THE BUG: Should infer &mut self, but currently infers &self
+    // THIS IS THE BUG: Should infer self, but currently infers self
     pub fn update(self) {
         self.poll_keyboard()
     }

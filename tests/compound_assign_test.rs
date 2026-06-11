@@ -28,7 +28,7 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub fn tick(&mut self, dt: f32) {
+    pub fn tick(self, dt: f32) {
         self.elapsed = self.elapsed + dt
     }
 }
@@ -52,7 +52,7 @@ pub struct Health {
 }
 
 impl Health {
-    pub fn damage(&mut self, amount: i32) {
+    pub fn damage(self, amount: i32) {
         self.hp = self.hp - amount
     }
 }
@@ -76,7 +76,7 @@ pub struct Transform {
 }
 
 impl Transform {
-    pub fn scale_by(&mut self, factor: f32) {
+    pub fn scale_by(self, factor: f32) {
         self.scale = self.scale * factor
     }
 }

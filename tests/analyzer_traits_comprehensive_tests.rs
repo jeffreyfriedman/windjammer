@@ -60,15 +60,15 @@ impl Counter {
         Counter { value: 0 }
     }
     
-    pub fn increment(&mut self) {
+    pub fn increment(self) {
         self.value += 1
     }
     
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
     
-    pub fn reset(&mut self) {
+    pub fn reset(self) {
         self.value = 0
     }
 }
@@ -99,7 +99,7 @@ impl Config {
         Config { value: Config::default_value() }
     }
     
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
 }
@@ -145,8 +145,8 @@ pub struct Container<T> {
 }
 
 impl<T: Clone> Container<T> {
-    pub fn duplicate(&self) -> Container<T> {
-        Container { value: self.value.clone() }
+    pub fn duplicate(self) -> Container<T> {
+        Container { value: self.value }
     }
 }
 "#;
@@ -172,7 +172,7 @@ pub struct Data {
 }
 
 impl Data {
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
 }
@@ -191,7 +191,7 @@ pub struct Data {
 }
 
 impl Data {
-    pub fn set(&mut self, v: i32) {
+    pub fn set(self, v: i32) {
         self.value = v
     }
 }
@@ -272,7 +272,7 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn is_vertical(&self) -> bool {
+    pub fn is_vertical(self) -> bool {
         match self {
             Direction::Up => true,
             Direction::Down => true,
@@ -307,11 +307,11 @@ impl Point {
 }
 
 impl Point {
-    pub fn get_x(&self) -> i32 {
+    pub fn get_x(self) -> i32 {
         self.x
     }
     
-    pub fn get_y(&self) -> i32 {
+    pub fn get_y(self) -> i32 {
         self.y
     }
 }
@@ -342,7 +342,7 @@ impl Builder {
         Builder { value: 0 }
     }
     
-    pub fn set(&mut self, v: i32) -> &mut Builder {
+    pub fn set(self, v: i32) -> &mut Builder {
         self.value = v;
         self
     }

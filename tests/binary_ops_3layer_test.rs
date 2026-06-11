@@ -27,7 +27,7 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_add_copy_refs() {
     let src = r#"
-pub fn add(a: &i32, b: &i32) -> i32 {
+pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
 "#;
@@ -50,7 +50,7 @@ pub fn add(a: &i32, b: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_sub_copy_refs() {
     let src = r#"
-pub fn sub(a: &i32, b: &i32) -> i32 {
+pub fn sub(a: i32, b: i32) -> i32 {
     a - b
 }
 "#;
@@ -63,7 +63,7 @@ pub fn sub(a: &i32, b: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_mul_copy_refs() {
     let src = r#"
-pub fn mul(a: &i32, b: &i32) -> i32 {
+pub fn mul(a: i32, b: i32) -> i32 {
     a * b
 }
 "#;
@@ -171,7 +171,7 @@ pub fn scale(x: f32) -> f32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_comparison_auto_deref() {
     let src = r#"
-pub fn compare(a: &i32, b: &i32) -> bool {
+pub fn compare(a: i32, b: i32) -> bool {
     a == b
 }
 "#;
@@ -189,10 +189,10 @@ pub fn compare(a: &i32, b: &i32) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_comparison_lt_gt() {
     let src = r#"
-pub fn less(a: &i32, b: &i32) -> bool {
+pub fn less(a: i32, b: i32) -> bool {
     a < b
 }
-pub fn greater(a: &i32, b: &i32) -> bool {
+pub fn greater(a: i32, b: i32) -> bool {
     a > b
 }
 "#;
@@ -210,7 +210,7 @@ pub fn greater(a: &i32, b: &i32) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_nested_precedence() {
     let src = r#"
-pub fn expr(a: &i32, b: &i32, c: &i32) -> i32 {
+pub fn expr(a: i32, b: i32, c: i32) -> i32 {
     a + b * c
 }
 "#;
@@ -231,7 +231,7 @@ pub fn expr(a: &i32, b: &i32, c: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_bitwise_and() {
     let src = r#"
-pub fn band(a: &i32, b: &i32) -> i32 {
+pub fn band(a: i32, b: i32) -> i32 {
     a & b
 }
 "#;
@@ -244,7 +244,7 @@ pub fn band(a: &i32, b: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_bitwise_or() {
     let src = r#"
-pub fn bor(a: &i32, b: &i32) -> i32 {
+pub fn bor(a: i32, b: i32) -> i32 {
     a | b
 }
 "#;
@@ -294,7 +294,7 @@ pub fn lor(a: bool, b: bool) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_add_three_refs() {
     let src = r#"
-pub fn add_three(a: &i32, b: &i32, c: &i32) -> i32 {
+pub fn add_three(a: i32, b: i32, c: i32) -> i32 {
     a + b + c
 }
 "#;
@@ -338,7 +338,7 @@ pub fn calc(a: i32, b: i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_len_comparison() {
     let src = r#"
-pub fn has_items(items: &Vec<i32>) -> bool {
+pub fn has_items(items: Vec<i32>) -> bool {
     items.len() > 0
 }
 "#;
@@ -361,7 +361,7 @@ pub fn has_items(items: &Vec<i32>) -> bool {
 fn test_binary_field_access() {
     let src = r#"
 pub struct Point { pub x: i32, pub y: i32 }
-pub fn sum(p: &Point) -> i32 {
+pub fn sum(p: Point) -> i32 {
     p.x + p.y
 }
 "#;
@@ -399,7 +399,7 @@ pub fn shl(x: i32, n: i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_xor() {
     let src = r#"
-pub fn xor(a: &i32, b: &i32) -> i32 {
+pub fn xor(a: i32, b: i32) -> i32 {
     a ^ b
 }
 "#;
@@ -419,7 +419,7 @@ pub fn xor(a: &i32, b: &i32) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_binary_mixed_owned_borrowed() {
     let src = r#"
-pub fn mix(a: i32, b: &i32) -> i32 {
+pub fn mix(a: i32, b: i32) -> i32 {
     a + b
 }
 "#;

@@ -38,7 +38,7 @@ impl Item {
 }
 
 fn main() {
-    // Should auto-convert string literals to String
+    // Should auto-convert string literals to string
     let item = Item::new("sword", "Iron Sword", "A basic sword")
     assert_eq(item.id, "sword")
 }
@@ -86,7 +86,7 @@ impl Manager {
         Manager { items: Vec::new() }
     }
     
-    pub fn add(&mut self, item: string) {
+    pub fn add(self, item: string) {
         self.items.push(item)
     }
 }

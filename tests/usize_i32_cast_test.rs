@@ -29,7 +29,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn check_bounds(&self) -> bool {
+    pub fn check_bounds(self) -> bool {
         let count = self.items.len()
         if self.selected >= count {
             return false
@@ -61,7 +61,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn update_count(&mut self) {
+    pub fn update_count(self) {
         self.count = self.items.len() - 1
     }
 }

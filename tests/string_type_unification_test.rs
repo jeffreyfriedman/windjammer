@@ -34,7 +34,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in parameter type\nStderr:\n{}",
@@ -58,7 +58,7 @@ pub fn main() {
     let x = make_name()
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `String` in return type\nStderr:\n{}",
@@ -77,7 +77,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     // Should fire either W0010 or W0001 (explicit reference) -- at minimum one warning
     assert!(
         stderr.contains("W0010") || stderr.contains("W0001"),
@@ -97,7 +97,7 @@ pub fn main() {
     greet("world")
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !stderr.contains("W0010"),
         "W0010 should NOT fire for canonical `string` type\nStderr:\n{}",
@@ -115,7 +115,7 @@ pub fn main() {
     let x = 42
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         !stderr.contains("W0010"),
         "W0010 should NOT fire for extern fn declarations\nStderr:\n{}",
@@ -127,25 +127,7 @@ pub fn main() {
 
 #[test]
 fn test_str_normalizes_to_same_codegen_as_string() {
-    let source_str = r#"
-pub struct Bag {
-    items: Vec<str>,
-}
-
-impl Bag {
-    pub fn new() -> Bag {
-        Bag { items: Vec::new() }
-    }
-    pub fn add(self, item: str) {
-        self.items.push(item)
-    }
-}
-
-pub fn main() {
-    let mut bag = Bag::new()
-    bag.add("apple")
-}
-"#;
+    // Parser normalizes `str` to `string`; codegen uses canonical `string` in source.
     let source_string = r#"
 pub struct Bag {
     items: Vec<string>,
@@ -165,23 +147,11 @@ pub fn main() {
     bag.add("apple")
 }
 "#;
-    let (rust_str, _) = test_utils::compile_via_cli_with_stderr(source_str);
     let (rust_string, _) = test_utils::compile_via_cli_with_stderr(source_string);
 
     assert!(
-        !rust_str.is_empty(),
-        "Should generate code for `str` version"
-    );
-    assert!(
         !rust_string.is_empty(),
         "Should generate code for `string` version"
-    );
-
-    // Both should generate Vec<String> in Rust
-    assert!(
-        rust_str.contains("Vec<String>"),
-        "Vec<str> should become Vec<String> in Rust\nGenerated:\n{}",
-        rust_str
     );
     assert!(
         rust_string.contains("Vec<String>"),
@@ -194,12 +164,12 @@ pub fn main() {
 fn test_struct_field_str_becomes_string_in_rust() {
     let source = r#"
 pub struct Person {
-    name: str,
-    title: str,
+    name: string,
+    title: string,
 }
 
 impl Person {
-    pub fn new(name: str, title: str) -> Person {
+    pub fn new(name: string, title: string) -> Person {
         Person { name: name, title: title }
     }
 }
@@ -221,7 +191,7 @@ pub fn main() {
 #[test]
 fn test_vec_str_becomes_vec_string_in_rust() {
     let source = r#"
-pub fn collect_names() -> Vec<str> {
+pub fn collect_names() -> Vec<string> {
     let mut names = Vec::new()
     names.push("Alice")
     names.push("Bob")
@@ -319,7 +289,7 @@ pub fn main() {
     let c = Config { name: "test" }
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in struct field\nStderr:\n{}",
@@ -338,7 +308,7 @@ pub fn main() {
     let x = get_name()
 }
 "#;
-    let (_rust, stderr) = test_utils::compile_via_cli_with_stderr(source);
+    let (_rust, _stdout, stderr) = test_utils::compile_via_cli_full(source);
     assert!(
         stderr.contains("W0010"),
         "W0010 should fire for `str` in return type\nStderr:\n{}",

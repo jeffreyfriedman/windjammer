@@ -51,7 +51,7 @@ struct Player {
 }
 
 impl Player {
-    // Avoid str == literal in body: current codegen can emit `*attr_name == "strength"`
+    // Avoid string == literal in body: current codegen can emit `*attr_name == "strength"`
     // which is invalid Rust; this test targets auto-borrow at the call site only.
     pub fn get_attribute(self, attr_name: string) -> i32 {
         if attr_name.len() > 0 {

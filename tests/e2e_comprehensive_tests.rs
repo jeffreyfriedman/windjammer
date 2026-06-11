@@ -40,19 +40,19 @@ impl Counter {
         Counter { value: 0 }
     }
     
-    pub fn increment(&mut self) {
+    pub fn increment(self) {
         self.value += 1
     }
     
-    pub fn decrement(&mut self) {
+    pub fn decrement(self) {
         self.value -= 1
     }
     
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
     
-    pub fn reset(&mut self) {
+    pub fn reset(self) {
         self.value = 0
     }
 }
@@ -84,23 +84,23 @@ impl Stack {
         Stack { items: Vec::new() }
     }
     
-    pub fn push(&mut self, item: i32) {
+    pub fn push(self, item: i32) {
         self.items.push(item)
     }
     
-    pub fn pop(&mut self) -> Option<i32> {
+    pub fn pop(self) -> Option<i32> {
         self.items.pop()
     }
     
-    pub fn peek(&self) -> Option<i32> {
+    pub fn peek(self) -> Option<i32> {
         self.items.last().copied()
     }
     
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.items.is_empty()
     }
     
-    pub fn len(&self) -> usize {
+    pub fn len(self) -> usize {
         self.items.len()
     }
 }
@@ -128,12 +128,12 @@ impl Point {
         Point { x: 0.0, y: 0.0 }
     }
     
-    pub fn translate(&mut self, dx: f32, dy: f32) {
+    pub fn translate(self, dx: f32, dy: f32) {
         self.x += dx;
         self.y += dy
     }
     
-    pub fn scale(&mut self, factor: f32) {
+    pub fn scale(self, factor: f32) {
         self.x *= factor;
         self.y *= factor
     }
@@ -159,7 +159,7 @@ impl Node {
         Node { value: value, has_next: false }
     }
     
-    pub fn value(&self) -> i32 {
+    pub fn value(self) -> i32 {
         self.value
     }
 }
@@ -220,11 +220,11 @@ impl EventHandler {
         EventHandler { event_count: 0 }
     }
     
-    pub fn handle(&mut self, _event: Event) {
+    pub fn handle(self, _event: Event) {
         self.event_count += 1
     }
     
-    pub fn count(&self) -> i32 {
+    pub fn count(self) -> i32 {
         self.event_count
     }
 }
@@ -255,29 +255,29 @@ impl StateMachine {
         StateMachine { state: State::Idle }
     }
     
-    pub fn start(&mut self) {
+    pub fn start(self) {
         if self.state == State::Idle {
             self.state = State::Running
         }
     }
     
-    pub fn pause(&mut self) {
+    pub fn pause(self) {
         if self.state == State::Running {
             self.state = State::Paused
         }
     }
     
-    pub fn resume(&mut self) {
+    pub fn resume(self) {
         if self.state == State::Paused {
             self.state = State::Running
         }
     }
     
-    pub fn stop(&mut self) {
+    pub fn stop(self) {
         self.state = State::Stopped
     }
     
-    pub fn is_running(&self) -> bool {
+    pub fn is_running(self) -> bool {
         self.state == State::Running
     }
 }
@@ -290,20 +290,20 @@ impl StateMachine {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_iterator_pipeline() {
     let code = r#"
-pub fn process_numbers(numbers: &Vec<i32>) -> i32 {
+pub fn process_numbers(numbers: Vec<i32>) -> i32 {
     numbers
-        .iter()
-        .filter(|n| **n > 0)
+        
+        .filter(|n| *n > 0)
         .map(|n| n * 2)
         .sum()
 }
 
-pub fn find_max(numbers: &Vec<i32>) -> Option<i32> {
-    numbers.iter().max().copied()
+pub fn find_max(numbers: Vec<i32>) -> Option<i32> {
+    numbers.max().copied()
 }
 
-pub fn count_positive(numbers: &Vec<i32>) -> usize {
-    numbers.iter().filter(|n| **n > 0).count()
+pub fn count_positive(numbers: Vec<i32>) -> usize {
+    numbers.filter(|n| *n > 0).count()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -355,17 +355,17 @@ impl Config {
         Config::default()
     }
     
-    pub fn width(&mut self, w: i32) -> &mut Config {
+    pub fn width(self, w: i32) -> &mut Config {
         self.width = w;
         self
     }
     
-    pub fn height(&mut self, h: i32) -> &mut Config {
+    pub fn height(self, h: i32) -> &mut Config {
         self.height = h;
         self
     }
     
-    pub fn fullscreen(&mut self, f: bool) -> &mut Config {
+    pub fn fullscreen(self, f: bool) -> &mut Config {
         self.fullscreen = f;
         self
     }
@@ -390,18 +390,18 @@ impl<T: Clone> Pair<T> {
         Pair { first: first, second: second }
     }
     
-    pub fn swap(&mut self) {
-        let temp = self.first.clone();
-        self.first = self.second.clone();
+    pub fn swap(self) {
+        let temp = self.first;
+        self.first = self.second;
         self.second = temp
     }
     
-    pub fn get_first(&self) -> T {
-        self.first.clone()
+    pub fn get_first(self) -> T {
+        self.first
     }
     
-    pub fn get_second(&self) -> T {
-        self.second.clone()
+    pub fn get_second(self) -> T {
+        self.second
     }
 }
 "#;
@@ -435,11 +435,11 @@ impl Entity {
         }
     }
     
-    pub fn set_active(&mut self, active: bool) {
+    pub fn set_active(self, active: bool) {
         self.active = active
     }
     
-    pub fn is_active(&self) -> bool {
+    pub fn is_active(self) -> bool {
         self.active
     }
 }

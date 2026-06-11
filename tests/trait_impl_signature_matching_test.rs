@@ -104,7 +104,7 @@ fn test_trait_impl_default_method_read_only() {
     let source = r#"
 trait Printable {
     fn display(self) {
-        // Read-only default impl - should infer &self
+        // Read-only default impl - should infer self
         println("Displaying");
     }
 }

@@ -13,7 +13,7 @@
 /// TDD Test: Extern function calls with borrowed string arguments
 ///
 /// Bug: When calling an extern function that takes `string` (→ String in Rust),
-/// passing a borrowed string param (e.g. `data: string` inferred as &str) generates
+/// passing a borrowed string param (e.g. `data: String` inferred as &str) generates
 /// `string_to_ffi(data)` but string_to_ffi expects String, not &str.
 ///   error[E0308]: mismatched types -- expected `String`, found `&str`
 ///
@@ -31,7 +31,7 @@ fn test_extern_borrowed_string_param() {
     // verify_checksum(data, expected) - data is inferred as &str (Borrowed)
     // save_checksum_hash(data) must pass String to string_to_ffi
     let source = r#"
-extern fn compute_hash(data: string) -> string
+extern fn compute_hash(data: String) -> String
 
 pub fn verify(data: string, expected: string) -> bool {
     let actual = compute_hash(data)
@@ -56,7 +56,7 @@ pub fn verify(data: string, expected: string) -> bool {
 fn test_extern_owned_string_param() {
     // When param is owned (e.g. consumed), .to_string() still works (String::to_string = clone)
     let source = r#"
-extern fn compute_hash(data: string) -> string
+extern fn compute_hash(data: String) -> String
 
 pub fn verify(data: string) -> string {
     compute_hash(data)

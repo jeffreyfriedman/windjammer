@@ -47,7 +47,7 @@ struct Stack {
 }
 
 impl Stack {
-    pub fn remove(&mut self, amount: i32) -> bool {
+    pub fn remove(self, amount: i32) -> bool {
         if self.quantity < amount {
             return false
         }
@@ -106,7 +106,7 @@ struct Stack {
 }
 
 impl Stack {
-    pub fn remove(&mut self, amount: i32) -> bool {
+    pub fn remove(self, amount: i32) -> bool {
         if self.quantity < amount {
             return false
         }
@@ -168,7 +168,7 @@ struct Config {
 }
 
 impl Config {
-    pub fn set_enabled(&mut self, value: bool) {
+    pub fn set_enabled(self, value: bool) {
         self.enabled = value;
     }
 }
@@ -223,7 +223,7 @@ struct Transform {
 }
 
 impl Transform {
-    pub fn set_x(&mut self, value: f32) {
+    pub fn set_x(self, value: f32) {
         self.x = value;
     }
 }

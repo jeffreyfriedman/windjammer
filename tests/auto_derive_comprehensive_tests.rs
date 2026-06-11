@@ -39,8 +39,8 @@ pub struct Point {
     y: i32,
 }
 
-pub fn duplicate(p: &Point) -> Point {
-    p.clone()
+pub fn duplicate(p: Point) -> Point {
+    p
 }
 "#;
     let (generated, success) = test_utils::compile_single_check(code);
@@ -59,7 +59,7 @@ pub struct Point {
     y: i32,
 }
 
-pub fn print_point(p: &Point) {
+pub fn print_point(p: Point) {
     println!("{:?}", p)
 }
 "#;
@@ -79,7 +79,7 @@ pub struct Point {
     y: i32,
 }
 
-pub fn are_equal(a: &Point, b: &Point) -> bool {
+pub fn are_equal(a: Point, b: Point) -> bool {
     a == b
 }
 "#;
@@ -142,7 +142,7 @@ pub struct Point {
     y: i32,
 }
 
-pub fn test_all(a: &Point, b: &Point) -> bool {
+pub fn test_all(a: Point, b: Point) -> bool {
     println!("{:?} == {:?}", a, b);
     a == b
 }
@@ -189,8 +189,8 @@ pub struct Person {
     age: i32,
 }
 
-pub fn clone_person(p: &Person) -> Person {
-    p.clone()
+pub fn clone_person(p: Person) -> Person {
+    p
 }
 "#;
     let (generated, success) = test_utils::compile_single_check(code);
@@ -210,8 +210,8 @@ pub struct Container {
     items: Vec<i32>,
 }
 
-pub fn clone_container(c: &Container) -> Container {
-    c.clone()
+pub fn clone_container(c: Container) -> Container {
+    c
 }
 "#;
     let (generated, success) = test_utils::compile_single_check(code);
@@ -235,7 +235,7 @@ pub enum Color {
     Blue,
 }
 
-pub fn is_red(c: &Color) -> bool {
+pub fn is_red(c: Color) -> bool {
     *c == Color::Red
 }
 "#;
@@ -253,8 +253,8 @@ pub enum Message {
     Number(i32),
 }
 
-pub fn clone_message(m: &Message) -> Message {
-    m.clone()
+pub fn clone_message(m: Message) -> Message {
+    m
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -283,8 +283,8 @@ pub struct Outer {
     inner: Inner,
 }
 
-pub fn clone_outer(o: &Outer) -> Outer {
-    o.clone()
+pub fn clone_outer(o: Outer) -> Outer {
+    o
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -308,8 +308,8 @@ pub struct Container<T> {
     value: T,
 }
 
-pub fn clone_container<T: Clone>(c: &Container<T>) -> Container<T> {
-    c.clone()
+pub fn clone_container<T: Clone>(c: Container<T>) -> Container<T> {
+    c
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);

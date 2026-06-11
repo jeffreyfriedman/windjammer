@@ -1,7 +1,7 @@
 //! Rust Leakage Detection
 //!
-//! Warns about Rust-specific patterns in Windjammer code.
-//! These patterns work but are not idiomatic - the compiler infers them automatically.
+//! Rejects Rust-specific patterns in Windjammer code.
+//! These patterns expose Rust internals that the compiler handles automatically.
 
 use crate::error::SourceLocation;
 use crate::linter::{LintCategory, LintCollector, LintDiagnostic, LintLevel};
@@ -121,7 +121,7 @@ impl<'ast> RustLeakageLinter<'ast> {
         self.collector.add(LintDiagnostic {
             lint_name: "W0001".to_string(),
             category: LintCategory::Style,
-            level: LintLevel::Note,
+            level: LintLevel::Error,
             message: "explicit ownership annotation".to_string(),
             location,
             help: Some(suggestion.clone()),
@@ -213,7 +213,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0002".to_string(),
                         category: LintCategory::Correctness,
-                        level: LintLevel::Warning,
+                        level: LintLevel::Error,
                         message: format!("explicit .{}() call", method),
                         location: loc,
                         help: Some(
@@ -233,7 +233,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0003".to_string(),
                         category: LintCategory::Style,
-                        level: LintLevel::Note,
+                        level: LintLevel::Error,
                         message: "explicit .iter() call".to_string(),
                         location: loc,
                         help: Some("use direct iteration: `for x in collection`".to_string()),
@@ -250,7 +250,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0005".to_string(),
                         category: LintCategory::Style,
-                        level: LintLevel::Warning,
+                        level: LintLevel::Error,
                         message: "explicit .clone() call".to_string(),
                         location: loc,
                         help: Some(
@@ -365,7 +365,7 @@ impl<'ast> RustLeakageLinter<'ast> {
             self.collector.add(LintDiagnostic {
                 lint_name: "W0004".to_string(),
                 category: LintCategory::Style,
-                level: LintLevel::Note,
+                level: LintLevel::Error,
                 message: "explicit borrow in function call".to_string(),
                 location: loc,
                 help: Some("remove explicit borrow - pass value directly".to_string()),
@@ -385,7 +385,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 self.collector.add(LintDiagnostic {
                     lint_name: "W0001".to_string(),
                     category: LintCategory::Style,
-                    level: LintLevel::Note,
+                    level: LintLevel::Error,
                     message: "explicit reference type in parameter".to_string(),
                     location,
                     help: Some(format!(
@@ -410,14 +410,31 @@ impl<'ast> RustLeakageLinter<'ast> {
 }
 
 /// Run the Rust leakage linter on a program and emit diagnostics to stderr.
-pub fn run_lint_if_enabled(enable_lint: bool, file: &std::path::Path, program: &Program) {
+/// Returns `Err` if any diagnostic is an error-level lint.
+pub fn run_lint_if_enabled(
+    enable_lint: bool,
+    file: &std::path::Path,
+    program: &Program,
+) -> Result<(), String> {
     if !enable_lint {
-        return;
+        return Ok(());
     }
     let file_name = file.to_string_lossy().to_string();
     let mut linter = RustLeakageLinter::new(&file_name);
     linter.lint_program(program);
+    let mut has_errors = false;
     for diag in linter.diagnostics() {
         eprintln!("{}", diag);
+        if diag.level == LintLevel::Error {
+            has_errors = true;
+        }
+    }
+    if has_errors {
+        Err(format!(
+            "Rust leakage errors in {} -- fix or use `extern fn` for FFI",
+            file_name
+        ))
+    } else {
+        Ok(())
     }
 }

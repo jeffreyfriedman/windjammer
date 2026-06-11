@@ -12,7 +12,7 @@
 
 // TDD Test: Integer literal inference in generic collections
 //
-// Bug: map.insert("k", 42) generates 42_i32 for HashMap<string, int> (int = i64)
+// Bug: map.insert("k", 42) generates 42_i32 for HashMap<String, int> (int = i64)
 // Expected: HashMap/BTreeMap value type and Vec element type should propagate to literals
 //
 // Tests: HashMap::insert, BTreeMap::insert, Vec::push, custom struct fields
@@ -44,7 +44,7 @@ fn init_ids() -> Vec<int> {
 
 #[test]
 fn test_hashmap_insert_i64_literal() {
-    // HashMap<string, int> → insert("k", 42) should generate 42_i64
+    // HashMap<String, int> → insert("k", 42) should generate 42_i64
     let wj_source = r#"
 use std::collections::HashMap
 
@@ -61,7 +61,7 @@ fn init_map() -> HashMap<string, int> {
 
     assert!(
         rust_code.contains("42_i64") && rust_code.contains("100_i64"),
-        "HashMap<string, int>.insert() should infer i64 value literals, got:\n{}",
+        "HashMap<String, int>.insert() should infer i64 value literals, got:\n{}",
         rust_code
     );
 }
@@ -188,7 +188,7 @@ fn main() {
 
     assert!(
         rust_code.contains("42_i64") && rust_code.contains("99_i64"),
-        "Struct field HashMap<string, int>.insert() should infer i64, got:\n{}",
+        "Struct field HashMap<String, int>.insert() should infer i64, got:\n{}",
         rust_code
     );
 }

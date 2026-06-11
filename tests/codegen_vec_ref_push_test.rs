@@ -36,9 +36,9 @@ struct QuestManager {
 }
 
 impl QuestManager {
-    pub fn get_completed_quests(&self) -> Vec<&Quest> {
+    pub fn get_completed_quests(self) -> Vec<&Quest> {
         let mut result = Vec::new()
-        for quest in &self.quests {
+        for quest in self.quests {
             if quest.completed {
                 result.push(quest)
             }

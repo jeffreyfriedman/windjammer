@@ -114,7 +114,7 @@ impl Serializer {
 }
 
 /// Bug 4: Comparison in destructured enum context should not over-clone
-/// When iterating a Vec<String> from a destructured enum field (which is borrowed),
+/// When iterating a Vec<string> from a destructured enum field (which is borrowed),
 /// the loop var is &String. Comparing &String with self.field (also &String in &self)
 /// should work without cloning — both sides are references.
 ///   Source: match self.kind { Kind::Items { data: items } => { for item in items { if item == self.value { ... } } } }
@@ -163,10 +163,10 @@ impl Foo {
     );
 }
 
-/// Bug 5: String concatenation with format!() should not cast to f32
+/// Bug 5: string concatenation with format!() should not cast to f32
 /// Source: options_html = options_html + format!("...", item)
 /// Bug: Generated as options_html as f32 + &format!(...) — incorrect float cast
-/// Fix: String + format!() should produce string concatenation, not numeric addition.
+/// Fix: string + format!() should produce string concatenation, not numeric addition.
 #[test]
 fn test_string_concat_with_format_no_float_cast() {
     let source = r#"
@@ -203,7 +203,7 @@ impl Builder {
     );
 }
 
-/// Bug 5b: String concat inside enum match arm with multiple format args
+/// Bug 5b: string concat inside enum match arm with multiple format args
 /// Reproduces the exact propertyeditor.wj pattern with match + iter + concat + multi-arg format
 #[test]
 fn test_string_concat_in_enum_match_arm() {

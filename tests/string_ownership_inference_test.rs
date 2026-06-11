@@ -12,7 +12,7 @@
 
 // TDD Test: String ownership inference (&str vs String)
 // THE WINDJAMMER WAY: Explicit types are honored
-// - User writes `text: string` → `text: String` (owned, as written)
+// - User writes `text: String` → `text: String` (owned, as written)
 // - User writes `text: &string` → `text: &str` (borrowed, as written)
 
 #[path = "common/test_utils.rs"]

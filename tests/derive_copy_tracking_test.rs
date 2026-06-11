@@ -87,7 +87,7 @@ fn test_no_derive_copy_not_tracked() {
     let source = r#"
 pub struct MyType { value: string }
 
-pub fn process(x: &MyType) -> usize {
+pub fn process(x: MyType) -> usize {
     x.value.len()
 }
 

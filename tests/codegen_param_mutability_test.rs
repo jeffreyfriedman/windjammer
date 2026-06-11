@@ -36,8 +36,8 @@ struct Loader {
 
 impl Loader {
     fn load(self, name: string) -> Item {
-        let item = Item { name: name.clone() }
-        self.items.push(item.clone())
+        let item = Item { name: name }
+        self.items.push(item)
         item
     }
 }
@@ -71,8 +71,8 @@ struct AssetLoader {
 impl AssetLoader {
     fn load(self, name: string, path: string) -> Asset {
         self.count = self.count + 1
-        let asset = Asset { name: name.clone(), data: Vec::new() }
-        self.loaded.push(asset.clone())
+        let asset = Asset { name: name, data: Vec::new() }
+        self.loaded.push(asset)
         asset
     }
 }

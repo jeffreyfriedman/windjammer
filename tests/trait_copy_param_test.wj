@@ -1,11 +1,11 @@
 // Test that Copy types in trait methods don't get unnecessary & references
 
 pub trait Calculator {
-    fn add(&self, a: f32, b: f32) -> f32 {
+    fn add(self, a: f32, b: f32) -> f32 {
         a + b
     }
     
-    fn multiply(&self, x: int, y: int) -> int {
+    fn multiply(self, x: int, y: int) -> int {
         x * y
     }
 }
@@ -15,11 +15,11 @@ pub struct SimpleCalc {
 }
 
 impl Calculator for SimpleCalc {
-    fn add(&self, a: f32, b: f32) -> f32 {
+    fn add(self, a: f32, b: f32) -> f32 {
         a + b
     }
     
-    fn multiply(&self, x: int, y: int) -> int {
+    fn multiply(self, x: int, y: int) -> int {
         x * y
     }
 }

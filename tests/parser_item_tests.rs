@@ -109,7 +109,7 @@ fn test_fn_generic() {
 fn test_fn_with_self() {
     let code = r#"
     impl Foo {
-        fn bar(&self) { }
+        fn bar(self) { }
     }
     "#;
     let program = parse_program(code);
@@ -120,7 +120,7 @@ fn test_fn_with_self() {
 fn test_fn_with_mut_self() {
     let code = r#"
     impl Foo {
-        fn bar(&mut self) { }
+        fn bar(self) { }
     }
     "#;
     let program = parse_program(code);
@@ -214,7 +214,7 @@ pub struct Prefab {
 
 #[test]
 fn test_struct_nested_type() {
-    let item = first_item("struct Container { items: Vec<string> }");
+    let item = first_item("struct Container { items: Vec<String> }");
     assert!(matches!(item, Item::Struct { .. }));
 }
 
@@ -240,7 +240,7 @@ fn test_enum_with_data() {
 
 #[test]
 fn test_enum_struct_variants() {
-    let item = first_item("enum Message { Text { content: string }, Image { url: string } }");
+    let item = first_item("enum Message { Text { content: String }, Image { url: String } }");
     assert!(matches!(item, Item::Enum { .. }));
 }
 
@@ -286,8 +286,8 @@ fn test_impl_with_methods() {
     let code = r#"
     impl Point {
         fn new() -> Point { Point { x: 0, y: 0 } }
-        fn x(&self) -> i32 { self.x }
-        fn set_x(&mut self, x: i32) { self.x = x }
+        fn x(self) -> i32 { self.x }
+        fn set_x(self, x: i32) { self.x = x }
     }
     "#;
     let item = first_item(code);
@@ -302,7 +302,7 @@ fn test_impl_with_methods() {
 fn test_impl_trait() {
     let code = r#"
     impl Display for Point {
-        fn fmt(&self) -> string {
+        fn fmt(self) -> string {
             "point"
         }
     }
@@ -338,7 +338,7 @@ fn test_trait_simple() {
     // Trait methods with default implementations
     let code = r#"
     trait Drawable {
-        fn draw(&self) { }
+        fn draw(self) { }
     }
     "#;
     let item = first_item(code);
@@ -349,8 +349,8 @@ fn test_trait_simple() {
 fn test_trait_with_methods() {
     let code = r#"
     trait Animal {
-        fn speak(&self) { }
-        fn name(&self) -> string { "unknown" }
+        fn speak(self) { }
+        fn name(self) -> string { "unknown" }
     }
     "#;
     let item = first_item(code);
@@ -365,7 +365,7 @@ fn test_trait_with_methods() {
 fn test_trait_with_default_impl() {
     let code = r#"
     trait Greet {
-        fn greet(&self) {
+        fn greet(self) {
             println!("Hello!")
         }
     }
@@ -525,13 +525,13 @@ fn test_struct_and_impl() {
 fn test_trait_and_impl() {
     let code = r#"
     trait Drawable {
-        fn draw(&self) { }
+        fn draw(self) { }
     }
     
     struct Circle { radius: f32 }
     
     impl Drawable for Circle {
-        fn draw(&self) { }
+        fn draw(self) { }
     }
     "#;
     let program = parse_program(code);
@@ -553,8 +553,8 @@ fn test_generic_struct_with_bounds() {
 fn test_impl_with_where_clause() {
     let code = r#"
     impl<T> Container<T> where T: Clone {
-        fn clone_value(&self) -> T {
-            self.value.clone()
+        fn clone_value(self) -> T {
+            self.value
         }
     }
     "#;
@@ -567,7 +567,7 @@ fn test_async_trait_method() {
     // Async trait methods need default implementations
     let code = r#"
     trait AsyncReader {
-        async fn read(&self) -> string { "data" }
+        async fn read(self) -> string { "data" }
     }
     "#;
     let item = first_item(code);

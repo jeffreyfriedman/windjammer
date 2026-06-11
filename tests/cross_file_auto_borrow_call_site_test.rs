@@ -54,7 +54,7 @@ impl Renderer {
     }
 
     // palette is only READ here → analyzer should infer Borrowed
-    // Generated Rust: fn upload(palette: &Palette)
+    // Generated Rust: fn upload(palette: Palette)
     pub fn upload(self, palette: Palette) {
         let count = palette.colors.len()
         self.active = count > 0

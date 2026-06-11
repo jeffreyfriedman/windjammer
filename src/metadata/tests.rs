@@ -179,6 +179,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
         structs: HashMap::new(),
         trait_impls: HashMap::new(),
         copy_structs: vec![],
+        non_copy_structs: vec![],
         version: "0.1.0".to_string(),
     };
     let cache_path = proj.join(".wj-cache/rendering/voxel_renderer.wj.meta");

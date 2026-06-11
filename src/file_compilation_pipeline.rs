@@ -186,15 +186,23 @@ fn compile_file_impl(
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
-    // Emit parser warnings (W0010: non-canonical string types, etc.)
+    // Emit parser diagnostics (W0010: non-canonical string types, etc.)
+    // W0010 normalizes the type before erroring, so codegen still works.
+    // We track errors and fail after writing output so the user sees the generated code.
+    let mut has_lint_errors = false;
     for w in wj_parser.warnings() {
+        let level = if w.is_error { "error" } else { "warning" };
         eprintln!(
-            "warning: {} [{}:{}:{}]",
+            "{}: {} [{}:{}:{}]",
+            level,
             w.message,
             w.file.as_deref().unwrap_or("<unknown>"),
             w.line.unwrap_or(0),
             w.column.unwrap_or(0),
         );
+        if w.is_error {
+            has_lint_errors = true;
+        }
     }
 
     // Content-based shader detection: skip files with @vertex/@fragment/@compute
@@ -480,7 +488,7 @@ fn compile_file_impl(
 
     let inferred_bounds_map = inference::collect_inferred_bounds(&program.items);
 
-    match generate_main_rust_code(
+    let result = match generate_main_rust_code(
         target,
         source_root,
         input_path,
@@ -506,5 +514,13 @@ fn compile_file_impl(
             &signatures,
             rust_code,
         ),
+    };
+
+    if has_lint_errors {
+        return Err(anyhow::anyhow!(
+            "Rust leakage errors detected -- see diagnostics above"
+        ));
     }
+
+    result
 }

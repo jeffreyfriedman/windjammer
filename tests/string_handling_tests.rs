@@ -68,7 +68,7 @@ pub fn greet(name: string) -> string {
 
     assert!(
         generated.contains(r#""Hello, ".to_string()"#)
-            || generated.contains(r#"String::from("Hello, ")"#),
+            || generated.contains(r#"string::from("Hello, ")"#),
         "Mutable string should be String. Generated:\n{}",
         generated
     );
@@ -78,7 +78,7 @@ pub fn greet(name: string) -> string {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_immutable_string_no_to_string() {
     let code = r#"
-pub fn get_message() -> &'static str {
+pub fn get_message() -> &'static string {
     let msg = "Hello"
     msg
 }
@@ -122,7 +122,7 @@ pub fn create() -> Container {
     // String literal passed to stored param should have .to_string()
     assert!(
         generated.contains(r#""hello".to_string()"#)
-            || generated.contains(r#"String::from("hello")"#),
+            || generated.contains(r#"string::from("hello")"#),
         "String literal should be converted to String. Generated:\n{}",
         generated
     );
@@ -172,9 +172,9 @@ pub fn status_message(code: i32) -> string {
     assert!(success, "Compilation failed: {}", err);
 
     let ok_converted = generated.contains(r#""OK".to_string()"#)
-        || generated.contains(r#"String::from("OK")"#);
+        || generated.contains(r#"string::from("OK")"#);
     let warning_converted = generated.contains(r#""Warning".to_string()"#)
-        || generated.contains(r#"String::from("Warning")"#);
+        || generated.contains(r#"string::from("Warning")"#);
 
     assert!(
         ok_converted && warning_converted,
@@ -201,7 +201,7 @@ pub fn format_value(opt: Option<string>) -> string {
 
     assert!(
         generated.contains(r#""default".to_string()"#)
-            || generated.contains(r#"String::from("default")"#),
+            || generated.contains(r#"string::from("default")"#),
         "None arm should be converted to String. Generated:\n{}",
         generated
     );
@@ -226,7 +226,7 @@ pub fn get_name() -> string {
 
     assert!(
         generated.contains(r#""Alice".to_string()"#)
-            || generated.contains(r#"String::from("Alice")"#),
+            || generated.contains(r#"string::from("Alice")"#),
         "Return literal should be String. Generated:\n{}",
         generated
     );
@@ -247,7 +247,7 @@ pub fn get_version() -> string {
 
     assert!(
         generated.contains(r#""1.0.0".to_string()"#)
-            || generated.contains(r#"String::from("1.0.0")"#),
+            || generated.contains(r#"string::from("1.0.0")"#),
         "Implicit return should be String. Generated:\n{}",
         generated
     );
@@ -342,7 +342,7 @@ pub fn create_person() -> Person {
 }
 
 // ============================================================================
-// Test: Vec<string> Operations
+// Test: Vec<String> Operations
 // ============================================================================
 
 #[test]
@@ -364,7 +364,7 @@ pub fn get_colors() -> Vec<string> {
 
     assert!(
         generated.contains(r#""red".to_string()"#)
-            || generated.contains(r#"String::from("red")"#),
+            || generated.contains(r#"string::from("red")"#),
         "Vec::push should convert literal. Generated:\n{}",
         generated
     );
@@ -395,13 +395,13 @@ pub fn classify(n: i32) -> string {
 
     assert!(
         generated.contains(r#""positive".to_string()"#)
-            || generated.contains(r#"String::from("positive")"#),
+            || generated.contains(r#"string::from("positive")"#),
         "If branch should be String. Generated:\n{}",
         generated
     );
     assert!(
         generated.contains(r#""zero".to_string()"#)
-            || generated.contains(r#"String::from("zero")"#),
+            || generated.contains(r#"string::from("zero")"#),
         "Else branch should be String. Generated:\n{}",
         generated
     );

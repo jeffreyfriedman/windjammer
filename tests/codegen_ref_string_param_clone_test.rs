@@ -43,7 +43,7 @@ impl Member {
     }
 }
 
-fn create_members(names: &Vec<string>) -> Vec<Member> {
+fn create_members(names: Vec<string>) -> Vec<Member> {
     let mut members = Vec::new();
     for name in names {
         members.push(Member::new(name));

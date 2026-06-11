@@ -47,7 +47,7 @@ impl Condition {
     pub fn evaluate(self, inv: Inventory) -> bool {
         match self {
             Condition::HasItem(item_id, qty) => {
-                inv.has_item(item_id, qty)  // Should auto-convert String → &str
+                inv.has_item(item_id, qty)  // Should auto-convert string → &string
             }
         }
     }

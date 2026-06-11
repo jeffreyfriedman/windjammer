@@ -185,7 +185,7 @@ pub fn unwrap_or_default(opt: Option<i32>) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_match_option_ref() {
     let code = r#"
-pub fn is_some(opt: &Option<i32>) -> bool {
+pub fn is_some(opt: Option<i32>) -> bool {
     match opt {
         Some(_) => true,
         None => false,

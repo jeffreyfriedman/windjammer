@@ -28,7 +28,7 @@ fn test_method_returning_mut_ref_needs_mut_self() {
     impl<T> Storage<T> {
         pub fn get_mut(self, index: usize) -> Option<&mut T> {
             if index < self.data.len() {
-                return Some(&mut self.data[index])
+                return Some(self.data[index])
             }
             return None
         }

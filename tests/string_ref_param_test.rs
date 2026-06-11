@@ -87,7 +87,7 @@ pub fn outer(name: string) -> i32 {
 #[test]
 fn test_extern_fn_wrapper_uses_str_ref() {
     let source = r#"
-extern fn gpu_env_var_is_set(name: string) -> u32
+extern fn gpu_env_var_is_set(name: &str) -> u32
 
 pub fn env_var_is_set(name: string) -> bool {
     gpu_env_var_is_set(name) != 0

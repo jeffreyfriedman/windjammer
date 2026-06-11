@@ -16,11 +16,11 @@ impl AnimationClip {
         AnimationClip { keyframes: Vec::new() }
     }
     
-    fn add_keyframe(&mut self, time: f32, value: f32) {
+    fn add_keyframe(self, time: f32, value: f32) {
         self.keyframes.push(Keyframe { time, value })
     }
     
-    fn find_keyframe_index(&self, target_time: f32) -> usize {
+    fn find_keyframe_index(self, target_time: f32) -> usize {
         // CRITICAL PATTERN: after_idx is usize (from .len())
         let mut after_idx = self.keyframes.len() - 1
         
@@ -38,7 +38,7 @@ impl AnimationClip {
         after_idx
     }
     
-    fn sample(&self, time: f32) -> f32 {
+    fn sample(self, time: f32) -> f32 {
         if self.keyframes.is_empty() {
             return 0.0
         }

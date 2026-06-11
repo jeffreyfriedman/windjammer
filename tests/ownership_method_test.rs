@@ -120,7 +120,7 @@ impl Quest {
 }
 
 pub fn create_fetch_quest(id: string, title: string, item_id: string, quantity: i32) -> Quest {
-    let mut quest = Quest::new(id.clone(), title, format!("Collect {} {}", quantity, item_id))
+    let mut quest = Quest::new(id, title, format!("Collect {} {}", quantity, item_id))
     quest
 }
 "#;
@@ -174,7 +174,7 @@ impl ItemStack {
     }
 }
 
-pub fn remove_items(slots: &mut Vec<Option<ItemStack>>, quantity: u32) -> u32 {
+pub fn remove_items(mut slots: Vec<Option<ItemStack>>, quantity: u32) -> u32 {
     let mut removed: u32 = 0
     let mut remaining: u32 = quantity
 
@@ -234,7 +234,7 @@ pub struct SceneManager {
 impl SceneManager {
     pub fn current_scene_id(self) -> Option<string> {
         if self.scene_stack.len() > 0 {
-            Some(&self.scene_stack[self.scene_stack.len() - 1])
+            Some(self.scene_stack[self.scene_stack.len() - 1])
         } else {
             None
         }
@@ -243,7 +243,7 @@ impl SceneManager {
     pub fn pop_scene(self) {
         if self.scene_stack.len() > 0 {
             let popped = self.scene_stack.remove(self.scene_stack.len() - 1)
-            self.paused_scenes.remove(&popped)
+            self.paused_scenes.remove(popped)
 
             if let Some(current) = self.current_scene_id() {
                 self.paused_scenes.remove(current)
@@ -304,23 +304,23 @@ impl Inventory {
     }
 
     /// Count items matching a predicate - uses filter with function pointer
-    pub fn count_where(self, predicate: fn(&Item) -> bool) -> usize {
-        self.items.iter().filter(predicate).count()
+    pub fn count_where(self, predicate: fn(Item) -> bool) -> usize {
+        self.items.filter(predicate).count()
     }
 
     /// Check if any item matches - uses any with function pointer
-    pub fn any_match(self, predicate: fn(&Item) -> bool) -> bool {
-        self.items.iter().any(predicate)
+    pub fn any_match(self, predicate: fn(Item) -> bool) -> bool {
+        self.items.any(predicate)
     }
 
     /// Find first matching item - uses find with function pointer
-    pub fn find_item(self, predicate: fn(&Item) -> bool) -> Option<&Item> {
-        self.items.iter().find(predicate)
+    pub fn find_item(self, predicate: fn(Item) -> bool) -> Option<&Item> {
+        self.items.find(predicate)
     }
 
     /// Count items NOT matching - uses filter with negated function pointer
-    pub fn count_not_matching(self, predicate: fn(&Item) -> bool) -> usize {
-        self.items.iter().filter(|e| !predicate(e)).count()
+    pub fn count_not_matching(self, predicate: fn(Item) -> bool) -> usize {
+        self.items.filter(|e| !predicate(e)).count()
     }
 }
 "#;
@@ -401,7 +401,7 @@ impl Inventory {
 // TEST: Auto-infer mut for parameters when mutating methods called on them
 //
 // Real game code pattern (from assets/loader.wj):
-//   pub fn load_game_level(loader: AssetLoader, level_name: string) -> ... {
+//   pub fn load_game_level(loader: AssetLoader, level_name: String) -> ... {
 //       let tilemap = loader.load(...)
 //       let texture = loader.load(...)
 //   }
@@ -442,8 +442,8 @@ impl ResourcePool {
 
 /// Function that takes owned ResourcePool and calls mutating methods on it
 /// THE WINDJAMMER WAY: User writes `pool: ResourcePool` without `mut`,
-/// compiler infers `mut` because .add() requires &mut self
-/// NOTE: String literals auto-convert to String (no .to_string() needed!)
+/// compiler infers `mut` because .add() requires self
+/// NOTE: string literals auto-convert to string (no .to_string() needed!)
 pub fn fill_pool(pool: ResourcePool) {
     pool.add("water")
     pool.add("food")

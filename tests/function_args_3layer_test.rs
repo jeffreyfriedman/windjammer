@@ -50,7 +50,7 @@ pub fn caller(s: string) {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_fn_arg_auto_borrow_mut() {
     let src = r#"
-pub fn takes_mut(n: &mut i32) {}
+pub fn takes_mut(mut n: i32) {}
 pub fn caller(mut n: i32) {
     takes_mut(n)
 }
@@ -74,7 +74,7 @@ pub fn caller(mut n: i32) {
 fn test_fn_arg_auto_deref_copy() {
     let src = r#"
 pub fn takes_owned(x: i32) {}
-pub fn caller(x: &i32) {
+pub fn caller(x: i32) {
     takes_owned(x)
 }
 "#;
@@ -218,7 +218,7 @@ fn test_fn_arg_borrowed_field_copy() {
     let src = r#"
 pub struct Item { pub id: i32 }
 pub fn takes_id(id: i32) {}
-pub fn caller(items: &Vec<Item>) {
+pub fn caller(items: Vec<Item>) {
     takes_id(items[0].id)
 }
 "#;
@@ -233,8 +233,8 @@ fn test_fn_arg_borrowed_field_noncopy() {
     let src = r#"
 pub struct Item { pub name: string }
 pub fn takes_name(name: string) {}
-pub fn caller(items: &Vec<Item>) {
-    takes_name(&items[0].name)
+pub fn caller(items: Vec<Item>) {
+    takes_name(items[0].name)
 }
 "#;
     let (success, _result, err) = test_utils::compile_via_cli(src);
@@ -249,8 +249,8 @@ pub fn caller(items: &Vec<Item>) {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_fn_arg_mixed_ownership() {
     let src = r#"
-pub fn mixed(a: &i32, b: i32, c: string) {}
-pub fn caller(x: &i32, y: i32, z: string) {
+pub fn mixed(a: i32, b: i32, c: string) {}
+pub fn caller(x: i32, y: i32, z: string) {
     mixed(x, y, z)
 }
 "#;
@@ -304,9 +304,9 @@ fn test_fn_arg_for_loop_borrowed() {
     let src = r#"
 pub struct Item { pub id: string }
 pub fn process(id: string) {}
-pub fn caller(items: &Vec<Item>) {
+pub fn caller(items: Vec<Item>) {
     for item in items {
-        process(&item.id)
+        process(item.id)
     }
 }
 "#;

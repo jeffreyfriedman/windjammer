@@ -28,8 +28,8 @@ struct Registry {
 
 impl Registry {
     pub fn find_by_name(name: string) -> u64 {
-        if self.name_index.contains_key(&name) {
-            self.name_index.get(&name).unwrap().clone()
+        if self.name_index.contains_key(name) {
+            self.name_index.get(name).unwrap()
         } else {
             0
         }

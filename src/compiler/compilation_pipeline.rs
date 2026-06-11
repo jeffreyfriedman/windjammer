@@ -96,10 +96,14 @@ pub fn build_project_ext(
         );
     }
 
+    let mut deferred_lint_errors: Vec<String> = Vec::new();
+
     for file in &wj_files {
         let source = std::fs::read_to_string(file)?;
         let (_parser, program) = super::parse_wj_source(file, &source)?;
-        super::emit_parser_warnings(&_parser);
+        if let Err(e) = super::emit_parser_warnings(&_parser) {
+            deferred_lint_errors.push(format!("{}", e));
+        }
 
         if library {
             crate::metadata::merge_file_skeleton_into_crate(&mut crate_metadata, file, &program);
@@ -110,7 +114,11 @@ pub fn build_project_ext(
             .check_forbidden_rust_patterns(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program);
+        if let Err(e) =
+            crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program)
+        {
+            deferred_lint_errors.push(e);
+        }
 
         let mut global_signatures = SignatureRegistry::new();
         let file_parent = file.parent().unwrap_or(Path::new("."));
@@ -266,6 +274,13 @@ pub fn build_project_ext(
     }
 
     super::generate_cargo_manifests(path, output, target, false)?;
+
+    if !deferred_lint_errors.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Rust leakage errors:\n{}",
+            deferred_lint_errors.join("\n")
+        ));
+    }
 
     Ok(())
 }

@@ -16,7 +16,7 @@ mod test_utils;
 use std::fs;
 /// TDD: Verify that structs containing String fields do NOT auto-derive Copy.
 ///
-/// Bug: InputAction has a `name: string` field, yet InputBinding (which contains
+/// Bug: InputAction has a `name: String` field, yet InputBinding (which contains
 /// InputAction) was getting `#[derive(Debug, Clone, Copy)]`. String is not Copy,
 /// so any struct transitively containing String must not derive Copy.
 use std::process::Command;
@@ -238,7 +238,7 @@ impl InputAction {
     }
 
     pub fn name(self) -> string {
-        self.name.clone()
+        self.name
     }
 }
 "#,

@@ -21,11 +21,11 @@
 ///     HasItem(string),
 /// }
 ///
-/// fn check_item(item_id: string) -> bool {
+/// fn check_item(item_id: String) -> bool {
 ///     has_item(item_id)  // item_id is owned String, has_item expects &str
 /// }
 ///
-/// fn has_item(id: string) -> bool {
+/// fn has_item(id: String) -> bool {
 ///     id == "sword"
 /// }
 /// ```
@@ -61,8 +61,8 @@ impl Inventory {
 fn check_condition(cond: Cond, inventory: Inventory) -> bool {
     match cond {
         Cond::HasItem(item_id) => {
-            // item_id is owned String from match arm
-            // has_item expects &str (inferred for read-only param)
+            // item_id is owned string from match arm
+            // has_item expects &string (inferred for read-only param)
             inventory.has_item(item_id)
         },
         Cond::HasGold(_) => false,

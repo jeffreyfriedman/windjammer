@@ -82,7 +82,7 @@ fn test_custom_method_string_param() {
     }
     
     impl Logger {
-        pub fn log(&mut self, message: string) {
+        pub fn log(self, message: string) {
             self.messages.push(message)
         }
     }
@@ -113,7 +113,7 @@ fn test_str_param_no_conversion() {
     }
     
     impl Text {
-        pub fn starts_with(&self, prefix: string) -> bool {
+        pub fn starts_with(self, prefix: string) -> bool {
             return self.content.starts_with(prefix)
         }
     }

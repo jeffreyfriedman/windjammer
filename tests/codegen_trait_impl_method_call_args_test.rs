@@ -35,7 +35,7 @@ enum Key {
 struct Input {}
 
 impl Input {
-    fn is_key_down(&self, key: Key) -> bool {
+    fn is_key_down(self, key: Key) -> bool {
         true
     }
 }
@@ -43,13 +43,13 @@ impl Input {
 struct Paddle {}
 
 impl Paddle {
-    fn update(&mut self, delta: f32, up: bool, down: bool) {
+    fn update(self, delta: f32, up: bool, down: bool) {
         // Do something
     }
 }
 
 trait GameLoop {
-    fn update(&mut self, delta: f32, input: &Input);
+    fn update(self, delta: f32, input: Input);
 }
 
 struct Game {
@@ -57,7 +57,7 @@ struct Game {
 }
 
 impl GameLoop for Game {
-    fn update(&mut self, delta: f32, input: &Input) {
+    fn update(self, delta: f32, input: Input) {
         // This is the context where the bug occurs
         self.paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
     }

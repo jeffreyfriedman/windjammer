@@ -115,7 +115,7 @@ pub fn use_closure() -> i32 {
 fn test_closure_map() {
     let code = r#"
 pub fn double_all(items: Vec<i32>) -> Vec<i32> {
-    items.iter().map(|x| x * 2).collect()
+    items.map(|x| x * 2).collect()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -127,7 +127,7 @@ pub fn double_all(items: Vec<i32>) -> Vec<i32> {
 fn test_closure_filter() {
     let code = r#"
 pub fn positive_only(items: Vec<i32>) -> Vec<i32> {
-    items.iter().filter(|x| **x > 0).cloned().collect()
+    items.filter(|x| *x > 0).collect()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -139,7 +139,7 @@ pub fn positive_only(items: Vec<i32>) -> Vec<i32> {
 fn test_closure_fold() {
     let code = r#"
 pub fn sum_all(items: Vec<i32>) -> i32 {
-    items.iter().fold(0, |acc, x| acc + x)
+    items.fold(0, |acc, x| acc + x)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -151,7 +151,7 @@ pub fn sum_all(items: Vec<i32>) -> i32 {
 fn test_closure_for_each() {
     let code = r#"
 pub fn print_all(items: Vec<i32>) {
-    items.iter().for_each(|x| println!("{}", x))
+    items.for_each(|x| println!("{}", x))
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -167,7 +167,7 @@ pub fn print_all(items: Vec<i32>) {
 fn test_closure_chain() {
     let code = r#"
 pub fn process(items: Vec<i32>) -> i32 {
-    items.iter()
+    items
         .map(|x| x * 2)
         .filter(|x| *x > 5)
         .sum()
@@ -182,8 +182,8 @@ pub fn process(items: Vec<i32>) -> i32 {
 fn test_closure_complex_chain() {
     let code = r#"
 pub fn transform(items: Vec<i32>) -> Vec<i32> {
-    items.iter()
-        .filter(|x| **x > 0)
+    items
+        .filter(|x| *x > 0)
         .map(|x| x * 2)
         .map(|x| x + 1)
         .collect()
@@ -222,7 +222,7 @@ pub fn use_closure() -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_closure_sort_by() {
     let code = r#"
-pub fn sort_descending(items: &mut Vec<i32>) {
+pub fn sort_descending(mut items: Vec<i32>) {
     items.sort_by(|a, b| b.cmp(a))
 }
 "#;
@@ -239,8 +239,8 @@ pub fn sort_descending(items: &mut Vec<i32>) {
 fn test_closure_count() {
     // Test count() which returns usize (simpler case)
     let code = r#"
-pub fn count_positive(items: &Vec<i32>) -> usize {
-    items.iter().filter(|x| **x > 0).count()
+pub fn count_positive(items: Vec<i32>) -> usize {
+    items.filter(|x| *x > 0).count()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -251,8 +251,8 @@ pub fn count_positive(items: &Vec<i32>) -> usize {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_closure_any() {
     let code = r#"
-pub fn has_positive(items: &Vec<i32>) -> bool {
-    items.iter().any(|x| *x > 0)
+pub fn has_positive(items: Vec<i32>) -> bool {
+    items.any(|x| *x > 0)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -263,8 +263,8 @@ pub fn has_positive(items: &Vec<i32>) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_closure_all() {
     let code = r#"
-pub fn all_positive(items: &Vec<i32>) -> bool {
-    items.iter().all(|x| *x > 0)
+pub fn all_positive(items: Vec<i32>) -> bool {
+    items.all(|x| *x > 0)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);

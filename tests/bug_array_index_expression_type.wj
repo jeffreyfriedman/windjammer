@@ -27,7 +27,7 @@ struct AnimationClip {
 }
 
 impl AnimationClip {
-    fn find_keyframe_index(&self, target_time: f32) -> usize {
+    fn find_keyframe_index(self, target_time: f32) -> usize {
         let mut before_idx = 0;
         let mut after_idx = self.keyframes.len() - 1;
         let mut i = 0;
@@ -48,7 +48,7 @@ impl AnimationClip {
         return after_idx;
     }
     
-    fn another_test(&self, idx: usize) -> f32 {
+    fn another_test(self, idx: usize) -> f32 {
         // Additional test: usize parameter in expression
         if idx + 1 < self.keyframes.len() {
             return self.keyframes[idx + 1].time;

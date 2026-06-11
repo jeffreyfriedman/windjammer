@@ -14,11 +14,11 @@
 /// Example:
 /// ```windjammer
 /// struct Loader {
-///     pub data: Vec<string>
+///     pub data: Vec<String>
 /// }
 ///
 /// impl Loader {
-///     pub fn add(&mut self, item: string) {
+///     pub fn add(&mut self, item: String) {
 ///         self.data.push(item)
 ///     }
 /// }
@@ -42,7 +42,7 @@ impl Loader {
         Loader { data: Vec::new() }
     }
     
-    pub fn add(&mut self, item: string) {
+    pub fn add(self, item: string) {
         self.data.push(item)
     }
 }
@@ -139,11 +139,11 @@ impl Config {
         Config { values: Vec::new() }
     }
     
-    pub fn set(&mut self, key: string) {
+    pub fn set(self, key: string) {
         self.values.push(key)
     }
     
-    pub fn clear(&mut self) {
+    pub fn clear(self) {
         self.values.clear()
     }
 }

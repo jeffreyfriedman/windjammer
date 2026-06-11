@@ -138,7 +138,7 @@ impl Counter {
     }
 }
 
-fn process(data: String) -> String {
+fn process(data: string) -> string {
     data
 }
 "#;

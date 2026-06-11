@@ -35,7 +35,7 @@ fn test_format_as_function_argument_extracts_to_variable() {
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
-extern fn draw_text(text: &str, x: f32, y: f32);
+extern fn draw_text(text: String, x: f32, y: f32);
 
 fn render(score: i32) {
     draw_text(format!("Score: {}", score), 10.0, 20.0);
@@ -112,7 +112,7 @@ fn test_format_in_method_call_extracts_to_variable() {
 struct Context {}
 
 impl Context {
-    fn draw_text(text: &str, x: f32, y: f32) {}
+    fn draw_text(text: string, x: f32, y: f32) {}
 }
 
 fn render(ctx: Context, lives: i32) {
@@ -178,7 +178,7 @@ fn test_format_as_variable_assignment_unchanged() {
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
-extern fn draw_text(text: &str, x: f32, y: f32);
+extern fn draw_text(text: String, x: f32, y: f32);
 
 fn render(score: i32) {
     let msg = format!("Score: {}", score);
@@ -239,7 +239,7 @@ fn test_multiple_format_calls_in_same_function() {
     fs::create_dir_all(&test_dir).unwrap();
 
     let windjammer_code = r#"
-extern fn draw_text(text: &str, x: f32, y: f32);
+extern fn draw_text(text: String, x: f32, y: f32);
 
 fn render(score: i32, lives: i32) {
     draw_text(format!("Score: {}", score), 10.0, 20.0);

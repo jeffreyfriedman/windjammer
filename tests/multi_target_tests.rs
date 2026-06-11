@@ -176,7 +176,7 @@ fn calculate(x: int, y: int) -> int {
         "Should declare greet function"
     );
     assert!(
-        ts_content.contains("(name: string): string"),
+        ts_content.contains("(name: &str): String"),
         "Should have correct type signature"
     );
     assert!(

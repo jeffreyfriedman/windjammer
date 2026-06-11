@@ -23,7 +23,7 @@ fn test_trait_method_no_body_single() {
     // TDD: Simple trait with single method without body
     let code = r#"
     pub trait Drawable {
-        fn draw(&self);
+        fn draw(self);
     }
     "#;
 
@@ -43,9 +43,9 @@ fn test_trait_method_no_body_multiple() {
     // TDD: Trait with multiple methods without bodies
     let code = r#"
     pub trait GameLoop {
-        fn init(&mut self);
-        fn update(&mut self, delta: f32);
-        fn render(&self);
+        fn init(self);
+        fn update(self, delta: f32);
+        fn render(self);
     }
     "#;
 
@@ -74,9 +74,9 @@ fn test_trait_method_mixed_bodies() {
     // TDD: Trait with some methods having default implementations and some not
     let code = r#"
     pub trait Updatable {
-        fn update(&mut self);
+        fn update(self);
         
-        fn tick(&mut self) {
+        fn tick(self) {
             self.update()
         }
     }
@@ -105,8 +105,8 @@ fn test_trait_impl_with_no_body_trait() {
     // TDD: Full trait + impl scenario
     let code = r#"
     pub trait Drawable {
-        fn draw(&self);
-        fn update(&mut self, delta: f32);
+        fn draw(self);
+        fn update(self, delta: f32);
     }
     
     pub struct Sprite {
@@ -115,11 +115,11 @@ fn test_trait_impl_with_no_body_trait() {
     }
     
     impl Drawable for Sprite {
-        fn draw(&self) {
+        fn draw(self) {
             let _pos = self.x + self.y
         }
         
-        fn update(&mut self, delta: f32) {
+        fn update(self, delta: f32) {
             self.x = self.x + delta;
             self.y = self.y + delta
         }
@@ -149,8 +149,8 @@ fn test_trait_method_with_return_type() {
     // TDD: Trait method without body but with return type
     let code = r#"
     pub trait Calculator {
-        fn add(&self, a: int, b: int) -> int;
-        fn multiply(&self, a: int, b: int) -> int;
+        fn add(self, a: int, b: int) -> int;
+        fn multiply(self, a: int, b: int) -> int;
     }
     "#;
 

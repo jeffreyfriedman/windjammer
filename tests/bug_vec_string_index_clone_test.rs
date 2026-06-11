@@ -102,7 +102,7 @@ impl Container {
     );
 }
 
-/// Cross-file: method in module A returns Vec<string>, module B indexes it
+/// Cross-file: method in module A returns Vec<String>, module B indexes it
 #[test]
 fn test_library_vec_string_index_needs_clone() {
     let files: &[(&str, &str)] = &[

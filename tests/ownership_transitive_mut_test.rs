@@ -209,7 +209,7 @@ impl Tactics {
     pub fn broadcast(self, msg: string, sender_id: i32) {
         for squad in self.squads {
             if squad.id != sender_id {
-                squad.send_message(msg.clone())
+                squad.send_message(msg)
             }
         }
     }
@@ -720,7 +720,7 @@ impl DialogTree {
         if let Some(node) = self.get_current_node() {
             if choice_index >= 0 && (choice_index as usize) < node.choices.len() {
                 let choice = node.choices[choice_index as usize]
-                return self.advance_to(choice.next_node_id.clone())
+                return self.advance_to(choice.next_node_id)
             }
         }
         false

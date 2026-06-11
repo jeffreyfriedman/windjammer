@@ -86,7 +86,7 @@ fn main() {
 fn test_vec_remove_with_expression_no_ref() {
     let source = r#"
 struct TextInput {
-    text: String,
+    text: string,
     cursor_position: i32,
 }
 

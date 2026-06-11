@@ -104,7 +104,7 @@ fn test_mod_rs_reexports_when_mod_wj_has_no_pub_use() {
         ),
         (
             "mymod/tile_rule.wj",
-            "pub struct TileRule {\n    pub name: string,\n}\n",
+            "pub struct TileRule {\n    pub name: String,\n}\n",
         ),
     ];
 

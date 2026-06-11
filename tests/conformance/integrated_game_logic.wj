@@ -51,11 +51,11 @@ impl Stats {
         Stats { hp, max_hp: hp, attack }
     }
 
-    fn is_alive(&self) -> bool {
+    fn is_alive(self) -> bool {
         self.hp > 0
     }
 
-    fn take_damage(&mut self, amount: int) {
+    fn take_damage(self, amount: int) {
         self.hp -= amount
         if self.hp < 0 {
             self.hp = 0
@@ -78,11 +78,11 @@ impl Player {
         }
     }
 
-    fn attack_enemy(&self, enemy: Enemy) -> int {
+    fn attack_enemy(self, enemy: Enemy) -> int {
         self.stats.attack
     }
 
-    fn gain_xp(&mut self, amount: int) {
+    fn gain_xp(self, amount: int) {
         self.xp += amount
     }
 }
@@ -122,7 +122,7 @@ impl Enemy {
         }
     }
 
-    fn name(&self) -> string {
+    fn name(self) -> string {
         enemy_type_name(self.enemy_type)
     }
 }

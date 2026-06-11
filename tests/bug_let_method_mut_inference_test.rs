@@ -36,7 +36,7 @@ impl Loader {
 
     pub fn load(self, name: string, size: i32) -> string {
         self.count = self.count + 1
-        self.items.push(name.clone())
+        self.items.push(name)
         name
     }
 }

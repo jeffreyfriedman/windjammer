@@ -35,7 +35,7 @@ impl Editor {
     }
     
     // This method only reads 'name' - should infer correctly
-    pub fn add_item(&mut self, name: string) -> i32 {
+    pub fn add_item(self, name: string) -> i32 {
         println!("Adding: {}", name)
         self.items.len() as i32
     }
@@ -77,7 +77,7 @@ impl NameList {
     }
     
     // This method stores 'name' - should be owned
-    pub fn add(&mut self, name: string) {
+    pub fn add(self, name: string) {
         self.names.push(name)
     }
 }
@@ -115,7 +115,7 @@ impl Counter {
     }
     
     // Uses name for logging, returns computed value
-    pub fn increment(&mut self, label: string) -> i32 {
+    pub fn increment(self, label: string) -> i32 {
         self.count = self.count + 1
         println!("{}: {}", label, self.count)
         self.count
@@ -155,12 +155,12 @@ impl Builder {
         Builder { parts: Vec::new() }
     }
     
-    pub fn add(&mut self, part: string) -> &mut Builder {
+    pub fn add(self, part: string) -> &mut Builder {
         self.parts.push(part)
         self
     }
     
-    pub fn build(&self) -> string {
+    pub fn build(self) -> string {
         self.parts.join(", ")
     }
 }

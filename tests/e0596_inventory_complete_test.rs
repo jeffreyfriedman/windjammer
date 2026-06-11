@@ -189,8 +189,8 @@ impl Inventory {
         if from_slot == to_slot {
             return false
         }
-        let from_data = match &self.slots[from_slot as usize] {
-            Some(from_stack) => Some((from_stack.item.id.clone(), from_stack.quantity)),
+        let from_data = match self.slots[from_slot as usize] {
+            Some(from_stack) => Some((from_stack.item.id, from_stack.quantity)),
             _ => None,
         }
         if let Some((from_id, from_q)) = from_data {

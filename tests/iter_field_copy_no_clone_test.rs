@@ -42,7 +42,7 @@ pub struct Game {
 
 impl Game {
     pub fn check_bricks(self) {
-        for brick in self.bricks.iter_mut() {
+        for brick in self.bricks {
             if !brick.alive {
                 continue
             }

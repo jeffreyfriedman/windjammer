@@ -16,10 +16,10 @@
 /// Example:
 /// ```windjammer
 /// struct Config {
-///     name: string,
+///     name: String,
 /// }
 /// impl Config {
-///     pub fn set_name(self, name: string) {
+///     pub fn set_name(self, name: String) {
 ///         self.name = name  // Assignment to String field
 ///     }
 /// }
