@@ -45,7 +45,7 @@ impl Editor {
     }
     
     // name is borrowed (only passed to struct constructor)
-    pub fn add_node(&mut self, id: string, name: string) {
+    pub fn add_node(self, id: string, name: string) {
         self.nodes.push(Node::new(id, name))
     }
 }
@@ -87,11 +87,11 @@ impl Container {
         Container { items: Vec::new() }
     }
     
-    pub fn filter_items(&self, prefix: string) -> Vec<Item> {
+    pub fn filter_items(self, prefix: string) -> Vec<Item> {
         let mut result = Vec::new()
-        for item in self.items.iter() {
+        for item in self.items {
             if item.name.starts_with(prefix) {
-                result.push(item.clone())
+                result.push(item)
             }
         }
         result
@@ -161,7 +161,7 @@ impl Logger {
         Logger { prefix: prefix }
     }
     
-    pub fn log(&self, message: string) {
+    pub fn log(self, message: string) {
         println!("[{}] {}", self.prefix, message)
     }
 }

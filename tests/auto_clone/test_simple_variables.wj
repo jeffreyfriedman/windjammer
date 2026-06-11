@@ -48,7 +48,7 @@ fn test_multiple_uses() {
 }
 
 fn sum_vec(v: Vec<int>) -> int {
-    v.iter().sum()
+    v.sum()
 }
 
 fn to_upper(s: string) -> string {

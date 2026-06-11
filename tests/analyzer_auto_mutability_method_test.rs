@@ -49,7 +49,7 @@ impl Inventory {
         Inventory { items: Vec::new() }
     }
     
-    fn add_item(&mut self, item: i32) {
+    fn add_item(self, item: i32) {
         self.items.push(item)
     }
 }
@@ -123,15 +123,15 @@ impl Counter {
         Counter { value: 0 }
     }
     
-    fn increment(&mut self) {
+    fn increment(self) {
         self.value = self.value + 1
     }
     
-    fn add(&mut self, amount: i32) {
+    fn add(self, amount: i32) {
         self.value = self.value + amount
     }
     
-    fn get(&self) -> i32 {
+    fn get(self) -> i32 {
         self.value
     }
 }
@@ -207,11 +207,11 @@ impl Point {
         Point { x, y }
     }
     
-    fn get_x(&self) -> i32 {
+    fn get_x(self) -> i32 {
         self.x
     }
     
-    fn get_y(&self) -> i32 {
+    fn get_y(self) -> i32 {
         self.y
     }
 }

@@ -26,8 +26,8 @@ fn test_duplicate_struct_names_different_modules() {
         src.join("dialogue").join("legacy.wj"),
         r#"
 pub struct DialogueChoice {
-    pub text: String,
-    pub next_node: String
+    pub text: string,
+    pub next_node: string
 }
 "#,
     )
@@ -38,7 +38,7 @@ pub struct DialogueChoice {
         r#"
 pub struct DialogueChoice {
     pub id: u32,
-    pub text: String,
+    pub text: string,
     pub next_line: u32
 }
 "#,

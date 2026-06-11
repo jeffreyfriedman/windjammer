@@ -17,7 +17,7 @@
 // [clone_struct] after modify clone: original score=100, cloned score=200
 // [clone_all] PASSED
 
-// --- Test: String clone ---
+// --- Test: string clone ---
 fn test_clone_string() {
     let original = "hello"
     let mut cloned = original.clone()

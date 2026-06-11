@@ -47,7 +47,7 @@ use crate::input::Input
 
 pub trait GameLoop {
     // Explicit & in trait definition should NOT become &&
-    fn update(&mut self, input: &Input) {
+    fn update(self, input: Input) {
         // Default implementation
     }
 }
@@ -68,7 +68,7 @@ struct Game {
 }
 
 impl GameLoop for Game {
-    fn update(&mut self, input: &Input) {
+    fn update(self, input: Input) {
         self.score += input.x;
     }
 }

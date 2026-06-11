@@ -43,7 +43,7 @@ fn test_unit_struct_with_impl() {
     pub struct Logger;
     
     impl Logger {
-        pub fn log(&self, message: string) -> int {
+        pub fn log(self, message: string) -> int {
             return message.len() as int
         }
     }
@@ -99,13 +99,13 @@ fn test_unit_struct_with_trait_impl() {
     // TDD: Unit struct implementing a trait
     let code = r#"
     pub trait Processor {
-        fn process(&self) -> int;
+        fn process(self) -> int;
     }
     
     pub struct SimpleProcessor;
     
     impl Processor for SimpleProcessor {
-        fn process(&self) -> int {
+        fn process(self) -> int {
             return 42
         }
     }

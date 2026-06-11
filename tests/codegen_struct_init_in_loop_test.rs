@@ -47,7 +47,7 @@ fn test_struct_init_in_for_loop() {
             a: f32,
         }
         
-        fn convert_vertices(vertices: &Vec<Vertex>) -> Vec<GpuVertex> {
+        fn convert_vertices(vertices: Vec<Vertex>) -> Vec<GpuVertex> {
             let mut gpu_vertices = Vec::new();
             
             for vertex in vertices {
@@ -64,7 +64,7 @@ fn test_struct_init_in_for_loop() {
         
         fn main() {
             let vertices = Vec::new();
-            let gpu = convert_vertices(&vertices);
+            let gpu = convert_vertices(vertices);
         }
     "#;
 

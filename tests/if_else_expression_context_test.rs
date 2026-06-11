@@ -65,7 +65,7 @@ fn test_if_else_with_field_access_no_semicolons() {
     }
     
     impl Controller {
-        pub fn get_control(&self) -> f32 {
+        pub fn get_control(self) -> f32 {
             let control = if self.body.is_grounded { 1.0 } else { self.air_control }
             return control
         }

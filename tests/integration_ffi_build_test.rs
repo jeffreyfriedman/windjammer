@@ -42,7 +42,7 @@ impl GameRuntime {
     }
     
     pub fn run<G: GameLoop>(self, mut game: G) {
-        ffi::run_with_event_loop(&mut game, &self.config.window_title, self.config.window_width, self.config.window_height)
+        ffi::run_with_event_loop(game, self.config.window_title, self.config.window_width, self.config.window_height)
     }
 }
 "#;
@@ -51,8 +51,8 @@ impl GameRuntime {
     // Create game_loop.wj to provide GameLoop trait
     let game_loop_wj = r#"
 pub trait GameLoop {
-    fn update(&mut self, delta: f32)
-    fn render(&self)
+    fn update(self, delta: f32)
+    fn render(self)
 }
 
 pub struct GameLoopConfig {
@@ -65,7 +65,7 @@ pub struct GameLoopConfig {
 
     // Create ffi.rs in project root (hand-written)
     let ffi_rs = r#"
-pub fn run_with_event_loop<G>(_game: &mut G, _title: &str, _width: i64, _height: i64)
+pub fn run_with_event_loop<G>(mut _game: G, _title: string, _width: i64, _height: i64)
 where
     G: crate::GameLoop,
 {

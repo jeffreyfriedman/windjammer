@@ -32,7 +32,7 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_auto_borrow_owned_vec_to_ref_param() {
     let code = r#"
-pub fn process_items(items: &Vec<i32>) -> i32 {
+pub fn process_items(items: Vec<i32>) -> i32 {
     let mut sum = 0
     for i in items {
         sum = sum + *i
@@ -90,7 +90,7 @@ fn test_auto_borrow_index_result_to_ref_param() {
     let code = r#"
 pub struct Point { x: f32, y: f32 }
 
-pub fn distance(p: &Point) -> f32 {
+pub fn distance(p: Point) -> f32 {
     (p.x * p.x + p.y * p.y).sqrt()
 }
 
@@ -349,7 +349,7 @@ pub fn main() -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_mixed_coercion_multiple_args() {
     let code = r#"
-pub fn compute(items: &Vec<i32>, index: usize) -> i32 {
+pub fn compute(items: Vec<i32>, index: usize) -> i32 {
     items[index]
 }
 
@@ -463,8 +463,8 @@ fn test_custom_struct_auto_borrow() {
     let code = r#"
 pub struct Config { name: string }
 
-pub fn process(c: &Config) -> string {
-    c.name.clone()
+pub fn process(c: Config) -> string {
+    c.name
 }
 
 pub fn main() -> string {
@@ -489,7 +489,7 @@ pub fn main() -> string {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_option_ref_unwrap() {
     let code = r#"
-pub fn get_value(opt: &Option<i32>) -> i32 {
+pub fn get_value(opt: Option<i32>) -> i32 {
     opt.unwrap()
 }
 "#;

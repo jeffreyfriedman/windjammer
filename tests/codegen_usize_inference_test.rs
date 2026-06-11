@@ -81,7 +81,7 @@ struct Controller {
 }
 
 impl Controller {
-    fn is_past_end(self, animation: &Animation) -> bool {
+    fn is_past_end(self, animation: Animation) -> bool {
         let frame_count = animation.frame_count()
         self.current_frame >= frame_count
     }
@@ -114,7 +114,7 @@ struct AssetManager {
 impl AssetManager {
     fn get_large_assets(self, min_size: usize) -> int {
         let mut count = 0
-        for asset in &self.assets {
+        for asset in self.assets {
             if asset.data_size >= min_size {
                 count = count + 1
             }
@@ -146,7 +146,7 @@ struct Inventory {
 impl Inventory {
     fn free_slots(self) -> usize {
         let mut count: usize = 0
-        for slot in &self.slots {
+        for slot in self.slots {
             if *slot == 0 {
                 count = count + 1
             }

@@ -89,7 +89,7 @@ pub fn test_string_literal_method() {
     assert!(!generated.is_empty(), "Generated Rust should not be empty");
 
     // The string literal "hello" must be converted to "hello".to_string()
-    // when passed to add_item(name: String)
+    // when passed to add_item(name: &str)
     assert!(
         generated.contains(r#""hello".to_string()"#),
         "String literal should be converted to .to_string() for method expecting String.\nGenerated:\n{}",

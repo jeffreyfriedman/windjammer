@@ -13,6 +13,7 @@ mod library_multipass;
 pub use cache_management::write_if_changed;
 pub use compilation_pipeline::{build_project, build_project_ext};
 
+use anyhow::Result;
 use crate::parser::ast::core::Item;
 
 /// Detect whether a parsed program is a GPU shader file (@vertex, @fragment, @compute).
@@ -106,17 +107,27 @@ pub(crate) fn parse_wj_source(
     Ok((parser, program))
 }
 
-/// Emit parser warnings to stderr in the standard format.
-pub(crate) fn emit_parser_warnings(parser: &crate::parser::Parser) {
+/// Emit parser warnings/errors to stderr. Returns `Err` if any diagnostic is an error.
+pub(crate) fn emit_parser_warnings(parser: &crate::parser::Parser) -> Result<()> {
+    let mut has_errors = false;
     for w in parser.warnings() {
+        let level = if w.is_error { "error" } else { "warning" };
         eprintln!(
-            "warning: {} [{}:{}:{}]",
+            "{}: {} [{}:{}:{}]",
+            level,
             w.message,
             w.file.as_deref().unwrap_or("<unknown>"),
             w.line.unwrap_or(0),
             w.column.unwrap_or(0),
         );
+        if w.is_error {
+            has_errors = true;
+        }
     }
+    if has_errors {
+        anyhow::bail!("Rust leakage errors detected -- see diagnostics above");
+    }
+    Ok(())
 }
 
 /// Ensure the parent directory of an output file exists.

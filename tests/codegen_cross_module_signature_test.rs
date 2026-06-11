@@ -53,7 +53,7 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn remove(&mut self, amount: i32) -> bool {
+    pub fn remove(self, amount: i32) -> bool {
         if self.quantity < amount {
             return false
         }
@@ -67,7 +67,7 @@ impl Stack {
     let inventory_source = r#"
 use crate::Stack
 
-pub fn remove_from_stack(stack: &mut Stack, quantity: i32) {
+pub fn remove_from_stack(mut stack: Stack, quantity: i32) {
     stack.remove(quantity);
 }
 "#;
@@ -152,7 +152,7 @@ impl Stack {
         Stack { quantity: quantity }
     }
     
-    pub fn remove(&mut self, amount: i32) -> bool {
+    pub fn remove(self, amount: i32) -> bool {
         if self.quantity < amount {
             return false
         }
@@ -160,7 +160,7 @@ impl Stack {
         true
     }
     
-    pub fn add(&mut self, amount: i32) {
+    pub fn add(self, amount: i32) {
         self.quantity = self.quantity + amount
     }
 }
@@ -179,14 +179,14 @@ impl Inventory {
         Inventory { items: Vec::new() }
     }
     
-    pub fn remove_at(&mut self, index: i32, quantity: i32) {
-        if let Some(stack) = &mut self.items[index as usize] {
+    pub fn remove_at(self, index: i32, quantity: i32) {
+        if let Some(stack) = self.items[index as usize] {
             stack.remove(quantity);
         }
     }
     
-    pub fn add_at(&mut self, index: i32, quantity: i32) {
-        if let Some(stack) = &mut self.items[index as usize] {
+    pub fn add_at(self, index: i32, quantity: i32) {
+        if let Some(stack) = self.items[index as usize] {
             stack.add(quantity);
         }
     }
@@ -275,7 +275,7 @@ pub struct ItemStack {
 }
 
 impl ItemStack {
-    pub fn remove(&mut self, amount: i32) -> bool {
+    pub fn remove(self, amount: i32) -> bool {
         if self.quantity < amount {
             return false
         }
@@ -289,7 +289,7 @@ impl ItemStack {
     let inventory_source = r#"
 use crate::ItemStack
 
-pub fn process(slots: &mut Vec<Option<ItemStack>>, index: i32, quantity: i32) {
+pub fn process(mut slots: Vec<Option<ItemStack>>, index: i32, quantity: i32) {
     if let Some(stack) = &mut slots[index as usize] {
         stack.remove(quantity);
     }

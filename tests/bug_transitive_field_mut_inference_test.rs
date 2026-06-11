@@ -186,7 +186,7 @@ impl RenderPort for GameRenderer {
 fn test_readonly_field_method_stays_borrowed() {
     let source = r#"
 struct Config {
-    items: Vec<String>
+    items: Vec<string>
 }
 
 impl Config {

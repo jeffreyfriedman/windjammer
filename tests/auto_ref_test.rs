@@ -53,7 +53,7 @@ fn test_hashmap_get_adds_ref() {
     use std::collections::HashMap
     
     pub fn get_value(map: HashMap<string, int>, key: string) -> Option<int> {
-        return map.get(key).cloned()
+        return map.get(key)
     }
     "#;
 
@@ -226,7 +226,7 @@ fn test_custom_method_with_ref_param() {
     }
     
     impl Validator {
-        pub fn check(&self, pattern: string) -> bool {
+        pub fn check(self, pattern: string) -> bool {
             return pattern.len() > 0
         }
     }
@@ -254,7 +254,7 @@ fn test_custom_method_with_ref_param() {
     }
     
     impl Validator {
-        pub fn check(&self, pattern: string) -> bool {
+        pub fn check(self, pattern: string) -> bool {
             return pattern.len() > 0
         }
     }

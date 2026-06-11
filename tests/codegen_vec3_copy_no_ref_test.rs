@@ -63,7 +63,7 @@ struct Particle {
 }
 
 impl Particle {
-    fn update(&mut self, dt: f32) {
+    fn update(self, dt: f32) {
         self.velocity = self.velocity.add(self.acceleration.mul(dt));
         self.position = self.position.add(self.velocity.mul(dt));
     }

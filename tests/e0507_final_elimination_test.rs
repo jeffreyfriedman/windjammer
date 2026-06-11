@@ -149,7 +149,7 @@ impl Quest {
 pub struct Manager { pub quests: HashMap<u32, Quest> }
 impl Manager {
     pub fn get_quest_title(self, id: u32) -> Option<string> {
-        if let Some(q) = self.quests.get(&id) {
+        if let Some(q) = self.quests.get(id) {
             Some(q.into_title())
         } else {
             None

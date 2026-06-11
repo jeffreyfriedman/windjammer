@@ -37,7 +37,7 @@ impl Item {
     }
     
     fn get_name(self) -> string {
-        &self.name
+        self.name
     }
 }
 

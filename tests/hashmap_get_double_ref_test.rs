@@ -30,7 +30,7 @@ fn test_hashmap_get_with_borrowed_key_from_keys() {
     let code = r#"
 use std::collections::HashMap
 
-pub fn get_values(map: &HashMap<string, i32>) -> Vec<i32> {
+pub fn get_values(map: HashMap<string, i32>) -> Vec<i32> {
     let mut result = Vec::new()
     
     for key in map.keys() {
@@ -79,7 +79,7 @@ fn test_hashmap_get_with_owned_key() {
     let code = r#"
 use std::collections::HashMap
 
-pub fn lookup(map: &HashMap<string, i32>, key: string) -> Option<i32> {
+pub fn lookup(map: HashMap<string, i32>, key: string) -> Option<i32> {
     match map.get(key) {
         Some(v) => Some(*v),
         None => None
@@ -115,7 +115,7 @@ fn test_hashmap_get_with_explicit_borrowed_key() {
     let code = r#"
 use std::collections::HashMap
 
-pub fn lookup_borrowed(map: &HashMap<string, i32>, key: string) -> Option<i32> {
+pub fn lookup_borrowed(map: HashMap<string, i32>, key: string) -> Option<i32> {
     match map.get(key) {
         Some(v) => Some(*v),
         None => None

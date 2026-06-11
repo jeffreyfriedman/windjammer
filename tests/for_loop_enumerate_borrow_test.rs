@@ -44,7 +44,7 @@ struct Breadcrumb {
 impl Breadcrumb {
     fn render(self) -> string {
         let mut html = ""
-        for (i, item) in self.items.iter().enumerate() {
+        for (i, item) in self.items.enumerate() {
             if i > 0 {
                 html.push_str(self.separator)
             }
@@ -90,7 +90,7 @@ struct Stepper {
 impl Stepper {
     fn render(self) -> string {
         let mut html = ""
-        for (step_index, step) in self.steps.iter().enumerate() {
+        for (step_index, step) in self.steps.enumerate() {
             let step_index = step_index as i32
             if step_index == self.current_step {
                 html.push_str("current")

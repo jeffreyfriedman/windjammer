@@ -440,7 +440,7 @@ impl Consequence {
     pub fn apply(self, state: bool) {
         match self {
             Consequence::GiveItem(item_id) => {
-                give_item(item_id.clone())
+                give_item(item_id)
             },
         }
     }
@@ -523,7 +523,7 @@ pub struct Pass {
 
 pub fn run(passes: Vec<Pass>) {
     for pass in passes {
-        execute_pass(true, pass.groups_x.clone(), pass.groups_y.clone(), pass.groups_z.clone())
+        execute_pass(true, pass.groups_x, pass.groups_y, pass.groups_z)
     }
 }
 "#;

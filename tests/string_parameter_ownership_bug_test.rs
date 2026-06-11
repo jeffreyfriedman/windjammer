@@ -34,9 +34,9 @@ fn test_explicit_string_parameter_stays_owned() {
     pub struct Loader {}
     
     impl Loader {
-        // CRITICAL: path is explicitly declared as String (owned)
+        // CRITICAL: path is explicitly declared as string (owned)
         pub fn load(path: string) -> i64 {
-            consume_string(path)  // Should pass String directly
+            consume_string(path)  // Should pass string directly
         }
     }
     "#;

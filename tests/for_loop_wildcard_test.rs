@@ -81,7 +81,7 @@ fn test_for_tuple_destructure() {
         r#"
 fn main() {
     let items = vec![10, 20, 30]
-    for (i, item) in items.iter().enumerate() {
+    for (i, item) in items.enumerate() {
         println("index {}: {}", i, item)
     }
 }

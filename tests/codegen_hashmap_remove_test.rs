@@ -34,7 +34,7 @@ fn test_hashmap_remove_auto_borrow() {
     let test_content = r#"
 use std::collections::HashMap;
 
-fn remove_entity(entities: &mut HashMap<i64, string>, entity_id: i64) {
+fn remove_entity(mut entities: HashMap<i64, string>, entity_id: i64) {
     entities.remove(entity_id);
 }
 
@@ -110,7 +110,7 @@ fn test_vec_remove_no_borrow() {
 
     // Test that Vec.remove() does NOT auto-borrow for usize index
     let test_content = r#"
-fn remove_at_index(items: &mut Vec<string>, index: usize) -> string {
+fn remove_at_index(mut items: Vec<string>, index: usize) -> string {
     items.remove(index)
 }
 

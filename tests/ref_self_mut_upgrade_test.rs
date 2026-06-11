@@ -28,7 +28,7 @@ pub struct Panel {
 }
 
 impl Panel {
-    pub fn hide(&self) {
+    pub fn hide(self) {
         self.visible = false
     }
 }

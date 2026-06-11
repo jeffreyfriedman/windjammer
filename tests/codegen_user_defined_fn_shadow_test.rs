@@ -35,7 +35,7 @@ fn test_user_defined_assert_approx_not_redirected() {
     // to windjammer_runtime::test::assert_approx
     let code = test_utils::compile_single(
         r#"
-fn assert_approx(name: &str, actual: f32, expected: f32, epsilon: f32) {
+fn assert_approx(name: string, actual: f32, expected: f32, epsilon: f32) {
     if (actual - expected).abs() < epsilon {
         println("PASS: {}", name)
     } else {

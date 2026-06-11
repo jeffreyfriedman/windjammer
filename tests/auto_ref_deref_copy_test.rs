@@ -80,7 +80,7 @@ impl World {
     fn update(self) {
         let entities = vec![Entity { id: 5 }]
         // entity is &Entity from iter()
-        for entity in entities.iter() {
+        for entity in entities {
             // Explicitly deref to get Entity value (Copy)
             // Should NOT add & back to it
             if self.velocities.contains(*entity) {
@@ -134,7 +134,7 @@ struct World {
 
 impl World {
     fn update(self) {
-        let entity_ref: &Entity = &Entity { id: 5 }
+        let entity_ref: Entity = &Entity { id: 5 }
         // Deref entity ref, then access field
         if self.velocities.contains((*entity_ref).id) {
             println("Has velocity")

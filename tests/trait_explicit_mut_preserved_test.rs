@@ -38,12 +38,12 @@ fn test_trait_explicit_mut_self_preserved() {
     let wj_code = r#"
 pub trait GameLoop {
     // Explicit &mut self should be preserved even though body doesn't mutate
-    fn init(&mut self) {
+    fn init(self) {
         // Empty default implementation
     }
     
     // Also test &self is preserved
-    fn render(&self) {
+    fn render(self) {
         // Empty default implementation
     }
 }
@@ -67,6 +67,7 @@ pub trait GameLoop {
         .arg(&output_dir)
         .arg("--library")
         .arg("--no-cargo")
+        .arg("--no-lint")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

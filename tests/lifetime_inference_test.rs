@@ -43,7 +43,7 @@ fn longest(a: string, b: string) -> string {
 fn main() {
     let a = "Hello World".to_string()
     let b = "Hi".to_string()
-    let result = longest(&a, &b)
+    let result = longest(a, b)
     println!("{}", result)
 }
 "#;
@@ -73,7 +73,7 @@ fn first_char(s: string) -> string {
 
 fn main() {
     let s = "Hello".to_string()
-    let c = first_char(&s)
+    let c = first_char(s)
     println!("{}", c)
 }
 "#;
@@ -93,7 +93,7 @@ fn test_self_method_ref_return_no_lifetime_needed() {
     // &self method returning reference: Rust elision ties to self lifetime
     let source = r#"
 struct Container {
-    pub items: Vec<String>,
+    pub items: Vec<string>,
 }
 
 impl Container {
@@ -105,7 +105,7 @@ impl Container {
         if self.items.is_empty() {
             None
         } else {
-            Some(&self.items[0])
+            Some(self.items[0])
         }
     }
 }
@@ -126,7 +126,7 @@ fn main() {
 
 #[test]
 fn test_option_ref_return_with_multiple_params_gets_lifetime() {
-    // Windjammer `string` in Option<string> generates Option<String> — owned, no lifetime
+    // Windjammer `string` in Option<String> generates Option<String> — owned, no lifetime
     let source = r#"
 fn longer_option(a: string, b: string) -> Option<string> {
     if a.len() > 0 {
@@ -139,7 +139,7 @@ fn longer_option(a: string, b: string) -> Option<string> {
 fn main() {
     let a = "Hello".to_string()
     let b = "World".to_string()
-    match longer_option(&a, &b) {
+    match longer_option(a, b) {
         Some(s) => println!("{}", s),
         None => println!("none"),
     }
@@ -171,7 +171,7 @@ fn compare(a: string, b: string) -> bool {
 fn main() {
     let a = "Hello".to_string()
     let b = "Hi".to_string()
-    println!("{}", compare(&a, &b))
+    println!("{}", compare(a, b))
 }
 "#;
     let generated = test_utils::compile_single(source);

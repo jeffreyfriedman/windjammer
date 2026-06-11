@@ -38,7 +38,7 @@ fn test_test_cases_with_string_literals_auto_converts_to_string() {
     ["bob", "Bob", 30]
 ])
 fn test_user(id: string, name: string, age: i32) {
-    // String methods should work (not &str)
+    // string methods should work (not &string)
     assert_eq(id.len() as i32, 5)
     assert_eq(name.len() as i32 > 0, true)
 }
@@ -77,7 +77,7 @@ fn test_user(id: string, name: string, age: i32) {
     // Windjammer philosophy: compiler infers the cheapest ownership mode
     // DESIGN: String → &str for borrowed (idiomatic Rust, not &String anti-pattern)
     assert!(
-        rust_code.contains("fn test_user_impl(id: &str, name: &str, _age: i32)"),
+        rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
         "Should generate impl function with &str parameters (idiomatic Rust).\nGenerated:\n{}",
         rust_code
     );
@@ -85,7 +85,7 @@ fn test_user(id: string, name: string, age: i32) {
     // The test case calls pass string literals directly (already &str, no .to_string() needed)
     assert!(
         rust_code.contains(r#"test_user_impl("alice", "Alice""#),
-        "String literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}",
+        "string literals pass directly as &str (no .to_string() needed).\nGenerated:\n{}",
         rust_code
     );
 

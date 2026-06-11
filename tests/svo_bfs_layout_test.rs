@@ -123,7 +123,7 @@ fn child_base(node: u32) -> usize {
 
 /// Validates BFS SVO layout: interior nodes point at 8 contiguous indices; ranges are disjoint;
 /// leaves have the leaf flag set.
-fn assert_bfs_svo_layout(svo: &[u32]) {
+fn assert_bfs_svo_layout(svo: [u32]) {
     assert!(!svo.is_empty(), "SVO must be non-empty");
     assert!(
         !is_leaf(svo[0]),
@@ -133,7 +133,7 @@ fn assert_bfs_svo_layout(svo: &[u32]) {
 
     let mut child_blocks: Vec<(usize, usize)> = Vec::new();
 
-    for (i, &node) in svo.iter().enumerate() {
+    for (i, &node) in svo.enumerate() {
         if is_leaf(node) {
             assert!(
                 (node & LEAF_FLAG) != 0,

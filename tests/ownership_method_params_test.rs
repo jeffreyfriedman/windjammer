@@ -23,7 +23,7 @@ struct Grid {
 }
 
 impl Grid {
-    pub fn set(&mut self, value: i32) {
+    pub fn set(self, value: i32) {
         self.data = value
     }
 }
@@ -73,7 +73,7 @@ struct Companion {
 }
 
 impl Companion {
-    pub fn get_dialogue_response(&self, topic: string) -> string {
+    pub fn get_dialogue_response(self, topic: string) -> string {
         if topic == "pragmatic" {
             return "Test response".to_string()
         }
@@ -100,7 +100,7 @@ struct VoxelGrid {
 }
 
 impl VoxelGrid {
-    pub fn set(&mut self, x: i32, y: i32, z: i32, value: i32) {
+    pub fn set(self, x: i32, y: i32, z: i32, value: i32) {
         // Mutates grid
     }
 }

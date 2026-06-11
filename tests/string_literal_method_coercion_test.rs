@@ -34,7 +34,7 @@ fn main() {
     let rust = test_utils::compile_single(code);
     println!("{}", rust);
     assert!(
-        rust.contains(r#""hello".to_string()"#) || rust.contains(r#"String::from("hello")"#),
+        rust.contains(r#""hello".to_string()"#) || rust.contains(r#"string::from("hello")"#),
         "String literal passed to Owned String param should get .to_string() conversion.\nGenerated:\n{}",
         rust
     );

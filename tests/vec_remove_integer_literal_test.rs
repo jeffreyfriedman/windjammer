@@ -27,7 +27,7 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_integer_literal() {
     let code = r#"
-pub fn remove_first<T: Clone>(vec: &mut Vec<T>) -> Option<T> {
+pub fn remove_first<T: Clone>(mut vec: Vec<T>) -> Option<T> {
     if vec.len() > 0 {
         Some(vec.remove(0))
     } else {

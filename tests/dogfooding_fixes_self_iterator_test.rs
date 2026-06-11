@@ -87,18 +87,18 @@ struct Panel {
 }
 
 impl Panel {
-    fn is_selected(&self, object_id: string) -> bool {
+    fn is_selected(self, object_id: string) -> bool {
         match self.selected_id {
             Some(id) => id == object_id,
             None => false,
         }
     }
     
-    fn other_method(&self) -> i32 {
+    fn other_method(self) -> i32 {
         42
     }
     
-    fn combined(&self, object_id: string) -> string {
+    fn combined(self, object_id: string) -> string {
         let selected = match self.selected_id {
             Some(id) => id == object_id,
             None => false,
@@ -138,7 +138,7 @@ struct Config {
 }
 
 impl Config {
-    fn with_name(&self, new_name: string) -> Config {
+    fn with_name(self, new_name: string) -> Config {
         Config {
             items: self.items,
             name: new_name,
@@ -181,11 +181,11 @@ struct Renderer {
 }
 
 impl Renderer {
-    fn render_polygon(&self, poly: Polygon) -> string {
+    fn render_polygon(self, poly: Polygon) -> string {
         format!("polygon {} {}", poly.id, poly.name)
     }
     
-    fn render_all(&self) -> string {
+    fn render_all(self) -> string {
         let mut result = ""
         for poly in self.polygons {
             result = result + self.render_polygon(poly)

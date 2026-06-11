@@ -93,7 +93,7 @@ pub struct Grid {
 
 impl Grid {
     pub fn get_name(self, row: i32, col: i32) -> string {
-        self.names[row][col].clone()
+        self.names[row][col]
     }
 }
 "#;

@@ -150,7 +150,7 @@ impl Player {
         
         // Pass owned parameter to method (no &)
         // Compiler should generate: future_box.intersects_aabb(wall)
-        // NOT: future_box.intersects_aabb(&wall)
+        // NOT: future_box.intersects_aabb(wall)
         future_box.intersects_aabb(wall)
     }
 }

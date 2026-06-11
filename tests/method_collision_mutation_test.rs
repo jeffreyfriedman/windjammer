@@ -101,7 +101,7 @@ pub fn update_voxels(grid: VoxelGrid, cache: ReadOnlyCache) {
     let output = compile_wj_to_rust(source);
 
     // The key check: `grid` should be &mut (it IS mutated through set()).
-    // `cache` should be &mut conservatively because "clear" collides with Vec::clear(&mut self).
+    // `cache` should be &mut conservatively because "clear" collides with Vec::clear(self).
     // Even though ReadOnlyCache::clear takes &self, the collision makes it ambiguous.
     // Conservative default: assume &mut.
     //

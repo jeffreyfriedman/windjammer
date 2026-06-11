@@ -62,12 +62,12 @@ impl Container {
         Container { items: HashMap::new(), last_accessed: None }
     }
 
-    fn get_item(&self, key: string) -> Option<&Item> {
+    fn get_item(self, key: string) -> Option<&Item> {
         self.items.get(key)
     }
 
-    fn access_item(&mut self, key: string) {
-        match self.get_item(&key) {
+    fn access_item(self, key: string) {
+        match self.get_item(key) {
             Some(item) => {
                 self.last_accessed = Some(key)
             }

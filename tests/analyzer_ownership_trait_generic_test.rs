@@ -23,7 +23,7 @@ mod test_utils;
 fn test_trait_impl_preserves_signature() {
     let code = r#"
 trait Printable {
-    fn print(&self) { }
+    fn print(self) { }
 }
 
 @derive(Clone, Debug)
@@ -32,7 +32,7 @@ pub struct MyType {
 }
 
 impl Printable for MyType {
-    fn print(&self) {
+    fn print(self) {
         println!("{}", self.value)
     }
 }
@@ -57,7 +57,7 @@ pub struct Container<T> {
 }
 
 pub fn get_value<T: Clone>(c: Container<T>) -> T {
-    c.value.clone()
+    c.value
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -71,7 +71,7 @@ pub fn get_value<T: Clone>(c: Container<T>) -> T {
 fn test_generic_with_clone() {
     let code = r#"
 pub fn clone_item<T: Clone>(item: T) -> T {
-    item.clone()
+    item
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -109,11 +109,11 @@ impl ThingId {
 
 struct Thing {
     id: ThingId,
-    name: String
+    name: string
 }
 
 impl Thing {
-    // Test struct literal &str -> String conversion
+    // Test struct literal &string -> string conversion
     pub fn new(id: u32, name: string) -> Thing {
         Thing { id: ThingId::new(id), name: name }
     }
@@ -123,7 +123,7 @@ impl Thing {
     }
 
     pub fn name(self) -> string {
-        &self.name
+        self.name
     }
 }
 

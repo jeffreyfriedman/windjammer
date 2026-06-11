@@ -455,7 +455,7 @@ fn test_whitespace_mixed() {
 
 #[test]
 fn test_function_declaration() {
-    let tokens = tokenize("fn greet(name: string) -> string");
+    let tokens = tokenize("fn greet(name: &str) -> String");
     assert!(matches!(tokens[0], Token::Fn));
     assert_eq!(tokens[1], Token::Ident("greet".to_string()));
     assert!(matches!(tokens[2], Token::LParen));
@@ -502,7 +502,7 @@ fn test_generic_type() {
     let tokens = tokenize("Vec<String>");
     assert_eq!(tokens[0], Token::Ident("Vec".to_string()));
     assert!(matches!(tokens[1], Token::Lt));
-    assert_eq!(tokens[2], Token::Ident("String".to_string()));
+    assert_eq!(tokens[2], Token::Ident("string".to_string()));
     assert!(matches!(tokens[3], Token::Gt));
 }
 

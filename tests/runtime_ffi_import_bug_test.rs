@@ -37,7 +37,7 @@ impl GameRuntime {
     }
     
     pub fn run<G: GameLoop>(self, mut game: G) {
-        ffi::run_with_event_loop(&mut game, &self.config.window_title, self.config.window_width, self.config.window_height)
+        ffi::run_with_event_loop(game, self.config.window_title, self.config.window_width, self.config.window_height)
     }
 }
 "#;

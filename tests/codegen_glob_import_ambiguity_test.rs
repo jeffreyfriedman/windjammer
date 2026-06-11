@@ -141,7 +141,7 @@ impl GizmoPanel {
         }
     }
 
-    pub fn set_mode(&mut self, mode: GizmoMode) {
+    pub fn set_mode(self, mode: GizmoMode) {
         self.gizmo.mode = mode
     }
 }

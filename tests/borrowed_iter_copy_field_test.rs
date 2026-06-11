@@ -143,7 +143,7 @@ pub struct ItemStack {
 pub fn collect_names(stacks: Vec<ItemStack>) -> Vec<string> {
     let mut names: Vec<string> = Vec::new()
     for stack in &stacks {
-        names.push(stack.item.name.clone())
+        names.push(stack.item.name)
     }
     names
 }

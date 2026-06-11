@@ -24,11 +24,11 @@ fn test_void_return_preserves_semicolon() {
         items: HashMap<string, i32>,
     }
     impl Store {
-        pub fn add(&mut self, key: string, value: i32) {
+        pub fn add(self, key: string, value: i32) {
             self.items.insert(key, value);
         }
         
-        pub fn remove(&mut self, key: string) {
+        pub fn remove(self, key: string) {
             self.items.remove(key);
         }
     }

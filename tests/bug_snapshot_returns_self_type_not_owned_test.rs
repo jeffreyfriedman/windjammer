@@ -56,22 +56,22 @@ impl Scene {
     pub fn snapshot(self) -> Scene {
         let mut children_copy = Vec::new()
         for row in self.children {
-            children_copy.push(row.clone())
+            children_copy.push(row)
         }
         Scene {
-            name: self.name.clone(),
-            entities: self.entities.clone(),
+            name: self.name,
+            entities: self.entities,
             next_id: self.next_id,
-            parents: self.parents.clone(),
+            parents: self.parents,
             children: children_copy,
         }
     }
 
     pub fn restore_from(self, other: Scene) {
-        self.name = other.name.clone()
-        self.entities = other.entities.clone()
+        self.name = other.name
+        self.entities = other.entities
         self.next_id = other.next_id
-        self.parents = other.parents.clone()
+        self.parents = other.parents
     }
 }
 

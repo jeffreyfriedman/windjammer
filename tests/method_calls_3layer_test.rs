@@ -73,7 +73,7 @@ pub struct Builder {}
 impl Builder {
     pub fn with_value(self, v: i32) -> Self { self }
 }
-pub fn build(b: &Builder) -> Builder {
+pub fn build(b: Builder) -> Builder {
     b.with_value(42)
 }
 "#;
@@ -164,7 +164,7 @@ pub fn process(s: string) -> usize {
 #[test]
 fn test_borrowed_receiver_len() {
     let src = r#"
-pub fn get_len(v: &Vec<i32>) -> usize {
+pub fn get_len(v: Vec<i32>) -> usize {
     v.len()
 }
 "#;
@@ -178,7 +178,7 @@ pub fn get_len(v: &Vec<i32>) -> usize {
 #[test]
 fn test_borrowed_receiver_is_empty() {
     let src = r#"
-pub fn check_empty(v: &Vec<i32>) -> bool {
+pub fn check_empty(v: Vec<i32>) -> bool {
     v.is_empty()
 }
 "#;
@@ -196,7 +196,7 @@ pub fn check_empty(v: &Vec<i32>) -> bool {
 fn test_unwrap_on_borrowed_field() {
     let src = r#"
 pub struct Node { pub value: Option<i32> }
-pub fn get_value(n: &Node) -> i32 {
+pub fn get_value(n: Node) -> i32 {
     n.value.unwrap()
 }
 "#;
@@ -261,8 +261,8 @@ pub fn get_first_id(items: Vec<Item>) -> i32 {
 fn test_explicit_clone_no_double() {
     let src = r#"
 pub struct Data { pub name: string }
-pub fn copy_name(d: &Data) -> string {
-    d.name.clone()
+pub fn copy_name(d: Data) -> string {
+    d.name
 }
 "#;
     let (result, success) = test_utils::compile_single_check(src);
@@ -285,7 +285,7 @@ pub fn copy_name(d: &Data) -> string {
 fn test_copy_type_no_clone() {
     let src = r#"
 pub struct Point { pub x: i32, pub y: i32 }
-pub fn get_x(p: &Point) -> i32 {
+pub fn get_x(p: Point) -> i32 {
     p.x
 }
 "#;
@@ -354,7 +354,7 @@ pub fn make_vec() -> Vec<i32> {
 #[test]
 fn test_get_on_borrowed_vec() {
     let src = r#"
-pub fn has_elements(v: &Vec<i32>) -> bool {
+pub fn has_elements(v: Vec<i32>) -> bool {
     !v.is_empty()
 }
 "#;
@@ -367,9 +367,9 @@ pub fn has_elements(v: &Vec<i32>) -> bool {
 #[test]
 fn test_iter_method_on_borrowed() {
     let src = r#"
-pub fn sum(v: &Vec<i32>) -> i32 {
+pub fn sum(v: Vec<i32>) -> i32 {
     let mut s = 0
-    for x in v.iter() {
+    for x in v {
         s = s + x
     }
     s
@@ -385,7 +385,7 @@ pub fn sum(v: &Vec<i32>) -> i32 {
 fn test_field_after_method_call() {
     let src = r#"
 pub struct Wrapper { pub value: i32 }
-pub fn get_inner(w: &Wrapper) -> i32 {
+pub fn get_inner(w: Wrapper) -> i32 {
     w.value
 }
 "#;

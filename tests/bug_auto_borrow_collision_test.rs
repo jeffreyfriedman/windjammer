@@ -171,7 +171,7 @@ fn show_message() {
 fn test_mut_borrow_skipped_on_collision() {
     let mut global_sigs = SignatureRegistry::new();
 
-    // Module A: update(data: string) inferred as MutBorrowed
+    // Module A: update(data: String) inferred as MutBorrowed
     global_sigs.add_function(
         "update".to_string(),
         FunctionSignature {
@@ -185,7 +185,7 @@ fn test_mut_borrow_skipped_on_collision() {
         },
     );
 
-    // Module B: update(data: string) inferred as Owned → collision
+    // Module B: update(data: String) inferred as Owned → collision
     let mut other_sigs = SignatureRegistry::new();
     other_sigs.add_function(
         "update".to_string(),

@@ -39,7 +39,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
     (result.status.success(), generated, combined)
 }
 
-/// Phase 2 optimizes `fn add_class(self, class: string)` to take `&str` because
+/// Phase 2 optimizes `fn add_class(self, class: String)` to take `&str` because
 /// the param is only forwarded to an extern fn. The generated function definition
 /// should use `&str`, and callers that pass string literals should NOT get spurious `&`.
 ///
@@ -49,7 +49,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
 #[test]
 fn test_phase2_caller_no_double_ref_on_string_literal() {
     let source = r#"
-extern fn apply_class(handle: i32, class: string)
+extern fn apply_class(handle: i32, class: String)
 
 pub struct Node {
     handle: i32,
@@ -86,11 +86,11 @@ pub fn build_node() -> Node {
 }
 
 /// When Phase 2 optimizes a method to take &str, callers passing variables
-/// should get `&variable` (which auto-derefs String to &str), NOT double refs.
+/// should get `&variable` (which auto-derefs string to &str), NOT double refs.
 #[test]
 fn test_phase2_caller_variable_arg_correct_ref() {
     let source = r#"
-extern fn apply_class(handle: i32, class: string)
+extern fn apply_class(handle: i32, class: String)
 
 pub struct Node {
     handle: i32,

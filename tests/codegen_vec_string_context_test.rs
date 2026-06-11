@@ -52,7 +52,7 @@ fn main() {
 fn test_string_to_str_auto_borrow_extern_fn() {
     // extern fn hash(data: &str) called with String should auto-borrow
     let source = r#"
-extern fn hash(data: string) -> string
+extern fn hash(data: String) -> String
 
 pub fn compute_hash(data: string) -> string {
     return hash(data)

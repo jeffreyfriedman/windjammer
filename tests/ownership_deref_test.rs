@@ -43,7 +43,7 @@ pub fn main() {}
 fn test_deref_for_borrowed_copy_in_struct() {
     let src = r#"
 pub struct Point { x: i32, y: i32 }
-pub fn copy_point(p: &Point) -> Point {
+pub fn copy_point(p: Point) -> Point {
     Point { x: p.x, y: p.y }
 }
 pub fn main() {}
@@ -57,7 +57,7 @@ pub fn main() {}
 #[test]
 fn test_no_double_deref() {
     let src = r#"
-pub fn process(values: &Vec<i32>, i: usize) -> i32 {
+pub fn process(values: Vec<i32>, i: usize) -> i32 {
     values[i]
 }
 pub fn main() {}
@@ -71,8 +71,8 @@ pub fn main() {}
 fn test_clone_result_is_owned() {
     let src = r#"
 pub struct Data { value: string }
-pub fn make(d: &Data) -> Data {
-    Data { value: d.value.clone() }
+pub fn make(d: Data) -> Data {
+    Data { value: d.value }
 }
 pub fn main() {}
 "#;
@@ -109,7 +109,7 @@ pub fn main() {}
 fn test_borrowed_loop_var_deref_copy() {
     let src = r#"
 pub fn process(x: i32) {}
-pub fn run(nums: &Vec<i32>) {
+pub fn run(nums: Vec<i32>) {
     for x in nums {
         process(x)
     }
@@ -149,7 +149,7 @@ pub fn main() {}
 #[test]
 fn test_binary_op_mixed_ownership() {
     let src = r#"
-pub fn add_one(r: &i32, y: i32) -> i32 {
+pub fn add_one(r: i32, y: i32) -> i32 {
     r + y
 }
 pub fn main() {}
@@ -179,7 +179,7 @@ pub fn main() {}
 fn test_arg_borrowed_to_owned_param() {
     let src = r#"
 pub fn take(x: i32) {}
-pub fn call(r: &i32) {
+pub fn call(r: i32) {
     take(r)
 }
 pub fn main() {}
@@ -196,7 +196,7 @@ pub fn main() {}
 #[test]
 fn test_arg_owned_to_borrowed_param() {
     let src = r#"
-pub fn double(x: &i32) -> i32 {
+pub fn double(x: i32) -> i32 {
     x + x
 }
 pub fn call() {
@@ -232,7 +232,7 @@ pub fn main() {}
 fn test_match_index_borrowed() {
     let src = r#"
 pub struct Node { id: u32 }
-pub fn copy_node(n: &Node) -> Node {
+pub fn copy_node(n: Node) -> Node {
     Node { id: n.id }
 }
 pub fn run(nodes: Vec<Node>) -> Vec<Node> {
@@ -271,7 +271,7 @@ pub fn main() {}
 #[test]
 fn test_push_borrowed_needs_clone() {
     let src = r#"
-pub fn build(items: &Vec<string>) -> Vec<string> {
+pub fn build(items: Vec<string>) -> Vec<string> {
     let mut out = Vec::new()
     for item in items {
         out.push(item)
@@ -291,7 +291,7 @@ pub fn main() {}
 fn test_field_access_copy_on_borrowed() {
     let src = r#"
 pub struct Vec2 { x: f32, y: f32 }
-pub fn length(v: &Vec2) -> f32 {
+pub fn length(v: Vec2) -> f32 {
     v.x * v.x + v.y * v.y
 }
 pub fn main() {}
@@ -304,7 +304,7 @@ pub fn main() {}
 fn test_field_access_non_copy_on_borrowed() {
     let src = r#"
 pub struct Data { name: string }
-pub fn get_name(d: &Data) -> string {
+pub fn get_name(d: Data) -> string {
     d.name
 }
 pub fn main() {}
@@ -377,7 +377,7 @@ pub fn main() {
 fn test_method_call_borrowed_receiver() {
     let src = r#"
 pub struct Counter { v: i32 }
-pub fn get(c: &Counter) -> i32 {
+pub fn get(c: Counter) -> i32 {
     c.v
 }
 pub fn main() {
@@ -421,7 +421,7 @@ pub fn main() {}
 #[test]
 fn test_index_copy_element() {
     let src = r#"
-pub fn first(nums: &Vec<i32>) -> i32 {
+pub fn first(nums: Vec<i32>) -> i32 {
     nums[0]
 }
 pub fn main() {}
@@ -447,7 +447,7 @@ pub fn main() {}
 #[test]
 fn test_assert_eq_borrowed() {
     let src = r#"
-pub fn check(r: &i32, y: i32) {
+pub fn check(r: i32, y: i32) {
     assert_eq(r, y)
 }
 pub fn main() {}
@@ -475,7 +475,7 @@ fn test_struct_with_borrowed_field_access() {
     let src = r#"
 pub struct Inner { x: i32 }
 pub struct Outer { inner: Inner }
-pub fn get_x(o: &Outer) -> i32 {
+pub fn get_x(o: Outer) -> i32 {
     o.inner.x
 }
 pub fn main() {}

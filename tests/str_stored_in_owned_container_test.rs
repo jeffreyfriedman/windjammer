@@ -144,7 +144,7 @@ impl Named {
     }
 
     pub fn name(self) -> string {
-        self.name.clone()
+        self.name
     }
 }
 

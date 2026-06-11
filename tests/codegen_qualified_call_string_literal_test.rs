@@ -90,7 +90,7 @@ impl Game {
     });
 
     // String literal "HELLO WORLD" should NOT get .to_string() when passed to
-    // a function with a borrowed string parameter (text: string → &str in Rust)
+    // a function with a borrowed string parameter (text: String → &str in Rust)
     assert!(
         !generated.contains(r#""HELLO WORLD".to_string()"#),
         "String literal should NOT get .to_string() for borrowed string param.\nGenerated:\n{}",
@@ -100,7 +100,7 @@ impl Game {
     // Should contain the string literal passed directly
     assert!(
         generated.contains(r#""HELLO WORLD""#),
-        "String literal should be passed directly.\nGenerated:\n{}",
+        "string literal should be passed directly.\nGenerated:\n{}",
         generated
     );
 }
@@ -133,7 +133,7 @@ pub fn render() {
   "module_path": "rendering_api",
   "functions": {
     "draw_text": {
-      "params": ["String", "Custom(\"f32\")", "Custom(\"f32\")"],
+      "params": ["string", "Custom(\"f32\")", "Custom(\"f32\")"],
       "return_type": null,
       "is_associated": false,
       "parent_type": null,

@@ -111,7 +111,7 @@ impl Counter {
         Counter { value: 0 }
     }
 
-    fn next(&mut self) -> int {
+    fn next(self) -> int {
         self.value += 1
         self.value
     }

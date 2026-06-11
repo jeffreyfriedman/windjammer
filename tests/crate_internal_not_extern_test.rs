@@ -67,7 +67,7 @@ fn compile_wj_to_rust(source: &str) -> String {
     String::from("NO RS FILE FOUND")
 }
 
-/// Bug: When a file declares `extern fn foo(s: string)` and also calls
+/// Bug: When a file declares `extern fn foo(s: String)` and also calls
 /// a crate-internal function with the same simple name (e.g. `module::foo(s)`),
 /// the compiler incorrectly wraps string args with `windjammer_runtime::ffi::string_to_ffi()`.
 ///
@@ -80,7 +80,7 @@ fn compile_wj_to_rust(source: &str) -> String {
 #[test]
 fn test_crate_internal_call_not_treated_as_extern() {
     let source = r#"
-extern fn render_text(text: string, x: f32, y: f32)
+extern fn render_text(text: String, x: f32, y: f32)
 
 use crate::utils
 
@@ -150,7 +150,7 @@ impl VNode {
 #[test]
 fn test_mixed_extern_and_crate_internal_same_name() {
     let source = r#"
-extern fn vnode_element(tag: string) -> u64
+extern fn vnode_element(tag: String) -> u64
 
 use crate::vnode_ffi
 

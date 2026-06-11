@@ -45,7 +45,7 @@ impl Container {
         Container { items: vec![] }
     }
 
-    pub fn update_at(&mut self, index: i32, item: Item) {
+    pub fn update_at(self, index: i32, item: Item) {
         self.items[index as usize] = item
     }
 }
@@ -95,8 +95,8 @@ impl Container {
         Container { items: vec![] }
     }
 
-    pub fn get_ref(&self, index: i32) -> &Item {
-        &self.items[index as usize]
+    pub fn get_ref(self, index: i32) -> &Item {
+        self.items[index as usize]
     }
 }
 
@@ -137,8 +137,8 @@ impl Container {
         Container { items: vec![] }
     }
 
-    pub fn get_mut_ref(&mut self, index: i32) -> &mut Item {
-        &mut self.items[index as usize]
+    pub fn get_mut_ref(self, index: i32) -> &mut Item {
+        self.items[index as usize]
     }
 }
 

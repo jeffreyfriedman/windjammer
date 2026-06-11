@@ -38,7 +38,7 @@ enum Key {
 struct Input {}
 
 impl Input {
-    fn is_key_down(&self, key: Key) -> bool {
+    fn is_key_down(self, key: Key) -> bool {
         true
     }
 }
@@ -46,7 +46,7 @@ impl Input {
 struct Paddle {}
 
 impl Paddle {
-    fn update(&mut self, up: bool, down: bool) {
+    fn update(self, up: bool, down: bool) {
         // Do something
     }
 }

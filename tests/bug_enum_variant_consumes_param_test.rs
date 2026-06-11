@@ -40,7 +40,7 @@ pub fn make_named(name: string) -> Shape {
 
     // `name` should stay owned (String) since Shape::Named consumes it
     assert!(
-        generated.contains("fn make_named(name: String)"),
+        generated.contains("fn make_named(name: &str)"),
         "Parameter consumed by enum variant should stay Owned. Got:\n{}",
         generated
     );
@@ -110,7 +110,7 @@ pub struct Objective {
 }
 
 impl Objective {
-    pub fn new_with_progress(name: string, desc: string, obj_type: &ObjectiveType, count: i32) -> Objective {
+    pub fn new_with_progress(name: string, desc: string, obj_type: ObjectiveType, count: i32) -> Objective {
         Objective { name, desc, count }
     }
 }
@@ -122,7 +122,7 @@ pub fn create_kill_quest(
     count: i32,
     quest_giver: string
 ) -> Quest {
-    let mut quest = Quest::new(id.clone(), title, format!("Kill {} {}", count, enemy_type))
+    let mut quest = Quest::new(id, title, format!("Kill {} {}", count, enemy_type))
     quest.quest_giver = quest_giver
 
     let obj = Objective::new_with_progress(
@@ -170,7 +170,7 @@ pub struct Objective {
 }
 
 impl Objective {
-    pub fn new_with_progress(name: string, desc: string, obj_type: &ObjectiveType, count: i32) -> Objective {
+    pub fn new_with_progress(name: string, desc: string, obj_type: ObjectiveType, count: i32) -> Objective {
         Objective { name, desc, obj_type: ObjectiveType::Kill("".to_string(), 0), count }
     }
 

@@ -44,7 +44,7 @@ pub struct StateMachine {
 
 impl StateMachine {
     pub fn should_transition(to_state: i32) -> bool {
-        for transition in &self.transitions {
+        for transition in self.transitions {
             if transition.matches(self.current_state) && transition.to_state == to_state {
                 return true
             }

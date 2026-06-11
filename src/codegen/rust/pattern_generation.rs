@@ -256,21 +256,36 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             }
-            Expression::MethodCall { .. } => {
-                // Method calls might return references
+            Expression::MethodCall { method, .. } => {
                 if let Some(ty) = self.infer_expression_type(expr) {
-                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                } else {
-                    false
+                    if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                        return true;
+                    }
+                    // HashMap.get()/BTreeMap.get() returns Option<&V>.
+                    // Pattern bindings from Some(v) are references.
+                    if method == "get"
+                        && matches!(ty, Type::Option(_))
+                    {
+                        return true;
+                    }
                 }
+                false
             }
-            Expression::Call { .. } => {
-                // Function calls might return references
+            Expression::Call { function, .. } => {
                 if let Some(ty) = self.infer_expression_type(expr) {
-                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                } else {
-                    false
+                    if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                        return true;
+                    }
+                    // Call(FieldAccess(receiver, "get")) is the parsed form of
+                    // receiver.get(key). HashMap/BTreeMap.get() returns Option<&V>,
+                    // so pattern bindings from Some(v) are references.
+                    if let Expression::FieldAccess { field, .. } = function {
+                        if field == "get" && matches!(ty, Type::Option(_)) {
+                            return true;
+                        }
+                    }
                 }
+                false
             }
             _ => false,
         }

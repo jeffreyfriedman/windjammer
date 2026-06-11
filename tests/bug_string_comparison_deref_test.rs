@@ -92,7 +92,7 @@ fn main() {
 fn test_string_comparison_in_loop() {
     let source = r#"
 fn find_match(items: Vec<string>, target: string) -> bool {
-    for item in items.iter() {
+    for item in items {
         if item == target {
             return true
         }
@@ -165,7 +165,7 @@ fn main() {
 fn test_str_comparison() {
     let source = r#"
 fn has_tag(tags: Vec<string>, tag: string) -> bool {
-    for t in tags.iter() {
+    for t in tags {
         if t == tag {
             return true
         }
@@ -218,8 +218,8 @@ struct Member {
     id: string,
 }
 
-fn find_member(members: &Vec<Member>, target_id: string) -> bool {
-    for m in members.iter() {
+fn find_member(members: Vec<Member>, target_id: string) -> bool {
+    for m in members {
         if m.id == target_id {
             return true
         }

@@ -59,7 +59,7 @@ pub fn get_data_int(map: HashMap<string, i32>, key: string) -> Option<i32> {
     assert!(success, "Generated Rust must compile. Error:\n{}", err);
 }
 
-/// Case 2: hashmap.get(key) where key: string (owned) → generates hashmap.get(&key) (add &)
+/// Case 2: hashmap.get(key) where key: String (owned) → generates hashmap.get(&key) (add &)
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_owned_string_param_adds_ref() {
@@ -82,7 +82,7 @@ pub fn lookup(map: HashMap<string, i32>, key: string) -> Option<i32> {
         println!("Rustc error:\n{}", err);
     }
 
-    // key: string (owned) needs & for HashMap.get(&K)
+    // key: String (owned) needs & for HashMap.get(&K)
     assert!(
         generated.contains("map.get(&key)") || generated.contains("map.get(key)"),
         "Owned String key should work. Got: {}",
@@ -124,7 +124,7 @@ pub enum EventDataValue {
     Int(i32),
     Float(f32),
     Bool(bool),
-    String(String),
+    string(string),
 }
 
 pub struct Event {
@@ -197,7 +197,7 @@ fn test_hashmap_get_explicit_ref_str_param() {
 use std::collections::HashMap
 
 pub fn lookup(map: HashMap<string, i32>, key: string) -> Option<i32> {
-    match map.get(&key) {
+    match map.get(key) {
         Some(v) => Some(*v),
         None => None
     }

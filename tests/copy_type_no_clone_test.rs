@@ -41,7 +41,7 @@ impl MathHelper {
         a + t * (b - a)
     }
 
-    pub fn compute(&self, x: f32) -> f32 {
+    pub fn compute(self, x: f32) -> f32 {
         let u = MathHelper::fade(x)
         let r1 = MathHelper::lerp(u, 1.0, 2.0)
         let r2 = MathHelper::lerp(u, 3.0, 4.0)
@@ -67,7 +67,7 @@ pub struct Foo {
 }
 
 impl Foo {
-    pub fn get_two(&self, idx: i32) -> i32 {
+    pub fn get_two(self, idx: i32) -> i32 {
         let a = self.items[idx as usize]
         let b = self.items[(idx + 1) as usize]
         a + b
@@ -93,7 +93,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn check(&self) -> i32 {
+    pub fn check(self) -> i32 {
         let active = self.running
         let a = if active { 1 } else { 0 }
         let b = if active { self.score } else { 0 }

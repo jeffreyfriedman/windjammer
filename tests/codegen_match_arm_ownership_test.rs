@@ -123,7 +123,7 @@ fn test_match_arm_ownership_with_string() {
 
     let test_content = r#"
 enum Message {
-    Text(String),
+    Text(string),
     Number(i32),
 }
 

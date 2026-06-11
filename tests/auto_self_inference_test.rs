@@ -40,15 +40,15 @@ impl Avatar {
         }
     }
     
-    // Uses self but doesn't declare it - should auto-infer &self
+    // Uses self but doesn't declare it - should auto-infer self
     fn alt(alt: string) -> Avatar {
         self.alt = alt
         self
     }
     
-    // Uses self immutably - should infer &self
+    // Uses self immutably - should infer self
     fn get_src() -> string {
-        self.src.clone()
+        self.src
     }
 }
 "#;
@@ -86,7 +86,7 @@ impl Counter {
         Counter { count: 0 }
     }
     
-    // Mutates self - should infer &mut self
+    // Mutates self - should infer self
     fn increment() {
         self.count += 1
     }

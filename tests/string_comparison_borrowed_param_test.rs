@@ -121,8 +121,8 @@ impl Condition {
     pub fn check(self, inv: Inventory) -> bool {
         match self {
             Condition::HasItem(item_id) => {
-                // This compares String (from match arm) with String (from Vec)
-                inv.items.iter().any(|stored| stored == item_id)
+                // This compares string (from match arm) with string (from Vec)
+                inv.items.any(|stored| stored == item_id)
             }
         }
     }

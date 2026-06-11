@@ -58,10 +58,10 @@ pub struct Equipment {
 impl Equipment {
     pub fn total_armor(self) -> f32 {
         let mut total = 0.0
-        if let Some(stack) = &self.head {
+        if let Some(stack) = self.head {
             total = total + stack.item.stats.armor
         }
-        if let Some(stack) = &self.body {
+        if let Some(stack) = self.body {
             total = total + stack.item.stats.armor
         }
         total
@@ -136,7 +136,7 @@ pub struct ItemStack {
 pub fn collect_names(stacks: Vec<ItemStack>) -> Vec<string> {
     let mut names: Vec<string> = Vec::new()
     for stack in &stacks {
-        names.push(stack.item.name.clone())
+        names.push(stack.item.name)
     }
     names
 }

@@ -127,7 +127,7 @@ impl Point {
         Point { x, y }
     }
     
-    fn distance(&self) -> int {
+    fn distance(self) -> int {
         self.x * self.x + self.y * self.y
     }
 }
@@ -140,7 +140,7 @@ impl Point {
 fn test_trait_definition() {
     let source = r#"
 trait Drawable {
-    fn draw(&self) -> string {
+    fn draw(self) -> string {
         "default"
     }
 }
@@ -153,7 +153,7 @@ trait Drawable {
 fn test_trait_implementation() {
     let source = r#"
 trait Show {
-    fn show(&self) -> string {
+    fn show(self) -> string {
         "default"
     }
 }
@@ -161,7 +161,7 @@ trait Show {
 struct Point { x: int, y: int }
 
 impl Show for Point {
-    fn show(&self) -> string {
+    fn show(self) -> string {
         "Point"
     }
 }

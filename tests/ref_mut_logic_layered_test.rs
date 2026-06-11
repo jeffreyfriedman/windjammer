@@ -544,7 +544,7 @@ fn test_if_let_option_clone() {
     let src = r#"
 pub fn clone_inner(opt: Option<string>) -> Option<string> {
     if let Some(s) = opt {
-        Some(s.clone())
+        Some(s)
     } else {
         None
     }

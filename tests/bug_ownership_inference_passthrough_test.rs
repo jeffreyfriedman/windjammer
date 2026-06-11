@@ -14,10 +14,10 @@
 ///
 /// Example:
 /// ```windjammer
-/// fn wrapper(item_id: string) -> bool {
+/// fn wrapper(item_id: String) -> bool {
 ///     has_item(item_id)  // has_item expects &String
 /// }
-/// fn has_item(id: string) -> bool { true }
+/// fn has_item(id: String) -> bool { true }
 /// ```
 ///
 /// Expected: wrapper should have item_id: &str (Borrowed)
@@ -35,7 +35,7 @@ struct Inventory {
 impl Inventory {
     fn has(id: string) -> bool {
         // Just a check, parameter not consumed
-        for item_id in &self.items {
+        for item_id in self.items {
             if item_id == id {
                 return true
             }
@@ -50,8 +50,8 @@ struct Merchant {
 
 impl Merchant {
     /// Wrapper that just calls inventory.has()
-    /// Should infer: item_id: &String (Borrowed)
-    /// Because Inventory::has expects &String (Borrowed)
+    /// Should infer: item_id: string (Borrowed)
+    /// Because Inventory::has expects &string (Borrowed)
     fn has_item(item_id: string) -> bool {
         self.inventory.has(item_id)
     }

@@ -53,7 +53,7 @@ impl KeyboardState {
         KeyboardState { keys: Vec::new() }
     }
     
-    // Direct mutation - should be &mut self
+    // Direct mutation - should be self
     pub fn update_key(self, key: i32, pressed: bool) {
         while self.keys.len() <= (key as usize) {
             self.keys.push(false)
@@ -88,7 +88,7 @@ impl Game {
     
     // Cross-file transitive mutation:
     // Calls self.keyboard.update_key() which needs &mut
-    // Should infer &mut self for poll_input
+    // Should infer self for poll_input
     fn poll_input(self) {
         let key_down = true
         self.keyboard.update_key(1, key_down)
@@ -96,7 +96,7 @@ impl Game {
     }
     
     // Level 2: Calls poll_input which calls mutating method
-    // Should ALSO infer &mut self
+    // Should ALSO infer self
     pub fn update(self) {
         self.poll_input()
     }

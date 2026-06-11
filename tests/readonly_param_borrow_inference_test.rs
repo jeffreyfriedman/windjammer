@@ -33,7 +33,7 @@ mod test_utils;
 // TEST 1: Method with read-only Vec parameter
 //
 // Real game code (profiler.wj):
-//   fn render_graph(self, data: Vec<f32>, ...) -> string { ... reads data ... }
+//   fn render_graph(self, data: Vec<f32>, ...) -> String { ... reads data ... }
 //   self.render_graph(&self.frame_times, ...)
 //
 // The function only reads data (len, indexing). The generated Rust should have
@@ -60,8 +60,8 @@ impl Profiler {
     }
 
     pub fn render(self) -> string {
-        let graph1 = self.render_graph(&self.frame_times, "Frame Times".to_string())
-        let graph2 = self.render_graph(&self.fps_history, "FPS".to_string())
+        let graph1 = self.render_graph(self.frame_times, "Frame Times".to_string())
+        let graph2 = self.render_graph(self.fps_history, "FPS".to_string())
         format!("{}\n{}", graph1, graph2)
     }
 }
@@ -95,7 +95,7 @@ impl Profiler {
 // TEST 2: Method with read-only Custom struct parameter
 //
 // Real game code (hierarchy.wj):
-//   fn render_node(self, object: SceneObject, depth: i32) -> string { ... }
+//   fn render_node(self, object: SceneObject, depth: i32) -> String { ... }
 //   self.render_node(obj, 0)  // where obj is &SceneObject from map.get()
 //
 // The function only reads object fields. Should be `object: &SceneObject`.

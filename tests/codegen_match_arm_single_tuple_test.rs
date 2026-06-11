@@ -47,7 +47,7 @@ impl Event {
     pub fn matches(self, checker: Checker) -> bool {
         match self {
             Event::QuestComplete(quest_id) => {
-                // quest_id should be owned String
+                // quest_id should be owned string
                 // With proper type inference, this should auto-add &
                 checker.check(quest_id)
             }
@@ -118,7 +118,7 @@ impl Event {
     pub fn matches(self, checker: Checker) -> bool {
         match self {
             Event::RelationshipLevel(char_id, min_level) => {
-                // Both should be owned, auto-convert String → &str
+                // Both should be owned, auto-convert string → &string
                 checker.check(char_id, min_level)
             }
         }

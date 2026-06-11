@@ -463,7 +463,7 @@ impl Inventory {
 fn test_collect_default_to_vec() {
     let source = r#"
 pub fn get_evens(numbers: Vec<i32>) -> Vec<i32> {
-    numbers.iter().filter(|x| *x % 2 == 0).map(|x| *x).collect()
+    numbers.filter(|x| *x % 2 == 0).map(|x| *x).collect()
 }
 "#;
 
@@ -482,7 +482,7 @@ pub fn get_evens(numbers: Vec<i32>) -> Vec<i32> {
 fn test_collect_infers_from_return_type() {
     let source = r#"
 pub fn get_ids(items: Vec<i32>) -> Vec<i32> {
-    items.iter().map(|x| *x).collect()
+    items.map(|x| *x).collect()
 }
 "#;
 

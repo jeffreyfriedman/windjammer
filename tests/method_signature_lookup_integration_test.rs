@@ -93,7 +93,7 @@ pub fn main() {
 fn test_string_contains_uses_signature() {
     let code = r#"
 pub fn has_substring(text: string, pattern: string) -> bool {
-    text.contains(pattern)  // Signature: &str; `pattern: &String` deref-coerces
+    text.contains(pattern)  // Signature: string; `pattern: string` deref-coerces
 }
 
 pub fn main() {
@@ -193,14 +193,14 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn has_item(self, item_id: string, qty: i32) -> bool {
-        // Method signature: has_item(&self, item_id: &str, qty: i32) -> bool
-        // (after ownership inference: self → &self, item_id → &str)
+        // Method signature: has_item(self, item_id: string, qty: i32) -> bool
+        // (after ownership inference: self → self, item_id → &string)
         self.items.contains(item_id)
     }
 }
 
 pub fn check_inventory(inv: Inventory, item: string) -> bool {
-    inv.has_item(item, 1)  // Should add & to item (signature says &str)
+    inv.has_item(item, 1)  // Should add & to item (signature says &string)
 }
 
 pub fn main() {
@@ -238,7 +238,7 @@ impl Checker {
 }
 
 pub fn test_checker(checker: Checker, text: string) -> bool {
-    checker.arbitrary_check_method_xyz(text)  // Should add & (signature says &str)
+    checker.arbitrary_check_method_xyz(text)  // Should add & (signature says &string)
 }
 
 pub fn main() {

@@ -36,7 +36,7 @@ fn test_method_call_bool_arg_not_borrowed() {
 struct Input {}
 
 impl Input {
-    fn is_key_down(&self) -> bool {
+    fn is_key_down(self) -> bool {
         true
     }
 }
@@ -44,7 +44,7 @@ impl Input {
 struct Paddle {}
 
 impl Paddle {
-    fn update(&mut self, value: bool) {
+    fn update(self, value: bool) {
         // Do something with value
     }
 }
@@ -54,7 +54,7 @@ fn test_function() {
     let input = Input {}
     
     // This should generate: paddle.update(input.is_key_down())
-    // NOT: paddle.update(&input.is_key_down().clone())
+    // NOT: paddle.update(input.is_key_down())
     paddle.update(input.is_key_down())
 }
 "#;

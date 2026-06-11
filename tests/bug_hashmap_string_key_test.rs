@@ -22,7 +22,7 @@ fn test_hashmap_string_key_contains() {
 use std::collections::HashMap
 
 fn check_exists(map: HashMap<string, int>, key: string) -> bool {
-    map.contains_key(&key)
+    map.contains_key(key)
 }
 
 fn main() {
@@ -55,7 +55,7 @@ fn test_hashmap_string_key_get() {
 use std::collections::HashMap
 
 fn get_value(map: HashMap<string, int>, key: string) -> Option<int> {
-    map.get(&key).cloned()
+    map.get(key)
 }
 
 fn main() {

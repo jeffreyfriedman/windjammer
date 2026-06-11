@@ -96,7 +96,7 @@ pub struct Item {
 pub fn collect_names(items: Vec<Item>) -> Vec<string> {
     let mut names: Vec<string> = Vec::new()
     for item in &items {
-        names.push(item.name.clone())
+        names.push(item.name)
     }
     names
 }

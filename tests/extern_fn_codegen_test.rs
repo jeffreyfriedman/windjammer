@@ -24,7 +24,7 @@ fn test_extern_fn_transpiles_to_rust() {
 extern fn test_simple_function(x: i32) -> i32
 extern fn test_no_return(value: f32)
 extern fn test_multiple_params(a: u32, b: u32, c: f32) -> bool
-extern fn test_string_param(path: string) -> u32
+extern fn test_string_param(path: String) -> u32
 "#;
 
     let rust_code = test_utils::compile_single(test_wj);

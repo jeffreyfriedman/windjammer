@@ -40,7 +40,7 @@ impl Container {
     }
     
     // Filter items and return a new Vec
-    pub fn filter_by_id(&self, min_id: i32) -> Vec<Item> {
+    pub fn filter_by_id(self, min_id: i32) -> Vec<Item> {
         let mut result = Vec::new()
         for item in self.items {
             if item.id >= min_id {
@@ -86,7 +86,7 @@ impl Mixer {
     }
     
     // Remove bus at index by rebuilding Vec
-    pub fn remove_bus(&mut self, index: i32) {
+    pub fn remove_bus(self, index: i32) {
         let mut new_buses = Vec::new()
         let mut i = 0
         for bus in self.buses {
@@ -132,7 +132,7 @@ impl Tree {
         Tree { nodes: Vec::new() }
     }
     
-    pub fn get_children(&self, parent: i32) -> Vec<Node> {
+    pub fn get_children(self, parent: i32) -> Vec<Node> {
         let mut children = Vec::new()
         for node in self.nodes {
             if node.parent_id == parent {

@@ -26,7 +26,7 @@ use anyhow::Result;
 ///
 /// Example WJ source:
 /// ```
-/// fn render_transform(self, transform: Transform) -> string { ... }
+/// fn render_transform(self, transform: Transform) -> String { ... }
 /// let result = self.render_transform(&object.transform)
 /// ```
 ///

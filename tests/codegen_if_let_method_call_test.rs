@@ -45,7 +45,7 @@ pub struct AIState {
 
 impl AIState {
     pub fn tick(dt: f32) {
-        if let Some(state) = &mut self.search {
+        if let Some(state) = self.search {
             if state.update(dt) || state.is_done() {
                 self.search = None
             }

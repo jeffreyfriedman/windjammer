@@ -35,7 +35,7 @@ fn test_match_option_with_f32() {
     let source = r#"use std::collections::HashMap
 
 pub fn get_score(scores: HashMap<i32, f32>, key: i32) -> f32 {
-    match scores.get(&key) {
+    match scores.get(key) {
         Some(v) => *v,
         None => 999999.0,
     }

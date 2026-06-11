@@ -34,8 +34,8 @@ struct Manager {
 }
 
 impl Manager {
-    pub fn get_squad(&self, squad_id: string) -> Option<&Squad> {
-        for squad in &self.squads {
+    pub fn get_squad(self, squad_id: string) -> Option<&Squad> {
+        for squad in self.squads {
             if squad.id == squad_id {
                 return Some(squad)
             }
@@ -100,8 +100,8 @@ struct Manager {
 }
 
 impl Manager {
-    pub fn get_squad_mut(&mut self, squad_id: string) -> Option<&mut Squad> {
-        for squad in &mut self.squads {
+    pub fn get_squad_mut(self, squad_id: string) -> Option<&mut Squad> {
+        for squad in self.squads {
             if squad.id == squad_id {
                 return Some(squad)
             }

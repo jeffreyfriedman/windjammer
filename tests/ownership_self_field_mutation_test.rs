@@ -50,7 +50,7 @@ impl Game {
         Game { keyboard: KeyboardState::new() }
     }
     
-    // BUG: This should be inferred as &mut self because:
+    // BUG: This should be inferred as self because:
     // 1. It calls self.keyboard.update_key()
     // 2. update_key() mutates self (self.w_down = ...)
     // 3. Therefore, self.keyboard needs &mut
@@ -160,7 +160,7 @@ struct Game {
 }
 
 impl Game {
-    // BUG: Should infer &mut self because:
+    // BUG: Should infer self because:
     // 1. Calls self.camera.look_at()
     // 2. look_at() is extern and marked as taking self (owned)
     // 3. Using self.camera requires &mut to avoid move

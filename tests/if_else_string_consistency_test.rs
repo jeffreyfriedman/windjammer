@@ -33,7 +33,7 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn display_name(&self) -> string {
+    pub fn display_name(self) -> string {
         if self.name == "" {
             "Unnamed"
         } else {
@@ -99,7 +99,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn get_value(&self) -> string {
+    pub fn get_value(self) -> string {
         if self.value != "" {
             self.value
         } else {

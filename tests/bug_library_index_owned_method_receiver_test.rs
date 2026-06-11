@@ -34,7 +34,7 @@ fn test_library_module_index_owned_method_receiver_clones() {
         r##"
 pub enum Value {
     Float(f32),
-    String(String),
+    string(string),
     None,
 }
 

@@ -42,7 +42,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn add(&mut self, item: Item) {
+    pub fn add(self, item: Item) {
         self.items.push(item)
     }
 }
@@ -112,7 +112,7 @@ pub struct Outer {
 }
 
 impl Outer {
-    pub fn set_inner(&mut self, inner: Inner) {
+    pub fn set_inner(self, inner: Inner) {
         self.inner = inner
     }
 }
@@ -243,7 +243,7 @@ pub struct Item {
     value: i32,
 }
 
-pub fn maybe_store(item: Item, items: &mut Vec<Item>, flag: bool) {
+pub fn maybe_store(item: Item, mut items: Vec<Item>, flag: bool) {
     if flag {
         items.push(item)
     }
@@ -288,10 +288,10 @@ pub struct Item {
     value: i32,
 }
 
-pub fn collect_items(items: &Vec<Item>) -> Vec<Item> {
+pub fn collect_items(items: Vec<Item>) -> Vec<Item> {
     let mut result = Vec::new()
     for item in items {
-        result.push(item.clone())
+        result.push(item)
     }
     result
 }
@@ -331,12 +331,12 @@ pub struct Item {
     value: i32,
 }
 
-pub fn borrow(item: &Item) -> i32 {
+pub fn borrow(item: Item) -> i32 {
     item.value
 }
 
 pub fn forward(item: Item) -> i32 {
-    borrow(&item)
+    borrow(item)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -360,8 +360,8 @@ pub struct Item {
     value: i32,
 }
 
-pub fn clone_and_store(item: &Item, items: &mut Vec<Item>) {
-    items.push(item.clone())
+pub fn clone_and_store(item: Item, mut items: Vec<Item>) {
+    items.push(item)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);

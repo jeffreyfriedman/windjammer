@@ -2,7 +2,7 @@
 // Expected: Should show "Type mismatch" with conversion suggestions
 
 fn main() {
-    // Test 1: String assigned to int
+    // Test 1: string assigned to int
     let x: int = "hello"
     
     // Test 2: Int assigned to string

@@ -76,7 +76,7 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.value
     }
 }
@@ -132,12 +132,12 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn increment(&mut self) {
+    pub fn increment(self) {
         self.value = self.value + 1
     }
 }
 
-pub fn bump(c: &mut Counter) {
+pub fn bump(mut c: Counter) {
     c.increment()
 }
 "#;
@@ -196,7 +196,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn add(&mut self, item: Item) {
+    pub fn add(self, item: Item) {
         self.items.push(item)
     }
 }
@@ -267,7 +267,7 @@ pub struct Data {
     value: i32,
 }
 
-pub fn process(d: &Data) -> i32 {
+pub fn process(d: Data) -> i32 {
     d.value
 }
 "#;
@@ -291,7 +291,7 @@ pub struct Data {
     value: i32,
 }
 
-pub fn modify(d: &mut Data) {
+pub fn modify(mut d: Data) {
     d.value = 42
 }
 "#;

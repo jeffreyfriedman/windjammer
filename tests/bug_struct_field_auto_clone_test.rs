@@ -38,8 +38,8 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn has_item(&self, item_id: string, quantity: i32) -> bool {
-        for item in &self.items {
+    pub fn has_item(self, item_id: string, quantity: i32) -> bool {
+        for item in self.items {
             if item.id == item_id && item.quantity >= quantity {
                 return true
             }
@@ -89,8 +89,8 @@ pub struct Recipe {
 }
 
 impl Recipe {
-    pub fn check_inventory(&self, has_item: fn(string, i32) -> bool) -> bool {
-        for ingredient in &self.ingredients {
+    pub fn check_inventory(self, has_item: fn(string, i32) -> bool) -> bool {
+        for ingredient in self.ingredients {
             if !has_item(ingredient.item_id, ingredient.quantity) {
                 return false
             }

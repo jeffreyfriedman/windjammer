@@ -17,7 +17,7 @@ mod test_utils;
 fn test_auto_clone_parameter_moved_in_simple_loop() {
     let source = r#"
     struct Item {
-        name: String,
+        name: string,
         max_stack: u32,
     }
     impl Item {
@@ -63,7 +63,7 @@ fn test_auto_clone_parameter_moved_in_simple_loop() {
 fn test_auto_clone_parameter_moved_in_complex_loop() {
     let source = r#"
     struct Item {
-        name: String,
+        name: string,
         max_stack: u32,
     }
     impl Item {
@@ -142,7 +142,7 @@ fn test_auto_clone_parameter_moved_in_complex_loop() {
 fn test_auto_clone_partial_move_field_access() {
     let source = r#"
     struct Item {
-        id: String,
+        id: string,
         weight: f32,
     }
     struct ItemStack {
@@ -178,7 +178,7 @@ fn test_auto_clone_partial_move_field_access() {
 fn test_auto_clone_partial_move_in_match_arm() {
     let source = r#"
     struct Item {
-        id: String,
+        id: string,
         weight: f32,
     }
     struct ItemStack {

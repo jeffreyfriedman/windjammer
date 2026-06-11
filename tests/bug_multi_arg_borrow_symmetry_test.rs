@@ -31,9 +31,9 @@ pub fn check_overlap(a: Body, b: Body) -> bool {
 pub fn detect(bodies: Vec<Body>) -> i32 {
     let mut count = 0
     for i in 0..bodies.len() {
-        let body_a = bodies[i].clone()
+        let body_a = bodies[i]
         for j in (i + 1)..bodies.len() {
-            let body_b = bodies[j].clone()
+            let body_b = bodies[j]
             if body_a.is_static && body_b.is_static {
                 continue
             }

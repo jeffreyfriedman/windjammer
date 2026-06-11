@@ -54,7 +54,7 @@ fn test_sparse_vec_len_comparison_with_usize() {
     }
     
     impl ComponentArray {
-        pub fn contains(&self, entity_idx: usize) -> bool {
+        pub fn contains(self, entity_idx: usize) -> bool {
             if self.sparse.len() <= entity_idx {
                 return false
             }
