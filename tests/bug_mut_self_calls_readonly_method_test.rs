@@ -10,12 +10,15 @@
     feature = "codegen_tests",
 ))]
 
-/// TDD: Mutating method calling read-only method on self
+/// TDD: Mutating method calling read-only method on self (non-Copy struct)
 ///
 /// Bug: When `update(self)` (inferred &mut self) calls `is_shaking(self)`,
 /// the compiler generates `is_shaking(self)` as owned instead of `&self`.
 /// This causes E0382 (use of moved value) and E0507 (cannot move out of
 /// &mut self).
+///
+/// The struct MUST be non-Copy (include a `string` field) to reproduce this,
+/// because Copy types intentionally use `self` (trivial copy, no moves).
 ///
 /// Expected: `is_shaking` should be inferred as `&self` because it only reads
 /// fields. Then `update(&mut self)` can call `self.is_shaking()` without moving.
@@ -31,6 +34,7 @@ pub struct Camera {
     pub shake_timer: f32,
     pub shake_duration: f32,
     pub offset_x: f32,
+    pub name: string,
 }
 
 impl Camera {
@@ -49,7 +53,7 @@ impl Camera {
 }
 
 pub fn main() {
-    let mut cam = Camera { shake_timer: 0.0, shake_duration: 1.0, offset_x: 5.0 }
+    let mut cam = Camera { shake_timer: 0.0, shake_duration: 1.0, offset_x: 5.0, name: "main_camera" }
     cam.update(0.1)
 }
 "#;
@@ -57,7 +61,7 @@ pub fn main() {
 
     assert!(
         rust.contains("fn is_shaking(&self)"),
-        "is_shaking should be inferred as &self (read-only).\nGenerated:\n{}",
+        "is_shaking should be inferred as &self (read-only on non-Copy struct).\nGenerated:\n{}",
         rust
     );
     assert!(
@@ -74,6 +78,7 @@ pub struct Timer {
     pub elapsed: f32,
     pub duration: f32,
     pub intensity: f32,
+    pub label: string,
 }
 
 impl Timer {
@@ -96,7 +101,7 @@ impl Timer {
 }
 
 pub fn main() {
-    let mut t = Timer { elapsed: 0.0, duration: 1.0, intensity: 5.0 }
+    let mut t = Timer { elapsed: 0.0, duration: 1.0, intensity: 5.0, label: "shake" }
     let i = t.current_intensity()
     t.tick(0.1)
 }
@@ -116,6 +121,35 @@ pub fn main() {
     assert!(
         rust.contains("fn tick(&mut self"),
         "tick should be &mut self.\nGenerated:\n{}",
+        rust
+    );
+}
+
+#[test]
+fn test_copy_struct_readonly_methods_use_self() {
+    let source = r#"
+pub struct Vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Vec2 {
+    pub fn length(self) -> f32 {
+        self.x * self.x + self.y * self.y
+    }
+}
+
+pub fn main() {
+    let v = Vec2 { x: 3.0, y: 4.0 }
+    let l = v.length()
+}
+"#;
+    let (rust, _stderr) = test_utils::compile_via_cli_with_stderr(source);
+
+    // Copy types should use `self` (by value) — trivially cheap, no moves
+    assert!(
+        rust.contains("fn length(self)") || rust.contains("fn length(&self)"),
+        "Copy type method should use self or &self.\nGenerated:\n{}",
         rust
     );
 }
