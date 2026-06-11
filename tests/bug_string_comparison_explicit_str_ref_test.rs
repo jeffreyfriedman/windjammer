@@ -37,7 +37,7 @@ fn has_tag(tags: Vec<string>, tag: string) -> bool {
 
 fn main() {
     let tags = vec!["player".to_string(), "enemy".to_string()]
-    let found = has_tag(&tags, "player")
+    let found = has_tag(tags, "player")
 }
 "#;
 
@@ -117,7 +117,7 @@ fn find_member(members: Vec<Member>, target_id: string) -> bool {
 
 fn main() {
     let members = vec![Member { id: "a".to_string() }]
-    let found = find_member(&members, "a")
+    let found = find_member(members, "a")
 }
 "#;
 

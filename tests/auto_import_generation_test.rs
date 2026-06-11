@@ -25,7 +25,7 @@ fn test_library_build_generates_use_super_for_sibling_struct_type() {
     let src = tempdir().expect("tempdir");
     fs::write(
         src.path().join("user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(
@@ -68,7 +68,7 @@ fn test_library_build_generates_multiple_super_uses_for_hashmap_fields() {
     .expect("write achievement_id.wj");
     fs::write(
         src.path().join("achievement.wj"),
-        "pub struct Achievement {\n    pub title: String\n}\n",
+        "pub struct Achievement {\n    pub title: string\n}\n",
     )
     .expect("write achievement.wj");
     fs::write(
@@ -190,7 +190,7 @@ fn test_skip_auto_super_import_when_super_glob_present() {
     let src = tempdir().expect("tempdir");
     fs::write(
         src.path().join("user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(
@@ -229,7 +229,7 @@ fn test_generates_auto_super_import_without_super_glob() {
     let src = tempdir().expect("tempdir");
     fs::write(
         src.path().join("user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(
@@ -268,7 +268,7 @@ fn test_mixed_explicit_crate_import_and_sibling_auto_import() {
     .expect("write math.wj");
     fs::write(
         src.path().join("user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(
@@ -307,7 +307,7 @@ fn test_crate_glob_suppresses_super_star_uses_resolved_sibling_path() {
     let src = tempdir().expect("tempdir");
     fs::write(
         src.path().join("user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(

@@ -38,7 +38,7 @@ fn check_str(a: string, b: string) -> bool {
 fn main() {
     let s1 = "hello"
     let s2 = "world"
-    let result = check_name(&s1, &s2)
+    let result = check_name(s1, s2)
     
     let result2 = check_str("foo", "bar")
 }
@@ -103,7 +103,7 @@ fn find_match(items: Vec<string>, target: string) -> bool {
 fn main() {
     let items = vec!["a".to_string(), "b".to_string()]
     let target = "a".to_string()
-    let found = find_match(&items, &target)
+    let found = find_match(items, target)
 }
 "#;
 
@@ -175,7 +175,7 @@ fn has_tag(tags: Vec<string>, tag: string) -> bool {
 
 fn main() {
     let tags = vec!["player".to_string(), "enemy".to_string()]
-    let found = has_tag(&tags, "player")
+    let found = has_tag(tags, "player")
 }
 "#;
 
@@ -229,7 +229,7 @@ fn find_member(members: Vec<Member>, target_id: string) -> bool {
 
 fn main() {
     let members = vec![Member { id: "a".to_string() }]
-    let found = find_member(&members, &"a".to_string())
+    let found = find_member(members, "a".to_string())
 }
 "#;
 

@@ -77,7 +77,7 @@ fn test_user(id: string, name: string, age: i32) {
     // Windjammer philosophy: compiler infers the cheapest ownership mode
     // DESIGN: String → &str for borrowed (idiomatic Rust, not &String anti-pattern)
     assert!(
-        rust_code.contains("fn test_user_impl(id: String, name: String, _age: i32)"),
+        rust_code.contains("fn test_user_impl(id: &str, name: &str, _age: i32)"),
         "Should generate impl function with &str parameters (idiomatic Rust).\nGenerated:\n{}",
         rust_code
     );

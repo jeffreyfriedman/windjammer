@@ -53,7 +53,7 @@ fn create_members(names: Vec<string>) -> Vec<Member> {
 
 fn main() {
     let names = vec!["Alice".to_string(), "Bob".to_string()];
-    let members = create_members(&names);
+    let members = create_members(names);
 }
 "#;
 
