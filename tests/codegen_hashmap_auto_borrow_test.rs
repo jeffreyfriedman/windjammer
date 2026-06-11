@@ -40,7 +40,7 @@ fn check_user(users: HashMap<i64, string>, user_id: i64) -> bool {
 fn main() {
     let mut users = HashMap::new();
     users.insert(1, "Alice".to_string());
-    let exists = check_user(&users, 1);
+    let exists = check_user(users, 1);
 }
 "#;
 
@@ -121,7 +121,7 @@ fn get_user_name(users: HashMap<i64, string>, user_id: i64) -> string {
 fn main() {
     let mut users = HashMap::new();
     users.insert(1, "Alice".to_string());
-    let name = get_user_name(&users, 1);
+    let name = get_user_name(users, 1);
 }
 "#;
 

@@ -141,13 +141,13 @@ pub struct Wrapper {
 }
 
 impl Wrapper {
-    pub fn unwrap(self) -> i32 {
+    pub fn into_value(self) -> i32 {
         self.value
     }
 }
 
 pub fn use_wrapper(w: Wrapper) -> i32 {
-    w.unwrap()
+    w.into_value()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
