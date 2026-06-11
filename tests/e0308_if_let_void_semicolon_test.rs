@@ -31,7 +31,7 @@ struct Manager {
 impl Manager {
     pub fn update_status(self, asset_id: i64) -> bool {
         if let Some(asset) = self.assets.get(asset_id) {
-            let mut copy = asset.clone()
+            let mut copy = asset
             copy.status = 1
             self.assets.insert(asset_id, copy)
         }

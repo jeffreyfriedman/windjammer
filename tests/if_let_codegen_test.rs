@@ -105,7 +105,7 @@ pub struct Registry {
 
 impl Registry {
     pub fn increment(self, key: string) {
-        if let Some(val) = self.items.get_mut(&key) {
+        if let Some(val) = self.items.get_mut(key) {
             *val = *val + 1
         }
     }

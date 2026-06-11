@@ -62,8 +62,8 @@ struct Choice {
 impl Choice {
     // TDD: Simulate the exact scenario from dialog.wj
     // User writes: pub fn apply_cost(self, game_state: GameState)
-    // Analyzer infers: pub fn apply_cost(&self, game_state: &mut GameState)
-    // Result: match self.cost gets auto-cloned to match self.cost.clone()
+    // Analyzer infers: pub fn apply_cost(self, mut game_state: GameState)
+    // Result: match self.cost gets auto-cloned to match self.cost
     // Bug: amount binding treated as &i32 instead of i32
     pub fn apply_cost(self, mut player: Player) -> bool {
         match self.cost {

@@ -29,7 +29,7 @@ pub struct Container {
 
 impl Container {
     pub fn extract_value(self) -> Option<i32> {
-        // .take() mutates self.value - should infer &mut self
+        // .take() mutates self.value - should infer self
         self.value.take()
     }
 }

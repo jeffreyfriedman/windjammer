@@ -177,7 +177,7 @@ fn main() {}
 fn test_vec_index_let_binding_borrows() {
     // Pattern A: let preset = self.available_presets[i] when non-Copy
     let source = r#"
-pub struct Preset { pub name: String }
+pub struct Preset { pub name: string }
 pub struct Editor { pub presets: Vec<Preset> }
 impl Editor {
     pub fn has_preset(self, i: i32) -> bool {

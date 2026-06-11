@@ -110,7 +110,7 @@ fn test_doc_comment_on_impl_method() {
         impl TestStruct {
             /// Gets the value
             /// Returns an integer
-            pub fn get_value(&self) -> int {
+            pub fn get_value(self) -> int {
                 self.value
             }
         }
@@ -135,7 +135,7 @@ fn test_voxel_mesh_pattern() {
         impl Mesh {
             /// Add a quad (2 triangles) to the mesh
             /// Vertices should be in counter-clockwise order
-            pub fn add_quad(&mut self, v0: int, v1: int, v2: int, v3: int) {
+            pub fn add_quad(self, v0: int, v1: int, v2: int, v3: int) {
                 self.vertices.push(v0);
                 self.vertices.push(v1);
                 self.vertices.push(v2);

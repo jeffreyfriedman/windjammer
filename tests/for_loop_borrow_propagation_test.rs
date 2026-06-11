@@ -57,7 +57,7 @@ pub struct Binding {
 }
 
 pub struct Pass {
-    pub name: String,
+    pub name: string,
     pub bindings: Vec<Binding>,
 }
 
@@ -100,13 +100,13 @@ impl Graph {
 fn test_for_loop_borrows_field_of_borrowed_param() {
     let source = r#"
 pub struct Item {
-    pub name: String,
+    pub name: string,
     pub value: i32,
 }
 
 pub struct Container {
     pub items: Vec<Item>,
-    pub label: String,
+    pub label: string,
 }
 
 pub struct Registry {
@@ -147,7 +147,7 @@ impl Registry {
 fn test_for_loop_borrows_field_of_option_binding() {
     let source = r#"
 pub struct Member {
-    pub name: String,
+    pub name: string,
 }
 
 pub struct Squad {

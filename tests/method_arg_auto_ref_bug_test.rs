@@ -109,7 +109,7 @@ fn test_method_signature_determines_ref_not_type() {
     }
     
     impl Container {
-        pub fn remove_at(&mut self, index: usize) -> i32 {
+        pub fn remove_at(self, index: usize) -> i32 {
             return self.items.remove(index)
         }
     }

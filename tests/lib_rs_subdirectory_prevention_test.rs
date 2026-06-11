@@ -97,7 +97,7 @@ fn test_lib_rs_not_generated_in_subdirectory() {
     // Create button.wj (for comparison)
     fs::write(
         components_src_dir.join("button.wj"),
-        "pub struct Button { pub label: string }",
+        "pub struct Button { pub label: String }",
     )
     .unwrap();
 
@@ -202,7 +202,7 @@ fn test_lib_rs_generated_at_crate_root() {
     // Create button.wj
     fs::write(
         src_dir.join("button.wj"),
-        "pub struct Button { pub label: string }",
+        "pub struct Button { pub label: String }",
     )
     .unwrap();
 

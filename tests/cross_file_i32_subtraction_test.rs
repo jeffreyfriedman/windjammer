@@ -117,7 +117,7 @@ impl Inventory {
 
     pub fn move_item(self, from_slot: i32, to_slot: i32) -> bool {
         let from_data = if let Some(from_stack) = self.slots[from_slot as usize] {
-            Some((from_stack.item.id.clone(), from_stack.item.stackable, from_stack.quantity))
+            Some((from_stack.item.id, from_stack.item.stackable, from_stack.quantity))
         } else {
             None
         }

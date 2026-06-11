@@ -48,7 +48,7 @@ pub struct Recipe {
 impl Recipe {
     pub fn total_quantity(self) -> i32 {
         let mut total = 0
-        for ingredient in &self.ingredients.clone() {
+        for ingredient in self.ingredients {
             total = total + ingredient.quantity
         }
         total
@@ -90,7 +90,7 @@ pub struct CraftingManager {
 impl CraftingManager {
     pub fn total_cost(self) -> i32 {
         let mut total = 0
-        for recipe in &self.recipes {
+        for recipe in self.recipes {
             total = total + recipe.gold_cost
         }
         total
@@ -126,8 +126,8 @@ pub struct Recipe {
 impl Recipe {
     pub fn collect_ids(self) -> Vec<string> {
         let mut ids: Vec<string> = Vec::new()
-        for ingredient in &self.ingredients.clone() {
-            ids.push(ingredient.item_id.clone())
+        for ingredient in self.ingredients {
+            ids.push(ingredient.item_id)
         }
         ids
     }
@@ -174,7 +174,7 @@ pub struct Equipment {
 impl Equipment {
     pub fn total_armor(self) -> i32 {
         let mut total = 0
-        for stack in &self.slots {
+        for stack in self.slots {
             total = total + stack.item.stats.armor
         }
         total

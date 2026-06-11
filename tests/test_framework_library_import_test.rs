@@ -121,7 +121,7 @@ pub use mod_file::TestStruct;
 
     // 3. The actual compiled module
     let mod_rs = r#"// Generated from mod.wj
-pub fn hello() -> String {
+pub fn hello() -> string {
     "Hello from library!".to_string()
 }
 

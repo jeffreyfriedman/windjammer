@@ -35,7 +35,7 @@ impl Table {
         let mut i = 0
         while i < self.rows.len() {
             if self.rows[i].k == key {
-                return self.rows[i].v.clone()
+                return self.rows[i].v
             }
             i = i + 1
         }
@@ -82,7 +82,7 @@ fn test_hashset_contains_str_param_not_owned_from_foreign_contains_sig() {
 use std::collections::HashSet
 
 pub struct Scenes {
-    names: HashSet<String>,
+    names: HashSet<string>,
 }
 
 impl Scenes {

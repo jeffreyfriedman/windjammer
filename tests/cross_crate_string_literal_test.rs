@@ -49,12 +49,12 @@ fn test_cross_crate_string_literal_with_metadata() {
     let metadata = r#"{
         "structs": {
             "SystemCoverage": {
-                "name": "String"
+                "name": "string"
             }
         },
         "functions": {
             "SystemCoverage::new": {
-                "params": ["String"],
+                "params": ["string"],
                 "return_type": "Custom(\"SystemCoverage\")",
                 "is_associated": true,
                 "parent_type": "SystemCoverage",
@@ -63,7 +63,7 @@ fn test_cross_crate_string_literal_with_metadata() {
                 "is_extern": false
             },
             "SystemCoverage::register_function": {
-                "params": ["Custom(\"Self\")", "String"],
+                "params": ["Custom(\"Self\")", "string"],
                 "return_type": "Custom(\"usize\")",
                 "is_associated": true,
                 "parent_type": "SystemCoverage",

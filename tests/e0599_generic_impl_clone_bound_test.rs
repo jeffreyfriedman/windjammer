@@ -30,11 +30,11 @@ pub struct ComponentArray<T> {
 
 impl ComponentArray<T> {
     pub fn get(self, i: i32) -> Option<T> {
-        return Some(self.dense[i as usize].clone())
+        return Some(self.dense[i as usize])
     }
 
     pub fn iter(self) -> Vec<T> {
-        return self.dense.clone()
+        return self.dense
     }
 }
 "#;

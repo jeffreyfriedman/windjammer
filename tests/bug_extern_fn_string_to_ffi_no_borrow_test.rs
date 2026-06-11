@@ -14,7 +14,7 @@ mod test_utils;
 #[test]
 fn test_extern_call_string_to_ffi_not_borrowed() {
     let source = r#"
-extern fn file_exists(path: string) -> u32
+extern fn file_exists(path: String) -> u32
 
 pub fn path_exists(path: string) -> bool {
     file_exists(path) != 0

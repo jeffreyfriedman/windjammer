@@ -89,7 +89,7 @@ fn test_parameter_does_not_shadow() {
     }
 
     impl Counter {
-        pub fn set(&mut self, count: i32) {
+        pub fn set(self, count: i32) {
             self.count = count  // Parameter shadows field - use self.count for assignment
         }
     }

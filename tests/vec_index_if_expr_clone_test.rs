@@ -103,7 +103,7 @@ impl Inventory {
 fn test_vec_index_unknown_type_defaults_to_clone() {
     // Use extern fn to simulate unknown return type (cross-crate method)
     let code = r#"
-extern fn get_labels() -> Vec<string>
+extern fn get_labels() -> Vec<String>
 
 pub fn first_or_default() -> string {
     let labels = get_labels()

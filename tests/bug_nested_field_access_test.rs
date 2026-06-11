@@ -124,7 +124,7 @@ struct Stack {
 }
 
 fn remove_item(item_id: string) {
-    let mut removed: Vec<String> = Vec::new()
+    let mut removed: Vec<string> = Vec::new()
     removed.push(item_id)
 }
 

@@ -95,7 +95,7 @@ impl PathFinder {
             match self.came_from.get(current) {
                 Some(prev) => {
                     path.push(current)
-                    current = prev.clone()
+                    current = prev
                 }
                 None => {
                     break
@@ -127,7 +127,7 @@ struct SaveManager {
 impl SaveManager {
     fn get_save(self, slot: usize) -> Option<string> {
         match self.slots.get(slot) {
-            Some(data) => Some(data.clone()),
+            Some(data) => Some(data),
             None => None
         }
     }
@@ -158,7 +158,7 @@ struct Panel {
 impl Panel {
     fn get_name(self, entity_id: i32) -> string {
         match self.names.get(entity_id as i64) {
-            Some(name) => name.clone(),
+            Some(name) => name,
             None => "Unknown".to_string()
         }
     }

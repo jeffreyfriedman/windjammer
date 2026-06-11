@@ -29,7 +29,7 @@ struct Manager {
 
 impl Manager {
     pub fn has_name(self, name: string) -> bool {
-        self.name_to_id.contains_key(&name)
+        self.name_to_id.contains_key(name)
     }
 }
 

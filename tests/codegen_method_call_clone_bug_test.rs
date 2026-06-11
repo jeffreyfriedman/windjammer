@@ -33,7 +33,7 @@ enum Key {
 struct Input {}
 
 impl Input {
-    fn is_key_down(&self, key: Key) -> bool {
+    fn is_key_down(self, key: Key) -> bool {
         true
     }
 }
@@ -41,7 +41,7 @@ impl Input {
 struct Paddle {}
 
 impl Paddle {
-    fn update(&mut self, delta: f32, up: bool, down: bool) {
+    fn update(self, delta: f32, up: bool, down: bool) {
         // Do something
     }
 }
@@ -51,8 +51,8 @@ struct Game {
 }
 
 impl Game {
-    fn update(&mut self, delta: f32, input: &Input) {
-        // This should NOT generate .clone() on method call results
+    fn update(self, delta: f32, input: Input) {
+        // This should NOT generate  on method call results
         self.paddle.update(delta, input.is_key_down(Key::W), input.is_key_down(Key::S))
     }
 }

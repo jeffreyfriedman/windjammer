@@ -33,7 +33,7 @@ struct Storage {
 }
 
 impl Storage {
-    fn add(&mut self, entity: Entity) {
+    fn add(self, entity: Entity) {
         self.entities.push(entity)
     }
 }
@@ -80,7 +80,7 @@ struct Registry {
 }
 
 impl Registry {
-    fn register(&mut self, entity: EntityId, name: string) {
+    fn register(self, entity: EntityId, name: string) {
         self.map.insert(entity, name)
     }
 }
@@ -126,7 +126,7 @@ struct Canvas {
 }
 
 impl Canvas {
-    fn add_point(&mut self, p: Point) {
+    fn add_point(self, p: Point) {
         self.points.push(p)
     }
 }

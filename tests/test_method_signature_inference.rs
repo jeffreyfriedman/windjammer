@@ -50,7 +50,7 @@ impl Game {
         }
     }
     
-    // Getter: should be &self (borrow), NOT self (consume)
+    // Getter: should be self (borrow), NOT self (consume)
     pub fn get_hud(self) -> Hud {
         self.hud
     }
@@ -113,7 +113,7 @@ impl KeyboardState {
         }
     }
     
-    // Mutates self.keys, should be &mut self, NOT &self
+    // Mutates self.keys, should be self, NOT self
     pub fn update_key(self, key: i32, pressed: bool) {
         if key >= 0 && key < 256 {
             while self.keys.len() <= (key as usize) {
@@ -195,7 +195,7 @@ impl Game {
     
     // Calls self.keyboard.update_key(...) which mutates keyboard
     // ALSO calls self.keyboard.is_key_down(...) which reads keyboard
-    // Should infer &mut self, NOT &self (mutation takes precedence)
+    // Should infer self, NOT self (mutation takes precedence)
     pub fn poll_input(self) {
         let w_down = true
         let was_down = self.keyboard.is_key_down(1)
@@ -327,12 +327,12 @@ impl Stats {
         Stats { score: 0, lives: 3 }
     }
     
-    // Only reads fields, should be &self
+    // Only reads fields, should be self
     pub fn is_game_over(self) -> bool {
         self.lives <= 0
     }
     
-    // Only reads fields, should be &self
+    // Only reads fields, should be self
     pub fn get_score(self) -> i32 {
         self.score
     }

@@ -51,9 +51,9 @@ pub fn main() {
 #[test]
 fn test_non_copy_type_no_derive() {
     let source = r#"
-pub struct MyData { value: String }
+pub struct MyData { value: string }
 
-pub fn process(data: &MyData) -> usize {
+pub fn process(data: MyData) -> usize {
     data.value.len()
 }
 

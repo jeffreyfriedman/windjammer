@@ -114,7 +114,7 @@ fn main() {}
     }
 
     // Verify: Should generate &stack.item.id (not stack.item.id)
-    // Because has_item(item_id: string) → has_item(item_id: &String)
+    // Because has_item(item_id: String) → has_item(item_id: &String)
     // And stack.item.id is accessed from borrowed stack
     assert!(
         generated.contains("&stack.item.id") || generated.contains("stack.item.id.clone()"),

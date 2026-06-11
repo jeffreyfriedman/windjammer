@@ -315,8 +315,8 @@ impl Person {
         Person { name: name, age: age }
     }
     
-    pub fn greet(&self) -> string {
-        "Hello, " + self.name.clone()
+    pub fn greet(self) -> string {
+        "Hello, " + self.name
     }
 }
 "#;
@@ -432,7 +432,7 @@ fn test_hashmap_get_string() {
     let code = r#"
 use std::collections::HashMap
 
-pub fn has_key(map: &HashMap<string, i32>, key: string) -> bool {
+pub fn has_key(map: HashMap<string, i32>, key: string) -> bool {
     map.contains_key(key)
 }
 "#;
@@ -519,7 +519,7 @@ pub fn with_escapes() -> string {
 fn test_string_clone() {
     let code = r#"
 pub fn duplicate(s: string) -> string {
-    s.clone()
+    s
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);

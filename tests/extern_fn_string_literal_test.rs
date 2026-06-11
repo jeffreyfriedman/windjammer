@@ -27,7 +27,7 @@ mod test_utils;
 #[test]
 fn test_extern_fn_string_literal_gets_to_string() {
     let code = r#"
-extern fn load_shader(path: string) -> u32
+extern fn load_shader(path: String) -> u32
 
 fn main() {
     let id = load_shader("shaders/test.wgsl")
@@ -46,7 +46,7 @@ fn main() {
 #[test]
 fn test_extern_fn_string_literal_multiple_params() {
     let code = r#"
-extern fn create_window(title: string, width: u32, height: u32)
+extern fn create_window(title: String, width: u32, height: u32)
 
 fn main() {
     create_window("My Window", 800, 600)
@@ -65,7 +65,7 @@ fn main() {
 #[test]
 fn test_extern_fn_string_literal_variable_still_works() {
     let code = r#"
-extern fn load_file(path: string) -> u32
+extern fn load_file(path: String) -> u32
 
 fn main() {
     let p = "test.txt"

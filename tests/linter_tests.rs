@@ -113,7 +113,7 @@ fn test_consistency_explicit_type_respected() {
     let source = r#"
 pub fn test() {
     let x: i32 = 42  // Explicit i32, even if usize would work
-    let y: string = "test"  // Explicit String, even if &str would work
+    let y: String = "test"  // Explicit string, even if &str would work
 }
 "#;
 
@@ -157,7 +157,7 @@ fn test_consistency_explicit_ownership_respected() {
     // This test uses the EXACT same example as dogfooding_ownership_inference_test
     let source = r#"
 pub struct ResourcePool {
-    items: Vec<string>,
+    items: Vec<String>,
     count: i32,
 }
 
@@ -166,7 +166,7 @@ impl ResourcePool {
         ResourcePool { items: Vec::new(), count: 0 }
     }
 
-    pub fn add(self, item: string) {
+    pub fn add(self, item: String) {
         self.items.push(item)
         self.count = self.count + 1
     }
@@ -205,7 +205,7 @@ pub struct Inventory {
 
 impl Inventory {
     pub fn count_inactive(self) -> usize {
-        self.items.iter().filter(|e| !e.active).count()
+        self.items.filter(|e| !e.active).count()
     }
 }
 "#;

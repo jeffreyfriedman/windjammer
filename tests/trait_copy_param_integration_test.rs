@@ -21,13 +21,13 @@ use std::process::Command;
 fn test_trait_copy_params_not_borrowed() {
     let wj_code = r#"
 pub trait Calculator {
-    fn add(&self, a: f32, b: f32) -> f32
+    fn add(self, a: f32, b: f32) -> f32
 }
 
 pub struct SimpleCalc {}
 
 impl Calculator for SimpleCalc {
-    fn add(&self, a: f32, b: f32) -> f32 {
+    fn add(self, a: f32, b: f32) -> f32 {
         a + b
     }
 }

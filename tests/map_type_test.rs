@@ -39,7 +39,7 @@ fn parse_and_generate(code: &str) -> String {
 #[test]
 fn test_map_type_generates_hashmap() {
     let source = r#"
-    fn create_scores() -> Map<String, i32> {
+    fn create_scores() -> Map<string, i32> {
         let mut scores = Map::new()
         scores.insert("Alice", 100)
         scores
@@ -57,7 +57,7 @@ fn test_map_type_generates_hashmap() {
 fn test_map_variable_declaration() {
     let source = r#"
     fn use_map() {
-        let mut m: Map<String, i32> = Map::new()
+        let mut m: Map<string, i32> = Map::new()
         m.insert("key", 42)
     }
     "#;
@@ -72,7 +72,7 @@ fn test_map_variable_declaration() {
 #[test]
 fn test_map_new_generates_hashmap_new() {
     let source = r#"
-    fn make_map() -> Map<String, String> {
+    fn make_map() -> Map<string, string> {
         Map::new()
     }
     "#;
@@ -88,7 +88,7 @@ fn test_map_new_generates_hashmap_new() {
 fn test_map_in_struct_field() {
     let source = r#"
     struct PlayerStats {
-        scores: Map<String, i32>,
+        scores: Map<string, i32>,
     }
     "#;
     let output = parse_and_generate(source);
@@ -102,7 +102,7 @@ fn test_map_in_struct_field() {
 #[test]
 fn test_map_as_parameter() {
     let source = r#"
-    fn process(data: Map<String, f32>) -> i32 {
+    fn process(data: Map<string, f32>) -> i32 {
         data.len()
     }
     "#;

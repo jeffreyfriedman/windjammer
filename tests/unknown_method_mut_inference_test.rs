@@ -69,8 +69,8 @@ fn compile_wj_to_rust(source: &str) -> String {
 ///   fn add_station_mesh_primitives(renderer: VoxelGPURenderer) {
 ///       renderer.add_primitive(...)  // add_primitive takes &mut self
 ///   }
-/// Generated: pub fn add_station_mesh_primitives(renderer: &VoxelGPURenderer)
-/// Should be: pub fn add_station_mesh_primitives(renderer: &mut VoxelGPURenderer)
+/// Generated: pub fn add_station_mesh_primitives(renderer: VoxelGPURenderer)
+/// Should be: pub fn add_station_mesh_primitives(mut renderer: VoxelGPURenderer)
 #[test]
 fn test_unknown_method_on_param_infers_mut() {
     let source = r#"

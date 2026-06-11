@@ -94,7 +94,7 @@ fn test_string_literal() {
     {
         assert_eq!(s, "hello");
     } else {
-        panic!("Expected String literal");
+        panic!("Expected string literal");
     }
 }
 

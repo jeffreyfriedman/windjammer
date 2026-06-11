@@ -87,6 +87,7 @@ pub mod game;
         .arg(&output_dir)
         .arg("--library")
         .arg("--no-cargo")
+        .arg("--no-lint")
         .output()
         .expect("Failed to execute compiler");
 

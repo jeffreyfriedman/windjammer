@@ -98,7 +98,7 @@ impl Game {
 fn test_infer_mut_self_from_field_extern_method() {
     // Test with extern method (like smooth_follow from windjammer-app)
     let source = r#"
-extern fn camera_smooth_follow(camera: &mut Camera, x: f32, y: f32, z: f32, speed: f32)
+extern fn camera_smooth_follow(mut camera: Camera, x: f32, y: f32, z: f32, speed: f32)
 
 struct Camera {
     x: f32,

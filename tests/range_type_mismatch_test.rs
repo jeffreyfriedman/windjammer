@@ -56,7 +56,7 @@ fn test(items: Vec<i32>) {
 fn test_range_with_field_len() {
     let test_wj = r#"
 struct Container {
-    items: Vec<String>
+    items: Vec<string>
 }
 
 impl Container {

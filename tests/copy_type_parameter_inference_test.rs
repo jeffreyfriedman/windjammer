@@ -97,7 +97,7 @@ struct World {
 
 impl World {
     pub fn add_transform(self, entity: EntityId, transform: i64) {
-        self.transforms.insert(entity.clone(), transform)
+        self.transforms.insert(entity, transform)
     }
 }
 
@@ -148,7 +148,7 @@ impl Canvas {
         self.log_point(point)
     }
     
-    fn log_point(&self, p: Point) {
+    fn log_point(self, p: Point) {
         println!("Added point: {}, {}", p.x, p.y)
     }
 }

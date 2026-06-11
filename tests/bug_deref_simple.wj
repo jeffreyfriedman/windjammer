@@ -3,7 +3,7 @@
 
 fn test_comparison(name: string) -> bool {
     let stored = "hello".to_string();
-    return stored == name;  // Should work: String == &String with auto-deref
+    return stored == name;  // Should work: string == &String with auto-deref
 }
 
 fn main() {

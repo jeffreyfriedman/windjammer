@@ -37,7 +37,7 @@ struct Particle {
 }
 
 impl Particle {
-    fn update(&mut self, delta: f32, gx: f32, gy: f32) {
+    fn update(self, delta: f32, gx: f32, gy: f32) {
         self.x += delta
         self.y += gx + gy
     }
@@ -100,7 +100,7 @@ struct Test {
 }
 
 impl Test {
-    fn add(&mut self, a: i32, b: i32, c: i32) {
+    fn add(self, a: i32, b: i32, c: i32) {
         self.value = a + b + c
     }
 }
@@ -163,7 +163,7 @@ struct Physics {
 }
 
 impl Physics {
-    fn apply_forces(&mut self, fx: f32, fy: f32, fz: f32) {
+    fn apply_forces(self, fx: f32, fy: f32, fz: f32) {
         self.x += fx + fy + fz
     }
 }

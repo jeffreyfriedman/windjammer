@@ -77,7 +77,7 @@ fn main() {
 fn test_hashmap_in_actual_code_does_trigger_import() {
     let source = r#"
 struct Registry {
-    items: HashMap<String, i64>,
+    items: HashMap<string, i64>,
 }
 
 fn main() {

@@ -59,7 +59,7 @@ fn test_auto_ref_option_arg() {
     let code = r#"
 pub fn display_optional(value: Option<string>) -> string {
     match value {
-        Some(s) => s.clone(),
+        Some(s) => s,
         None => "empty".to_string(),
     }
 }

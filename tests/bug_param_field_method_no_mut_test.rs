@@ -31,11 +31,11 @@ struct Matrix {
 
 impl Matrix {
     pub fn to_array(self) -> Vec<f32> {
-        self.data.clone()
+        self.data
     }
 
     pub fn inverse(self) -> Matrix {
-        Matrix { data: self.data.clone() }
+        Matrix { data: self.data }
     }
 }
 

@@ -12,7 +12,7 @@
 
 // TDD TEST: String literals should work with borrowed string parameters
 //
-// PHASE 1 BASELINE: greet(name: string) with borrowed ownership generates
+// PHASE 1 BASELINE: greet(name: &str) with borrowed ownership generates
 // greet(name: &String), and string literals need conversion: "World" → &"World".to_string()
 
 use std::fs;

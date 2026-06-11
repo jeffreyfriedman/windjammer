@@ -80,7 +80,7 @@ fn main() {}
 fn test_shared_ref_deref_clone() {
     // Pattern B: *q when q: &Quest in owned context
     let source = r#"
-pub struct Quest { pub name: String }
+pub struct Quest { pub name: string }
 pub fn get_quest(q: Quest) -> Quest {
     q
 }

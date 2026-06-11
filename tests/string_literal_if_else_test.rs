@@ -23,7 +23,7 @@ fn test_if_else_string_clone_vs_literal_tail_return() {
     let source = r#"
 pub fn pick(parts: Vec<string>, cond: bool) -> string {
     if cond {
-        parts[0].clone()
+        parts[0]
     } else {
         "0"
     }
@@ -75,7 +75,7 @@ fn test_if_else_clone_vs_literal_not_last_statement_still_unifies() {
 pub fn pick(parts: Vec<string>, cond: bool) -> string {
     let _dummy = 1
     if cond {
-        parts[0].clone()
+        parts[0]
     } else {
         "0"
     }
@@ -118,7 +118,7 @@ fn test_if_else_clone_vs_literal_untyped_let_then_return() {
     let source = r#"
 pub fn pick(parts: Vec<string>, cond: bool) -> string {
     let x = if cond {
-        parts[0].clone()
+        parts[0]
     } else {
         "0"
     }
@@ -138,7 +138,7 @@ fn test_if_else_clone_vs_literal_in_non_string_function() {
     let source = r#"
 fn parse_int(s: string) -> i32 {
     let parts = split(s, ".")
-    let int_part = if parts.len() > 0 { parts[0].clone() } else { "0" }
+    let int_part = if parts.len() > 0 { parts[0] } else { "0" }
     0
 }
 

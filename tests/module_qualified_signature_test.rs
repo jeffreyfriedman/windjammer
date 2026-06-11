@@ -45,7 +45,7 @@ fn test_multipass_module_qualified_autoborrow() {
     fs::write(
         src.join("draw.wj"),
         r#"
-extern fn renderer_draw_text(text: string, x: f32, y: f32)
+extern fn renderer_draw_text(text: String, x: f32, y: f32)
 
 pub fn draw_text(text: string, x: f32, y: f32) {
     renderer_draw_text(text, x, y)
@@ -110,7 +110,7 @@ fn test_multipass_no_name_collision_different_modules() {
     fs::write(
         src.join("draw.wj"),
         r#"
-extern fn renderer_draw_text(text: string, x: f32)
+extern fn renderer_draw_text(text: String, x: f32)
 
 pub fn draw_text(text: string, x: f32) {
     renderer_draw_text(text, x)

@@ -22,7 +22,7 @@ mod test_utils;
 #[test]
 fn test_string_literal_to_extern_fn_is_wrapped() {
     let code = r#"
-extern fn save_file(path: string, data: i32)
+extern fn save_file(path: String, data: i32)
 
 pub fn do_save() {
     save_file("fixture_output.txt", 42)

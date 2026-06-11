@@ -1,4 +1,4 @@
-// Conformance Test: String Operations
+// Conformance Test: string Operations
 //
 // SEMANTIC CONTRACT:
 // - Strings are UTF-8 encoded text
@@ -87,7 +87,7 @@ struct Greeter {
 }
 
 impl Greeter {
-    fn greet(&self, name: string) -> string {
+    fn greet(self, name: string) -> string {
         self.prefix.clone() + ", " + name + "!"
     }
 }

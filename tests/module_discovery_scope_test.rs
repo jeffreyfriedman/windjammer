@@ -149,7 +149,7 @@ impl Button {
         Button { label }
     }
 
-    pub fn render(&self) -> string {
+    pub fn render(self) -> string {
         format!("<button>{}</button>", self.label)
     }
 }
@@ -252,7 +252,7 @@ fn test_sibling_hand_written_modules_are_discovered() {
     fs::create_dir_all(&components_wj_dir).unwrap();
     fs::write(
         components_wj_dir.join("button.wj"),
-        "pub struct Button { pub label: string }",
+        "pub struct Button { pub label: String }",
     )
     .unwrap();
     fs::write(components_wj_dir.join("mod.wj"), "").unwrap();

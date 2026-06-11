@@ -41,7 +41,7 @@ fn test_hashmap_str_i32_emits_string_i64() {
     );
 }
 
-/// HashMap<str, str> -> HashMap<String, String> (both key and value)
+/// HashMap<str, string> -> HashMap<String, string> (both key and value)
 #[test]
 fn test_hashmap_str_str_emits_string_string() {
     let ty = Type::Parameterized(
@@ -53,25 +53,25 @@ fn test_hashmap_str_str_emits_string_string() {
     );
     let rust = type_to_rust(&ty);
     assert_eq!(
-        rust, "HashMap<String, String>",
-        "HashMap<str, str> should emit HashMap<String, String>, got {}",
+        rust, "HashMap<String, string>",
+        "HashMap<str, string> should emit HashMap<String, string>, got {}",
         rust
     );
 }
 
-/// HashMap<string, i32> -> HashMap<String, i64> (string keyword)
+/// HashMap<String, i32> -> HashMap<String, i64> (string keyword)
 #[test]
 fn test_hashmap_string_i32_emits_string_i64() {
-    let ty = Type::Parameterized("HashMap".to_string(), vec![Type::String, Type::Int]);
+    let ty = Type::Parameterized("HashMap".to_string(), vec![Type:: String, Type::Int]);
     let rust = type_to_rust(&ty);
     assert_eq!(
         rust, "HashMap<String, i64>",
-        "HashMap<string, i32> should emit HashMap<String, i64>, got {}",
+        "HashMap<String, i32> should emit HashMap<String, i64>, got {}",
         rust
     );
 }
 
-/// HashMap<i32, str> -> HashMap<i32, String> (value str becomes String)
+/// HashMap<i32, string> -> HashMap<i32, string> (value str becomes String)
 #[test]
 fn test_hashmap_i32_str_value_emits_string() {
     let ty = Type::Parameterized(
@@ -80,8 +80,8 @@ fn test_hashmap_i32_str_value_emits_string() {
     );
     let rust = type_to_rust(&ty);
     assert_eq!(
-        rust, "HashMap<i64, String>",
-        "HashMap<i32, str> value should become String, got {}",
+        rust, "HashMap<i64, string>",
+        "HashMap<i32, string> value should become String, got {}",
         rust
     );
 }
@@ -104,7 +104,7 @@ fn test_hashmap_str_in_struct_field() {
     );
 }
 
-/// type_to_rust_with_lifetime: HashMap<str, str> (for fn signatures with lifetimes)
+/// type_to_rust_with_lifetime: HashMap<str, string> (for fn signatures with lifetimes)
 #[test]
 fn test_hashmap_str_str_with_lifetime() {
     let ty = Type::Parameterized(
@@ -116,8 +116,8 @@ fn test_hashmap_str_str_with_lifetime() {
     );
     let rust = type_to_rust_with_lifetime(&ty);
     assert!(
-        rust == "HashMap<String, String>" || rust == "HashMap<&str, &str>",
-        "HashMap<str, str> mapping: expected String pair or &str pair, got {}",
+        rust == "HashMap<String, string>" || rust == "HashMap<&str, &str>",
+        "HashMap<str, string> mapping: expected String pair or &str pair, got {}",
         rust
     );
 }
@@ -151,12 +151,12 @@ fn test_hashmap_str_compiles_to_string_integration() {
 use std::collections::HashMap
 
 struct Registry {
-    name_to_id: HashMap<str, i64>
+    name_to_id: HashMap<string, i64>
 }
 
 impl Registry {
-    pub fn get_id(self, name: str) -> Option<i64> {
-        self.name_to_id.get(&name).cloned()
+    pub fn get_id(self, name: string) -> Option<i64> {
+        self.name_to_id.get(name)
     }
 }
 

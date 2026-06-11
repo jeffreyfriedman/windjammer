@@ -106,7 +106,7 @@ fn test_tuple_struct_borrowed_copy_args() {
     let src = r#"
 pub struct Point(i32, i32)
 
-pub fn make_pair(x: &i32, y: &i32) -> Point {
+pub fn make_pair(x: i32, y: i32) -> Point {
     Point(x, y)
 }
 "#;

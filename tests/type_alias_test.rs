@@ -96,7 +96,7 @@ fn test_string_type_alias() {
     fs::create_dir_all(&test_dir).unwrap();
 
     let source = r#"
-pub type QuestId = String
+pub type QuestId = string
 
 pub fn create_quest(id: QuestId) -> QuestId {
     id

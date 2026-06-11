@@ -14,20 +14,20 @@
 /// when the method parameter is inferred as borrowed (&str).
 ///
 /// Bug: VNode::element("hr") generates VNode::element("hr".to_string()) in Rust,
-/// but the function signature is fn element(tag: &str). This causes a type mismatch.
+/// but the function signature is fn element(tag: String). This causes a type mismatch.
 ///
 /// The codegen correctly suppresses .to_string() for module-qualified calls (draw::draw_text),
 /// but not for type-qualified static method calls (VNode::element) in cross-file scenarios.
 ///
 /// Scenario:
-///   - Struct Builder has fn create(name: string) where name is only read → inferred as &str
+///   - Struct Builder has fn create(name: &str) where name is only read → inferred as &str
 ///   - Caller does Builder::create("hello") → should generate Builder::create("hello"), NOT "hello".to_string()
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
 /// Cross-file test: This is the actual failing case from windjammer-ui.
-/// File A defines VNode::element(tag: string) [inferred as &str].
+/// File A defines VNode::element(tag: String) [inferred as &str].
 /// File B calls VNode::element("hr") from a free function.
 /// The codegen must look up the cross-file signature to know tag is &str.
 #[test]
@@ -109,7 +109,7 @@ pub fn spacer() -> VNode {
     // element's `tag` parameter is inferred as &str (read-only)
     assert!(
         !generated.contains(r#""hr".to_string()"#),
-        "Cross-file: string literal should NOT get .to_string() for borrowed param.\n\
+        "Cross-file: String literal should NOT get .to_string() for borrowed param.\n\
          Expected: VNode::element(\"hr\")\n\
          Generated:\n{}",
         generated
@@ -123,7 +123,7 @@ pub fn spacer() -> VNode {
     // VNode::element("div") inside VNode::div() should also not get .to_string()
     assert!(
         !vnode_generated.contains(r#""div".to_string()"#),
-        "Same-file: string literal should NOT get .to_string() for borrowed param.\n\
+        "Same-file: String literal should NOT get .to_string() for borrowed param.\n\
          Expected: VNode::element(\"div\")\n\
          Generated:\n{}",
         vnode_generated
@@ -143,7 +143,7 @@ fn test_string_literal_in_type_static_call_borrowed_param() {
     let temp_dir = TempDir::new().unwrap();
 
     let source = r#"
-extern fn external_create(name: string) -> i64
+extern fn external_create(name: &str) -> i64
 
 pub struct Builder {
     pub handle: i64,
@@ -184,7 +184,7 @@ pub fn make_builder() -> Builder {
     let generated = fs::read_to_string(&builder_rs)
         .unwrap_or_else(|_| panic!("Failed to read generated builder.rs"));
 
-    // The function `create` takes `name: string` but only reads it,
+    // The function `create` takes `name: String` but only reads it,
     // so the analyzer infers it as `&str`. The call site should pass
     // the string literal directly, not with .to_string().
     assert!(

@@ -41,7 +41,7 @@ fn main() {
     println!("Generated Rust code:\n{}", rust_code);
 
     // NEW DESIGN: Read-only string parameters infer to &str
-    // text: string (read-only) → infers to text: &str
+    // text: String (read-only) → infers to text: &str
     // Call site: owned String is borrowed with &
     assert!(
         rust_code.contains("text: &str"),
@@ -63,14 +63,14 @@ fn test_string_literal_converted_to_string() {
 struct Renderer {}
 
 impl Renderer {
-    fn draw_text(&self, text: string) {
+    fn draw_text(self, text: string) {
         println!("{}", text)
     }
 }
 
 fn main() {
     let renderer = Renderer{}
-    renderer.draw_text("Hello World")  // Should convert &str to String
+    renderer.draw_text("Hello World")  // Should convert &string to string
 }
 "#;
 

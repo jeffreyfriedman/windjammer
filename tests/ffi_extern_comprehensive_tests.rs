@@ -74,7 +74,7 @@ pub fn use_ffi_types(
 fn test_ffi_references() {
     // References are safe alternatives to pointers
     let code = r#"
-pub fn use_references(a: &i32, b: &mut i32) -> i32 {
+pub fn use_references(a: i32, mut b: i32) -> i32 {
     *b = *a;
     *a
 }

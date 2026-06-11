@@ -100,9 +100,9 @@ pub fn format_value(v: i32) -> string {
 
 pub fn build_mixed() -> string {
     let mut result = ""
-    result += "Prefix: "      // String literal (already &str) - should work
-    result += format_value(42) // Function returning String - needs fix
-    result += " - Suffix"     // String literal - should work
+    result += "Prefix: "      // string literal (already &string) - should work
+    result += format_value(42) // Function returning string - needs fix
+    result += " - Suffix"     // string literal - should work
     result
 }
 "#;

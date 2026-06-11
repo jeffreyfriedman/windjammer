@@ -27,7 +27,7 @@ fn test_gameloop_no_ambiguity() {
         // Simulate the game_loop module (trait)
         mod game_loop {
             pub trait GameLoop {
-                fn update(&mut self);
+                fn update(self);
             }
         }
         

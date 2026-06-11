@@ -28,7 +28,7 @@
 
 // --- Basic trait implementation ---
 trait Describe {
-    fn describe(&self) -> string
+    fn describe(self) -> string
 }
 
 struct Circle {
@@ -40,13 +40,13 @@ struct Square {
 }
 
 impl Describe for Circle {
-    fn describe(&self) -> string {
+    fn describe(self) -> string {
         "Circle(r=${self.radius})"
     }
 }
 
 impl Describe for Square {
-    fn describe(&self) -> string {
+    fn describe(self) -> string {
         "Square(s=${self.side})"
     }
 }
@@ -60,17 +60,17 @@ fn test_basic_trait() {
 
 // --- Trait with computation ---
 trait HasArea {
-    fn area(&self) -> int
+    fn area(self) -> int
 }
 
 impl HasArea for Circle {
-    fn area(&self) -> int {
+    fn area(self) -> int {
         3 * self.radius * self.radius
     }
 }
 
 impl HasArea for Square {
-    fn area(&self) -> int {
+    fn area(self) -> int {
         self.side * self.side
     }
 }
@@ -84,11 +84,11 @@ fn test_trait_area() {
 
 // --- Multiple traits on one type ---
 trait Named {
-    fn name(&self) -> string
+    fn name(self) -> string
 }
 
 trait Aged {
-    fn age(&self) -> int
+    fn age(self) -> int
 }
 
 struct Person {
@@ -97,13 +97,13 @@ struct Person {
 }
 
 impl Named for Person {
-    fn name(&self) -> string {
+    fn name(self) -> string {
         self.person_name.clone()
     }
 }
 
 impl Aged for Person {
-    fn age(&self) -> int {
+    fn age(self) -> int {
         self.person_age
     }
 }
@@ -119,9 +119,9 @@ fn test_multiple_traits() {
 
 // --- Default implementations ---
 trait Animal {
-    fn speak(&self) -> string
+    fn speak(self) -> string
 
-    fn is_loud(&self) -> bool {
+    fn is_loud(self) -> bool {
         false
     }
 }
@@ -130,17 +130,17 @@ struct Dog {}
 struct Cat {}
 
 impl Animal for Dog {
-    fn speak(&self) -> string {
+    fn speak(self) -> string {
         "Woof!"
     }
 
-    fn is_loud(&self) -> bool {
+    fn is_loud(self) -> bool {
         true  // Override default
     }
 }
 
 impl Animal for Cat {
-    fn speak(&self) -> string {
+    fn speak(self) -> string {
         "Meow!"
     }
     // Uses default is_loud() -> false

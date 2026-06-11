@@ -38,7 +38,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
 #[test]
 fn test_borrowed_string_param_generates_borrow() {
     let source = r#"
-extern fn read_text_file(path: string) -> string
+extern fn read_text_file(path: String) -> String
 
 pub fn load_scene() -> string {
     let path = "test.wjscene"

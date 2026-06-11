@@ -113,7 +113,7 @@ impl Player {
             self.y + 1.8
         )
         
-        // BUG: Compiler incorrectly generates: future_box.intersects_aabb(&wall)
+        // BUG: Compiler incorrectly generates: future_box.intersects_aabb(wall)
         // SHOULD generate: future_box.intersects_aabb(wall)
         // Because AABB is Copy and method expects owned
         future_box.intersects_aabb(wall)

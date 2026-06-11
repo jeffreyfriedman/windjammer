@@ -113,7 +113,7 @@ fn test_type_bool() {
 
 #[test]
 fn test_type_string() {
-    let ty = get_fn_param_type("fn foo(x: string) { }");
+    let ty = get_fn_param_type("fn foo(x: String) { }");
     assert!(matches!(ty, Type::String), "Expected String, got {:?}", ty);
 }
 
@@ -333,7 +333,7 @@ fn test_fn_param_str_type_is_custom_str() {
     let ok = matches!(&t, Type::String) || matches!(&t, Type::Custom(s) if s == "str");
     assert!(
         ok,
-        "expected `key: str` → Type::String or Custom(\"str\"), got {:?}",
+        "expected `key: String` → Type:: String or Custom(\"str\"), got {:?}",
         t
     );
 }
@@ -434,8 +434,8 @@ fn test_field_type_primitive() {
 
 #[test]
 fn test_field_type_string() {
-    let ty = get_struct_field_type("struct Person { name: string }");
-    assert!(matches!(ty, Type::String));
+    let ty = get_struct_field_type("struct Person { name: String }");
+    assert!(matches!(ty, Type:: String));
 }
 
 #[test]
@@ -462,7 +462,7 @@ fn test_field_type_option() {
 
 #[test]
 fn test_type_ref_to_vec() {
-    let ty = get_fn_param_type("fn foo(x: &Vec<i32>) { }");
+    let ty = get_fn_param_type("fn foo(x: Vec<i32>) { }");
     if let Type::Reference(inner) = ty {
         match *inner {
             Type::Vec(_) | Type::Parameterized(_, _) => {}
@@ -475,7 +475,7 @@ fn test_type_ref_to_vec() {
 
 #[test]
 fn test_type_mut_ref_to_parameterized() {
-    let ty = get_fn_param_type("fn foo(x: &mut HashMap<String, i32>) { }");
+    let ty = get_fn_param_type("fn foo(mut x: HashMap<String, i32>) { }");
     if let Type::MutableReference(inner) = ty {
         if let Type::Parameterized(name, _) = *inner {
             assert_eq!(name, "HashMap");
@@ -557,7 +557,7 @@ fn test_type_with_bound() {
 fn test_where_clause() {
     let code = r#"
     impl<T> Container<T> where T: Clone {
-        fn clone_value(&self) -> T { self.value.clone() }
+        fn clone_value(self) -> T { self.value }
     }
     "#;
     let program = parse_program(code);

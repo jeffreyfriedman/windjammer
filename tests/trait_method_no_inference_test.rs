@@ -53,7 +53,7 @@ fn compile_and_check(code: &str) -> (bool, String) {
 fn test_trait_method_no_inference_f32() {
     let code = r#"
 pub trait GameLoop {
-    fn update(&mut self, delta: f32) {
+    fn update(self, delta: f32) {
         // Default implementation
     }
 }
@@ -85,11 +85,11 @@ pub struct Input { pub key: int }
 pub struct RenderContext { pub width: int }
 
 pub trait GameLoop {
-    fn update(&mut self, input: Input) {
+    fn update(self, input: Input) {
         // Default implementation
     }
     
-    fn render(&self, ctx: RenderContext) {
+    fn render(self, ctx: RenderContext) {
         // Default implementation
     }
 }
@@ -115,13 +115,13 @@ fn test_trait_impl_can_use_references() {
 pub struct Input { pub key: int }
 
 pub trait GameLoop {
-    fn update(&mut self, input: Input);
+    fn update(self, input: Input);
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(&mut self, input: Input) {
+    fn update(self, input: Input) {
         // Implementation - can use references if needed
         println(input.key)
     }

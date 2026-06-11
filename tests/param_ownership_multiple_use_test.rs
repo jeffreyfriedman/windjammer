@@ -40,7 +40,7 @@ use tempfile::TempDir;
 fn test_param_used_multiple_times_in_loop() {
     let wj_code = r#"
 struct GameState {
-    player_name: string,  // String makes struct non-Copy!
+    player_name: string,  // string makes struct non-Copy!
     player_health: i32,
 }
 

@@ -7,9 +7,9 @@
     feature = "integration_tests",
 )))]
 
-/// TDD test for BUG: string parameters getting unnecessary * derefs on the parameter itself
+/// TDD test for BUG: String parameters getting unnecessary * derefs on the parameter itself
 ///
-/// PROBLEM: When a function has a read-only `tag: string` parameter (generates &str),
+/// PROBLEM: When a function has a read-only `tag: String` parameter (generates &str),
 /// comparing it with Vec<String> elements must not deref the parameter: `*tag`
 ///
 /// EXPECTED: Parameter used directly (`tag`), iterator may use `*t == tag` for &String vs &str
@@ -27,7 +27,7 @@ use tempfile::tempdir;
 fn test_explicit_str_ref_param_no_deref() {
     let source = r#"
 fn has_tag(tags: Vec<string>, tag: string) -> bool {
-    for t in tags.iter() {
+    for t in tags {
         if t == tag {
             return true
         }
@@ -106,8 +106,8 @@ struct Member {
     id: string,
 }
 
-fn find_member(members: &Vec<Member>, target_id: string) -> bool {
-    for m in members.iter() {
+fn find_member(members: Vec<Member>, target_id: string) -> bool {
+    for m in members {
         if m.id == target_id {
             return true
         }

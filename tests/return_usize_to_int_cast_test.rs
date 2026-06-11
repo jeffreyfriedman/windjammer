@@ -46,7 +46,7 @@ fn test_return_len_from_method() {
     }
     
     impl ComponentArray {
-        pub fn len(&self) -> int {
+        pub fn len(self) -> int {
             return self.dense.len()
         }
     }

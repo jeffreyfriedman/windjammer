@@ -5,11 +5,11 @@ struct DataSource {
 }
 
 impl DataSource {
-    fn get_items(&self) -> Vec<string> {
+    fn get_items(self) -> Vec<string> {
         self.items.clone()
     }
     
-    fn get_count(&self) -> int {
+    fn get_count(self) -> int {
         self.items.len() as int
     }
 }

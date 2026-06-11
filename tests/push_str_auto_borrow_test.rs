@@ -45,7 +45,7 @@ fn test_push_str_with_string_expression() {
     let code = r#"
     pub fn build_tag(tag: string) -> string {
         let html = "<"
-        html.push_str(tag.clone())
+        html.push_str(tag)
         html.push_str(">")
         return html
     }

@@ -125,7 +125,7 @@ impl Library {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: string params are owned String — literals should convert via .to_string()
+    // ASSERT: String params are owned String — literals should convert via .to_string()
     assert!(
         generated.contains("\"jump.ogg\".to_string()")
             || generated.contains("String::from(\"jump.ogg\")"),

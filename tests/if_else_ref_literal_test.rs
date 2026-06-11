@@ -17,20 +17,20 @@ mod test_utils;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_if_else_ref_field_vs_literal() {
-    let code = r###"
+    let code = r####"
     struct Rating {
         color: string,
     }
     impl Rating {
-        pub fn get_color(&self, filled: bool) -> string {
+        pub fn get_color(self, filled: bool) -> string {
             if filled {
-                &self.color
+                self.color
             } else {
                 "#e2e8f0"
             }
         }
     }
-    "###;
+    "####;
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
     // When one branch is &self.field (explicit ref) and other is string literal,
     // the literal should NOT be converted to String
@@ -54,7 +54,7 @@ fn test_if_else_ref_vs_literal_in_let() {
     struct Config {
         name: string,
     }
-    pub fn get_display_name(config: &Config, use_default: bool) -> string {
+    pub fn get_display_name(config: Config, use_default: bool) -> string {
         let name = if use_default {
             &config.name
         } else {

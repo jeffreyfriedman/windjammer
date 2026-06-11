@@ -18,7 +18,7 @@ mod test_utils;
 // TEST 5: Trait Method Self Inference Gap
 //
 // Real game code: systems.wj defines a System trait with abstract methods:
-//   fn name(self) -> string
+//   fn name(self) -> String
 //   fn update(self, dt: f32)
 //   fn is_enabled(self) -> bool
 //   fn priority(self) -> i32 { 0 }  // has default body

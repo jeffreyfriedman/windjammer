@@ -25,7 +25,7 @@ fn test_enum_struct_wildcard() {
         Rectangle { width: f32, height: f32 },
     }
     
-    fn get_type(shape: &Shape) -> string {
+    fn get_type(shape: Shape) -> string {
         match shape {
             Shape::Circle { .. } => "circle",
             Shape::Rectangle { .. } => "rectangle",
@@ -66,7 +66,7 @@ fn test_enum_struct_extract_fields() {
         Rectangle { width: f32, height: f32 },
     }
     
-    fn area(shape: &Shape) -> f32 {
+    fn area(shape: Shape) -> f32 {
         match shape {
             Shape::Circle { radius } => 3.14159 * radius * radius,
             Shape::Rectangle { width, height } => width * height,
@@ -112,7 +112,7 @@ fn test_enum_struct_partial_extract() {
         Directional { color: string, intensity: f32 },
     }
     
-    fn get_intensity(light: &Light) -> f32 {
+    fn get_intensity(light: Light) -> f32 {
         match light {
             Light::Point { intensity, .. } => *intensity,
             Light::Directional { intensity, .. } => *intensity,
@@ -154,7 +154,7 @@ fn test_enum_mixed_variants() {
         Pair { x: i32, y: i32 },
     }
     
-    fn describe(val: &Value) -> string {
+    fn describe(val: Value) -> string {
         match val {
             Value::Int(n) => format!("int: {}", n),
             Value::Float(f) => format!("float: {:.1}", f),

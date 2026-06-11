@@ -44,12 +44,12 @@ fn test_constructor_return_type_inference_with_null_metadata() {
     let metadata = r#"{
         "structs": {
             "SystemCoverage": {
-                "name": "String"
+                "name": "string"
             }
         },
         "functions": {
             "SystemCoverage::new": {
-                "params": ["Custom(\"String\")"],
+                "params": ["Custom(\"string\")"],
                 "return_type": null,
                 "is_associated": false,
                 "parent_type": null,
@@ -58,7 +58,7 @@ fn test_constructor_return_type_inference_with_null_metadata() {
                 "is_extern": false
             },
             "SystemCoverage::register_function": {
-                "params": ["Custom(\"Self\")", "Custom(\"String\")"],
+                "params": ["Custom(\"Self\")", "Custom(\"string\")"],
                 "return_type": "Custom(\"usize\")",
                 "is_associated": true,
                 "parent_type": "SystemCoverage",
@@ -158,14 +158,14 @@ fn test_string_coercion_deep_in_long_function_multifile_library() {
     let metadata = r#"{
         "structs": {
             "SystemCoverage": {
-                "name": "String"
+                "name": "string"
             },
             "InputRecorder": {},
             "GoldenBaseline": {}
         },
         "functions": {
             "SystemCoverage::new": {
-                "params": ["Custom(\"String\")"],
+                "params": ["Custom(\"string\")"],
                 "return_type": null,
                 "is_associated": false,
                 "parent_type": null,
@@ -174,7 +174,7 @@ fn test_string_coercion_deep_in_long_function_multifile_library() {
                 "is_extern": false
             },
             "SystemCoverage::register_function": {
-                "params": ["Custom(\"Self\")", "Custom(\"String\")"],
+                "params": ["Custom(\"Self\")", "Custom(\"string\")"],
                 "return_type": "Custom(\"usize\")",
                 "is_associated": true,
                 "parent_type": "SystemCoverage",
@@ -201,7 +201,7 @@ fn test_string_coercion_deep_in_long_function_multifile_library() {
                 "is_extern": false
             },
             "GoldenBaseline::from_pixels": {
-                "params": ["Custom(\"String\")", "Custom(\"Vec<f32>\")"],
+                "params": ["Custom(\"string\")", "Custom(\"Vec<f32>\")"],
                 "return_type": "Custom(\"GoldenBaseline\")",
                 "is_associated": false,
                 "parent_type": null,

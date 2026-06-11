@@ -76,8 +76,8 @@ impl<T> Container<T> {
         Container { value: value }
     }
     
-    pub fn get(&self) -> &T {
-        &self.value
+    pub fn get(self) -> &T {
+        self.value
     }
 }
 "#;
@@ -118,7 +118,7 @@ impl<A, B> Pair<A, B> {
 fn test_trait_bound_clone() {
     let code = r#"
 pub fn duplicate<T: Clone>(item: T) -> (T, T) {
-    (item.clone(), item)
+    (item, item)
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -131,7 +131,7 @@ fn test_trait_bound_multiple() {
     // Multiple trait bounds
     let code = r#"
 pub fn clone_twice<T: Clone>(item: T) -> (T, T) {
-    let a = item.clone();
+    let a = item;
     let b = item;
     (a, b)
 }
@@ -166,7 +166,7 @@ pub enum Maybe<T> {
     Nothing,
 }
 
-pub fn is_just<T>(m: &Maybe<T>) -> bool {
+pub fn is_just<T>(m: Maybe<T>) -> bool {
     match m {
         Maybe::Just(_) => true,
         Maybe::Nothing => false,
@@ -192,11 +192,11 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn increment(&mut self) {
+    pub fn increment(self) {
         self.count += 1
     }
     
-    pub fn get(&self) -> i32 {
+    pub fn get(self) -> i32 {
         self.count
     }
 }
@@ -220,8 +220,8 @@ pub struct Container<T> {
 }
 
 impl<T: Clone> Container<T> {
-    pub fn duplicate(&self) -> Container<T> {
-        Container { value: self.value.clone() }
+    pub fn duplicate(self) -> Container<T> {
+        Container { value: self.value }
     }
 }
 "#;
@@ -237,8 +237,8 @@ impl<T: Clone> Container<T> {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_generic() {
     let code = r#"
-pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
-    items.first().cloned()
+pub fn first<T: Clone>(items: Vec<T>) -> Option<T> {
+    items.first()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -250,7 +250,7 @@ pub fn first<T: Clone>(items: &Vec<T>) -> Option<T> {
 fn test_option_generic() {
     // Simple option usage
     let code = r#"
-pub fn is_some<T>(opt: &Option<T>) -> bool {
+pub fn is_some<T>(opt: Option<T>) -> bool {
     match opt {
         Some(_) => true,
         None => false,
@@ -270,8 +270,8 @@ pub fn is_some<T>(opt: &Option<T>) -> bool {
 fn test_iterator_usage() {
     // Basic iterator usage with Vec
     let code = r#"
-pub fn count_items(items: &Vec<i32>) -> usize {
-    items.iter().count()
+pub fn count_items(items: Vec<i32>) -> usize {
+    items.count()
 }
 "#;
     let (success, _generated, err) = test_utils::compile_via_cli(code);
@@ -287,7 +287,7 @@ pub fn count_items(items: &Vec<i32>) -> usize {
 fn test_reference_return() {
     // Simple reference return (lifetime inferred)
     let code = r#"
-pub fn get_first(items: &Vec<i32>) -> Option<&i32> {
+pub fn get_first(items: Vec<i32>) -> Option<&i32> {
     items.first()
 }
 "#;

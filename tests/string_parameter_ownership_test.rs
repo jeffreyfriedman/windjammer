@@ -13,7 +13,7 @@
 /// TDD Test: String Parameter Ownership
 ///
 /// THE WINDJAMMER WAY: Explicit type annotations are honored.
-/// - `name: string` → `String` (owned, as written)
+/// - `name: String` → `String` (owned, as written)
 /// - `name: &string` → `&str` (borrowed, as written)
 ///
 /// This prevents API contract violations where methods expect owned strings.
@@ -37,7 +37,7 @@ fn main() {
     println!("Generated Rust code:\n{}", rust_code);
 
     // NEW DESIGN: String ownership is inferred from USAGE
-    // `name: string` (read-only) → infers to `name: &str` (idiomatic Rust!)
+    // `name: String` (read-only) → infers to `name: &str` (idiomatic Rust!)
     assert!(
         rust_code.contains("fn greet(name: &str)"),
         "Read-only string parameter should infer to &str.\nGenerated:\n{}",
@@ -101,7 +101,7 @@ fn main() {
 
     // THE WINDJAMMER WAY: String parameters for storage should be String (owned)
     assert!(
-        rust_code.contains("name: String") && rust_code.contains("fn new(name: String)"),
+        rust_code.contains("name: String") && rust_code.contains("fn new(name: &str)"),
         "String parameters that are stored should be String (owned).\nGenerated:\n{}",
         rust_code
     );

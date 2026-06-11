@@ -108,7 +108,7 @@ fn test_wasm_specific_module_declaration() {
 
     fs::write(
         src_dir.join("button.wj"),
-        "pub struct Button { pub label: string }",
+        "pub struct Button { pub label: String }",
     )
     .unwrap();
 

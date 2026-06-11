@@ -40,7 +40,7 @@ pub mod game_loop;
         game_loop_dir.join("game_loop.wj"),
         r#"
 pub trait GameLoop {
-    fn init(&mut self) {
+    fn init(self) {
         // Default implementation
     }
 }
@@ -59,7 +59,7 @@ pub struct Game {
 }
 
 impl GameLoop for Game {
-    fn init(&mut self) {
+    fn init(self) {
         self.score = 0;
     }
 }
