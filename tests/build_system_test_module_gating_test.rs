@@ -114,7 +114,7 @@ fn test_self_referencing_dep_filtered() {
 
     fs::write(
         src_dir.join("lib.wj"),
-        "pub fn hello() -> String { \"hello\" }\n",
+        "pub fn hello() -> string { \"hello\" }\n",
     )
     .unwrap();
 

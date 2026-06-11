@@ -16,7 +16,7 @@ fn test_index_owned_method_receiver_clones() {
     let source = r##"
 pub enum Value {
     Float(f32),
-    string(string),
+    Text(string),
     None,
 }
 
