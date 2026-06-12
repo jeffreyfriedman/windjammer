@@ -237,12 +237,15 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             }
             Expression::FieldAccess { object, .. } => {
-                // If object is self, check if self is borrowed
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                     if obj_name == "self" {
                         return self.current_function_params.iter().any(|p| {
                             p.name == "self"
-                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                && matches!(
+                                    p.ownership,
+                                    crate::parser::OwnershipHint::Ref
+                                        | crate::parser::OwnershipHint::Mut
+                                )
                         });
                     }
                 }

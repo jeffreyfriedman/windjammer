@@ -428,3 +428,26 @@ pub fn is_runtime_std_module(name: &str) -> bool {
 pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
     matches!(module, "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env")
 }
+
+/// Check if a runtime std module function parameter should be auto-borrowed.
+///
+/// In `windjammer_runtime`, some modules take non-Copy struct parameters by reference
+/// (`&T`) in the Rust implementation, but WJ stdlib declarations use owned types
+/// (since WJ infers ownership). This function identifies those params so the codegen
+/// can insert `&` at call sites.
+///
+/// This is module-specific because conventions differ:
+/// - `json::get(value: &Value, ...)` — Rust takes `&Value`
+/// - `subprocess::wait(handle: SubprocessHandle)` — Rust takes owned
+pub fn runtime_std_param_needs_auto_borrow(module: &str, _func: &str, param_type: &crate::parser::Type) -> bool {
+    use crate::parser::Type;
+    match module {
+        "json" => {
+            // All json functions take Value params by reference (&Value) in Rust,
+            // except constructors (object/array/null/boolean/number_*/json_string)
+            // which don't take Value params at all.
+            matches!(param_type, Type::Custom(name) if name == "Value")
+        }
+        _ => false,
+    }
+}

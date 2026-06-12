@@ -1,6 +1,7 @@
 //! Function signature storage and lookup for ownership inference.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 use crate::parser::Type;
 
@@ -43,10 +44,13 @@ impl FunctionSignature {
     }
 }
 
+static STDLIB_BASELINE: OnceLock<SignatureRegistry> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct SignatureRegistry {
     pub signatures: HashMap<String, FunctionSignature>,
     collision_keys: HashSet<String>,
+    method_index: HashMap<String, Vec<String>>,
 }
 
 impl Default for SignatureRegistry {
@@ -57,29 +61,37 @@ impl Default for SignatureRegistry {
 
 impl SignatureRegistry {
     pub fn new() -> Self {
-        let mut registry = SignatureRegistry {
+        let baseline = STDLIB_BASELINE.get_or_init(|| {
+            let mut registry = SignatureRegistry {
+                signatures: HashMap::new(),
+                collision_keys: HashSet::new(),
+                method_index: HashMap::new(),
+            };
+
+            if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
+                eprintln!("Warning: Failed to scan runtime signatures: {}", e);
+                eprintln!("Continuing with empty registry - may generate incorrect borrows");
+            }
+
+            Self::load_stdlib_meta(&mut registry);
+            registry
+        });
+
+        baseline.clone()
+    }
+
+    /// Lightweight empty registry (no stdlib) for building deltas.
+    pub fn empty() -> Self {
+        SignatureRegistry {
             signatures: HashMap::new(),
             collision_keys: HashSet::new(),
-        };
-
-        // Populate with stdlib signatures by scanning windjammer-runtime source
-        if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
-            eprintln!("Warning: Failed to scan runtime signatures: {}", e);
-            eprintln!("Continuing with empty registry - may generate incorrect borrows");
+            method_index: HashMap::new(),
         }
-
-        // Load Rust stdlib type signatures from shipped .wj.meta files.
-        // These provide type-qualified ownership info (e.g. Vec::push → &mut self, T)
-        // so the compiler doesn't need hard-coded method name tables.
-        Self::load_stdlib_meta(&mut registry);
-
-        registry
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
         use std::path::Path;
 
-        // Locate stdlib_meta/ relative to the compiler binary or crate root
         let candidates = [
             Path::new("stdlib_meta").to_path_buf(),
             Path::new(env!("CARGO_MANIFEST_DIR")).join("stdlib_meta"),
@@ -100,16 +112,18 @@ impl SignatureRegistry {
             {
                 self.collision_keys.insert(name.clone());
             }
-            // For qualified names (Type::method), protect a method signature
-            // (has_self_receiver=true) from being overwritten by a standalone function
-            // (has_self_receiver=false). This prevents metadata/analysis ordering races
-            // from losing the correct &mut self inference.
             if name.contains("::")
                 && existing.has_self_receiver
                 && !sig.has_self_receiver
             {
                 return;
             }
+        }
+        if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
+            self.method_index
+                .entry(suffix)
+                .or_default()
+                .push(name.clone());
         }
         self.signatures.insert(name, sig);
     }
@@ -139,24 +153,25 @@ impl SignatureRegistry {
     }
 
     /// Fallback lookup: find a signature whose key ends with `::name`.
-    /// Used when a method call is recorded as bare "method" but registered as "Type::method".
+    /// Uses the method index for O(1) lookup instead of scanning all entries.
     pub fn find_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
-        let pattern = format!("::{}", suffix);
-        self.signatures
-            .iter()
-            .find(|(key, _)| key.ends_with(&pattern))
-            .map(|(_, sig)| sig)
+        if let Some(keys) = self.method_index.get(suffix) {
+            for key in keys {
+                if let Some(sig) = self.signatures.get(key) {
+                    return Some(sig);
+                }
+            }
+        }
+        None
     }
 
     /// Find a signature matching the simple name with a specific argument count.
-    /// Searches exact match first, then all qualified names ending with `::name`.
-    /// Used when simple-name lookup returns the wrong overload (name collision).
+    /// Uses the method index for fast qualified-name lookup.
     pub fn find_signature_by_name_and_arg_count(
         &self,
         name: &str,
         arg_count: usize,
     ) -> Option<&FunctionSignature> {
-        // Try exact match first
         if let Some(sig) = self.signatures.get(name) {
             let sig_args = if sig.has_self_receiver {
                 sig.param_ownership.len().saturating_sub(1)
@@ -167,17 +182,17 @@ impl SignatureRegistry {
                 return Some(sig);
             }
         }
-        // Search all signatures ending with ::name
-        let pattern = format!("::{}", name);
-        for (key, sig) in &self.signatures {
-            if key.ends_with(&pattern) || key == name {
-                let sig_args = if sig.has_self_receiver {
-                    sig.param_ownership.len().saturating_sub(1)
-                } else {
-                    sig.param_ownership.len()
-                };
-                if sig_args == arg_count {
-                    return Some(sig);
+        if let Some(keys) = self.method_index.get(name) {
+            for key in keys {
+                if let Some(sig) = self.signatures.get(key) {
+                    let sig_args = if sig.has_self_receiver {
+                        sig.param_ownership.len().saturating_sub(1)
+                    } else {
+                        sig.param_ownership.len()
+                    };
+                    if sig_args == arg_count {
+                        return Some(sig);
+                    }
                 }
             }
         }
@@ -213,6 +228,90 @@ impl SignatureRegistry {
             || old.has_self_receiver != new.has_self_receiver
     }
 
+    /// Build declaration-only signature stubs from a parsed program (no ownership inference).
+    /// Used by library multipass Step 2 to seed the global registry before Step 3 convergence.
+    pub fn from_program_declarations(program: &crate::parser::Program<'_>) -> Self {
+        let mut registry = Self::empty();
+        Self::collect_declarations_from_items(&program.items, &mut registry);
+        registry
+    }
+
+    fn collect_declarations_from_items(
+        items: &[crate::parser::ast::core::Item<'_>],
+        registry: &mut Self,
+    ) {
+        use crate::parser::ast::core::Item;
+
+        for item in items {
+            match item {
+                Item::Function { decl, .. } => {
+                    let sig = Self::signature_stub_from_decl(decl, &decl.name);
+                    registry.add_function(decl.name.clone(), sig);
+                }
+                Item::Impl { block, .. } => {
+                    let base_type_name = block
+                        .type_name
+                        .split('<')
+                        .next()
+                        .unwrap_or(&block.type_name);
+                    for func in &block.functions {
+                        let sig = Self::signature_stub_from_decl(func, &func.name);
+                        let qualified_name = format!("{}::{}", base_type_name, func.name);
+                        registry.add_function(qualified_name, sig.clone());
+                        registry.add_function(func.name.clone(), sig);
+                    }
+                }
+                Item::Trait { decl, .. } => {
+                    for method in &decl.methods {
+                        let has_self_receiver = method
+                            .parameters
+                            .first()
+                            .is_some_and(|p| p.name == "self" || p.name == "mut self");
+                        let param_types: Vec<Type> =
+                            method.parameters.iter().map(|p| p.type_.clone()).collect();
+                        let param_ownership = vec![OwnershipMode::Owned; param_types.len()];
+                        let sig = FunctionSignature {
+                            name: method.name.clone(),
+                            param_types,
+                            param_ownership,
+                            return_type: method.return_type.clone(),
+                            return_ownership: OwnershipMode::Owned,
+                            has_self_receiver,
+                            is_extern: false,
+                        };
+                        registry.add_function(format!("{}::{}", decl.name, method.name), sig);
+                    }
+                }
+                Item::Mod { items, .. } => {
+                    Self::collect_declarations_from_items(items, registry);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn signature_stub_from_decl(
+        func: &crate::parser::ast::core::FunctionDecl<'_>,
+        name: &str,
+    ) -> FunctionSignature {
+        let has_self_receiver = func
+            .parameters
+            .first()
+            .is_some_and(|p| p.name == "self" || p.name == "mut self");
+        let param_types: Vec<Type> = func.parameters.iter().map(|p| p.type_.clone()).collect();
+        let param_ownership = vec![OwnershipMode::Owned; param_types.len()];
+
+        FunctionSignature {
+            name: name.to_string(),
+            param_types,
+            param_ownership,
+            return_type: func.return_type.clone(),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver,
+            is_extern: func.is_extern,
+        }
+    }
+
     /// BUG #8 FIX: Merge signatures from another registry.
     /// Detects collisions when different registries provide different
     /// param types for the same key (namespace collision from different modules).
@@ -224,6 +323,12 @@ impl SignatureRegistry {
                 {
                     self.collision_keys.insert(name.clone());
                 }
+            }
+            if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
+                self.method_index
+                    .entry(suffix)
+                    .or_default()
+                    .push(name.clone());
             }
             self.signatures.insert(name.clone(), sig.clone());
         }

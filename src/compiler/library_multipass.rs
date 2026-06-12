@@ -11,6 +11,17 @@ use crate::CompilationTarget;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+fn profiling_enabled() -> bool {
+    std::env::var("WJ_PROFILE").map_or(false, |v| v == "1" || v == "true")
+}
+
+fn profile_phase(phase: &str, start: Instant) {
+    if profiling_enabled() {
+        eprintln!("[wj-profile] {}: {}ms", phase, start.elapsed().as_millis());
+    }
+}
 
 /// Detect if source code imports from Windjammer stdlib (`std::*`)
 fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
@@ -83,6 +94,8 @@ pub(crate) fn build_library_multipass(
     external_paths: &HashMap<String, PathBuf>,
     mut crate_metadata: CrateMetadata,
 ) -> Result<()> {
+    let phase_start = Instant::now();
+
     // Step 0: Detect stdlib usage and prepend stdlib files
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
     let mut needed_stdlib_modules = HashSet::new();
@@ -219,10 +232,13 @@ pub(crate) fn build_library_multipass(
         );
     }
 
+    profile_phase("Step 0+1: Source reading + shader filter", phase_start);
+
     if sources.is_empty() {
         return Ok(());
     }
 
+    let parse_start = Instant::now();
     // PERFORMANCE: Parse all files once upfront and reuse ASTs across all pipeline
     // phases. Previously each file was re-parsed 9-10 times. The Parser owns arenas
     // (expr_arena, stmt_arena, pattern_arena) that Program references borrow from,
@@ -238,6 +254,7 @@ pub(crate) fn build_library_multipass(
         parsed_programs.push(program);
         parsers.push(parser);
     }
+    profile_phase("Parse upfront", parse_start);
 
     let src_base: PathBuf = {
         let raw = if base_path.is_file() {
@@ -269,6 +286,7 @@ pub(crate) fn build_library_multipass(
         );
     }
 
+    let copy_registry_start = Instant::now();
     let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs) =
         super::library_copy_registry::collect_global_copy_structs_for_library(&sources);
     let global_non_copy_enums =
@@ -305,7 +323,9 @@ pub(crate) fn build_library_multipass(
             }
         }
     }
+    profile_phase("Copy registry collection", copy_registry_start);
 
+    let step2_start = Instant::now();
     // Step 2: Build initial registries from ALL files (first pass)
     // - global_registry: For ownership inference (SignatureRegistry)
     // - global_float_signatures: For float inference (function param types)
@@ -428,14 +448,10 @@ pub(crate) fn build_library_multipass(
             &mut struct_defining_module_paths,
         );
 
-        // First-pass analysis
-        let mut analyzer = Analyzer::new_with_copy_structs(global_copy_structs.clone());
-        let (_, registry, _) = analyzer
-            .analyze_program(&program)
-            .map_err(|e| anyhow::anyhow!("Analysis error in {}: {}", file.display(), e))?;
-
-        // Merge into global registry using public API
-        global_registry.merge(&registry);
+        // Seed global registry with declaration stubs (parameter names + types only).
+        // Full ownership inference runs in Step 3 with cross-file context.
+        let stub_registry = SignatureRegistry::from_program_declarations(program);
+        global_registry.merge(&stub_registry);
 
         // Also register module-qualified names so the code generator can find the
         // correct signature for qualified function calls.
@@ -443,8 +459,9 @@ pub(crate) fn build_library_multipass(
         // to avoid collisions when two files have the same stem name.
         let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let module_path = file_module.join("::");
-        global_registry.register_module_aliases(&registry, file_stem, &module_path);
+        global_registry.register_module_aliases(&stub_registry, file_stem, &module_path);
     }
+    profile_phase("Step 2: Declaration stub collection", step2_start);
 
     // Step 3: Global multi-pass iteration until convergence
     // Wrap read-only data in Arc for O(1) sharing across all files (avoids O(n) deep clones).
@@ -454,8 +471,10 @@ pub(crate) fn build_library_multipass(
 
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
+    let step3_start = Instant::now();
 
     loop {
+        let round_start = Instant::now();
         let mut new_registry = global_registry.clone();
 
         // Re-analyze ALL files with current global registry
@@ -467,6 +486,7 @@ pub(crate) fn build_library_multipass(
                 global_struct_fields.clone(),
                 struct_defining_module_paths.clone(),
             );
+            analyzer.convergence_only = true;
             let (_, file_registry, _) = analyzer
                 .analyze_program_with_global_signatures(&program, &global_registry)
                 .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
@@ -509,6 +529,8 @@ pub(crate) fn build_library_multipass(
             }
         }
 
+        profile_phase(&format!("Step 3 round {}", pass_number), round_start);
+
         // Convergence check: did any signatures change in this pass?
         let changed = new_registry.signatures.iter().any(|(name, sig)| {
             match global_registry.signatures.get(name) {
@@ -525,6 +547,7 @@ pub(crate) fn build_library_multipass(
         global_registry = new_registry;
         pass_number += 1;
     }
+    profile_phase("Step 3 total", step3_start);
 
     // Collect `pub use` re-exports from every file first so `use super::*` / `use crate::...::*`
     // can resolve struct field types (glob has no explicit type path).
@@ -570,6 +593,7 @@ pub(crate) fn build_library_multipass(
     }
 
     // Step 4A: Global float inference pass (collect constraints from ALL files first)
+    let step4a_start = Instant::now();
     let mut global_float_inference = FloatInference::new();
     if !external_paths.is_empty() {
         global_float_inference.set_external_crate_metadata_paths(external_paths);
@@ -606,6 +630,7 @@ pub(crate) fn build_library_multipass(
     }
 
     super::bail_on_inference_errors(&global_int_inference.errors, "Int", None)?;
+    profile_phase("Step 4A: Float/Int inference", step4a_start);
 
     let type_defining_modules =
         super::dependency_resolution::build_type_defining_modules_for_library(&sources, &src_base)?;
@@ -619,6 +644,7 @@ pub(crate) fn build_library_multipass(
     //
     // Runs on a separate thread with a large stack because the merged program (~3000 items)
     // can produce deep recursive analysis.
+    let step4b_pre_start = Instant::now();
     let global_analyzed_trait_methods = {
         let global_copy_structs_clone = (*global_copy_structs).clone();
         // The trait inference thread needs its own parsed programs since Program borrows
@@ -670,8 +696,13 @@ pub(crate) fn build_library_multipass(
             }
         }
     };
+    profile_phase("Step 4B-pre: Trait inference thread", step4b_pre_start);
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
+    //
+    // TWO-PHASE APPROACH: First analyze ALL files to build a consistent final registry,
+    // then generate code using that registry. This ensures cross-module call sites see
+    // the same Phase 2 optimized signatures as the function definitions.
     //
     // INCREMENTAL (Phase 2): Compute dirty files to skip codegen for unchanged sources.
     // Analysis still runs for ALL files (needed for metadata.json convergence),
@@ -688,25 +719,46 @@ pub(crate) fn build_library_multipass(
         );
     }
 
+    // Phase 1: Analyze ALL files and collect per-file results + build final registry.
+    // The final registry has Phase 2 optimizations (str_ref, etc.) from ALL files,
+    // so cross-module call sites will see consistent signatures.
+    struct PerFileAnalysis<'a> {
+        analyzed_functions: Vec<crate::analyzer::AnalyzedFunction<'a>>,
+        registry: SignatureRegistry,
+        merged_trait_methods: HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'a>>>,
+        copy_structs: Vec<String>,
+        output_file: PathBuf,
+    }
+
+    let mut per_file_analyses: Vec<PerFileAnalysis<'static>> = Vec::with_capacity(sources.len());
+    let mut final_global_registry = global_registry.clone();
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
+
+    // Pre-build stripped programs so they live long enough for analysis references.
+    let mut stripped_programs: Vec<Option<crate::parser::Program<'static>>> =
+        vec![None; sources.len()];
     for (i, (file, _source)) in sources.iter().enumerate() {
-        // Use cached parse. For files that need mod item stripping, clone just the items vec.
-        let needs_strip = file.parent()
+        let needs_strip = file
+            .parent()
             .and_then(|p| filtered_modules_by_dir.get(p))
             .is_some();
-
-        let program: std::borrow::Cow<'_, crate::parser::Program<'static>> = if needs_strip {
+        if needs_strip {
             let mut cloned = parsed_programs[i].clone();
             if let Some(parent_dir) = file.parent() {
                 if let Some(filtered_names) = filtered_modules_by_dir.get(parent_dir) {
                     cloned.items = super::strip_filtered_mod_items(cloned.items, filtered_names);
                 }
             }
-            std::borrow::Cow::Owned(cloned)
-        } else {
-            std::borrow::Cow::Borrowed(&parsed_programs[i])
-        };
+            stripped_programs[i] = Some(cloned);
+        }
+    }
+
+    let step4b_phase1_start = Instant::now();
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let program: &crate::parser::Program<'static> = stripped_programs[i]
+            .as_ref()
+            .unwrap_or(&parsed_programs[i]);
 
         let mut analyzer = Analyzer::for_library_pass(
             (*global_copy_structs).clone(),
@@ -715,27 +767,23 @@ pub(crate) fn build_library_multipass(
         );
 
         if let Err(e) =
-            crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, &program)
+            crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, program)
         {
             deferred_lint_errors.push(e);
         }
 
-        // Register traits so per-file analysis can resolve trait contracts
         analyzer
-            .register_traits_from_program(&program)
+            .register_traits_from_program(program)
             .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
 
-        // Final analysis with converged registry
         let (analyzed_functions, registry, _) = analyzer
-            .analyze_program_with_global_signatures(&program, &global_registry)
+            .analyze_program_with_global_signatures(program, &global_registry)
             .map_err(|e| anyhow::anyhow!("Final analysis error: {}", e))?;
 
         analyzer
-            .infer_trait_signatures_from_impls(&program)
+            .infer_trait_signatures_from_impls(program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        // Merge per-file trait analysis with global cross-file trait methods.
-        // Global takes priority (it has the merged view from ALL implementations).
         let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
         for (trait_name, methods) in &global_analyzed_trait_methods {
             let entry = merged_trait_methods.entry(trait_name.clone()).or_default();
@@ -744,19 +792,55 @@ pub(crate) fn build_library_multipass(
             }
         }
 
-        // Preserve directory structure (directory-module layout when `foo.wj` + `foo/*.wj` co-exist).
-        // In library mode, mod.wj output goes to _mod_items.rs so --module-file doesn't overwrite it.
         let output_file =
             crate::project_paths::resolve_wj_output_path_library(&src_base, file, output)?;
         super::ensure_output_parent_dir(&output_file)?;
 
-        // Library-style modules: `use super::*` + automatic sibling `use super::Type` imports.
-        // Use the global registry (all cross-file signatures) merged with the per-file registry
-        // so that method calls to other files' types resolve correctly for auto-borrowing.
-        let mut full_registry = global_registry.clone();
-        full_registry.merge(&registry);
-        analyzer.register_trait_methods_in_registry(&merged_trait_methods, &mut full_registry);
-        let mut registry_snapshot = full_registry.clone();
+        // Merge this file's final signatures into final_global_registry.
+        // This captures Phase 2 optimizations (str_ref params, etc.)
+        let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let file_module =
+            crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
+                .unwrap_or_default();
+        let module_path = file_module.join("::");
+        final_global_registry.merge(&registry);
+        final_global_registry.register_module_aliases(&registry, file_stem, &module_path);
+
+        per_file_analyses.push(PerFileAnalysis {
+            analyzed_functions,
+            registry,
+            merged_trait_methods,
+            copy_structs: analyzer.get_copy_structs(),
+            output_file,
+        });
+    }
+    profile_phase("Step 4B Phase 1: Final analysis", step4b_phase1_start);
+
+    // Phase 2: Code generation using the consistent final_global_registry.
+    let step4b_phase2_start = Instant::now();
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let analysis = &per_file_analyses[i];
+        let program: &crate::parser::Program<'static> = stripped_programs[i]
+            .as_ref()
+            .unwrap_or(&parsed_programs[i]);
+
+        // Build full registry: final global (with Phase 2 from ALL files) + per-file local
+        let mut full_registry = final_global_registry.clone();
+        full_registry.merge(&analysis.registry);
+        {
+            let mut tmp_analyzer = Analyzer::for_library_pass(
+                (*global_copy_structs).clone(),
+                global_struct_fields.clone(),
+                struct_defining_module_paths.clone(),
+            );
+            tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
+            tmp_analyzer.register_trait_methods_in_registry(
+                &analysis.merged_trait_methods,
+                &mut full_registry,
+            );
+        }
+
+        let registry_snapshot = full_registry.clone();
         for (name, sig) in &registry_snapshot.signatures {
             if !sig.param_ownership.is_empty()
                 && (crate::metadata::signature_targets_local_struct(name, &local_struct_names)
@@ -765,9 +849,8 @@ pub(crate) fn build_library_multipass(
                 local_converged_sigs.insert(name.clone(), sig.clone());
             }
         }
-        // INCREMENTAL: Skip codegen for unchanged files. Analysis above still ran
-        // so local_converged_sigs are correct for metadata.json emission.
-        if !dirty_set.contains(&i) && output_file.exists() {
+
+        if !dirty_set.contains(&i) && analysis.output_file.exists() {
             continue;
         }
 
@@ -775,27 +858,29 @@ pub(crate) fn build_library_multipass(
         codegen.set_copy_types_registry((*global_copy_structs).clone());
         codegen.set_non_copy_types_registry(global_non_copy_types.clone());
         codegen.set_global_struct_field_types((*global_struct_fields).clone());
-        codegen.set_output_file(&output_file);
+        codegen.set_output_file(&analysis.output_file);
         codegen.set_source_file(file);
         codegen.set_library_source_root(src_base.clone());
         codegen.set_type_defining_modules(type_defining_modules.clone());
         codegen.set_extern_submodule_qualifiers(extern_submodule_qualifiers.clone());
-        codegen.set_analyzed_trait_methods(merged_trait_methods);
+        codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
         codegen.set_float_inference(global_float_inference.clone());
         codegen.set_int_inference(global_int_inference.clone());
 
-        super::apply_inferred_bounds_to_codegen(&mut codegen, &program);
+        super::apply_inferred_bounds_to_codegen(&mut codegen, program);
+        let mut registry_snapshot_mut = registry_snapshot;
         super::write_generated_rust_and_meta(
             &mut codegen,
-            &program,
-            &analyzed_functions,
-            &mut registry_snapshot,
-            &output_file,
+            program,
+            &analysis.analyzed_functions,
+            &mut registry_snapshot_mut,
+            &analysis.output_file,
             file,
-            analyzer.get_copy_structs(),
+            analysis.copy_structs.clone(),
             target,
         )?;
     }
+    profile_phase("Step 4B Phase 2: Code generation", step4b_phase2_start);
 
     // Emit metadata.json — refresh ONLY locally-defined function signatures from the
     // converged registry. Dumping the full merged registry (engine + game) creates

@@ -183,7 +183,13 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut bound_vars = std::collections::HashSet::new();
                 self.extract_pattern_bindings(&main_arm.pattern, &mut bound_vars);
 
-                let added_borrowed: Vec<String> = if match_binds_refs_early_check {
+                for var in &bound_vars {
+                    self.match_arm_bindings.insert(var.clone());
+                }
+
+                let added_borrowed: Vec<String> = if match_binds_refs_early_check
+                    || !scrutinee_ref_prefix.is_empty()
+                {
                     bound_vars.iter().cloned().collect()
                 } else {
                     Vec::new()
@@ -191,6 +197,8 @@ impl<'ast> CodeGenerator<'ast> {
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.insert(var.clone());
                 }
+
+                let bound_vars_for_cleanup = bound_vars.clone();
 
                 self.local_variable_scopes.push(bound_vars);
 
@@ -265,8 +273,8 @@ impl<'ast> CodeGenerator<'ast> {
                                             .iter()
                                             .find(|(n, _)| n == name)
                                             .map(|(_, t)| t);
-                                        let is_copy =
-                                            binding_type.is_some_and(|t| self.is_type_copy(t));
+                                        let is_copy = binding_type
+                                            .is_some_and(|t| self.is_copy_pointee(t));
                                         // Generate all but last, then the derefed last
                                         let all_but_last = &statements[..statements.len() - 1];
                                         output.push_str(&self.generate_block(all_but_last));
@@ -299,6 +307,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         for (var_name, _) in &match_bound_type_entries {
                                             self.local_var_types.remove(var_name);
                                         }
+                                        for var in &bound_vars_for_cleanup {
+                                            self.match_arm_bindings.remove(var);
+                                        }
                                         return output;
                                     }
                                 }
@@ -316,7 +327,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
-                                let is_copy = binding_type.is_some_and(|t| self.is_type_copy(t));
+                                let is_copy = binding_type
+                                    .is_some_and(|t| self.is_copy_pointee(t));
                                 if is_copy {
                                     body_str = format!("*{}", body_str);
                                 } else {
@@ -354,6 +366,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.remove(var);
+                }
+                for var in &bound_vars_for_cleanup {
+                    self.match_arm_bindings.remove(var);
                 }
 
                 return output;

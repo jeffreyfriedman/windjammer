@@ -157,9 +157,8 @@ impl<'ast> CodeGenerator<'ast> {
                     self.borrowed_iterator_vars.remove(p);
                 }
 
-                // Owned params still need `.clone()` when the arg is a non-Copy binding; suppressing
-                // auto-clone during `generate_expression` (above) skips spurious clones for
-                // `&mut` pattern bindings (e.g. `world` from `if let Some(world) = &mut self.world`).
+                // Owned params need `.clone()` when the arg is a non-Copy binding, including
+                // `if let Some(x) = &self.opt` where `x` is `&T` but the callee expects owned `T`.
                 if method_signature
                     .as_ref()
                     .and_then(|sig| sig.param_ownership_for_arg(i))
@@ -169,15 +168,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .infer_expression_type(arg_to_generate)
                         .as_ref()
                         .is_some_and(|t| self.is_type_copy(t));
-                    let is_mut_ref_binding = self
-                        .infer_expression_type(arg_to_generate)
-                        .as_ref()
-                        .is_some_and(|t| {
-                            matches!(t, Type::MutableReference(_))
-                                || matches!(t, Type::Reference(_))
-                        });
                     if !is_copy
-                        && !is_mut_ref_binding
                         && !arg_str.ends_with(".clone()")
                         && !Self::is_enum_variant_or_constructor(arg_to_generate)
                         && matches!(
@@ -541,19 +532,33 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // `if let Some(world) = &mut self.world` — pass owned `World`/`Entity`, not `&mut world`.
+                // `if let Some(x) = &self.opt` — pass owned values via `.clone()`, not `&x` / `&mut x`.
                 if let Expression::Identifier { name, .. } = arg_to_generate {
-                    if self.match_arm_bindings.contains(name.as_str()) {
+                    let inferred = self.infer_expression_type(arg_to_generate);
+                    let is_ref_binding = inferred
+                        .as_ref()
+                        .is_some_and(|t| {
+                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        })
+                        || self.match_arm_bindings.contains(name.as_str());
+                    // Skip Copy types — they don't need cloning (e.g. i32 from enum destructure)
+                    let is_copy = inferred
+                        .as_ref()
+                        .is_some_and(|t| {
+                            crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(t)
+                        });
+                    if is_ref_binding && !is_copy {
                         if let Some(ref sig) = method_signature {
                             let sig_param_idx = sig.arg_param_index(i);
                             let param_is_mut_borrowed = sig
                                 .param_ownership
                                 .get(sig_param_idx)
                                 .is_some_and(|&o| matches!(o, OwnershipMode::MutBorrowed));
-                            let wants_owned = sig.param_types.get(sig_param_idx).is_some_and(|ty| {
-                                matches!(ty, Type::Custom(n) if n == "World" || n == "Entity")
-                            });
-                            if wants_owned
+                            let param_is_owned = sig
+                                .param_ownership
+                                .get(sig_param_idx)
+                                .is_some_and(|&o| matches!(o, OwnershipMode::Owned));
+                            if param_is_owned
                                 && !param_is_mut_borrowed
                                 && !arg_str.ends_with(".clone()")
                             {
