@@ -63,10 +63,13 @@ impl MethodCallAnalyzer {
 
     pub(super) fn is_copy_type_annotation_internal(type_: &Type) -> bool {
         match type_ {
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
             Type::Custom(name) => {
                 crate::type_classification::is_copy_primitive(name) || name == "int"
             }
             Type::Reference(_) | Type::MutableReference(_) => true,
+            Type::RawPointer { .. } | Type::FunctionPointer { .. } => true,
+            Type::Tuple(types) => types.iter().all(|t| Self::is_copy_type_annotation_internal(t)),
             _ => false,
         }
     }

@@ -545,6 +545,31 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
+            // Runtime std module auto-borrow: windjammer_runtime functions take &T
+            // for non-Copy struct params (e.g. json::get(&value, ...) not json::get(value, ...)).
+            // WJ stdlib declares owned params; the Rust side uses references.
+            if !arg_str.starts_with('&') {
+                let module = func_name.split("::").next().unwrap_or("");
+                let param_type = signature
+                    .as_ref()
+                    .and_then(|sig| sig.param_types.get(i));
+                let inferred_type = param_type.cloned().or_else(|| gen.infer_expression_type(arg));
+                if let Some(ref ty) = inferred_type {
+                    if super::super::super::stdlib_method_traits::runtime_std_param_needs_auto_borrow(
+                        module, func_name, ty,
+                    ) {
+                        let already_ref = if let Expression::Identifier { name, .. } = arg {
+                            gen.identifier_already_ref(name)
+                        } else {
+                            false
+                        };
+                        if !already_ref {
+                            arg_str = format!("&{}", arg_str);
+                        }
+                    }
+                }
+            }
+
             vec![arg_str]
         })
         .collect()
