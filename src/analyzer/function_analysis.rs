@@ -271,61 +271,111 @@ impl<'ast> Analyzer<'ast> {
             inferred_ownership.insert(param.name.clone(), mode);
         }
 
-        // PHASE 2 OPTIMIZATION: Detect unnecessary clones
-        let clone_optimizations = self.detect_unnecessary_clones(func);
+        // During multipass convergence, skip expensive optimization detectors.
+        // Only ownership inference matters for convergence; codegen-only
+        // optimizations run in the final pass.
+        let (
+            clone_optimizations,
+            struct_mapping_optimizations,
+            string_optimizations,
+            assignment_optimizations,
+            defer_drop_optimizations,
+            auto_clone_analysis,
+            mutated_variables,
+            mutated_parameters,
+            const_static_optimizations,
+            smallvec_optimizations,
+            cow_optimizations,
+            cache_locality,
+            str_ref_optimizable_params,
+            inferred_param_types,
+        ) = if self.convergence_only {
+            // str_ref analysis is cheap and affects signatures (param_types change
+            // from String to &str), so it MUST run during convergence.
+            // Only skip the truly expensive codegen-only optimizations.
+            let str_ref_optimizable_params =
+                self.analyze_str_ref_optimizable_params(func, registry);
+            let inferred_param_types: Vec<Type> = func
+                .parameters
+                .iter()
+                .map(|param| {
+                    if str_ref_optimizable_params.contains(&param.name) {
+                        Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else {
+                        param.type_.clone()
+                    }
+                })
+                .collect();
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                AutoCloneAnalysis::default(),
+                HashSet::new(),
+                HashSet::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                super::CacheLocalityAnalysis::default(),
+                str_ref_optimizable_params,
+                inferred_param_types,
+            )
+        } else {
+            let clone_optimizations = self.detect_unnecessary_clones(func);
+            let struct_mapping_optimizations = self.detect_struct_mappings(func);
+            let string_optimizations = self.detect_string_optimizations(func);
+            let assignment_optimizations = self.detect_assignment_optimizations(func);
+            let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
+            let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
 
-        // PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
-        let struct_mapping_optimizations = self.detect_struct_mappings(func);
+            self.track_mutations(&func.body, registry);
+            let mutated_variables = self.mutated_variables.clone();
 
-        // PHASE 4 OPTIMIZATION: Detect string operation opportunities
-        let string_optimizations = self.detect_string_optimizations(func);
-
-        // PHASE 5: Detect assignment operations that can use compound operators
-        let assignment_optimizations = self.detect_assignment_optimizations(func);
-        let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
-
-        // AUTO-CLONE: Analyze where clones should be automatically inserted
-        let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
-
-        // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
-        self.track_mutations(&func.body, registry);
-        let mutated_variables = self.mutated_variables.clone();
-
-        // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
-        let mut mutated_parameters = HashSet::new();
-        for param in &func.parameters {
-            if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
-                mutated_parameters.insert(param.name.clone());
-            }
-        }
-
-        // PHASE 7-9: Additional optimizations (future implementation)
-        let const_static_optimizations = Vec::new(); // TODO: Implement detection
-        let smallvec_optimizations = Vec::new(); // TODO: Implement detection
-        let cow_optimizations = Vec::new(); // TODO: Implement detection
-
-        let cache_locality = super::CacheLocalityAnalysis::default();
-
-        // PHASE 2: Analyze which string parameters can use &str optimization
-        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
-
-        // Build inferred parameter types based on Phase 2 analysis
-        let inferred_param_types: Vec<Type> = func
-            .parameters
-            .iter()
-            .map(|param| {
-                // Check if this parameter can be optimized to &str (instead of &String)
-                let can_use_str_ref = str_ref_optimizable_params.contains(&param.name);
-
-                if can_use_str_ref {
-                    // Optimize to &str (not &String)
-                    Type::Reference(Box::new(Type::Custom("str".to_string())))
-                } else {
-                    // Keep original type (will become &String for string params)
-                    param.type_.clone()
+            let mut mutated_parameters = HashSet::new();
+            for param in &func.parameters {
+                if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
+                    mutated_parameters.insert(param.name.clone());
                 }
-            })
-            .collect();
+            }
+
+            let const_static_optimizations = Vec::new();
+            let smallvec_optimizations = Vec::new();
+            let cow_optimizations = Vec::new();
+            let cache_locality = super::CacheLocalityAnalysis::default();
+            let str_ref_optimizable_params =
+                self.analyze_str_ref_optimizable_params(func, registry);
+
+            let inferred_param_types: Vec<Type> = func
+                .parameters
+                .iter()
+                .map(|param| {
+                    if str_ref_optimizable_params.contains(&param.name) {
+                        Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else {
+                        param.type_.clone()
+                    }
+                })
+                .collect();
+
+            (
+                clone_optimizations,
+                struct_mapping_optimizations,
+                string_optimizations,
+                assignment_optimizations,
+                defer_drop_optimizations,
+                auto_clone_analysis,
+                mutated_variables,
+                mutated_parameters,
+                const_static_optimizations,
+                smallvec_optimizations,
+                cow_optimizations,
+                cache_locality,
+                str_ref_optimizable_params,
+                inferred_param_types,
+            )
+        };
 
         Ok(AnalyzedFunction {
             decl: func.clone(),

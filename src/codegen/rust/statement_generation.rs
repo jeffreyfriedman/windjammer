@@ -629,11 +629,6 @@ impl<'ast> CodeGenerator<'ast> {
                         return "";
                     }
                 }
-                // TDD FIX: For non-Copy types, also strip &mut when the body does
-                // NOT mutate the binding directly (i.e., no method calls with &mut self
-                // on the binding). When the binding is only passed as an owned argument
-                // to other functions, we need an owned value, not a &mut reference.
-                // The auto-clone logic will add .clone() to the scrutinee when needed.
                 if !self.is_type_copy(&inner) {
                     let body_mutates = some_arm
                         .and_then(|arm| {
@@ -645,6 +640,9 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         .unwrap_or(false);
                     if !body_mutates {
+                        if self.match_scrutinee_is_self_field(value) {
+                            return "& ";
+                        }
                         return "";
                     }
                 }

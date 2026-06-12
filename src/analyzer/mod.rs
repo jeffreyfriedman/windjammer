@@ -284,6 +284,10 @@ pub struct Analyzer<'ast> {
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
+    /// When true, skip expensive optimization detectors (clone, struct mapping,
+    /// string, cache locality, etc.) during multipass convergence.
+    /// Only ownership inference runs. Final pass sets this to false.
+    pub convergence_only: bool,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -299,6 +303,7 @@ impl<'ast> Analyzer<'ast> {
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
+            convergence_only: false,
         }
     }
 

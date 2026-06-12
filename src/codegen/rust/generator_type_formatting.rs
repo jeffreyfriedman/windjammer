@@ -61,6 +61,16 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// When a match/if-let binding has type `&T`, decide `*binding` vs `.clone()` from `T`.
+    /// `&T` is Copy in Rust, but `*binding` is only valid when `T: Copy`.
+    pub(super) fn is_copy_pointee(&self, ty: &Type) -> bool {
+        let pointee = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        self.is_type_copy(pointee)
+    }
+
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"
     pub(crate) fn format_type_params(&self, type_params: &[crate::parser::TypeParam]) -> String {
         type_params

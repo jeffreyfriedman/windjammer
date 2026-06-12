@@ -26,6 +26,17 @@ pub(super) fn ref_from_known_method_signature(
         return Some(false);
     }
 
+    // `if let Some(x) = &self.opt` binds `x` as `&T`. Do not add another `&` for `&T` params.
+    if let Expression::Identifier { name: arg_name, .. } = arg {
+        if let Some(var_types) = local_var_types {
+            if let Some(ty) = var_types.get(arg_name) {
+                if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                    return Some(false);
+                }
+            }
+        }
+    }
+
     if let Some(param_type) = sig.param_types.get(sig_param_idx) {
         if !matches!(param_type, Type::Reference(_) | Type::MutableReference(_))
             && MethodCallAnalyzer::is_copy_type_annotation_internal(param_type)

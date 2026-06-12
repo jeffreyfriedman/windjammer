@@ -522,8 +522,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
-                                let is_copy =
-                                    bound_type.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                let is_copy = bound_type
+                                    .as_ref()
+                                    .is_some_and(|t| self.is_copy_pointee(t));
                                 if is_copy {
                                     if final_arm_str.trim() == name {
                                         final_arm_str = format!("*{}", name);
