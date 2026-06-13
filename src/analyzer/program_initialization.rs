@@ -2,6 +2,7 @@
 
 use crate::parser::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::{AnalyzedFunction, Analyzer, SignatureRegistry};
 
@@ -33,12 +34,12 @@ impl<'ast> Analyzer<'ast> {
     /// Update the analyzer's Copy structs registry (for shared analyzer across files)
     /// This allows newly discovered Copy structs to be available for subsequent file analysis
     pub fn update_copy_structs(&mut self, global_copy_structs: HashSet<String>) {
-        self.copy_structs = global_copy_structs;
+        self.copy_structs = Arc::new(global_copy_structs);
     }
 
     /// Register a single struct as Copy (for cross-crate metadata or testing)
     pub fn register_copy_struct(&mut self, name: &str) {
-        self.copy_structs.insert(name.to_string());
+        Arc::make_mut(&mut self.copy_structs).insert(name.to_string());
     }
 
     /// Set the global struct field types for cross-file nested field chain resolution.
@@ -60,19 +61,28 @@ impl<'ast> Analyzer<'ast> {
     /// cross-file data (Copy structs, struct fields, module paths). Uses Arc to
     /// avoid deep cloning when called once per file across 649+ files.
     pub fn for_library_pass(
-        copy_structs: HashSet<String>,
+        copy_structs: Arc<HashSet<String>>,
         struct_fields: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
         module_paths: std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
     ) -> Self {
-        let mut analyzer = Self::new_with_copy_structs(copy_structs);
+        let mut analyzer = Self::new_with_shared_copy_structs(copy_structs);
         analyzer.global_struct_field_types = struct_fields;
         analyzer.struct_defining_module_paths = module_paths;
         analyzer
     }
 
+    fn new_with_shared_copy_structs(copy_structs: Arc<HashSet<String>>) -> Self {
+        let mut analyzer = Analyzer::new_empty_shared(copy_structs);
+        analyzer.register_stdlib_traits();
+        analyzer
+            .hydrate_prelude_trait_method_signatures()
+            .expect("prelude trait method analysis (Drop, etc.)");
+        analyzer
+    }
+
     /// TDD FIX: Remove a struct from the Copy set (e.g., when local definition differs from metadata)
     pub fn unregister_copy_struct(&mut self, name: &str) {
-        self.copy_structs.remove(name);
+        Arc::make_mut(&mut self.copy_structs).remove(name);
     }
 
     /// TDD FIX: Check if a struct is registered as Copy

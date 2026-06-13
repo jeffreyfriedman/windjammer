@@ -1,6 +1,7 @@
 //! Program-level analysis: module items, multi-pass convergence, and per-pass registry updates.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::parser::*;
 
@@ -158,7 +159,7 @@ impl<'ast> Analyzer<'ast> {
                         })
                 });
                 if has_copy_derive {
-                    self.copy_structs.insert(decl.name.clone());
+                    Arc::make_mut(&mut self.copy_structs).insert(decl.name.clone());
                 } else if has_derive {
                     explicit_non_copy.insert(decl.name.clone());
                 }
@@ -178,7 +179,7 @@ impl<'ast> Analyzer<'ast> {
                 let all_copy =
                     field_types.is_empty() || field_types.iter().all(|ft| self.is_copy_type(ft));
                 if all_copy {
-                    self.copy_structs.insert(name.clone());
+                    Arc::make_mut(&mut self.copy_structs).insert(name.clone());
                     changed = true;
                 }
             }
@@ -284,17 +285,19 @@ impl<'ast> Analyzer<'ast> {
                 Item::Function { decl: func, .. } => {
                     let mut analyzed_func = self.analyze_function(func, &registry)?;
 
-                    // PHASE 7: Detect const/static optimizations
-                    analyzed_func.const_static_optimizations =
-                        self.detect_const_static_opportunities(&analyzed_func);
+                    if !self.convergence_only {
+                        // PHASE 7: Detect const/static optimizations
+                        analyzed_func.const_static_optimizations =
+                            self.detect_const_static_opportunities(&analyzed_func);
 
-                    // PHASE 8: Detect SmallVec optimizations
-                    analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
+                        // PHASE 8: Detect SmallVec optimizations
+                        analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
 
-                    // PHASE 9: Detect Cow optimizations
-                    analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+                        // PHASE 9: Detect Cow optimizations
+                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
-                    analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                        analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                    }
 
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
@@ -405,18 +408,20 @@ impl<'ast> Analyzer<'ast> {
                         }
                         let mut analyzed_func = analyzed_func_opt.unwrap();
 
-                        // PHASE 7: Detect const/static optimizations
-                        analyzed_func.const_static_optimizations =
-                            self.detect_const_static_opportunities(&analyzed_func);
+                        if !self.convergence_only {
+                            // PHASE 7: Detect const/static optimizations
+                            analyzed_func.const_static_optimizations =
+                                self.detect_const_static_opportunities(&analyzed_func);
 
-                        // PHASE 8: Detect SmallVec optimizations
-                        analyzed_func.smallvec_optimizations =
-                            self.detect_smallvec_opportunities(func);
+                            // PHASE 8: Detect SmallVec optimizations
+                            analyzed_func.smallvec_optimizations =
+                                self.detect_smallvec_opportunities(func);
 
-                        // PHASE 9: Detect Cow optimizations
-                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+                            // PHASE 9: Detect Cow optimizations
+                            analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
-                        analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                            analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                        }
 
                         let signature = self.build_signature(&analyzed_func);
 

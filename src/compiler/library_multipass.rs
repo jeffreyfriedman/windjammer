@@ -9,6 +9,7 @@ use crate::parser::Parser;
 use crate::type_inference::{FloatInference, IntInference};
 use crate::CompilationTarget;
 use anyhow::Result;
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -477,20 +478,35 @@ pub(crate) fn build_library_multipass(
         let round_start = Instant::now();
         let mut new_registry = global_registry.clone();
 
-        // Re-analyze ALL files with current global registry
+        // Re-analyze ALL files with current global registry (parallel per file).
+        let file_registries: Vec<SignatureRegistry> = (0..sources.len())
+            .into_par_iter()
+            .map(|i| {
+                let (file, _source) = &sources[i];
+                let program = &parsed_programs[i];
+                let mut analyzer = Analyzer::for_library_pass(
+                    global_copy_structs.clone(),
+                    global_struct_fields.clone(),
+                    struct_defining_module_paths.clone(),
+                );
+                analyzer.convergence_only = true;
+                analyzer
+                    .analyze_program_with_global_signatures(program, &global_registry)
+                    .map(|(_, file_registry, _)| file_registry)
+                    .map_err(|e| {
+                        format!(
+                            "Analysis error in pass {} for {}: {}",
+                            pass_number,
+                            file.display(),
+                            e
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow::anyhow!(e))?;
+
         for (i, (file, _source)) in sources.iter().enumerate() {
-            let program = &parsed_programs[i];
-
-            let mut analyzer = Analyzer::for_library_pass(
-                (*global_copy_structs).clone(),
-                global_struct_fields.clone(),
-                struct_defining_module_paths.clone(),
-            );
-            analyzer.convergence_only = true;
-            let (_, file_registry, _) = analyzer
-                .analyze_program_with_global_signatures(&program, &global_registry)
-                .map_err(|e| anyhow::anyhow!("Analysis error in pass {}: {}", pass_number, e))?;
-
+            let file_registry = &file_registries[i];
             // FIX: Only merge entries that CHANGED from global_registry.
             // analyze_program_with_global_signatures returns a FULL registry (global clone +
             // file-specific entries). Merging all entries would let passthrough global entries
@@ -761,7 +777,7 @@ pub(crate) fn build_library_multipass(
             .unwrap_or(&parsed_programs[i]);
 
         let mut analyzer = Analyzer::for_library_pass(
-            (*global_copy_structs).clone(),
+            global_copy_structs.clone(),
             global_struct_fields.clone(),
             struct_defining_module_paths.clone(),
         );
@@ -829,7 +845,7 @@ pub(crate) fn build_library_multipass(
         full_registry.merge(&analysis.registry);
         {
             let mut tmp_analyzer = Analyzer::for_library_pass(
-                (*global_copy_structs).clone(),
+                global_copy_structs.clone(),
                 global_struct_fields.clone(),
                 struct_defining_module_paths.clone(),
             );
