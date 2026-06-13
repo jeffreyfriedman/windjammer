@@ -265,7 +265,8 @@ pub struct Analyzer<'ast> {
     // Track enum definitions to determine if they're Copy
     copy_enums: HashSet<String>,
     // Track struct definitions with @derive(Copy) to determine if they're Copy
-    copy_structs: HashSet<String>,
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ library files.
+    copy_structs: Arc<HashSet<String>>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl<'ast>>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
@@ -292,10 +293,14 @@ pub struct Analyzer<'ast> {
 
 impl<'ast> Analyzer<'ast> {
     pub(super) fn new_empty(global_copy_structs: HashSet<String>) -> Self {
+        Self::new_empty_shared(Arc::new(global_copy_structs))
+    }
+
+    pub(super) fn new_empty_shared(copy_structs: Arc<HashSet<String>>) -> Self {
         Self {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
-            copy_structs: global_copy_structs,
+            copy_structs,
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),
