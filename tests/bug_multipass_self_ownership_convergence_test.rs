@@ -6,7 +6,6 @@
     feature = "conformance_tests",
     feature = "integration_tests",
 )))]
-
 /// TDD Test: Multipass convergence for cross-file self.field.method() mutation
 ///
 /// Bug: In multi-file compilation, File A's method calls self.field.method() where
@@ -16,7 +15,6 @@
 /// File A already converged to Borrowed and isn't re-checked.
 ///
 /// This creates a stable wrong fixed point in the multipass convergence loop.
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

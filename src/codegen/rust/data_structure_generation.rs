@@ -302,6 +302,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_field_access_object
             && !self.in_borrow_context
             && !self.in_call_argument_generation
+            && !self.in_user_written_closure
         {
             if let Expression::Identifier { name: var_name, .. } = object {
                 if self.borrowed_iterator_vars.contains(var_name) {
@@ -328,6 +329,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_borrow_context
             && !self.suppress_borrowed_clone
             && !self.in_call_argument_generation
+            && !self.in_user_written_closure
         {
             if let Expression::Identifier { name: obj_name, .. } = object {
                 if self.inferred_borrowed_params.contains(obj_name.as_str()) {
@@ -374,6 +376,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
             && !self.in_borrow_context
+            && !self.in_user_written_closure
             && (self.in_call_argument_generation
                 || self.in_struct_literal_field
                 || self.in_owned_value_context)
@@ -471,6 +474,20 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+
+                    // Phase 2 &str param stored into owned String field → .to_string() at site.
+                    if self.str_ref_optimized_params.contains(id) {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                            if let Some(field_type) = field_types.get(field_name) {
+                                let field_is_string = matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
+                                if field_is_string && !expr_str.ends_with(".to_string()") {
+                                    expr_str = format!("{}.to_string()", expr_str);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Windjammer `string` params inferred as borrowed (`&String`/`&str`) need
@@ -483,7 +500,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 let field_is_string = matches!(field_type, Type::String)
                                     || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
                                 if field_is_string && !expr_str.ends_with(".clone()") {
-                                    expr_str = format!("{}.clone()", expr_str);
+                                    if expr_str.ends_with(".to_string()") {
+                                        // Already coerced from &str → String
+                                    } else {
+                                        expr_str = format!("{}.clone()", expr_str);
+                                    }
                                 }
                             }
                         }
@@ -499,7 +520,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 let field_is_string = matches!(field_type, Type::String)
                                     || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
                                 if field_is_string && !expr_str.ends_with(".clone()") {
-                                    expr_str = format!("{}.clone()", expr_str);
+                                    if expr_str.ends_with(".to_string()") {
+                                        // Already coerced from &str → String
+                                    } else {
+                                        expr_str = format!("{}.clone()", expr_str);
+                                    }
                                 }
                             }
                         }

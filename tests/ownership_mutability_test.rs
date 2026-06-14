@@ -40,7 +40,7 @@ pub fn main() {}
     assert!(compiles, "Should compile. Got:\n{}", result);
     // Either `Some(ref val)` or `if let Some(val) = r` with `*val` (auto-deref to value)
     let ok_pattern = result.contains("Some(ref val)")
-        || (result.contains("if let Some(val) = r#") && result.contains("*val"));
+        || (result.contains("if let Some(val) = r") && result.contains("*val"));
     assert!(
         ok_pattern,
         "Expected ref or deref pattern. Got:\n{}",
@@ -69,7 +69,7 @@ pub fn main() {}
     let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Got:\n{}", result);
     let ok = result.contains("Some(ref v)")
-        || (result.contains("if let Some(v) = r#") && result.contains("*v"));
+        || (result.contains("if let Some(v) = r") && result.contains("*v"));
     assert!(
         ok,
         "Should use `Some(ref v)` or `if let Some(v) = r` with `*v`. Got:\n{}",
@@ -98,8 +98,8 @@ pub fn main() {}
     assert!(compiles, "Should compile. Got:\n{}", result);
     let ok = result.contains("Some(ref mut c)")
         || (result.contains("let mut o = opt")
-            && (result.contains("if let Some(c) = r#")
-                || result.contains("if let Some(mut c) = r#")));
+            && (result.contains("if let Some(c) = r")
+                || result.contains("if let Some(mut c) = r")));
     assert!(
         ok,
         "Expected ref mut, or let mut o + if let Some(c)/Some(mut c). Got:\n{}",

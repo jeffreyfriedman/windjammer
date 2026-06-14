@@ -75,7 +75,7 @@ use my_game_core::Player
 
 @test
 fn test_player_creation() {
-    let player = Player::new("Hero".to_string())
+    let player = Player::new("Hero")
     assert_eq(player.health, 100)
 }
 "#;

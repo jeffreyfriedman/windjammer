@@ -133,8 +133,8 @@ impl Port for Renderer {
     assert!(result.is_ok(), "compile failed: {:?}", result.err());
     let g = result.unwrap();
     assert!(
-        g.contains("fn shutdown(&mut self)"),
-        "void abstract trait methods default to &mut self; empty impl must match; got:\n{}",
+        g.contains("fn shutdown(&self)"),
+        "Abstract void trait methods default to &self; empty impl must match; got:\n{}",
         g
     );
 }

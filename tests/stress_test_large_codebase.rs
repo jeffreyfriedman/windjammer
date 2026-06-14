@@ -161,7 +161,6 @@ fn test_compile_deeply_nested() {
 }
 
 #[test]
-#[ignore = "Performance stress test — run explicitly: cargo test --release --test stress_test_large_codebase test_compile_10k_lines -- --ignored --nocapture"]
 fn test_compile_10k_lines() {
     // Generate ~10K lines of code
     let mut source = String::new();

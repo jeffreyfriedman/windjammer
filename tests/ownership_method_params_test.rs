@@ -101,7 +101,7 @@ struct VoxelGrid {
 
 impl VoxelGrid {
     pub fn set(self, x: i32, y: i32, z: i32, value: i32) {
-        // Mutates grid
+        self.data.push(value)
     }
 }
 

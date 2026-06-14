@@ -24,7 +24,7 @@ fn test_mod_rs_uses_self_for_child_module_reexports() {
     fs::create_dir_all(src.path().join("user")).expect("mkdir user");
     fs::write(
         src.path().join("user/user.wj"),
-        "pub struct User {\n    pub name: String\n}\n",
+        "pub struct User {\n    pub name: string\n}\n",
     )
     .expect("write user.wj");
     fs::write(

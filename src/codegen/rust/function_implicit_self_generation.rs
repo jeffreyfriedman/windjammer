@@ -152,12 +152,8 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.insert("self".to_string());
                 }
             } else if accesses {
-                if !self.in_trait_impl && self.current_struct_is_copy() {
-                    params.push("self".to_string());
-                } else {
-                    params.push("&self".to_string());
-                    self.inferred_borrowed_params.insert("self".to_string());
-                }
+                params.push("&self".to_string());
+                self.inferred_borrowed_params.insert("self".to_string());
             }
         }
     }

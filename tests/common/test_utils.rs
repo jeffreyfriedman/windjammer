@@ -168,6 +168,28 @@ pub fn compile_single_result(source: &str) -> Result<String, String> {
         .map_err(|e| format!("Failed to read generated file: {}", e))
 }
 
+/// Compile with a pre-populated signature registry (cross-file / collision tests).
+pub fn compile_with_external_sigs(
+    source: &str,
+    external_sigs: &windjammer::analyzer::SignatureRegistry,
+) -> String {
+    use windjammer::analyzer::Analyzer;
+    use windjammer::codegen::rust::CodeGenerator;
+    use windjammer::lexer::Lexer;
+    use windjammer::parser::Parser;
+
+    let mut lexer = Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
+    let program = parser.parse().unwrap();
+    let mut analyzer = Analyzer::new();
+    let (analyzed_fns, registry, _) = analyzer
+        .analyze_program_with_global_signatures(&program, external_sigs)
+        .unwrap();
+    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+    codegen.generate_program(&program, &analyzed_fns)
+}
+
 /// Compile a single `.wj` source string and return (generated_rust, success).
 /// Does NOT panic on compilation failure — returns empty string with success=false.
 pub fn compile_single_check(source: &str) -> (String, bool) {

@@ -76,7 +76,7 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 4. **Run tests**
    ```bash
-   cargo test
+   cargo test --release --test all
    ```
 
 5. **Install pre-commit hooks**
@@ -87,9 +87,9 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 ## 🧪 Testing
 
-- **Run all tests**: `cargo test`
-- **Run specific test**: `cargo test test_name`
-- **Run with output**: `cargo test -- --nocapture`
+- **Run all tests**: `cargo test --release --test all`
+- **Run specific test**: `cargo test --release --test all -- test_name`
+- **Run with output**: `cargo test --release --test all -- test_name -- --nocapture`
 - **Run benchmarks**: `cargo bench`
 
 Always add tests for new features and bug fixes.

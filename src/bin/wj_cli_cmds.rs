@@ -31,6 +31,7 @@ pub fn run(cli: Cli) -> Result<()> {
             library,
             module_file,
             no_cargo,
+            no_lint,
             no_generate_cargo_toml,
             metadata,
         } => {
@@ -58,6 +59,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 library,
                 module_file,
                 !no_cargo,
+                !no_lint,
                 no_generate_cargo_toml,
                 &metadata,
             )?;
@@ -279,6 +281,7 @@ fn cmd_errors_tui(file: &std::path::Path, output: &std::path::Path) -> Result<()
         false,
         false,
         false,
+        true,
         false,
         &[],
     )

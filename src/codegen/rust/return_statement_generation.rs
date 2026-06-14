@@ -104,12 +104,16 @@ impl<'ast> CodeGenerator<'ast> {
                         _ => t,
                     });
                     if let Some(inner) = inner_type {
-                        if !self.is_type_copy(&inner) {
+                        if self.is_type_copy(&inner) && !return_str.starts_with('*') {
+                            return_str = format!("*{}", return_str);
+                        } else if !self.is_type_copy(&inner) {
                             return_str = format!("({}).clone()", return_str);
                         }
                     }
                 }
             }
+
+            self.coerce_return_ref_to_owned_copy(&mut return_str, e);
 
             // `let (a, b) = &vec[i]` in Rust: Copy fields like `i32` are still `&i32` bindings.
             // When we record `Type::Reference(i32)` in local_var_types, `return b` must become `*b`.

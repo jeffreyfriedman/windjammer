@@ -220,35 +220,39 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // TDD FIX (Bug #3): Extract format!() macros in method arguments too
+        // TDD FIX (Bug #3): Extract format!() / write!-block macros in method arguments too
+        let needs_format_temp = |arg_str: &str| -> bool {
+            arg_str.contains("format!(") || arg_str.contains("write!(&mut __s,")
+        };
         let has_format_arg = processed_args
             .iter()
-            .any(|arg_str| arg_str.contains("format!("));
+            .any(|arg_str| needs_format_temp(arg_str));
 
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
             let mut temp_decls = String::new();
-            let mut temp_counter = 0;
+            let mut temp_counter = 0i32;
             let fixed_args: Vec<String> = processed_args
                 .iter()
                 .map(|arg_str| {
-                    if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
-                        // Strip leading & if present (was added by argument processing)
-                        let format_expr = if arg_str.starts_with("&") {
-                            arg_str.strip_prefix("&").unwrap()
-                        } else {
-                            arg_str
-                        };
-                        // Extract to temp var
+                    let has_borrow_prefix = arg_str.starts_with('&');
+                    let inner = if has_borrow_prefix {
+                        &arg_str[1..]
+                    } else {
+                        arg_str.as_str()
+                    };
+                    let needs_extract = inner.starts_with("format!(")
+                        || (inner.starts_with('{') && inner.contains("write!(&mut __s,"));
+                    if needs_extract {
                         let temp_name = format!("_temp{}", temp_counter);
                         temp_counter += 1;
-                        temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                        temp_decls.push_str(&format!("let {} = {}; ", temp_name, inner));
 
                         // When the method expects &str (push_str, extend_from_slice),
                         // add & to pass borrowed temp. Otherwise, pass owned value.
                         let method_needs_borrow =
                             matches!(method, "push_str" | "extend_from_slice");
-                        if arg_str.starts_with("&") || method_needs_borrow {
+                        if has_borrow_prefix || method_needs_borrow {
                             format!("&{}", temp_name)
                         } else {
                             temp_name

@@ -241,11 +241,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             let qualified_key = type_name
                 .as_ref()
                 .map(|tn| format!("{}::{}", tn, call_method));
-            let has_collision = qualified_key
-                .as_ref()
-                .is_some_and(|k| gen.signature_registry.has_collision(k))
-                || gen.signature_registry.has_collision(call_method);
-            if !has_collision {
+            let skip_cast = gen.signature_registry.should_skip_int_to_float_auto_cast(
+                type_name.as_deref(),
+                call_method,
+                qualified_key.as_deref(),
+            );
+            if !skip_cast {
                 if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
                     let arg_ty = gen.infer_expression_type(arg);
                     crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(

@@ -11,8 +11,8 @@
 ))]
 
 //! TDD Test: Trait method declarations without bodies
-//! WINDJAMMER PHILOSOPHY: Traits should support method declarations without bodies
-//! This enables proper trait definitions that implementations must fulfill
+//! WINDJAMMER PHILOSOPHY: Omit `self` on all instance methods; compiler infers &self vs &mut self
+//! from body analysis and impl merging — never from method names or void-return defaults.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -20,19 +20,17 @@ mod test_utils;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_no_body_single() {
-    // TDD: Simple trait with single method without body
     let code = r#"
     pub trait Drawable {
-        fn draw(self);
+        fn draw();
     }
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Should generate trait with method declaration ending in semicolon
     assert!(
         generated.contains("fn draw(&self);"),
-        "Trait method without body should end with semicolon. Generated:\n{}",
+        "Abstract trait method without body defaults to &self. Generated:\n{}",
         generated
     );
 }
@@ -40,30 +38,30 @@ fn test_trait_method_no_body_single() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_no_body_multiple() {
-    // TDD: Trait with multiple methods without bodies
+    // Trait-only, no impl: abstract methods default to &self (safe object-safe default).
     let code = r#"
     pub trait GameLoop {
-        fn init(self);
-        fn update(self, delta: f32);
-        fn render(self);
+        fn init();
+        fn update(delta: f32);
+        fn render();
     }
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
     assert!(
-        generated.contains("fn init(&mut self);"),
-        "Expected init method. Generated:\n{}",
+        generated.contains("fn init(&self);"),
+        "Expected init(&self) for abstract method. Generated:\n{}",
         generated
     );
     assert!(
-        generated.contains("fn update(&mut self, delta: f32);"),
-        "Expected update method. Generated:\n{}",
+        generated.contains("fn update(&self, delta: f32);"),
+        "Expected update(&self, ...) for abstract method. Generated:\n{}",
         generated
     );
     assert!(
         generated.contains("fn render(&self);"),
-        "Expected render method. Generated:\n{}",
+        "Expected render(&self) for abstract method. Generated:\n{}",
         generated
     );
 }
@@ -71,12 +69,11 @@ fn test_trait_method_no_body_multiple() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_mixed_bodies() {
-    // TDD: Trait with some methods having default implementations and some not
     let code = r#"
     pub trait Updatable {
-        fn update(self);
+        fn update();
         
-        fn tick(self) {
+        fn tick() {
             self.update()
         }
     }
@@ -84,17 +81,15 @@ fn test_trait_method_mixed_bodies() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Method without body should have semicolon
     assert!(
-        generated.contains("fn update(&mut self);"),
-        "Method without body should end with semicolon. Generated:\n{}",
+        generated.contains("fn update(&self);"),
+        "Abstract method without body defaults to &self. Generated:\n{}",
         generated
     );
 
-    // Method with default impl should have body
     assert!(
-        generated.contains("fn tick(&mut self) {"),
-        "Method with default impl should have body. Generated:\n{}",
+        generated.contains("fn tick(&self) {"),
+        "Calling &self method on self does not require &mut self. Generated:\n{}",
         generated
     );
 }
@@ -102,11 +97,11 @@ fn test_trait_method_mixed_bodies() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_impl_with_no_body_trait() {
-    // TDD: Full trait + impl scenario
+    // Impl body mutates self — infer_trait_signatures_from_impls upgrades trait contract.
     let code = r#"
     pub trait Drawable {
-        fn draw(self);
-        fn update(self, delta: f32);
+        fn draw();
+        fn update(delta: f32);
     }
     
     pub struct Sprite {
@@ -115,11 +110,11 @@ fn test_trait_impl_with_no_body_trait() {
     }
     
     impl Drawable for Sprite {
-        fn draw(self) {
+        fn draw() {
             let _pos = self.x + self.y
         }
         
-        fn update(self, delta: f32) {
+        fn update(delta: f32) {
             self.x = self.x + delta;
             self.y = self.y + delta
         }
@@ -128,14 +123,17 @@ fn test_trait_impl_with_no_body_trait() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Trait should have method declarations
     assert!(
         generated.contains("fn draw(&self);"),
-        "Trait method should end with semicolon. Generated:\n{}",
+        "Read-only impl keeps trait at &self. Generated:\n{}",
+        generated
+    );
+    assert!(
+        generated.contains("fn update(&mut self, delta: f32);"),
+        "Mutating impl upgrades trait to &mut self. Generated:\n{}",
         generated
     );
 
-    // Impl should have method bodies
     assert!(
         generated.contains("fn draw(&self) {") || generated.contains("pub fn draw(&self) {"),
         "Impl method should have body. Generated:\n{}",
@@ -146,11 +144,10 @@ fn test_trait_impl_with_no_body_trait() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_method_with_return_type() {
-    // TDD: Trait method without body but with return type
     let code = r#"
     pub trait Calculator {
-        fn add(self, a: int, b: int) -> int;
-        fn multiply(self, a: int, b: int) -> int;
+        fn add(a: int, b: int) -> int;
+        fn multiply(a: int, b: int) -> int;
     }
     "#;
 

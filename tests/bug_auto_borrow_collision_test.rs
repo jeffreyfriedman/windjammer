@@ -72,7 +72,7 @@ fn render_hud() {
 }
 "#;
 
-    let rust_code = test_utils::compile_single(source);
+    let rust_code = test_utils::compile_with_external_sigs(source, &global_sigs);
 
     // The call should NOT have `&text` — collision means we can't trust
     // the Borrowed inference from the potentially-wrong module's signature.
@@ -155,7 +155,7 @@ fn show_message() {
 }
 "#;
 
-    let rust_code = test_utils::compile_single(source);
+    let rust_code = test_utils::compile_with_external_sigs(source, &global_sigs);
 
     // Module-qualified call should also skip auto-borrow on collision
     assert!(
@@ -208,7 +208,7 @@ fn do_update() {
 }
 "#;
 
-    let rust_code = test_utils::compile_single(source);
+    let rust_code = test_utils::compile_with_external_sigs(source, &global_sigs);
 
     assert!(
         !rust_code.contains("&mut data"),

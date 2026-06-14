@@ -169,6 +169,21 @@ impl<'ast> Analyzer<'ast> {
                 ));
             }
         }
+        // Populate struct field type registry from this file's struct definitions so
+        // string-field storage analysis works before cross-file metadata is available.
+        {
+            use std::collections::HashMap;
+            let field_map = Arc::make_mut(&mut self.global_struct_field_types);
+            for item in &program.items {
+                if let Item::Struct { decl, .. } = item {
+                    let mut fields = HashMap::new();
+                    for f in &decl.fields {
+                        fields.insert(f.name.clone(), f.field_type.clone());
+                    }
+                    field_map.insert(decl.name.clone(), fields);
+                }
+            }
+        }
         const MAX_COPY_STRUCT_PASSES: usize = 64;
         for _ in 0..MAX_COPY_STRUCT_PASSES {
             let mut changed = false;
@@ -202,6 +217,7 @@ impl<'ast> Analyzer<'ast> {
             let converged = self.signatures_converged(&registry, &new_registry);
 
             if converged {
+                self.infer_trait_signatures_from_impls(program, &new_registry)?;
                 return Ok((
                     new_analyzed,
                     new_registry,
@@ -215,6 +231,7 @@ impl<'ast> Analyzer<'ast> {
                     MAX_PASSES
                 );
                 eprintln!("    Using last known signatures (may be suboptimal)");
+                self.infer_trait_signatures_from_impls(program, &new_registry)?;
                 return Ok((
                     new_analyzed,
                     new_registry,

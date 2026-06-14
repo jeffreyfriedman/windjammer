@@ -3,7 +3,7 @@
 //! Helper functions for classifying and analyzing Windjammer types.
 //! These are pure functions with no state dependencies.
 
-use crate::parser::{Expression, Type};
+use crate::parser::{Expression, Literal, Type};
 
 /// Check if a type is an integer type (Int, Int32, Uint, or custom integer types).
 pub fn is_integer_type(t: &Type) -> bool {
@@ -52,13 +52,20 @@ pub fn maybe_cast_int_arg_to_float(
     param_type: &Type,
     arg_type: Option<&Type>,
 ) -> bool {
-    let param_is_f32 = matches!(param_type, Type::Custom(n) if n == "f32");
+    let param_is_f32 =
+        matches!(param_type, Type::Float) || matches!(param_type, Type::Custom(n) if n == "f32");
     let param_is_f64 = matches!(param_type, Type::Custom(n) if n == "f64");
     if !param_is_f32 && !param_is_f64 {
         return false;
     }
 
-    let arg_is_int = arg_type.is_some_and(|t| {
+    let arg_is_int = matches!(
+        arg_expr,
+        Expression::Literal {
+            value: Literal::Int(_),
+            ..
+        }
+    ) || arg_type.is_some_and(|t| {
         matches!(t, Type::Int)
             || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
     });

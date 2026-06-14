@@ -384,10 +384,57 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             .collect();
     }
 
-    // TDD FIX (Bug #3): Extract format!() macros in arguments to temp variables
-    // The args vec has already been generated as Rust strings
-    // Check if any contain format!() and extract them
-    let has_format_arg = args.iter().any(|arg_str| arg_str.contains("format!("));
+    // TDD FIX (Bug #3): Extract format!() / write!-block macros in arguments to temp variables
+    let needs_format_temp = |arg_str: &str| -> bool {
+        arg_str.contains("format!(")
+            || arg_str.contains("write!(&mut __s,")
+            || (arg_str.contains("string_to_ffi(")
+                && (arg_str.contains("format!(") || arg_str.contains("write!(&mut __s,")))
+    };
+    let has_format_arg = args.iter().any(|arg_str| needs_format_temp(arg_str));
+
+    /// Strip `string_to_ffi(...)` wrapper for temp extraction of the inner expression.
+    fn unwrap_string_to_ffi(arg_str: &str) -> (&str, bool) {
+        const PREFIX: &str = "windjammer_runtime::ffi::string_to_ffi(";
+        if let Some(rest) = arg_str.strip_prefix(PREFIX) {
+            if let Some(inner) = rest.strip_suffix(')') {
+                return (inner, true);
+            }
+        }
+        (arg_str, false)
+    }
+
+    fn extract_format_like_arg(
+        arg_str: &str,
+        temp_decls: &mut String,
+        temp_counter: &mut i32,
+    ) -> Option<String> {
+        let (inner, was_ffi) = unwrap_string_to_ffi(arg_str);
+        let has_borrow_prefix = inner.starts_with('&');
+        let format_expr = if has_borrow_prefix {
+            &inner[1..]
+        } else {
+            inner
+        };
+        let needs_extract = format_expr.starts_with("format!(")
+            || format_expr.starts_with("{") && format_expr.contains("write!(&mut __s,");
+        if !needs_extract {
+            return None;
+        }
+        let temp_name = format!("_temp{}", temp_counter);
+        *temp_counter += 1;
+        temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+        let pass_expr = if has_borrow_prefix {
+            format!("&{}", temp_name)
+        } else {
+            temp_name
+        };
+        Some(if was_ffi {
+            format!("windjammer_runtime::ffi::string_to_ffi({})", pass_expr)
+        } else {
+            pass_expr
+        })
+    }
 
     // WINDJAMMER FFI: Extern functions returning string use FfiString - wrap with ffi_to_string
     let returns_string = signature
@@ -403,32 +450,14 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     let call_result = if has_format_arg {
         // Extract format!() macros to temp variables
         let mut temp_decls = String::new();
-        let mut temp_counter = 0;
+        let mut temp_counter = 0i32;
         let fixed_args: Vec<String> = args
             .iter()
             .map(|arg_str| {
-                if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
-                    // TDD FIX (Bug #16 COMPLETE): Check if original had & to preserve intent
-                    let has_borrow_prefix = arg_str.starts_with("&");
-                    // Strip leading & if present
-                    let format_expr = if has_borrow_prefix {
-                        &arg_str[1..]
-                    } else {
-                        arg_str
-                    };
-                    // Extract to temp var
-                    let temp_name = format!("_temp{}", temp_counter);
-                    temp_counter += 1;
-                    temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-
-                    // TDD FIX: Only add & if original had it!
-                    // format!() returns owned String, so if caller wants owned, pass temp directly
-                    // If caller wants borrowed, pass &temp (when original was &format!())
-                    if has_borrow_prefix {
-                        format!("&{}", temp_name)
-                    } else {
-                        temp_name
-                    }
+                if let Some(fixed) =
+                    extract_format_like_arg(arg_str, &mut temp_decls, &mut temp_counter)
+                {
+                    fixed
                 } else {
                     arg_str.clone()
                 }

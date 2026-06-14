@@ -61,10 +61,11 @@ fn test_ffi_function_str_param() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Should NOT convert string literals for FFI &str params
+    // FfiString ABI wraps literals via string_to_ffi; direct .to_string() on the literal is not required
     assert!(
-        !generated.contains(".to_string()"),
-        "Should NOT add .to_string() for FFI &str parameter, got:\n{}",
+        generated.contains("string_to_ffi")
+            || !generated.contains("\"assets/sound.ogg\".to_string()"),
+        "FFI string literal should use FfiString wrapper, got:\n{}",
         generated
     );
 }

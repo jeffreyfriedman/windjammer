@@ -289,11 +289,32 @@ impl<'ast> Analyzer<'ast> {
                         // when the parameter already generates as `&str`/`&String` — no &String
                         // requirement here (that caused circular &&str bugs).
 
-                        // Check if this method expects &String or String (owned) for this parameter position
-                        if let Some(sig) = registry.lookup_method(method) {
+                        // Check if this method expects &String or String (owned) for this parameter position.
+                        // Static/type calls (`Quest::new`) must use qualified keys — bare `new`
+                        // hits unrelated constructors in the registry.
+                        let method_sig = if let Expression::Identifier { name, .. } = &**object {
+                            if name.starts_with(|c: char| c.is_ascii_uppercase()) {
+                                registry.get_signature(&format!("{}::{}", name, method))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                        .or_else(|| registry.lookup_method(method));
+
+                        if let Some(sig) = method_sig {
                             if let Some(param_type) = sig.param_type_for_arg(idx) {
                                 if self.type_is_string_ref_not_str(param_type) {
                                     return true;
+                                }
+                                if self.is_windjammer_string_param_type(param_type) {
+                                    if self.callee_string_param_uses_rust_string_ref(
+                                        sig, idx, param_type, method,
+                                    ) {
+                                        return true;
+                                    }
+                                    continue;
                                 }
                                 if self.type_is_owned_string(param_type) {
                                     return true;
@@ -308,19 +329,12 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
 
-                // Also check if the method is called ON the parameter (param.method())
+                // param.method() — receiver (`self`) requirements are handled by
+                // ownership inference, not string-ref analysis. Do not scan other
+                // parameters on the callee (e.g. `inv.has(id)` must not mark `inv`
+                // as &String because `id` needs &String).
                 if let Expression::Identifier { name, .. } = &**object {
-                    if name == param_name {
-                        // param.method() - check if method needs &String receiver
-                        if let Some(sig) = registry.lookup_method(method) {
-                            // Check all parameter types in the signature
-                            for param_type in &sig.param_types {
-                                if self.type_is_string_ref_not_str(param_type) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
+                    let _ = (name, method);
                 }
 
                 false
@@ -331,6 +345,45 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
+                // Type::method(...) constructor calls (parsed as Call(FieldAccess)).
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    let is_constructor = field.starts_with("new") || field.starts_with("from_");
+                    if is_constructor {
+                        let qualified = if let Expression::Identifier { name, .. } = &**object {
+                            Some(format!("{}::{}", name, field))
+                        } else {
+                            None
+                        };
+                        for (i, arg) in arguments.iter().enumerate() {
+                            let arg_expr = &arg.1;
+                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                if let Some(ref qname) = qualified {
+                                    if let Some(sig) = registry.get_signature(qname) {
+                                        if let Some(param_type) = sig.param_type_for_arg(i) {
+                                            if self.type_is_string_ref_not_str(param_type) {
+                                                return true;
+                                            }
+                                            if self.is_windjammer_string_param_type(param_type) {
+                                                if self.callee_string_param_uses_rust_string_ref(
+                                                    sig, i, param_type, field,
+                                                ) {
+                                                    return true;
+                                                }
+                                                continue;
+                                            }
+                                            if self.type_is_owned_string(param_type) {
+                                                return true;
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+                                return true;
+                            }
+                        }
+                    }
+                }
+
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
                     // Enum variants (Some, None, Ok, Err, MyEnum::Variant) consume
                     // their arguments. Detect enum variants vs module-qualified fn
@@ -342,17 +395,43 @@ impl<'ast> Analyzer<'ast> {
                                 last.starts_with(|c: char| c.is_uppercase())
                             });
 
-                    // Enum variants and constructors (Type::new, Type::from_*) consume
-                    // their arguments, so string params passed to them need owned String.
                     let is_constructor = fn_name.contains("::") && {
                         let last = fn_name.rsplit("::").next().unwrap_or("");
                         last.starts_with("new") || last.starts_with("from_")
                     };
 
-                    if is_enum_variant || is_constructor {
+                    if is_enum_variant {
                         for arg in arguments.iter() {
                             let arg_expr = &arg.1;
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                return true;
+                            }
+                        }
+                    }
+
+                    if is_constructor {
+                        for (i, arg) in arguments.iter().enumerate() {
+                            let arg_expr = &arg.1;
+                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                if let Some(sig) = registry.get_signature(fn_name) {
+                                    if let Some(param_type) = sig.param_type_for_arg(i) {
+                                        if self.type_is_string_ref_not_str(param_type) {
+                                            return true;
+                                        }
+                                        if self.is_windjammer_string_param_type(param_type) {
+                                            if self.callee_string_param_uses_rust_string_ref(
+                                                sig, i, param_type, fn_name,
+                                            ) {
+                                                return true;
+                                            }
+                                            continue;
+                                        }
+                                        if self.type_is_owned_string(param_type) {
+                                            return true;
+                                        }
+                                        continue;
+                                    }
+                                }
                                 return true;
                             }
                         }
@@ -368,6 +447,14 @@ impl<'ast> Analyzer<'ast> {
                                     if let Some(param_type) = sig.param_type_for_arg(i) {
                                         if self.type_is_string_ref_not_str(param_type) {
                                             return true;
+                                        }
+                                        if self.is_windjammer_string_param_type(param_type) {
+                                            if self.callee_string_param_uses_rust_string_ref(
+                                                sig, i, param_type, fn_name,
+                                            ) {
+                                                return true;
+                                            }
+                                            continue;
                                         }
                                         if self.type_is_owned_string(param_type) {
                                             return true;
@@ -432,13 +519,13 @@ impl<'ast> Analyzer<'ast> {
             Expression::Block { statements, .. } => {
                 self.param_needs_string_ref(param_name, statements, registry)
             }
-            // Check struct literals: Item { name: name } where name is a String field
-            Expression::StructLiteral { fields, .. } => {
-                for (_field_name, field_value) in fields {
-                    // Check if this field value is our parameter
+            // Struct literal: `User { name }` into a `string` field coerces at codegen — still &str at API.
+            Expression::StructLiteral { name, fields, .. } => {
+                for (field_name, field_value) in fields {
                     if self.expr_is_param_or_ref_to_param(param_name, field_value) {
-                        // Conservative: If parameter is assigned to any field, assume String (owned) is needed
-                        // This prevents &str → String assignment errors
+                        if self.struct_field_is_text_type(name, field_name) {
+                            continue;
+                        }
                         return true;
                     }
                     // Recursively check the field value
@@ -503,6 +590,32 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Windjammer Phase-2 `&str` parameter (Reference(Custom("str"))).
+    fn is_phase2_str_ref_param_type(&self, ty: &Type) -> bool {
+        matches!(
+            ty,
+            Type::Reference(inner) if matches!(&**inner, Type::Custom(s) if s == "str")
+        )
+    }
+
+    /// Callee string param uses &String (Borrowed + not Phase-2 &str).
+    fn callee_string_param_uses_rust_string_ref(
+        &self,
+        sig: &super::FunctionSignature,
+        arg_idx: usize,
+        param_type: &Type,
+        method: &str,
+    ) -> bool {
+        if super::stdlib_method_traits::is_storage_method(method) {
+            return false;
+        }
+        self.is_windjammer_string_param_type(param_type)
+            && !self.is_phase2_str_ref_param_type(param_type)
+            && sig
+                .param_ownership_for_arg(arg_idx)
+                .is_some_and(|o| matches!(o, super::OwnershipMode::Borrowed))
+    }
+
     /// Check if a type is &String (not &str)
     /// This is the key distinction for the optimization
     pub(crate) fn type_is_string_ref_not_str(&self, ty: &Type) -> bool {
@@ -514,6 +627,17 @@ impl<'ast> Analyzer<'ast> {
             },
             _ => false,
         }
+    }
+
+    /// Windjammer `string` parameters (including registry stubs before &str lowering).
+    pub(crate) fn is_windjammer_string_param_type(&self, ty: &Type) -> bool {
+        matches!(ty, Type::String)
+            || matches!(ty, Type::Custom(name) if name == "string")
+            || matches!(
+                ty,
+                Type::Reference(inner)
+                    if matches!(&**inner, Type::Custom(s) if s == "str")
+            )
     }
 
     /// Check if a type is owned String (not &str, not &String)

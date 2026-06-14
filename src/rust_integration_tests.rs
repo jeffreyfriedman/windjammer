@@ -33,6 +33,12 @@ fn is_excluded_test_root_file(name: &str) -> bool {
     name == "lib.rs" || name == "mod.rs" || name == "all.rs"
 }
 
+/// True when this project uses the consolidated `tests/all.rs` binary (build.rs auto-discovery).
+/// Those crates must not also generate `tests/lib.rs` — it is redundant and confusing.
+fn uses_consolidated_test_binary(project_root: &Path) -> bool {
+    project_root.join("tests").join("all.rs").exists()
+}
+
 fn is_helper_module(stem: &str, contents: &str) -> bool {
     if stem.ends_with("_test") || stem.starts_with("test_") || stem.ends_with("_tests") {
         return false;
@@ -43,6 +49,9 @@ fn is_helper_module(stem: &str, contents: &str) -> bool {
 
 /// Scan `tests/*.rs` and write `tests/lib.rs`.
 pub fn generate_tests_lib_rs(project_root: &Path) -> Result<Option<PathBuf>> {
+    if uses_consolidated_test_binary(project_root) {
+        return Ok(None);
+    }
     let tests_dir = project_root.join("tests");
     if !tests_dir.is_dir() {
         return Ok(None);
@@ -188,6 +197,9 @@ fn ensure_autotests_disabled(cargo_toml_path: &Path) -> Result<()> {
 
 /// Full sync: generate `tests/lib.rs` + wire crate root + disable autotests.
 pub fn sync_rust_integration_tests(project_root: &Path) -> Result<()> {
+    if uses_consolidated_test_binary(project_root) {
+        return Ok(());
+    }
     if generate_tests_lib_rs(project_root)?.is_some() {
         wire_tests_lib_into_crate_root(project_root)?;
     }
@@ -198,6 +210,22 @@ pub fn sync_rust_integration_tests(project_root: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn skips_lib_rs_when_consolidated_all_binary_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("tests")).unwrap();
+        fs::write(root.join("tests/all.rs"), "// consolidated\n").unwrap();
+        fs::write(
+            root.join("tests/feature_test.rs"),
+            "#[test]\nfn t() { assert!(true); }\n",
+        )
+        .unwrap();
+
+        assert!(generate_tests_lib_rs(root).unwrap().is_none());
+        assert!(!root.join("tests/lib.rs").exists());
+    }
 
     #[test]
     fn generates_lib_rs_from_test_files() {

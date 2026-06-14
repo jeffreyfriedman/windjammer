@@ -125,21 +125,13 @@ impl Library {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: String params are owned String — literals should convert via .to_string()
+    // Struct-literal-only storage: &str API — literals at call site, .to_string() in callee body.
     assert!(
-        generated.contains("\"jump.ogg\".to_string()")
-            || generated.contains("String::from(\"jump.ogg\")"),
-        "Compiler SHOULD add .to_string() for owned string parameters!"
-    );
-    assert!(
-        generated.contains("\"land.ogg\".to_string()")
-            || generated.contains("String::from(\"land.ogg\")"),
-        "Compiler SHOULD add .to_string() for owned string parameters!"
-    );
-    assert!(
-        generated.contains("\"coin.ogg\".to_string()")
-            || generated.contains("String::from(\"coin.ogg\")"),
-        "Compiler SHOULD add .to_string() for owned string parameters!"
+        generated.contains("Sound::new(\"jump.ogg\")")
+            && generated.contains("Sound::new(\"land.ogg\")")
+            && generated.contains("Sound::new(\"coin.ogg\")"),
+        "Compiler should pass string literals directly as &str at call site!\n{}",
+        generated
     );
 }
 
@@ -174,9 +166,14 @@ impl App {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // ASSERT: SHOULD add .to_string() for owned String parameters
+    // Struct-literal-only storage: &str param — literal passes directly at call site.
     assert!(
-        generated.contains("\"MyApp\".to_string()"),
-        "Compiler SHOULD add .to_string() when function expects owned String!"
+        generated.contains("Config::new(\"MyApp\")"),
+        "Compiler should pass string literal directly as &str when stored only in struct literal.\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("\"MyApp\".to_string()"),
+        "Should not add .to_string() at call site for struct-literal-stored &str param"
     );
 }

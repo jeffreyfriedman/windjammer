@@ -23,7 +23,7 @@ pub fn test_string_storage() {
     
     // store_path pushes the path, so it should be owned String
     let mut paths = Vec::new()
-    store_path(&mut paths, "file.txt")
+    store_path(paths, "file.txt")
     
     println!("Logger prefix: {}", logger.prefix)
 }

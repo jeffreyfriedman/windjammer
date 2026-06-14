@@ -145,10 +145,10 @@ fn main() {
         generated
     );
 
-    // Windjammer `string` params generate owned String; read-only usage may still borrow at call sites
+    // Stored into a `string` field: API uses &str; struct literal coerces to String at the site.
     assert!(
-        generated.contains("fn new(id: u32, name: String)"),
-        "name parameter should be String. Got:\n{}",
+        generated.contains("fn new(id: u32, name: &str)"),
+        "name parameter stored in struct should infer &str at API. Got:\n{}",
         generated
     );
     assert!(

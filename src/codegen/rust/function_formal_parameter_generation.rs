@@ -85,8 +85,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
                                             "&mut self"
-                                        } else if !self.in_trait_impl && self.current_struct_is_copy() {
-                                            "self"
                                         } else {
                                             "&self"
                                         }
@@ -218,8 +216,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
                                             "&mut self"
-                                        } else if !self.in_trait_impl && self.current_struct_is_copy() {
-                                            "self"
                                         } else {
                                             "&self"
                                         }
@@ -238,9 +234,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 "self"
                             } else if body_modifies {
                                 "&mut self"
-                            } else if returns_self
-                                || (!self.in_trait_impl && self.current_struct_is_copy())
-                            {
+                            } else if returns_self {
                                 "self"
                             } else {
                                 "&self"
@@ -337,11 +331,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         let is_string = matches!(inferred_type, Type::String)
                                             || matches!(inferred_type, Type::Custom(ref name) if name == "string");
 
-                                        if is_string && analyzed.str_ref_optimizable_params.contains(&param.name) {
-                                            // PHASE 2 OPTIMIZATION: Use &str (zero allocations for literals)
+                                        if is_string
+                                            && analyzed.str_ref_optimizable_params.contains(&param.name)
+                                        {
                                             "&str".to_string()
                                         } else {
-                                            // PHASE 1 BASELINE: Use &String (correct for Vec<String> methods)
                                             format!("&{}", self.type_to_rust(inferred_type))
                                         }
                                     }

@@ -6,7 +6,6 @@
     feature = "conformance_tests",
     feature = "integration_tests",
 )))]
-
 /// TDD: Vec.push() generates spurious .clone() when vec is later passed to another method
 ///
 /// Bug: When a Vec is declared with `let mut`, pushed to, and later passed to a method,
@@ -21,7 +20,6 @@
 ///
 /// Actual (buggy) Rust:
 ///   visited.clone().push(false);
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

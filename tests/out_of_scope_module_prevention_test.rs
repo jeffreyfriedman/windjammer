@@ -117,7 +117,7 @@ fn test_out_of_scope_modules_not_declared() {
 
     fs::write(
         components_src_dir.join("button.wj"),
-        "pub struct Button { pub label: String }",
+        "pub struct Button { pub label: string }",
     )
     .unwrap();
 
@@ -230,7 +230,7 @@ fn test_ffi_modules_in_project_root_are_declared() {
 
     fs::write(
         src_dir.join("button.wj"),
-        "pub struct Button { pub label: String }",
+        "pub struct Button { pub label: string }",
     )
     .unwrap();
 

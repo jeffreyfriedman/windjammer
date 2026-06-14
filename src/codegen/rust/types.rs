@@ -191,7 +191,13 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
             // Special case: &[T; N] stays as &[T; N]
             } else if let Type::Array(elem, size) = &**inner {
                 format!("&[{}; {}]", type_to_rust_mapped(elem, map_custom), size)
-            // Special case: &str instead of &String (more idiomatic Rust)
+            // Phase 2: inferred &str (Reference(Custom("str")))
+            } else if matches!(&**inner, Type::Custom(s) if s == "str") {
+                "&str".to_string()
+            // Vec<String>::contains and similar need &String, not &str
+            } else if matches!(&**inner, Type::String) {
+                "&String".to_string()
+            // Windjammer `string` API default: borrowed → &str
             } else if is_windjammer_text_type(inner) {
                 "&str".to_string()
             // Special case: &dyn Trait (don't box when already a reference)
