@@ -3,7 +3,6 @@
 use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
-use crate::codegen::rust::expression_helpers;
 use crate::codegen::rust::CodeGenerator;
 
 /// Rust stdlib methods whose closure parameter receives `&T` (not owned `T`).
@@ -729,9 +728,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn is_enum_variant_or_constructor(expr: &Expression) -> bool {
         match expr {
             Expression::StructLiteral { .. } => true,
-            Expression::Identifier { name, .. } => {
-                Self::is_enum_variant_qualified_path(name)
-            }
+            Expression::Identifier { name, .. } => Self::is_enum_variant_qualified_path(name),
             Expression::Call {
                 function,
                 arguments,

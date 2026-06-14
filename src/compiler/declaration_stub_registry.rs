@@ -94,7 +94,8 @@ fn collect_float_signatures_from_program(
                         .map(|p| p.type_.clone())
                         .collect();
                     let full_name = format!("{}::{}", base_type_name, func_decl.name);
-                    float_signatures.insert(full_name, (param_types, func_decl.return_type.clone()));
+                    float_signatures
+                        .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
             _ => {}
@@ -148,10 +149,7 @@ pub fn merge_declaration_stub_contributions(
             Option<crate::parser::ast::types::Type>,
         ),
     >,
-    global_struct_fields: &mut HashMap<
-        String,
-        HashMap<String, crate::parser::ast::types::Type>,
-    >,
+    global_struct_fields: &mut HashMap<String, HashMap<String, crate::parser::ast::types::Type>>,
     struct_defining_module_paths: &mut HashMap<String, Vec<Vec<String>>>,
     ordered: &[(PathBuf, DeclarationStubContribution)],
     crate_metadata: &mut CrateMetadata,

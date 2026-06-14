@@ -11,7 +11,12 @@ impl<'ast> CodeGenerator<'ast> {
         func.decorators.iter().any(|d| {
             matches!(
                 d.name.as_str(),
-                "timeout" | "bench" | "profile" | "requires" | "ensures" | "property_test"
+                "timeout"
+                    | "bench"
+                    | "profile"
+                    | "requires"
+                    | "ensures"
+                    | "property_test"
                     | "invariant"
             ) || (d.name == "test" && !d.arguments.is_empty())
         })

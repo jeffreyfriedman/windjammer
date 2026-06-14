@@ -147,9 +147,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
 }
 
 /// Enums that must not be treated as Copy (data-carrying variants with non-Copy fields).
-pub(crate) fn collect_non_copy_enums_for_library(
-    sources: &[(PathBuf, String)],
-) -> HashSet<String> {
+pub(crate) fn collect_non_copy_enums_for_library(sources: &[(PathBuf, String)]) -> HashSet<String> {
     use crate::parser::ast::EnumVariantData;
 
     let (copy_structs, _, _) = collect_global_copy_structs_for_library(sources);

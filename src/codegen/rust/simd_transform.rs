@@ -2,7 +2,9 @@
 //!
 //! See `crate::analyzer::simd_loops` for legality / pattern detection.
 
-use crate::analyzer::simd_loops::{analyze_for_loop_simd, half_open_range_from_zero, SimdLoopPattern};
+use crate::analyzer::simd_loops::{
+    analyze_for_loop_simd, half_open_range_from_zero, SimdLoopPattern,
+};
 use crate::codegen::rust::CodeGenerator;
 use crate::parser::{Expression, Pattern, Statement};
 use crate::CompilationTarget;
@@ -87,15 +89,9 @@ fn emit_f32_dot_product(
     out.push_str(&i3);
     out.push_str("use std::arch::x86_64::*;\n");
     out.push_str(&i3);
-    out.push_str(&format!(
-        "let __wj_ap = {a}.as_ptr();\n",
-        a = slice_a
-    ));
+    out.push_str(&format!("let __wj_ap = {a}.as_ptr();\n", a = slice_a));
     out.push_str(&i3);
-    out.push_str(&format!(
-        "let __wj_bp = {b}.as_ptr();\n",
-        b = slice_b
-    ));
+    out.push_str(&format!("let __wj_bp = {b}.as_ptr();\n", b = slice_b));
     out.push_str(&i3);
     out.push_str("if std::arch::is_x86_feature_detected!(\"avx\") {\n");
     gen.indent_level += 1;
@@ -215,15 +211,9 @@ fn emit_f32_dot_product(
     out.push_str(&ia2);
     out.push_str("use std::arch::aarch64::*;\n");
     out.push_str(&ia2);
-    out.push_str(&format!(
-        "let __wj_ap = {a}.as_ptr();\n",
-        a = slice_a
-    ));
+    out.push_str(&format!("let __wj_ap = {a}.as_ptr();\n", a = slice_a));
     out.push_str(&ia2);
-    out.push_str(&format!(
-        "let __wj_bp = {b}.as_ptr();\n",
-        b = slice_b
-    ));
+    out.push_str(&format!("let __wj_bp = {b}.as_ptr();\n", b = slice_b));
     out.push_str(&ia2);
     out.push_str("let __wj_chunks = __wj_len / 4_usize;\n");
     out.push_str(&ia2);
@@ -280,10 +270,7 @@ fn emit_f32_dot_product(
     out.push_str("{\n");
     gen.indent_level += 1;
     out.push_str(&gen.indent());
-    out.push_str(&format!(
-        "for {lv} in 0..__wj_len {{\n",
-        lv = loop_var
-    ));
+    out.push_str(&format!("for {lv} in 0..__wj_len {{\n", lv = loop_var));
     gen.indent_level += 1;
     out.push_str(&gen.indent());
     out.push_str(&format!(
@@ -343,17 +330,14 @@ fn emit_f32_array_add(
     out.push_str(&i3);
     out.push_str("use std::arch::x86_64::*;\n");
     out.push_str(&i3);
-    out.push_str(&format!("let __wj_op = {out}.as_mut_ptr();\n", out = out_arr));
-    out.push_str(&i3);
     out.push_str(&format!(
-        "let __wj_ap = {a}.as_ptr();\n",
-        a = slice_a
+        "let __wj_op = {out}.as_mut_ptr();\n",
+        out = out_arr
     ));
     out.push_str(&i3);
-    out.push_str(&format!(
-        "let __wj_bp = {b}.as_ptr();\n",
-        b = slice_b
-    ));
+    out.push_str(&format!("let __wj_ap = {a}.as_ptr();\n", a = slice_a));
+    out.push_str(&i3);
+    out.push_str(&format!("let __wj_bp = {b}.as_ptr();\n", b = slice_b));
     out.push_str(&i3);
     out.push_str("if std::arch::is_x86_feature_detected!(\"avx\") {\n");
     gen.indent_level += 1;
@@ -458,17 +442,14 @@ fn emit_f32_array_add(
     out.push_str(&ia2);
     out.push_str("use std::arch::aarch64::*;\n");
     out.push_str(&ia2);
-    out.push_str(&format!("let __wj_op = {out}.as_mut_ptr();\n", out = out_arr));
-    out.push_str(&ia2);
     out.push_str(&format!(
-        "let __wj_ap = {a}.as_ptr();\n",
-        a = slice_a
+        "let __wj_op = {out}.as_mut_ptr();\n",
+        out = out_arr
     ));
     out.push_str(&ia2);
-    out.push_str(&format!(
-        "let __wj_bp = {b}.as_ptr();\n",
-        b = slice_b
-    ));
+    out.push_str(&format!("let __wj_ap = {a}.as_ptr();\n", a = slice_a));
+    out.push_str(&ia2);
+    out.push_str(&format!("let __wj_bp = {b}.as_ptr();\n", b = slice_b));
     out.push_str(&ia2);
     out.push_str("let __wj_chunks = __wj_len / 4_usize;\n");
     out.push_str(&ia2);
@@ -518,10 +499,7 @@ fn emit_f32_array_add(
     out.push_str("{\n");
     gen.indent_level += 1;
     out.push_str(&gen.indent());
-    out.push_str(&format!(
-        "for {lv} in 0..__wj_len {{\n",
-        lv = loop_var
-    ));
+    out.push_str(&format!("for {lv} in 0..__wj_len {{\n", lv = loop_var));
     gen.indent_level += 1;
     out.push_str(&gen.indent());
     out.push_str(&format!(

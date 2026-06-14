@@ -194,8 +194,7 @@ impl<'ast> Analyzer<'ast> {
                                 OwnershipMode::Owned
                             } else if self.function_body_consumes_bare_self(func) {
                                 OwnershipMode::Owned
-                            } else if self.function_calls_consuming_method_on_self(func, registry)
-                            {
+                            } else if self.function_calls_consuming_method_on_self(func, registry) {
                                 OwnershipMode::Owned
                             } else if self.function_matches_on_self(func) {
                                 OwnershipMode::Owned
@@ -219,7 +218,12 @@ impl<'ast> Analyzer<'ast> {
                         let is_copy = self.is_copy_type(&param.type_);
 
                         if is_copy {
-                            let mutated = self.is_mutated(&param.name, &func.body, registry, Some(&param.type_));
+                            let mutated = self.is_mutated(
+                                &param.name,
+                                &func.body,
+                                registry,
+                                Some(&param.type_),
+                            );
                             let passthrough_mut = matches!(
                                 self.infer_passthrough_ownership(
                                     &param.name,
@@ -725,7 +729,10 @@ impl<'ast> Analyzer<'ast> {
     /// `TraitName::method_name` keys.
     pub fn register_trait_methods_in_registry(
         &self,
-        trait_methods: &std::collections::HashMap<String, std::collections::HashMap<String, AnalyzedFunction<'_>>>,
+        trait_methods: &std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, AnalyzedFunction<'_>>,
+        >,
         registry: &mut super::SignatureRegistry,
     ) {
         for (trait_name, methods) in trait_methods {

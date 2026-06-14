@@ -50,8 +50,9 @@ pub fn remove_first<T: Clone>(mut vec: Vec<T>) -> Option<T> {
     );
 
     assert!(
-        generated.contains("vec.remove(0)"),
-        "Should use integer literal directly: vec.remove(0)"
+        generated.contains("vec.remove(0)") || generated.contains("vec.remove(0_usize)"),
+        "Should use integer literal directly (not &0): {}",
+        generated
     );
 
     assert!(

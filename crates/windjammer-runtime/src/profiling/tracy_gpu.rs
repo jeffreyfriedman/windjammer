@@ -5,4 +5,6 @@
 //! use a `wgpu::QuerySet` with `QUERY_TYPE_TIMESTAMP` (or backend-specific timestamp queries), map
 //! the result buffer, then pass nanosecond values to [`GpuSpan`].
 
-pub use tracy_client::{Client, GpuContext, GpuContextCreationError, GpuContextType, GpuSpan, GpuSpanCreationError};
+pub use tracy_client::{
+    Client, GpuContext, GpuContextCreationError, GpuContextType, GpuSpan, GpuSpanCreationError,
+};

@@ -53,13 +53,8 @@ pub(in crate::codegen::rust) const COMMON_INTERNAL_MODULES: &[&str] = &[
 ];
 
 /// Known external/crate module prefixes that should NOT get ::* added
-pub(in crate::codegen::rust) const EXTERNAL_CRATE_MODULES: &[&str] = &[
-    "engine",
-    "windjammer_runtime",
-    "smallvec",
-    "serde",
-    "std",
-];
+pub(in crate::codegen::rust) const EXTERNAL_CRATE_MODULES: &[&str] =
+    &["engine", "windjammer_runtime", "smallvec", "serde", "std"];
 
 pub(in crate::codegen::rust) fn is_external_crate(first_segment: &str) -> bool {
     EXTERNAL_CRATE_MODULES.contains(&first_segment)

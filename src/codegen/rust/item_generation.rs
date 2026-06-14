@@ -141,10 +141,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if !user_requested_copy {
                         inferred.retain(|t| t != "Copy");
                     }
-                    let merged = CodeGenerator::merge_standard_derive_traits(
-                        traits,
-                        inferred,
-                    );
+                    let merged = CodeGenerator::merge_standard_derive_traits(traits, inferred);
                     output.push_str(&format!("#[derive({})]\n", merged.join(", ")));
 
                     if merged.contains(&"Copy".to_string()) {
@@ -198,11 +195,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("#[repr(C)]\n");
 
         // Add struct declaration with type parameters
-        let pub_prefix = if s.is_pub {
-            "pub "
-        } else {
-            ""
-        };
+        let pub_prefix = if s.is_pub { "pub " } else { "" };
         output.push_str(&format!("{}struct ", pub_prefix));
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
@@ -293,11 +286,7 @@ impl<'ast> CodeGenerator<'ast> {
             // In Windjammer, pub struct implies pub fields — the language doesn't
             // have Rust-style per-field privacy.  If the user explicitly marked the
             // struct pub, every field is accessible from sibling modules.
-            let pub_keyword = if field.is_pub || s.is_pub {
-                "pub "
-            } else {
-                ""
-            };
+            let pub_keyword = if field.is_pub || s.is_pub { "pub " } else { "" };
             output.push_str(&format!(
                 "    {}{}: {},\n",
                 pub_keyword,
@@ -446,11 +435,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
-        let pub_prefix = if e.is_pub {
-            "pub "
-        } else {
-            ""
-        };
+        let pub_prefix = if e.is_pub { "pub " } else { "" };
         output.push_str(&format!("{}enum {}", pub_prefix, e.name));
 
         // Generate generic parameters: enum Option<T>, enum Result<T, E>

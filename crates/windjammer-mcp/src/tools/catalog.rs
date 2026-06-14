@@ -3,12 +3,12 @@
 use schemars::schema_for;
 use serde_json::{json, Value};
 
+use super::registry::ToolStability;
 use super::{
     analyze_ssr_routing, analyze_types, explain_error, generate_code, generate_component,
-    generate_game_entity, get_definition, get_language_info, parse_code,
-    refactor_extract_function, refactor_inline_variable, refactor_rename_symbol, search_workspace,
+    generate_game_entity, get_definition, get_language_info, parse_code, refactor_extract_function,
+    refactor_inline_variable, refactor_rename_symbol, search_workspace,
 };
-use super::registry::ToolStability;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ToolSpec {
@@ -20,19 +20,84 @@ pub struct ToolSpec {
 
 pub fn all_tool_specs() -> &'static [ToolSpec] {
     &[
-        ToolSpec { name: "parse_code", description: "Parse Windjammer code and return AST structure", category: "analyze", stability: ToolStability::Stable },
-        ToolSpec { name: "analyze_types", description: "Perform type inference and analysis on Windjammer code", category: "analyze", stability: ToolStability::Stable },
-        ToolSpec { name: "get_definition", description: "Find the definition of a symbol at a given position", category: "analyze", stability: ToolStability::Beta },
-        ToolSpec { name: "generate_code", description: "Generate Windjammer code from natural language description", category: "generate", stability: ToolStability::Beta },
-        ToolSpec { name: "explain_error", description: "Explain a Windjammer compiler error in plain English", category: "knowledge", stability: ToolStability::Stable },
-        ToolSpec { name: "search_workspace", description: "Search for code patterns across the workspace", category: "analyze", stability: ToolStability::Beta },
-        ToolSpec { name: "extract_function", description: "Extract selected code into a new function", category: "refactor", stability: ToolStability::Stable },
-        ToolSpec { name: "inline_variable", description: "Inline a variable by replacing all uses with its value", category: "refactor", stability: ToolStability::Stable },
-        ToolSpec { name: "rename_symbol", description: "Rename a symbol with workspace-wide updates", category: "refactor", stability: ToolStability::Stable },
-        ToolSpec { name: "generate_component", description: "Generate a Windjammer UI component with @component decorator", category: "generate", stability: ToolStability::Beta },
-        ToolSpec { name: "generate_game_entity", description: "Generate a game entity with @game decorator and ECS components", category: "generate", stability: ToolStability::Beta },
-        ToolSpec { name: "analyze_ssr_routing", description: "Analyze SSR and routing configurations", category: "analyze", stability: ToolStability::Beta },
-        ToolSpec { name: "get_language_info", description: "Get Windjammer compiler version, MCP version, and agent index metadata", category: "knowledge", stability: ToolStability::Stable },
+        ToolSpec {
+            name: "parse_code",
+            description: "Parse Windjammer code and return AST structure",
+            category: "analyze",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "analyze_types",
+            description: "Perform type inference and analysis on Windjammer code",
+            category: "analyze",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "get_definition",
+            description: "Find the definition of a symbol at a given position",
+            category: "analyze",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "generate_code",
+            description: "Generate Windjammer code from natural language description",
+            category: "generate",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "explain_error",
+            description: "Explain a Windjammer compiler error in plain English",
+            category: "knowledge",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "search_workspace",
+            description: "Search for code patterns across the workspace",
+            category: "analyze",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "extract_function",
+            description: "Extract selected code into a new function",
+            category: "refactor",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "inline_variable",
+            description: "Inline a variable by replacing all uses with its value",
+            category: "refactor",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "rename_symbol",
+            description: "Rename a symbol with workspace-wide updates",
+            category: "refactor",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "generate_component",
+            description: "Generate a Windjammer UI component with @component decorator",
+            category: "generate",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "generate_game_entity",
+            description: "Generate a game entity with @game decorator and ECS components",
+            category: "generate",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "analyze_ssr_routing",
+            description: "Analyze SSR and routing configurations",
+            category: "analyze",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "get_language_info",
+            description: "Get Windjammer compiler version, MCP version, and agent index metadata",
+            category: "knowledge",
+            stability: ToolStability::Stable,
+        },
     ]
 }
 

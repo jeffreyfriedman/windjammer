@@ -300,22 +300,18 @@ impl IntInference {
                 }
                 ty.clone()
             }
-            Type::Option(inner) => Type::Option(Box::new(self.substitute_generic_params_typed(inner, generics))),
+            Type::Option(inner) => Type::Option(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
             Type::Result(ok, err) => Type::Result(
                 Box::new(self.substitute_generic_params_typed(ok, generics)),
                 Box::new(self.substitute_generic_params_typed(err, generics)),
             ),
-            Type::Vec(inner) => Type::Vec(Box::new(self.substitute_generic_params_typed(inner, generics))),
+            Type::Vec(inner) => Type::Vec(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
             _ => ty.clone(),
         }
-    }
-
-    /// Legacy: Substitute generic type parameters with concrete types from strings
-    /// E.g., for HashMap<u32, String>::insert, parameter type K becomes u32
-    /// Generic params: K=0, V=1, T=2, etc.
-    fn substitute_generic_params(&self, ty: &Type, generics: &[String]) -> Type {
-        let typed_generics: Vec<Type> = generics.iter().map(|s| self.parse_type_from_string(s)).collect();
-        self.substitute_generic_params_typed(ty, &typed_generics)
     }
 
     /// Parse a type from a string representation (e.g., "u32" → Type::Custom("u32"))

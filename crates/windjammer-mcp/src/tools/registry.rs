@@ -11,7 +11,8 @@ pub type ToolHandler = Box<
     dyn Fn(
             Arc<Mutex<WindjammerDatabase>>,
             Value,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = McpResult<ToolCallResult>> + Send>>
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = McpResult<ToolCallResult>> + Send>>
         + Send
         + Sync,
 >;

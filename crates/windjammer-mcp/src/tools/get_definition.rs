@@ -76,7 +76,11 @@ pub async fn handle(
     let location = db_guard.find_definition(&request.symbol, &files);
 
     let response = if let Some(loc) = location {
-        let file = loc.uri.to_file_path().map(|p| p.display().to_string()).unwrap_or_else(|_| loc.uri.to_string());
+        let file = loc
+            .uri
+            .to_file_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| loc.uri.to_string());
         let symbols = db_guard.get_symbols(files[0]);
         let signature = symbols
             .iter()

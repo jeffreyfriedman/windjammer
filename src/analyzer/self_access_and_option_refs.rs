@@ -159,7 +159,11 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_is_self_field_access(a)
                     && self.method_call_argument_expects_mut_borrow(object, method, i, reg)
             }),
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if let Expression::Identifier { name, .. } = &**function {
                     if name == "is_available" || name.ends_with("::is_available") {
                         return arguments.iter().enumerate().any(|(i, (_, a))| {
@@ -212,9 +216,9 @@ impl<'ast> Analyzer<'ast> {
             return false;
         };
         match expr {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_binding_passed_as_mut_method_argument(s, binding, reg)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg)),
             Expression::MethodCall {
                 object,
                 method,
@@ -248,12 +252,13 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 self.binding_passed_as_mut_method_argument(condition, binding, Some(reg))
-                    || then_block
-                        .iter()
-                        .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg))
+                    || then_block.iter().any(|s| {
+                        self.statement_binding_passed_as_mut_method_argument(s, binding, reg)
+                    })
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.statement_binding_passed_as_mut_method_argument(s, binding, reg))
+                        b.iter().any(|s| {
+                            self.statement_binding_passed_as_mut_method_argument(s, binding, reg)
+                        })
                     })
             }
             Statement::While { body, .. } | Statement::Loop { body, .. } => body
@@ -273,12 +278,10 @@ impl<'ast> Analyzer<'ast> {
         arg_idx: usize,
         reg: &super::SignatureRegistry,
     ) -> bool {
-        let sig = reg
-            .get_signature(method)
-            .or_else(|| {
-                // `choice.is_available(world, …)` — registry keys are often qualified.
-                reg.get_signature(&format!("Choice::{}", method))
-            });
+        let sig = reg.get_signature(method).or_else(|| {
+            // `choice.is_available(world, …)` — registry keys are often qualified.
+            reg.get_signature(&format!("Choice::{}", method))
+        });
         let Some(sig) = sig else {
             return false;
         };

@@ -10,10 +10,7 @@
 
 use crate::parser::*;
 
-use super::{
-    arm_string_analysis, codegen_helpers, pattern_analysis, string_analysis, string_utilities,
-    CodeGenerator,
-};
+use super::{codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
@@ -145,7 +142,9 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             let target = match &self.current_function_return_type {
                                 Some(Type::Int) => Some("int"),
-                                Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                                Some(Type::Custom(name)) if name == "i64" || name == "int" => {
+                                    Some("int")
+                                }
                                 _ => None,
                             };
                             self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
@@ -238,7 +237,9 @@ impl<'ast> CodeGenerator<'ast> {
                             {
                                 let target = match &self.current_function_return_type {
                                     Some(Type::Int) => Some("int"),
-                                    Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                                    Some(Type::Custom(name)) if name == "i64" || name == "int" => {
+                                        Some("int")
+                                    }
                                     _ => None,
                                 };
                                 self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
@@ -405,9 +406,9 @@ impl<'ast> CodeGenerator<'ast> {
                     || string_utilities::return_type_expects_owned_string(
                         &self.current_function_return_type,
                     )
-                    || arms.iter().any(|arm| {
-                        string_utilities::match_arm_needs_string_ascription(&arm.body)
-                    });
+                    || arms
+                        .iter()
+                        .any(|arm| string_utilities::match_arm_needs_string_ascription(&arm.body));
 
                 // Set context flag BEFORE generating arms
                 let old_in_match_arm = self.in_match_arm_needing_string;
@@ -522,9 +523,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
-                                let is_copy = bound_type
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_copy_pointee(t));
+                                let is_copy =
+                                    bound_type.as_ref().is_some_and(|t| self.is_copy_pointee(t));
                                 if is_copy {
                                     if final_arm_str.trim() == name {
                                         final_arm_str = format!("*{}", name);
@@ -565,7 +565,9 @@ impl<'ast> CodeGenerator<'ast> {
                     // Auto-convert string literals to String when other arms return String
                     if any_arm_produces_string
                         && *is_string_literal
-                        && !crate::codegen::rust::string_utilities::already_owned_string_expr(&final_arm_str)
+                        && !crate::codegen::rust::string_utilities::already_owned_string_expr(
+                            &final_arm_str,
+                        )
                     {
                         output.push_str(
                             &crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(

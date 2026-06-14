@@ -54,12 +54,16 @@ pub async fn handle(
 }
 
 /// Explain errors using agent index catalog first, then heuristics.
-fn explain_error_with_catalog(error: &str, code_context: Option<&str>) -> (String, String, Option<String>) {
+fn explain_error_with_catalog(
+    error: &str,
+    code_context: Option<&str>,
+) -> (String, String, Option<String>) {
     // Try WJ code in error message
     for token in error.split_whitespace() {
         if token.starts_with("WJ") && token.len() >= 6 {
             if let Ok(catalog) = crate::agent_index::load_errors_json() {
-                if let Some(entry) = catalog.get(token.trim_matches(|c: char| !c.is_alphanumeric())) {
+                if let Some(entry) = catalog.get(token.trim_matches(|c: char| !c.is_alphanumeric()))
+                {
                     if let Some(obj) = entry.as_object() {
                         let explanation = obj
                             .get("explanation")
@@ -92,7 +96,10 @@ fn explain_error_with_catalog(error: &str, code_context: Option<&str>) -> (Strin
 }
 
 /// Heuristic fallback for unstructured compiler errors
-fn explain_error_heuristic(error: &str, code_context: Option<&str>) -> (String, String, Option<String>) {
+fn explain_error_heuristic(
+    error: &str,
+    code_context: Option<&str>,
+) -> (String, String, Option<String>) {
     let error_lower = error.to_lowercase();
 
     // Type mismatch errors

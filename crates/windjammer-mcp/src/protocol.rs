@@ -136,10 +136,7 @@ pub enum ToolContent {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "image")]
-    Image {
-        data: String,
-        mime_type: String,
-    },
+    Image { data: String, mime_type: String },
 }
 
 /// Position in source code
@@ -182,8 +179,12 @@ mod tests {
         let result = InitializeResult {
             protocol_version: crate::MCP_VERSION.to_string(),
             capabilities: ServerCapabilities {
-                tools: ToolsCapability { list_changed: false },
-                resources: Some(ResourcesCapability { list_changed: false }),
+                tools: ToolsCapability {
+                    list_changed: false,
+                },
+                resources: Some(ResourcesCapability {
+                    list_changed: false,
+                }),
                 experimental: serde_json::Value::Null,
             },
             server_info: ServerInfo {

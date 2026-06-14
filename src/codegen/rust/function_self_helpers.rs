@@ -202,9 +202,8 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         // Check signature registry for the trait method's self ownership.
                         // This handles cross-file trait impls where metadata was loaded.
-                        let registry_ownership = self.lookup_trait_method_ownership_in_registry(
-                            trait_name, func_name,
-                        );
+                        let registry_ownership =
+                            self.lookup_trait_method_ownership_in_registry(trait_name, func_name);
                         if let Some(reg_own) = registry_ownership {
                             reg_own
                         } else if let Some(body_ownership) =

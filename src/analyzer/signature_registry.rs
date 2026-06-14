@@ -112,10 +112,7 @@ impl SignatureRegistry {
             {
                 self.collision_keys.insert(name.clone());
             }
-            if name.contains("::")
-                && existing.has_self_receiver
-                && !sig.has_self_receiver
-            {
+            if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
                 return;
             }
         }
@@ -338,7 +335,10 @@ impl SignatureRegistry {
 
     /// Collect only signatures whose ownership differs from `base`.
     /// Used by multipass Step 3 to avoid deep-cloning the full registry each round.
-    pub fn delta_from_base(base: &SignatureRegistry, updated: &SignatureRegistry) -> SignatureDelta {
+    pub fn delta_from_base(
+        base: &SignatureRegistry,
+        updated: &SignatureRegistry,
+    ) -> SignatureDelta {
         let mut changed = HashMap::new();
         for (name, sig) in &updated.signatures {
             let is_new_or_changed = match base.signatures.get(name) {

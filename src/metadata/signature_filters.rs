@@ -17,8 +17,7 @@ pub fn struct_name_from_method_key(name: &str) -> Option<&str> {
 
 /// True when `name` is an associated method on a struct defined in the current crate.
 pub fn signature_targets_local_struct(name: &str, local_struct_names: &HashSet<String>) -> bool {
-    struct_name_from_method_key(name)
-        .is_some_and(|s| local_struct_names.contains(s))
+    struct_name_from_method_key(name).is_some_and(|s| local_struct_names.contains(s))
 }
 
 /// Remove dependency signatures for types the current crate defines locally.
@@ -40,7 +39,10 @@ mod tests {
             "dialogue::tree::DialogueNodeTree::get_node",
             &locals
         ));
-        assert!(signature_targets_local_struct("DialogueNodeTree::get_node", &locals));
+        assert!(signature_targets_local_struct(
+            "DialogueNodeTree::get_node",
+            &locals
+        ));
         assert!(!signature_targets_local_struct(
             "dialogue_tree::DialogueTree::get_node",
             &locals

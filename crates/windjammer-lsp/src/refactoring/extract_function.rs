@@ -81,11 +81,7 @@ impl<'a> ExtractFunction<'a> {
         };
         let function_signature =
             ast_utils::generate_function_signature(function_name, &parameters, &return_type);
-        let captured_variables = analysis
-            .parameters
-            .iter()
-            .map(|v| v.name.clone())
-            .collect();
+        let captured_variables = analysis.parameters.iter().map(|v| v.name.clone()).collect();
         Ok(ExtractFunctionResult {
             edit,
             function_signature,

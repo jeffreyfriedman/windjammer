@@ -91,7 +91,10 @@ impl<'a> BodyParser<'a> {
             self.parse_block()?;
         } else if matches!(self.current, Token::Semicolon) {
             self.advance();
-        } else if matches!(self.current, Token::Break | Token::Continue | Token::Discard) {
+        } else if matches!(
+            self.current,
+            Token::Break | Token::Continue | Token::Discard
+        ) {
             self.advance();
             if matches!(self.current, Token::Semicolon) {
                 self.advance();
@@ -279,66 +282,15 @@ impl<'a> BodyParser<'a> {
         }
     }
 
-    fn skip_block(&mut self) -> Result<()> {
-        while !matches!(self.current, Token::LBrace)
-            && !matches!(self.current, Token::Semicolon)
-            && !matches!(self.current, Token::Eof)
-        {
-            self.advance();
-        }
-        if matches!(self.current, Token::Semicolon) {
-            self.advance();
-            return Ok(());
-        }
-        if matches!(self.current, Token::Eof) {
-            return Err(self.error_at("Expected block or statement".to_string()));
-        }
-        let mut depth = 0;
-        loop {
-            match &self.current {
-                Token::LBrace => {
-                    depth += 1;
-                    self.advance();
-                }
-                Token::RBrace => {
-                    depth -= 1;
-                    self.advance();
-                    if depth == 0 {
-                        break;
-                    }
-                }
-                Token::Eof => return Err(anyhow!("Unclosed block")),
-                _ => {
-                    self.advance();
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn skip_braces(&mut self) -> Result<()> {
-        self.expect(Token::LBrace)?;
-        let mut depth = 1;
-        while depth > 0 && !matches!(self.current, Token::Eof) {
-            match &self.current {
-                Token::LBrace => depth += 1,
-                Token::RBrace => depth -= 1,
-                _ => {}
-            }
-            self.advance();
-        }
-        Ok(())
-    }
-
     /// Parse a for loop: for (init; condition; increment) { body }
     fn parse_for_loop(&mut self) -> Result<()> {
         self.advance(); // consume 'for'
-        
+
         // Expect '('
         if matches!(self.current, Token::LParen) {
             self.advance();
         }
-        
+
         // Parse init statement (e.g., var i = 0u;)
         if matches!(self.current, Token::Var) {
             self.parse_var_decl()?;
@@ -357,16 +309,16 @@ impl<'a> BodyParser<'a> {
                 self.advance();
             }
         }
-        
+
         // Skip condition and increment - just advance to the block
         while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
             self.advance();
         }
-        
+
         if matches!(self.current, Token::Eof) {
             return Err(self.error_at("Expected block after 'for'".to_string()));
         }
-        
+
         // Parse the block body (with inherited symbols including loop variable)
         self.parse_block()
     }
@@ -374,90 +326,91 @@ impl<'a> BodyParser<'a> {
     /// Parse an if statement: if (condition) { body } else { body }
     fn parse_if_statement(&mut self) -> Result<()> {
         self.advance(); // consume 'if'
-        
+
         // Skip condition
         while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
             self.advance();
         }
-        
+
         if matches!(self.current, Token::Eof) {
             return Err(self.error_at("Expected block after 'if'".to_string()));
         }
-        
+
         // Parse the if block
         self.parse_block()?;
-        
+
         // Handle else if/else
         while matches!(self.current, Token::Else) {
             self.advance();
-            
+
             if matches!(self.current, Token::If) {
                 self.advance();
                 // Skip condition
-                while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
+                while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof)
+                {
                     self.advance();
                 }
             }
-            
+
             if matches!(self.current, Token::LBrace) {
                 self.parse_block()?;
             }
         }
-        
+
         Ok(())
     }
 
     /// Parse a while loop: while (condition) { body }
     fn parse_while_loop(&mut self) -> Result<()> {
         self.advance(); // consume 'while'
-        
+
         // Skip condition
         while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
             self.advance();
         }
-        
+
         if matches!(self.current, Token::Eof) {
             return Err(self.error_at("Expected block after 'while'".to_string()));
         }
-        
+
         self.parse_block()
     }
 
     /// Parse a loop statement: loop { body }
     fn parse_loop_statement(&mut self) -> Result<()> {
         self.advance(); // consume 'loop'
-        
+
         if !matches!(self.current, Token::LBrace) {
             return Err(self.error_at("Expected block after 'loop'".to_string()));
         }
-        
+
         self.parse_block()
     }
 
     /// Parse a switch statement: switch (value) { case ... }
     fn parse_switch_statement(&mut self) -> Result<()> {
         self.advance(); // consume 'switch'
-        
+
         // Skip value expression
         while !matches!(self.current, Token::LBrace) && !matches!(self.current, Token::Eof) {
             self.advance();
         }
-        
+
         if matches!(self.current, Token::Eof) {
             return Err(self.error_at("Expected block after 'switch'".to_string()));
         }
-        
+
         self.parse_block()
     }
 
     /// Parse a block { ... } recursively, inheriting outer scope symbols
     fn parse_block(&mut self) -> Result<()> {
         self.expect(Token::LBrace)?;
-        
+
         while !matches!(self.current, Token::RBrace | Token::Eof) {
             self.parse_single_statement(None)?;
         }
-        
+
         self.expect(Token::RBrace)?;
         Ok(())
     }
@@ -489,7 +442,10 @@ impl<'a> BodyParser<'a> {
                     | Token::LBrace
             ) {
                 self.parse_single_statement(None)?;
-            } else if matches!(self.current, Token::Break | Token::Continue | Token::Discard) {
+            } else if matches!(
+                self.current,
+                Token::Break | Token::Continue | Token::Discard
+            ) {
                 self.advance();
                 if matches!(self.current, Token::Semicolon) {
                     self.advance();
@@ -537,34 +493,5 @@ impl<'a> BodyParser<'a> {
         } else {
             Err(self.error_at(format!("Expected semicolon, found {:?}", self.current)))
         }
-    }
-
-    /// Parse an lvalue (left-hand side of assignment): identifier with optional field/array access
-    fn parse_lvalue(&mut self) -> Result<Type> {
-        // Must start with an identifier
-        let name = self.expect_ident()?;
-        let mut ty = self
-            .symbols
-            .get(&name)
-            .ok_or_else(|| anyhow!("Unknown identifier '{}'", name))?
-            .clone();
-
-        // Handle postfix operations: .field and [index]
-        loop {
-            if matches!(self.current, Token::Dot) {
-                self.advance();
-                let member = self.expect_ident()?;
-                ty = self.get_swizzle_or_field_type(&ty, &member)?;
-            } else if matches!(self.current, Token::LBracket) {
-                self.advance();
-                let _index_ty = self.parse_expr()?;
-                self.expect(Token::RBracket)?;
-                ty = element_type_for_index(&ty)?;
-            } else {
-                break;
-            }
-        }
-
-        Ok(ty)
     }
 }

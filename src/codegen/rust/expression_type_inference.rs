@@ -273,7 +273,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // .clone() returns the same type as the object
                 // This enables type inference through cloned iterables:
                 //   for x in &collection.clone() → x has same element type as collection
-                if matches!(method.as_str(), "clone" | "to_owned" | "to_vec" | "into_iter") {
+                if matches!(
+                    method.as_str(),
+                    "clone" | "to_owned" | "to_vec" | "into_iter"
+                ) {
                     return self.infer_expression_type(object);
                 }
                 // TDD FIX: .unwrap() on Option<T> → T
@@ -290,8 +293,19 @@ impl<'ast> CodeGenerator<'ast> {
                 //   for brick in self.bricks.iter_mut() → brick: Brick
                 if matches!(
                     method.as_str(),
-                    "iter" | "iter_mut" | "into_iter" | "keys" | "values" | "values_mut" | "drain"
-                        | "lines" | "chars" | "bytes" | "split" | "split_whitespace" | "enumerate"
+                    "iter"
+                        | "iter_mut"
+                        | "into_iter"
+                        | "keys"
+                        | "values"
+                        | "values_mut"
+                        | "drain"
+                        | "lines"
+                        | "chars"
+                        | "bytes"
+                        | "split"
+                        | "split_whitespace"
+                        | "enumerate"
                 ) {
                     if let Some(obj_type) = self.infer_expression_type(object) {
                         return Some(obj_type);

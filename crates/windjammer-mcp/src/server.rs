@@ -82,10 +82,7 @@ impl McpServer {
                             // Try to extract request ID if possible
                             let error_response =
                                 if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(trimmed) {
-                                    self.create_error_response(
-                                        req.id.unwrap_or(Value::Null),
-                                        e,
-                                    )
+                                    self.create_error_response(req.id.unwrap_or(Value::Null), e)
                                 } else {
                                     self.create_error_response(Value::Null, e)
                                 };
@@ -175,8 +172,12 @@ impl McpServer {
         let result = InitializeResult {
             protocol_version: crate::MCP_VERSION.to_string(),
             capabilities: ServerCapabilities {
-                tools: ToolsCapability { list_changed: false },
-                resources: Some(ResourcesCapability { list_changed: false }),
+                tools: ToolsCapability {
+                    list_changed: false,
+                },
+                resources: Some(ResourcesCapability {
+                    list_changed: false,
+                }),
                 experimental: Value::Null,
             },
             server_info: ServerInfo {
@@ -231,16 +232,14 @@ impl McpServer {
     }
 
     async fn handle_resources_read(&self, params: Value) -> McpResult<Value> {
-        let uri = params
-            .get("uri")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::ValidationError {
+        let uri = params.get("uri").and_then(|v| v.as_str()).ok_or_else(|| {
+            McpError::ValidationError {
                 field: "uri".to_string(),
                 message: "Missing resource uri".to_string(),
-            })?;
-        let contents = crate::agent_index::read_resource(uri).map_err(|e| McpError::InternalError {
-            message: e,
+            }
         })?;
+        let contents = crate::agent_index::read_resource(uri)
+            .map_err(|e| McpError::InternalError { message: e })?;
         Ok(json!({
             "contents": [{
                 "uri": uri,

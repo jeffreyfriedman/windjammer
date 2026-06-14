@@ -147,7 +147,8 @@ impl<'ast> CodeGenerator<'ast> {
                             if !self.is_type_copy(&inner) {
                                 let root = self.root_identifier_of_field_or_index_chain(value);
                                 let is_behind_borrow = root.is_some_and(|r| {
-                                    r == "self" || self.inferred_borrowed_params.contains(r)
+                                    r == "self"
+                                        || self.inferred_borrowed_params.contains(r)
                                         || self.inferred_mut_borrowed_params.contains(r)
                                 });
                                 if is_behind_borrow {
@@ -186,13 +187,12 @@ impl<'ast> CodeGenerator<'ast> {
                     self.match_arm_bindings.insert(var.clone());
                 }
 
-                let added_borrowed: Vec<String> = if match_binds_refs_early_check
-                    || !scrutinee_ref_prefix.is_empty()
-                {
-                    bound_vars.iter().cloned().collect()
-                } else {
-                    Vec::new()
-                };
+                let added_borrowed: Vec<String> =
+                    if match_binds_refs_early_check || !scrutinee_ref_prefix.is_empty() {
+                        bound_vars.iter().cloned().collect()
+                    } else {
+                        Vec::new()
+                    };
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.insert(var.clone());
                 }
@@ -272,8 +272,8 @@ impl<'ast> CodeGenerator<'ast> {
                                             .iter()
                                             .find(|(n, _)| n == name)
                                             .map(|(_, t)| t);
-                                        let is_copy = binding_type
-                                            .is_some_and(|t| self.is_copy_pointee(t));
+                                        let is_copy =
+                                            binding_type.is_some_and(|t| self.is_copy_pointee(t));
                                         // Generate all but last, then the derefed last
                                         let all_but_last = &statements[..statements.len() - 1];
                                         output.push_str(&self.generate_block(all_but_last));
@@ -326,8 +326,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
-                                let is_copy = binding_type
-                                    .is_some_and(|t| self.is_copy_pointee(t));
+                                let is_copy = binding_type.is_some_and(|t| self.is_copy_pointee(t));
                                 if is_copy {
                                     body_str = format!("*{}", body_str);
                                 } else {
@@ -511,8 +510,8 @@ impl<'ast> CodeGenerator<'ast> {
             value_str
         };
 
-        let needs_borrow_break = self.match_scrutinee_is_self_method_call(value)
-            && self.match_arms_mutate_self(arms);
+        let needs_borrow_break =
+            self.match_scrutinee_is_self_method_call(value) && self.match_arms_mutate_self(arms);
 
         let mut output = self.indent();
 
@@ -526,11 +525,12 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
-                let scrutinee = crate::codegen::rust::string_utilities::maybe_append_as_str_for_match(
-                    &value_str,
-                    &self.inferred_borrowed_params,
-                    &self.current_function_params,
-                );
+                let scrutinee =
+                    crate::codegen::rust::string_utilities::maybe_append_as_str_for_match(
+                        &value_str,
+                        &self.inferred_borrowed_params,
+                        &self.current_function_params,
+                    );
                 output.push_str(&scrutinee);
             } else {
                 output.push_str(&value_str);

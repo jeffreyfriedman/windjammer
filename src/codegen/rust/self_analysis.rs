@@ -217,9 +217,10 @@ pub fn function_matches_on_self(func: &FunctionDecl) -> bool {
 fn statement_matches_on_self(stmt: &Statement) -> bool {
     match stmt {
         Statement::Match { value, .. } => expression_is_bare_self(value),
-        Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
-            expression_contains_match_on_self(expr)
-        }
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        } => expression_contains_match_on_self(expr),
         Statement::If {
             then_block,
             else_block,
@@ -268,9 +269,7 @@ pub fn function_iterates_self_field_consuming(func: &FunctionDecl) -> bool {
 
 fn statement_iterates_self_field(stmt: &Statement) -> bool {
     match stmt {
-        Statement::For {
-            iterable, body, ..
-        } => {
+        Statement::For { iterable, body, .. } => {
             let is_self_field = matches!(
                 iterable,
                 Expression::FieldAccess { object, .. }
@@ -290,9 +289,7 @@ fn statement_iterates_self_field(stmt: &Statement) -> bool {
             else_block,
             ..
         } => {
-            then_block
-                .iter()
-                .any(|s| statement_iterates_self_field(s))
+            then_block.iter().any(|s| statement_iterates_self_field(s))
                 || else_block
                     .as_ref()
                     .is_some_and(|b| b.iter().any(|s| statement_iterates_self_field(s)))
@@ -313,12 +310,23 @@ fn statement_only_clones_element(stmt: &Statement) -> bool {
 fn expression_only_clones(expr: &Expression) -> bool {
     match expr {
         Expression::MethodCall { method, .. }
-            if matches!(method.as_str(), "clone" | "to_owned" | "to_vec" | "into_iter")
-                || matches!(
-                    method.as_str(),
-                    "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add"
-                        | "fill"
-                ) => true,
+            if matches!(
+                method.as_str(),
+                "clone" | "to_owned" | "to_vec" | "into_iter"
+            ) || matches!(
+                method.as_str(),
+                "push"
+                    | "insert"
+                    | "extend"
+                    | "append"
+                    | "push_front"
+                    | "push_back"
+                    | "add"
+                    | "fill"
+            ) =>
+        {
+            true
+        }
         _ => false,
     }
 }
@@ -341,24 +349,28 @@ fn expression_consumes_self(expr: &Expression) -> bool {
 
 fn statement_consumes_self(stmt: &Statement) -> bool {
     match stmt {
-        Statement::Return { value: Some(expr), .. } => {
-            expression_is_bare_self(expr) || expression_consumes_self(expr)
-        }
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_is_bare_self(expr) || expression_consumes_self(expr),
         Statement::Expression { expr, .. } => {
             expression_is_bare_self(expr) || expression_consumes_self(expr)
         }
         Statement::Let { value, .. } => {
             expression_is_bare_self(value) || expression_consumes_self(value)
         }
-        Statement::If { then_block, else_block, .. } => {
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
             then_block.iter().any(|s| statement_consumes_self(s))
-                || else_block.as_ref().is_some_and(|b| b.iter().any(|s| statement_consumes_self(s)))
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| statement_consumes_self(s)))
         }
-        Statement::Match { arms, .. } => {
-            arms.iter().any(|arm| {
-                expression_is_bare_self(arm.body) || expression_consumes_self(arm.body)
-            })
-        }
+        Statement::Match { arms, .. } => arms
+            .iter()
+            .any(|arm| expression_is_bare_self(arm.body) || expression_consumes_self(arm.body)),
         _ => false,
     }
 }
@@ -402,10 +414,11 @@ fn statement_modifies_derived_local(stmt: &Statement, derived: &HashSet<String>)
                         .any(|s| statement_modifies_derived_local(s, derived))
                 })
         }
-        Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
-            body.iter()
-                .any(|s| statement_modifies_derived_local(s, derived))
-        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| statement_modifies_derived_local(s, derived)),
         _ => false,
     }
 }
@@ -528,10 +541,7 @@ fn collect_self_field_get_bindings(func: &FunctionDecl) -> HashSet<String> {
 
 /// Check if an expression is `self.field.get(...)`.
 pub fn is_self_field_get_call(expr: &Expression) -> bool {
-    if let Expression::MethodCall {
-        object, method, ..
-    } = expr
-    {
+    if let Expression::MethodCall { object, method, .. } = expr {
         method == "get" && is_self_field_chain(object)
     } else {
         false
@@ -583,23 +593,14 @@ fn match_or_if_let_mutates_get_binding(
             if scrutinee_var.is_some_and(|v| get_bindings.contains(v)) {
                 for arm in arms.iter() {
                     if let Some(binding) = extract_some_binding(&arm.pattern) {
-                        if match_arm_body_mutates_var(
-                            arm.body,
-                            binding,
-                            registry,
-                            struct_name,
-                        ) {
+                        if match_arm_body_mutates_var(arm.body, binding, registry, struct_name) {
                             return true;
                         }
                     }
                     if let Some(bindings) = extract_tuple_some_bindings(&arm.pattern) {
                         for binding in &bindings {
-                            if match_arm_body_mutates_var(
-                                arm.body,
-                                binding,
-                                registry,
-                                struct_name,
-                            ) {
+                            if match_arm_body_mutates_var(arm.body, binding, registry, struct_name)
+                            {
                                 return true;
                             }
                         }
@@ -613,7 +614,9 @@ fn match_or_if_let_mutates_get_binding(
                     if let Expression::Identifier { name, .. } = elem {
                         if get_bindings.contains(name.as_str()) {
                             for arm in arms.iter() {
-                                if let Some(binding) = find_binding_for_var_in_tuple_match(value, name, &arm.pattern) {
+                                if let Some(binding) =
+                                    find_binding_for_var_in_tuple_match(value, name, &arm.pattern)
+                                {
                                     if match_arm_body_mutates_var(
                                         arm.body,
                                         binding,
@@ -644,14 +647,13 @@ fn match_or_if_let_mutates_get_binding(
             else_block,
             ..
         } => {
-            then_block
-                .iter()
-                .any(|s| match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name))
-                || else_block.as_ref().is_some_and(|b| {
-                    b.iter().any(|s| {
-                        match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)
-                    })
+            then_block.iter().any(|s| {
+                match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)
+            }) || else_block.as_ref().is_some_and(|b| {
+                b.iter().any(|s| {
+                    match_or_if_let_mutates_get_binding(s, get_bindings, registry, struct_name)
                 })
+            })
         }
         Statement::While { body, .. }
         | Statement::For { body, .. }
@@ -702,9 +704,9 @@ pub fn find_binding_for_var_in_tuple_match<'a>(
     arm_pattern: &'a Pattern<'a>,
 ) -> Option<&'a str> {
     if let Expression::Tuple { elements, .. } = scrutinee {
-        let position = elements.iter().position(|e| {
-            matches!(e, Expression::Identifier { name, .. } if name == var_name)
-        })?;
+        let position = elements
+            .iter()
+            .position(|e| matches!(e, Expression::Identifier { name, .. } if name == var_name))?;
         if let Pattern::Tuple(pat_elements) = arm_pattern {
             let pat_at_pos = pat_elements.get(position)?;
             return extract_some_binding(pat_at_pos);
@@ -724,9 +726,7 @@ fn match_arm_body_mutates_var(
         Expression::Block { statements, .. } => statements
             .iter()
             .any(|s| statement_mutates_var(s, var_name, registry, struct_name)),
-        Expression::MethodCall {
-            object, method, ..
-        } => {
+        Expression::MethodCall { object, method, .. } => {
             if expression_is_var(object, var_name) {
                 return method_is_mutating(method, registry, struct_name);
             }
@@ -789,12 +789,8 @@ fn expr_mutates_var(
     struct_name: Option<&str>,
 ) -> bool {
     match expr {
-        Expression::MethodCall {
-            object, method, ..
-        } => {
-            if expression_is_var(object, var_name)
-                || expression_is_field_of_var(object, var_name)
-            {
+        Expression::MethodCall { object, method, .. } => {
+            if expression_is_var(object, var_name) || expression_is_field_of_var(object, var_name) {
                 if method_is_mutating(method, registry, struct_name) {
                     return true;
                 }
@@ -1073,12 +1069,9 @@ fn method_is_mutating(
             let qualified = format!("{}::{}", ctx, method);
             if let Some(sig) = reg.get_signature(&qualified) {
                 if sig.has_self_receiver
-                    && sig
-                        .param_ownership
-                        .first()
-                        .is_some_and(|o| {
-                            *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
-                        })
+                    && sig.param_ownership.first().is_some_and(|o| {
+                        *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
+                    })
                 {
                     return true;
                 }
@@ -1086,12 +1079,9 @@ fn method_is_mutating(
         }
         if let Some(sig) = lookup_method_in_registry(reg, method) {
             return sig.has_self_receiver
-                && sig
-                    .param_ownership
-                    .first()
-                    .is_some_and(|o| {
-                        *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
-                    });
+                && sig.param_ownership.first().is_some_and(|o| {
+                    *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
+                });
         }
     }
 
