@@ -20,8 +20,22 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::test_module_gate::is_test_module;
 use import_resolution::parse_mod_declarations;
 use module_resolution::discover_hand_written_modules;
+
+/// Whether a `.wj` module should be included when mod.wj lists explicit `pub mod` names.
+/// Test modules (`*_test`, `test_*`, etc.) are always auto-discovered with `#[cfg(test)]`.
+fn include_module_in_explicit_mod_wj(
+    name: &str,
+    pub_mods: &[String],
+    is_subdirectory: bool,
+) -> bool {
+    if is_subdirectory {
+        return pub_mods.is_empty() || pub_mods.iter().any(|m| m == name);
+    }
+    pub_mods.is_empty() || pub_mods.iter().any(|m| m == name) || is_test_module(name)
+}
 
 /// Generate lib.rs content for a Windjammer project
 ///
@@ -223,12 +237,15 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         for module_file in &module_files {
             // Only include if it's not a subdirectory
             if !submodule_names.contains(module_file)
-                && (pub_mods.is_empty() || pub_mods.contains(module_file))
+                && include_module_in_explicit_mod_wj(module_file, &pub_mods, false)
             {
                 // THE WINDJAMMER FIX: Desktop-only modules need feature gates
                 let needs_desktop_gate = module_file.starts_with("desktop_")
                     || (module_file.starts_with("app_") && module_file != "app_reactive");
 
+                if is_test_module(module_file) {
+                    content.push_str("#[cfg(test)]\n");
+                }
                 if needs_desktop_gate {
                     content.push_str("#[cfg(feature = \"desktop\")]\n");
                 }
@@ -240,10 +257,15 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         if !module.submodules.is_empty() {
             content.push_str("\n// Submodule declarations\n");
             for submodule in &module.submodules {
-                if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                if include_module_in_explicit_mod_wj(&submodule.name, &pub_mods, true)
+                    || is_test_module(&submodule.name)
+                {
                     let needs_desktop_gate = submodule.name.starts_with("desktop_")
                         || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
 
+                    if is_test_module(&submodule.name) {
+                        content.push_str("#[cfg(test)]\n");
+                    }
                     if needs_desktop_gate {
                         content.push_str("#[cfg(feature = \"desktop\")]\n");
                     }
@@ -273,14 +295,18 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
             // Re-export .wj file modules (not already covered by submodules)
             for module_file in &module_files {
                 if !submodule_names.contains(module_file)
-                    && (pub_mods.is_empty() || pub_mods.contains(module_file))
+                    && include_module_in_explicit_mod_wj(module_file, &pub_mods, false)
+                    && !is_test_module(module_file)
                 {
                     content.push_str(&format!("pub use {}::*;\n", module_file));
                 }
             }
             // Re-export subdirectory modules
             for submodule in &module.submodules {
-                if pub_mods.is_empty() || pub_mods.contains(&submodule.name) {
+                if (include_module_in_explicit_mod_wj(&submodule.name, &pub_mods, true)
+                    || is_test_module(&submodule.name))
+                    && !is_test_module(&submodule.name)
+                {
                     content.push_str(&format!("pub use {}::*;\n", submodule.name));
                 }
             }

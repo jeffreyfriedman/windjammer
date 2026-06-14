@@ -115,6 +115,57 @@ impl CrateMetadata {
     }
 }
 
+/// Extract typed struct field types from a CrateMetadata for cross-crate type inference.
+/// Returns struct_name → field_name → Type, enabling `infer_type_name` to resolve
+/// nested field access chains like `self.renderer.voxel_renderer` across crate boundaries.
+pub fn extract_struct_field_types(
+    crate_meta: &CrateMetadata,
+) -> HashMap<String, HashMap<String, Type>> {
+    let mut result = HashMap::new();
+    for (struct_name, fields) in &crate_meta.structs {
+        let mut typed_fields = HashMap::new();
+        for (field_name, type_str) in fields {
+            if let Some(ty) = ModuleMetadata::deserialize_type(type_str) {
+                typed_fields.insert(field_name.clone(), ty);
+            }
+        }
+        if !typed_fields.is_empty() {
+            result.insert(struct_name.clone(), typed_fields);
+        }
+    }
+    result
+}
+
+/// Load struct field types from a metadata.json file on disk.
+pub fn load_struct_field_types_from_file(path: &Path) -> HashMap<String, HashMap<String, Type>> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+    let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
+        return HashMap::new();
+    };
+    extract_struct_field_types(&crate_meta)
+}
+
+/// Load and merge external struct field types from dependency metadata files.
+/// Shared by both `compilation_pipeline` and `library_multipass` to avoid
+/// duplicated metadata loading loops.
+pub fn load_merged_external_struct_fields(
+    external_paths: &HashMap<String, std::path::PathBuf>,
+    exclude_local: Option<&std::collections::HashSet<String>>,
+) -> HashMap<String, HashMap<String, Type>> {
+    let mut merged: HashMap<String, HashMap<String, Type>> = HashMap::new();
+    for meta_path in external_paths.values() {
+        let fields = load_struct_field_types_from_file(meta_path);
+        for (struct_name, field_map) in fields {
+            if exclude_local.is_none_or(|locals| !locals.contains(&struct_name)) {
+                merged.entry(struct_name).or_default().extend(field_map);
+            }
+        }
+    }
+    merged
+}
+
 pub(in crate::metadata) fn merge_crate_metadata_file(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,

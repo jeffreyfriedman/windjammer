@@ -70,15 +70,16 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
                             let self_str = if let Some(ownership_mode) = eff_ownership {
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
-                                            && self.method_returns_impl_struct(func) =>
+                                            && (self.method_returns_impl_struct(func) || consumes_self) =>
                                     {
-                                        "mut self"
+                                        if body_modifies { "mut self" } else { "self" }
                                     }
                                     OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Borrowed => {
@@ -89,24 +90,18 @@ impl<'ast> CodeGenerator<'ast> {
                                         }
                                     }
                                     OwnershipMode::Owned => {
-                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
-                                        if body_modifies && ret_self {
-                                            "mut self"
-                                        } else if body_modifies {
-                                            "&mut self"
-                                        } else {
+                                        if self.in_trait_impl {
                                             "self"
+                                        } else {
+                                            self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
                                 }
                             } else {
-                                let ret_self = self.method_returns_impl_struct(&analyzed.decl);
-                                if body_modifies && ret_self {
-                                    "mut self"
-                                } else if body_modifies {
-                                    "&mut self"
-                                } else {
+                                if self.in_trait_impl {
                                     "self"
+                                } else {
+                                    self.owned_self_receiver(&analyzed.decl)
                                 }
                             };
                             // Sync borrowed-params sets with actual generated receiver.
@@ -124,6 +119,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.inferred_mut_borrowed_params.remove("self");
                                 }
                             }
+                            self.record_self_receiver_upgrade(
+                                &func.name,
+                                eff_ownership,
+                                self_str,
+                            );
                             return self_str.to_string();
                         }
                         // Owned parameters are always mutable in Windjammer
@@ -181,13 +181,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                     OwnershipMode::MutBorrowed => "&mut self".to_string(),
                                     OwnershipMode::Owned => {
-                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
-                                        if body_modifies && ret_self {
-                                            "mut self".to_string()
-                                        } else if body_modifies {
-                                            "&mut self".to_string()
-                                        } else {
+                                        if self.in_trait_impl {
                                             "self".to_string()
+                                        } else {
+                                            self.owned_self_receiver(&analyzed.decl).to_string()
                                         }
                                     }
                                 };
@@ -205,14 +202,15 @@ impl<'ast> CodeGenerator<'ast> {
                         if param.name == "self" {
                             let body_modifies = self.function_modifies_self(&analyzed.decl);
                             let returns_self = self.method_returns_impl_struct(&analyzed.decl);
+                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
                             let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                        if !self.in_trait_impl && returns_self =>
+                                        if !self.in_trait_impl && (returns_self || consumes_self) =>
                                     {
-                                        "mut self"
+                                        if body_modifies { "mut self" } else { "self" }
                                     }
                                     OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Borrowed => {
@@ -223,22 +221,23 @@ impl<'ast> CodeGenerator<'ast> {
                                         }
                                     }
                                     OwnershipMode::Owned => {
-                                        let ret_self = self.method_returns_impl_struct(&analyzed.decl);
-                                        if body_modifies && ret_self {
-                                            "mut self"
-                                        } else if body_modifies {
-                                            "&mut self"
-                                        } else {
+                                        if self.in_trait_impl {
                                             "self"
+                                        } else {
+                                            self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
                                 }
                             } else if body_modifies && returns_self {
                                 "mut self"
+                            } else if consumes_self {
+                                "self"
                             } else if body_modifies {
                                 "&mut self"
-                            } else {
+                            } else if returns_self {
                                 "self"
+                            } else {
+                                "&self"
                             };
                             // Sync borrowed-params sets with actual generated receiver.
                             match self_str {
@@ -255,6 +254,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.inferred_mut_borrowed_params.remove("self");
                                 }
                             }
+                            let eff = self.get_effective_self_ownership(&func.name, analyzed);
+                            self.record_self_receiver_upgrade(
+                                &func.name,
+                                eff,
+                                self_str,
+                            );
                             return self_str.to_string();
                         }
 
@@ -275,6 +280,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 .get(&param.name)
                                 .unwrap_or(&OwnershipMode::Owned);
 
+                            if std::env::var("WJ_DEBUG_CODEGEN").is_ok() {
+                                eprintln!(
+                                    "  [CODEGEN] param={} fn={} ownership={:?} all_keys={:?}",
+                                    param.name, func.name, ownership_mode,
+                                    analyzed.inferred_ownership.keys().collect::<Vec<_>>()
+                                );
+                            }
 
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's
@@ -319,11 +331,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         let is_string = matches!(inferred_type, Type::String)
                                             || matches!(inferred_type, Type::Custom(ref name) if name == "string");
 
-                                        if is_string && analyzed.str_ref_optimizable_params.contains(&param.name) {
-                                            // PHASE 2 OPTIMIZATION: Use &str (zero allocations for literals)
+                                        if is_string
+                                            && analyzed.str_ref_optimizable_params.contains(&param.name)
+                                        {
                                             "&str".to_string()
                                         } else {
-                                            // PHASE 1 BASELINE: Use &String (correct for Vec<String> methods)
                                             format!("&{}", self.type_to_rust(inferred_type))
                                         }
                                     }

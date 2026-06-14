@@ -1,0 +1,102 @@
+{
+  "module_path": "Result",
+  "structs": {},
+  "functions": {
+    "Result::unwrap": {
+      "params": ["Custom(\"Result\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Result::unwrap_or": {
+      "params": ["Custom(\"Result\")", "Custom(\"T\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::unwrap_or_else": {
+      "params": ["Custom(\"Result\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::unwrap_or_default": {
+      "params": ["Custom(\"Result\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Result::expect": {
+      "params": ["Custom(\"Result\")", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Result::is_ok": {
+      "params": ["Reference(Custom(\"Result\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Result::is_err": {
+      "params": ["Reference(Custom(\"Result\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "Result::map": {
+      "params": ["Custom(\"Result\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::and_then": {
+      "params": ["Custom(\"Result\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::or_else": {
+      "params": ["Custom(\"Result\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::ok_or": {
+      "params": ["Custom(\"Result\")", "Custom(\"E\")"],
+      "return_type": "Custom(\"Result\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Result::clone": {
+      "params": ["Reference(Custom(\"Result\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Result",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

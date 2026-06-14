@@ -50,15 +50,18 @@ impl CodeGenerator<'_> {
             return Some(String::new());
         }
 
-        // Rust std modules: pass through as `use std::fs`, `use std::env`, etc.
+        // Rust std modules: pass through as `use std::fs`, `use std::process`, etc.
+        // `std::env` maps to windjammer_runtime (cross-backend get/get_or).
         if module_base == "fs"
             || module_base.starts_with("fs::")
             || module_base == "process"
             || module_base.starts_with("process::")
-            || module_base == "env"
-            || module_base.starts_with("env::")
         {
             return Some(format!("use std::{};\n", module_name));
+        }
+
+        if module_base == "env" || module_base.starts_with("env::") {
+            return Some("use windjammer_runtime::env;\n".to_string());
         }
 
         // Platform APIs with no Rust std equivalent - skip
@@ -84,9 +87,11 @@ impl CodeGenerator<'_> {
             "http" => "windjammer_runtime::http",
             "mime" => "windjammer_runtime::mime",
             "json" => "windjammer_runtime::json",
+            "io" => "windjammer_runtime::io",
+            "subprocess" => "windjammer_runtime::subprocess",
 
             // Additional modules
-            "async" => "windjammer_runtime::async_runtime",
+            "async" | "async_runtime" => "windjammer_runtime::async_runtime",
             "cli" => "windjammer_runtime::cli",
             "crypto" => "windjammer_runtime::crypto",
             "csv" => "windjammer_runtime::csv_mod",

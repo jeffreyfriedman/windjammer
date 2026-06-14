@@ -24,32 +24,7 @@ fn is_type_copy_quick(
     copy_structs: &HashSet<String>,
     copy_enums: &HashSet<String>,
 ) -> bool {
-    use parser::Type;
-    match ty {
-        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
-        Type::Reference(_) => true,
-        Type::MutableReference(_) => false,
-        Type::Tuple(types) => types
-            .iter()
-            .all(|t| is_type_copy_quick(t, copy_structs, copy_enums)),
-        Type::Option(inner) => is_type_copy_quick(inner, copy_structs, copy_enums),
-        Type::Result(ok, err) => {
-            is_type_copy_quick(ok, copy_structs, copy_enums)
-                && is_type_copy_quick(err, copy_structs, copy_enums)
-        }
-        Type::Array(inner, _) => is_type_copy_quick(inner, copy_structs, copy_enums),
-        Type::Vec(_) | Type::String => false,
-        Type::RawPointer { pointee, .. } => {
-            is_type_copy_quick(pointee.as_ref(), copy_structs, copy_enums)
-        }
-        Type::FunctionPointer { .. } => true,
-        Type::Custom(name) => {
-            copy_structs.contains(name)
-                || copy_enums.contains(name)
-                || crate::type_classification::is_copy_primitive(name.as_str())
-        }
-        _ => false,
-    }
+    crate::type_classification::is_type_copy_with_registries(ty, copy_structs, copy_enums)
 }
 
 /// Extended build with library mode and external crate metadata.

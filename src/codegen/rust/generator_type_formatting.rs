@@ -38,12 +38,20 @@ impl<'ast> CodeGenerator<'ast> {
     /// 4. Structs with all-Copy fields (struct_field_types recursive check)
     /// 5. Known game engine types from external crates (Vec3, AABB, etc.)
     pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
+        if let Type::Custom(name) = ty {
+            if self.non_copy_types_registry.contains(name.as_str()) {
+                return false;
+            }
+        }
         if crate::codegen::rust::type_analysis::is_copy_type(ty) {
             return true;
         }
         match ty {
             Type::Option(inner) => self.is_type_copy(inner),
             Type::Custom(name) => {
+                if self.non_copy_types_registry.contains(name.as_str()) {
+                    return false;
+                }
                 if self.copy_types_registry.contains(name.as_str()) {
                     return true;
                 }
@@ -51,6 +59,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// When a match/if-let binding has type `&T`, decide `*binding` vs `.clone()` from `T`.
+    /// `&T` is Copy in Rust, but `*binding` is only valid when `T: Copy`.
+    pub(super) fn is_copy_pointee(&self, ty: &Type) -> bool {
+        let pointee = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        self.is_type_copy(pointee)
     }
 
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"

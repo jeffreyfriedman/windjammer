@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.48.0] - 2026-06-14
+
+### Changed
+- **Ownership inference**: Snapshot/self ownership, generic owned params, trait receiver consistency, int→float cast skip on type collisions only
+- **String API/codegen**: `Reference(String)` → `&String`, struct-literal string storage, callee-aware `.to_string()` at call sites, string optimization passthrough fixes
+- **Test infrastructure**: Consolidated `tests/all` binary; removed duplicate `tests/lib.rs`; 4180+ integration tests with updated docs
+
+### Fixed
+- Compiler regressions from engine phase 16 refactor (signature registry, function analysis, regular call argument generation)
+- CI performance workflow: safe wrk metric parsing for `$GITHUB_OUTPUT`
+
+---
+
 ## [0.47.0] - 2026-05-15
 
 ### Changed

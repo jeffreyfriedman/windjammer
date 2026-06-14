@@ -90,6 +90,30 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// When iterating `self.field` with owned self (not in borrowed params),
+    /// check if the loop body uses `self` in any way (method calls, field access).
+    /// If so, we must borrow the iterable (`&self.field`) to avoid partial move (E0382).
+    pub(crate) fn self_field_iterable_needs_borrow(
+        &self,
+        iterable: &Expression,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let is_self_field = matches!(
+            iterable,
+            Expression::FieldAccess { object, .. }
+                if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+        );
+        if !is_self_field {
+            return false;
+        }
+        if self.inferred_borrowed_params.contains("self")
+            || self.inferred_mut_borrowed_params.contains("self")
+        {
+            return false;
+        }
+        Self::variable_used_in_statements(body, "self")
+    }
+
     /// For `for x in coll` when `coll` is borrowed (`&self.field`): if the body calls a method on
     /// `x` whose inferred receiver is `&mut self` (e.g. `System::update` on `Box<dyn System>`),
     /// the iterable must be `&mut coll`, not `&coll`.

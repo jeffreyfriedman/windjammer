@@ -1,4 +1,4 @@
-// Test: String literals in enum variants expecting String should auto-convert
+// Test: string literals in enum variants expecting String should auto-convert
 pub enum Speaker {
     Player,
     NPC(string),

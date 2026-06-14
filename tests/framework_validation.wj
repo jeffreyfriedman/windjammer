@@ -186,7 +186,7 @@ impl TestDatabase {
         Self { connected: true }
     }
     
-    fn query(&self, sql: string) -> int {
+    fn query(self, sql: string) -> int {
         requires(self.connected, "must be connected");
         42 // Mock result
     }
@@ -237,7 +237,7 @@ impl Player {
         }
     }
     
-    fn take_damage(&mut self, amount: int) {
+    fn take_damage(self, amount: int) {
         requires(amount >= 0, "damage must be non-negative");
         requires(self.health > 0, "player must be alive");
         
@@ -250,13 +250,13 @@ impl Player {
         ensures(self.health <= old_health, "health should decrease");
     }
     
-    fn move_to(&mut self, x: float, y: float) {
+    fn move_to(self, x: float, y: float) {
         requires(self.health > 0, "dead players can't move");
         self.position_x = x;
         self.position_y = y;
     }
     
-    fn add_item(&mut self, item: string) {
+    fn add_item(self, item: string) {
         self.inventory.push(item);
         invariant(self.inventory.len() > 0, "inventory not empty after add");
     }

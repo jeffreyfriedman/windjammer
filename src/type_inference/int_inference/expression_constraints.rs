@@ -6,13 +6,23 @@ impl IntInference {
     ) {
         match expr {
             Expression::Identifier { name, .. } => {
+                let id = self.get_expr_id(expr);
+                
+                // TDD FIX REMOVED: Don't link identifier uses to assignments.
+                // This caused backward propagation where:
+                //   let n = data.len() as i32  // n is i32
+                //   data[n]  // Index forces usize
+                // would make n usize at declaration, breaking comparisons like `if idx >= n`
+                //
+                // Instead, we'll insert casts at use sites during code generation:
+                //   data[n as usize]  // Cast happens here, not at declaration
+                
                 if let Some(var_type) = self
                     .var_types
                     .get(name)
                     .or_else(|| self.const_types.get(name))
                 {
                     if let Some(int_ty) = self.extract_int_type(var_type) {
-                        let id = self.get_expr_id(expr);
                         self.constraints.push(IntConstraint::MustBe(
                             id,
                             int_ty,
@@ -197,22 +207,113 @@ impl IntInference {
 
                 // Prefer qualified lookup (Type::method) to avoid ambiguous matches.
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
-                let qualified_sig =
-                    self.infer_type_from_expression(object)
-                        .and_then(|ty| match &ty {
+                // TDD FIX: Extract generic type parameters for HashMap<K,V> specialization
+                let receiver_type = self.infer_type_from_expression(object);
+                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                    eprintln!("[INT_INFERENCE DEBUG] Method call: {}, Receiver type: {:?}", method, receiver_type);
+                }
+                let (qualified_sig, receiver_generics) =
+                    receiver_type
+                        .map(|ty| match &ty {
+                            // TDD FIX: Handle Parameterized types (e.g., HashMap<u32, Keyframe>)
+                            Type::Parameterized(base, type_params) => {
+                                let qualified = format!("{}::{}", base, method);
+                                // Type params are already parsed Type enums, extract them directly
+                                let generics = type_params.clone();
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                                    eprintln!("[INT_INFERENCE DEBUG] Parameterized type '{}' with {} params: {:?}", base, generics.len(), generics);
+                                }
+                                let sig = self.function_signatures.get(&qualified).cloned();
+                                if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                                    eprintln!("[INT_INFERENCE DEBUG] Qualified lookup '{}': {:?}", qualified, sig.is_some());
+                                    if let Some(ref s) = sig {
+                                        eprintln!("[INT_INFERENCE DEBUG] Original signature params: {:?}", s.0);
+                                    }
+                                }
+                                (sig, generics)
+                            }
                             Type::Custom(n) => {
                                 let base = n.split('<').next().unwrap_or(n);
                                 let qualified = format!("{}::{}", base, method);
-                                self.function_signatures.get(&qualified).cloned()
+                                // For Custom types with angle brackets (legacy), parse the string
+                                let generics = if n.contains('<') {
+                                    if let (Some(start), Some(end)) = (n.find('<'), n.rfind('>')) {
+                                        let inner = &n[start+1..end];
+                                        inner.split(',').map(|s| self.parse_type_from_string(s.trim())).collect()
+                                    } else {
+                                        vec![]
+                                    }
+                                } else {
+                                    vec![]
+                                };
+                                (self.function_signatures.get(&qualified).cloned(), generics)
                             }
                             Type::Vec(_) => {
                                 let qualified = format!("Vec::{}", method);
-                                self.function_signatures.get(&qualified).cloned()
+                                (self.function_signatures.get(&qualified).cloned(), vec![])
                             }
-                            _ => None,
-                        });
+                            _ => (None, vec![]),
+                        })
+                        .unwrap_or((None, vec![]));
 
-                let method_sig = qualified_sig.map(|(params, _)| params).or_else(|| {
+                let method_sig = if let Some((params, _ret_ty)) = qualified_sig {
+                    // TDD FIX: Substitute generic parameters with concrete types from receiver
+                    // e.g., HashMap::insert has param type "K", but receiver is HashMap<u32, String>
+                    // so we need to substitute K → u32
+                    if !receiver_generics.is_empty() {
+                        let substituted: Vec<Type> = params.iter().map(|ty| {
+                            self.substitute_generic_params_typed(ty, &receiver_generics)
+                        }).collect();
+                        if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
+                            eprintln!("[INT_INFERENCE DEBUG] After substitution: {:?}", substituted);
+                        }
+                        Some(substituted)
+                    } else {
+                        Some(params)
+                    }
+                } else {
+                    None
+                };
+
+                // TDD FIX: Vec index-based methods - first arg must be usize
+                // Check this BEFORE fallback signature lookup to avoid conflicts
+                let is_always_usize_method =
+                    method == "with_capacity" || method == "reserve" || method == "truncate";
+                let is_vec_index_method = method == "remove"
+                    || method == "swap"
+                    || method == "swap_remove"
+                    || method == "insert"
+                    || method == "drain"
+                    || method == "split_off";
+                let receiver_is_vec = match self.infer_type_from_expression(object) {
+                        Some(Type::Vec(_)) => true,
+                        Some(Type::Custom(name)) if name.starts_with("Vec<") => true,
+                        _ => match object {
+                            Expression::FieldAccess {
+                                object: inner_obj,
+                                field: field_name,
+                                ..
+                            } => {
+                                matches!(&**inner_obj, Expression::Identifier { name, .. } if name == "self")
+                                    && self
+                                        .current_impl_type
+                                        .as_deref()
+                                        .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
+                                        .and_then(|fields| fields.get(field_name))
+                                        .is_some_and(|t| matches!(t, Type::Vec(_)))
+                            }
+                            _ => false,
+                        },
+                    };
+                let skip_fallback = (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
+                    && !arguments.is_empty();
+
+                // Fallback: search for any method with matching name
+                // BUT skip if this is a Vec usize method to avoid HashMap::remove() conflicts
+                let method_sig = method_sig.or_else(|| {
+                    if skip_fallback {
+                        return None; // Don't search - we'll add usize constraint instead
+                    }
                     self.function_signatures
                         .iter()
                         .filter(|(func_name, (params, _))| {
@@ -250,36 +351,8 @@ impl IntInference {
                     }
                 }
 
-                // TDD FIX: Vec index-based methods - first arg must be usize
-                let is_always_usize_method =
-                    method == "with_capacity" || method == "reserve" || method == "truncate";
-                let is_vec_index_method = method == "remove"
-                    || method == "swap"
-                    || method == "swap_remove"
-                    || method == "split_off"
-                    || method == "drain";
-                let receiver_is_vec = self
-                    .infer_type_from_expression(object)
-                    .is_some_and(|t| matches!(t, Type::Vec(_)))
-                    || match object {
-                        Expression::FieldAccess {
-                            object: inner_obj,
-                            field: field_name,
-                            ..
-                        } => {
-                            matches!(&**inner_obj, Expression::Identifier { name, .. } if name == "self")
-                                && self
-                                    .current_impl_type
-                                    .as_deref()
-                                    .and_then(|ty| self.lookup_struct_fields_for_impl_type(ty))
-                                    .and_then(|fields| fields.get(field_name))
-                                    .is_some_and(|t| matches!(t, Type::Vec(_)))
-                        }
-                        _ => false,
-                    };
-                if (is_always_usize_method || (is_vec_index_method && receiver_is_vec))
-                    && !arguments.is_empty()
-                {
+                // Apply usize constraint for Vec index methods (uses skip_fallback var from above)
+                if skip_fallback && !arguments.is_empty() {
                     if let Some((_label, arg)) = arguments.first() {
                         let arg_id = self.get_expr_id(arg);
                         self.constraints.push(IntConstraint::MustBe(
@@ -293,8 +366,22 @@ impl IntInference {
                 // TDD FIX: HashMap<K,V>::insert and Vec<T>::push - propagate generic types from receiver
                 // Handles: mgr.name_to_id.insert("test", 42) where name_to_id: HashMap<string, int>
                 if let Some(receiver_type) = self.infer_type_from_expression(object) {
-                    // HashMap<K,V>.insert(K, V) - constrain second argument to V
+                    // HashMap<K,V>.insert(K, V) - constrain BOTH key and value arguments
                     if method == "insert" {
+                        // Constrain KEY (first argument) to K
+                        if let Some(key_type) = self.extract_map_key_type(&receiver_type) {
+                            if let Some(int_ty) = self.extract_int_type(&key_type) {
+                                if let Some((_label, key_arg)) = arguments.first() {
+                                    let key_id = self.get_expr_id(key_arg);
+                                    self.constraints.push(IntConstraint::MustBe(
+                                        key_id,
+                                        int_ty,
+                                        "HashMap/BTreeMap.insert key type".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        // Constrain VALUE (second argument) to V
                         if let Some(value_type) = self.extract_map_value_type(&receiver_type) {
                             if let Some(int_ty) = self.extract_int_type(&value_type) {
                                 if let Some((_label, value_arg)) = arguments.get(1) {

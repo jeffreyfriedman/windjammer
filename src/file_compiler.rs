@@ -87,7 +87,7 @@ impl ModuleCompiler {
 
         // Run the cross-file trait inference
         self.analyzer
-            .infer_trait_signatures_from_impls(&merged_program)
+            .infer_trait_signatures_from_impls(&merged_program, &self.global_signatures)
             .map_err(|e| anyhow::anyhow!("Trait inference error: {}", e))?;
 
         Ok(())
@@ -252,7 +252,9 @@ impl ModuleCompiler {
             .update_copy_structs(self.copy_structs_registry.clone());
         // Provide cross-file struct field types for nested field chain resolution
         self.analyzer
-            .set_global_struct_field_types(self.global_struct_field_types.clone());
+            .set_global_struct_field_types(std::sync::Arc::new(
+                self.global_struct_field_types.clone(),
+            ));
 
         // Register any newly discovered traits into the analyzer
         for trait_decl in self.trait_registry.values() {

@@ -101,6 +101,16 @@ pub enum Token {
     Shl,
     Shr,
     Assign,
+    PlusAssign,    // +=
+    MinusAssign,   // -=
+    StarAssign,    // *=
+    SlashAssign,   // /=
+    PercentAssign, // %=
+    AndAssign,     // &=
+    OrAssign,      // |=
+    XorAssign,     // ^=
+    ShlAssign,     // <<=
+    ShrAssign,     // >>=
     Arrow,
 
     // Delimiters
@@ -402,18 +412,49 @@ impl<'a> Lexer<'a> {
                     Token::At
                 }
             }
-            '+' => Token::Plus,
+            '+' => {
+                if self.peek() == Some('=') {
+                    self.next();
+                    Token::PlusAssign
+                } else {
+                    Token::Plus
+                }
+            }
             '-' => {
                 if self.peek() == Some('>') {
                     self.next();
                     Token::Arrow
+                } else if self.peek() == Some('=') {
+                    self.next();
+                    Token::MinusAssign
                 } else {
                     Token::Minus
                 }
             }
-            '*' => Token::Star,
-            '/' => Token::Slash,
-            '%' => Token::Percent,
+            '*' => {
+                if self.peek() == Some('=') {
+                    self.next();
+                    Token::StarAssign
+                } else {
+                    Token::Star
+                }
+            }
+            '/' => {
+                if self.peek() == Some('=') {
+                    self.next();
+                    Token::SlashAssign
+                } else {
+                    Token::Slash
+                }
+            }
+            '%' => {
+                if self.peek() == Some('=') {
+                    self.next();
+                    Token::PercentAssign
+                } else {
+                    Token::Percent
+                }
+            }
             '=' => {
                 if self.peek() == Some('=') {
                     self.next();
@@ -436,7 +477,12 @@ impl<'a> Lexer<'a> {
                     Token::Le
                 } else if self.peek() == Some('<') {
                     self.next();
-                    Token::Shl
+                    if self.peek() == Some('=') {
+                        self.next();
+                        Token::ShlAssign
+                    } else {
+                        Token::Shl
+                    }
                 } else {
                     Token::LAngle
                 }
@@ -447,7 +493,12 @@ impl<'a> Lexer<'a> {
                     Token::Ge
                 } else if self.peek() == Some('>') {
                     self.next();
-                    Token::Shr
+                    if self.peek() == Some('=') {
+                        self.next();
+                        Token::ShrAssign
+                    } else {
+                        Token::Shr
+                    }
                 } else {
                     Token::RAngle
                 }
@@ -456,6 +507,9 @@ impl<'a> Lexer<'a> {
                 if self.peek() == Some('&') {
                     self.next();
                     Token::And
+                } else if self.peek() == Some('=') {
+                    self.next();
+                    Token::AndAssign
                 } else {
                     Token::BitAnd
                 }
@@ -464,11 +518,21 @@ impl<'a> Lexer<'a> {
                 if self.peek() == Some('|') {
                     self.next();
                     Token::Or
+                } else if self.peek() == Some('=') {
+                    self.next();
+                    Token::OrAssign
                 } else {
                     Token::BitOr
                 }
             }
-            '^' => Token::BitXor,
+            '^' => {
+                if self.peek() == Some('=') {
+                    self.next();
+                    Token::XorAssign
+                } else {
+                    Token::BitXor
+                }
+            }
             '~' => Token::BitNot,
             c if c.is_ascii_digit() => self.read_number(c),
             c if c.is_alphabetic() || c == '_' => {

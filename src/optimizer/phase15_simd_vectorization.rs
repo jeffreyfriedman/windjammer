@@ -1,6 +1,9 @@
-//! Phase 15: SIMD Vectorization
+//! Phase 15: SIMD Vectorization (legacy stats / future AST rewrite hook)
 //!
-//! Automatically vectorizes numeric loops to use SIMD instructions.
+//! **Active path:** Analyzer [`crate::analyzer::simd_loops`] plus Rust codegen
+//! [`crate::codegen::rust::simd_transform`] emit SIMD for select `for` loops when
+//! `CompilationTarget::Rust`. This module retains loop walk + stats until the optimizer
+//! pipeline is wired to owned AST again.
 //! This optimization identifies loops that operate on numeric arrays
 //! and transforms them to use SIMD (Single Instruction, Multiple Data)
 //! operations for massive performance improvements.

@@ -1,0 +1,58 @@
+// Test for integer type inference with array indexing
+// Bug: Compiler hoists usize casts from array indexing to variable declaration
+//
+// Expected behavior:
+// - Variable should keep its natural i32 type
+// - Cast to usize only at indexing site
+// - Comparisons should work with consistent types
+
+pub fn test_integer_comparison_before_indexing() {
+    let data = vec![1.0, 2.0, 3.0, 4.0, 5.0]
+    let n = data.len() as i32  // n is i32
+    
+    // idx should be i32 based on RHS type
+    let mut idx = n / 2
+    
+    // Comparison should work (i32 >= i32)
+    if idx >= n {
+        idx = n - 1
+    }
+    
+    // Cast to usize only at indexing site
+    let value = data[idx]
+    
+    assert(value == 3.0, "Should get middle element")
+}
+
+pub fn test_integer_arithmetic_then_indexing() {
+    let nums = vec![10, 20, 30, 40, 50]
+    let count = nums.len() as i32
+    
+    // Should be i32 based on arithmetic operands
+    let offset = count / 2
+    let adjusted = offset + 1
+    
+    // Should work with i32 comparison
+    if adjusted < count {
+        let val = nums[adjusted]
+        assert(val == 30, "Should index correctly")
+    }
+}
+
+pub fn test_percentage_calculation_then_indexing() {
+    let values = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let n = values.len() as i32
+    let pct = 50
+    
+    // numer and idx should be i32 based on operands
+    let numer = n * pct
+    let idx = numer / 100
+    
+    // Comparisons should work (all i32)
+    assert(idx >= 0, "Index should be non-negative")
+    assert(idx < n, "Index should be in bounds")
+    
+    // Cast to usize only here
+    let result = values[idx]
+    assert(result == 5, "Should get 50th percentile")
+}

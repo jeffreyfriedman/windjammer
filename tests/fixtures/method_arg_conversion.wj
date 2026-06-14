@@ -13,17 +13,17 @@ impl ItemList {
     }
     
     // contains() should get & added to argument
-    fn has_item(&self, item: string) -> bool {
+    fn has_item(self, item: string) -> bool {
         self.items.contains(item)
     }
     
     // push() should work with owned string
-    fn add_item(&self, item: string) {
+    fn add_item(self, item: string) {
         self.items.push(item)
     }
     
     // push() with literal should convert to String
-    fn add_hello(&self) {
+    fn add_hello(self) {
         self.items.push("hello")
     }
 }
