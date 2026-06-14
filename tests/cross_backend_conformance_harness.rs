@@ -12,6 +12,7 @@
 
 //! Shared harness for cross-backend conformance crates in this directory.
 
+#![allow(dead_code)] // Helpers used only when Go/JS backends are exercised in CI
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;

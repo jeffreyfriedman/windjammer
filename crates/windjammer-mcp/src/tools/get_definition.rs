@@ -17,6 +17,7 @@ use windjammer_lsp::database::WindjammerDatabase;
 pub struct GetDefinitionRequest {
     file: Option<String>,
     symbol: String,
+    #[allow(dead_code)] // Reserved for LSP position-based lookup
     position: Option<Position>,
 }
 

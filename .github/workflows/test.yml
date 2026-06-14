@@ -301,7 +301,7 @@ jobs:
           test -f /tmp/test_wasm/Cargo.toml || exit 1
       
       - name: Run multi-target integration tests
-        run: cargo test --release --test multi_target_tests --verbose
+        run: cargo test --release --test all multi_target_tests --verbose
       
       - name: Test complex code across targets
         run: |

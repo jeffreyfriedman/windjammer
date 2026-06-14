@@ -156,6 +156,12 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 6c. Unknown/non-readonly methods on the parameter (e.g. `loader.load()?`) may
+        // require &mut self — do not infer Borrowed when the receiver calls such methods.
+        if self.has_potentially_mutating_method_call(param_name, body) {
+            return Ok(OwnershipMode::MutBorrowed);
+        }
+
         // 7. MULTI-PASS OWNERSHIP INFERENCE (The Proper Solution!)
         // Check if parameter is passed as an argument to another function/method.
         // Look up the callee's signature in the registry and match the ownership mode.

@@ -61,7 +61,6 @@ impl ToolRegistry {
 
     fn handler_for(&self, name: &str) -> ToolHandler {
         let unknown_name = name.to_string();
-        let db = self.db.clone();
         match name {
             "parse_code" => Box::new(move |d, args| Box::pin(parse_code::handle(d, args))),
             "analyze_types" => Box::new(move |d, args| Box::pin(analyze_types::handle(d, args))),
