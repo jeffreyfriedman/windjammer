@@ -531,7 +531,11 @@ mod tests {
     #[test]
     fn test_param_ref_type_string_not_borrowed() {
         let borrowed = std::collections::HashSet::new();
-        assert!(!param_generates_as_rust_ref(&Type::String, "key", &borrowed));
+        assert!(!param_generates_as_rust_ref(
+            &Type::String,
+            "key",
+            &borrowed
+        ));
     }
 
     #[test]

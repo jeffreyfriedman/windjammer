@@ -56,7 +56,12 @@ pub fn is_codegen_cache_valid(
     output_path: &Path,
     dep_roots: &[PathBuf],
 ) -> bool {
-    crate::compiler::incremental::is_codegen_cache_valid(source, source_path, output_path, dep_roots)
+    crate::compiler::incremental::is_codegen_cache_valid(
+        source,
+        source_path,
+        output_path,
+        dep_roots,
+    )
 }
 
 fn is_mod_wj_source(source_path: &Path) -> bool {
@@ -94,11 +99,8 @@ pub fn is_library_codegen_cache_valid(
     dep_roots: &[PathBuf],
 ) -> bool {
     if is_mod_wj_source(source_path) && is_mod_items_output(output_path) && !output_path.exists() {
-        if !crate::compiler::incremental::fingerprint_matches_cached(
-            source,
-            source_path,
-            dep_roots,
-        ) {
+        if !crate::compiler::incremental::fingerprint_matches_cached(source, source_path, dep_roots)
+        {
             return false;
         }
         if let Some(mod_rs) = merged_mod_rs_for_mod_wj(source_path, src_base, output_dir) {
@@ -107,6 +109,35 @@ pub fn is_library_codegen_cache_valid(
         return false;
     }
     is_codegen_cache_valid(source, source_path, output_path, dep_roots)
+}
+
+pub fn is_library_codegen_cache_valid_with_dep_epoch(
+    source: &str,
+    source_path: &Path,
+    output_path: &Path,
+    src_base: &Path,
+    output_dir: &Path,
+    dep_epoch: u64,
+) -> bool {
+    if is_mod_wj_source(source_path) && is_mod_items_output(output_path) && !output_path.exists() {
+        if !crate::compiler::incremental::fingerprint_matches_cached_with_dep_epoch(
+            source,
+            source_path,
+            dep_epoch,
+        ) {
+            return false;
+        }
+        if let Some(mod_rs) = merged_mod_rs_for_mod_wj(source_path, src_base, output_dir) {
+            return mod_rs.exists() && is_output_fresh(source_path, &mod_rs);
+        }
+        return false;
+    }
+    crate::compiler::incremental::is_codegen_cache_valid_with_dep_epoch(
+        source,
+        source_path,
+        output_path,
+        dep_epoch,
+    )
 }
 
 /// Compute the set of .wj files that need recompilation.
@@ -128,15 +159,14 @@ pub fn compute_dirty_files(
     let mut skipped = 0;
 
     for (i, (file, source)) in wj_files.iter().enumerate() {
-        let output_file = match crate::project_paths::resolve_wj_output_path_library(
-            src_base, file, output,
-        ) {
-            Ok(p) => p,
-            Err(_) => {
-                dirty_indices.push(i);
-                continue;
-            }
-        };
+        let output_file =
+            match crate::project_paths::resolve_wj_output_path_library(src_base, file, output) {
+                Ok(p) => p,
+                Err(_) => {
+                    dirty_indices.push(i);
+                    continue;
+                }
+            };
 
         if is_library_codegen_cache_valid(source, file, &output_file, src_base, output, dep_roots) {
             skipped += 1;
@@ -195,12 +225,11 @@ pub fn all_sources_fresh(
     }
 
     for (file, source) in wj_files {
-        let output_file = match crate::project_paths::resolve_wj_output_path_library(
-            src_base, file, output,
-        ) {
-            Ok(p) => p,
-            Err(_) => return false,
-        };
+        let output_file =
+            match crate::project_paths::resolve_wj_output_path_library(src_base, file, output) {
+                Ok(p) => p,
+                Err(_) => return false,
+            };
 
         if !is_library_codegen_cache_valid(
             source,
@@ -246,21 +275,40 @@ pub fn find_stale_codegen_outputs(
     output: &Path,
     dep_roots: &[PathBuf],
 ) -> Vec<PathBuf> {
+    find_stale_codegen_outputs_with_dep_epoch(wj_files, src_base, output, dep_roots, None)
+}
+
+/// Like [`find_stale_codegen_outputs`] but optionally pins dep-metadata epoch from build start.
+pub fn find_stale_codegen_outputs_with_dep_epoch(
+    wj_files: &[(PathBuf, String)],
+    src_base: &Path,
+    output: &Path,
+    dep_roots: &[PathBuf],
+    dep_epoch: Option<u64>,
+) -> Vec<PathBuf> {
     let mut stale = Vec::new();
     for (file, source) in wj_files {
         if !is_library_source_under_root(file, src_base) {
             continue;
         }
-        let output_file = match crate::project_paths::resolve_wj_output_path_library(
-            src_base, file, output,
-        ) {
-            Ok(p) => p,
-            Err(_) => {
-                stale.push(file.clone());
-                continue;
-            }
-        };
-        if !is_library_codegen_cache_valid(
+        let output_file =
+            match crate::project_paths::resolve_wj_output_path_library(src_base, file, output) {
+                Ok(p) => p,
+                Err(_) => {
+                    stale.push(file.clone());
+                    continue;
+                }
+            };
+        let cache_valid = if let Some(epoch) = dep_epoch {
+            is_library_codegen_cache_valid_with_dep_epoch(
+                source,
+                file,
+                &output_file,
+                src_base,
+                output,
+                epoch,
+            )
+        } else if !is_library_codegen_cache_valid(
             source,
             file,
             &output_file,
@@ -268,6 +316,11 @@ pub fn find_stale_codegen_outputs(
             output,
             dep_roots,
         ) {
+            false
+        } else {
+            true
+        };
+        if !cache_valid {
             stale.push(file.clone());
         }
     }

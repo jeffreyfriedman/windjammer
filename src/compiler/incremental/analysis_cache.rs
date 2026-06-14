@@ -20,15 +20,14 @@ pub fn compute_reanalysis_set(
 
     let mut dirty = HashSet::new();
     for (i, (file, source)) in sources.iter().enumerate() {
-        let output_file = match crate::project_paths::resolve_wj_output_path_library(
-            src_base, file, output,
-        ) {
-            Ok(p) => p,
-            Err(_) => {
-                dirty.insert(i);
-                continue;
-            }
-        };
+        let output_file =
+            match crate::project_paths::resolve_wj_output_path_library(src_base, file, output) {
+                Ok(p) => p,
+                Err(_) => {
+                    dirty.insert(i);
+                    continue;
+                }
+            };
 
         if super::build_fingerprint::is_codegen_cache_valid(source, file, &output_file, dep_roots) {
             // clean — skip reanalysis for this file
@@ -49,4 +48,8 @@ pub fn compute_reanalysis_set(
 
 pub fn fingerprint_for_emit(source: &str, dep_roots: &[PathBuf]) -> SourceFingerprint {
     super::build_fingerprint::compute_fingerprint(source, dep_roots)
+}
+
+pub fn fingerprint_for_emit_with_dep_epoch(source: &str, dep_epoch: u64) -> SourceFingerprint {
+    super::build_fingerprint::compute_fingerprint_with_dep_epoch(source, dep_epoch)
 }

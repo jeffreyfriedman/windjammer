@@ -105,18 +105,28 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                         .param_ownership
                         .get(sig_param_idx)
                         .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                    && sig.param_types.get(sig_param_idx).is_some_and(
-                        crate::codegen::rust::types::is_windjammer_text_type,
-                    );
+                    && sig
+                        .param_types
+                        .get(sig_param_idx)
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
                     let arg_is_str_param = arguments.get(i).is_some_and(|(_, arg_expr)| {
                         if let Expression::Identifier { name, .. } = *arg_expr {
                             gen.identifier_already_ref(name)
-                        } else if let Expression::Unary { op: UnaryOp::Ref, operand, .. } = *arg_expr {
+                        } else if let Expression::Unary {
+                            op: UnaryOp::Ref,
+                            operand,
+                            ..
+                        } = *arg_expr
+                        {
                             if let Expression::Identifier { name, .. } = &**operand {
                                 gen.identifier_already_ref(name)
-                            } else { false }
-                        } else { false }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
                     });
                     if arg_is_str_param {
                         arg_str.clone()
@@ -144,7 +154,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
         _ => ".",
     };
-    let call_str = format!("{}{}{}({})", obj_str, separator, call_method, args.join(", "));
+    let call_str = format!(
+        "{}{}{}({})",
+        obj_str,
+        separator,
+        call_method,
+        args.join(", ")
+    );
 
     let is_extern_call = method_signature.as_ref().is_some_and(|sig| sig.is_extern)
         || gen.extern_function_names.contains(call_method);

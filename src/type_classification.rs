@@ -89,9 +89,7 @@ pub fn is_type_copy_with_registries(
         }
         Type::FunctionPointer { .. } => true,
         Type::Custom(name) => {
-            copy_structs.contains(name)
-                || copy_enums.contains(name)
-                || is_copy_primitive(name)
+            copy_structs.contains(name) || copy_enums.contains(name) || is_copy_primitive(name)
         }
         _ => false,
     }

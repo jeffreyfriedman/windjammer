@@ -60,9 +60,9 @@ pub fn is_identifier_already_mut_ref(
     inferred_mut_borrowed_params: &HashSet<String>,
 ) -> bool {
     if let Expression::Identifier { name, .. } = arg {
-        let explicit_mut_ref = current_function_params.iter().any(|param| {
-            param.name == *name && matches!(&param.type_, Type::MutableReference(_))
-        });
+        let explicit_mut_ref = current_function_params
+            .iter()
+            .any(|param| param.name == *name && matches!(&param.type_, Type::MutableReference(_)));
         let inferred_mut_ref = inferred_mut_borrowed_params.contains(name.as_str());
         explicit_mut_ref || inferred_mut_ref
     } else {

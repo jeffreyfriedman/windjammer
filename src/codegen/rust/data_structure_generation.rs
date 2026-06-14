@@ -43,7 +43,8 @@ impl<'ast> CodeGenerator<'ast> {
                         s = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&s);
                     }
                 }
-                if !s.ends_with(".clone()") && !crate::codegen::rust::literals::is_already_owned_string(&s)
+                if !s.ends_with(".clone()")
+                    && !crate::codegen::rust::literals::is_already_owned_string(&s)
                 {
                     let ty = self.infer_expression_type(e);
                     let needs_clone = ty.as_ref().is_some_and(|t| match t {
@@ -599,8 +600,6 @@ impl<'ast> CodeGenerator<'ast> {
         index: &Expression<'ast>,
         expr_to_generate: &Expression<'ast>,
     ) -> String {
-        use crate::parser::Literal;
-
         // INDEX CHAIN OPTIMIZATION: When generating the object of an Index expression,
         // suppress auto-clone. In `a[i][j]`, Rust auto-derefs `a[i]` (returns &Vec<T>)
         // to access [j]. Cloning the intermediate Vec is wasteful and wrong.

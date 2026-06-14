@@ -265,8 +265,16 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         Type::Custom(name)
                             if matches!(
                                 name.as_str(),
-                                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "bool"
-                                    | "char" | "usize" | "isize"
+                                "i32"
+                                    | "i64"
+                                    | "u32"
+                                    | "u64"
+                                    | "f32"
+                                    | "f64"
+                                    | "bool"
+                                    | "char"
+                                    | "usize"
+                                    | "isize"
                             ) =>
                         {
                             OwnershipMode::Owned
@@ -350,9 +358,10 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         .param_ownership
                         .get(sig_param_idx)
                         .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                    && sig.param_types.get(sig_param_idx).is_some_and(
-                        crate::codegen::rust::types::is_windjammer_text_type,
-                    );
+                    && sig
+                        .param_types
+                        .get(sig_param_idx)
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                 if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
                     let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {
                         if let Expression::Identifier { name, .. } = arg_expr {

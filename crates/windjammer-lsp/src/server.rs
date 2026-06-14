@@ -7,7 +7,9 @@ use tower_lsp::{Client, LanguageServer};
 
 use crate::cache::{CacheEntry, CacheManager};
 use crate::completion::CompletionProvider;
-use crate::database::{ParallelConfig, Symbol as DbSymbol, SymbolKind as DbSymbolKind, WindjammerDatabase};
+use crate::database::{
+    ParallelConfig, Symbol as DbSymbol, SymbolKind as DbSymbolKind, WindjammerDatabase,
+};
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
@@ -144,8 +146,7 @@ impl WindjammerLanguageServer {
                 let analysis = db.get_ide_analysis(source_file);
                 let symbols = db.get_symbols(source_file).clone();
                 let diagnostics = crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics);
-                let inlay_hints =
-                    crate::ide_queries::to_inlay_hints(&analysis, &symbols, &content);
+                let inlay_hints = crate::ide_queries::to_inlay_hints(&analysis, &symbols, &content);
 
                 let mut inlay_hints_provider = InlayHintsProvider::new();
                 inlay_hints_provider.update_hints(inlay_hints);
@@ -968,12 +969,8 @@ impl LanguageServer for WindjammerLanguageServer {
                         .map(|t| format!(" -> {}", self.type_to_string(t)))
                         .unwrap_or_default();
 
-                    let signature_label = format!(
-                        "fn {}({}){}",
-                        func_name,
-                        params_str.join(", "),
-                        return_str
-                    );
+                    let signature_label =
+                        format!("fn {}({}){}", func_name, params_str.join(", "), return_str);
 
                     // Calculate active parameter based on comma count
                     let params_section = &before_cursor[paren_pos + 1..];

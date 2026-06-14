@@ -88,11 +88,7 @@ pub fn parse_bool<S: AsRef<str>>(s: S) -> bool {
 
 /// ASCII byte at index (for line-oriented parsers on `.wjscene` files).
 pub fn byte_at<S: AsRef<str>>(s: S, index: usize) -> u8 {
-    s.as_ref()
-        .as_bytes()
-        .get(index)
-        .copied()
-        .unwrap_or(0)
+    s.as_ref().as_bytes().get(index).copied().unwrap_or(0)
 }
 
 /// Join strings with delimiter

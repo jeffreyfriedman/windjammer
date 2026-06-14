@@ -313,7 +313,13 @@ impl<'ast> CodeGenerator<'ast> {
 
             let is_push_or_insert = matches!(
                 method.as_str(),
-                "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add"
+                "push"
+                    | "insert"
+                    | "extend"
+                    | "append"
+                    | "push_front"
+                    | "push_back"
+                    | "add"
                     | "fill"
             );
             if !is_push_or_insert || arguments.is_empty() {

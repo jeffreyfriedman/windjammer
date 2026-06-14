@@ -4,7 +4,6 @@
 //! Determines which traits (Debug, Clone, Copy, PartialEq, Eq, Hash, Default)
 //! can be safely derived based on field/variant types.
 
-use crate::codegen::rust::type_analysis;
 use crate::parser::*;
 
 use super::CodeGenerator;

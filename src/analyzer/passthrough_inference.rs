@@ -116,17 +116,21 @@ impl<'ast> Analyzer<'ast> {
         // Resolve the actual Type of the collection (e.g. Vec<DialogueConsequence>)
         // by tracing through the expression to find the declaring field/param type.
         let full_type = match object {
-            Expression::FieldAccess { object: inner, field, .. } => {
+            Expression::FieldAccess {
+                object: inner,
+                field,
+                ..
+            } => {
                 let inner_base = self.infer_receiver_type_base(inner, func)?;
                 self.lookup_struct_fields_for_type(&inner_base)
                     .and_then(|m| m.get(field.as_str()))
                     .cloned()
             }
-            Expression::Identifier { name, .. } => {
-                func.parameters.iter()
-                    .find(|p| &p.name == name)
-                    .map(|p| p.type_.clone())
-            }
+            Expression::Identifier { name, .. } => func
+                .parameters
+                .iter()
+                .find(|p| &p.name == name)
+                .map(|p| p.type_.clone()),
             _ => None,
         }?;
         // Extract the element type from Vec<T>, Array<T>, etc.
@@ -264,7 +268,7 @@ impl<'ast> Analyzer<'ast> {
                     } else {
                         continue;
                     }
-                },
+                }
             };
             let adjusted_position = if sig.has_self_receiver {
                 *arg_position + 1
@@ -698,7 +702,9 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Expression { expr, .. }
             | Statement::Let { value: expr, .. }
-            | Statement::Return { value: Some(expr), .. } => {
+            | Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.collect_hashmap_lookup_key_uses_expr(param_name, expr, func, results);
             }
             Statement::If {
@@ -717,7 +723,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.collect_hashmap_lookup_key_uses_expr(param_name, condition, func, results);
                 for s in body {
                     self.collect_hashmap_lookup_key_uses_stmt(param_name, s, func, results);
@@ -756,7 +764,9 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } if Self::is_hashmap_lookup_method(method) => {
-                if arguments.first().is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+                if arguments
+                    .first()
+                    .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
                 {
                     results.push(());
                 }
@@ -766,9 +776,7 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 self.collect_hashmap_lookup_key_uses_expr(param_name, object, func, results);
                 for (_, arg) in arguments {
@@ -786,7 +794,9 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::FieldAccess { object, .. }
-            | Expression::Unary { operand: object, .. }
+            | Expression::Unary {
+                operand: object, ..
+            }
             | Expression::TryOp { expr: object, .. } => {
                 self.collect_hashmap_lookup_key_uses_expr(param_name, object, func, results);
             }
@@ -833,7 +843,9 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Expression { expr, .. }
             | Statement::Let { value: expr, .. }
-            | Statement::Return { value: Some(expr), .. } => {
+            | Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.collect_non_lookup_param_uses_expr(param_name, expr, found);
             }
             Statement::If {
@@ -861,7 +873,9 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_non_lookup_param_uses_expr(param_name, arm.body, found);
                 }
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.collect_non_lookup_param_uses_expr(param_name, condition, found);
                 for s in body {
                     self.collect_non_lookup_param_uses_stmt(param_name, s, found);
@@ -918,7 +932,11 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_non_lookup_param_uses_expr(param_name, arg, found);
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 for (_, arg) in arguments {
                     if self.expr_is_identifier(arg, param_name) {
                         *found = true;
@@ -931,7 +949,9 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::FieldAccess { object, .. }
-            | Expression::Unary { operand: object, .. }
+            | Expression::Unary {
+                operand: object, ..
+            }
             | Expression::TryOp { expr: object, .. } => {
                 self.collect_non_lookup_param_uses_expr(param_name, object, found);
             }

@@ -828,7 +828,10 @@ pub(crate) fn generate_test_harness(
             if already_marked {
                 continue;
             }
-            for sig in [format!("pub fn {}()", test.name), format!("fn {}()", test.name)] {
+            for sig in [
+                format!("pub fn {}()", test.name),
+                format!("fn {}()", test.name),
+            ] {
                 if rust_code.contains(&sig) {
                     rust_code = rust_code.replace(&sig, &format!("#[test]\n{}", sig));
                     break;
@@ -902,16 +905,17 @@ pub(crate) fn generate_test_harness(
         "✓".green().bold()
     );
 
-    let library_dep_str = if let Some((lib_crate_name, lib_package_name, lib_path)) = library_dependency {
-        format!(
-            "\n{} = {{ path = \"{}\", package = \"{}\" }}",
-            lib_crate_name,
-            path_to_toml_string(&lib_path),
-            lib_package_name
-        )
-    } else {
-        String::new()
-    };
+    let library_dep_str =
+        if let Some((lib_crate_name, lib_package_name, lib_path)) = library_dependency {
+            format!(
+                "\n{} = {{ path = \"{}\", package = \"{}\" }}",
+                lib_crate_name,
+                path_to_toml_string(&lib_path),
+                lib_package_name
+            )
+        } else {
+            String::new()
+        };
 
     let cargo_toml = format!(
         r#"[package]

@@ -291,7 +291,8 @@ impl<'ast> Analyzer<'ast> {
                             self.detect_const_static_opportunities(&analyzed_func);
 
                         // PHASE 8: Detect SmallVec optimizations
-                        analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
+                        analyzed_func.smallvec_optimizations =
+                            self.detect_smallvec_opportunities(func);
 
                         // PHASE 9: Detect Cow optimizations
                         analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
@@ -420,7 +421,8 @@ impl<'ast> Analyzer<'ast> {
                             // PHASE 9: Detect Cow optimizations
                             analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
 
-                            analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                            analyzed_func.cache_locality =
+                                self.analyze_cache_locality(program, func);
                         }
 
                         let signature = self.build_signature(&analyzed_func);
@@ -502,7 +504,8 @@ impl<'ast> Analyzer<'ast> {
                             // PHASE 9: Detect Cow optimizations
                             analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
 
-                            analyzed_func.cache_locality = self.analyze_cache_locality(program, &func);
+                            analyzed_func.cache_locality =
+                                self.analyze_cache_locality(program, &func);
                         }
 
                         // THE WINDJAMMER WAY: Store analyzed trait method for trait impl matching

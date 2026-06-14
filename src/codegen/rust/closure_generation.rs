@@ -80,9 +80,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
     ) -> bool {
         match expr {
-            Expression::Identifier { name, .. } => {
-                name != "self" && !bound.contains(name.as_str())
-            }
+            Expression::Identifier { name, .. } => name != "self" && !bound.contains(name.as_str()),
             Expression::FieldAccess { object, .. } => self.expr_has_free_identifier(bound, object),
             Expression::MethodCall {
                 object, arguments, ..
@@ -135,9 +133,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|el| self.expr_has_free_identifier(bound, el)),
-            Expression::Cast { expr: inner, .. } => {
-                self.expr_has_free_identifier(bound, inner)
-            }
+            Expression::Cast { expr: inner, .. } => self.expr_has_free_identifier(bound, inner),
             Expression::Range { start, end, .. } => {
                 self.expr_has_free_identifier(bound, start)
                     || self.expr_has_free_identifier(bound, end)
@@ -179,9 +175,7 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Return { value, .. } => {
                 value.is_some_and(|v| self.expr_has_free_identifier(local_bound, v))
             }
-            Statement::Expression { expr, .. } => {
-                self.expr_has_free_identifier(local_bound, expr)
-            }
+            Statement::Expression { expr, .. } => self.expr_has_free_identifier(local_bound, expr),
             Statement::If {
                 condition,
                 then_block,
@@ -225,20 +219,37 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn bind_pattern<'b>(bound: &mut std::collections::HashSet<&'b str>, pattern: &'b crate::parser::Pattern) {
+    fn bind_pattern<'b>(
+        bound: &mut std::collections::HashSet<&'b str>,
+        pattern: &'b crate::parser::Pattern,
+    ) {
         use crate::parser::Pattern;
         match pattern {
-            Pattern::Identifier(name) => { bound.insert(name.as_str()); }
-            Pattern::MutBinding(name) => { bound.insert(name.as_str()); }
-            Pattern::Ref(name) => { bound.insert(name.as_str()); }
-            Pattern::RefMut(name) => { bound.insert(name.as_str()); }
+            Pattern::Identifier(name) => {
+                bound.insert(name.as_str());
+            }
+            Pattern::MutBinding(name) => {
+                bound.insert(name.as_str());
+            }
+            Pattern::Ref(name) => {
+                bound.insert(name.as_str());
+            }
+            Pattern::RefMut(name) => {
+                bound.insert(name.as_str());
+            }
             Pattern::Tuple(pats) => {
-                for p in pats { Self::bind_pattern(bound, p); }
+                for p in pats {
+                    Self::bind_pattern(bound, p);
+                }
             }
             Pattern::Or(pats) => {
-                for p in pats { Self::bind_pattern(bound, p); }
+                for p in pats {
+                    Self::bind_pattern(bound, p);
+                }
             }
-            Pattern::Reference(inner) => { Self::bind_pattern(bound, inner); }
+            Pattern::Reference(inner) => {
+                Self::bind_pattern(bound, inner);
+            }
             Pattern::EnumVariant(_, _) => {}
             Pattern::Wildcard | Pattern::Literal(_) => {}
         }

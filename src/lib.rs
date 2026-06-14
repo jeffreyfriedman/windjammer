@@ -73,10 +73,10 @@ pub mod file_compiler; // Single-file compilation
 mod output_generation;
 #[cfg(feature = "cli")]
 pub mod plugin;
+pub mod rust_integration_tests;
+pub mod test_module_gate;
 #[cfg(feature = "cli")]
 pub mod test_runner;
-pub mod test_module_gate;
-pub mod rust_integration_tests;
 
 /// Build a Windjammer project - compiles .wj files to Rust.
 /// Used by integration tests and CLI.

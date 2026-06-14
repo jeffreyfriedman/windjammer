@@ -162,8 +162,8 @@ pub fn method_returns_usize_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| return_type_is(s, |ty| is_usize_type(ty)))
 }
 
@@ -173,11 +173,9 @@ pub fn method_returns_iterator_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| {
-        return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Iterator"))
-    })
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
+    sig.is_some_and(|s| return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Iterator")))
 }
 
 /// Is this method type-preserving (return type == `Self`)?
@@ -187,11 +185,9 @@ pub fn method_is_type_preserving_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| {
-        return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Self"))
-    })
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
+    sig.is_some_and(|s| return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Self")))
 }
 
 /// Is this a storage method that moves a parameter into a collection?
@@ -201,8 +197,8 @@ pub fn method_is_storage_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     if let Some(s) = sig {
         if !s.has_self_receiver || arg_count(s) == 0 {
             return false;
@@ -230,8 +226,8 @@ pub fn method_auto_borrows_arg_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
         first_arg_type(s).is_some_and(|ty| is_reference_type(ty))
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
@@ -251,7 +247,9 @@ pub fn method_is_map_key_qualified(
         }
         for map_ty in MAP_TYPES {
             if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
-                if sig.has_self_receiver && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed) {
+                if sig.has_self_receiver
+                    && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
+                {
                     if first_arg_type(sig).is_some_and(|ty| is_reference_type(ty)) {
                         return true;
                     }
@@ -275,8 +273,8 @@ pub fn method_is_option_accessor_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
         s.has_self_receiver
             && return_type_is(s, |ty| {
@@ -293,8 +291,8 @@ pub fn method_is_capacity_cast_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| first_arg_type(s).is_some_and(|ty| is_usize_type(ty)))
 }
 
@@ -313,8 +311,8 @@ pub fn method_is_closure_taking_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| first_arg_type(s).is_some_and(|ty| is_closure_type(ty)))
 }
 
@@ -325,8 +323,8 @@ pub fn method_is_slice_search_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
         s.has_self_receiver
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
@@ -341,8 +339,8 @@ pub fn method_is_string_search_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_suffix(method, registry));
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
         s.has_self_receiver
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
@@ -356,30 +354,82 @@ pub fn method_is_string_search_qualified(
 pub fn method_mutates_receiver(method: &str) -> bool {
     matches!(
         method,
-        "push" | "pop" | "insert" | "remove" | "clear" | "append" | "extend"
-            | "drain" | "truncate" | "resize" | "retain" | "sort" | "sort_by"
-            | "sort_by_key" | "sort_unstable" | "sort_unstable_by" | "dedup"
-            | "reverse" | "swap" | "swap_remove" | "reserve" | "shrink_to_fit"
-            | "split_off" | "fill" | "set" | "rotate_left" | "rotate_right"
-            | "set_len" | "push_str" | "push_front" | "push_back" | "pop_front"
-            | "pop_back" | "make_ascii_lowercase" | "make_ascii_uppercase" | "add"
-            | "take" | "replace" | "get_or_insert" | "get_or_insert_with" | "entry"
-            | "get_mut" | "iter_mut" | "values_mut"
+        "push"
+            | "pop"
+            | "insert"
+            | "remove"
+            | "clear"
+            | "append"
+            | "extend"
+            | "drain"
+            | "truncate"
+            | "resize"
+            | "retain"
+            | "sort"
+            | "sort_by"
+            | "sort_by_key"
+            | "sort_unstable"
+            | "sort_unstable_by"
+            | "dedup"
+            | "reverse"
+            | "swap"
+            | "swap_remove"
+            | "reserve"
+            | "shrink_to_fit"
+            | "split_off"
+            | "fill"
+            | "set"
+            | "rotate_left"
+            | "rotate_right"
+            | "set_len"
+            | "push_str"
+            | "push_front"
+            | "push_back"
+            | "pop_front"
+            | "pop_back"
+            | "make_ascii_lowercase"
+            | "make_ascii_uppercase"
+            | "add"
+            | "take"
+            | "replace"
+            | "get_or_insert"
+            | "get_or_insert_with"
+            | "entry"
+            | "get_mut"
+            | "iter_mut"
+            | "values_mut"
     )
 }
 
 pub fn method_returns_iterator(method: &str) -> bool {
     matches!(
         method,
-        "iter" | "iter_mut" | "into_iter" | "keys" | "values" | "values_mut"
-            | "drain" | "lines" | "chars" | "bytes" | "split" | "split_whitespace"
-            | "enumerate" | "windows" | "chunks" | "match_indices" | "rsplit"
+        "iter"
+            | "iter_mut"
+            | "into_iter"
+            | "keys"
+            | "values"
+            | "values_mut"
+            | "drain"
+            | "lines"
+            | "chars"
+            | "bytes"
+            | "split"
+            | "split_whitespace"
+            | "enumerate"
+            | "windows"
+            | "chunks"
+            | "match_indices"
+            | "rsplit"
             | "splitn"
     )
 }
 
 pub fn is_map_key_method(method: &str) -> bool {
-    matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
+    matches!(
+        method,
+        "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
+    )
 }
 
 pub fn is_index_taking_method(method: &str) -> bool {
@@ -392,9 +442,20 @@ pub fn is_index_taking_method(method: &str) -> bool {
 pub fn is_closure_taking_method(method: &str) -> bool {
     matches!(
         method,
-        "filter" | "any" | "all" | "find" | "find_map" | "position"
-            | "take_while" | "skip_while" | "map_while" | "partition"
-            | "rposition" | "retain" | "sort_by" | "sort_by_key"
+        "filter"
+            | "any"
+            | "all"
+            | "find"
+            | "find_map"
+            | "position"
+            | "take_while"
+            | "skip_while"
+            | "map_while"
+            | "partition"
+            | "rposition"
+            | "retain"
+            | "sort_by"
+            | "sort_by_key"
             | "sort_unstable_by"
     )
 }
@@ -426,7 +487,10 @@ pub fn is_runtime_std_module(name: &str) -> bool {
 
 /// Runtime std modules whose Rust implementations take `AsRef<str>` for Windjammer `string` params.
 pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
-    matches!(module, "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env")
+    matches!(
+        module,
+        "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env"
+    )
 }
 
 /// Check if a runtime std module function parameter should be auto-borrowed.
@@ -439,7 +503,11 @@ pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
 /// This is module-specific because conventions differ:
 /// - `json::get(value: &Value, ...)` — Rust takes `&Value`
 /// - `subprocess::wait(handle: SubprocessHandle)` — Rust takes owned
-pub fn runtime_std_param_needs_auto_borrow(module: &str, _func: &str, param_type: &crate::parser::Type) -> bool {
+pub fn runtime_std_param_needs_auto_borrow(
+    module: &str,
+    _func: &str,
+    param_type: &crate::parser::Type,
+) -> bool {
     use crate::parser::Type;
     match module {
         "json" => {

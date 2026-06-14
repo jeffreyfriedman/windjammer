@@ -392,9 +392,10 @@ impl<'ast> CodeGenerator<'ast> {
             sig.param_ownership
                 .get(idx)
                 .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                && sig.param_types.get(idx).is_some_and(
-                    crate::codegen::rust::types::is_windjammer_text_type,
-                )
+                && sig
+                    .param_types
+                    .get(idx)
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
         };
 
         if string_literal_converted {
@@ -670,8 +671,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 float_type_utilities::try_extract_float_type(field_type)
                             {
                                 let s = f.to_string();
-                                return if !s.contains('.') && !s.contains('e') && !s.contains('E')
-                                {
+                                return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
                                     format!("{}.0_{}", s, suffix)
                                 } else {
                                     format!("{}_{}", s, suffix)

@@ -11,7 +11,7 @@ impl CodeGenerator<'_> {
         is_pub: bool,
     ) -> String {
         let pub_prefix = if is_pub { "pub " } else { "" };
-        
+
         if path.is_empty() {
             return String::new();
         }
@@ -41,7 +41,10 @@ impl CodeGenerator<'_> {
                         let first_seg = rest.split("::").next().unwrap_or("");
                         if first_seg == mod_dir {
                             if let Some(alias_name) = alias {
-                                return format!("{}use self::{} as {};\n", pub_prefix, rest, alias_name);
+                                return format!(
+                                    "{}use self::{} as {};\n",
+                                    pub_prefix, rest, alias_name
+                                );
                             }
                             return format!("{}use self::{};\n", pub_prefix, rest);
                         }
@@ -152,7 +155,10 @@ impl CodeGenerator<'_> {
                 // In submodules (is_module=true), we need to explicitly use sibling modules
                 let module_name = stripped.split('/').next_back().unwrap_or(stripped);
                 if let Some(alias_name) = alias {
-                    return format!("{}use crate::{} as {};\n", pub_prefix, module_name, alias_name);
+                    return format!(
+                        "{}use crate::{} as {};\n",
+                        pub_prefix, module_name, alias_name
+                    );
                 } else if self.is_module {
                     // In a module, we need to explicitly use sibling modules
                     return format!("{}use crate::{};\n", pub_prefix, module_name);
@@ -221,7 +227,10 @@ impl CodeGenerator<'_> {
                     if self.is_output_mod_rs() {
                         // mod.wj: `pub use animation::Animation` → self::animation::Animation (not super::Animation)
                         if let Some(alias_name) = alias {
-                            return format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name);
+                            return format!(
+                                "{}use self::{} as {};\n",
+                                pub_prefix, rust_path, alias_name
+                            );
                         }
                         return format!("{}use self::{};\n", pub_prefix, rust_path);
                     }
@@ -230,7 +239,10 @@ impl CodeGenerator<'_> {
                         .strip_prefix(&format!("{}::", parent_dir))
                         .unwrap();
                     if let Some(alias_name) = alias {
-                        return format!("{}use super::{} as {};\n", pub_prefix, path_without_parent, alias_name);
+                        return format!(
+                            "{}use super::{} as {};\n",
+                            pub_prefix, path_without_parent, alias_name
+                        );
                     }
                     return format!("{}use super::{};\n", pub_prefix, path_without_parent);
                 }
@@ -309,12 +321,18 @@ impl CodeGenerator<'_> {
         if let Some(alias_name) = alias {
             if is_directory_prefix {
                 let rp = self.expand_bare_module_path_for_type(&rust_path);
-                format!("{}use {}{} as {};\n", pub_prefix, import_prefix, rp, alias_name)
+                format!(
+                    "{}use {}{} as {};\n",
+                    pub_prefix, import_prefix, rp, alias_name
+                )
             } else if is_actual_module_file {
                 if self.is_output_mod_rs() {
                     format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name)
                 } else {
-                    format!("{}use super::{} as {};\n", pub_prefix, rust_path, alias_name)
+                    format!(
+                        "{}use super::{} as {};\n",
+                        pub_prefix, rust_path, alias_name
+                    )
                 }
             } else {
                 format!("{}use {} as {};\n", pub_prefix, rust_path, alias_name)
@@ -365,7 +383,7 @@ impl CodeGenerator<'_> {
             } else if rust_path.contains("::") {
                 let is_likely_internal = external_imports::is_likely_internal_module(first_segment);
                 let is_external = external_imports::is_external_crate(first_segment);
-                
+
                 if is_likely_internal {
                     format!("{}use crate::{};\n", pub_prefix, rust_path)
                 } else if is_external {

@@ -365,14 +365,12 @@ impl<'a> BodyParser<'a> {
                 }
             }
             Token::If => self.parse_if_expression(),
-            _ => {
-                Err(anyhow!(
-                    "[line {}:{}] Unexpected token in expression: {:?}",
-                    self.current_line,
-                    self.current_column,
-                    self.current
-                ))
-            }
+            _ => Err(anyhow!(
+                "[line {}:{}] Unexpected token in expression: {:?}",
+                self.current_line,
+                self.current_column,
+                self.current
+            )),
         }
     }
 

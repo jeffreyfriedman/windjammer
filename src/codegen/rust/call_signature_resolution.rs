@@ -188,7 +188,9 @@ pub fn resolve_call_signature(
     if !func_name.contains("::") {
         let suffix = format!("::{}", func_name);
         for (key, sig) in registry.all_signatures() {
-            if key.ends_with(&suffix) && !sig.has_self_receiver && validate_arg_count(sig, arg_count)
+            if key.ends_with(&suffix)
+                && !sig.has_self_receiver
+                && validate_arg_count(sig, arg_count)
             {
                 return Some(ResolvedSignature {
                     sig: sig.clone(),
@@ -271,11 +273,7 @@ mod tests {
         }
     }
 
-    fn make_sig_with_types(
-        name: &str,
-        types: Vec<Type>,
-        has_self: bool,
-    ) -> FunctionSignature {
+    fn make_sig_with_types(name: &str, types: Vec<Type>, has_self: bool) -> FunctionSignature {
         let ownership_len = types.len() + if has_self { 1 } else { 0 };
         FunctionSignature {
             name: name.to_string(),
@@ -309,8 +307,7 @@ mod tests {
         let mut reg = SignatureRegistry::new();
         reg.add_function("Emitter::new".into(), make_sig("new", 2, false));
 
-        let result =
-            resolve_call_signature(&reg, "new", Some("Emitter"), 2, &empty_aliases());
+        let result = resolve_call_signature(&reg, "new", Some("Emitter"), 2, &empty_aliases());
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ReceiverQualified);
@@ -337,34 +334,36 @@ mod tests {
             "Emitter::new".into(),
             make_sig_with_types(
                 "new",
-                vec![
-                    Type::Custom("Vec3".into()),
-                    Type::Custom("i32".into()),
-                ],
+                vec![Type::Custom("Vec3".into()), Type::Custom("i32".into())],
                 false,
             ),
         );
 
         // Looking up "new" bare with 2 args should NOT match Vec3::new (3 args)
         // and SHOULD match Emitter::new (2 args) via arg-count validation
-        let result =
-            resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases());
+        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases());
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.qualified_key, "Emitter::new");
-        assert!(!r.sig.param_types.iter().any(|t| matches!(t, Type::Custom(n) if n == "f32")));
+        assert!(!r
+            .sig
+            .param_types
+            .iter()
+            .any(|t| matches!(t, Type::Custom(n) if n == "f32")));
     }
 
     #[test]
     fn module_alias_resolution() {
         let mut reg = SignatureRegistry::new();
-        reg.add_function("gpu_safe::load_shader".into(), make_sig("load_shader", 1, false));
+        reg.add_function(
+            "gpu_safe::load_shader".into(),
+            make_sig("load_shader", 1, false),
+        );
 
         let mut aliases = HashMap::new();
         aliases.insert("gpu".into(), "gpu_safe".into());
 
-        let result =
-            resolve_call_signature(&reg, "gpu::load_shader", None, 1, &aliases);
+        let result = resolve_call_signature(&reg, "gpu::load_shader", None, 1, &aliases);
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ModuleAlias);
@@ -376,8 +375,7 @@ mod tests {
         reg.add_function("Foo::new".into(), make_sig("new", 3, false));
 
         // Call with 2 args should NOT match a 3-param signature
-        let result =
-            resolve_call_signature(&reg, "Foo::new", None, 2, &empty_aliases());
+        let result = resolve_call_signature(&reg, "Foo::new", None, 2, &empty_aliases());
         assert!(result.is_none());
     }
 
@@ -386,15 +384,22 @@ mod tests {
         let mut reg = SignatureRegistry::new();
         reg.add_function(
             "Emitter::new".into(),
-            make_sig_with_types("new", vec![Type::Custom("Vec3".into()), Type::Custom("i32".into())], false),
+            make_sig_with_types(
+                "new",
+                vec![Type::Custom("Vec3".into()), Type::Custom("i32".into())],
+                false,
+            ),
         );
         reg.add_function(
             "Emitter::new".into(),
-            make_sig_with_types("new", vec![Type::Custom("f32".into()), Type::Custom("f32".into())], false),
+            make_sig_with_types(
+                "new",
+                vec![Type::Custom("f32".into()), Type::Custom("f32".into())],
+                false,
+            ),
         );
 
-        let result =
-            resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases());
+        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases());
         assert!(result.is_some());
         assert!(result.unwrap().has_collision);
     }
@@ -402,7 +407,10 @@ mod tests {
     #[test]
     fn progressive_qualified_match() {
         let mut reg = SignatureRegistry::new();
-        reg.add_function("rendering::Camera::update".into(), make_sig("update", 1, true));
+        reg.add_function(
+            "rendering::Camera::update".into(),
+            make_sig("update", 1, true),
+        );
 
         let result = resolve_call_signature(
             &reg,

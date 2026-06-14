@@ -1006,8 +1006,7 @@ impl<'ast> CodeGenerator<'ast> {
             if let crate::parser::Expression::Identifier { name: obj_name, .. } = &**object {
                 if obj_name == "self" && !expr_str.ends_with(".clone()") {
                     let self_is_borrowed = self.current_function_params.iter().any(|p| {
-                        p.name == "self"
-                            && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                     });
                     if self_is_borrowed {
                         let is_copy = self
@@ -1038,8 +1037,7 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(ref name) = root_name {
                 let is_borrowed_iter = self.borrowed_iterator_vars.contains(name);
                 let is_explicit_ref = self.current_function_params.iter().any(|p| {
-                    p.name == *name
-                        && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    p.name == *name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 });
                 let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
 

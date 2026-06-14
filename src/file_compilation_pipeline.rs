@@ -400,7 +400,9 @@ fn compile_file_impl(
     // Provide cross-file struct field types for nested field chain resolution
     module_compiler
         .analyzer
-        .set_global_struct_field_types(std::sync::Arc::new(module_compiler.global_struct_field_types.clone()));
+        .set_global_struct_field_types(std::sync::Arc::new(
+            module_compiler.global_struct_field_types.clone(),
+        ));
 
     // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {

@@ -266,9 +266,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // HashMap.get()/BTreeMap.get() returns Option<&V>.
                     // Pattern bindings from Some(v) are references.
-                    if method == "get"
-                        && matches!(ty, Type::Option(_))
-                    {
+                    if method == "get" && matches!(ty, Type::Option(_)) {
                         return true;
                     }
                 }

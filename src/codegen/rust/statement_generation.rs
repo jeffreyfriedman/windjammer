@@ -384,8 +384,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 OptionFieldPattern::ReplaceWith(next_idx, replacement) => {
                     let replacement_str = replacement.to_string();
-                    *value_str =
-                        format!("{}.replace({})", value_str, replacement_str);
+                    *value_str = format!("{}.replace({})", value_str, replacement_str);
                     self.skip_block_indices.insert(next_idx);
                 }
                 OptionFieldPattern::None => {
@@ -411,10 +410,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Check if the next statement in the current block assigns None or Some(...)
     /// to the same field that was just read.
-    fn next_statement_option_pattern(
-        &self,
-        field_path: &str,
-    ) -> OptionFieldPattern {
+    fn next_statement_option_pattern(&self, field_path: &str) -> OptionFieldPattern {
         let next_idx = self.current_block_local_idx + 1;
         if next_idx >= self.current_function_body.len() {
             return OptionFieldPattern::None;

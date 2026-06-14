@@ -70,55 +70,59 @@ pub async fn handle(
     let mut files = Vec::new();
     collect_wj_files(&root, &mut files)?;
 
-    for path in files.into_iter().filter(|p| matches_pattern(p, &request.file_pattern)).take(50) {
-            let content = fs::read_to_string(&path).map_err(|e| McpError::InternalError {
-                message: e.to_string(),
-            })?;
-            if !content.contains(&request.query) {
-                continue;
-            }
+    for path in files
+        .into_iter()
+        .filter(|p| matches_pattern(p, &request.file_pattern))
+        .take(50)
+    {
+        let content = fs::read_to_string(&path).map_err(|e| McpError::InternalError {
+            message: e.to_string(),
+        })?;
+        if !content.contains(&request.query) {
+            continue;
+        }
 
-            let uri = Url::from_file_path(&path).map_err(|_| McpError::InternalError {
-                message: format!("Invalid path {}", path.display()),
-            })?;
-            let file = db_guard.set_source_text(uri, content.clone());
+        let uri = Url::from_file_path(&path).map_err(|_| McpError::InternalError {
+            message: format!("Invalid path {}", path.display()),
+        })?;
+        let file = db_guard.set_source_text(uri, content.clone());
 
-            let symbol_hits: Vec<SearchMatch> = db_guard
-                .get_symbols(file)
-                .iter()
-                .filter(|s| s.name.contains(&request.query))
-                .map(|s| SearchMatch {
-                    line: s.line as usize + 1,
-                    signature: s
-                        .type_info
-                        .clone()
-                        .unwrap_or_else(|| format!("{:?}", s.kind)),
-                    context: s.name.clone(),
+        let symbol_hits: Vec<SearchMatch> = db_guard
+            .get_symbols(file)
+            .iter()
+            .filter(|s| s.name.contains(&request.query))
+            .map(|s| SearchMatch {
+                line: s.line as usize + 1,
+                signature: s
+                    .type_info
+                    .clone()
+                    .unwrap_or_else(|| format!("{:?}", s.kind)),
+                context: s.name.clone(),
+            })
+            .collect();
+
+        let text_hits: Vec<SearchMatch> = if symbol_hits.is_empty() {
+            content
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(&request.query))
+                .map(|(idx, line)| SearchMatch {
+                    line: idx + 1,
+                    signature: request.query.clone(),
+                    context: line.trim().to_string(),
                 })
-                .collect();
+                .take(20)
+                .collect()
+        } else {
+            symbol_hits
+        };
 
-            let text_hits: Vec<SearchMatch> = if symbol_hits.is_empty() {
-                content
-                    .lines()
-                    .enumerate()
-                    .filter(|(_, line)| line.contains(&request.query))
-                    .map(|(idx, line)| SearchMatch {
-                        line: idx + 1,
-                        signature: request.query.clone(),
-                        context: line.trim().to_string(),
-                    })
-                    .take(20)
-                    .collect()
-            } else {
-                symbol_hits
-            };
-
-            if !text_hits.is_empty() {
-                results.push(SearchResult {
-                    file: path.display().to_string(),
-                    matches: text_hits,
-                });
-            }
+        if !text_hits.is_empty() {
+            results.push(SearchResult {
+                file: path.display().to_string(),
+                matches: text_hits,
+            });
+        }
     }
 
     let response = SearchWorkspaceResponse {
@@ -163,5 +167,6 @@ fn matches_pattern(path: &Path, pattern: &str) -> bool {
     if pattern == "**/*.wj" || pattern == "*.wj" {
         return true;
     }
-    path.to_string_lossy().contains(pattern.trim_start_matches("**/"))
+    path.to_string_lossy()
+        .contains(pattern.trim_start_matches("**/"))
 }

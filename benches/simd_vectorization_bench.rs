@@ -81,14 +81,8 @@ fn dot_simd_avx256(a: &[f32], b: &[f32]) -> f32 {
             vacc = _mm256_add_ps(vacc, _mm256_mul_ps(va, vb));
         }
         let parts: [f32; 8] = std::mem::transmute(vacc);
-        let mut s = parts[0]
-            + parts[1]
-            + parts[2]
-            + parts[3]
-            + parts[4]
-            + parts[5]
-            + parts[6]
-            + parts[7];
+        let mut s =
+            parts[0] + parts[1] + parts[2] + parts[3] + parts[4] + parts[5] + parts[6] + parts[7];
         for i in (chunks * 8)..n {
             s += a[i] * b[i];
         }
@@ -103,7 +97,9 @@ fn bench_dots(c: &mut Criterion) {
     let b = black_box(b);
 
     let mut g = c.benchmark_group("f32_dot_10m");
-    g.bench_function("scalar", |bench| bench.iter(|| dot_scalar(black_box(&a), black_box(&b))));
+    g.bench_function("scalar", |bench| {
+        bench.iter(|| dot_scalar(black_box(&a), black_box(&b)))
+    });
     #[cfg(target_arch = "x86_64")]
     g.bench_function("simd_sse_4wide", |bench| {
         bench.iter(|| dot_simd_x86(black_box(&a), black_box(&b)))
@@ -115,7 +111,9 @@ fn bench_dots(c: &mut Criterion) {
         });
     }
     #[cfg(target_arch = "aarch64")]
-    g.bench_function("simd_neon", |bench| bench.iter(|| dot_simd_neon(black_box(&a), black_box(&b))));
+    g.bench_function("simd_neon", |bench| {
+        bench.iter(|| dot_simd_neon(black_box(&a), black_box(&b)))
+    });
     g.finish();
 }
 

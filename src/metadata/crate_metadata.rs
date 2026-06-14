@@ -137,9 +137,7 @@ pub fn extract_struct_field_types(
 }
 
 /// Load struct field types from a metadata.json file on disk.
-pub fn load_struct_field_types_from_file(
-    path: &Path,
-) -> HashMap<String, HashMap<String, Type>> {
+pub fn load_struct_field_types_from_file(path: &Path) -> HashMap<String, HashMap<String, Type>> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return HashMap::new();
     };

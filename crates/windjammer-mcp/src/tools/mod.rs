@@ -47,9 +47,8 @@ impl ToolRegistry {
 
     fn register_all_tools(&mut self) {
         for spec in all_tool_specs() {
-            let schema = input_schema_for(spec.name).unwrap_or_else(|| {
-                serde_json::json!({"type": "object", "properties": {}})
-            });
+            let schema = input_schema_for(spec.name)
+                .unwrap_or_else(|| serde_json::json!({"type": "object", "properties": {}}));
             let handler = self.handler_for(spec.name);
             self.tools.push(Tool {
                 name: spec.name.to_string(),
@@ -72,12 +71,12 @@ impl ToolRegistry {
             "search_workspace" => {
                 Box::new(move |d, args| Box::pin(search_workspace::handle(d, args)))
             }
-            "extract_function" => Box::new(move |d, args| {
-                Box::pin(refactor_extract_function::handle(d, args))
-            }),
-            "inline_variable" => Box::new(move |d, args| {
-                Box::pin(refactor_inline_variable::handle(d, args))
-            }),
+            "extract_function" => {
+                Box::new(move |d, args| Box::pin(refactor_extract_function::handle(d, args)))
+            }
+            "inline_variable" => {
+                Box::new(move |d, args| Box::pin(refactor_inline_variable::handle(d, args)))
+            }
             "rename_symbol" => {
                 Box::new(move |d, args| Box::pin(refactor_rename_symbol::handle(d, args)))
             }
@@ -131,9 +130,7 @@ impl ToolRegistry {
             }
             _ => Box::new(move |_d, _args| {
                 let tool_name = unknown_name.clone();
-                Box::pin(async move {
-                    Err(McpError::ToolNotFound { tool_name })
-                })
+                Box::pin(async move { Err(McpError::ToolNotFound { tool_name }) })
             }),
         }
     }

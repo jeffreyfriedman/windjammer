@@ -266,9 +266,14 @@ impl CodeGenerator<'_> {
         out
     }
 
-    fn expand_braced_crate_import(&self, normalized: &str, alias: Option<&str>, is_pub: bool) -> String {
+    fn expand_braced_crate_import(
+        &self,
+        normalized: &str,
+        alias: Option<&str>,
+        is_pub: bool,
+    ) -> String {
         let pub_prefix = if is_pub { "pub " } else { "" };
-        
+
         let module_root = if self.is_module {
             self.get_module_root_name()
         } else {

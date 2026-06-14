@@ -4,20 +4,20 @@
 //! (`dependency_resolution`), incremental output handling (`cache_management`), Copy registry
 //! (`library_copy_registry`), and the large multipass library path (`library_multipass`).
 
-pub mod incremental;
 pub mod cache_management;
 mod compilation_pipeline;
+mod declaration_stub_registry;
 mod dependency_resolution;
+pub mod incremental;
 mod library_copy_registry;
 pub mod library_multipass;
 mod salsa_library_build;
-mod declaration_stub_registry;
 
 pub use cache_management::write_if_changed;
 pub use compilation_pipeline::{build_project, build_project_ext};
 
-use anyhow::Result;
 use crate::parser::ast::core::Item;
+use anyhow::Result;
 
 /// Detect whether a parsed program is a GPU shader file (@vertex, @fragment, @compute).
 pub fn is_shader_file(program: &crate::parser::Program) -> bool {
@@ -153,15 +153,18 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     copy_structs: Vec<String>,
     target: crate::CompilationTarget,
     dep_roots: &[std::path::PathBuf],
+    dep_epoch: Option<u64>,
 ) -> anyhow::Result<()> {
     let rust_code = codegen.generate_program(program, analyzed_functions);
     codegen.apply_self_receiver_upgrades(registry_snapshot);
     cache_management::write_if_changed(output_file, &rust_code)?;
     if target == crate::CompilationTarget::Rust {
         let source = std::fs::read_to_string(source_file)?;
-        let fingerprint = Some(
-            incremental::fingerprint_for_emit(&source, dep_roots).into(),
-        );
+        let fingerprint = Some(if let Some(epoch) = dep_epoch {
+            incremental::fingerprint_for_emit_with_dep_epoch(&source, epoch).into()
+        } else {
+            incremental::fingerprint_for_emit(&source, dep_roots).into()
+        });
         crate::metadata::emit_module_meta_for_file_with_fingerprint(
             source_file,
             program,

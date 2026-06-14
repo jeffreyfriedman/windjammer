@@ -139,11 +139,18 @@ impl<'ast> Analyzer<'ast> {
                     }
                     for arm in arms {
                         if let Some(guard) = arm.guard {
-                            if self.has_mutable_method_call(name, guard, registry, param_type_hint) {
+                            if self.has_mutable_method_call(name, guard, registry, param_type_hint)
+                            {
                                 return true;
                             }
                         }
-                        if self.is_mutated_in_match_arm_body(name, value, arm, registry, param_type_hint) {
+                        if self.is_mutated_in_match_arm_body(
+                            name,
+                            value,
+                            arm,
+                            registry,
+                            param_type_hint,
+                        ) {
                             return true;
                         }
                     }
@@ -375,12 +382,11 @@ impl<'ast> Analyzer<'ast> {
     ) -> Option<Type> {
         match expr {
             Expression::FieldAccess { object, field, .. } => {
-                let base = self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
+                let base =
+                    self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
                 self.lookup_field_type_on_struct(&base, field)
             }
-            Expression::Identifier { name, .. } if name == param_name => {
-                param_type_hint.cloned()
-            }
+            Expression::Identifier { name, .. } if name == param_name => param_type_hint.cloned(),
             _ => None,
         }
     }
@@ -404,9 +410,9 @@ impl<'ast> Analyzer<'ast> {
                             if let Some(param_ty) = param_type_hint {
                                 if let Type::Custom(type_name) = param_ty {
                                     qualified_attempted = true;
-                                    if let Some(sig) = registry.get_signature(
-                                        &format!("{}::{}", type_name, method),
-                                    ) {
+                                    if let Some(sig) = registry
+                                        .get_signature(&format!("{}::{}", type_name, method))
+                                    {
                                         if sig.has_self_receiver {
                                             if let Some(mode) = sig.param_ownership.first() {
                                                 return matches!(mode, OwnershipMode::MutBorrowed);
@@ -508,10 +514,7 @@ impl<'ast> Analyzer<'ast> {
                 // corresponding parameter has MutBorrowed ownership.
                 // Example: obj.apply(state) where apply expects &mut DialogueState
                 // → state must be MutBorrowed.
-                if let Expression::MethodCall {
-                    arguments, ..
-                } = expr
-                {
+                if let Expression::MethodCall { arguments, .. } = expr {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
                             if let Some(sig) = registry.lookup_method(method) {
@@ -539,7 +542,8 @@ impl<'ast> Analyzer<'ast> {
                             }
                         }
                         Statement::Let { value, .. } => {
-                            if self.has_mutable_method_call(name, value, registry, param_type_hint) {
+                            if self.has_mutable_method_call(name, value, registry, param_type_hint)
+                            {
                                 return true;
                             }
                         }
