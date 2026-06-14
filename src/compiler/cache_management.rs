@@ -309,14 +309,7 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
                 epoch,
             )
         } else {
-            is_library_codegen_cache_valid(
-                source,
-                file,
-                &output_file,
-                src_base,
-                output,
-                dep_roots,
-            )
+            is_library_codegen_cache_valid(source, file, &output_file, src_base, output, dep_roots)
         };
         if !cache_valid {
             stale.push(file.clone());
