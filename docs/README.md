@@ -37,7 +37,7 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`TOOLING_VISION.md`](TOOLING_VISION.md) - Tooling ecosystem
 
 **Game Host Framework (vision & positioning)**  
-Companion repo **`game-host`**. Summary: [`GAME_ENGINE_VISION.md`](GAME_ENGINE_VISION.md).
+Companion repo **`game-host`**: [`../game-host/VISION.md`](../game-host/VISION.md), [`../game-host/COMPETITIVE_POSITIONING.md`](../game-host/COMPETITIVE_POSITIONING.md).
 
 **Project Management:**
 - [`PUBLISHING.md`](PUBLISHING.md) - Publishing and release process
