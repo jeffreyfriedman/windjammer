@@ -275,9 +275,11 @@ pub fn process(d: Data) -> i32 {
     let (generated, success) = test_utils::compile_single_check(code);
     let err = if !success { "compilation failed" } else { "" };
 
-    // Data is auto-Copy (all fields Copy); readonly Copy params pass by value.
+    // Data is auto-Copy (all fields Copy); readonly Copy params may pass by value or borrow.
     assert!(
-        generated.contains("process(d: Data)") || generated.contains("process(&Data)"),
+        generated.contains("process(d: Data)")
+            || generated.contains("process(d: &Data)")
+            || generated.contains("process(&Data)"),
         "process should compile with owned or borrowed Data. Generated:\n{}",
         generated
     );
