@@ -39,7 +39,8 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
-        let method_signature = self.mc_resolve_method_call_signature(object, effective_method, arguments);
+        let method_signature =
+            self.mc_resolve_method_call_signature(object, effective_method, arguments);
         let type_name = self.infer_type_name(object);
         let (args, prev_float) = self.mc_build_method_call_arg_strings(
             object,
@@ -49,7 +50,13 @@ impl<'ast> CodeGenerator<'ast> {
             type_name,
         );
         self.mc_finalize_method_call_expression(
-            object, effective_method, type_args, arguments, obj_str, args, prev_float,
+            object,
+            effective_method,
+            type_args,
+            arguments,
+            obj_str,
+            args,
+            prev_float,
         )
     }
 }

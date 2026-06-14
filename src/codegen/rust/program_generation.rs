@@ -11,8 +11,7 @@ use crate::CompilationTarget;
 
 impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
-        let mut seen_private: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut seen_private: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut seen_pub: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut out_lines: Vec<String> = Vec::new();
         for line in block.lines() {
@@ -146,12 +145,11 @@ impl<'ast> CodeGenerator<'ast> {
                             {
                                 continue;
                             }
-                            let all_types: Vec<&Type> =
-                                if let Some(ref tf) = s.tuple_fields {
-                                    tf.iter().collect()
-                                } else {
-                                    s.fields.iter().map(|f| &f.field_type).collect()
-                                };
+                            let all_types: Vec<&Type> = if let Some(ref tf) = s.tuple_fields {
+                                tf.iter().collect()
+                            } else {
+                                s.fields.iter().map(|f| &f.field_type).collect()
+                            };
                             if all_types.iter().all(|t| self.is_copy_type_with_registry(t)) {
                                 self.copy_types_registry.insert(s.name.clone());
                                 changed = true;
@@ -353,11 +351,7 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     ..
                 } => {
-                    let pub_prefix = if *is_pub {
-                        "pub "
-                    } else {
-                        ""
-                    };
+                    let pub_prefix = if *is_pub { "pub " } else { "" };
 
                     // Special case: string constants should use &'static str, not String
                     let rust_type = if matches!(type_, Type::String)
@@ -788,7 +782,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         if std::env::var("WJ_EMIT_AOSOA_HINTS").ok().as_deref() == Some("1") {
             let hints = crate::codegen::rust::aosoa_transform::emit_aosoa_hints(program, analyzed);
             if !hints.is_empty() {
-                output.push_str("\n\n// --- Windjammer cache locality (WJ_EMIT_AOSOA_HINTS=1) ---\n");
+                output
+                    .push_str("\n\n// --- Windjammer cache locality (WJ_EMIT_AOSOA_HINTS=1) ---\n");
                 output.push_str(&hints);
             }
         }

@@ -65,11 +65,13 @@ pub async fn handle(
                     captured_variables: Some(result.captured_variables),
                     error: None,
                 };
-                Ok(text_response(serde_json::to_string_pretty(&response).map_err(|e| {
-                    McpError::InternalError {
-                        message: e.to_string(),
-                    }
-                })?))
+                Ok(text_response(
+                    serde_json::to_string_pretty(&response).map_err(|e| {
+                        McpError::InternalError {
+                            message: e.to_string(),
+                        }
+                    })?,
+                ))
             }
             Err(e) => Ok(text_response(error_response(e))),
         },

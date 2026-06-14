@@ -86,14 +86,21 @@ pub fn dep_metadata_epoch(dep_roots: &[std::path::PathBuf]) -> u64 {
     hasher.finish()
 }
 
-pub fn compute_fingerprint(
-    source: &str,
-    dep_roots: &[std::path::PathBuf],
-) -> SourceFingerprint {
+pub fn compute_fingerprint(source: &str, dep_roots: &[std::path::PathBuf]) -> SourceFingerprint {
     SourceFingerprint {
         content_hash: hash_source(source),
         compiler_version: compiler_build_identity(),
         dep_metadata_epoch: dep_metadata_epoch(dep_roots),
+    }
+}
+
+/// Like [`compute_fingerprint`] but pins `dep_metadata_epoch` for the duration of one build.
+/// Prevents flaky stale-output checks when parallel tests mutate dependency trees mid-build.
+pub fn compute_fingerprint_with_dep_epoch(source: &str, dep_epoch: u64) -> SourceFingerprint {
+    SourceFingerprint {
+        content_hash: hash_source(source),
+        compiler_version: compiler_build_identity(),
+        dep_metadata_epoch: dep_epoch,
     }
 }
 
@@ -102,7 +109,21 @@ pub fn fingerprint_matches_cached(
     source_path: &Path,
     dep_roots: &[std::path::PathBuf],
 ) -> bool {
-    let current = compute_fingerprint(source, dep_roots);
+    fingerprint_matches(source_path, &compute_fingerprint(source, dep_roots))
+}
+
+pub fn fingerprint_matches_cached_with_dep_epoch(
+    source: &str,
+    source_path: &Path,
+    dep_epoch: u64,
+) -> bool {
+    fingerprint_matches(
+        source_path,
+        &compute_fingerprint_with_dep_epoch(source, dep_epoch),
+    )
+}
+
+fn fingerprint_matches(source_path: &Path, current: &SourceFingerprint) -> bool {
     let meta_path = crate::metadata::meta_cache_path(source_path);
     let Ok(content) = std::fs::read_to_string(&meta_path) else {
         return false;
@@ -110,13 +131,11 @@ pub fn fingerprint_matches_cached(
     let Ok(meta) = serde_json::from_str::<crate::metadata::ModuleMetadata>(&content) else {
         return false;
     };
-    meta.analysis_fingerprint
-        .as_ref()
-        .is_some_and(|cached| {
-            cached.content_hash == current.content_hash
-                && cached.compiler_version == current.compiler_version
-                && cached.dep_metadata_epoch == current.dep_metadata_epoch
-        })
+    meta.analysis_fingerprint.as_ref().is_some_and(|cached| {
+        cached.content_hash == current.content_hash
+            && cached.compiler_version == current.compiler_version
+            && cached.dep_metadata_epoch == current.dep_metadata_epoch
+    })
 }
 
 fn is_output_mtime_fresh(source: &Path, output: &Path) -> bool {
@@ -145,6 +164,22 @@ pub fn is_codegen_cache_valid(
         return false;
     }
     fingerprint_matches_cached(source, source_path, dep_roots)
+}
+
+/// Like [`is_codegen_cache_valid`] but uses a dep-metadata epoch snapshot from build start.
+pub fn is_codegen_cache_valid_with_dep_epoch(
+    source: &str,
+    source_path: &Path,
+    output_path: &Path,
+    dep_epoch: u64,
+) -> bool {
+    if !output_path.exists() {
+        return false;
+    }
+    if !is_output_mtime_fresh(source_path, output_path) {
+        return false;
+    }
+    fingerprint_matches_cached_with_dep_epoch(source, source_path, dep_epoch)
 }
 
 impl From<SourceFingerprint> for crate::metadata::AnalysisFingerprint {

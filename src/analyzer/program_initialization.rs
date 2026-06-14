@@ -32,7 +32,9 @@ fn stdlib_traits_bootstrap() -> &'static StdlibTraitsBootstrap {
 fn apply_stdlib_traits_bootstrap(analyzer: &mut Analyzer<'_>) {
     let bootstrap = stdlib_traits_bootstrap();
     for (name, decl) in &bootstrap.trait_definitions {
-        analyzer.trait_definitions.insert(name.clone(), decl.clone());
+        analyzer
+            .trait_definitions
+            .insert(name.clone(), decl.clone());
     }
     for (trait_name, methods) in &bootstrap.analyzed_trait_methods {
         analyzer
@@ -76,7 +78,10 @@ impl<'ast> Analyzer<'ast> {
 
     /// Set the global struct field types for cross-file nested field chain resolution.
     /// Accepts Arc to enable O(1) sharing across many files without deep cloning.
-    pub fn set_global_struct_field_types(&mut self, types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>) {
+    pub fn set_global_struct_field_types(
+        &mut self,
+        types: std::sync::Arc<HashMap<String, HashMap<String, Type>>>,
+    ) {
         self.global_struct_field_types = types;
     }
 
@@ -123,133 +128,118 @@ impl<'ast> Analyzer<'ast> {
     pub fn get_copy_structs(&self) -> Vec<String> {
         self.copy_structs.iter().cloned().collect()
     }
-
-    /// Pre-register standard library traits (Add, Sub, Mul, Div, etc.)
-    /// This allows the analyzer to correctly handle trait implementations
-    /// for stdlib traits without needing to parse Rust's stdlib.
-    fn register_stdlib_traits(&mut self) {
-        build_stdlib_trait_definitions(&mut self.trait_definitions);
-    }
 }
 
 /// Build stdlib trait stubs (Add, Sub, Drop, etc.) into the given map.
-/// Shared by `register_stdlib_traits` and the OnceLock bootstrap cache.
-fn build_stdlib_trait_definitions<'ast>(
-    trait_definitions: &mut HashMap<String, TraitDecl<'ast>>,
-) {
-        use crate::parser::ast::{
-            AssociatedType, OwnershipHint, Parameter, TraitDecl, TraitMethod, Type,
-        };
+fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, TraitDecl<'ast>>) {
+    use crate::parser::ast::{
+        AssociatedType, OwnershipHint, Parameter, TraitDecl, TraitMethod, Type,
+    };
 
-        // Helper to create a binary operator trait (Add, Sub, Mul, Div, etc.)
-        let create_binary_op_trait = |name: &str, method: &str| -> TraitDecl {
-            TraitDecl {
-                name: name.to_string(),
-                generics: vec!["Rhs".to_string()],
-                supertraits: vec![],
-                methods: vec![TraitMethod {
-                    name: method.to_string(),
-                    parameters: vec![
-                        Parameter {
-                            name: "self".to_string(),
-                            pattern: None,
-                            type_: Type::Custom("Self".to_string()),
-                            ownership: OwnershipHint::Owned,
-                            is_mutable: false,
-                            decorators: Vec::new(),
-                        },
-                        Parameter {
-                            name: "rhs".to_string(),
-                            pattern: None,
-                            type_: Type::Custom("Rhs".to_string()),
-                            ownership: OwnershipHint::Owned,
-                            is_mutable: false,
-                            decorators: Vec::new(),
-                        },
-                    ],
-                    return_type: Some(Type::Custom("Output".to_string())),
-                    is_async: false,
-                    body: None,
-                    doc_comment: None,
-                }],
-                associated_types: vec![AssociatedType {
-                    name: "Output".to_string(),
-                    concrete_type: None,
-                }],
-                doc_comment: None,
-            }
-        };
-
-        // Register common operator traits
-        trait_definitions
-            .insert("Add".to_string(), create_binary_op_trait("Add", "add"));
-        trait_definitions
-            .insert("Sub".to_string(), create_binary_op_trait("Sub", "sub"));
-        trait_definitions
-            .insert("Mul".to_string(), create_binary_op_trait("Mul", "mul"));
-        trait_definitions
-            .insert("Div".to_string(), create_binary_op_trait("Div", "div"));
-        trait_definitions
-            .insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
-
-        // Register unary operator traits
-        // Neg: -x
-        trait_definitions.insert(
-            "Neg".to_string(),
-            TraitDecl {
-                name: "Neg".to_string(),
-                generics: vec![],
-                supertraits: vec![],
-                methods: vec![TraitMethod {
-                    name: "neg".to_string(),
-                    parameters: vec![Parameter {
+    // Helper to create a binary operator trait (Add, Sub, Mul, Div, etc.)
+    let create_binary_op_trait = |name: &str, method: &str| -> TraitDecl {
+        TraitDecl {
+            name: name.to_string(),
+            generics: vec!["Rhs".to_string()],
+            supertraits: vec![],
+            methods: vec![TraitMethod {
+                name: method.to_string(),
+                parameters: vec![
+                    Parameter {
                         name: "self".to_string(),
                         pattern: None,
                         type_: Type::Custom("Self".to_string()),
-                        ownership: OwnershipHint::Owned, // THE WINDJAMMER WAY: Neg uses owned self!
+                        ownership: OwnershipHint::Owned,
                         is_mutable: false,
                         decorators: Vec::new(),
-                    }],
-                    return_type: Some(Type::Custom("Output".to_string())),
-                    is_async: false,
-                    body: None,
-                    doc_comment: None,
-                }],
-                associated_types: vec![AssociatedType {
-                    name: "Output".to_string(),
-                    concrete_type: None,
-                }],
-                doc_comment: None,
-            },
-        );
-
-        // Rust std `Drop::drop(&mut self)` — Windjammer users write `fn drop(self)`; generated Rust
-        // must match or rustc reports E0186/E0053. Not parsed from .wj, so register like operator traits.
-        trait_definitions.insert(
-            "Drop".to_string(),
-            TraitDecl {
-                name: "Drop".to_string(),
-                generics: vec![],
-                supertraits: vec![],
-                methods: vec![TraitMethod {
-                    name: "drop".to_string(),
-                    parameters: vec![Parameter {
-                        name: "self".to_string(),
+                    },
+                    Parameter {
+                        name: "rhs".to_string(),
                         pattern: None,
-                        type_: Type::Custom("Self".to_string()),
-                        ownership: OwnershipHint::Mut,
+                        type_: Type::Custom("Rhs".to_string()),
+                        ownership: OwnershipHint::Owned,
                         is_mutable: false,
                         decorators: Vec::new(),
-                    }],
-                    return_type: None,
-                    is_async: false,
-                    body: None,
-                    doc_comment: None,
-                }],
-                associated_types: vec![],
+                    },
+                ],
+                return_type: Some(Type::Custom("Output".to_string())),
+                is_async: false,
+                body: None,
                 doc_comment: None,
-            },
-        );
+            }],
+            associated_types: vec![AssociatedType {
+                name: "Output".to_string(),
+                concrete_type: None,
+            }],
+            doc_comment: None,
+        }
+    };
+
+    // Register common operator traits
+    trait_definitions.insert("Add".to_string(), create_binary_op_trait("Add", "add"));
+    trait_definitions.insert("Sub".to_string(), create_binary_op_trait("Sub", "sub"));
+    trait_definitions.insert("Mul".to_string(), create_binary_op_trait("Mul", "mul"));
+    trait_definitions.insert("Div".to_string(), create_binary_op_trait("Div", "div"));
+    trait_definitions.insert("Rem".to_string(), create_binary_op_trait("Rem", "rem"));
+
+    // Register unary operator traits
+    // Neg: -x
+    trait_definitions.insert(
+        "Neg".to_string(),
+        TraitDecl {
+            name: "Neg".to_string(),
+            generics: vec![],
+            supertraits: vec![],
+            methods: vec![TraitMethod {
+                name: "neg".to_string(),
+                parameters: vec![Parameter {
+                    name: "self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Self".to_string()),
+                    ownership: OwnershipHint::Owned, // THE WINDJAMMER WAY: Neg uses owned self!
+                    is_mutable: false,
+                    decorators: Vec::new(),
+                }],
+                return_type: Some(Type::Custom("Output".to_string())),
+                is_async: false,
+                body: None,
+                doc_comment: None,
+            }],
+            associated_types: vec![AssociatedType {
+                name: "Output".to_string(),
+                concrete_type: None,
+            }],
+            doc_comment: None,
+        },
+    );
+
+    // Rust std `Drop::drop(&mut self)` — Windjammer users write `fn drop(self)`; generated Rust
+    // must match or rustc reports E0186/E0053. Not parsed from .wj, so register like operator traits.
+    trait_definitions.insert(
+        "Drop".to_string(),
+        TraitDecl {
+            name: "Drop".to_string(),
+            generics: vec![],
+            supertraits: vec![],
+            methods: vec![TraitMethod {
+                name: "drop".to_string(),
+                parameters: vec![Parameter {
+                    name: "self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Self".to_string()),
+                    ownership: OwnershipHint::Mut,
+                    is_mutable: false,
+                    decorators: Vec::new(),
+                }],
+                return_type: None,
+                is_async: false,
+                body: None,
+                doc_comment: None,
+            }],
+            associated_types: vec![],
+            doc_comment: None,
+        },
+    );
 }
 
 impl<'ast> Analyzer<'ast> {

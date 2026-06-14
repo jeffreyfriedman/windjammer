@@ -588,15 +588,20 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         match stmt {
             Statement::Match { value, arms, .. } => {
-                let is_scrutinee = matches!(value, Expression::Identifier { name, .. } if name == var_name);
+                let is_scrutinee =
+                    matches!(value, Expression::Identifier { name, .. } if name == var_name);
                 if is_scrutinee {
                     for arm in arms.iter() {
-                        if let Some(binding) = super::self_analysis::extract_some_binding(&arm.pattern) {
+                        if let Some(binding) =
+                            super::self_analysis::extract_some_binding(&arm.pattern)
+                        {
                             if self.match_body_has_mutating_call(arm.body, binding) {
                                 return true;
                             }
                         }
-                        if let Some(bindings) = super::self_analysis::extract_tuple_some_bindings(&arm.pattern) {
+                        if let Some(bindings) =
+                            super::self_analysis::extract_tuple_some_bindings(&arm.pattern)
+                        {
                             for binding in &bindings {
                                 if self.match_body_has_mutating_call(arm.body, binding) {
                                     return true;
@@ -609,7 +614,13 @@ impl<'ast> CodeGenerator<'ast> {
                 // Handle tuple scrutinee: match (a_opt, b_opt) { (Some(a), Some(b)) => ... }
                 if let Expression::Tuple { .. } = *value {
                     for arm in arms.iter() {
-                        if let Some(binding) = super::self_analysis::find_binding_for_var_in_tuple_match(value, var_name, &arm.pattern) {
+                        if let Some(binding) =
+                            super::self_analysis::find_binding_for_var_in_tuple_match(
+                                value,
+                                var_name,
+                                &arm.pattern,
+                            )
+                        {
                             if self.match_body_has_mutating_call(arm.body, binding) {
                                 return true;
                             }
@@ -638,12 +649,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn match_body_has_mutating_call(&self, body: &Expression<'ast>, var_name: &str) -> bool {
         match body {
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
-            }
-            Expression::MethodCall {
-                object, method, ..
-            } => {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
+            Expression::MethodCall { object, method, .. } => {
                 if matches!(&**object, Expression::Identifier { name, .. } if name == var_name) {
                     return !super::self_analysis::is_known_readonly_method_name(method);
                 }
@@ -655,7 +664,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn stmt_has_mutating_method_on_var(&self, stmt: &Statement<'ast>, var_name: &str) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => self.expr_has_mutating_method_on_var(expr, var_name),
+            Statement::Expression { expr, .. } => {
+                self.expr_has_mutating_method_on_var(expr, var_name)
+            }
             Statement::Assignment { target, .. } => {
                 super::self_analysis::expression_references_variable_or_field(target, var_name)
             }
@@ -664,19 +675,22 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block,
                 ..
             } => {
-                then_block.iter().any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter().any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
+                        b.iter()
+                            .any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
                     })
             }
             Statement::While { body, .. }
             | Statement::For { body, .. }
-            | Statement::Loop { body, .. } => {
-                body.iter().any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
-            }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expr_has_mutating_method_on_var(arm.body, var_name)
-            }),
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| self.expr_has_mutating_method_on_var(arm.body, var_name)),
             Statement::Let { value, .. } => self.expr_has_mutating_method_on_var(value, var_name),
             _ => false,
         }
@@ -684,15 +698,15 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expr_has_mutating_method_on_var(&self, expr: &Expression<'ast>, var_name: &str) -> bool {
         match expr {
-            Expression::MethodCall {
-                object, method, ..
-            } => {
-                let is_var = matches!(&**object, Expression::Identifier { name, .. } if name == var_name);
-                let is_field_of_var = if let Expression::FieldAccess { object: inner, .. } = &**object {
-                    matches!(&**inner, Expression::Identifier { name, .. } if name == var_name)
-                } else {
-                    false
-                };
+            Expression::MethodCall { object, method, .. } => {
+                let is_var =
+                    matches!(&**object, Expression::Identifier { name, .. } if name == var_name);
+                let is_field_of_var =
+                    if let Expression::FieldAccess { object: inner, .. } = &**object {
+                        matches!(&**inner, Expression::Identifier { name, .. } if name == var_name)
+                    } else {
+                        false
+                    };
                 if (is_var || is_field_of_var)
                     && !super::self_analysis::is_known_readonly_method_name(method)
                 {
@@ -700,9 +714,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             }
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
-            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
             _ => false,
         }
     }

@@ -243,9 +243,10 @@ impl<'ast> CodeGenerator<'ast> {
                 .param_ownership
                 .get(pidx)
                 .is_some_and(|&o| o == OwnershipMode::MutBorrowed)
-                || sig.param_types.get(pidx).is_some_and(|t| {
-                    matches!(t, crate::parser::Type::MutableReference(_))
-                });
+                || sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)));
             if !needs_mut_borrow {
                 continue;
             }

@@ -28,9 +28,10 @@ pub async fn handle(
     _db: Arc<Mutex<WindjammerDatabase>>,
     arguments: Value,
 ) -> McpResult<ToolCallResult> {
-    let req: GetLanguageInfoRequest = serde_json::from_value(arguments).unwrap_or(GetLanguageInfoRequest {
-        include_agent_index: false,
-    });
+    let req: GetLanguageInfoRequest =
+        serde_json::from_value(arguments).unwrap_or(GetLanguageInfoRequest {
+            include_agent_index: false,
+        });
 
     let agent_index = if req.include_agent_index {
         crate::agent_index::load_embedded_index().ok()

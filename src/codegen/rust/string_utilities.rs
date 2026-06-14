@@ -14,9 +14,9 @@ pub fn untyped_let_rhs_needs_string_ascription(value: &Expression) -> bool {
             ..
         } => !s.is_empty(),
         Expression::Block { statements, .. } => statements.iter().any(|stmt| match stmt {
-            Statement::Match { arms, .. } => {
-                arms.iter().any(|arm| match_arm_needs_string_ascription(&arm.body))
-            }
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| match_arm_needs_string_ascription(&arm.body)),
             Statement::If {
                 then_block,
                 else_block,
@@ -34,24 +34,10 @@ pub fn untyped_let_rhs_needs_string_ascription(value: &Expression) -> bool {
     }
 }
 
-fn block_ends_with_string_literal(stmts: &[&Statement]) -> bool {
-    stmts.last().is_some_and(|s| {
-        matches!(
-            s,
-            Statement::Expression {
-                expr: Expression::Literal {
-                    value: Literal::String(_),
-                    ..
-                },
-                ..
-            }
-        )
-    })
-}
-
-/// If/else-if chains used as `let` RHS (including nested `else { if ... }`).
 fn block_tail_is_string_producing(stmts: &[&Statement]) -> bool {
-    stmts.last().is_some_and(|s| statement_tail_is_string_producing(s))
+    stmts
+        .last()
+        .is_some_and(|s| statement_tail_is_string_producing(s))
 }
 
 fn statement_tail_is_string_producing(stmt: &Statement) -> bool {
@@ -140,8 +126,7 @@ pub fn is_string_const_identifier(
     name: &str,
     auto_clone: Option<&crate::auto_clone::AutoCloneAnalysis>,
 ) -> bool {
-    name.starts_with("SCOPE_")
-        || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
+    name.starts_with("SCOPE_") || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
 }
 
 /// Callee borrows a string parameter: Rust will receive `&str` or `&String`.

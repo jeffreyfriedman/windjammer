@@ -99,8 +99,10 @@ impl MethodCallAnalyzer {
             }
         }
 
-        if matches!(method, "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill")
-            && param_idx == 0
+        if matches!(
+            method,
+            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill"
+        ) && param_idx == 0
         {
             return true;
         }
@@ -126,7 +128,9 @@ impl MethodCallAnalyzer {
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>
     pub fn should_add_cloned(method: &str, _return_type: &Option<Type>) -> bool {
-        matches!(method, "get" | "get_mut" | "contains_key" | "remove" | "get_key_value")
-            || matches!(method, "unwrap" | "first" | "last")
+        matches!(
+            method,
+            "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
+        ) || matches!(method, "unwrap" | "first" | "last")
     }
 }

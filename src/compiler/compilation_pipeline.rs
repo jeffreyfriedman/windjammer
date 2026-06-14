@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 
 use super::cache_management::write_if_changed;
 use super::dependency_resolution::{find_dependency_metadata_roots, find_wj_files};
-use super::library_multipass::build_library_multipass;
 use super::salsa_library_build::build_library;
 
 /// Check if a Type is Copy in single-file context (overrides stale metadata Copy).
@@ -174,10 +173,8 @@ pub fn build_project_ext(
             .infer_trait_signatures_from_impls(&program)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        analyzer.register_trait_methods_in_registry(
-            &analyzer.analyzed_trait_methods,
-            &mut registry,
-        );
+        analyzer
+            .register_trait_methods_in_registry(&analyzer.analyzed_trait_methods, &mut registry);
 
         let mut float_inference = FloatInference::new();
         if !external_paths.is_empty() {
@@ -253,6 +250,7 @@ pub fn build_project_ext(
             analyzer.get_copy_structs(),
             target,
             &ancestor_roots,
+            None,
         )?;
     }
 

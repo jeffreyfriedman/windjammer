@@ -32,6 +32,8 @@ RUN mkdir -p src/bin benches crates/windjammer-lsp/src crates/windjammer-lsp/ben
     echo "fn main() {}" > benches/regression_benchmarks.rs && \
     echo "fn main() {}" > benches/arena_performance.rs && \
     echo "fn main() {}" > benches/string_optimization_bench.rs && \
+    echo "fn main() {}" > benches/simd_vectorization_bench.rs && \
+    echo "fn main() {}" > benches/cache_locality_aosoa_bench.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-lsp/src/lib.rs && \
     echo "fn main() {}" > crates/windjammer-lsp/benches/salsa_performance.rs && \
     echo "pub fn dummy() {}" > crates/windjammer-mcp/src/lib.rs && \

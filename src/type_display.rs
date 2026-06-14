@@ -22,11 +22,7 @@ pub fn format_wj_type(ty: &Type) -> String {
             }
         }
         Type::Option(inner) => format!("Option<{}>", format_wj_type(inner)),
-        Type::Result(ok, err) => format!(
-            "Result<{}, {}>",
-            format_wj_type(ok),
-            format_wj_type(err)
-        ),
+        Type::Result(ok, err) => format!("Result<{}, {}>", format_wj_type(ok), format_wj_type(err)),
         Type::Vec(inner) => format!("Vec<{}>", format_wj_type(inner)),
         Type::Array(inner, size) => format!("[{}; {}]", format_wj_type(inner), size),
         Type::Tuple(types) => {

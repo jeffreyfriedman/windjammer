@@ -115,13 +115,19 @@ fn accumulate_identifier_usages(
             accumulate_identifier_usages(object, counts);
             accumulate_identifier_usages(index, counts);
         }
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             accumulate_identifier_usages(function, counts);
             for (_, arg) in arguments {
                 accumulate_identifier_usages(arg, counts);
             }
         }
-        Expression::MethodCall { object, arguments, .. } => {
+        Expression::MethodCall {
+            object, arguments, ..
+        } => {
             accumulate_identifier_usages(object, counts);
             for (_, arg) in arguments {
                 accumulate_identifier_usages(arg, counts);
@@ -170,6 +176,5 @@ fn accumulate_identifier_usages(
         Expression::ChannelRecv { channel, .. } => accumulate_identifier_usages(channel, counts),
         Expression::Closure { body, .. } => accumulate_identifier_usages(body, counts),
         Expression::Literal { .. } => {}
-        _ => {}
     }
 }

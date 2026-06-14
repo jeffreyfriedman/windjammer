@@ -47,9 +47,7 @@ fn borrow_runtime_std_str_arg<'ast>(
                 .as_deref()
                 .filter(|t| gen.is_imported_runtime_std_module(t))
         })
-        .is_some_and(
-            super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
-        );
+        .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
     let arg_is_string = gen
         .infer_expression_type(arg)
         .as_ref()
@@ -451,4 +449,3 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
         })
         .collect()
 }
-

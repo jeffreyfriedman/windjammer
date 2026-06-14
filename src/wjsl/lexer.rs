@@ -101,16 +101,16 @@ pub enum Token {
     Shl,
     Shr,
     Assign,
-    PlusAssign,     // +=
-    MinusAssign,    // -=
-    StarAssign,     // *=
-    SlashAssign,    // /=
-    PercentAssign,  // %=
-    AndAssign,      // &=
-    OrAssign,       // |=
-    XorAssign,      // ^=
-    ShlAssign,      // <<=
-    ShrAssign,      // >>=
+    PlusAssign,    // +=
+    MinusAssign,   // -=
+    StarAssign,    // *=
+    SlashAssign,   // /=
+    PercentAssign, // %=
+    AndAssign,     // &=
+    OrAssign,      // |=
+    XorAssign,     // ^=
+    ShlAssign,     // <<=
+    ShrAssign,     // >>=
     Arrow,
 
     // Delimiters

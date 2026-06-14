@@ -1,12 +1,10 @@
 //! IDE analysis helpers for LSP database (calls `windjammer::ide_analysis`).
 
 use crate::database::{SourceFile, Symbol, SymbolKind};
-use tower_lsp::lsp_types::{
-    InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, Position,
-};
+use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use windjammer::ide_analysis::{
-    analyze_source, analyze_source_at_point, DiagnosticSeverity, IdeAnalysisOptions,
-    IdeDiagnostic, IdeOwnershipHint,
+    analyze_source, analyze_source_at_point, DiagnosticSeverity, IdeAnalysisOptions, IdeDiagnostic,
+    IdeOwnershipHint,
 };
 
 /// IDE analysis snapshot for a source file.
@@ -27,7 +25,9 @@ impl IdeAnalysisSnapshot {
 pub fn run_ide_analysis(file: &SourceFile, db: &dyn salsa::Database) -> IdeAnalysisSnapshot {
     let uri = file.uri(db);
     let text = file.text(db);
-    let path = uri.to_file_path().unwrap_or_else(|_| std::path::PathBuf::from("input.wj"));
+    let path = uri
+        .to_file_path()
+        .unwrap_or_else(|_| std::path::PathBuf::from("input.wj"));
 
     let result = analyze_source(
         text,
@@ -53,7 +53,9 @@ pub fn run_type_at_point(
 ) -> Option<String> {
     let uri = file.uri(db);
     let text = file.text(db);
-    let path = uri.to_file_path().unwrap_or_else(|_| std::path::PathBuf::from("input.wj"));
+    let path = uri
+        .to_file_path()
+        .unwrap_or_else(|_| std::path::PathBuf::from("input.wj"));
 
     analyze_source_at_point(
         text,
@@ -104,7 +106,8 @@ pub fn to_inlay_hints(
     }
 
     for hint in &snapshot.ownership_hints {
-        if let Some(position) = parameter_hint_position(source, &hint.function_name, &hint.parameter_name)
+        if let Some(position) =
+            parameter_hint_position(source, &hint.function_name, &hint.parameter_name)
         {
             hints.push(InlayHint {
                 position,
@@ -129,7 +132,11 @@ pub fn to_inlay_hints(
     hints
 }
 
-fn parameter_hint_position(source: &str, function_name: &str, parameter_name: &str) -> Option<Position> {
+fn parameter_hint_position(
+    source: &str,
+    function_name: &str,
+    parameter_name: &str,
+) -> Option<Position> {
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
         if !trimmed.contains("fn ") || !trimmed.contains(function_name) {
@@ -169,8 +176,8 @@ fn find_parameter_token(line: &str, parameter_name: &str) -> Option<usize> {
 
 /// Convert IDE diagnostics to LSP `Diagnostic` values.
 pub fn to_lsp_diagnostics(diagnostics: &[IdeDiagnostic]) -> Vec<tower_lsp::lsp_types::Diagnostic> {
-    use tower_lsp::lsp_types::{Diagnostic, Position, Range};
     use tower_lsp::lsp_types::DiagnosticSeverity as LspSeverity;
+    use tower_lsp::lsp_types::{Diagnostic, Position, Range};
 
     diagnostics
         .iter()
@@ -183,10 +190,7 @@ pub fn to_lsp_diagnostics(diagnostics: &[IdeDiagnostic]) -> Vec<tower_lsp::lsp_t
             let line = d.line.unwrap_or(1).saturating_sub(1);
             Diagnostic {
                 range: Range {
-                    start: Position {
-                        line,
-                        character: 0,
-                    },
+                    start: Position { line, character: 0 },
                     end: Position {
                         line,
                         character: u32::MAX,

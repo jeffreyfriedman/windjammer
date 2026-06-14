@@ -80,14 +80,7 @@ impl<'ast> super::Analyzer<'ast> {
         collect_annotated_locals(&func.body, &mut locals);
 
         let mut candidates = Vec::new();
-        scan_for_aosoa_loops(
-            self,
-            func,
-            &structs,
-            &locals,
-            &func.body,
-            &mut candidates,
-        );
+        scan_for_aosoa_loops(self, func, &structs, &locals, &func.body, &mut candidates);
 
         CacheLocalityAnalysis {
             aosoa_candidates: candidates,
@@ -226,20 +219,16 @@ fn scan_for_aosoa_loops<'ast>(
                     continue;
                 };
                 if let Expression::Identifier {
-                    name: iterable_var,
-                    ..
+                    name: iterable_var, ..
                 } = iterable
                 {
                     if let Some(ty) = locals.get(iterable_var.as_str()) {
                         if let Some(elem) = vec_element_struct_name(ty) {
                             if let Some(fields) = structs.get(&elem) {
                                 if !fields.is_empty()
-                                    && fields
-                                        .iter()
-                                        .all(|(_, ft)| analyzer.is_copy_type(ft))
+                                    && fields.iter().all(|(_, ft)| analyzer.is_copy_type(ft))
                                 {
-                                    let counts =
-                                        count_field_accesses_on_var(&loop_var, body);
+                                    let counts = count_field_accesses_on_var(&loop_var, body);
                                     let total: u64 = counts.values().sum();
                                     if total > 0 {
                                         let mut pairs: Vec<(String, u64)> =
@@ -258,14 +247,12 @@ fn scan_for_aosoa_loops<'ast>(
                                                     | Type::Bool
                                             )
                                         });
-                                        let pattern_kind = if body_indexes_ident(
-                                            iterable_var.as_str(),
-                                            body,
-                                        ) {
-                                            AccessPatternKind::IterableAlsoIndexedInBody
-                                        } else {
-                                            AccessPatternKind::SequentialIteration
-                                        };
+                                        let pattern_kind =
+                                            if body_indexes_ident(iterable_var.as_str(), body) {
+                                                AccessPatternKind::IterableAlsoIndexedInBody
+                                            } else {
+                                                AccessPatternKind::SequentialIteration
+                                            };
                                         out.push(AoSoACandidate {
                                             function_name: func.name.clone(),
                                             loop_var,
@@ -368,7 +355,9 @@ fn stmt_indexes_ident(iterable: &str, st: &Statement<'_>) -> bool {
             false
         }
         Statement::For {
-            iterable: it_expr, body, ..
+            iterable: it_expr,
+            body,
+            ..
         } => {
             if expr_indexes_ident(iterable, it_expr) {
                 return true;
@@ -442,16 +431,18 @@ fn expr_indexes_ident(iterable: &str, expr: &Expression<'_>) -> bool {
             expr_indexes_ident(iterable, left) || expr_indexes_ident(iterable, right)
         }
         Expression::Unary { operand, .. } => expr_indexes_ident(iterable, operand),
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             expr_indexes_ident(iterable, function)
                 || arguments
                     .iter()
                     .any(|(_, a)| expr_indexes_ident(iterable, a))
         }
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             expr_indexes_ident(iterable, object)
                 || arguments
@@ -478,11 +469,9 @@ fn expr_indexes_ident(iterable: &str, expr: &Expression<'_>) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| stmt_indexes_ident(iterable, s))
         }
-        Expression::MapLiteral { pairs, .. } => {
-            pairs.iter().any(|(k, v)| {
-                expr_indexes_ident(iterable, k) || expr_indexes_ident(iterable, v)
-            })
-        }
+        Expression::MapLiteral { pairs, .. } => pairs
+            .iter()
+            .any(|(k, v)| expr_indexes_ident(iterable, k) || expr_indexes_ident(iterable, v)),
         Expression::ChannelSend { channel, value, .. } => {
             expr_indexes_ident(iterable, channel) || expr_indexes_ident(iterable, value)
         }
@@ -516,10 +505,7 @@ fn split_hot_cold(
     (hot, cold)
 }
 
-fn count_field_accesses_on_var(
-    loop_var: &str,
-    stmts: &[&Statement<'_>],
-) -> HashMap<String, u64> {
+fn count_field_accesses_on_var(loop_var: &str, stmts: &[&Statement<'_>]) -> HashMap<String, u64> {
     let mut m = HashMap::new();
     for st in stmts {
         count_field_accesses_stmt(loop_var, st, &mut m);
@@ -583,9 +569,7 @@ fn count_field_accesses_stmt(loop_var: &str, st: &Statement<'_>, m: &mut HashMap
                 count_field_accesses_stmt(loop_var, s, m);
             }
         }
-        Statement::For {
-            iterable, body, ..
-        } => {
+        Statement::For { iterable, body, .. } => {
             count_field_accesses_expr(loop_var, iterable, m);
             for s in body {
                 count_field_accesses_stmt(loop_var, s, m);
@@ -631,16 +615,18 @@ fn count_field_accesses_expr(loop_var: &str, expr: &Expression<'_>, m: &mut Hash
         Expression::Unary { operand, .. } => {
             count_field_accesses_expr(loop_var, operand, m);
         }
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             count_field_accesses_expr(loop_var, function, m);
             for (_, arg) in arguments {
                 count_field_accesses_expr(loop_var, arg, m);
             }
         }
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             count_field_accesses_expr(loop_var, object, m);
             for (_, arg) in arguments {
@@ -670,18 +656,12 @@ fn count_field_accesses_expr(loop_var: &str, expr: &Expression<'_>, m: &mut Hash
                 count_field_accesses_expr(loop_var, a, m);
             }
         }
-        Expression::Range {
-            start,
-            end,
-            ..
-        } => {
+        Expression::Range { start, end, .. } => {
             count_field_accesses_expr(loop_var, start, m);
             count_field_accesses_expr(loop_var, end, m);
         }
         Expression::Closure { body, .. } => count_field_accesses_expr(loop_var, body, m),
-        Expression::Block {
-            statements, ..
-        } => {
+        Expression::Block { statements, .. } => {
             for s in statements {
                 count_field_accesses_stmt(loop_var, s, m);
             }

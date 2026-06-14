@@ -76,7 +76,11 @@ impl<'ast> CodeGenerator<'ast> {
                 let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
                 let self_param = match ownership {
                     OwnershipMode::Borrowed if !self.in_trait_impl && consumes_self => {
-                        if body_modifies { "mut self" } else { "self" }
+                        if body_modifies {
+                            "mut self"
+                        } else {
+                            "self"
+                        }
                     }
                     OwnershipMode::Borrowed => {
                         if body_modifies {
@@ -88,7 +92,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     OwnershipMode::MutBorrowed if !self.in_trait_impl && consumes_self => {
-                        if body_modifies { "mut self" } else { "self" }
+                        if body_modifies {
+                            "mut self"
+                        } else {
+                            "self"
+                        }
                     }
                     OwnershipMode::MutBorrowed => "&mut self",
                     OwnershipMode::Owned => {

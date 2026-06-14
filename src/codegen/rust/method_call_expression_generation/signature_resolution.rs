@@ -29,9 +29,7 @@ impl<'ast> CodeGenerator<'ast> {
             // completely different type's method (e.g. str::contains when we
             // asked for String::contains), which causes wrong coercion.
             let result = resolved
-                .filter(|r| {
-                    !matches!(r.resolution_method, ResolutionMethod::ArgCountValidated)
-                })
+                .filter(|r| !matches!(r.resolution_method, ResolutionMethod::ArgCountValidated))
                 .map(|r| r.sig);
             return result;
         }

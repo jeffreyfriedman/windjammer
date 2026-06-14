@@ -34,9 +34,7 @@ fn include_module_in_explicit_mod_wj(
     if is_subdirectory {
         return pub_mods.is_empty() || pub_mods.iter().any(|m| m == name);
     }
-    pub_mods.is_empty()
-        || pub_mods.iter().any(|m| m == name)
-        || is_test_module(name)
+    pub_mods.is_empty() || pub_mods.iter().any(|m| m == name) || is_test_module(name)
 }
 
 /// Generate lib.rs content for a Windjammer project

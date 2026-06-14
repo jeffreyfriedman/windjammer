@@ -8,9 +8,7 @@ use std::path::{Path, PathBuf};
 /// Import edges: file index → indices of files it directly imports.
 #[derive(Debug, Default)]
 pub struct DependencyGraph {
-    /// file_index → set of imported file indices
-    edges: HashMap<usize, HashSet<usize>>,
-    /// Reverse edges for transitive dependent lookup
+    /// Reverse edges for transitive dependent lookup (importer → imported)
     reverse: HashMap<usize, HashSet<usize>>,
 }
 
@@ -31,16 +29,13 @@ impl DependencyGraph {
 
         let mut edges: HashMap<usize, HashSet<usize>> = HashMap::new();
         for (i, program) in parsed_programs.iter().enumerate() {
-            let file_module = crate::analyzer::type_collector::wj_file_to_module_path(
-                src_base,
-                &sources[i].0,
-            )
-            .unwrap_or_default();
+            let file_module =
+                crate::analyzer::type_collector::wj_file_to_module_path(src_base, &sources[i].0)
+                    .unwrap_or_default();
             let imported = collect_imported_modules(&program.items);
             let mut deps = HashSet::new();
             for import_path in imported {
-                if let Some(dep_idx) =
-                    resolve_import(&file_module, &import_path, &module_to_index)
+                if let Some(dep_idx) = resolve_import(&file_module, &import_path, &module_to_index)
                 {
                     deps.insert(dep_idx);
                 }
@@ -57,7 +52,7 @@ impl DependencyGraph {
             }
         }
 
-        Self { edges, reverse }
+        Self { reverse }
     }
 
     /// All file indices that transitively depend on any of `dirty` (includes dirty themselves).

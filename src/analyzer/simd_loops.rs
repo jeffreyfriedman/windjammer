@@ -57,10 +57,7 @@ pub fn half_open_range_from_zero<'ast>(
     }
 }
 
-fn index_with_loop_var<'ast>(
-    expr: &'ast Expression<'ast>,
-    loop_var: &str,
-) -> Option<(String, ())> {
+fn index_with_loop_var<'ast>(expr: &'ast Expression<'ast>, loop_var: &str) -> Option<(String, ())> {
     match expr {
         Expression::Index { object, index, .. } => {
             if expr_identifier_name(index)? != loop_var {
@@ -116,11 +113,12 @@ fn loop_body_safe_for_simd<'ast>(body: &[&'ast Statement<'ast>]) -> bool {
         return false;
     }
     match body[0] {
-        Statement::Return { .. }
-        | Statement::Break { .. }
-        | Statement::Continue { .. } => false,
-        Statement::If { .. } | Statement::Match { .. } | Statement::While { .. }
-        | Statement::For { .. } | Statement::Loop { .. } => false,
+        Statement::Return { .. } | Statement::Break { .. } | Statement::Continue { .. } => false,
+        Statement::If { .. }
+        | Statement::Match { .. }
+        | Statement::While { .. }
+        | Statement::For { .. }
+        | Statement::Loop { .. } => false,
         Statement::Assignment { target, value, .. } => {
             !expression_contains_call(target) && !expression_contains_call(value)
         }
@@ -131,9 +129,9 @@ fn loop_body_safe_for_simd<'ast>(body: &[&'ast Statement<'ast>]) -> bool {
 
 fn expression_contains_call(expr: &Expression<'_>) -> bool {
     match expr {
-        Expression::Call { .. } | Expression::MethodCall { .. } | Expression::MacroInvocation { .. } => {
-            true
-        }
+        Expression::Call { .. }
+        | Expression::MethodCall { .. }
+        | Expression::MacroInvocation { .. } => true,
         Expression::Binary { left, right, .. } => {
             expression_contains_call(left) || expression_contains_call(right)
         }
@@ -153,9 +151,9 @@ fn expression_contains_call(expr: &Expression<'_>) -> bool {
         Expression::MapLiteral { pairs, .. } => pairs
             .iter()
             .any(|(k, v)| expression_contains_call(k) || expression_contains_call(v)),
-        Expression::Block { statements, .. } => statements
-            .iter()
-            .any(|s| statement_contains_call(s)),
+        Expression::Block { statements, .. } => {
+            statements.iter().any(|s| statement_contains_call(s))
+        }
         Expression::ChannelSend { channel, value, .. } => {
             expression_contains_call(channel) || expression_contains_call(value)
         }
@@ -168,7 +166,9 @@ fn expression_contains_call(expr: &Expression<'_>) -> bool {
 fn statement_contains_call(stmt: &Statement<'_>) -> bool {
     match stmt {
         Statement::Expression { expr, .. } => expression_contains_call(expr),
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expression_contains_call(value)
                 || else_block
                     .as_ref()
@@ -443,12 +443,7 @@ mod tests {
         });
         let body = vec![bad];
         assert!(
-            analyze_for_loop_simd(
-                &Pattern::Identifier("i".to_string()),
-                iterable,
-                &body
-            )
-            .is_none()
+            analyze_for_loop_simd(&Pattern::Identifier("i".to_string()), iterable, &body).is_none()
         );
     }
 }

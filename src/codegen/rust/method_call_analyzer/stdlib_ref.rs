@@ -27,7 +27,9 @@ impl MethodCallAnalyzer {
             let param_is_ref = current_function_params.iter().any(|p| {
                 p.name == *name
                     && crate::codegen::rust::types::param_generates_as_rust_ref(
-                        &p.type_, &p.name, inferred_borrowed_params,
+                        &p.type_,
+                        &p.name,
+                        inferred_borrowed_params,
                     )
             });
             let is_str_ref_optimized = ctx.str_ref_optimized_params.contains(name.as_str());
@@ -61,7 +63,9 @@ impl MethodCallAnalyzer {
                     let is_already_ref = current_function_params.iter().any(|p| {
                         p.name == *name
                             && crate::codegen::rust::types::param_generates_as_rust_ref(
-                                &p.type_, &p.name, inferred_borrowed_params,
+                                &p.type_,
+                                &p.name,
+                                inferred_borrowed_params,
                             )
                     });
                     if is_already_ref {
@@ -72,7 +76,12 @@ impl MethodCallAnalyzer {
             }
 
             if super::super::stdlib_method_traits::is_map_key_method(method)
-                && Self::is_copy_type_with_locals(arg, usize_variables, current_function_params, local_var_types)
+                && Self::is_copy_type_with_locals(
+                    arg,
+                    usize_variables,
+                    current_function_params,
+                    local_var_types,
+                )
             {
                 let arg_name = if let Expression::Identifier { name, .. } = arg {
                     Some(name.as_str())
@@ -93,7 +102,9 @@ impl MethodCallAnalyzer {
                         let is_already_map_key_ref = current_function_params.iter().any(|p| {
                             p.name == name
                                 && crate::codegen::rust::types::param_generates_as_rust_ref(
-                                    &p.type_, &p.name, inferred_borrowed_params,
+                                    &p.type_,
+                                    &p.name,
+                                    inferred_borrowed_params,
                                 )
                         });
                         if is_already_map_key_ref {
@@ -117,7 +128,12 @@ impl MethodCallAnalyzer {
             return true;
         }
 
-        if Self::is_copy_type_with_locals(arg, usize_variables, current_function_params, local_var_types) {
+        if Self::is_copy_type_with_locals(
+            arg,
+            usize_variables,
+            current_function_params,
+            local_var_types,
+        ) {
             return false;
         }
 

@@ -45,7 +45,10 @@ fn collect_struct_fields_rec(items: &[Item<'_>], m: &mut HashMap<String, Vec<(St
     }
 }
 
-fn emit_one_candidate(c: &AoSoACandidate, layouts: &HashMap<String, Vec<(String, Type)>>) -> String {
+fn emit_one_candidate(
+    c: &AoSoACandidate,
+    layouts: &HashMap<String, Vec<(String, Type)>>,
+) -> String {
     let mut s = String::new();
     let soa_name = format!("{}SoA", c.element_struct);
     s.push_str(&format!(

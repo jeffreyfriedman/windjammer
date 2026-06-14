@@ -218,11 +218,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
 
     let mut registry = crate::analyzer::SignatureRegistry::new();
     let mut analyzer = crate::analyzer::Analyzer::new();
-    merge_wj_meta_signatures_and_copy_structs(
-        &proj.join("src"),
-        &mut registry,
-        &mut analyzer,
-    );
+    merge_wj_meta_signatures_and_copy_structs(&proj.join("src"), &mut registry, &mut analyzer);
 
     let sig = registry
         .get_signature("VoxelRenderer::set_camera")

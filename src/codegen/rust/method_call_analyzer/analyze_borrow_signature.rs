@@ -56,7 +56,9 @@ pub(super) fn ref_from_known_method_signature(
                 let already_rust_str = current_function_params.iter().any(|p| {
                     p.name == *arg_name
                         && crate::codegen::rust::types::param_generates_as_rust_ref(
-                            &p.type_, &p.name, inferred_borrowed_params,
+                            &p.type_,
+                            &p.name,
+                            inferred_borrowed_params,
                         )
                 });
                 if already_rust_str {
@@ -85,7 +87,9 @@ pub(super) fn ref_from_known_method_signature(
         let already_rust_str = current_function_params.iter().any(|p| {
             p.name == *arg_name
                 && crate::codegen::rust::types::param_generates_as_rust_ref(
-                    &p.type_, &p.name, inferred_borrowed_params,
+                    &p.type_,
+                    &p.name,
+                    inferred_borrowed_params,
                 )
         });
         if already_rust_str {

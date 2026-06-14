@@ -65,8 +65,8 @@ pub fn generate_tests_lib_rs(project_root: &Path) -> Result<Option<PathBuf>> {
             continue;
         }
         let stem = name.strip_suffix(".rs").unwrap_or(name);
-        let contents = fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let contents =
+            fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let helper = is_helper_module(stem, &contents);
         modules.push((stem.to_string(), helper));
     }

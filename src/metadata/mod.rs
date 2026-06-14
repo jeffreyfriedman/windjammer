@@ -303,9 +303,7 @@ fn merge_single_wj_meta_file(
 
 /// Build pre-analysis metadata from AST items only (no registry needed).
 /// Used during library compilation to seed `CrateMetadata` before ownership analysis.
-pub fn collect_ast_skeleton_metadata(
-    program: &crate::parser::Program,
-) -> ModuleMetadata {
+pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> ModuleMetadata {
     use crate::parser::ast::core::Item;
 
     let mut meta = ModuleMetadata::new(String::new());
@@ -441,11 +439,7 @@ pub fn collect_analyzed_module_metadata(
                     if let Some(sig) = registry.get_signature(&full_name) {
                         meta.functions.insert(
                             full_name,
-                            metadata_function_sig_from_analyzer(
-                                sig,
-                                true,
-                                Some(decl.name.clone()),
-                            ),
+                            metadata_function_sig_from_analyzer(sig, true, Some(decl.name.clone())),
                         );
                     }
                 }

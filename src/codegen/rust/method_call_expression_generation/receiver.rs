@@ -26,7 +26,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
         // since those methods already produce an owned value.
         let prev_coerce = self.coerce_string_literals_to_owned;
-        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter") || method == "to_string" {
+        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter") || method == "to_string"
+        {
             self.coerce_string_literals_to_owned = false;
         }
         let mut obj_str = self.generate_expression_with_precedence(object);
@@ -51,16 +52,20 @@ impl<'ast> CodeGenerator<'ast> {
         // and the variable is a borrowed iterator variable (from `for x in &collection`).
         // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
         if let Expression::Identifier { name, .. } = object {
-            let is_type_preserving = matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter");
-            let is_borrowed_iter = self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
-            let is_mut_borrowed_param = self.inferred_mut_borrowed_params.contains(name)
-                && !is_type_preserving;
+            let is_type_preserving =
+                matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter");
+            let is_borrowed_iter =
+                self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
+            let is_mut_borrowed_param =
+                self.inferred_mut_borrowed_params.contains(name) && !is_type_preserving;
             if is_borrowed_iter || is_mut_borrowed_param {
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
                         if let Some(tn) = Self::type_to_name(&recv_ty) {
                             let qualified = format!("{}::{}", tn, method);
-                            let sig_opt = self.signature_registry.get_signature(&qualified)
+                            let sig_opt = self
+                                .signature_registry
+                                .get_signature(&qualified)
                                 .or_else(|| {
                                     let base = tn.split('<').next().unwrap_or(&tn);
                                     if base != tn {
@@ -82,9 +87,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     // Suffix match: find any `::method` in the registry.
                                     // Conservative for ownership check (any mutating method
                                     // prevents spurious clone).
-                                    self.signature_registry.find_signature_ending_with(
-                                        &format!("::{method}")
-                                    )
+                                    self.signature_registry
+                                        .find_signature_ending_with(&format!("::{method}"))
                                 });
                             if let Some(sig) = sig_opt {
                                 if sig.has_self_receiver
@@ -94,7 +98,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     obj_str = format!("{}.clone()", obj_str);
                                 }
-                            } else if is_borrowed_iter && !is_mut_borrowed_param && !obj_str.ends_with(".clone()") {
+                            } else if is_borrowed_iter
+                                && !is_mut_borrowed_param
+                                && !obj_str.ends_with(".clone()")
+                            {
                                 // Unknown signature on borrowed iterator var — clone conservatively (E0507).
                                 obj_str = format!("{}.clone()", obj_str);
                             }
@@ -155,54 +162,6 @@ impl<'ast> CodeGenerator<'ast> {
         obj_str
     }
 
-    /// True when the resolved method signature takes `&self` or `&mut self` (not owned `self`).
-    /// Unknown signatures return false so index elements are cloned before the call (E0507-safe).
-    fn method_call_receiver_is_ref(
-        &self,
-        object: &Expression<'ast>,
-        method: &str,
-    ) -> bool {
-        let Some(recv_ty) = self.infer_expression_type(object) else {
-            return false;
-        };
-        let Some(tn) = Self::type_to_name(&recv_ty) else {
-            return false;
-        };
-        let qualified = format!("{tn}::{method}");
-        let sig_opt = self.signature_registry.get_signature(&qualified)
-            .or_else(|| {
-                let base = tn.split('<').next().unwrap_or(&tn);
-                if base != tn {
-                    let base_q = format!("{base}::{method}");
-                    self.signature_registry.get_signature(&base_q)
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
-                    let trait_q = format!("{trait_name}::{method}");
-                    self.signature_registry.get_signature(&trait_q)
-                })
-            })
-            .or_else(|| {
-                self.signature_registry.find_signature_ending_with(
-                    &format!("::{method}")
-                )
-            });
-        let Some(sig) = sig_opt else {
-            return false;
-        };
-        if !sig.has_self_receiver {
-            return false;
-        }
-        matches!(
-            sig.param_ownership.first(),
-            Some(crate::analyzer::OwnershipMode::Borrowed
-                | crate::analyzer::OwnershipMode::MutBorrowed)
-        )
-    }
-
     /// Extract the trait name from `Box<dyn Trait>`, `dyn Trait`, or `TraitObject("Trait")`.
     fn extract_dyn_trait_name(ty: &crate::parser::Type) -> Option<&str> {
         use crate::parser::Type;
@@ -210,9 +169,9 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::extract_dyn_trait_name(inner)
             }
-            Type::Parameterized(name, params) if name == "Box" => {
-                params.first().and_then(|inner| Self::extract_dyn_trait_name(inner))
-            }
+            Type::Parameterized(name, params) if name == "Box" => params
+                .first()
+                .and_then(|inner| Self::extract_dyn_trait_name(inner)),
             Type::TraitObject(name) => Some(name.as_str()),
             Type::Custom(name) => name.strip_prefix("dyn "),
             _ => None,

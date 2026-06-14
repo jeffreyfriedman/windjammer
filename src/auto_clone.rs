@@ -320,13 +320,14 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
                 for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                     // HashMap/BTreeMap lookups borrow keys (`&Q`); do not treat as moves.
-                    let arg_kind = if crate::analyzer::stdlib_method_traits::is_map_key_method(method)
-                        && i == 0
-                    {
-                        UsageKind::Read
-                    } else {
-                        UsageKind::Move
-                    };
+                    let arg_kind =
+                        if crate::analyzer::stdlib_method_traits::is_map_key_method(method)
+                            && i == 0
+                        {
+                            UsageKind::Read
+                        } else {
+                            UsageKind::Move
+                        };
                     Self::collect_usages_from_expression(arg_expr, idx, arg_kind, in_loop, map);
                 }
             }

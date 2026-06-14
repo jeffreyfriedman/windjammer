@@ -3,7 +3,6 @@
 use crate::analyzer::{Analyzer, OwnershipMode, SignatureRegistry};
 use crate::linter;
 use crate::parser::ast::core::Item;
-use crate::parser::ast::types::Type;
 use crate::type_inference::{FloatInference, IntInference};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -203,10 +202,7 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
     for item in &program.items {
         if let Item::Function { decl, .. } = item {
             if let Some(ret) = &decl.return_type {
-                inferred_types.insert(
-                    format!("{}::return", decl.name),
-                    format_wj_type(ret),
-                );
+                inferred_types.insert(format!("{}::return", decl.name), format_wj_type(ret));
             }
         }
     }
@@ -233,7 +229,10 @@ pub fn analyze_source_at_point(
 ) -> IdeAnalysisResult {
     let mut result = analyze_source(source, options);
     // Heuristic: match function return type annotation at cursor line via declared names.
-    if let Some((_, ty)) = result.inferred_types.iter().find(|(name, _)| name.contains("::return"))
+    if let Some((_, ty)) = result
+        .inferred_types
+        .iter()
+        .find(|(name, _)| name.contains("::return"))
     {
         if line <= 10 {
             result.type_at_point = Some(ty.clone());
@@ -300,7 +299,10 @@ pub fn read_only(self, x: i32) -> i32 {
         );
         assert!(result.success, "{:?}", result.diagnostics);
         assert!(
-            result.ownership_hints.iter().any(|h| h.parameter_name == "x"),
+            result
+                .ownership_hints
+                .iter()
+                .any(|h| h.parameter_name == "x"),
             "expected ownership hint for parameter x"
         );
     }
