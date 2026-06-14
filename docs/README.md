@@ -37,7 +37,7 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`TOOLING_VISION.md`](TOOLING_VISION.md) - Tooling ecosystem
 
 **Windjammer Game Framework (vision & positioning)**  
-Companion repo **`windjammer-game`**. Summary: [`GAME_ENGINE_VISION.md`](GAME_ENGINE_VISION.md).
+Companion repo **`windjammer-game`**: [`../windjammer-game/VISION.md`](../windjammer-game/VISION.md), [`../windjammer-game/COMPETITIVE_POSITIONING.md`](../windjammer-game/COMPETITIVE_POSITIONING.md).
 
 **Project Management:**
 - [`PUBLISHING.md`](PUBLISHING.md) - Publishing and release process
