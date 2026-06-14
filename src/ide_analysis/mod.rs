@@ -1,6 +1,6 @@
 //! IDE-facing analysis: parse + ownership + type inference without codegen.
 
-use crate::analyzer::{Analyzer, SignatureRegistry};
+use crate::analyzer::{Analyzer, OwnershipMode, SignatureRegistry};
 use crate::linter;
 use crate::parser::ast::core::Item;
 use crate::parser::ast::types::Type;
@@ -34,6 +34,41 @@ pub struct IdeAnalysisResult {
     /// Variable and parameter names → formatted Windjammer type strings.
     pub inferred_types: HashMap<String, String>,
     pub type_at_point: Option<String>,
+    /// Ownership inference for function parameters (same pass as `wj build` analyzer).
+    pub ownership_hints: Vec<IdeOwnershipHint>,
+}
+
+/// Ownership hint for inlay hints / IDE display.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IdeOwnershipHint {
+    pub function_name: String,
+    pub parameter_name: String,
+    pub mode: OwnershipHintMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OwnershipHintMode {
+    Owned,
+    Borrowed,
+    MutBorrowed,
+}
+
+impl OwnershipHintMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Owned => "owned",
+            Self::Borrowed => "borrowed (&)",
+            Self::MutBorrowed => "mut borrow (&mut)",
+        }
+    }
+
+    pub fn inlay_suffix(self) -> &'static str {
+        match self {
+            Self::Owned => "/* owned */",
+            Self::Borrowed => "/* & */",
+            Self::MutBorrowed => "/* &mut */",
+        }
+    }
 }
 
 /// Options controlling lint and metadata loading.
@@ -71,6 +106,7 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
                 diagnostics,
                 inferred_types: HashMap::new(),
                 type_at_point: None,
+                ownership_hints: Vec::new(),
             };
         }
     };
@@ -117,15 +153,30 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
     let copy_structs: std::collections::HashSet<String> =
         analyzer.get_copy_structs().into_iter().collect();
     let mut analyzer_pass2 = Analyzer::new_with_copy_structs(copy_structs);
-    if let Err(e) = analyzer_pass2
-        .analyze_program_with_global_signatures(&program, &global_signatures)
-        .map_err(|e| e.to_string())
-    {
-        diagnostics.push(IdeDiagnostic {
-            message: format!("Second-pass analysis error: {}", e),
-            severity: DiagnosticSeverity::Error,
-            line: None,
-        });
+    let mut ownership_hints = Vec::new();
+    match analyzer_pass2.analyze_program_with_global_signatures(&program, &global_signatures) {
+        Ok((analyzed_functions, _, _)) => {
+            for func in analyzed_functions {
+                for (param_name, mode) in &func.inferred_ownership {
+                    ownership_hints.push(IdeOwnershipHint {
+                        function_name: func.decl.name.clone(),
+                        parameter_name: param_name.clone(),
+                        mode: match mode {
+                            OwnershipMode::Owned => OwnershipHintMode::Owned,
+                            OwnershipMode::Borrowed => OwnershipHintMode::Borrowed,
+                            OwnershipMode::MutBorrowed => OwnershipHintMode::MutBorrowed,
+                        },
+                    });
+                }
+            }
+        }
+        Err(e) => {
+            diagnostics.push(IdeDiagnostic {
+                message: format!("Second-pass analysis error: {}", e),
+                severity: DiagnosticSeverity::Error,
+                line: None,
+            });
+        }
     }
 
     let mut float_inference = FloatInference::new();
@@ -169,6 +220,7 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
         diagnostics,
         inferred_types,
         type_at_point: None,
+        ownership_hints,
     }
 }
 
@@ -229,6 +281,27 @@ pub fn add(a: i32, b: i32) -> i32 {
         assert_eq!(
             result.inferred_types.get("add::return"),
             Some(&"i32".to_string())
+        );
+    }
+
+    #[test]
+    fn analyze_exports_ownership_hints() {
+        let source = r#"
+pub fn read_only(self, x: i32) -> i32 {
+    x
+}
+"#;
+        let result = analyze_source(
+            source,
+            IdeAnalysisOptions {
+                enable_lint: false,
+                file_path: PathBuf::from("test.wj"),
+            },
+        );
+        assert!(result.success, "{:?}", result.diagnostics);
+        assert!(
+            result.ownership_hints.iter().any(|h| h.parameter_name == "x"),
+            "expected ownership hint for parameter x"
         );
     }
 

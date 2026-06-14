@@ -31,10 +31,35 @@ pub struct InlineAnalysis {
     pub unsafe_reason: Option<String>,
 }
 
+/// Result of inline-variable refactoring for MCP / preview consumers.
+#[derive(Debug, Clone)]
+pub struct InlineVariableResult {
+    pub edit: WorkspaceEdit,
+    pub variable_name: String,
+    pub occurrences_replaced: usize,
+}
+
 impl<'a> InlineRefactoring<'a> {
     /// Create a new inline refactoring
     pub fn new(db: &'a WindjammerDatabase, uri: Url, position: Position) -> Self {
         Self { db, uri, position }
+    }
+
+    /// Execute and return workspace edit plus metadata for MCP responses.
+    pub fn execute_with_metadata(&self, source: &str) -> Result<InlineVariableResult, String> {
+        let analysis = self.analyze_variable(source)?;
+        if !analysis.is_safe {
+            return Err(analysis
+                .unsafe_reason
+                .unwrap_or_else(|| "Cannot inline: unsafe".to_string()));
+        }
+        let occurrences_replaced = analysis.usage_ranges.len();
+        let edit = self.execute(source)?;
+        Ok(InlineVariableResult {
+            edit,
+            variable_name: analysis.name,
+            occurrences_replaced,
+        })
     }
 
     /// Execute the refactoring
