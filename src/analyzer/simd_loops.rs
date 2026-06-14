@@ -398,7 +398,7 @@ mod tests {
         match analyze_for_loop_simd(
             &Pattern::Identifier("i".to_string()),
             iterable,
-            &[&body_stmt],
+            &[body_stmt],
         )
         .expect("pattern")
         {

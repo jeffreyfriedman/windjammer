@@ -1,7 +1,6 @@
 /// TDD test: Assignment in if statement (single-line body)
 ///
 /// Bug: `if (cond) { x = value; }` fails with "Unexpected token: Assign"
-
 use windjammer::wjsl::transpile_wjsl;
 
 #[test]

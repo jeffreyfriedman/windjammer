@@ -164,7 +164,7 @@ pub fn method_returns_usize_qualified(
 ) -> bool {
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| return_type_is(s, |ty| is_usize_type(ty)))
+    sig.is_some_and(|s| return_type_is(s, is_usize_type))
 }
 
 /// Does this method return an iterator?
@@ -229,7 +229,7 @@ pub fn method_auto_borrows_arg_qualified(
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
-        first_arg_type(s).is_some_and(|ty| is_reference_type(ty))
+        first_arg_type(s).is_some_and(is_reference_type)
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
     })
 }
@@ -249,11 +249,9 @@ pub fn method_is_map_key_qualified(
             if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
                 if sig.has_self_receiver
                     && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
-                {
-                    if first_arg_type(sig).is_some_and(|ty| is_reference_type(ty)) {
+                    && first_arg_type(sig).is_some_and(is_reference_type) {
                         return true;
                     }
-                }
             }
         }
         return false;
@@ -262,7 +260,7 @@ pub fn method_is_map_key_qualified(
     sig.is_some_and(|s| {
         s.has_self_receiver
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-            && first_arg_type(s).is_some_and(|ty| is_reference_type(ty))
+            && first_arg_type(s).is_some_and(is_reference_type)
     })
 }
 
@@ -293,7 +291,7 @@ pub fn method_is_capacity_cast_qualified(
 ) -> bool {
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| first_arg_type(s).is_some_and(|ty| is_usize_type(ty)))
+    sig.is_some_and(|s| first_arg_type(s).is_some_and(is_usize_type))
 }
 
 /// Does the first non-self param take a usize index?
@@ -313,7 +311,7 @@ pub fn method_is_closure_taking_qualified(
 ) -> bool {
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| first_arg_type(s).is_some_and(|ty| is_closure_type(ty)))
+    sig.is_some_and(|s| first_arg_type(s).is_some_and(is_closure_type))
 }
 
 /// Is this a slice search method (`contains`, `binary_search`) whose first arg
@@ -344,7 +342,7 @@ pub fn method_is_string_search_qualified(
     sig.is_some_and(|s| {
         s.has_self_receiver
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-            && first_arg_type(s).is_some_and(|ty| is_str_reference(ty))
+            && first_arg_type(s).is_some_and(is_str_reference)
     })
 }
 

@@ -71,7 +71,7 @@ impl MethodCallAnalyzer {
             Type::RawPointer { .. } | Type::FunctionPointer { .. } => true,
             Type::Tuple(types) => types
                 .iter()
-                .all(|t| Self::is_copy_type_annotation_internal(t)),
+                .all(Self::is_copy_type_annotation_internal),
             _ => false,
         }
     }

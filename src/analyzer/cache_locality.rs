@@ -150,7 +150,7 @@ fn collect_annotated_locals(stmts: &[&Statement<'_>], out: &mut HashMap<String, 
             }
             Statement::Match { arms, .. } => {
                 for arm in arms {
-                    collect_annotated_locals_in_expr(&arm.body, out);
+                    collect_annotated_locals_in_expr(arm.body, out);
                 }
             }
             Statement::Thread { body, .. } | Statement::Async { body, .. } => {
@@ -162,10 +162,7 @@ fn collect_annotated_locals(stmts: &[&Statement<'_>], out: &mut HashMap<String, 
 }
 
 fn collect_annotated_locals_in_expr(expr: &Expression<'_>, out: &mut HashMap<String, Type>) {
-    match expr {
-        Expression::Block { statements, .. } => collect_annotated_locals(statements, out),
-        _ => {}
-    }
+    if let Expression::Block { statements, .. } = expr { collect_annotated_locals(statements, out) }
 }
 
 fn vec_element_struct_name(ty: &Type) -> Option<String> {
@@ -190,11 +187,8 @@ fn scan_for_aosoa_loops_in_expr<'ast>(
     expr: &'ast Expression<'ast>,
     out: &mut Vec<AoSoACandidate>,
 ) {
-    match expr {
-        Expression::Block { statements, .. } => {
-            scan_for_aosoa_loops(analyzer, func, structs, locals, statements, out);
-        }
-        _ => {}
+    if let Expression::Block { statements, .. } = expr {
+        scan_for_aosoa_loops(analyzer, func, structs, locals, statements, out);
     }
 }
 
@@ -395,7 +389,7 @@ fn stmt_indexes_ident(iterable: &str, st: &Statement<'_>) -> bool {
                             }
                         }
                     }
-                    ref e => {
+                    e => {
                         if expr_indexes_ident(iterable, e) {
                             return true;
                         }

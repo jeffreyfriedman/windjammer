@@ -85,6 +85,7 @@ impl IntInference {
     /// expression (field access, variable, etc.) and the other is an unsuffixed
     /// int literal, constrain the literal to match the typed operand's type.
     /// This avoids the bidirectional MustMatch that caused backward propagation bugs.
+    #[allow(clippy::too_many_arguments)]
     fn propagate_typed_operand_to_literal<'ast>(
         &mut self,
         left: &'ast Expression<'ast>,
@@ -100,7 +101,7 @@ impl IntInference {
                 self.constraints.push(IntConstraint::MustBe(
                     right_id,
                     int_type,
-                    format!("literal must match typed operand"),
+                    "literal must match typed operand".to_string(),
                 ));
             }
         }
@@ -109,7 +110,7 @@ impl IntInference {
                 self.constraints.push(IntConstraint::MustBe(
                     left_id,
                     int_type,
-                    format!("literal must match typed operand"),
+                    "literal must match typed operand".to_string(),
                 ));
             }
         }

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 fn profiling_enabled() -> bool {
-    std::env::var("WJ_PROFILE").map_or(false, |v| v == "1" || v == "true")
+    std::env::var("WJ_PROFILE").is_ok_and(|v| v == "1" || v == "true")
 }
 
 fn profile_phase(phase: &str, start: Instant) {
@@ -1042,6 +1042,7 @@ fn analyze_file_for_step4b(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_parallel_float_inference(
     sources: &[(PathBuf, String)],
     parsed_programs: &[crate::parser::Program<'static>],

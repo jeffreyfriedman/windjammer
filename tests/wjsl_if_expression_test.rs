@@ -15,7 +15,6 @@
 /// Bug: `let x = if (cond) { a } else { b }` fails with
 /// "[line N:18] Unexpected token in expression: If" because the WJSL
 /// body type checker only supported if *statements*, not if *expressions*.
-
 use windjammer::wjsl::transpile_wjsl;
 
 #[test]

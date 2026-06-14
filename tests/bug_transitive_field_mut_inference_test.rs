@@ -11,7 +11,6 @@
 ///
 /// Expected: Outer::do_work generates `&mut self` (not `&self`)
 /// because it transitively mutates through self.inner.
-
 fn compile_wj_to_rust(test_name: &str, wj_source: &str) -> String {
     let dir = std::env::temp_dir().join(format!("wj_transitive_mut_{}", test_name));
     let _ = std::fs::remove_dir_all(&dir);

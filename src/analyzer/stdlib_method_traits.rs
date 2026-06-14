@@ -434,7 +434,7 @@ pub fn method_is_map_key_qualified(
                 if sig.has_self_receiver
                     && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
                 {
-                    if first_arg_type(sig).is_some_and(|ty| is_reference_type(ty)) {
+                    if first_arg_type(sig).is_some_and(is_reference_type) {
                         return true;
                     }
                 }
@@ -446,7 +446,7 @@ pub fn method_is_map_key_qualified(
     sig.is_some_and(|s| {
         s.has_self_receiver
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-            && first_arg_type(s).is_some_and(|ty| is_reference_type(ty))
+            && first_arg_type(s).is_some_and(is_reference_type)
     })
 }
 

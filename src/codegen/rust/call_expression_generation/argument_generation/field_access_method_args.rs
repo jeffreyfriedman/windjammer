@@ -51,7 +51,7 @@ fn borrow_runtime_std_str_arg<'ast>(
     let arg_is_string = gen
         .infer_expression_type(arg)
         .as_ref()
-        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t));
+        .is_some_and(crate::codegen::rust::string_utilities::param_is_owned_string_type);
     if asref_str_module
         && arg_is_string
         && matches!(
