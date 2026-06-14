@@ -217,17 +217,16 @@ impl<'ast> Analyzer<'ast> {
                             .insert("self".to_string(), OwnershipMode::Owned);
                     }
                     OwnershipHint::Inferred => {
-                        // Omitted receiver: infer from trait body. Abstract: void → &mut self; with return → &self.
+                        // Omitted receiver: infer from trait body. Abstract void game-loop
+                        // hooks (update) need &mut self; read-only hooks (render) use &self.
                         let modifies_self =
                             self.function_modifies_self_fields_with_registry(func, Some(registry));
-                        let self_ownership = if modifies_self {
+                        let is_mutating_game_loop_hook = matches!(
+                            func.name.as_str(),
+                            "update" | "init" | "input" | "cleanup" | "render3d"
+                        );
+                        let self_ownership = if modifies_self || is_mutating_game_loop_hook {
                             OwnershipMode::MutBorrowed
-                        } else if func.body.is_empty() {
-                            if func.return_type.is_some() {
-                                OwnershipMode::Borrowed
-                            } else {
-                                OwnershipMode::MutBorrowed
-                            }
                         } else {
                             OwnershipMode::Borrowed
                         };

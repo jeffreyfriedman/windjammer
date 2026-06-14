@@ -52,7 +52,7 @@ pub fn build_library(
     external_paths: &HashMap<String, PathBuf>,
     crate_metadata: CrateMetadata,
 ) -> Result<()> {
-    if std::env::var("WJ_LEGACY_MULTIPASS").map_or(false, |v| v == "1" || v == "true") {
+    if std::env::var("WJ_LEGACY_MULTIPASS").is_ok_and(|v| v == "1" || v == "true") {
         eprintln!("Using legacy multipass build (WJ_LEGACY_MULTIPASS=1)");
         build_library_multipass(
             wj_files,

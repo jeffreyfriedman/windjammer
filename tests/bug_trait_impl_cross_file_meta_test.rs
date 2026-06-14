@@ -160,9 +160,7 @@ impl RenderPort for GameRenderer {
     let _game_renderer_rs = test_dir.join("out").join("game_renderer.rs");
 
     // Create a lib.rs that includes both modules
-    let lib_rs = format!(
-        "mod render_port;\nmod game_renderer;\n"
-    );
+    let lib_rs = "mod render_port;\nmod game_renderer;\n".to_string();
     fs::write(test_dir.join("out").join("lib.rs"), lib_rs).unwrap();
 
     let rustc_out = Command::new("rustc")

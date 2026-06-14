@@ -4,7 +4,7 @@ use crate::wjsl::ast::*;
 use crate::wjsl::lexer::Token;
 use crate::wjsl::shader_type_rules::{
     check_binary_op, element_type_for_index, is_integer_scalar, is_numeric, scalar_of,
-    type_to_string, types_match, BinaryOp,
+    type_to_string, BinaryOp,
 };
 use crate::wjsl::type_checker::BodyParser;
 use anyhow::{anyhow, Result};
@@ -390,17 +390,13 @@ impl<'a> BodyParser<'a> {
         }
         self.advance(); // consume 'else'
 
-        let else_ty = if matches!(self.current, Token::If) {
+        let _else_ty = if matches!(self.current, Token::If) {
             self.parse_if_expression()?
         } else {
             self.parse_block_expr_value()?
         };
 
-        if types_match(&then_ty, &else_ty) {
-            Ok(then_ty)
-        } else {
-            Ok(then_ty)
-        }
+        Ok(then_ty)
     }
 
     pub(crate) fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {

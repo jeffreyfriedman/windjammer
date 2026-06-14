@@ -94,8 +94,6 @@ fn emit_one_candidate(
     }
     s.push_str("}\n");
 
-    s.push_str(&format!(
-        "// References: Unity DOTS chunk storage, Rust soa/soa-derive patterns, Mike Acton DOD talks.\n"
-    ));
+    s.push_str("// References: Unity DOTS chunk storage, Rust soa/soa-derive patterns, Mike Acton DOD talks.\n");
     s
 }

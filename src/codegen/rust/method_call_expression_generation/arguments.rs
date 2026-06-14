@@ -348,7 +348,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let arg_is_string = self
                         .infer_expression_type(arg_to_generate)
                         .as_ref()
-                        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t));
+                        .is_some_and(crate::codegen::rust::string_utilities::param_is_owned_string_type);
                     if asref_str_module
                         && arg_is_string
                         && matches!(

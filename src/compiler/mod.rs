@@ -143,6 +143,7 @@ pub(crate) fn ensure_output_parent_dir(output_file: &std::path::Path) -> anyhow:
 
 /// Generate the final Rust code, apply self-receiver upgrades, write the output,
 /// and emit `.wj.meta` metadata when targeting Rust.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn write_generated_rust_and_meta<'ast>(
     codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
     program: &crate::parser::Program<'ast>,

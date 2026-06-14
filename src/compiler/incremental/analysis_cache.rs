@@ -36,7 +36,7 @@ pub fn compute_reanalysis_set(
         }
     }
 
-    if std::env::var("WJ_INCREMENTAL_TRACE").map_or(false, |v| v == "1" || v == "true") {
+    if std::env::var("WJ_INCREMENTAL_TRACE").is_ok_and(|v| v == "1" || v == "true") {
         eprintln!(
             "[wj-incremental] {} direct dirty files before dependents",
             dirty.len()

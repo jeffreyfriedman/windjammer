@@ -714,6 +714,93 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Like [`Self::has_potentially_mutating_method_call`] but only for calls under `?`.
+    /// Example: `loader.load(...)?` must not leave `loader` as `&T` when `.load()` may need &mut.
+    pub(super) fn has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            if self.stmt_has_potentially_mutating_method_call_in_tryop(name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn stmt_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, expr)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+            }
+            Statement::Return { value: Some(v), .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, v)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
+                    || self.has_potentially_mutating_method_call_in_tryop(name, then_block)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.has_potentially_mutating_method_call_in_tryop(name, b)
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
+                    || self.has_potentially_mutating_method_call_in_tryop(name, body)
+            }
+            Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                self.has_potentially_mutating_method_call_in_tryop(name, body)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+                    || arms.iter().any(|arm| {
+                        self.expr_has_potentially_mutating_method_call_in_tryop(name, arm.body)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn expr_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::TryOp { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, expr)
+            }
+            Expression::Block { statements, .. } => {
+                self.has_potentially_mutating_method_call_in_tryop(name, statements)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, left)
+                    || self.expr_has_potentially_mutating_method_call_in_tryop(name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, operand)
+            }
+            _ => false,
+        }
+    }
+
     /// Track which local variables are mutated in a function body
     /// This enables automatic `mut` inference - users don't need to write `let mut x`
     pub fn track_mutations(

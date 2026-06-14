@@ -155,10 +155,10 @@ pub fn load_merged_external_struct_fields(
     exclude_local: Option<&std::collections::HashSet<String>>,
 ) -> HashMap<String, HashMap<String, Type>> {
     let mut merged: HashMap<String, HashMap<String, Type>> = HashMap::new();
-    for (_crate_name, meta_path) in external_paths {
+    for meta_path in external_paths.values() {
         let fields = load_struct_field_types_from_file(meta_path);
         for (struct_name, field_map) in fields {
-            if exclude_local.map_or(true, |locals| !locals.contains(&struct_name)) {
+            if exclude_local.is_none_or(|locals| !locals.contains(&struct_name)) {
                 merged.entry(struct_name).or_default().extend(field_map);
             }
         }

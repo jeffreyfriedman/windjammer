@@ -81,7 +81,7 @@ fn merged_mod_rs_for_mod_wj(
     let relative = source_path.strip_prefix(src_base).ok()?;
     let parent = relative.parent().unwrap_or_else(|| Path::new(""));
     let mut mod_rs = output_dir.to_path_buf();
-    if parent.as_os_str().len() > 0 {
+    if !parent.as_os_str().is_empty() {
         mod_rs.push(parent);
     }
     mod_rs.push("mod.rs");
@@ -308,17 +308,15 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
                 output,
                 epoch,
             )
-        } else if !is_library_codegen_cache_valid(
-            source,
-            file,
-            &output_file,
-            src_base,
-            output,
-            dep_roots,
-        ) {
-            false
         } else {
-            true
+            is_library_codegen_cache_valid(
+                source,
+                file,
+                &output_file,
+                src_base,
+                output,
+                dep_roots,
+            )
         };
         if !cache_valid {
             stale.push(file.clone());

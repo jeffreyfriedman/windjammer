@@ -475,7 +475,7 @@ pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std
     }
     if let Ok(json) = serde_json::to_string_pretty(meta) {
         crate::compiler::write_if_changed(&meta_path, &json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
     }
     Ok(())
 }

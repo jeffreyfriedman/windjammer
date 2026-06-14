@@ -408,7 +408,7 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     || arms
                         .iter()
-                        .any(|arm| string_utilities::match_arm_needs_string_ascription(&arm.body));
+                        .any(|arm| string_utilities::match_arm_needs_string_ascription(arm.body));
 
                 // Set context flag BEFORE generating arms
                 let old_in_match_arm = self.in_match_arm_needing_string;

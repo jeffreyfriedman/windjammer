@@ -9,4 +9,6 @@
 //! Run all tests:  cargo test --release --test all
 //! Run one module: cargo test --release --test all -- module_name::test_fn
 
+#![allow(clippy::duplicate_mod)]
+
 include!(concat!(env!("OUT_DIR"), "/all_tests_generated.rs"));
