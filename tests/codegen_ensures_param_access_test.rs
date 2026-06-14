@@ -112,7 +112,7 @@ fn test_create_user() {
     // SUCCESS: The code compiles, meaning the bug is fixed!
     // Verify the fix: parameters should be cloned before function body
     assert!(
-        rust_code.contains("__name_for_ensures") || rust_code.contains("name.clone()"),
+        rust_code.contains("__name__for_ensures") || rust_code.contains("name.clone()"),
         "Expected parameter to be cloned for @ensures access"
     );
 }

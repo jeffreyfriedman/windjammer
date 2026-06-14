@@ -32,12 +32,18 @@ impl Parser {
                 None
             };
 
-            let variant_name = if let Token::Ident(n) = self.current_token() {
-                let name = n.clone();
-                self.advance();
-                name
-            } else {
-                return Err("Expected variant name".to_string());
+            let variant_name = match self.current_token() {
+                Token::Ident(n) => {
+                    let name = n.clone();
+                    self.advance();
+                    name
+                }
+                // Allow type-keyword names as variant names (e.g. `string(string)` in EventDataValue)
+                Token::String => {
+                    self.advance();
+                    "string".to_string()
+                }
+                _ => return Err("Expected variant name".to_string()),
             };
 
             let data = if self.current_token() == &Token::LParen {

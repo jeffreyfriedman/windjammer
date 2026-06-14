@@ -9,7 +9,7 @@ use super::super::super::{expression_helpers, CodeGenerator};
 pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
     gen: &mut CodeGenerator<'ast>,
     func_name: &str,
-    func_str: &str,
+    _func_str: &str,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
     signature: &Option<crate::analyzer::FunctionSignature>,
     signature_from_simple_fallback: bool,
@@ -91,14 +91,36 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         // already ends with .to_string(), don't add another.
                         if crate::codegen::rust::string_utilities::param_is_owned_string_type(param_type)
                         {
-                            let inner = if arg_str.ends_with(".to_string()") {
+                            let inner = if matches!(
+                                arg,
+                                Expression::Literal {
+                                    value: Literal::String(_),
+                                    ..
+                                }
+                            ) {
+                                if arg_str.ends_with(".to_string()") {
+                                    arg_str.clone()
+                                } else {
+                                    format!("{}.to_string()", arg_str)
+                                }
+                            } else if arg_str.ends_with(".to_string()") {
+                                arg_str.clone()
+                            } else if matches!(arg, Expression::Identifier { name, .. }
+                                if gen.identifier_already_ref(name)
+                                    || gen.inferred_borrowed_params.contains(name)
+                                    || gen.inferred_mut_borrowed_params.contains(name))
+                            {
+                                format!("{}.to_string()", arg_str)
+                            } else if gen
+                                .infer_expression_type(arg)
+                                .is_some_and(|t| matches!(t, Type::String))
+                            {
                                 arg_str.clone()
                             } else {
                                 format!("{}.to_string()", arg_str)
                             };
                             return vec![format!(
-                                "windjammer_runtime::ffi::string_to_ffi({})",
-                                inner
+                                "windjammer_runtime::ffi::string_to_ffi({inner})"
                             )];
                         }
                     }
@@ -133,6 +155,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         // Parameter type is &str (string optimization inferred this).
                         // String literals are already &str in Rust — no .to_string() needed.
                         false
+                    } else if (func_name == "new" || func_name.ends_with("::new"))
+                        && sig.param_types.get(i).is_some_and(
+                            crate::codegen::rust::types::is_windjammer_text_type,
+                        )
+                    {
+                        // Constructor string params use struct-literal storage in the
+                        // callee body — literals are passed as &str at the call site.
+                        false
                     } else if signature_from_simple_fallback && {
                         let qualifier = func_name.split("::").next().unwrap_or("");
                         qualifier.chars().next().is_some_and(|c| c.is_lowercase())
@@ -142,12 +172,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         // string coercion — the actual target may take &str.
                         false
                     } else if let Some(&ownership) = sig.param_ownership.get(i) {
-                        // Convert if parameter expects owned String
+                        // Borrowed string params lower to &str — literals are already &str.
                         matches!(ownership, OwnershipMode::Owned)
                     } else {
-                        // No ownership info for this param
-                        // THE WINDJAMMER WAY: Heuristic for constructors
-                        // Functions named 'new' (or Type::new) taking string params likely expect String
+                        // No ownership info for this param — only apply constructor
+                        // heuristic for non-text params.
                         func_name == "new" || func_name.ends_with("::new")
                     }
                 } else {
@@ -244,23 +273,21 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 // - Bare-name calls within the same file are also unambiguous
                 // - Only fallback from module::fn → fn is risky (wrong module)
                 let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-                let has_ownership_collision = signature_from_simple_fallback
-                    && (gen.signature_registry.has_collision(func_name)
-                        || gen.signature_registry.has_collision(simple_name))
+                let has_registry_collision = gen.signature_registry.has_collision(func_name)
+                    || gen.signature_registry.has_collision(simple_name);
+                let has_ownership_collision = has_registry_collision
                     && {
-                        // Validate collision: if the found signature's arg count
-                        // matches the actual call, it's the right overload despite
-                        // the collision. Only suppress ownership when arg count
-                        // doesn't match (genuinely ambiguous signature).
                         let sig_args = if sig.has_self_receiver {
                             sig.param_ownership.len().saturating_sub(1)
                         } else {
                             sig.param_ownership.len()
                         };
-                        sig_args != arguments.len()
+                        // Only suppress when resolution was ambiguous (fallback/suffix) or
+                        // arg count doesn't match the resolved signature.
+                        signature_from_simple_fallback && sig_args != arguments.len()
                     };
 
-                if let Some(&ownership) = sig.param_ownership.get(i) {
+                if let Some(&ownership) = sig.param_ownership_for_arg(i) {
                     match ownership {
                         OwnershipMode::Borrowed if !has_ownership_collision => {
                             // PHASE 1: Generate &String parameters for correctness
@@ -301,17 +328,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
 
                             // TDD FIX: Check if parameter is already a reference type
-                            // If param is &string, don't add another & (would be &&string)
+                            // If param is &string / Phase-2 &str, don't add another & (would be &&str)
                             let is_param_already_ref =
                                 if let Expression::Identifier { name, .. } = arg {
-                                    gen.current_function_params.iter().any(|param| {
-                                        param.name == *name
-                                            && matches!(
-                                                &param.type_,
-                                                Type::Reference(_)
-                                                    | Type::MutableReference(_)
-                                            )
-                                    })
+                                    gen.identifier_already_ref(name)
+                                        || gen.current_function_params.iter().any(|param| {
+                                            param.name == *name
+                                                && matches!(
+                                                    &param.type_,
+                                                    Type::Reference(_)
+                                                        | Type::MutableReference(_)
+                                                )
+                                        })
                                 } else {
                                     false
                                 };
@@ -373,6 +401,40 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             return vec![arg_str];
                         }
                         OwnershipMode::Owned => {
+                            // Explicit `&x` / `&mut x` at call site → owned param needs deref (Copy) or clone.
+                            if matches!(
+                                arg,
+                                Expression::Unary {
+                                    op: UnaryOp::Ref | UnaryOp::MutRef,
+                                    ..
+                                }
+                            ) && !arg_str.trim_start().starts_with('*')
+                            {
+                                let pointee_is_copy = gen
+                                    .infer_expression_type(arg)
+                                    .as_ref()
+                                    .map(|t| match t {
+                                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                                            gen.is_type_copy(inner)
+                                        }
+                                        other => gen.is_type_copy(other),
+                                    })
+                                    .unwrap_or(false);
+                                if pointee_is_copy {
+                                    arg_str = format!("*{}", arg_str);
+                                } else if !arg_str.ends_with(".clone()") {
+                                    let inner = if arg_str.starts_with("&mut ") {
+                                        arg_str.strip_prefix("&mut ").unwrap_or(&arg_str)
+                                    } else if arg_str.starts_with('&') {
+                                        arg_str.strip_prefix('&').unwrap_or(&arg_str)
+                                    } else {
+                                        arg_str.as_str()
+                                    };
+                                    arg_str = format!("{}.clone()", inner);
+                                }
+                                return vec![arg_str];
+                            }
+
                             let param_is_str_ref = sig.param_types.get(i).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             });
@@ -387,6 +449,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
 
                             if let Expression::Identifier { name, .. } = arg {
+                                if gen.in_user_written_closure
+                                    && gen.user_closure_params.contains(name)
+                                {
+                                    return vec![arg_str];
+                                }
                                 arg_str = gen.maybe_auto_clone(name, &arg_str);
 
                                 // Find the parameter type
@@ -450,16 +517,28 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                                 .is_some_and(|t| {
                                                     crate::codegen::rust::types::is_windjammer_text_type(t)
                                                 });
-                                            let is_phase2_str_param = gen
-                                                .str_ref_optimized_params
-                                                .contains(name.as_str());
-                                            if is_text && !is_phase2_str_param {
+                                            if is_text {
                                                 arg_str =
                                                     format!("{}.to_string()", arg_str);
                                             } else if !is_text {
-                                                // Borrowed from iterator or inferred - use .clone()
-                                                // This handles &T → T for non-text types
-                                                arg_str = format!("{}.clone()", arg_str);
+                                                let src_is_copy = gen
+                                                    .infer_expression_type(arg)
+                                                    .as_ref()
+                                                    .map(|t| match t {
+                                                        Type::Reference(inner)
+                                                        | Type::MutableReference(inner) => {
+                                                            gen.is_type_copy(inner)
+                                                        }
+                                                        other => gen.is_type_copy(other),
+                                                    })
+                                                    .unwrap_or(false);
+                                                if src_is_copy {
+                                                    arg_str = format!("*{}", arg_str);
+                                                } else {
+                                                    // Borrowed from iterator or inferred - use .clone()
+                                                    // This handles &T → T for non-text types
+                                                    arg_str = format!("{}.clone()", arg_str);
+                                                }
                                             }
                                         }
                                     }
@@ -490,11 +569,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             }
 
             // AUTO-CAST int → float: when parameter expects f32/f64 but argument is int.
-            // Skip when signature has a collision (different types with same name).
             if let Some(ref sig) = signature {
-                let has_collision = gen.signature_registry.has_collision(func_name)
-                    || gen.signature_registry.has_collision(func_str);
-                if !has_collision {
+                let method_part = func_name.rsplit("::").next().unwrap_or(func_name);
+                let type_name = func_name
+                    .contains("::")
+                    .then(|| func_name.rsplit("::").nth(1).unwrap_or(""))
+                    .filter(|tn| !tn.is_empty() && tn.chars().next().is_some_and(|c| c.is_ascii_uppercase()));
+                let skip_cast = gen.signature_registry.should_skip_int_to_float_auto_cast(
+                    type_name,
+                    method_part,
+                    Some(func_name),
+                );
+                if !skip_cast {
                     if let Some(param_ty) = sig.param_types.get(i) {
                         let arg_ty = gen.infer_expression_type(arg);
                         crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(
@@ -528,7 +614,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         } else {
                             false
                         };
+                    let arg_is_owned_string = gen
+                        .infer_expression_type(arg)
+                        .is_some_and(|t| matches!(t, Type::String));
                     if (param_is_str_ref || callee_borrows_string)
+                        && !arg_is_owned_string
                         && !arg_str.contains("string_to_ffi(")
                         && !arg_str.starts_with('&')
                         && !arg_already_ref

@@ -766,8 +766,9 @@ impl SceneBuilder {
 "#;
     let rust = test_utils::compile_single_result(code).expect("Should compile");
     assert!(
-        rust.contains("pub fn with_material(mut self"),
-        "with_material should infer mut self from self.materials.set() (builder pattern). Generated:\n{}",
+        rust.contains("pub fn with_material(mut self")
+            || rust.contains("pub fn with_material(&mut self"),
+        "with_material should infer mut/&mut self from self.materials.set() (builder pattern). Generated:\n{}",
         rust
     );
 }

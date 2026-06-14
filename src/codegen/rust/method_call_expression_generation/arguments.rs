@@ -158,7 +158,10 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Owned params need `.clone()` when the arg is a non-Copy binding, including
                 // `if let Some(x) = &self.opt` where `x` is `&T` but the callee expects owned `T`.
-                if method_signature
+                // Skip for user-written closures — preserve `|e| !e.active` verbatim.
+                if !self.in_user_written_closure
+                    && !matches!(arg_to_generate, Expression::Closure { .. })
+                    && method_signature
                     .as_ref()
                     .and_then(|sig| sig.param_ownership_for_arg(i))
                     .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
@@ -169,13 +172,24 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|t| self.is_type_copy(t));
                     if !is_copy
                         && !arg_str.ends_with(".clone()")
+                        && !arg_str.ends_with(".to_string()")
                         && !Self::is_enum_variant_or_constructor(arg_to_generate)
                         && matches!(
                             arg_to_generate,
                             Expression::Identifier { .. } | Expression::FieldAccess { .. }
                         )
                     {
-                        arg_str = format!("{}.clone()", arg_str);
+                        let is_text = self
+                            .infer_expression_type(arg_to_generate)
+                            .as_ref()
+                            .is_some_and(|t| {
+                                crate::codegen::rust::types::is_windjammer_text_type(t)
+                            });
+                        if is_text {
+                            arg_str = format!("{}.to_string()", arg_str);
+                        } else {
+                            arg_str = format!("{}.clone()", arg_str);
+                        }
                     }
                 }
 
@@ -293,9 +307,10 @@ impl<'ast> CodeGenerator<'ast> {
                         false
                     };
 
-                    if is_explicit_str_ref || asref_str_module {
-                        // Explicit &str parameter - no conversion needed
+                    if asref_str_module {
                         false
+                    } else if is_explicit_str_ref {
+                        matches!(param_ownership, Some(OwnershipMode::Owned))
                     } else {
                         match param_ownership {
                             Some(&OwnershipMode::Owned) | Some(&OwnershipMode::Borrowed) => {
@@ -321,7 +336,15 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             _ => {
                                 // No signature info - use heuristic (fallback to old logic)
-                                if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, method_signature) {
+                                let wants_owned = method_signature
+                                    .as_ref()
+                                    .and_then(|sig| sig.param_type_for_arg(i))
+                                    .is_some_and(|t| {
+                                        crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+                                    });
+                                if wants_owned
+                                    || crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(i, method, method_signature)
+                                {
                                     arg_str = format!("{}.to_string()", arg_str);
                                     true
                                 } else {
@@ -668,6 +691,20 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                 if (is_auto_borrow || is_map_method) && i == 0 {
                     let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
+                    let arg_is_windjammer_str = match arg_to_generate {
+                        Expression::Identifier { name, .. } => {
+                            self.current_function_params.iter().any(|p| {
+                                p.name == *name
+                                    && (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                        || matches!(
+                                            &p.type_,
+                                            Type::Reference(inner)
+                                                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                                        ))
+                            }) || self.inferred_borrowed_params.contains(name)
+                        }
+                        _ => false,
+                    };
                     let arg_already_ref = match arg_to_generate {
                         Expression::Identifier { name, .. } => self.identifier_already_ref(name),
                         _ => {
@@ -682,7 +719,11 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     };
-                    if !is_string_literal && !arg_str.starts_with('&') && !arg_already_ref {
+                    if !is_string_literal
+                        && !arg_is_windjammer_str
+                        && !arg_str.starts_with('&')
+                        && !arg_already_ref
+                    {
                         let needs_borrow = matches!(arg,
                             Expression::Identifier { .. } |
                             Expression::FieldAccess { .. } |
@@ -697,14 +738,18 @@ impl<'ast> CodeGenerator<'ast> {
                 // AUTO-CAST int → float
                 {
                     let effective_sig = method_signature.as_ref();
-                    let qualified_method = self.infer_type_name(object)
-                        .map(|tn| format!("{}::{}", tn, method));
-                    let has_collision = qualified_method.as_deref()
-                        .is_some_and(|q| self.signature_registry.has_collision(q))
-                        || self.signature_registry.has_collision(method);
                     if let Some(sig) = effective_sig {
                         let sig_param_idx = sig.arg_param_index(i);
-                        if !has_collision {
+                        let type_name = self.infer_type_name(object);
+                        let qualified_key = type_name
+                            .as_ref()
+                            .map(|tn| format!("{}::{}", tn, method));
+                        let skip_cast = self.signature_registry.should_skip_int_to_float_auto_cast(
+                            type_name.as_deref(),
+                            method,
+                            qualified_key.as_deref(),
+                        );
+                        if !skip_cast {
                             if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
                                 let arg_ty = self.infer_expression_type(arg);
                                 crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(

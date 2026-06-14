@@ -378,7 +378,11 @@ pub fn sum(v: Vec<i32>) -> i32 {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    assert!(result.contains("iter()"));
+    assert!(
+        result.contains("for x in v") || result.contains("for x in &v"),
+        "Should iterate over vec directly or via borrow. Got:\n{}",
+        result
+    );
 }
 
 #[test]

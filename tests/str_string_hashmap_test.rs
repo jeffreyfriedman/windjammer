@@ -53,8 +53,8 @@ fn test_hashmap_str_str_emits_string_string() {
     );
     let rust = type_to_rust(&ty);
     assert_eq!(
-        rust, "HashMap<String, string>",
-        "HashMap<str, string> should emit HashMap<String, string>, got {}",
+        rust, "HashMap<String, String>",
+        "HashMap<str, string> should emit HashMap<String, String>, got {}",
         rust
     );
 }
@@ -80,7 +80,7 @@ fn test_hashmap_i32_str_value_emits_string() {
     );
     let rust = type_to_rust(&ty);
     assert_eq!(
-        rust, "HashMap<i64, string>",
+        rust, "HashMap<i64, String>",
         "HashMap<i32, string> value should become String, got {}",
         rust
     );

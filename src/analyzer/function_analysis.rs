@@ -91,6 +91,41 @@ impl<'ast> Analyzer<'ast> {
         Ok(analyzed)
     }
 
+    /// Infer `self` receiver ownership for impl methods. Windjammer always writes bare
+    /// `self` in source; codegen maps to `&self`, `&mut self`, or owned `self`.
+    fn infer_impl_self_receiver_ownership(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+    ) -> OwnershipMode {
+        if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
+            return OwnershipMode::MutBorrowed;
+        }
+        let modifies_fields =
+            self.function_modifies_self_fields_with_registry(func, Some(registry));
+        let returns_self = self.function_returns_self(func);
+        let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+        let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
+
+        let consumes_self = (!snapshot_factory && body_moves_fields)
+            || self.function_moves_self_into_return(func)
+            || (!snapshot_factory
+                && (returns_self
+                    || self.function_body_consumes_bare_self(func)
+                    || self.function_calls_consuming_method_on_self(func, registry)
+                    || self.function_matches_on_self(func)
+                    || self.function_consumes_self_field_elements(func, Some(registry))));
+        if consumes_self {
+            OwnershipMode::Owned
+        } else if modifies_fields {
+            OwnershipMode::MutBorrowed
+        } else if self.is_used_in_binary_op("self", &func.body) {
+            OwnershipMode::Owned
+        } else {
+            OwnershipMode::Borrowed
+        }
+    }
+
     pub(crate) fn analyze_function(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -119,13 +154,16 @@ impl<'ast> Analyzer<'ast> {
                 self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
             let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+            let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-            let consumes_self = returns_self
-                || body_moves_fields
-                || self.function_body_consumes_bare_self(func)
-                || self.function_calls_consuming_method_on_self(func, registry)
-                || self.function_matches_on_self(func)
-                || self.function_consumes_self_field_elements(func, Some(registry));
+            let consumes_self = (!snapshot_factory && body_moves_fields)
+                || self.function_moves_self_into_return(func)
+                || (!snapshot_factory
+                    && (returns_self
+                        || self.function_body_consumes_bare_self(func)
+                        || self.function_calls_consuming_method_on_self(func, registry)
+                        || self.function_matches_on_self(func)
+                        || self.function_consumes_self_field_elements(func, Some(registry))));
             let self_ownership = if consumes_self {
                 OwnershipMode::Owned
             } else if modifies_fields {
@@ -144,14 +182,21 @@ impl<'ast> Analyzer<'ast> {
         for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
                 OwnershipHint::Owned => {
-                    // DOGFOODING FIX #1: Respect explicit ownership annotations!
-                    // If user writes `self` (not `&self` or `&mut self`), they want OWNED.
-                    // Bug was: analyzer checked modifies_fields and downgraded to &mut self
-                    // Fix: When Owned is explicit, use it - don't analyze or modify!
-                    // Analysis should ONLY happen for OwnershipHint::Inferred.
-                    OwnershipMode::Owned
+                    // Windjammer writes `self` without & — in impl methods, infer receiver
+                    // ownership from body usage (distance(self) → &self, not owned self).
+                    if param.name == "self" && func.parent_type.is_some() {
+                        self.infer_impl_self_receiver_ownership(func, registry)
+                    } else {
+                        OwnershipMode::Owned
+                    }
                 }
-                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                OwnershipHint::Mut => {
+                    if Self::is_generic_type_param(&param.type_) {
+                        OwnershipMode::Owned
+                    } else {
+                        OwnershipMode::MutBorrowed
+                    }
+                }
                 OwnershipHint::Ref => {
                     // SMART FIX: If user wrote &self but function modifies fields, upgrade to &mut self
                     // This prevents a common user error
@@ -183,14 +228,22 @@ impl<'ast> Analyzer<'ast> {
                             let returns_self = self.function_returns_self(func);
                             let body_moves_fields =
                                 self.function_body_moves_non_copy_self_fields(func);
+                            let snapshot_factory =
+                                self.function_returns_new_instance_from_self_fields(func);
 
-                            let consumes_self = returns_self
-                                || body_moves_fields
+                            let consumes_self = (!snapshot_factory && body_moves_fields)
                                 || self.function_moves_self_into_return(func)
-                                || self.function_body_consumes_bare_self(func)
-                                || self.function_calls_consuming_method_on_self(func, registry)
-                                || self.function_matches_on_self(func)
-                                || self.function_consumes_self_field_elements(func, Some(registry));
+                                || (!snapshot_factory
+                                    && (returns_self
+                                        || self.function_body_consumes_bare_self(func)
+                                        || self.function_calls_consuming_method_on_self(
+                                            func, registry,
+                                        )
+                                        || self.function_matches_on_self(func)
+                                        || self.function_consumes_self_field_elements(
+                                            func,
+                                            Some(registry),
+                                        )));
                             if consumes_self {
                                 OwnershipMode::Owned
                             } else if modifies_fields {
@@ -206,7 +259,25 @@ impl<'ast> Analyzer<'ast> {
                         // Mutated Copy types should be &mut, not Owned
                         let is_copy = self.is_copy_type(&param.type_);
 
-                        if is_copy {
+                        if param.is_mutable {
+                            if Self::is_generic_type_param(&param.type_) {
+                                OwnershipMode::Owned
+                            } else {
+                                let passthrough = self.infer_passthrough_ownership(
+                                    &param.name,
+                                    &param.type_,
+                                    &func.body,
+                                    registry,
+                                    &func.name,
+                                    func,
+                                );
+                                if passthrough == Some(OwnershipMode::MutBorrowed) {
+                                    OwnershipMode::Owned
+                                } else {
+                                    OwnershipMode::MutBorrowed
+                                }
+                            }
+                        } else if is_copy {
                             let mutated = self.is_mutated(
                                 &param.name,
                                 &func.body,
@@ -444,6 +515,9 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
         } else if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
+            // Defer mutable trait registry updates until after this immutable borrow ends.
+            let mut self_receiver_upgrades: Vec<(String, String, String, OwnershipMode)> =
+                Vec::new();
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
                 // Override ALL parameters to match trait signature
@@ -472,25 +546,43 @@ impl<'ast> Analyzer<'ast> {
                             None
                         };
 
-                        // When the trait has concrete ownership data (from default
-                        // impl or from a previous impl upgrade), the impl must match.
-                        // When the trait has NO data (abstract method, never analyzed),
-                        // the impl's own body analysis drives ownership, and the trait
-                        // entry will be upgraded in the post-analysis merge step.
-                        let final_mode = if let Some(mode) = trait_mode {
+                        let impl_body_mode =
+                            analyzed.inferred_ownership.get(&impl_param.name).copied();
+                        let final_mode = if impl_param.name == "self" {
+                            match (trait_mode, impl_body_mode) {
+                                (Some(trait_m), Some(impl_m)) => {
+                                    Self::merge_borrow_trait_receivers(trait_m, impl_m)
+                                }
+                                (Some(trait_m), None) => trait_m,
+                                (None, Some(impl_m)) => impl_m,
+                                (None, None) => self.convert_ownership_hint_to_mode(
+                                    &trait_param.ownership,
+                                    &trait_param.name,
+                                ),
+                            }
+                        } else if let Some(mode) = trait_mode {
                             mode
                         } else {
-                            analyzed
-                                .inferred_ownership
-                                .get(&impl_param.name)
-                                .copied()
-                                .unwrap_or_else(|| {
-                                    self.convert_ownership_hint_to_mode(
-                                        &trait_param.ownership,
-                                        &trait_param.name,
-                                    )
-                                })
+                            impl_body_mode.unwrap_or_else(|| {
+                                self.convert_ownership_hint_to_mode(
+                                    &trait_param.ownership,
+                                    &trait_param.name,
+                                )
+                            })
                         };
+
+                        if impl_param.name == "self" {
+                            if let Some(trait_m) = trait_mode {
+                                if final_mode != trait_m {
+                                    self_receiver_upgrades.push((
+                                        trait_name.to_string(),
+                                        trait_key.to_string(),
+                                        func.name.clone(),
+                                        final_mode,
+                                    ));
+                                }
+                            }
+                        }
 
                         // INSERT or UPDATE with the final ownership mode
                         analyzed
@@ -499,17 +591,16 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-        }
-
-        // E0186 / E0053: Impl receiver must match the trait — never infer only from the impl body.
-        // Replacing analyzed_trait_methods with the impl used to drop implicit `self` when the impl
-        // body was empty or omitted `self`, producing trait/impl mismatches in Rust.
-        if let Some(self_mode) =
-            self.trait_method_receiver_ownership(trait_name, trait_key, &func.name)
-        {
-            analyzed
-                .inferred_ownership
-                .insert("self".to_string(), self_mode);
+            for (upgrade_trait_name, upgrade_trait_key, method_name, receiver) in
+                self_receiver_upgrades
+            {
+                self.upgrade_trait_method_self_receiver(
+                    &upgrade_trait_name,
+                    &upgrade_trait_key,
+                    &method_name,
+                    receiver,
+                );
+            }
         }
 
         // E0053: Parameter types in generated Rust must match the trait declaration (impls may

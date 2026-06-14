@@ -170,7 +170,7 @@ pub fn build_project_ext(
         let mut analyzer = analyzer_pass2;
 
         analyzer
-            .infer_trait_signatures_from_impls(&program)
+            .infer_trait_signatures_from_impls(&program, &registry)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         analyzer

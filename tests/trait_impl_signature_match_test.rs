@@ -50,13 +50,13 @@ fn compile_rust(code: &str) -> (bool, String) {
 fn test_trait_impl_matches_trait_signature_f32() {
     let code = r#"
 pub trait GameLoop {
-    fn update(self, delta: f32) {}
+    fn update(delta: f32) {}
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(self, delta: f32) {
+    fn update(delta: f32) {
         let _used = delta + 1.0
     }
 }
@@ -71,8 +71,8 @@ impl GameLoop for MyGame {
         "Should have trait definition"
     );
     assert!(
-        generated.contains("fn update(&mut self, delta: f32)"),
-        "Trait should have 'delta: f32'. Generated:\n{}",
+        generated.contains("fn update(&self, delta: f32)"),
+        "Empty bodies do not mutate — trait uses &self. Generated:\n{}",
         generated
     );
 
@@ -91,8 +91,8 @@ impl GameLoop for MyGame {
         .join("\n");
 
     assert!(
-        impl_section.contains("fn update(&mut self, delta: f32"),
-        "Impl should have 'delta: f32' to match trait (not &f32). Impl section:\n{}",
+        impl_section.contains("fn update(&self, delta: f32"),
+        "Impl should match trait with 'delta: f32' (not &f32). Impl section:\n{}",
         impl_section
     );
 
@@ -118,15 +118,15 @@ pub struct Input { pub key: int }
 pub struct RenderContext { pub width: int }
 
 pub trait GameLoop {
-    fn update(self, input: Input) {}
-    fn render(self, ctx: RenderContext) {}
+    fn update(input: Input) {}
+    fn render(ctx: RenderContext) {}
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(self, input: Input) {}
-    fn render(self, ctx: RenderContext) {}
+    fn update(input: Input) {}
+    fn render(ctx: RenderContext) {}
 }
 "#;
 
@@ -142,8 +142,8 @@ impl GameLoop for MyGame {
         .join("\n");
 
     assert!(
-        trait_section.contains("fn update(&mut self, input: Input)"),
-        "Trait should have 'input: Input'. Trait:\n{}",
+        trait_section.contains("fn update(&self, input: Input)"),
+        "Empty bodies do not mutate — trait uses &self. Trait:\n{}",
         trait_section
     );
     assert!(
@@ -162,8 +162,8 @@ impl GameLoop for MyGame {
 
     // Note: unused params get _ prefix from the compiler's unused-param detection
     assert!(
-        impl_section.contains("fn update(&mut self, input: Input")
-            || impl_section.contains("fn update(&mut self, _input: Input"),
+        impl_section.contains("fn update(&self, input: Input")
+            || impl_section.contains("fn update(&self, _input: Input"),
         "Impl should match trait with 'input: Input' (or '_input' if unused). Impl:\n{}",
         impl_section
     );

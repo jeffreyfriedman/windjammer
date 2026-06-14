@@ -32,15 +32,15 @@ pub trait Counter {
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
-    // Trait methods should have &mut self inferred
+    // Abstract void trait methods default to &self; impl merging upgrades when bodies mutate.
     assert!(
-        output.contains("fn increment(&mut self)"),
-        "Expected 'fn increment(&mut self)', got: {}",
+        output.contains("fn increment(&self)"),
+        "Expected 'fn increment(&self)', got: {}",
         output
     );
     assert!(
-        output.contains("fn reset(&mut self)"),
-        "Expected 'fn reset(&mut self)', got: {}",
+        output.contains("fn reset(&self)"),
+        "Expected 'fn reset(&self)', got: {}",
         output
     );
 }
@@ -85,15 +85,15 @@ pub trait Renderer {
 
     println!("\n=== Generated Rust ===\n{}\n", output);
 
-    // Methods with parameters should infer &mut self
+    // Methods with parameters still default to &self when abstract (no body).
     assert!(
-        output.contains("fn set_camera(&mut self, camera: i32)"),
-        "Expected 'fn set_camera(&mut self, camera: i32)', got: {}",
+        output.contains("fn set_camera(&self, camera: i32)"),
+        "Expected 'fn set_camera(&self, camera: i32)', got: {}",
         output
     );
     assert!(
-        output.contains("fn upload_data(&mut self, data: Vec<u8>)"),
-        "Expected 'fn upload_data(&mut self, data: Vec<u8>)', got: {}",
+        output.contains("fn upload_data(&self, data: Vec<u8>)"),
+        "Expected 'fn upload_data(&self, data: Vec<u8>)', got: {}",
         output
     );
 }

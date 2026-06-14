@@ -37,13 +37,13 @@ fn test_trait_explicit_mut_self_preserved() {
     // Trait with explicit &mut self that doesn't mutate
     let wj_code = r#"
 pub trait GameLoop {
-    // Explicit &mut self should be preserved even though body doesn't mutate
-    fn init(self) {
+    // Explicit &mut self must be preserved even when the body does not mutate fields.
+    fn init(&mut self) {
         // Empty default implementation
     }
     
-    // Also test &self is preserved
-    fn render(self) {
+    // Omit self on read-only hooks — body analysis yields &self
+    fn render() {
         // Empty default implementation
     }
 }

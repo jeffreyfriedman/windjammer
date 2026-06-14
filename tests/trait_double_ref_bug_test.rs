@@ -22,7 +22,7 @@ use std::process::Command;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_trait_explicit_ref_not_doubled() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let output_dir = temp_dir.path();
+    let output_dir = temp_dir.path().join("out");
 
     // Create a multi-file project with trait in one file, impl in another
     let src = temp_dir.path().join("src");
@@ -46,8 +46,8 @@ pub struct Input {
 use crate::input::Input
 
 pub trait GameLoop {
-    // Explicit & in trait definition should NOT become &&
-    fn update(self, input: Input) {
+    // Omit `self` — impl body mutates fields, merged signature uses &mut self
+    fn update(input: Input) {
         // Default implementation
     }
 }
@@ -68,7 +68,7 @@ struct Game {
 }
 
 impl GameLoop for Game {
-    fn update(self, input: Input) {
+    fn update(input: Input) {
         self.score += input.x;
     }
 }
@@ -77,14 +77,16 @@ impl GameLoop for Game {
     // Write root mod.wj
     let input_file = src.join("mod.wj");
     std::fs::write(&input_file, wj_code).unwrap();
+    std::fs::create_dir_all(&output_dir).unwrap();
 
     let compile_result = Command::new(env!("CARGO_BIN_EXE_wj"))
         .arg("build")
         .arg(&input_file)
         .arg("--output")
-        .arg(output_dir)
+        .arg(&output_dir)
         .arg("--library")
         .arg("--no-cargo")
+        .arg("--no-lint")
         .output()
         .expect("Failed to execute compiler");
 
@@ -109,11 +111,11 @@ impl GameLoop for Game {
         trait_rust
     );
 
-    // CRITICAL: Trait should have single &, not double &&
+    // CRITICAL: no double-reference on parameters (explicit & must not become &&)
     assert!(
-        trait_rust.contains("fn update(&mut self, input: &Input)")
-            && !trait_rust.contains("fn update(&mut self, input: &&Input)"),
-        "Trait definition should have single & for input parameter, not &&!\nGenerated:\n{}",
+        trait_rust.contains("fn update(&mut self, input: Input)")
+            && !trait_rust.contains("input: &&Input"),
+        "Trait definition must not double-borrow parameters!\nGenerated:\n{}",
         trait_rust
     );
 
@@ -129,9 +131,9 @@ impl GameLoop for Game {
     // The impl should match trait with single & (check if impl exists in lib.rs)
     if main_rust.contains("impl GameLoop for Game") {
         assert!(
-            main_rust.contains("fn update(&mut self, input: &Input)")
-                && !main_rust.contains("fn update(&mut self, input: &&Input)"),
-            "Impl should match trait with single & for input parameter!\nGenerated:\n{}",
+            main_rust.contains("fn update(&mut self, input: Input)")
+                && !main_rust.contains("input: &&Input"),
+            "Impl should match trait without double-borrowing input!\nGenerated:\n{}",
             main_rust
         );
     } else {

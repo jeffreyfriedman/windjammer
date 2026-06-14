@@ -45,6 +45,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             false, // library
             false, // module_file
             false, // run_cargo - run.rs handles execution itself
+            true,  // enable_lint
             false, // no_generate_cargo_toml
             &[],   // metadata
         )?;

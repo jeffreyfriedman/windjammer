@@ -235,10 +235,10 @@ pub fn make_label() -> Label {
     let generated = fs::read_to_string(&label_rs)
         .unwrap_or_else(|_| panic!("Failed to read generated label.rs"));
 
-    // Label::new("Hello") should get .to_string() because the param is owned String
+    // Struct-literal storage → &str API; literal passes directly at call site.
     assert!(
-        generated.contains(r#""Hello".to_string()"#),
-        "String literal should get .to_string() for owned String param.\nGenerated:\n{}",
+        generated.contains(r#"Label::new("Hello")"#),
+        "String literal should pass as &str for struct-literal-stored param.\nGenerated:\n{}",
         generated
     );
 }

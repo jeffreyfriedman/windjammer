@@ -87,9 +87,7 @@ impl Renderer {
     // Write a minimal Cargo project to verify
     std::fs::write(
         dir.join("out/main.rs"),
-        format!(
-            "#[allow(dead_code, unused)]\nmod test;\nfn main() {{}}"
-        ),
+        "#[allow(dead_code, unused)]\nmod test;\nfn main() {}",
     )
     .unwrap();
 

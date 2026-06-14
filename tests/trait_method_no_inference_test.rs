@@ -53,7 +53,7 @@ fn compile_and_check(code: &str) -> (bool, String) {
 fn test_trait_method_no_inference_f32() {
     let code = r#"
 pub trait GameLoop {
-    fn update(self, delta: f32) {
+    fn update(delta: f32) {
         // Default implementation
     }
 }
@@ -64,8 +64,8 @@ pub trait GameLoop {
 
     // Check that trait signature uses f32, not &f32
     assert!(
-        generated.contains("fn update(&mut self, delta: f32)"),
-        "Trait method should have 'delta: f32' (owned), not '&f32'. Generated:\n{}",
+        generated.contains("fn update(&self, delta: f32)"),
+        "Empty default impl does not mutate — trait uses &self. Generated:\n{}",
         generated
     );
 
@@ -85,11 +85,11 @@ pub struct Input { pub key: int }
 pub struct RenderContext { pub width: int }
 
 pub trait GameLoop {
-    fn update(self, input: Input) {
+    fn update(input: Input) {
         // Default implementation
     }
     
-    fn render(self, ctx: RenderContext) {
+    fn render(ctx: RenderContext) {
         // Default implementation
     }
 }
@@ -100,8 +100,8 @@ pub trait GameLoop {
 
     // Check that trait signatures use owned types, not references
     assert!(
-        generated.contains("fn update(&mut self, input: Input)"),
-        "Trait method should have 'input: Input' (owned), not '&Input'. Generated:\n{}",
+        generated.contains("fn update(&self, input: Input)"),
+        "Empty default impl does not mutate — trait uses &self. Generated:\n{}",
         generated
     );
     assert!(generated.contains("fn render(&self, ctx: RenderContext)"), 
@@ -115,13 +115,13 @@ fn test_trait_impl_can_use_references() {
 pub struct Input { pub key: int }
 
 pub trait GameLoop {
-    fn update(self, input: Input);
+    fn update(input: Input);
 }
 
 pub struct MyGame {}
 
 impl GameLoop for MyGame {
-    fn update(self, input: Input) {
+    fn update(input: Input) {
         // Implementation - can use references if needed
         println(input.key)
     }
@@ -133,8 +133,8 @@ impl GameLoop for MyGame {
 
     // Trait signature should be owned
     assert!(
-        generated.contains("fn update(&mut self, input: Input);"),
-        "Trait method signature should have 'input: Input' (owned). Generated:\n{}",
+        generated.contains("fn update(&self, input: Input);"),
+        "Read-only impl keeps trait at &self. Generated:\n{}",
         generated
     );
 

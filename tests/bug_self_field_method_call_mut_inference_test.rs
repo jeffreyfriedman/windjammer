@@ -6,7 +6,6 @@
     feature = "conformance_tests",
     feature = "integration_tests",
 )))]
-
 /// TDD Test: self.field.user_method() must infer &mut self when user_method mutates
 ///
 /// Bug: When a method body only calls `self.state.tick(dt)` (no direct `self.field = ...`),
@@ -17,7 +16,6 @@
 /// This causes E0596 in generated Rust: "cannot borrow `*self` as mutable"
 ///
 /// Fix: Conservative default for unknown self.field methods -- assume mutation.
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

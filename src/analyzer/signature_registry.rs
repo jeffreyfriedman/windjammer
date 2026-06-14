@@ -49,7 +49,10 @@ static STDLIB_BASELINE: OnceLock<SignatureRegistry> = OnceLock::new();
 #[derive(Debug, Clone)]
 pub struct SignatureRegistry {
     pub signatures: HashMap<String, FunctionSignature>,
-    collision_keys: HashSet<String>,
+    /// Param-type mismatches (namespace collisions) — used for int→float cast safety.
+    type_collision_keys: HashSet<String>,
+    /// Same param types but different ownership — used for auto-borrow safety.
+    ownership_collision_keys: HashSet<String>,
     method_index: HashMap<String, Vec<String>>,
 }
 
@@ -64,7 +67,8 @@ impl SignatureRegistry {
         let baseline = STDLIB_BASELINE.get_or_init(|| {
             let mut registry = SignatureRegistry {
                 signatures: HashMap::new(),
-                collision_keys: HashSet::new(),
+                type_collision_keys: HashSet::new(),
+                ownership_collision_keys: HashSet::new(),
                 method_index: HashMap::new(),
             };
 
@@ -84,7 +88,8 @@ impl SignatureRegistry {
     pub fn empty() -> Self {
         SignatureRegistry {
             signatures: HashMap::new(),
-            collision_keys: HashSet::new(),
+            type_collision_keys: HashSet::new(),
+            ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
         }
     }
@@ -107,10 +112,16 @@ impl SignatureRegistry {
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {
         if let Some(existing) = self.signatures.get(&name) {
-            if existing.param_types != sig.param_types
-                || existing.param_ownership != sig.param_ownership
-            {
-                self.collision_keys.insert(name.clone());
+            if existing.param_types != sig.param_types {
+                // Empty-param runtime/stdlib stubs (e.g. `Config::new()`) are
+                // intentionally shadowed by user-defined constructors — not
+                // ambiguous collisions.
+                let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
+                if !stub_like {
+                    self.type_collision_keys.insert(name.clone());
+                }
+            } else if existing.param_ownership != sig.param_ownership {
+                self.ownership_collision_keys.insert(name.clone());
             }
             if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
                 return;
@@ -132,7 +143,73 @@ impl SignatureRegistry {
     /// Check if a signature key has been registered with conflicting param types
     /// from different modules (namespace collision).
     pub fn has_collision(&self, name: &str) -> bool {
-        self.collision_keys.contains(name)
+        if self.type_collision_keys.contains(name) || self.ownership_collision_keys.contains(name) {
+            return true;
+        }
+        self.has_method_name_collision(name)
+    }
+
+    /// True when multiple qualified methods share this suffix (e.g. `new`) with
+    /// incompatible param types — used for unqualified calls like `Emitter::new`.
+    pub fn has_method_name_collision(&self, method: &str) -> bool {
+        self.has_method_name_collision_for_type(None, method)
+    }
+
+    /// Whether int→float auto-cast should be skipped for safety.
+    ///
+    /// Skips when the exact qualified key has a param-type collision, or when
+    /// multiple implementations of `method` on the same (or unknown) type disagree
+    /// on parameter types.
+    pub fn should_skip_int_to_float_auto_cast(
+        &self,
+        type_name: Option<&str>,
+        method: &str,
+        qualified_key: Option<&str>,
+    ) -> bool {
+        if qualified_key.is_some_and(|k| self.type_collision_keys.contains(k)) {
+            return true;
+        }
+        self.has_method_name_collision_for_type(type_name, method)
+    }
+
+    /// Like [`has_method_name_collision`] but only considers signatures whose key
+    /// contains `type_name` (e.g. `Emitter` for `Emitter::new` calls).
+    pub fn has_method_name_collision_for_type(
+        &self,
+        type_name: Option<&str>,
+        method: &str,
+    ) -> bool {
+        let Some(keys) = self.method_index.get(method) else {
+            return false;
+        };
+        let filtered: Vec<&String> = if let Some(tn) = type_name {
+            keys.iter()
+                .filter(|k| {
+                    k.ends_with(&format!("::{method}"))
+                        && (k.as_str() == format!("{tn}::{method}")
+                            || k.contains(&format!("::{tn}::")))
+                })
+                .collect()
+        } else {
+            keys.iter().collect()
+        };
+        if filtered.len() < 2 {
+            return false;
+        }
+        let mut first: Option<&FunctionSignature> = None;
+        for key in filtered {
+            if let Some(sig) = self.signatures.get(key) {
+                if let Some(f) = first {
+                    if f.param_types != sig.param_types || f.param_ownership != sig.param_ownership
+                    {
+                        return true;
+                    }
+                } else {
+                    first = Some(sig);
+                }
+            }
+        }
+        false
     }
 
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -315,10 +392,13 @@ impl SignatureRegistry {
     pub fn merge(&mut self, other: &SignatureRegistry) {
         for (name, sig) in &other.signatures {
             if let Some(existing) = self.signatures.get(name) {
-                if existing.param_types != sig.param_types
-                    || existing.param_ownership != sig.param_ownership
-                {
-                    self.collision_keys.insert(name.clone());
+                if existing.param_types != sig.param_types {
+                    let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
+                    if !stub_like {
+                        self.type_collision_keys.insert(name.clone());
+                    }
+                } else if existing.param_ownership != sig.param_ownership {
+                    self.ownership_collision_keys.insert(name.clone());
                 }
             }
             if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
@@ -329,8 +409,10 @@ impl SignatureRegistry {
             }
             self.signatures.insert(name.clone(), sig.clone());
         }
-        self.collision_keys
-            .extend(other.collision_keys.iter().cloned());
+        self.type_collision_keys
+            .extend(other.type_collision_keys.iter().cloned());
+        self.ownership_collision_keys
+            .extend(other.ownership_collision_keys.iter().cloned());
     }
 
     /// Collect only signatures whose ownership differs from `base`.

@@ -128,7 +128,11 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
-            return Ok(OwnershipMode::Owned);
+            if !(Self::is_windjammer_text_param_type(param_type)
+                && self.is_stored_via_text_struct_fields_only(param_name, body))
+            {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
@@ -143,9 +147,15 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 6. TDD: Check if parameter is iterated over in a for loop
+        // 6. For-loop iteration: if the loop dereferences elements (`*i`), the collection is
+        // borrowed (`for i in &items`); otherwise consuming iteration uses owned param.
         if self.is_iterated_over(param_name, body) {
-            return Ok(OwnershipMode::Owned);
+            if self.for_loop_over_param_dereferences_element(param_name, body) {
+                return Ok(OwnershipMode::Borrowed);
+            }
+            if !self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 6b. TDD: Check if parameter calls a method that takes `self` by value (consuming).
@@ -188,10 +198,22 @@ impl<'ast> Analyzer<'ast> {
         ) {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
-                OwnershipMode::MutBorrowed => return Ok(OwnershipMode::MutBorrowed),
-                OwnershipMode::Owned => {
-                    return Ok(OwnershipMode::Owned);
+                OwnershipMode::MutBorrowed => {
+                    // `mut param` used only as an argument to a &mut callee keeps an owned
+                    // binding; the call site adds `&mut`. Method calls on the param (e.g.
+                    // `c.increment()`) need `&mut T` in the signature itself.
+                    let only_fn_passthrough = func
+                        .parameters
+                        .iter()
+                        .find(|p| p.name == param_name)
+                        .is_some_and(|p| p.is_mutable)
+                        && !self.param_has_direct_method_calls(param_name, body);
+                    if only_fn_passthrough {
+                        return Ok(OwnershipMode::Owned);
+                    }
+                    return Ok(OwnershipMode::MutBorrowed);
                 }
+                OwnershipMode::Owned => return Ok(OwnershipMode::Owned),
             }
         }
 
@@ -227,6 +249,18 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// True when the parameter is the receiver of a method call (e.g. `grid.set()`), not
+    /// merely passed as an argument to a free function.
+    fn param_has_direct_method_calls(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut calls = Vec::new();
+        self.collect_method_calls_on_param(param_name, body, &mut calls);
+        !calls.is_empty()
     }
 
     /// TDD: Check if parameter is ONLY used as &param or &mut param (never consumed directly).

@@ -79,10 +79,10 @@ fn main() {
 
     let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
-    // Check that Clone bound is inferred
+    // Returning a moved generic parameter does not require Clone (Rust move semantics).
     assert!(
-        generated.contains("T: Clone") || generated.contains("Clone"),
-        "Expected Clone bound in:\n{}",
+        !generated.contains("T: Clone"),
+        "Move-return generic fn should not infer Clone bound:\n{}",
         generated
     );
 }
@@ -102,10 +102,15 @@ fn main() {
 
     let generated = test_utils::compile_single_result(source).expect("Compilation failed");
 
-    // Check that both Clone and Debug bounds are inferred
+    // Check that Debug bound is inferred (Clone is not required to return `item`)
     assert!(
-        generated.contains("Clone") && generated.contains("Debug"),
-        "Expected Clone + Debug bounds in:\n{}",
+        generated.contains("Debug"),
+        "Expected Debug bound in:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("T: Clone"),
+        "Clone should not be inferred for move-return generic fn:\n{}",
         generated
     );
 }

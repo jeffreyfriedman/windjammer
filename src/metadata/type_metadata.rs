@@ -122,6 +122,7 @@ impl ModuleMetadata {
             "Float" => Some(Type::Float),
             "Bool" => Some(Type::Bool),
             "String" => Some(Type::String),
+            "string" | "Custom(\"string\")" => Some(Type::String),
             s if s.starts_with("Array(") && s.ends_with(')') => {
                 // Array(Custom("f32"), 16) or Array(InnerType, N)
                 let inner = &s[6..s.len() - 1];

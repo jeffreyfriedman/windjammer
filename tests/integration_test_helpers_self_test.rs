@@ -61,7 +61,6 @@ pub fn bad( -> i32 { 1 }
 }
 
 #[test]
-#[ignore = "Slow: spawns `cargo check` in a temp crate (compiles windjammer-runtime on cold cache). Run: cargo test --release --test integration_test_helpers_self_test -- --ignored --nocapture"]
 #[cfg_attr(tarpaulin, ignore)]
 fn multi_file_test_cargo_check_smoke() {
     let mut test = MultiFileTest::new();

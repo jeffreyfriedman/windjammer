@@ -66,10 +66,14 @@ fn main() {
 
     println!("Generated Rust:\n{}", rust_code);
 
-    // Verify .to_string() was added automatically
+    // Struct-literal-only string params use &str API — literals pass directly at call site.
     assert!(
-        rust_code.contains(r#"Item::new("sword".to_string(), "Iron Sword".to_string(), "A basic sword".to_string())"#),
-        "Expected automatic .to_string() conversion in function call"
+        rust_code.contains(r#"Item::new("sword", "Iron Sword", "A basic sword")"#),
+        "Expected string literals passed directly as &str (no call-site .to_string())"
+    );
+    assert!(
+        !rust_code.contains(r#""sword".to_string(), "Iron Sword".to_string()"#),
+        "Should not add .to_string() at call site for struct-literal-stored &str params"
     );
 }
 

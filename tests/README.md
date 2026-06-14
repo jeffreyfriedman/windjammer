@@ -1,66 +1,64 @@
 # Windjammer integration tests
 
-Rust integration tests live under this directory and are registered explicitly in the root `Cargo.toml` (`[[test]]` targets). Most crates use a crate-level `cfg` gate so you can **run a subset of suites** by enabling one or more `*_tests` Cargo features.
+Rust integration tests live under this directory. **Adding a file is enough** — no manual registration in `all.rs`, `mod.rs`, or `wj.toml`.
 
-## Suite features
+## How discovery works
 
-Declared in `Cargo.toml` under `[features]`:
+1. **`build.rs`** scans `tests/*.rs` at compile time and generates `OUT_DIR/all_tests_generated.rs` with one `mod` per file (skipping `all.rs`, `lib.rs`, and `common/`).
+2. **`tests/all.rs`** is a thin shell that `include!()`s that generated module list into a **single test binary** (one link step instead of ~800).
+3. **`Cargo.toml`** sets `autotests = false` and declares one `[[test]]` target named `all`.
 
-| Feature | Directory | `[[test]]` targets | Purpose |
-|--------|-----------|-------------------|---------|
-| `parser_tests` | `tests/parser/` | 43 | Parser, WGSL front matter, shader file detection |
-| `analyzer_tests` | `tests/analyzer/` | 508 | Analyzer, ownership inference, type checking |
-| `codegen_tests` | `tests/codegen/` | 103 | Backend codegen (Rust / Go / JS) |
-| `interpreter_tests` | `tests/interpreter/` | 3 | Interpreter runtime |
-| `conformance_tests` | `tests/conformance/` | 6 | Cross-backend conformance |
-| `integration_tests` | `tests/integration/` | 95 | End-to-end / build / FFI / modules |
+Downstream Windjammer projects (game crates) may still use auto-generated `tests/lib.rs` + a crate-root hook for `cargo test --lib`. The **compiler repo does not** — it uses the consolidated `all` binary only.
 
-## Commands
+## Canonical commands
 
-**Full suite** (default—no suite feature flags): every gated directory plus `tests/regression/` and `tests/linter/` (those are only active when *no* suite feature above is enabled).
+**Full suite** (default):
 
 ```bash
 cd windjammer
-cargo test --release
+cargo test --release --test all
 ```
 
-**One suite** (example: parser):
+**One module or test**:
 
 ```bash
-cargo test --release --features parser_tests
+cargo test --release --test all -- ownership_method_test
+cargo test --release --test all -- test_snapshot_method_returns_self_type_gets_ref_self
 ```
 
-**Another suite** (example: Rust codegen):
+**Fast iteration** (skip slow fixture subprocess tests):
 
 ```bash
-cargo test --release --features codegen_tests
+cargo test --release --test all --features skip_fixtures
 ```
 
-**Multiple suites**:
+**Opt-in suite features** (subset of gated directories):
+
+| Feature | Purpose |
+|--------|---------|
+| `parser_tests` | Parser, WGSL front matter |
+| `analyzer_tests` | Analyzer, ownership inference |
+| `codegen_tests` | Backend codegen |
+| `interpreter_tests` | Interpreter runtime |
+| `conformance_tests` | Cross-backend conformance |
+| `integration_tests` | End-to-end / build / FFI |
 
 ```bash
-cargo test --release --features "parser_tests codegen_tests"
-```
-
-**Single integration test binary** (still respects the same feature gates):
-
-```bash
-cargo test --release --features parser_tests --test parser_expression_tests
+cargo test --release --test all --features analyzer_tests
 ```
 
 ## `regression/` and `linter/`
 
-Bug-regression and linter tests are **not** tied to a suite feature. They are included only when you run the full suite (**no** `parser_tests`, `analyzer_tests`, `codegen_tests`, `interpreter_tests`, `conformance_tests`, or `integration_tests` feature is enabled). That keeps focused runs fast and avoids widening every partial suite with long regression matrices.
-
-## How gating works
-
-Each integration test source file starts with `#![cfg(any(...))]` (or `#![cfg(not(any(...)))]` for regression/linter):
-
-- If **no** suite feature is set, the `not(any(...))` branch is true and **all** gated suites compile and run.
-- If **any** suite feature is set, only sources tagged for that feature compile; regression and linter crates (the `#![cfg(not(any(...)))]` form) **do not**.
-
-Cargo may still build empty test harnesses for crates that are gated off; use `--test <name>` when you want to limit work to one binary.
+Bug-regression and linter tests use `#![cfg(not(any(...suite features...)))]`. They run only in the **full** suite (no suite feature enabled).
 
 ## Shared helpers
 
-`tests/common/` holds modules included via `#[path = ...] mod ...;` from individual tests. Helpers are not standalone `[[test]]` targets.
+`tests/common/` holds modules included via `#[path = ...] mod ...;` from individual tests. Helpers are not standalone test modules.
+
+## Quality gates (compiler changes)
+
+```bash
+cargo fmt --all
+cargo clippy --all-targets -- -D warnings
+cargo test --release --test all
+```

@@ -462,7 +462,7 @@ fn test_field_type_option() {
 
 #[test]
 fn test_type_ref_to_vec() {
-    let ty = get_fn_param_type("fn foo(x: Vec<i32>) { }");
+    let ty = get_fn_param_type("fn foo(x: &Vec<i32>) { }");
     if let Type::Reference(inner) = ty {
         match *inner {
             Type::Vec(_) | Type::Parameterized(_, _) => {}
@@ -475,15 +475,17 @@ fn test_type_ref_to_vec() {
 
 #[test]
 fn test_type_mut_ref_to_parameterized() {
-    let ty = get_fn_param_type("fn foo(mut x: HashMap<String, i32>) { }");
-    if let Type::MutableReference(inner) = ty {
-        if let Type::Parameterized(name, _) = *inner {
+    let program = parse_program("fn foo(mut x: HashMap<string, i32>) { }");
+    if let Some(Item::Function { decl, .. }) = program.items.first() {
+        let param = &decl.parameters[0];
+        assert!(param.is_mutable, "mut param should set is_mutable");
+        if let Type::Parameterized(name, _) = &param.type_ {
             assert_eq!(name, "HashMap");
         } else {
-            panic!("Expected Parameterized inside MutableReference");
+            panic!("Expected Parameterized HashMap type, got {:?}", param.type_);
         }
     } else {
-        panic!("Expected MutableReference type");
+        panic!("Expected function item");
     }
 }
 

@@ -73,13 +73,19 @@ fn test_stored_param_infers_owned() {
 
     assert!(
         generated.contains("name: String"),
-        "Should infer String for stored parameter, got:\n{}",
+        "Should infer String field for stored parameter, got:\n{}",
         generated
     );
 
     assert!(
-        generated.contains("User::new(\"Alice\".to_string())"),
-        "SHOULD convert literal for String param, got:\n{}",
+        generated.contains("fn new(name: &str)"),
+        "Struct-literal storage should use &str at API, got:\n{}",
+        generated
+    );
+
+    assert!(
+        generated.contains("User::new(\"Alice\")"),
+        "String literal passes directly to &str parameter, got:\n{}",
         generated
     );
 }

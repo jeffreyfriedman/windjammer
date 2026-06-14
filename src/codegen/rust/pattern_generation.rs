@@ -265,9 +265,14 @@ impl<'ast> CodeGenerator<'ast> {
                         return true;
                     }
                     // HashMap.get()/BTreeMap.get() returns Option<&V>.
-                    // Pattern bindings from Some(v) are references.
-                    if method == "get" && matches!(ty, Type::Option(_)) {
-                        return true;
+                    // Custom methods like Map::get -> Option<i32> return owned values.
+                    if method == "get" {
+                        if let Type::Option(inner) = ty {
+                            return matches!(
+                                inner.as_ref(),
+                                Type::Reference(_) | Type::MutableReference(_)
+                            );
+                        }
                     }
                 }
                 false
@@ -277,12 +282,14 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    // Call(FieldAccess(receiver, "get")) is the parsed form of
-                    // receiver.get(key). HashMap/BTreeMap.get() returns Option<&V>,
-                    // so pattern bindings from Some(v) are references.
                     if let Expression::FieldAccess { field, .. } = function {
-                        if field == "get" && matches!(ty, Type::Option(_)) {
-                            return true;
+                        if field == "get" {
+                            if let Type::Option(inner) = ty {
+                                return matches!(
+                                    inner.as_ref(),
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                );
+                            }
                         }
                     }
                 }

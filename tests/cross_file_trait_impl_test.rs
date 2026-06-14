@@ -87,7 +87,7 @@ fn parse_and_generate_multi_file(files: &[(&str, &str)]) -> String {
     // CRITICAL: Call infer_trait_signatures_from_impls to finalize trait signatures
     // This is what the real compiler does in ModuleCompiler::finalize_trait_inference()
     analyzer
-        .infer_trait_signatures_from_impls(&program)
+        .infer_trait_signatures_from_impls(&program, &merged_registry)
         .unwrap();
 
     // Get the updated analyzed_trait_methods after inference
@@ -103,11 +103,11 @@ fn test_cross_file_trait_impl_with_default() {
     // Trait in one file with default implementation
     let trait_file = r#"
     pub trait GameLoop {
-        fn init(self) {
+        fn init() {
             // Default: do nothing
         }
         
-        fn update(self, delta: f32) {
+        fn update(delta: f32) {
             // Default: do nothing  
         }
     }
@@ -120,11 +120,11 @@ fn test_cross_file_trait_impl_with_default() {
     struct MyGame { score: i64 }
     
     impl GameLoop for MyGame {
-        fn init(self) {
+        fn init() {
             println!("Initializing game")
         }
         
-        fn update(self, delta: f32) {
+        fn update(delta: f32) {
             println!("Updating with delta:", delta)
         }
     }
