@@ -243,20 +243,37 @@ impl<'a> BodyParser<'a> {
                     }
                 }
                 self.expect(Token::LParen)?;
-                loop {
-                    let _ = self.parse_expr()?;
-                    if matches!(self.current, Token::RParen) {
-                        break;
-                    }
-                    self.expect(Token::Comma)?;
-                }
-                self.expect(Token::RParen)?;
+                let _ = self.parse_constructor_exprs()?;
                 match mat {
                     Token::Mat2x2 => Ok(Type::Mat2x2(Some(ScalarType::F32))),
                     Token::Mat3x3 => Ok(Type::Mat3x3(Some(ScalarType::F32))),
                     Token::Mat4x4 => Ok(Type::Mat4x4(Some(ScalarType::F32))),
                     _ => Ok(Type::Mat4x4(Some(ScalarType::F32))),
                 }
+            }
+            Token::Array => {
+                self.advance();
+                let mut elem_type = Type::Scalar(ScalarType::F32);
+                let mut size = None;
+                if matches!(self.current, Token::LAngle) {
+                    self.advance();
+                    elem_type = self.parse_type_annotation()?;
+                    if matches!(self.current, Token::Comma) {
+                        self.advance();
+                        if let Token::IntLiteral(n) = self.current {
+                            size = Some(n as u32);
+                            self.advance();
+                        }
+                    }
+                    if matches!(self.current, Token::Shr) {
+                        self.current = Token::RAngle;
+                    } else if matches!(self.current, Token::RAngle) {
+                        self.advance();
+                    }
+                }
+                self.expect(Token::LParen)?;
+                let _ = self.parse_constructor_exprs()?;
+                Ok(Type::Array(Box::new(elem_type), size))
             }
             Token::Ident(name) => {
                 let name = name.clone();
@@ -292,12 +309,9 @@ impl<'a> BodyParser<'a> {
                     }
                     return Ok(result);
                 }
-                if matches!(self.current, Token::LAngle) {
-                    self.skip_optional_angle_bracket();
-                    if matches!(self.current, Token::LParen) {
-                        return self.parse_function_call(&name);
-                    }
-                }
+                // NOTE: Removed skip_optional_angle_bracket() check here because it causes
+                // the parser to skip tokens when < is a comparison operator, not a generic.
+                // Generic type parameters should be handled explicitly in type contexts only.
                 let mut ty = self
                     .symbols
                     .get(&name)
@@ -350,14 +364,42 @@ impl<'a> BodyParser<'a> {
                     Ok(Type::Scalar(ScalarType::F32))
                 }
             }
+            Token::If => self.parse_if_expression(),
             _ => Err(anyhow!(
-                "Unexpected token in expression: {:?}",
+                "[line {}:{}] Unexpected token in expression: {:?}",
+                self.current_line,
+                self.current_column,
                 self.current
             )),
         }
     }
 
-    fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {
+    /// WGSL if-expression: `if (cond) { then_val } else { else_val }`
+    fn parse_if_expression(&mut self) -> Result<Type> {
+        self.advance(); // consume 'if'
+        self.expect(Token::LParen)?;
+        let _cond = self.parse_expr()?;
+        self.expect(Token::RParen)?;
+        let then_ty = self.parse_block_expr_value()?;
+
+        if !matches!(self.current, Token::Else) {
+            return Err(self.error_at(
+                "if-expression requires else branch (WGSL if-expressions are always if/else)"
+                    .to_string(),
+            ));
+        }
+        self.advance(); // consume 'else'
+
+        let _else_ty = if matches!(self.current, Token::If) {
+            self.parse_if_expression()?
+        } else {
+            self.parse_block_expr_value()?
+        };
+
+        Ok(then_ty)
+    }
+
+    pub(crate) fn get_swizzle_or_field_type(&self, ty: &Type, member: &str) -> Result<Type> {
         match ty {
             Type::Vec2(scalar) | Type::Vec3(scalar) | Type::Vec4(scalar) => {
                 let scalar_ty = scalar.unwrap_or(ScalarType::F32);
@@ -429,6 +471,22 @@ impl<'a> BodyParser<'a> {
         }
     }
 
+    fn parse_constructor_exprs(&mut self) -> Result<Vec<Type>> {
+        let mut args = Vec::new();
+        loop {
+            if matches!(self.current, Token::RParen) {
+                break;
+            }
+            args.push(self.parse_expr()?);
+            if matches!(self.current, Token::RParen) {
+                break;
+            }
+            self.expect(Token::Comma)?;
+        }
+        self.expect(Token::RParen)?;
+        Ok(args)
+    }
+
     fn parse_vec_constructor(&mut self, n: usize) -> Result<Type> {
         if matches!(self.current, Token::LAngle) {
             self.advance();
@@ -440,15 +498,7 @@ impl<'a> BodyParser<'a> {
             }
         }
         self.expect(Token::LParen)?;
-        let mut args = Vec::new();
-        loop {
-            args.push(self.parse_expr()?);
-            if matches!(self.current, Token::RParen) {
-                break;
-            }
-            self.expect(Token::Comma)?;
-        }
-        self.expect(Token::RParen)?;
+        let args = self.parse_constructor_exprs()?;
         let elem_type = scalar_of(&args[0]);
         Ok(match n {
             2 => Type::Vec2(Some(elem_type)),
@@ -458,7 +508,7 @@ impl<'a> BodyParser<'a> {
         })
     }
 
-    fn parse_function_call(&mut self, name: &str) -> Result<Type> {
+    pub(crate) fn parse_function_call(&mut self, name: &str) -> Result<Type> {
         self.expect(Token::LParen)?;
         let mut arg_types = Vec::new();
         while !matches!(self.current, Token::RParen | Token::Eof) {

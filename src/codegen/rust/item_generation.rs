@@ -136,13 +136,14 @@ impl<'ast> CodeGenerator<'ast> {
                     Self::collect_derive_trait_identifiers(expr, &mut traits);
                 }
                 if !traits.is_empty() {
-                    let merged = CodeGenerator::merge_standard_derive_traits(
-                        traits,
-                        self.infer_derivable_traits(s),
-                    );
+                    let user_requested_copy = traits.iter().any(|t| t == "Copy");
+                    let mut inferred = self.infer_derivable_traits(s);
+                    if !user_requested_copy {
+                        inferred.retain(|t| t != "Copy");
+                    }
+                    let merged = CodeGenerator::merge_standard_derive_traits(traits, inferred);
                     output.push_str(&format!("#[derive({})]\n", merged.join(", ")));
 
-                    // TDD FIX: Register this struct as Copy if derived (explicit or inferred)
                     if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
                     }
@@ -194,11 +195,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("#[repr(C)]\n");
 
         // Add struct declaration with type parameters
-        let pub_prefix = if s.is_pub || self.is_module {
-            "pub "
-        } else {
-            ""
-        };
+        let pub_prefix = if s.is_pub { "pub " } else { "" };
         output.push_str(&format!("{}struct ", pub_prefix));
         output.push_str(&s.name);
         if !s.type_params.is_empty() {
@@ -286,12 +283,10 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(")]\n");
                 }
             }
-            // In modules, all fields should be pub for cross-module access
-            let pub_keyword = if self.is_module || field.is_pub {
-                "pub "
-            } else {
-                ""
-            };
+            // In Windjammer, pub struct implies pub fields — the language doesn't
+            // have Rust-style per-field privacy.  If the user explicitly marked the
+            // struct pub, every field is accessible from sibling modules.
+            let pub_keyword = if field.is_pub || s.is_pub { "pub " } else { "" };
             output.push_str(&format!(
                 "    {}{}: {},\n",
                 pub_keyword,
@@ -440,11 +435,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
 
-        let pub_prefix = if e.is_pub || self.is_module {
-            "pub "
-        } else {
-            ""
-        };
+        let pub_prefix = if e.is_pub { "pub " } else { "" };
         output.push_str(&format!("{}enum {}", pub_prefix, e.name));
 
         // Generate generic parameters: enum Option<T>, enum Result<T, E>
@@ -899,9 +890,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .map(|af| af.inferred_ownership.contains_key("self"))
                 .unwrap_or(false);
             let accesses_fields = if !self.current_struct_fields.is_empty() {
-                let ctx = self_analysis::AnalysisContext::new(
+                let local_bindings = self_analysis::collect_local_bindings(&func.body);
+                let ctx = self_analysis::AnalysisContext::with_locals(
                     &func.parameters,
                     &self.current_struct_fields,
+                    &local_bindings,
                 );
                 self_analysis::function_accesses_fields(&ctx, func)
                     || self_analysis::function_mutates_fields(&ctx, func)

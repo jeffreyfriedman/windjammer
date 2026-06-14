@@ -1,5 +1,7 @@
 # Agent Instructions
 
+**Read the [windjammer-engineering skill](../.cursor/skills/windjammer-engineering/SKILL.md) before starting work.**
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
@@ -39,3 +41,25 @@ bd sync               # Sync with git
 - If push fails, resolve and retry until it succeeds
 
 Use 'bd' for task tracking
+
+## Compiler tests
+
+Add `tests/your_feature_test.rs` — `build.rs` picks it up automatically. No edits to `all.rs` or `tests/lib.rs`.
+
+**Canonical full suite:**
+
+```bash
+cargo test --release --test all
+```
+
+See `tests/README.md` for suite features and filtering.
+
+Compiler-only changes: tests + `cargo test --release --test all` in `windjammer/` are sufficient.
+
+When fixes enable or change player-visible behavior in **Breach Protocol** or the engine render path, agents must validate through the game — not only unit tests:
+
+1. Build the game: `wj game build --release` in `../breach-protocol/`
+2. Headless playthrough with screenshots (see `../breach-protocol/AGENTS.md`)
+3. Dual-persona jury per `../.cursor/rules/dual-persona-jury-evaluation.mdc`
+
+Do not claim rendering or gameplay fixes are done without screenshot evidence and three-tier verdict.

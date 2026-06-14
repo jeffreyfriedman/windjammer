@@ -12,6 +12,11 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(inner) | Type::MutableReference(inner) => t = inner.as_ref(),
                 Type::Vec(inner) => return Some(inner.as_ref()),
                 Type::Array(inner, _) => return Some(inner.as_ref()),
+                Type::Parameterized(name, params)
+                    if (name == "Vec" || name == "VecDeque") && !params.is_empty() =>
+                {
+                    return Some(&params[0]);
+                }
                 _ => return None,
             }
         }

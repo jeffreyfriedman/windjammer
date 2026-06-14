@@ -1,6 +1,7 @@
-//! Qualified and unqualified method signature resolution during codegen.
+//! Method call signature resolution — delegates to unified resolver.
 
 use crate::analyzer::FunctionSignature;
+use crate::codegen::rust::call_signature_resolution::{self, ResolutionMethod};
 use crate::parser::Expression;
 
 use crate::codegen::rust::CodeGenerator;
@@ -13,65 +14,35 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> Option<FunctionSignature> {
         let type_name = self.infer_type_name(object);
-        let out = if let Some(ref type_name) = type_name {
-            let qualified_name = format!("{}::{}", type_name, method);
-            let mut sig = self
-                .signature_registry
-                .get_signature(&qualified_name)
-                .cloned();
-            // Validate argument count vs signature to dodge name collisions.
-            if let Some(ref found_sig) = sig {
-                let expected_args = if found_sig.has_self_receiver {
-                    found_sig.param_ownership.len().saturating_sub(1)
-                } else {
-                    found_sig.param_ownership.len()
-                };
-                if expected_args != arguments.len() {
-                    sig = None;
-                    for (key, alt_sig) in &self.signature_registry.signatures {
-                        if key.ends_with(&format!("::{}", qualified_name)) && key != &qualified_name
-                        {
-                            let alt_args = if alt_sig.has_self_receiver {
-                                alt_sig.param_ownership.len().saturating_sub(1)
-                            } else {
-                                alt_sig.param_ownership.len()
-                            };
-                            if alt_args == arguments.len() {
-                                sig = Some(alt_sig.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            sig
-        } else {
-            if crate::codegen::rust::stdlib_method_traits::is_common_stdlib_method(method) {
-                None
-            } else {
-                self.signature_registry
-                    .get_signature(method)
-                    .cloned()
-                    .or_else(|| {
-                        let suffix_sig = self
-                            .signature_registry
-                            .find_signature_ending_with(method)
-                            .cloned();
-                        if let Some(ref sig) = suffix_sig {
-                            let expected_args = if sig.has_self_receiver {
-                                sig.param_ownership.len().saturating_sub(1)
-                            } else {
-                                sig.param_ownership.len()
-                            };
-                            if expected_args == arguments.len() {
-                                return suffix_sig;
-                            }
-                        }
-                        None
-                    })
-            }
-        };
 
-        out
+        if let Some(ref tn) = type_name {
+            let qualified_name = format!("{}::{}", tn, method);
+            let resolved = call_signature_resolution::resolve_call_signature(
+                &self.signature_registry,
+                &qualified_name,
+                Some(tn.as_str()),
+                arguments.len(),
+                &self.module_alias_map,
+            );
+            // Only accept resolutions that matched our type (exact, receiver, or
+            // module-alias). Arg-count-validated suffix matches could pick a
+            // completely different type's method (e.g. str::contains when we
+            // asked for String::contains), which causes wrong coercion.
+            let result = resolved
+                .filter(|r| !matches!(r.resolution_method, ResolutionMethod::ArgCountValidated))
+                .map(|r| r.sig);
+            return result;
+        }
+
+        // No receiver type known: only suffix-match with arg-count validation.
+        // Never do bare `get_signature(method)` — it could pick any type's method.
+        // Skip `remove` specifically because it has incompatible semantics across types:
+        // Vec::remove(usize) takes owned index, HashMap::remove(&K) takes borrowed key.
+        if method == "remove" {
+            return None;
+        }
+        self.signature_registry
+            .find_signature_by_name_and_arg_count(method, arguments.len())
+            .cloned()
     }
 }

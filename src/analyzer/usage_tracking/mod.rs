@@ -193,6 +193,109 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// True when `for x in param { ... *x ... }` — collection is borrowed for element refs.
+    pub(crate) fn for_loop_over_param_dereferences_element(
+        &self,
+        param_name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            if let Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } = stmt
+            {
+                if let Expression::Identifier { name: id, .. } = iterable {
+                    if id == param_name {
+                        if let Pattern::Identifier(loop_var) = pattern {
+                            if self.statements_deref_identifier(loop_var, body) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                if self.for_loop_over_param_dereferences_element(param_name, body) {
+                    return true;
+                }
+            } else if let Statement::If {
+                then_block,
+                else_block,
+                ..
+            } = stmt
+            {
+                if self.for_loop_over_param_dereferences_element(param_name, then_block) {
+                    return true;
+                }
+                if let Some(else_stmts) = else_block {
+                    if self.for_loop_over_param_dereferences_element(param_name, else_stmts) {
+                        return true;
+                    }
+                }
+            } else if let Statement::While { body, .. } | Statement::Loop { body, .. } = stmt {
+                if self.for_loop_over_param_dereferences_element(param_name, body) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn statements_deref_identifier(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            if self.expr_derefs_identifier(
+                match stmt {
+                    Statement::Expression { expr, .. } => expr,
+                    Statement::Let { value, .. } => value,
+                    Statement::Return { value: Some(v), .. } => v,
+                    Statement::Assignment { value, .. } => value,
+                    _ => continue,
+                },
+                name,
+            ) {
+                return true;
+            }
+            if let Statement::If {
+                then_block,
+                else_block,
+                ..
+            } = stmt
+            {
+                if self.statements_deref_identifier(name, then_block) {
+                    return true;
+                }
+                if let Some(else_stmts) = else_block {
+                    if self.statements_deref_identifier(name, else_stmts) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn expr_derefs_identifier(&self, expr: &Expression, name: &str) -> bool {
+        match expr {
+            Expression::Unary {
+                op: UnaryOp::Deref,
+                operand,
+                ..
+            } => matches!(**operand, Expression::Identifier { name: ref id, .. } if id == name),
+            Expression::Binary { left, right, .. } => {
+                self.expr_derefs_identifier(left, name) || self.expr_derefs_identifier(right, name)
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_derefs_identifier(arg, name)),
+            _ => false,
+        }
+    }
+
     /// `let v = param` (and chains) so that `if let` / `match` on `v` must still require an owned
     /// parameter when the arm moves out of `Option`/`Result`, etc.
     pub(crate) fn simple_let_alias_ids_for_param(

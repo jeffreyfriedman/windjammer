@@ -1,0 +1,27 @@
+// Conformance Test: std::subprocess (Rust backend)
+//
+// EXPECTED OUTPUT:
+// [subprocess_echo] hello
+// [subprocess_all] PASSED
+
+use std::subprocess
+
+fn test_echo() {
+    let args = vec!["hello".to_string()]
+    match subprocess::spawn("echo", args) {
+        Ok(handle) => {
+            match subprocess::read_line(handle) {
+                Ok(line) => println("[subprocess_echo] ${line}"),
+                Err(e) => println("[subprocess_echo] FAIL read: ${e}"),
+            }
+            let _ = subprocess::wait(handle)
+            let _ = subprocess::close(handle)
+        }
+        Err(e) => println("[subprocess_echo] FAIL spawn: ${e}"),
+    }
+}
+
+fn main() {
+    test_echo()
+    println("[subprocess_all] PASSED")
+}

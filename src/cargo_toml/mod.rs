@@ -249,9 +249,9 @@ mod tests {
         let temp = std::env::temp_dir().join("wj_infer_game");
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).unwrap();
-        fs::write(temp.join("game.toml"), r#"name = "Breach Protocol""#).unwrap();
+        fs::write(temp.join("game.toml"), r#"name = "My Game""#).unwrap();
 
-        assert_eq!(infer_project_name(&temp), "breach-protocol");
+        assert_eq!(infer_project_name(&temp), "my-game");
 
         fs::remove_dir_all(&temp).ok();
     }
@@ -276,7 +276,7 @@ mod tests {
         fs::write(
             temp.join("Cargo.toml"),
             r#"[package]
-name = "breach_protocol"
+name = "my_project"
 version = "0.1.0"
 "#,
         )
@@ -284,7 +284,7 @@ version = "0.1.0"
 
         assert_eq!(
             resolve_package_name_with_existing_cargo(&temp, "windjammer"),
-            "breach_protocol"
+            "my_project"
         );
 
         fs::remove_dir_all(&temp).ok();
@@ -305,8 +305,8 @@ version = "0.1.0"
         .unwrap();
 
         assert_eq!(
-            resolve_package_name_with_existing_cargo(&temp, "breach_protocol"),
-            "breach_protocol"
+            resolve_package_name_with_existing_cargo(&temp, "my_project"),
+            "my_project"
         );
 
         fs::remove_dir_all(&temp).ok();
@@ -339,7 +339,7 @@ version = "0.1.0"
             out.join("Cargo.toml"),
             r#"# Auto-generated
 [package]
-name = "breach_protocol"
+name = "my_project"
 version = "0.1.0"
 edition = "2021"
 
@@ -354,7 +354,7 @@ edition = "2021"
 
         let cargo = fs::read_to_string(out.join("Cargo.toml")).unwrap();
         assert!(
-            cargo.contains("name = \"breach_protocol\""),
+            cargo.contains("name = \"my_project\""),
             "package name should be preserved: {}",
             cargo
         );

@@ -27,8 +27,34 @@
 //
 // Infers: `fn print_and_clone<T: Display + Clone>(x: T)`
 
-use crate::parser::{BinaryOp, Expression, FunctionDecl, Statement, TypeParam};
+use crate::parser::{BinaryOp, Expression, FunctionDecl, Item, Statement, TypeParam};
 use std::collections::{HashMap, HashSet};
+
+/// Collect inferred trait bounds for all functions and impl methods in a program.
+///
+/// This eliminates the duplicated loop pattern found in compilation_pipeline,
+/// library_multipass, file_compilation_pipeline, ejector, and compiler_database.
+pub fn collect_inferred_bounds(items: &[Item]) -> HashMap<String, InferredBounds> {
+    let mut engine = InferenceEngine::new();
+    let mut bounds_map = HashMap::new();
+    for item in items {
+        if let Item::Function { decl: func, .. } = item {
+            let bounds = engine.infer_function_bounds(func);
+            if !bounds.is_empty() {
+                bounds_map.insert(func.name.clone(), bounds);
+            }
+        }
+        if let Item::Impl { block, .. } = item {
+            for func in &block.functions {
+                let bounds = engine.infer_function_bounds(func);
+                if !bounds.is_empty() {
+                    bounds_map.insert(func.name.clone(), bounds);
+                }
+            }
+        }
+    }
+    bounds_map
+}
 
 /// A trait constraint on a type parameter
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

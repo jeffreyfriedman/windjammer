@@ -13,6 +13,16 @@ use crate::parser::*;
 
 use super::self_analysis;
 use super::string_analysis;
+
+/// Result of looking ahead to detect Option field take/replace patterns.
+enum OptionFieldPattern {
+    /// Next statement is `self.field = None` — fold into `.take()`
+    ClearToNone(usize),
+    /// Next statement is `self.field = Some(expr)` — fold into `.replace(expr)`
+    ReplaceWith(usize, String),
+    /// No recognizable pattern
+    None,
+}
 use super::CodeGenerator;
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
@@ -328,10 +338,13 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// E0507 fix for `let x = self.field` behind borrowed self.
-    /// - Option<T> behind &mut self → `.take()` (atomically moves value out, leaves None)
+    ///
+    /// Patterns recognized:
+    /// - `let prev = self.field; self.field = None`  → `let prev = self.field.take()`
+    /// - `let prev = self.field; self.field = Some(v)` → `let prev = self.field.replace(v)`
     /// - Other non-Copy behind &self/&mut self → `.clone()`
     pub(in crate::codegen::rust) fn apply_self_field_move_fix(
-        &self,
+        &mut self,
         value: &Expression<'ast>,
         value_str: &mut String,
     ) {
@@ -350,20 +363,109 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(ty) = self.infer_expression_type(value) else {
             return;
         };
-        if self.is_type_copy(&ty)
-            || value_str.ends_with(".clone()")
-            || value_str.ends_with(".take()")
-        {
+        if self.is_type_copy(&ty) || value_str.ends_with(".take()") {
             return;
         }
         let is_option =
             matches!(&ty, Type::Option(_)) || matches!(&ty, Type::Custom(n) if n == "Option");
         let self_is_mut = self.inferred_mut_borrowed_params.contains("self");
         if is_option && self_is_mut {
-            *value_str = format!("{}.take()", value_str);
-        } else {
+            // Strip any .clone() that auto_clone inserted prematurely
+            if value_str.ends_with(".clone()") {
+                value_str.truncate(value_str.len() - ".clone()".len());
+            }
+
+            // Look ahead: does the next statement clear or replace this field?
+            let field_path = self.extract_field_access_path_string(value);
+            match self.next_statement_option_pattern(&field_path) {
+                OptionFieldPattern::ClearToNone(next_idx) => {
+                    *value_str = format!("{}.take()", value_str);
+                    self.skip_block_indices.insert(next_idx);
+                }
+                OptionFieldPattern::ReplaceWith(next_idx, replacement) => {
+                    let replacement_str = replacement.to_string();
+                    *value_str = format!("{}.replace({})", value_str, replacement_str);
+                    self.skip_block_indices.insert(next_idx);
+                }
+                OptionFieldPattern::None => {
+                    *value_str = format!("{}.take()", value_str);
+                }
+            }
+        } else if !value_str.ends_with(".clone()") {
             *value_str = format!("{}.clone()", value_str);
         }
+    }
+
+    /// Extract the string representation of a field access path (e.g., "self.weapon").
+    fn extract_field_access_path_string(&self, expr: &Expression<'ast>) -> String {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                let obj = self.extract_field_access_path_string(object);
+                format!("{}.{}", obj, field)
+            }
+            Expression::Identifier { name, .. } => name.to_string(),
+            _ => String::new(),
+        }
+    }
+
+    /// Check if the next statement in the current block assigns None or Some(...)
+    /// to the same field that was just read.
+    fn next_statement_option_pattern(&self, field_path: &str) -> OptionFieldPattern {
+        let next_idx = self.current_block_local_idx + 1;
+        if next_idx >= self.current_function_body.len() {
+            return OptionFieldPattern::None;
+        }
+        let next_stmt = self.current_function_body[next_idx];
+        match next_stmt {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op: None,
+                ..
+            } => {
+                let target_path = self.extract_field_access_path_string(target);
+                if target_path != field_path {
+                    return OptionFieldPattern::None;
+                }
+                if self.expression_is_none(value) {
+                    OptionFieldPattern::ClearToNone(next_idx)
+                } else if let Some(inner) = self.expression_unwrap_some(value) {
+                    OptionFieldPattern::ReplaceWith(next_idx, inner.to_string())
+                } else {
+                    OptionFieldPattern::None
+                }
+            }
+            _ => OptionFieldPattern::None,
+        }
+    }
+
+    fn expression_is_none(&self, expr: &Expression) -> bool {
+        matches!(
+            expr,
+            Expression::Identifier { name, .. } if name == "None"
+        ) || matches!(
+            expr,
+            Expression::Call { function, arguments, .. }
+            if matches!(&**function, Expression::Identifier { name, .. } if name == "None")
+               && arguments.is_empty()
+        )
+    }
+
+    fn expression_unwrap_some(&self, expr: &Expression<'ast>) -> Option<String> {
+        if let Expression::Call {
+            function,
+            arguments,
+            ..
+        } = expr
+        {
+            if let Expression::Identifier { name, .. } = &**function {
+                if name == "Some" && arguments.len() == 1 {
+                    let inner_str = self.generate_expression_immut(arguments[0].1);
+                    return Some(inner_str);
+                }
+            }
+        }
+        Option::None
     }
 
     /// Tuple `let (a, b) = rhs`: register each binding's type for comparisons / codegen.
@@ -506,13 +608,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if base == "&mut " {
-            // For Copy inner types, strip &mut UNLESS the body calls
-            // mutating methods on the binding.  Copy values auto-copy on
-            // destructure, so comparisons/arithmetic/returns work with owned
-            // T.  But if the body calls methods that take &mut self on the
-            // binding, we need &mut to (a) compile and (b) propagate
-            // mutations back through self.field.
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
+                // For Copy inner types, strip &mut UNLESS the body calls
+                // mutating methods on the binding.
                 if self.is_type_copy(&inner) {
                     let body_mutates = some_arm
                         .and_then(|arm| {
@@ -524,6 +622,23 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         .unwrap_or(false);
                     if !body_mutates {
+                        return "";
+                    }
+                }
+                if !self.is_type_copy(&inner) {
+                    let body_mutates = some_arm
+                        .and_then(|arm| {
+                            Self::some_pattern_single_binding(&arm.pattern).map(|b| {
+                                self.binding_receives_mutating_call_with_sig_check(
+                                    arm.body, b, &inner,
+                                )
+                            })
+                        })
+                        .unwrap_or(false);
+                    if !body_mutates {
+                        if self.match_scrutinee_is_self_field(value) {
+                            return "& ";
+                        }
                         return "";
                     }
                 }
@@ -559,7 +674,17 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(b) = Self::some_pattern_single_binding(&main_arm.pattern) else {
             return false;
         };
-        self.expr_binding_receives_mutating_method_call(main_arm.body, b)
+        if self.expr_binding_receives_mutating_method_call(main_arm.body, b) {
+            return true;
+        }
+        if let Some(Type::Option(inner)) = self.infer_expression_type(scrutinee) {
+            return self.binding_receives_mutating_call_with_sig_check(
+                main_arm.body,
+                b,
+                inner.as_ref(),
+            );
+        }
+        false
     }
 
     /// Check if expression is self.field (or self.field.subfield) - traces to self
@@ -627,7 +752,22 @@ impl<'ast> CodeGenerator<'ast> {
                                 return Some("usize".to_string());
                             }
                         }
-                        return Some("i64".to_string());
+                        if let Some(fields) = self.lookup_struct_field_types(base_name) {
+                            if let Some(ty) = fields.get(field.as_str()) {
+                                if matches!(ty, Type::Custom(n) if n == "usize") {
+                                    return Some("usize".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "f32") {
+                                    return Some("f32".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "i32") {
+                                    return Some("i32".to_string());
+                                }
+                                if matches!(ty, Type::Custom(n) if n == "i64" || n == "int") {
+                                    return Some("i64".to_string());
+                                }
+                            }
+                        }
                     }
                 }
             }

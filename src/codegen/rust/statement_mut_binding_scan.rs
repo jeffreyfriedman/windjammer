@@ -105,7 +105,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        super::stdlib_method_traits::method_mutates_receiver(method)
     }
 
     /// Like `expr_binding_receives_mutating_method_call` but also consults
@@ -120,13 +120,24 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.stmt_binding_mut_call_with_sig(s, binding, binding_type)),
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == binding
                         && self.method_mutates_via_registry_or_sig(method, binding_type)
                     {
                         return true;
                     }
+                }
+                if arguments.iter().enumerate().any(|(i, (_, a))| {
+                    matches!(a, Expression::Identifier { name, .. } if name == binding)
+                        && self.method_call_argument_expects_mut_borrow(object, method, i)
+                }) {
+                    return true;
                 }
                 self.binding_receives_mutating_call_with_sig_check(object, binding, binding_type)
             }
@@ -211,10 +222,36 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Whether argument `arg_idx` of `receiver.method(...)` expects `&mut` (e.g. `is_available(world, …)`).
+    fn method_call_argument_expects_mut_borrow(
+        &self,
+        receiver: &Expression<'ast>,
+        method: &str,
+        arg_idx: usize,
+    ) -> bool {
+        let recv_type = self.infer_expression_type(receiver);
+        let type_name = match recv_type.as_ref() {
+            Some(Type::Custom(name)) => name.as_str(),
+            _ => return false,
+        };
+        let qualified = format!("{}::{}", type_name, method);
+        let Some(sig) = self.signature_registry.get_signature(&qualified) else {
+            return false;
+        };
+        let param_idx = if sig.has_self_receiver {
+            arg_idx + 1
+        } else {
+            arg_idx
+        };
+        sig.param_ownership
+            .get(param_idx)
+            .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
+    }
+
     /// Check if a method on the given type is known to mutate its receiver,
     /// using both the stdlib method registry and the signature registry.
     fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
-        if crate::method_registry::mutates_receiver(method) {
+        if super::stdlib_method_traits::method_mutates_receiver(method) {
             return true;
         }
         let type_name = match receiver_type {

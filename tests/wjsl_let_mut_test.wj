@@ -1,0 +1,15 @@
+// Test: WJSL should support `let mut` syntax like Windjammer
+// This is for the WJSL transpiler (shader language)
+
+// NOTE: This is a Windjammer test that will test the WJSL transpiler
+
+extern fn test_wjsl_let_mut_simple()
+extern fn test_wjsl_let_mut_with_usage()
+extern fn test_wjsl_let_mut_in_loop()
+
+pub fn test_all() {
+    test_wjsl_let_mut_simple()
+    test_wjsl_let_mut_with_usage()
+    test_wjsl_let_mut_in_loop()
+    println("✅ All WJSL let mut tests passed")
+}

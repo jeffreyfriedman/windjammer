@@ -170,22 +170,12 @@ pub fn perform_analysis<'ast>(
     program: &parser::Program<'ast>,
 ) -> Result<AnalysisResults<'ast>, String> {
     use crate::analyzer::Analyzer;
-    use crate::inference::InferenceEngine;
-
     // Run ownership and type analysis
     let mut analyzer = Analyzer::new();
     let (analyzed_functions, signatures, _analyzed_trait_methods) =
         analyzer.analyze_program(program)?;
 
-    // Run trait bound inference
-    let mut inference_engine = InferenceEngine::new();
-    let mut inferred_bounds_map = std::collections::HashMap::new();
-    for item in &program.items {
-        if let crate::parser::Item::Function { decl: func, .. } = item {
-            let bounds = inference_engine.infer_function_bounds(func);
-            inferred_bounds_map.insert(func.name.clone(), bounds);
-        }
-    }
+    let inferred_bounds_map = crate::inference::collect_inferred_bounds(&program.items);
 
     Ok(AnalysisResults {
         analyzed_functions,

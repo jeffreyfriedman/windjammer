@@ -2,7 +2,7 @@
 // Bug: Compiler infers &G when source says `mut game: G`
 
 pub trait GameState {
-    fn tick(&mut self)
+    fn tick(self)
 }
 
 // External FFI that takes &mut reference
@@ -19,7 +19,7 @@ pub struct MyGame {
 }
 
 impl GameState for MyGame {
-    fn tick(&mut self) {
+    fn tick(self) {
         self.frame = self.frame + 1
     }
 }

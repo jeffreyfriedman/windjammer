@@ -14,7 +14,7 @@ use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RenameSymbolRequest {
     /// Source code to refactor
     pub code: String,

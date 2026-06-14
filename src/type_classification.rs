@@ -58,6 +58,44 @@ pub fn is_prelude_or_primitive(name: &str) -> bool {
 }
 
 // =============================================================================
+// Copy Type Classification (Structural)
+// =============================================================================
+
+/// Determine if a `Type` tree is Copy given sets of known Copy structs/enums.
+/// This is the canonical implementation used by both single-file and library
+/// compilation for registry-building passes.
+pub fn is_type_copy_with_registries(
+    ty: &crate::parser::ast::types::Type,
+    copy_structs: &std::collections::HashSet<String>,
+    copy_enums: &std::collections::HashSet<String>,
+) -> bool {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Reference(_) => true,
+        Type::MutableReference(_) => false,
+        Type::Tuple(types) => types
+            .iter()
+            .all(|t| is_type_copy_with_registries(t, copy_structs, copy_enums)),
+        Type::Option(inner) => is_type_copy_with_registries(inner, copy_structs, copy_enums),
+        Type::Result(ok, err) => {
+            is_type_copy_with_registries(ok, copy_structs, copy_enums)
+                && is_type_copy_with_registries(err, copy_structs, copy_enums)
+        }
+        Type::Array(inner, _) => is_type_copy_with_registries(inner, copy_structs, copy_enums),
+        Type::Vec(_) | Type::String => false,
+        Type::RawPointer { pointee, .. } => {
+            is_type_copy_with_registries(pointee.as_ref(), copy_structs, copy_enums)
+        }
+        Type::FunctionPointer { .. } => true,
+        Type::Custom(name) => {
+            copy_structs.contains(name) || copy_enums.contains(name) || is_copy_primitive(name)
+        }
+        _ => false,
+    }
+}
+
+// =============================================================================
 // Container / Stdlib Type Classification
 // =============================================================================
 
@@ -93,6 +131,20 @@ pub fn is_stdlib_container(name: &str) -> bool {
             | "Slice"
             | "Signal"
     )
+}
+
+/// Returns true if the given `Type` is a stdlib container or wrapper.
+/// Used by mutation detection to decide whether known-mutating heuristics
+/// (like `push`, `insert`, `clear`) should apply even when a qualified
+/// registry lookup missed.
+pub fn is_stdlib_collection_or_wrapper(ty: &crate::parser::ast::types::Type) -> bool {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Vec(_) | Type::Option(_) | Type::Result(_, _) | Type::String => true,
+        Type::Parameterized(name, _) | Type::Custom(name) => is_stdlib_container(name),
+        Type::Array(_, _) => true,
+        _ => false,
+    }
 }
 
 /// Large collection types (high heap allocation cost, never Copy).

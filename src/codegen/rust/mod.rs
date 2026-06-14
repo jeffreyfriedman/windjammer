@@ -11,6 +11,7 @@
 //! - **helpers**: Utility functions
 //! - **backend**: Backend trait implementation
 
+pub mod aosoa_transform;
 pub mod arm_string_analysis;
 pub mod assignment_statement_generation;
 pub mod ast_utilities;
@@ -20,6 +21,7 @@ pub mod backend;
 pub mod binary_expression_generation;
 pub mod block_generation;
 pub mod call_expression_generation;
+pub mod call_signature_resolution;
 pub mod closure_generation;
 pub mod codegen_helpers;
 pub mod collection_detection;
@@ -72,6 +74,7 @@ pub mod program_generation;
 pub mod return_statement_generation;
 pub mod rust_coercion_rules;
 pub mod self_analysis;
+pub mod simd_transform;
 pub mod statement_generation;
 pub mod statement_mut_binding_scan;
 pub mod statements;
@@ -101,4 +104,5 @@ pub use backend::RustBackend;
 pub use types::type_to_rust;
 pub mod method_call_analyzer;
 pub mod method_call_expression_generation;
+pub mod rust_stdlib_annotations;
 pub mod stdlib_method_traits;

@@ -1,4 +1,4 @@
-// Test: String parameter inference 
+// Test: string parameter inference 
 // Tests that stored parameters are kept as owned String
 
 pub struct Logger {
@@ -13,7 +13,7 @@ impl Logger {
 }
 
 // Function that stores the parameter
-pub fn store_path(paths: &mut Vec<string>, path: string) {
+pub fn store_path(paths: Vec<string>, path: string) {
     paths.push(path)
 }
 
@@ -23,7 +23,7 @@ pub fn test_string_storage() {
     
     // store_path pushes the path, so it should be owned String
     let mut paths = Vec::new()
-    store_path(&mut paths, "file.txt")
+    store_path(paths, "file.txt")
     
     println!("Logger prefix: {}", logger.prefix)
 }

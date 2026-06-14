@@ -1,4 +1,4 @@
-// TDD TEST: String field getters should return &str, not String
+// TDD TEST: string field getters should return &str, not String
 // Bug: Methods returning String fields require owned self
 // Expected: Should either infer &self and return &str, or require explicit return type
 
@@ -26,7 +26,7 @@ impl Quest {
     // Pattern 2: Return &str - should infer &self automatically
     // This is what most getters should do
     pub fn title(self) -> string {
-        &self.title
+        self.title
     }
     
     // Pattern 3: Just access field - should infer &self
@@ -35,8 +35,8 @@ impl Quest {
     }
 }
 
-fn use_quest(q: &Quest) {
-    // This should work - calling method on &Quest
+fn use_quest(q: Quest) {
+    // This should work - calling method on borrowed Quest
     let title = q.title()
     let done = q.is_completed()
     
@@ -47,7 +47,7 @@ fn main() {
     let quest = Quest::new("Save the kingdom", "Defeat the dragon")
     
     // Call methods on reference
-    use_quest(&quest)
+    use_quest(quest)
     
     // Now consume it
     let title = quest.take_title()

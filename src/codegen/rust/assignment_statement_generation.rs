@@ -296,10 +296,52 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) {
-            value_str = format!("{}.to_string()", value_str);
+            value_str =
+                crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&value_str);
+        }
+
+        // Vec<T>[i] → owned String field: clone the element, not borrow it.
+        if matches!(value, Expression::Index { .. }) {
+            let target_type = self.infer_expression_type(target);
+            let expects_owned = !matches!(
+                target_type.as_ref(),
+                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+            );
+            if expects_owned
+                && !value_str.ends_with(".clone()")
+                && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
+            {
+                let elem_type = self.infer_expression_type(value);
+                if elem_type.as_ref().is_some_and(|t| !self.is_type_copy(t)) {
+                    if value_str.starts_with('&') {
+                        let base = value_str.trim_start_matches('&').trim();
+                        value_str = format!("{}.clone()", base);
+                    } else {
+                        value_str = format!("{}.clone()", value_str);
+                    }
+                }
+            }
         }
 
         if let Expression::Identifier { ref name, .. } = value {
+            // Match/for bindings from borrowed scrutinees: Copy targets need * not .clone().
+            if self.borrowed_iterator_vars.contains(name) && !value_str.starts_with('*') {
+                let target_type = self.infer_expression_type(target);
+                if target_type.as_ref().is_some_and(|t| self.is_type_copy(t)) {
+                    value_str = format!("*{}", value_str);
+                }
+            }
+
+            if let Some(ref analysis) = self.auto_clone_analysis {
+                if analysis
+                    .needs_clone(name, self.current_statement_idx)
+                    .is_some()
+                    && !value_str.ends_with(".clone()")
+                    && !value_str.starts_with('*')
+                {
+                    value_str = format!("{}.clone()", value_str);
+                }
+            }
             if self.inferred_borrowed_params.contains(name) {
                 let target_type = self.infer_expression_type(target);
                 let assignment_target_is_text = target_type
@@ -307,18 +349,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                 if assignment_target_is_text
                     && !value_str.contains(".clone()")
-                    && !value_str.contains(".to_string()")
+                    && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
                 {
-                    value_str = format!("{}.to_string()", value_str);
-                }
-            }
-            // E0308 FIX: match-bound variables from &/&mut scrutinees are references.
-            // When assigning to a Copy-type field (e.g. self.x = min_x where min_x: &mut f32),
-            // auto-deref the value.
-            if self.borrowed_iterator_vars.contains(name) && !value_str.starts_with('*') {
-                let target_type = self.infer_expression_type(target);
-                if target_type.as_ref().is_some_and(|t| self.is_type_copy(t)) {
-                    value_str = format!("*{}", value_str);
+                    value_str = format!("{}.into()", value_str);
                 }
             }
         }
@@ -341,19 +374,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if self.expression_produces_usize(value) {
+        {
             let target_type = self.get_assignment_target_type(target);
-
-            match target_type.as_deref() {
-                Some("usize") => {}
-                Some("int") | Some("i64") => {
-                    value_str = format!("(({}) as i64)", value_str);
-                }
-                Some("i32") => {
-                    value_str = format!("(({}) as i32)", value_str);
-                }
-                _ => {}
-            }
+            self.maybe_cast_usize_to_int_target(&mut value_str, value, target_type.as_deref());
         }
 
         output.push_str(&value_str);

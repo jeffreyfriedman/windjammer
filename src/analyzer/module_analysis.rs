@@ -1,5 +1,8 @@
 //! Program-level analysis: module items, multi-pass convergence, and per-pass registry updates.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use crate::parser::*;
 
 use super::{AnalyzedFunction, Analyzer, OwnershipMode, ProgramAnalysisResult, SignatureRegistry};
@@ -141,8 +144,10 @@ impl<'ast> Analyzer<'ast> {
         // Single forward pass fails when struct A references Copy struct B but B is declared
         // later in the file; empty structs must be Copy (same as Rust / trait_derivation).
         let mut struct_infos: Vec<(String, Vec<Type>)> = Vec::new();
+        let mut explicit_non_copy: HashSet<String> = HashSet::new();
         for item in &program.items {
             if let Item::Struct { decl, .. } = item {
+                let has_derive = decl.decorators.iter().any(|d| d.name == "derive");
                 let has_copy_derive = decl.decorators.iter().any(|decorator| {
                     decorator.name == "derive"
                         && decorator.arguments.iter().any(|(_, arg)| {
@@ -154,7 +159,9 @@ impl<'ast> Analyzer<'ast> {
                         })
                 });
                 if has_copy_derive {
-                    self.copy_structs.insert(decl.name.clone());
+                    Arc::make_mut(&mut self.copy_structs).insert(decl.name.clone());
+                } else if has_derive {
+                    explicit_non_copy.insert(decl.name.clone());
                 }
                 struct_infos.push((
                     decl.name.clone(),
@@ -162,17 +169,32 @@ impl<'ast> Analyzer<'ast> {
                 ));
             }
         }
+        // Populate struct field type registry from this file's struct definitions so
+        // string-field storage analysis works before cross-file metadata is available.
+        {
+            use std::collections::HashMap;
+            let field_map = Arc::make_mut(&mut self.global_struct_field_types);
+            for item in &program.items {
+                if let Item::Struct { decl, .. } = item {
+                    let mut fields = HashMap::new();
+                    for f in &decl.fields {
+                        fields.insert(f.name.clone(), f.field_type.clone());
+                    }
+                    field_map.insert(decl.name.clone(), fields);
+                }
+            }
+        }
         const MAX_COPY_STRUCT_PASSES: usize = 64;
         for _ in 0..MAX_COPY_STRUCT_PASSES {
             let mut changed = false;
             for (name, field_types) in &struct_infos {
-                if self.copy_structs.contains(name) {
+                if self.copy_structs.contains(name) || explicit_non_copy.contains(name) {
                     continue;
                 }
                 let all_copy =
                     field_types.is_empty() || field_types.iter().all(|ft| self.is_copy_type(ft));
                 if all_copy {
-                    self.copy_structs.insert(name.clone());
+                    Arc::make_mut(&mut self.copy_structs).insert(name.clone());
                     changed = true;
                 }
             }
@@ -195,6 +217,7 @@ impl<'ast> Analyzer<'ast> {
             let converged = self.signatures_converged(&registry, &new_registry);
 
             if converged {
+                self.infer_trait_signatures_from_impls(program, &new_registry)?;
                 return Ok((
                     new_analyzed,
                     new_registry,
@@ -208,6 +231,7 @@ impl<'ast> Analyzer<'ast> {
                     MAX_PASSES
                 );
                 eprintln!("    Using last known signatures (may be suboptimal)");
+                self.infer_trait_signatures_from_impls(program, &new_registry)?;
                 return Ok((
                     new_analyzed,
                     new_registry,
@@ -278,15 +302,20 @@ impl<'ast> Analyzer<'ast> {
                 Item::Function { decl: func, .. } => {
                     let mut analyzed_func = self.analyze_function(func, &registry)?;
 
-                    // PHASE 7: Detect const/static optimizations
-                    analyzed_func.const_static_optimizations =
-                        self.detect_const_static_opportunities(&analyzed_func);
+                    if !self.convergence_only {
+                        // PHASE 7: Detect const/static optimizations
+                        analyzed_func.const_static_optimizations =
+                            self.detect_const_static_opportunities(&analyzed_func);
 
-                    // PHASE 8: Detect SmallVec optimizations
-                    analyzed_func.smallvec_optimizations = self.detect_smallvec_opportunities(func);
+                        // PHASE 8: Detect SmallVec optimizations
+                        analyzed_func.smallvec_optimizations =
+                            self.detect_smallvec_opportunities(func);
 
-                    // PHASE 9: Detect Cow optimizations
-                    analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+                        // PHASE 9: Detect Cow optimizations
+                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+
+                        analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
+                    }
 
                     let signature = self.build_signature(&analyzed_func);
                     registry.add_function(func.name.clone(), signature);
@@ -397,16 +426,21 @@ impl<'ast> Analyzer<'ast> {
                         }
                         let mut analyzed_func = analyzed_func_opt.unwrap();
 
-                        // PHASE 7: Detect const/static optimizations
-                        analyzed_func.const_static_optimizations =
-                            self.detect_const_static_opportunities(&analyzed_func);
+                        if !self.convergence_only {
+                            // PHASE 7: Detect const/static optimizations
+                            analyzed_func.const_static_optimizations =
+                                self.detect_const_static_opportunities(&analyzed_func);
 
-                        // PHASE 8: Detect SmallVec optimizations
-                        analyzed_func.smallvec_optimizations =
-                            self.detect_smallvec_opportunities(func);
+                            // PHASE 8: Detect SmallVec optimizations
+                            analyzed_func.smallvec_optimizations =
+                                self.detect_smallvec_opportunities(func);
 
-                        // PHASE 9: Detect Cow optimizations
-                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+                            // PHASE 9: Detect Cow optimizations
+                            analyzed_func.cow_optimizations = self.detect_cow_opportunities(func);
+
+                            analyzed_func.cache_locality =
+                                self.analyze_cache_locality(program, func);
+                        }
 
                         let signature = self.build_signature(&analyzed_func);
 
@@ -475,16 +509,21 @@ impl<'ast> Analyzer<'ast> {
                         let mut analyzed_func =
                             self.analyze_trait_method(&func, &registry, Some(decl.name.as_str()))?;
 
-                        // PHASE 7: Detect const/static optimizations
-                        analyzed_func.const_static_optimizations =
-                            self.detect_const_static_opportunities(&analyzed_func);
+                        if !self.convergence_only {
+                            // PHASE 7: Detect const/static optimizations
+                            analyzed_func.const_static_optimizations =
+                                self.detect_const_static_opportunities(&analyzed_func);
 
-                        // PHASE 8: Detect SmallVec optimizations
-                        analyzed_func.smallvec_optimizations =
-                            self.detect_smallvec_opportunities(&func);
+                            // PHASE 8: Detect SmallVec optimizations
+                            analyzed_func.smallvec_optimizations =
+                                self.detect_smallvec_opportunities(&func);
 
-                        // PHASE 9: Detect Cow optimizations
-                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
+                            // PHASE 9: Detect Cow optimizations
+                            analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
+
+                            analyzed_func.cache_locality =
+                                self.analyze_cache_locality(program, &func);
+                        }
 
                         // THE WINDJAMMER WAY: Store analyzed trait method for trait impl matching
                         // BUT: Don't overwrite if cross-file inference has already set it!
@@ -521,7 +560,10 @@ impl<'ast> Analyzer<'ast> {
                         // Add trait methods to analyzed list so codegen can access ownership info
                         // They won't be generated as standalone functions (codegen skips trait methods)
                         let signature = self.build_signature(&analyzed_func);
-                        registry.add_function(func.name.clone(), signature);
+                        registry.add_function(func.name.clone(), signature.clone());
+                        // Also register as TraitName::method for cross-file meta lookup
+                        let qualified_name = format!("{}::{}", decl.name, func.name);
+                        registry.add_function(qualified_name, signature);
                         analyzed.push(analyzed_func);
                     }
                 }
@@ -546,6 +588,8 @@ impl<'ast> Analyzer<'ast> {
                                     self.detect_smallvec_opportunities(func);
                                 analyzed_func.cow_optimizations =
                                     self.detect_cow_opportunities(func);
+                                analyzed_func.cache_locality =
+                                    self.analyze_cache_locality(program, func);
                                 let signature = self.build_signature(&analyzed_func);
                                 registry.add_function(func.name.clone(), signature);
                                 // Add to analyzed list for codegen to access (but marked as in-module)
@@ -651,6 +695,9 @@ impl<'ast> Analyzer<'ast> {
                                         self.detect_smallvec_opportunities(func);
                                     analyzed_func.cow_optimizations =
                                         self.detect_cow_opportunities(func);
+
+                                    analyzed_func.cache_locality =
+                                        self.analyze_cache_locality(program, func);
 
                                     let signature = self.build_signature(&analyzed_func);
                                     let qualified_name =

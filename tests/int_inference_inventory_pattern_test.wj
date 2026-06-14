@@ -1,0 +1,37 @@
+// TDD Test: Reproduce exact game code pattern
+// Game code: inventory.wj line 48-56
+// pub fn add_item(self, item: Item, quantity: i32) -> bool {
+//     let q: i32 = quantity as i32
+//     stack.add(q)  // add() takes what type?
+// }
+
+pub struct Item {
+    pub id: string,
+    pub stackable: bool,
+}
+
+pub struct ItemStack {
+    pub item: Item,
+    pub quantity: u32,
+}
+
+impl ItemStack {
+    // This is the key: add() takes u32
+    pub fn add(self, amount: u32) -> bool {
+        self.quantity = self.quantity + amount
+        true
+    }
+}
+
+fn test_i32_to_u32_parameter() {
+    let item = Item { id: "test", stackable: true }
+    let mut stack = ItemStack { item: item, quantity: 5 }
+    
+    // Game code pattern: quantity parameter is i32
+    let quantity: i32 = 10
+    let q: i32 = quantity
+    
+    // This calls add(u32) with i32 argument - NO explicit cast
+    // Should the compiler auto-cast or error?
+    stack.add(q)
+}

@@ -40,19 +40,23 @@ pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iter
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod metadata; // Cross-module type inference metadata
-pub mod method_registry;
 pub mod optimizer;
 pub mod parser; // Parser module (refactored structure)
 pub mod parser_impl; // Parser implementation (being migrated to parser/)
                      // Test utilities for arena-allocated AST construction (available for integration tests)
+pub mod agent_index;
+pub mod ide_analysis;
 pub mod parser_recovery;
+pub mod rust_integration_tests;
 pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
+pub mod test_module_gate;
 pub mod test_runner; // Test framework and execution
 pub mod test_utils; // Syntax highlighting for error snippets
 pub mod type_classification;
+pub mod type_display;
 pub mod type_inference; // Expression-level float type inference
 pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 

@@ -19,10 +19,131 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use windjammer::compiler::build_project;
 use windjammer::CompilationTarget;
+
+/// Default timeout for subprocess calls (cargo check, cargo build, cargo test).
+const SUBPROCESS_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Run a `Command` with a timeout. Kills the child and returns an error if the
+/// deadline is exceeded. This prevents the test suite from hanging indefinitely
+/// when a cargo subprocess gets stuck on a lock file or compilation loop.
+fn run_with_timeout(mut cmd: Command, timeout: Duration) -> std::io::Result<Output> {
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(_status) => return child.wait_with_output(),
+            None => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("subprocess timed out after {}s", timeout.as_secs()),
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        }
+    }
+}
+
+/// Serializes cargo invocations so parallel test threads don't fight over
+/// the shared target directory's lock file.
+static CARGO_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes `wj build` subprocesses — concurrent compiler runs share process-global
+/// state (e.g. current_exe identity reads) and can false-trigger stale-output checks.
+static WJ_BUILD_LOCK: Mutex<()> = Mutex::new(());
+
+/// Run the `wj` CLI with args, serialized across test threads.
+pub fn run_wj_command<I, S>(args: I) -> Output
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let _guard = WJ_BUILD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    run_with_timeout(
+        {
+            let mut cmd = Command::new(wj_binary());
+            cmd.args(args);
+            cmd
+        },
+        SUBPROCESS_TIMEOUT,
+    )
+    .expect("run wj")
+}
+
+/// Shared target directory for integration tests that spawn `cargo`.
+/// Caching deps here avoids recompiling `windjammer-runtime`, `serde`, etc.
+/// from scratch in every fresh temp directory.
+fn shared_cargo_target_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("wj_integration_verify")
+}
+
+/// Type-check generated Rust code via `cargo check` with a shared dependency cache.
+///
+/// The `build_dir` must contain a `Cargo.toml` (the Windjammer compiler generates one
+/// when `--no-cargo` is NOT passed, or the test can write one manually).
+///
+/// Panics with the compiler's stderr on failure.
+pub fn cargo_check_generated(build_dir: &Path) {
+    let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let shared_target = shared_cargo_target_dir();
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(build_dir)
+        .env("CARGO_TARGET_DIR", &shared_target)
+        .args(["check", "--quiet"]);
+
+    let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
+        .unwrap_or_else(|e| panic!("cargo check failed to run: {}", e));
+
+    assert!(
+        output.status.success(),
+        "cargo check failed in {}.\nstderr:\n{}",
+        build_dir.display(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Full `cargo build` of generated Rust code with a shared dependency cache.
+///
+/// Use when the test needs to **run** the resulting binary (e.g. `voxel_octree_test`).
+/// Returns the shared target directory so callers can find the binary at
+/// `<returned_path>/debug/<crate_name>`.
+pub fn cargo_build_generated(build_dir: &Path) -> PathBuf {
+    let _guard = CARGO_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let shared_target = shared_cargo_target_dir();
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(build_dir)
+        .env("CARGO_TARGET_DIR", &shared_target)
+        .args(["build", "--quiet"]);
+
+    let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
+        .unwrap_or_else(|e| panic!("cargo build failed to run: {}", e));
+
+    assert!(
+        output.status.success(),
+        "cargo build failed in {}.\nstderr:\n{}",
+        build_dir.display(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    shared_target
+}
 
 // =============================================================================
 // Single-file compilation (library API — fast, no subprocess)
@@ -45,6 +166,28 @@ pub fn compile_single_result(source: &str) -> Result<String, String> {
 
     fs::read_to_string(out_dir.join("test.rs"))
         .map_err(|e| format!("Failed to read generated file: {}", e))
+}
+
+/// Compile with a pre-populated signature registry (cross-file / collision tests).
+pub fn compile_with_external_sigs(
+    source: &str,
+    external_sigs: &windjammer::analyzer::SignatureRegistry,
+) -> String {
+    use windjammer::analyzer::Analyzer;
+    use windjammer::codegen::rust::CodeGenerator;
+    use windjammer::lexer::Lexer;
+    use windjammer::parser::Parser;
+
+    let mut lexer = Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let parser = Box::leak(Box::new(Parser::new(tokens)));
+    let program = parser.parse().unwrap();
+    let mut analyzer = Analyzer::new();
+    let (analyzed_fns, registry, _) = analyzer
+        .analyze_program_with_global_signatures(&program, external_sigs)
+        .unwrap();
+    let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+    codegen.generate_program(&program, &analyzed_fns)
 }
 
 /// Compile a single `.wj` source string and return (generated_rust, success).

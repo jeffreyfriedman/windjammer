@@ -408,12 +408,20 @@ impl FloatInference {
             }
         }
 
-        // For MethodCall on MethodCall (chaining), try to infer from the inner call
+        // For MethodCall on MethodCall (chaining), try to infer from the inner call.
+        // Guard: only treat as a float method if the receiver actually IS a float type.
+        // Struct builder methods like `Slider::max` must NOT collide with `f32::max`.
         if let Expression::MethodCall { .. } = object {
-            // Check if the method is a known f32-returning method
             if F32_METHODS.contains(&method) {
-                // Assume it returns the same type as the input (common for math methods)
-                // This is a heuristic - ideally we'd recursively determine the type
+                if let Some(object_type) = self.infer_type_from_expression(object) {
+                    if let Some(float_ty) = self.extract_float_type(&object_type) {
+                        return Some(float_ty);
+                    }
+                    // Receiver is a known non-float type (e.g. Slider) — not a numeric method.
+                    return None;
+                }
+                // Can't determine receiver type — fall back to f32 heuristic for
+                // chained math like `vec.x.sin().cos()` where type info isn't available.
                 return Some(FloatType::F32);
             }
         }

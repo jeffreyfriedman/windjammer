@@ -88,12 +88,15 @@ fn install_plugins(bin: &Path) -> Result<usize> {
             root.parent()
                 .unwrap_or(root)
                 .join("windjammer-game/wj-plugins/wj-game/target/release"),
+            root.parent()
+                .unwrap_or(root)
+                .join("windjammer-game/wj-plugins/wj-vgraph/target/release"),
         ]
     } else {
         vec![]
     };
 
-    let plugin_names = ["wj-game", "wj-lint"];
+    let plugin_names = ["wj-game", "wj-lint", "wj-vgraph"];
 
     for name in &plugin_names {
         for dir in &plugin_search_dirs {

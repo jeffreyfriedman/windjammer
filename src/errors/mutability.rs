@@ -298,6 +298,6 @@ impl MutabilityChecker {
     }
 
     fn is_mutating_method(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        crate::analyzer::stdlib_method_traits::method_mutates_receiver(method)
     }
 }

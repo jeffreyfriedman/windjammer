@@ -1,12 +1,27 @@
-// std/async - Async runtime utilities
-// Wraps tokio for convenient async/await
+// std/async - Async runtime (Windjammer API)
+//
+// Implementation: windjammer_runtime::async_runtime → tokio (hidden from users)
+// Import: use std::async
+//
+// Sync callers use blocking wrappers; async HTTP/DB modules use @async + runtime.
 
-// Re-export common async types
-// use tokio::time::Duration
-// use tokio::time::sleep
-
-/// Sleep for the specified milliseconds
+/// Non-blocking sleep (requires async context / @async caller)
 @async
 pub fn sleep_ms(ms: int) {
-    // In generated Rust: tokio::time::sleep(Duration::from_millis(ms as u64)).await
+    // tokio::time::sleep in generated Rust
+}
+
+/// Blocking sleep for tests and sync code paths
+pub fn sleep_ms_blocking(ms: int) {
+    // windjammer_runtime::async_runtime::sleep_ms_blocking
+}
+
+/// Run an async future to completion (creates ephemeral tokio runtime)
+pub fn block_on<T>(future: T) -> T {
+    // windjammer_runtime::async_runtime::block_on
+}
+
+/// Spawn a task on the tokio runtime (advanced)
+pub fn spawn<T>(task: T) -> T {
+    // windjammer_runtime::async_runtime::spawn
 }

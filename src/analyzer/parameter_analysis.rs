@@ -75,8 +75,17 @@ impl<'ast> Analyzer<'ast> {
 
         // Multi-pass registry-aware inference
 
+        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed.
+        // Match scrutinees like `match self.nodes.get(id)` must not infer Owned for `id`
+        // when passthrough collides on bare `get` from unrelated types.
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
         // 1. Check if parameter is mutated (uses registry for method call detection)
-        if self.is_mutated(param_name, body, registry) {
+        if self.is_mutated(param_name, body, registry, Some(param_type)) {
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -119,7 +128,11 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
-            return Ok(OwnershipMode::Owned);
+            if !(Self::is_windjammer_text_param_type(param_type)
+                && self.is_stored_via_text_struct_fields_only(param_name, body))
+            {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
@@ -134,9 +147,15 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
-        // 6. TDD: Check if parameter is iterated over in a for loop
+        // 6. For-loop iteration: if the loop dereferences elements (`*i`), the collection is
+        // borrowed (`for i in &items`); otherwise consuming iteration uses owned param.
         if self.is_iterated_over(param_name, body) {
-            return Ok(OwnershipMode::Owned);
+            if self.for_loop_over_param_dereferences_element(param_name, body) {
+                return Ok(OwnershipMode::Borrowed);
+            }
+            if !self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 6b. TDD: Check if parameter calls a method that takes `self` by value (consuming).
@@ -145,6 +164,13 @@ impl<'ast> Analyzer<'ast> {
         // E0507 errors because you can't move out of a shared reference.
         if self.calls_consuming_method(param_name, body, registry) {
             return Ok(OwnershipMode::Owned);
+        }
+
+        // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
+        // &mut self — do not infer Borrowed for the receiver. Scoped to `?` only so
+        // unknown methods on typed params still default to borrowed (multi-pass refines).
+        if self.has_potentially_mutating_method_call_in_tryop(param_name, body) {
+            return Ok(OwnershipMode::MutBorrowed);
         }
 
         // 7. MULTI-PASS OWNERSHIP INFERENCE (The Proper Solution!)
@@ -172,14 +198,41 @@ impl<'ast> Analyzer<'ast> {
         ) {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
-                OwnershipMode::MutBorrowed => return Ok(OwnershipMode::MutBorrowed),
-                OwnershipMode::Owned => {
-                    return Ok(OwnershipMode::Owned);
+                OwnershipMode::MutBorrowed => {
+                    // `mut param` used only as an argument to a &mut callee keeps an owned
+                    // binding; the call site adds `&mut`. Method calls on the param (e.g.
+                    // `c.increment()`) need `&mut T` in the signature itself.
+                    let only_fn_passthrough = func
+                        .parameters
+                        .iter()
+                        .find(|p| p.name == param_name)
+                        .is_some_and(|p| p.is_mutable)
+                        && !self.param_has_direct_method_calls(param_name, body);
+                    if only_fn_passthrough {
+                        return Ok(OwnershipMode::Owned);
+                    }
+                    return Ok(OwnershipMode::MutBorrowed);
                 }
+                OwnershipMode::Owned => return Ok(OwnershipMode::Owned),
             }
         }
 
-        // 8. Default ownership: Borrowed (THE WINDJAMMER WAY!)
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
+        // 8. HashMap lookup keys — pin Borrowed after registry-dependent steps.
+        // Large engine metadata can flip passthrough/is_mutated heuristics on later
+        // convergence passes; the body fact (only used as HashMap key) is authoritative.
+        if Self::is_windjammer_text_param_type(param_type)
+            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+        {
+            return Ok(OwnershipMode::Borrowed);
+        }
+
+        // 9. Default ownership: Borrowed (THE WINDJAMMER WAY!)
         //
         // **PHILOSOPHY**: The compiler does the work, not the user.
         // - Default to **Borrowed** for read-only parameters
@@ -196,6 +249,18 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// True when the parameter is the receiver of a method call (e.g. `grid.set()`), not
+    /// merely passed as an argument to a free function.
+    fn param_has_direct_method_calls(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut calls = Vec::new();
+        self.collect_method_calls_on_param(param_name, body, &mut calls);
+        !calls.is_empty()
     }
 
     /// TDD: Check if parameter is ONLY used as &param or &mut param (never consumed directly).
