@@ -61,6 +61,28 @@ fn run_with_timeout(mut cmd: Command, timeout: Duration) -> std::io::Result<Outp
 /// the shared target directory's lock file.
 static CARGO_LOCK: Mutex<()> = Mutex::new(());
 
+/// Serializes `wj build` subprocesses — concurrent compiler runs share process-global
+/// state (e.g. current_exe identity reads) and can false-trigger stale-output checks.
+static WJ_BUILD_LOCK: Mutex<()> = Mutex::new(());
+
+/// Run the `wj` CLI with args, serialized across test threads.
+pub fn run_wj_command<I, S>(args: I) -> Output
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let _guard = WJ_BUILD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    run_with_timeout(
+        {
+            let mut cmd = Command::new(wj_binary());
+            cmd.args(args);
+            cmd
+        },
+        SUBPROCESS_TIMEOUT,
+    )
+    .expect("run wj")
+}
+
 /// Shared target directory for integration tests that spawn `cargo`.
 /// Caching deps here avoids recompiling `windjammer-runtime`, `serde`, etc.
 /// from scratch in every fresh temp directory.

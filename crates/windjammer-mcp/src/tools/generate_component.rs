@@ -3,14 +3,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GenerateComponentArgs {
     pub name: String,
     pub props: Option<Vec<ComponentProp>>,
     pub render_template: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ComponentProp {
     pub name: String,
     #[serde(rename = "type")]

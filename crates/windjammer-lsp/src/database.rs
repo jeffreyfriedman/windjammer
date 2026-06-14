@@ -667,6 +667,24 @@ impl WindjammerDatabase {
         symbol_table.symbols(self)
     }
 
+    /// Full IDE analysis (diagnostics + inferred types) via shared compiler pipeline.
+    pub fn get_ide_analysis(&self, file: SourceFile) -> super::ide_queries::IdeAnalysisSnapshot {
+        super::ide_queries::run_ide_analysis(&file, self)
+    }
+
+    /// Inferred types for variables in a file.
+    pub fn get_inferred_types(
+        &self,
+        file: SourceFile,
+    ) -> std::collections::HashMap<String, String> {
+        self.get_ide_analysis(file).inferred_types()
+    }
+
+    /// Type at cursor position (line, column).
+    pub fn get_type_at_point(&self, file: SourceFile, line: u32, column: u32) -> Option<String> {
+        super::ide_queries::run_type_at_point(&file, self, line, column)
+    }
+
     /// Get references for a file
     pub fn get_references(&self, file: SourceFile) -> &Vec<SymbolReference> {
         let reference_info = extract_references(self, file);

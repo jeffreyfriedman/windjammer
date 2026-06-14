@@ -51,6 +51,18 @@ pub struct ModuleMetadata {
 
     /// Version for compatibility checking
     pub version: String,
+
+    /// Content + compiler fingerprint for incremental analysis cache validation.
+    #[serde(default)]
+    pub analysis_fingerprint: Option<AnalysisFingerprint>,
+}
+
+/// Fingerprint stored in `.wj.meta` to skip re-analysis when source unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AnalysisFingerprint {
+    pub content_hash: u64,
+    pub compiler_version: String,
+    pub dep_metadata_epoch: u64,
 }
 
 impl ModuleMetadata {
@@ -63,6 +75,7 @@ impl ModuleMetadata {
             copy_structs: Vec::new(),
             non_copy_structs: Vec::new(),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            analysis_fingerprint: None,
         }
     }
 }
@@ -481,11 +494,22 @@ pub fn emit_module_meta_for_file(
     registry: &crate::analyzer::SignatureRegistry,
     copy_structs: Vec<String>,
 ) {
+    emit_module_meta_for_file_with_fingerprint(source_file, program, registry, copy_structs, None);
+}
+
+pub fn emit_module_meta_for_file_with_fingerprint(
+    source_file: &Path,
+    program: &crate::parser::Program,
+    registry: &crate::analyzer::SignatureRegistry,
+    copy_structs: Vec<String>,
+    analysis_fingerprint: Option<AnalysisFingerprint>,
+) {
     let module_name = source_file
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
-    let meta = collect_analyzed_module_metadata(module_name, program, registry, copy_structs);
+    let mut meta = collect_analyzed_module_metadata(module_name, program, registry, copy_structs);
+    meta.analysis_fingerprint = analysis_fingerprint;
     let _ = write_module_meta_cache(source_file, &meta);
 }
 

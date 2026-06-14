@@ -2,7 +2,6 @@
 
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
-use crate::lexer::Lexer;
 use crate::metadata::{metadata_function_sig_from_analyzer, CrateMetadata};
 use crate::parser::ast::core::Item;
 use crate::parser::Parser;
@@ -22,6 +21,107 @@ fn profile_phase(phase: &str, start: Instant) {
     if profiling_enabled() {
         eprintln!("[wj-profile] {}: {}ms", phase, start.elapsed().as_millis());
     }
+}
+
+/// Remove shader files from parsed sources (uses upfront parse — no re-tokenize).
+fn filter_shader_files(
+    sources: &mut Vec<(PathBuf, String)>,
+    parsers: &mut Vec<Parser>,
+    parsed_programs: &mut Vec<crate::parser::Program<'static>>,
+) -> (HashMap<PathBuf, HashSet<String>>, usize) {
+    let mut filtered_modules_by_dir: HashMap<PathBuf, HashSet<String>> = HashMap::new();
+    let mut removed_stems: HashSet<PathBuf> = HashSet::new();
+    let mut shader_count = 0usize;
+
+    let mut keep_indices: Vec<usize> = Vec::new();
+    for i in 0..parsed_programs.len() {
+        let file = &sources[i].0;
+        if super::is_shader_file(&parsed_programs[i]) {
+            removed_stems.insert(file.clone());
+            if let Some(parent) = file.parent() {
+                if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
+                    filtered_modules_by_dir
+                        .entry(parent.to_path_buf())
+                        .or_default()
+                        .insert(stem.to_string());
+                }
+            }
+            shader_count += 1;
+        } else {
+            keep_indices.push(i);
+        }
+    }
+
+    if !removed_stems.is_empty() {
+        let mut pass2_keep: Vec<usize> = Vec::new();
+        for &i in &keep_indices {
+            let file = &sources[i].0;
+            let is_mod = file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n == "mod.wj")
+                .unwrap_or(false);
+            if !is_mod {
+                pass2_keep.push(i);
+                continue;
+            }
+            let parent = match file.parent() {
+                Some(p) => p,
+                None => {
+                    pass2_keep.push(i);
+                    continue;
+                }
+            };
+            let program = &parsed_programs[i];
+            let has_non_mod_items = program
+                .items
+                .iter()
+                .any(|item| !matches!(item, Item::Mod { .. }));
+            if has_non_mod_items {
+                pass2_keep.push(i);
+                continue;
+            }
+            let all_subs_removed = program.items.iter().all(|item| {
+                if let Item::Mod { name, .. } = item {
+                    let sub_file = parent.join(format!("{}.wj", name));
+                    let sub_dir_mod = parent.join(name.as_str()).join("mod.wj");
+                    removed_stems.contains(&sub_file) || removed_stems.contains(&sub_dir_mod)
+                } else {
+                    true
+                }
+            });
+            if all_subs_removed {
+                if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
+                    if let Some(grandparent) = parent.parent() {
+                        filtered_modules_by_dir
+                            .entry(grandparent.to_path_buf())
+                            .or_default()
+                            .insert(dir_name.to_string());
+                    }
+                }
+                shader_count += 1;
+            } else {
+                pass2_keep.push(i);
+            }
+        }
+        keep_indices = pass2_keep;
+    }
+
+    if keep_indices.len() != sources.len() {
+        let mut drop_mask = vec![true; sources.len()];
+        for &i in &keep_indices {
+            drop_mask[i] = false;
+        }
+        for i in (0..sources.len()).rev() {
+            if drop_mask[i] {
+                sources.remove(i);
+                parsers.remove(i);
+                parsed_programs.remove(i);
+            }
+        }
+    }
+
+    (filtered_modules_by_dir, shader_count)
 }
 
 /// Detect if source code imports from Windjammer stdlib (`std::*`)
@@ -129,123 +229,12 @@ pub(crate) fn build_library_multipass(
         sources.push((canon, source));
     }
 
-    // Filter out shader files (detected by @vertex/@fragment/@compute decorators).
-    // These target the WJSL→WGSL pipeline, not Rust codegen.
-    //
-    // Two-pass filter:
-    //   Pass 1: Remove files with shader entry-point decorators
-    //   Pass 2: Remove mod.wj files whose sub-modules were ALL filtered
-    //
-    // For mod.wj files that survive pass 2 (some children filtered, some not),
-    // we collect the filtered child module names per directory so we can strip
-    // them from the AST before codegen — preventing wrong code from ever being
-    // generated.
-    let mut removed_stems: HashSet<PathBuf> = HashSet::new();
-    let mut shader_count = 0usize;
-    // Map: directory path → set of module names that were filtered in that dir
-    let mut filtered_modules_by_dir: HashMap<PathBuf, HashSet<String>> = HashMap::new();
-
-    sources.retain(|(file, source)| {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        if let Ok(program) = parser.parse() {
-            if super::is_shader_file(&program) {
-                removed_stems.insert(file.clone());
-                // Record the module name for its parent directory
-                if let Some(parent) = file.parent() {
-                    if let Some(stem) = file.file_stem().and_then(|s| s.to_str()) {
-                        filtered_modules_by_dir
-                            .entry(parent.to_path_buf())
-                            .or_default()
-                            .insert(stem.to_string());
-                    }
-                }
-                shader_count += 1;
-                return false;
-            }
-        }
-        true
-    });
-
-    // Pass 2: mod.wj files whose only items are `pub mod` declarations
-    // referencing filtered shader files should also be skipped.
-    if !removed_stems.is_empty() {
-        sources.retain(|(file, source)| {
-            let is_mod = file
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|n| n == "mod.wj")
-                .unwrap_or(false);
-            if !is_mod {
-                return true;
-            }
-            let parent = match file.parent() {
-                Some(p) => p,
-                None => return true,
-            };
-            let mut lexer = Lexer::new(source);
-            let tokens = lexer.tokenize_with_locations();
-            let mut parser =
-                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-            let program = match parser.parse() {
-                Ok(p) => p,
-                Err(_) => return true,
-            };
-            let has_non_mod_items = program
-                .items
-                .iter()
-                .any(|item| !matches!(item, Item::Mod { .. }));
-            if has_non_mod_items {
-                return true;
-            }
-            let all_subs_removed = program.items.iter().all(|item| {
-                if let Item::Mod { name, .. } = item {
-                    let sub_file = parent.join(format!("{}.wj", name));
-                    let sub_dir_mod = parent.join(name.as_str()).join("mod.wj");
-                    removed_stems.contains(&sub_file) || removed_stems.contains(&sub_dir_mod)
-                } else {
-                    true
-                }
-            });
-            if all_subs_removed {
-                // Record filtered directory module name for its grandparent
-                if let Some(dir_name) = parent.file_name().and_then(|n| n.to_str()) {
-                    if let Some(grandparent) = parent.parent() {
-                        filtered_modules_by_dir
-                            .entry(grandparent.to_path_buf())
-                            .or_default()
-                            .insert(dir_name.to_string());
-                    }
-                }
-                shader_count += 1;
-                false
-            } else {
-                true
-            }
-        });
-    }
-    if shader_count > 0 {
-        eprintln!(
-            "  Skipped {} shader file(s) from Rust pipeline (use WJSL target for GPU shaders)",
-            shader_count
-        );
-    }
-
-    profile_phase("Step 0+1: Source reading + shader filter", phase_start);
-
-    if sources.is_empty() {
-        return Ok(());
-    }
-
     let parse_start = Instant::now();
     // PERFORMANCE: Parse all files once upfront and reuse ASTs across all pipeline
-    // phases. Previously each file was re-parsed 9-10 times. The Parser owns arenas
-    // (expr_arena, stmt_arena, pattern_arena) that Program references borrow from,
-    // so parsers must be kept alive as long as their programs are used.
+    // phases. Shader filtering uses parsed ASTs (no duplicate tokenization).
     let mut parsers: Vec<Parser> = Vec::with_capacity(sources.len());
-    let mut parsed_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources.len());
+    let mut parsed_programs: Vec<crate::parser::Program<'static>> =
+        Vec::with_capacity(sources.len());
     let mut deferred_lint_errors: Vec<String> = Vec::new();
     for (file, source) in &sources {
         let (parser, program) = super::parse_wj_source(file, source)?;
@@ -256,6 +245,22 @@ pub(crate) fn build_library_multipass(
         parsers.push(parser);
     }
     profile_phase("Parse upfront", parse_start);
+
+    let shader_filter_start = Instant::now();
+    let (filtered_modules_by_dir, shader_count) =
+        filter_shader_files(&mut sources, &mut parsers, &mut parsed_programs);
+    if shader_count > 0 {
+        eprintln!(
+            "  Skipped {} shader file(s) from Rust pipeline (use WJSL target for GPU shaders)",
+            shader_count
+        );
+    }
+    profile_phase("Shader filter (parsed AST)", shader_filter_start);
+    profile_phase("Step 0+1: Source reading + parse + shader filter", phase_start);
+
+    if sources.is_empty() {
+        return Ok(());
+    }
 
     let src_base: PathBuf = {
         let raw = if base_path.is_file() {
@@ -270,9 +275,23 @@ pub(crate) fn build_library_multipass(
     let dep_roots =
         super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
 
+    let dependency_graph =
+        super::incremental::DependencyGraph::build(&sources, &parsed_programs, &src_base);
+
     // INCREMENTAL: Whole-crate fast path — if no .wj file has changed and dep
     // metadata is also unchanged, skip the entire transpilation pipeline.
     if super::cache_management::all_sources_fresh(&sources, &src_base, output, &dep_roots) {
+        let stale = super::cache_management::find_stale_codegen_outputs(
+            &sources, &src_base, output, &dep_roots,
+        );
+        if !stale.is_empty() {
+            return Err(anyhow::anyhow!(
+                "incremental skip rejected: {} file(s) have stale generated output \
+                 (mtime/fingerprint mismatch): {:?}",
+                stale.len(),
+                stale.iter().take(5).collect::<Vec<_>>()
+            ));
+        }
         let user_count = sources.len() - needed_stdlib_modules.len();
         eprintln!(
             "✓ All {} source files up to date, skipping transpilation",
@@ -284,6 +303,21 @@ pub(crate) fn build_library_multipass(
     if !super::cache_management::is_compiler_stamp_fresh(output) {
         eprintln!(
             "⟳ Compiler changed — re-transpiling all sources"
+        );
+    }
+
+    let reanalysis_set = super::incremental::compute_reanalysis_set(
+        &sources,
+        &src_base,
+        output,
+        &dep_roots,
+        &dependency_graph,
+    );
+    if reanalysis_set.len() < sources.len() {
+        eprintln!(
+            "⚡ Incremental analysis: {}/{} files need re-analysis",
+            reanalysis_set.len(),
+            sources.len()
         );
     }
 
@@ -326,15 +360,9 @@ pub(crate) fn build_library_multipass(
     }
     profile_phase("Copy registry collection", copy_registry_start);
 
-    let step2_start = Instant::now();
-    // Step 2: Build initial registries from ALL files (first pass)
-    // - global_registry: For ownership inference (SignatureRegistry)
-    // - global_float_signatures: For float inference (function param types)
-    // - global_struct_fields: For float inference (struct field types)
-    // Seed with dependency crate signatures (ownership from .wj.meta files).
-    // Also load the project's own .wj.meta files from prior builds so that
-    // module-qualified ownership info (e.g., draw::draw_text → Borrowed) is
-    // available from the very first analysis pass.
+    let stub_registry_start = Instant::now();
+    // Collect declaration stubs + float/struct registries from every file (parallel scan,
+    // ordered merge). Feeds the global ownership convergence passes (Step 3+).
     let mut global_registry = dep_registry;
     // Drop dependency metadata for types defined in this crate so local inference wins.
     // Handles module-qualified keys like `dialogue::tree::DialogueNodeTree::get_node`.
@@ -366,103 +394,42 @@ pub(crate) fn build_library_multipass(
         crate::metadata::load_merged_external_struct_fields(external_paths, Some(&local_struct_names))
     );
 
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let program = &parsed_programs[i];
+    // Parallel per-file Step 2 scan; merge in source order for deterministic collisions.
+    let mut indexed_contributions: Vec<(usize, super::declaration_stub_registry::DeclarationStubContribution)> =
+        (0..sources.len())
+            .into_par_iter()
+            .map(|i| {
+                let (file, _) = &sources[i];
+                (
+                    i,
+                    super::declaration_stub_registry::collect_per_file_declaration_stubs(
+                        &src_base,
+                        file,
+                        &parsed_programs[i],
+                    ),
+                )
+            })
+            .collect();
+    indexed_contributions.sort_by_key(|(i, _)| *i);
 
-        crate::metadata::merge_file_skeleton_into_crate(&mut crate_metadata, file, program);
+    let ordered: Vec<(PathBuf, super::declaration_stub_registry::DeclarationStubContribution)> =
+        indexed_contributions
+            .iter()
+            .map(|(i, contrib)| (sources[*i].0.clone(), contrib.clone()))
+            .collect();
+    let source_indices: Vec<usize> = indexed_contributions.iter().map(|(i, _)| *i).collect();
 
-        // Collect function signatures for float inference
-        for item in &program.items {
-            match item {
-                Item::Function { decl, .. } => {
-                    let param_types: Vec<crate::parser::ast::types::Type> =
-                        decl.parameters.iter().map(|p| p.type_.clone()).collect();
-                    global_float_signatures
-                        .insert(decl.name.clone(), (param_types, decl.return_type.clone()));
-                }
-                Item::Impl { block, .. } => {
-                    // TDD FIX: Strip generic parameters from type_name for signature registration
-                    // Parser stores "HashMap<K, V>" but we look up "HashMap::get"
-                    let base_type_name = block.type_name.split('<').next().unwrap_or(&block.type_name);
-                    for func_decl in &block.functions {
-                        let param_types: Vec<crate::parser::ast::types::Type> = func_decl
-                            .parameters
-                            .iter()
-                            .map(|p| p.type_.clone())
-                            .collect();
-                        let full_name = format!("{}::{}", base_type_name, func_decl.name);
-                        global_float_signatures
-                            .insert(full_name, (param_types, func_decl.return_type.clone()));
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Collect struct field types for float/int inference (module-qualified keys).
-        fn merge_struct_fields_from_items(
-            items: &[crate::parser::ast::core::Item<'_>],
-            module_prefix: &[String],
-            global_struct_fields: &mut HashMap<
-                String,
-                HashMap<String, crate::parser::ast::types::Type>,
-            >,
-            struct_defining_module_paths: &mut HashMap<String, Vec<Vec<String>>>,
-        ) {
-            use crate::parser::ast::core::Item;
-            use crate::type_inference::struct_field_registry;
-            for item in items {
-                match item {
-                    Item::Struct { decl, .. } => {
-                        let qualified =
-                            struct_field_registry::qualify_struct_key(module_prefix, &decl.name);
-                        let mut fields = HashMap::new();
-                        for field in &decl.fields {
-                            fields.insert(field.name.clone(), field.field_type.clone());
-                        }
-                        global_struct_fields.insert(qualified, fields);
-                        struct_defining_module_paths
-                            .entry(decl.name.clone())
-                            .or_default()
-                            .push(module_prefix.to_vec());
-                    }
-                    Item::Mod { name, items, .. } => {
-                        let mut next = module_prefix.to_vec();
-                        next.push(name.clone());
-                        merge_struct_fields_from_items(
-                            items,
-                            &next,
-                            global_struct_fields,
-                            struct_defining_module_paths,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
-        let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-            .unwrap_or_default();
-        merge_struct_fields_from_items(
-            &program.items,
-            &file_module,
-            &mut global_struct_fields,
-            &mut struct_defining_module_paths,
-        );
-
-        // Seed global registry with declaration stubs (parameter names + types only).
-        // Full ownership inference runs in Step 3 with cross-file context.
-        let stub_registry = SignatureRegistry::from_program_declarations(program);
-        global_registry.merge(&stub_registry);
-
-        // Also register module-qualified names so the code generator can find the
-        // correct signature for qualified function calls.
-        // Uses the full module path (e.g., combat::abilities::Ability::activate)
-        // to avoid collisions when two files have the same stem name.
-        let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let module_path = file_module.join("::");
-        global_registry.register_module_aliases(&stub_registry, file_stem, &module_path);
-    }
-    profile_phase("Step 2: Declaration stub collection", step2_start);
+    super::declaration_stub_registry::merge_declaration_stub_contributions(
+        &mut global_registry,
+        &mut global_float_signatures,
+        &mut global_struct_fields,
+        &mut struct_defining_module_paths,
+        &ordered,
+        &mut crate_metadata,
+        &parsed_programs,
+        &source_indices,
+    );
+    profile_phase("Declaration stub registry (parallel)", stub_registry_start);
 
     // Step 3: Global multi-pass iteration until convergence
     // Wrap read-only data in Arc for O(1) sharing across all files (avoids O(n) deep clones).
@@ -482,6 +449,9 @@ pub(crate) fn build_library_multipass(
         let file_registries: Vec<SignatureRegistry> = (0..sources.len())
             .into_par_iter()
             .map(|i| {
+                if !reanalysis_set.contains(&i) {
+                    return Ok(SignatureRegistry::empty());
+                }
                 let (file, _source) = &sources[i];
                 let program = &parsed_programs[i];
                 let mut analyzer = Analyzer::for_library_pass(
@@ -608,43 +578,40 @@ pub(crate) fn build_library_multipass(
         }
     }
 
-    // Step 4A: Global float inference pass (collect constraints from ALL files first)
+    // Step 4A: Global float + int inference (parallel per-file collection; passes run concurrently)
     let step4a_start = Instant::now();
-    let mut global_float_inference = FloatInference::new();
-    if !external_paths.is_empty() {
-        global_float_inference.set_external_crate_metadata_paths(external_paths);
-    }
-    global_float_inference.set_global_function_signatures(global_float_signatures.clone());
-    global_float_inference.set_global_struct_field_types(&global_struct_fields);
-    global_float_inference.set_struct_defining_module_paths((*struct_defining_module_paths).clone());
-    global_float_inference.set_module_re_exports(module_re_exports.clone());
-
-    // Collect constraints from ALL files into one FloatInference instance
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let program = &parsed_programs[i];
-        let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-            .unwrap_or_default();
-        global_float_inference.set_current_file_module_path(file_module);
-        global_float_inference.infer_program(program);
-    }
+    let module_re_exports_for_int = module_re_exports.clone();
+    let (global_float_inference, global_int_inference) = std::thread::scope(|scope| {
+        let float_handle = scope.spawn(|| {
+            run_parallel_float_inference(
+                &sources,
+                &parsed_programs,
+                &src_base,
+                external_paths,
+                &global_float_signatures,
+                &global_struct_fields,
+                &struct_defining_module_paths,
+                module_re_exports,
+            )
+        });
+        let int_handle = scope.spawn(|| {
+            run_parallel_int_inference(
+                &sources,
+                &parsed_programs,
+                &src_base,
+                &global_float_signatures,
+                &global_struct_fields,
+                &struct_defining_module_paths,
+                module_re_exports_for_int,
+            )
+        });
+        (
+            float_handle.join().expect("float inference thread"),
+            int_handle.join().expect("int inference thread"),
+        )
+    });
 
     super::bail_on_inference_errors(&global_float_inference.errors, "Float", None)?;
-
-    // Step 4A2: Global int inference pass (same architecture as float)
-    let mut global_int_inference = IntInference::new();
-    global_int_inference.set_global_function_signatures(global_float_signatures.clone());
-    global_int_inference.set_global_struct_field_types(&global_struct_fields);
-    global_int_inference.set_struct_defining_module_paths((*struct_defining_module_paths).clone());
-    global_int_inference.set_module_re_exports(module_re_exports);
-
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let program = &parsed_programs[i];
-        let file_module = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-            .unwrap_or_default();
-        global_int_inference.set_current_file_module_path(file_module);
-        global_int_inference.infer_program(program);
-    }
-
     super::bail_on_inference_errors(&global_int_inference.errors, "Int", None)?;
     profile_phase("Step 4A: Float/Int inference", step4a_start);
 
@@ -661,53 +628,27 @@ pub(crate) fn build_library_multipass(
     // Runs on a separate thread with a large stack because the merged program (~3000 items)
     // can produce deep recursive analysis.
     let step4b_pre_start = Instant::now();
+    // Reuse upfront parse on main thread (parsers stay alive). Avoids 649-file re-tokenize.
     let global_analyzed_trait_methods = {
-        let global_copy_structs_clone = (*global_copy_structs).clone();
-        // The trait inference thread needs its own parsed programs since Program borrows
-        // from Parser arenas (can't send references across threads). Re-parse on thread.
-        let sources_for_thread: Vec<(PathBuf, String)> = sources.clone();
+        let mut shared_analyzer =
+            Analyzer::new_with_copy_structs((*global_copy_structs).clone());
 
-        let handle = std::thread::Builder::new()
-            .name("trait-inference".to_string())
-            .stack_size(64 * 1024 * 1024)
-            .spawn(move || -> Result<HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>, String> {
-                let mut shared_analyzer = Analyzer::new_with_copy_structs(global_copy_structs_clone);
+        for program in &parsed_programs {
+            shared_analyzer
+                .register_traits_from_program(program)
+                .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
+        }
 
-                let mut thread_parsers: Vec<Parser> = Vec::with_capacity(sources_for_thread.len());
-                let mut thread_programs: Vec<crate::parser::Program<'static>> = Vec::with_capacity(sources_for_thread.len());
-                for (file, source) in &sources_for_thread {
-                    let mut lexer = Lexer::new(source);
-                    let tokens = lexer.tokenize_with_locations();
-                    let mut parser = Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-                    let program = parser.parse().map_err(|e| format!("Parse error in {}: {}", file.display(), e))?;
-                    thread_programs.push(program);
-                    thread_parsers.push(parser);
-                }
+        let mut all_items = Vec::new();
+        for program in &parsed_programs {
+            all_items.extend(program.items.iter().cloned());
+        }
 
-                for program in &thread_programs {
-                    shared_analyzer.register_traits_from_program(program)
-                        .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
-                }
-
-                let mut all_items = Vec::new();
-                for program in thread_programs {
-                    all_items.extend(program.items);
-                }
-
-                let merged_program = crate::parser::Program { items: all_items };
-                shared_analyzer.infer_trait_signatures_from_impls(&merged_program)?;
-                Ok(shared_analyzer.analyzed_trait_methods.clone())
-            })
-            .map_err(|e| anyhow::anyhow!("Failed to spawn trait inference thread: {}", e))?;
-
-        match handle.join() {
-            Ok(Ok(methods)) => methods,
-            Ok(Err(e)) => {
+        let merged_program = crate::parser::Program { items: all_items };
+        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program) {
+            Ok(()) => shared_analyzer.analyzed_trait_methods.clone(),
+            Err(e) => {
                 eprintln!("Cross-file trait inference warning: {}", e);
-                HashMap::new()
-            }
-            Err(_) => {
-                eprintln!("⚠️  Global trait inference thread panicked (stack overflow?) — skipping cross-file trait methods.");
                 HashMap::new()
             }
         }
@@ -724,7 +665,7 @@ pub(crate) fn build_library_multipass(
     // Analysis still runs for ALL files (needed for metadata.json convergence),
     // but the expensive codegen + write is skipped for files whose source hasn't changed.
     let (dirty_indices, skipped_count) =
-        super::cache_management::compute_dirty_files(&sources, &src_base, output);
+        super::cache_management::compute_dirty_files(&sources, &src_base, output, &dep_roots);
     let dirty_set: HashSet<usize> = dirty_indices.into_iter().collect();
     if skipped_count > 0 {
         eprintln!(
@@ -735,18 +676,8 @@ pub(crate) fn build_library_multipass(
         );
     }
 
-    // Phase 1: Analyze ALL files and collect per-file results + build final registry.
-    // The final registry has Phase 2 optimizations (str_ref, etc.) from ALL files,
-    // so cross-module call sites will see consistent signatures.
-    struct PerFileAnalysis<'a> {
-        analyzed_functions: Vec<crate::analyzer::AnalyzedFunction<'a>>,
-        registry: SignatureRegistry,
-        merged_trait_methods: HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'a>>>,
-        copy_structs: Vec<String>,
-        output_file: PathBuf,
-    }
-
-    let mut per_file_analyses: Vec<PerFileAnalysis<'static>> = Vec::with_capacity(sources.len());
+    // Phase 1: Analyze files in bounded batches to build final registry without retaining
+    // all per-file analysis in memory (664+ engine files OOM with exit 137 otherwise).
     let mut final_global_registry = global_registry.clone();
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
@@ -771,77 +702,89 @@ pub(crate) fn build_library_multipass(
     }
 
     let step4b_phase1_start = Instant::now();
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let program: &crate::parser::Program<'static> = stripped_programs[i]
-            .as_ref()
-            .unwrap_or(&parsed_programs[i]);
-
-        let mut analyzer = Analyzer::for_library_pass(
-            global_copy_structs.clone(),
-            global_struct_fields.clone(),
-            struct_defining_module_paths.clone(),
-        );
-
-        if let Err(e) =
-            crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, program)
-        {
-            deferred_lint_errors.push(e);
-        }
-
-        analyzer
-            .register_traits_from_program(program)
-            .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
-
-        let (analyzed_functions, registry, _) = analyzer
-            .analyze_program_with_global_signatures(program, &global_registry)
-            .map_err(|e| anyhow::anyhow!("Final analysis error: {}", e))?;
-
-        analyzer
-            .infer_trait_signatures_from_impls(program)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-        let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
-        for (trait_name, methods) in &global_analyzed_trait_methods {
-            let entry = merged_trait_methods.entry(trait_name.clone()).or_default();
-            for (method_name, method_analysis) in methods {
-                entry.insert(method_name.clone(), method_analysis.clone());
-            }
-        }
-
-        let output_file =
-            crate::project_paths::resolve_wj_output_path_library(&src_base, file, output)?;
-        super::ensure_output_parent_dir(&output_file)?;
-
-        // Merge this file's final signatures into final_global_registry.
-        // This captures Phase 2 optimizations (str_ref params, etc.)
-        let file_stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let file_module =
-            crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
-                .unwrap_or_default();
-        let module_path = file_module.join("::");
-        final_global_registry.merge(&registry);
-        final_global_registry.register_module_aliases(&registry, file_stem, &module_path);
-
-        per_file_analyses.push(PerFileAnalysis {
-            analyzed_functions,
-            registry,
-            merged_trait_methods,
-            copy_structs: analyzer.get_copy_structs(),
-            output_file,
-        });
+    struct Phase1RegistryResult {
+        index: usize,
+        registry: SignatureRegistry,
+        file_stem: String,
+        module_path: String,
+        lint_errors: Vec<String>,
     }
-    profile_phase("Step 4B Phase 1: Final analysis", step4b_phase1_start);
 
-    // Phase 2: Code generation using the consistent final_global_registry.
+    let global_registry_for_phase1 = global_registry.clone();
+    let global_analyzed_trait_methods_arc = std::sync::Arc::new(global_analyzed_trait_methods);
+
+    for batch_start in (0..sources.len()).step_by(STEP4B_REGISTRY_BATCH_SIZE) {
+        let batch_end = (batch_start + STEP4B_REGISTRY_BATCH_SIZE).min(sources.len());
+        let batch: Vec<usize> = (batch_start..batch_end).collect();
+        let mut batch_results: Vec<Phase1RegistryResult> = batch
+            .into_par_iter()
+            .map(|i| -> Result<Phase1RegistryResult, String> {
+                let analysis = analyze_file_for_step4b(
+                    i,
+                    &sources,
+                    &parsed_programs,
+                    &stripped_programs,
+                    &src_base,
+                    output,
+                    &global_registry_for_phase1,
+                    &global_copy_structs,
+                    &global_struct_fields,
+                    &struct_defining_module_paths,
+                    &global_analyzed_trait_methods_arc,
+                    enable_lint,
+                )?;
+                Ok(Phase1RegistryResult {
+                    index: i,
+                    registry: analysis.registry,
+                    file_stem: analysis.file_stem,
+                    module_path: analysis.module_path,
+                    lint_errors: analysis.lint_errors,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow::anyhow!(e))?;
+        batch_results.sort_by_key(|r| r.index);
+        for result in batch_results {
+            deferred_lint_errors.extend(result.lint_errors);
+            final_global_registry.merge(&result.registry);
+            final_global_registry.register_module_aliases(
+                &result.registry,
+                &result.file_stem,
+                &result.module_path,
+            );
+        }
+    }
+    let final_global_registry = std::sync::Arc::new(final_global_registry);
+    profile_phase("Step 4B Phase 1: Final analysis (batched parallel)", step4b_phase1_start);
+
+    // Phase 2: Sequential analyze + codegen — one file in memory at a time.
     let step4b_phase2_start = Instant::now();
     for (i, (file, _source)) in sources.iter().enumerate() {
-        let analysis = &per_file_analyses[i];
+        // Stdlib injects (outside src_base) participate in analysis only — no crate output.
+        if file.strip_prefix(&src_base).is_err() {
+            continue;
+        }
+        let analysis = analyze_file_for_step4b(
+            i,
+            &sources,
+            &parsed_programs,
+            &stripped_programs,
+            &src_base,
+            output,
+            final_global_registry.as_ref(),
+            &global_copy_structs,
+            &global_struct_fields,
+            &struct_defining_module_paths,
+            &global_analyzed_trait_methods_arc,
+            enable_lint,
+        )
+        .map_err(|e| anyhow::anyhow!(e))?;
         let program: &crate::parser::Program<'static> = stripped_programs[i]
             .as_ref()
             .unwrap_or(&parsed_programs[i]);
 
-        // Build full registry: final global (with Phase 2 from ALL files) + per-file local
-        let mut full_registry = final_global_registry.clone();
+        // Build full registry: shared global (Arc) + per-file local overlay
+        let mut full_registry = final_global_registry.as_ref().clone();
         full_registry.merge(&analysis.registry);
         {
             let mut tmp_analyzer = Analyzer::for_library_pass(
@@ -867,6 +810,22 @@ pub(crate) fn build_library_multipass(
         }
 
         if !dirty_set.contains(&i) && analysis.output_file.exists() {
+            // Guardrail: never skip codegen if fingerprint validation would fail.
+            let (_, source) = &sources[i];
+            if !super::cache_management::is_library_codegen_cache_valid(
+                source,
+                file,
+                &analysis.output_file,
+                &src_base,
+                output,
+                &dep_roots,
+            ) {
+                return Err(anyhow::anyhow!(
+                    "incremental codegen skip would leave stale output for {} — \
+                     source changed but cache appeared fresh; this is a compiler bug",
+                    file.display()
+                ));
+            }
             continue;
         }
 
@@ -894,6 +853,7 @@ pub(crate) fn build_library_multipass(
             file,
             analysis.copy_structs.clone(),
             target,
+            &dep_roots,
         )?;
     }
     profile_phase("Step 4B Phase 2: Code generation", step4b_phase2_start);
@@ -913,7 +873,7 @@ pub(crate) fn build_library_multipass(
                         .find(|(k, _)| k.ends_with(&format!("::{name}")))
                         .map(|(_, v)| v)
                 })
-                .or_else(|| resolve_converged_local_signature(&global_registry, &name));
+                .or_else(|| resolve_converged_local_signature(final_global_registry.as_ref(), &name));
             if let Some(sig) = sig {
                 let (is_associated, parent_type) =
                     if let Some(struct_name) = crate::metadata::struct_name_from_method_key(&name) {
@@ -938,6 +898,11 @@ pub(crate) fn build_library_multipass(
             output,
             Some((output, src_base.as_path())),
         )?;
+        if let Some(project_root) =
+            crate::rust_integration_tests::find_project_root_with_tests(src_base.as_path())
+        {
+            let _ = crate::rust_integration_tests::sync_rust_integration_tests(&project_root);
+        }
     }
 
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
@@ -945,6 +910,18 @@ pub(crate) fn build_library_multipass(
 
     // Record the compiler version so the next build can detect upgrades.
     let _ = super::cache_management::write_compiler_stamp(output);
+
+    let stale = super::cache_management::find_stale_codegen_outputs(
+        &sources, &src_base, output, &dep_roots,
+    );
+    if !stale.is_empty() {
+        return Err(anyhow::anyhow!(
+            "build finished but {} file(s) still have stale generated output — \
+             incremental codegen bug; affected files: {:?}",
+            stale.len(),
+            stale.iter().take(10).collect::<Vec<_>>()
+        ));
+    }
 
     if !deferred_lint_errors.is_empty() {
         return Err(anyhow::anyhow!(
@@ -954,4 +931,204 @@ pub(crate) fn build_library_multipass(
     }
 
     Ok(())
+}
+
+/// Cap parallel Step 4B registry scans — retaining all per-file analysis for 664+ files OOMs.
+const STEP4B_REGISTRY_BATCH_SIZE: usize = 16;
+
+struct Step4bFileAnalysis {
+    registry: SignatureRegistry,
+    analyzed_functions: Vec<crate::analyzer::AnalyzedFunction<'static>>,
+    merged_trait_methods:
+        HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>,
+    copy_structs: Vec<String>,
+    output_file: PathBuf,
+    file_stem: String,
+    module_path: String,
+    lint_errors: Vec<String>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn analyze_file_for_step4b(
+    i: usize,
+    sources: &[(PathBuf, String)],
+    parsed_programs: &[crate::parser::Program<'static>],
+    stripped_programs: &[Option<crate::parser::Program<'static>>],
+    src_base: &Path,
+    output: &Path,
+    global_registry: &SignatureRegistry,
+    global_copy_structs: &std::sync::Arc<std::collections::HashSet<String>>,
+    global_struct_fields: &std::sync::Arc<
+        HashMap<String, HashMap<String, crate::parser::ast::types::Type>>,
+    >,
+    struct_defining_module_paths: &std::sync::Arc<HashMap<String, Vec<Vec<String>>>>,
+    global_analyzed_trait_methods: &std::sync::Arc<
+        HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>,
+    >,
+    enable_lint: bool,
+) -> Result<Step4bFileAnalysis, String> {
+    let (file, _source) = &sources[i];
+    let program: &crate::parser::Program<'static> = stripped_programs[i]
+        .as_ref()
+        .unwrap_or(&parsed_programs[i]);
+
+    let mut lint_errors = Vec::new();
+    if let Err(e) = crate::linter::rust_leakage::run_lint_if_enabled(enable_lint, file, program) {
+        lint_errors.push(e);
+    }
+
+    let mut analyzer = Analyzer::for_library_pass(
+        global_copy_structs.clone(),
+        global_struct_fields.clone(),
+        struct_defining_module_paths.clone(),
+    );
+
+    analyzer
+        .register_traits_from_program(program)
+        .map_err(|e| format!("Trait registration: {}", e))?;
+
+    let (analyzed_functions, registry, _) = analyzer
+        .analyze_program_with_global_signatures(program, global_registry)
+        .map_err(|e| format!("Final analysis error: {}", e))?;
+
+    analyzer
+        .infer_trait_signatures_from_impls(program)
+        .map_err(|e| e.to_string())?;
+
+    let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
+    for (trait_name, methods) in global_analyzed_trait_methods.iter() {
+        let entry = merged_trait_methods.entry(trait_name.clone()).or_default();
+        for (method_name, method_analysis) in methods {
+            entry.insert(method_name.clone(), method_analysis.clone());
+        }
+    }
+
+    let output_file =
+        crate::project_paths::resolve_wj_output_path_library(src_base, file, output)
+            .map_err(|e| e.to_string())?;
+    super::ensure_output_parent_dir(&output_file).map_err(|e| e.to_string())?;
+
+    let file_stem = file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let file_module =
+        crate::analyzer::type_collector::wj_file_to_module_path(src_base, file).unwrap_or_default();
+    let module_path = file_module.join("::");
+
+    Ok(Step4bFileAnalysis {
+        registry,
+        analyzed_functions,
+        merged_trait_methods,
+        copy_structs: analyzer.get_copy_structs(),
+        output_file,
+        file_stem,
+        module_path,
+        lint_errors,
+    })
+}
+
+fn run_parallel_float_inference(
+    sources: &[(PathBuf, String)],
+    parsed_programs: &[crate::parser::Program<'static>],
+    src_base: &Path,
+    external_paths: &std::collections::HashMap<String, PathBuf>,
+    global_float_signatures: &HashMap<String, (Vec<crate::parser::Type>, Option<crate::parser::Type>)>,
+    global_struct_fields: &HashMap<String, HashMap<String, crate::parser::Type>>,
+    struct_defining_module_paths: &HashMap<String, Vec<Vec<String>>>,
+    module_re_exports: HashMap<String, HashMap<String, String>>,
+) -> FloatInference {
+    let mut global = FloatInference::new();
+    if !external_paths.is_empty() {
+        global.set_external_crate_metadata_paths(external_paths);
+    }
+    global.set_global_function_signatures(global_float_signatures.clone());
+    global.set_global_struct_field_types(global_struct_fields);
+    global.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+    global.set_module_re_exports(module_re_exports);
+    global.reset_imported_type_registry();
+
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let file_module =
+            crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                .unwrap_or_default();
+        global.set_current_file_module_path(file_module);
+        global.prepare_program(&parsed_programs[i]);
+    }
+
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let file_module =
+            crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                .unwrap_or_default();
+        global.set_current_file_module_path(file_module);
+        global.prepare_program(&parsed_programs[i]);
+    }
+
+    let base = global.clone();
+    let partials: Vec<FloatInference> = sources
+        .par_iter()
+        .enumerate()
+        .map(|(i, (file, _source))| {
+            let mut local = base.clone();
+            let file_module =
+                crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                    .unwrap_or_default();
+            local.set_current_file_module_path(file_module);
+            local.collect_program_constraints(&parsed_programs[i]);
+            local
+        })
+        .collect();
+
+    for partial in partials {
+        global.merge_parallel_state(partial);
+    }
+    global.finish_solve();
+    global
+}
+
+fn run_parallel_int_inference(
+    sources: &[(PathBuf, String)],
+    parsed_programs: &[crate::parser::Program<'static>],
+    src_base: &Path,
+    global_float_signatures: &HashMap<String, (Vec<crate::parser::Type>, Option<crate::parser::Type>)>,
+    global_struct_fields: &HashMap<String, HashMap<String, crate::parser::Type>>,
+    struct_defining_module_paths: &HashMap<String, Vec<Vec<String>>>,
+    module_re_exports: HashMap<String, HashMap<String, String>>,
+) -> IntInference {
+    let mut global = IntInference::new();
+    global.set_global_function_signatures(global_float_signatures.clone());
+    global.set_global_struct_field_types(global_struct_fields);
+    global.set_struct_defining_module_paths(struct_defining_module_paths.clone());
+    global.set_module_re_exports(module_re_exports);
+    global.reset_imported_type_registry();
+
+    for (i, (file, _source)) in sources.iter().enumerate() {
+        let file_module =
+            crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                .unwrap_or_default();
+        global.set_current_file_module_path(file_module);
+        global.prepare_program(&parsed_programs[i]);
+    }
+
+    let base = global.clone();
+    let partials: Vec<IntInference> = sources
+        .par_iter()
+        .enumerate()
+        .map(|(i, (file, _source))| {
+            let mut local = base.clone();
+            let file_module =
+                crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
+                    .unwrap_or_default();
+            local.set_current_file_module_path(file_module);
+            local.collect_program_constraints(&parsed_programs[i]);
+            local
+        })
+        .collect();
+
+    for partial in partials {
+        global.merge_parallel_state(partial);
+    }
+    global.finish_solve();
+    global
 }

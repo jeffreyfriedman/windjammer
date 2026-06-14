@@ -1,0 +1,34 @@
+# Windjammer error codes — single source of truth for wj explain and MCP explain_error.
+# Generated Rust registry should stay in sync (CI: wj agent-index + diff check).
+
+codes:
+  - code: WJ0001
+    title: Variable not found
+    rust_codes: [E0425]
+  - code: WJ0002
+    title: Function not found
+    rust_codes: [E0425]
+  - code: WJ0003
+    title: Type mismatch
+    rust_codes: [E0308]
+  - code: WJ0004
+    title: Cannot modify immutable variable
+    rust_codes: [E0384]
+  - code: WJ0005
+    title: Rust leakage detected
+    rust_codes: []
+  - code: WJ0006
+    title: Missing return type
+    rust_codes: []
+  - code: WJ0007
+    title: Invalid pattern match
+    rust_codes: []
+  - code: WJ0008
+    title: Ownership violation
+    rust_codes: []
+  - code: WJ0009
+    title: Module not found
+    rust_codes: [E0433]
+  - code: WJ0010
+    title: Non-canonical string type
+    rust_codes: []
