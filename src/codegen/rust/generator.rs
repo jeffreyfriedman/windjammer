@@ -944,6 +944,30 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Deref `&Copy` / `&mut Copy` expressions when the function returns an owned Copy type.
+    /// Handles `.get().unwrap()` chains and other reference-producing expressions.
+    pub(crate) fn coerce_return_ref_to_owned_copy(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+    ) {
+        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") {
+            return;
+        }
+        let expects_owned = !matches!(
+            &self.current_function_return_type,
+            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+        );
+        if !expects_owned {
+            return;
+        }
+        if let Some(Type::Reference(inner)) = self.infer_expression_type(expr) {
+            if self.is_type_copy(inner.as_ref()) {
+                *expr_str = format!("*{}", expr_str);
+            }
+        }
+    }
+
     /// Apply owned-String tail coercion to an implicit-return or explicit-return expression.
     ///
     /// When a function returns `String`, this converts string literals to owned form,

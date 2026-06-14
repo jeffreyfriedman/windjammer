@@ -28,6 +28,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) -> String {
         let func = &analyzed.decl;
+        self.prepare_codegen_environment_for_regular_function(analyzed);
         let mut output = String::new();
 
         // TDD FIX: Auto-add #[test] attribute for test functions in test files (EARLY CHECK)
@@ -155,16 +156,25 @@ impl<'ast> CodeGenerator<'ast> {
                         .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
                     let rust_type = self.type_to_rust(param_type);
 
-                    // THE WINDJAMMER WAY: Owned parameters are always mutable
-                    // TDD FIX: Borrowed string params use &String (not &str) for correctness
-                    // While &str is more idiomatic, &String is CORRECT when interfacing with
-                    // generic stdlib code like Vec<String>::contains which expects &String
                     match ownership {
                         crate::analyzer::OwnershipMode::Borrowed => {
-                            format!("{}: &{}", param.name, rust_type)
+                            if matches!(
+                                param_type,
+                                Type::Reference(inner)
+                                    if matches!(&**inner, Type::Custom(s) if s == "str")
+                            ) || analyzed.str_ref_optimizable_params.contains(&param.name)
+                            {
+                                format!("{}: &str", param.name)
+                            } else {
+                                format!("{}: &{}", param.name, rust_type)
+                            }
                         }
                         crate::analyzer::OwnershipMode::MutBorrowed => {
-                            format!("{}: &mut {}", param.name, rust_type)
+                            if crate::analyzer::Analyzer::is_generic_type_param(param_type) {
+                                format!("mut {}: {}", param.name, rust_type)
+                            } else {
+                                format!("{}: &mut {}", param.name, rust_type)
+                            }
                         }
                         crate::analyzer::OwnershipMode::Owned => {
                             format!("mut {}: {}", param.name, rust_type)
@@ -193,6 +203,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level -= 1;
         output.push_str("}\n\n");
+
+        self.local_variable_scopes.pop();
 
         output
     }
@@ -416,7 +428,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // Clone owned parameters that appear in @ensures
+            // Preserve @ensures access for parameters moved in the function body.
             for param in &func.parameters {
                 if params_in_ensures.contains(&param.name) {
                     let ownership = analyzed
@@ -424,13 +436,23 @@ impl<'ast> CodeGenerator<'ast> {
                         .get(&param.name)
                         .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
 
-                    // Only clone Owned parameters (borrowed ones can be used multiple times)
-                    if matches!(ownership, crate::analyzer::OwnershipMode::Owned) {
-                        output.push_str(&self.indent());
-                        output.push_str(&format!(
-                            "let __{}__for_ensures = {}.clone();\n",
-                            param.name, param.name
-                        ));
+                    output.push_str(&self.indent());
+                    match ownership {
+                        crate::analyzer::OwnershipMode::Owned => {
+                            output.push_str(&format!(
+                                "let __{}__for_ensures = {}.clone();\n",
+                                param.name, param.name
+                            ));
+                        }
+                        crate::analyzer::OwnershipMode::Borrowed
+                        | crate::analyzer::OwnershipMode::MutBorrowed => {
+                            // Borrowed `string`/`&str` params are still moved into struct
+                            // literals; clone for post-body @ensures checks.
+                            output.push_str(&format!(
+                                "let __{}__for_ensures = {}.to_string();\n",
+                                param.name, param.name
+                            ));
+                        }
                     }
                 }
             }
@@ -512,7 +534,12 @@ impl<'ast> CodeGenerator<'ast> {
                             .get(&param.name)
                             .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
 
-                        if matches!(ownership, crate::analyzer::OwnershipMode::Owned) {
+                        if matches!(
+                            ownership,
+                            crate::analyzer::OwnershipMode::Owned
+                                | crate::analyzer::OwnershipMode::Borrowed
+                                | crate::analyzer::OwnershipMode::MutBorrowed
+                        ) {
                             // Split condition into tokens and replace standalone param names
                             // Avoid replacing field accesses (e.g. ".name")
                             let tokens: Vec<&str> = condition.split(' ').collect();

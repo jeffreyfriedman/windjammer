@@ -372,6 +372,35 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
     }
 }
 
+/// Snapshot/factory: returns a new parent-type instance from `self.field` reads, not bare `self`.
+pub fn function_returns_new_instance_from_self_fields(func: &FunctionDecl) -> bool {
+    use crate::parser::{Expression, Statement, Type};
+
+    let parent_type = match &func.parent_type {
+        Some(name) => name,
+        None => return false,
+    };
+    let return_type_name = match &func.return_type {
+        Some(Type::Custom(name)) if name == parent_type => name,
+        _ => return false,
+    };
+
+    let return_expr = match func.body.last() {
+        Some(Statement::Return {
+            value: Some(expr), ..
+        }) => expr,
+        Some(Statement::Expression { expr, .. }) => expr,
+        _ => return false,
+    };
+
+    match return_expr {
+        Expression::StructLiteral { name, fields, .. } if name == return_type_name => !fields
+            .iter()
+            .any(|(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self")),
+        _ => false,
+    }
+}
+
 /// Fluent builder: `let mut result = self; result.field = x; result`
 pub fn function_flows_self_through_local(func: &FunctionDecl) -> bool {
     let derived = collect_self_derived_locals(func);

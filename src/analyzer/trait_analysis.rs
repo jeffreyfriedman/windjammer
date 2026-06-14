@@ -5,9 +5,66 @@ use crate::parser::*;
 use super::{AnalyzedFunction, Analyzer, OwnershipHint, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
-    /// Analyze a trait method with default implementation
-    /// Trait methods must use &self or &mut self (not owned self)
-    /// to work with unsized types
+    /// Infer `&self` vs `&mut self` for trait methods from body analysis only.
+    /// No name-based heuristics — mutation, mutating self calls, and impl merging decide.
+    pub(super) fn infer_trait_self_receiver_from_body(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+    ) -> OwnershipMode {
+        if self.function_modifies_self_fields_with_registry(func, Some(registry)) {
+            return OwnershipMode::MutBorrowed;
+        }
+        let mut visited = std::collections::HashSet::new();
+        if self.function_calls_mutating_self_methods_with_registry(
+            func,
+            Some(registry),
+            &mut visited,
+        ) {
+            return OwnershipMode::MutBorrowed;
+        }
+        OwnershipMode::Borrowed
+    }
+
+    /// Trait receiver when `self` is omitted or inferred (not explicit `&self` / `&mut self`).
+    /// Abstract methods (empty body): void → `&mut self`, value-returning → `&self`.
+    /// Methods with bodies: analyze usage; consuming `-> Self` builders use owned `self`.
+    fn infer_trait_self_receiver(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+        trait_method_returns_self: bool,
+    ) -> OwnershipMode {
+        if trait_method_returns_self && self.function_returns_self(func) {
+            return OwnershipMode::Owned;
+        }
+        if func.body.is_empty() {
+            // Abstract trait methods: safe object-safe default is &self.
+            // Impl merging upgrades to &mut self when any impl body mutates.
+            return OwnershipMode::Borrowed;
+        }
+        self.infer_trait_self_receiver_from_body(func, registry)
+    }
+
+    /// Upgrade stored trait method receiver when an impl body needs a stronger borrow.
+    pub(super) fn upgrade_trait_method_self_receiver(
+        &mut self,
+        trait_name: &str,
+        trait_key: &str,
+        method_name: &str,
+        receiver: OwnershipMode,
+    ) {
+        for key in [trait_name, trait_key] {
+            if let Some(methods) = self.analyzed_trait_methods.get_mut(key) {
+                if let Some(method) = methods.get_mut(method_name) {
+                    method
+                        .inferred_ownership
+                        .insert("self".to_string(), receiver);
+                }
+            }
+        }
+    }
+
     /// Helper: Convert OwnershipHint to OwnershipMode
     pub(super) fn convert_ownership_hint_to_mode(
         &self,
@@ -35,6 +92,7 @@ impl<'ast> Analyzer<'ast> {
     pub fn infer_trait_signatures_from_impls(
         &mut self,
         program: &Program<'ast>,
+        registry: &SignatureRegistry,
     ) -> Result<(), String> {
         use std::collections::HashMap;
 
@@ -76,9 +134,8 @@ impl<'ast> Analyzer<'ast> {
                 for (method_name, mut trait_method_analysis) in trait_methods {
                     // Trait receiver is the contract. When any impl exists in this program, derive
                     // `self` **only** from those impls (merge with max-permissive: &mut beats &).
-                    // Trait-only crates keep `analyze_trait_method` defaults (abstract → &mut self).
-                    //
-                    // Associated functions (`fn create() -> Self`) have no `self` entry — skip.
+                    // Trait-only crates: receiver from body analysis (&self default).
+                    // Impl blocks in this program merge upward via infer_trait_signatures_from_impls.
 
                     if !trait_method_analysis
                         .inferred_ownership
@@ -132,12 +189,8 @@ impl<'ast> Analyzer<'ast> {
                     for impl_block in &impl_blocks {
                         for func in &impl_block.functions {
                             if func.name == method_name {
-                                let empty_registry = SignatureRegistry::new();
                                 let impl_analysis = self.analyze_function_in_impl(
-                                    func,
-                                    impl_block,
-                                    program,
-                                    &empty_registry,
+                                    func, impl_block, program, registry,
                                 )?;
 
                                 if let Some(&impl_self_ownership) =
@@ -156,9 +209,17 @@ impl<'ast> Analyzer<'ast> {
                     }
 
                     if let Some(merged_self) = merged_from_impls {
+                        let final_self = trait_method_analysis
+                            .inferred_ownership
+                            .get("self")
+                            .copied()
+                            .map(|existing| {
+                                Self::merge_borrow_trait_receivers(existing, merged_self)
+                            })
+                            .unwrap_or(merged_self);
                         trait_method_analysis
                             .inferred_ownership
-                            .insert("self".to_string(), merged_self);
+                            .insert("self".to_string(), final_self);
                     }
 
                     updated_methods.insert(method_name, trait_method_analysis);
@@ -195,46 +256,36 @@ impl<'ast> Analyzer<'ast> {
         // - For explicit `&self` or `&mut self`, preserve them (user explicitly requested)
         // - For `self` (inferred), analyze body/implementations and optimize
 
+        let trait_method_returns_self = trait_name.is_some_and(|t| {
+            self.trait_definitions
+                .get(t)
+                .and_then(|decl| decl.methods.iter().find(|m| m.name == func.name))
+                .is_some_and(
+                    |m| matches!(&m.return_type, Some(Type::Custom(name)) if name == "Self"),
+                )
+        });
+
         for param in &func.parameters {
             if param.name == "self" {
-                match &param.ownership {
-                    OwnershipHint::Ref => {
-                        // User explicitly wrote &self - preserve it
-                        analyzed
-                            .inferred_ownership
-                            .insert("self".to_string(), OwnershipMode::Borrowed);
-                    }
-                    OwnershipHint::Mut => {
-                        // User explicitly wrote &mut self - preserve it
-                        analyzed
-                            .inferred_ownership
-                            .insert("self".to_string(), OwnershipMode::MutBorrowed);
-                    }
-                    OwnershipHint::Owned => {
-                        // Explicit consuming `self` in the trait (e.g. fn consume(self) -> T)
-                        analyzed
-                            .inferred_ownership
-                            .insert("self".to_string(), OwnershipMode::Owned);
-                    }
+                let self_ownership = match &param.ownership {
+                    OwnershipHint::Ref => OwnershipMode::Borrowed,
+                    OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                    OwnershipHint::Owned => OwnershipMode::Owned,
                     OwnershipHint::Inferred => {
-                        // Omitted receiver: infer from trait body. Abstract void game-loop
-                        // hooks (update) need &mut self; read-only hooks (render) use &self.
-                        let modifies_self =
-                            self.function_modifies_self_fields_with_registry(func, Some(registry));
-                        let is_mutating_game_loop_hook = matches!(
-                            func.name.as_str(),
-                            "update" | "init" | "input" | "cleanup" | "render3d"
-                        );
-                        let self_ownership = if modifies_self || is_mutating_game_loop_hook {
-                            OwnershipMode::MutBorrowed
+                        if trait_name.is_some() {
+                            self.infer_trait_self_receiver(
+                                func,
+                                registry,
+                                trait_method_returns_self,
+                            )
                         } else {
-                            OwnershipMode::Borrowed
-                        };
-                        analyzed
-                            .inferred_ownership
-                            .insert("self".to_string(), self_ownership);
+                            self.infer_trait_self_receiver_from_body(func, registry)
+                        }
                     }
-                }
+                };
+                analyzed
+                    .inferred_ownership
+                    .insert("self".to_string(), self_ownership);
             } else {
                 // Non-self parameters: preserve explicit, infer otherwise
                 let ownership = match &param.ownership {
@@ -248,10 +299,14 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        // E0053 FIX: Trait methods without explicit self (e.g. fn initialize()) need self for impl matching.
-        // Windjammer trait methods often omit self - add default so infer_trait_signatures_from_impls can upgrade.
+        // E0053 FIX: Instance methods without `self` in the signature still need a receiver
+        // entry so impl matching and codegen can attach &self or &mut self.
         //
-        // Associated functions (constructors / `fn make() -> MyTrait`): no receiver in Rust.
+        // WINDJAMMER WAY: Omit `self` in source for every instance method (init, update, render).
+        // Receiver strength comes from body analysis and impl merging — never from void-return
+        // defaults or method names.
+        //
+        // Associated functions (constructors / `fn make() -> Self`): no receiver in Rust.
         // Detect by: common factory names, `-> Self`, or `-> TraitName` for the trait being defined.
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
         let is_named_constructor = crate::type_classification::is_constructor_name(&func.name);
@@ -263,26 +318,14 @@ impl<'ast> Analyzer<'ast> {
         let is_associated_fn =
             !has_explicit_self && (is_named_constructor || returns_associated_type);
         if !analyzed.inferred_ownership.contains_key("self") && !is_associated_fn {
-            let default_receiver = if func.return_type.is_some() {
-                OwnershipMode::Borrowed
+            let receiver = if trait_name.is_some() {
+                self.infer_trait_self_receiver(func, registry, trait_method_returns_self)
             } else {
-                OwnershipMode::MutBorrowed
+                self.infer_trait_self_receiver_from_body(func, registry)
             };
             analyzed
                 .inferred_ownership
-                .insert("self".to_string(), default_receiver);
-        }
-
-        // Object-safe traits: `fn render(self) -> string` must become `&self` in Rust signatures.
-        if trait_name.is_some() && !self.function_returns_self(func) {
-            if matches!(
-                analyzed.inferred_ownership.get("self"),
-                Some(OwnershipMode::Owned)
-            ) {
-                analyzed
-                    .inferred_ownership
-                    .insert("self".to_string(), OwnershipMode::Borrowed);
-            }
+                .insert("self".to_string(), receiver);
         }
 
         Ok(analyzed)
@@ -300,22 +343,5 @@ impl<'ast> Analyzer<'ast> {
             (MutBorrowed, _) | (_, MutBorrowed) => MutBorrowed,
             _ => Borrowed,
         }
-    }
-
-    /// Look up the analyzed receiver (`self`) ownership for a trait method (trait is the contract).
-    pub(super) fn trait_method_receiver_ownership(
-        &self,
-        trait_name: &str,
-        trait_key: &str,
-        method_name: &str,
-    ) -> Option<OwnershipMode> {
-        for key in [trait_key, trait_name] {
-            if let Some(methods) = self.analyzed_trait_methods.get(key) {
-                if let Some(trait_fn) = methods.get(method_name) {
-                    return trait_fn.inferred_ownership.get("self").copied();
-                }
-            }
-        }
-        None
     }
 }

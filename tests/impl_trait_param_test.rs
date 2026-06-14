@@ -171,7 +171,7 @@ impl Describable for Point {
 }
 
 struct Wrapper {
-    item: trait Describable,
+    item: &trait Describable,
 }
 
 fn main() {

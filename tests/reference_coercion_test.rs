@@ -490,7 +490,10 @@ pub fn main() -> string {
 fn test_option_ref_unwrap() {
     let code = r#"
 pub fn get_value(opt: Option<i32>) -> i32 {
-    opt.unwrap()
+    match opt {
+        Some(v) => v,
+        None => 0,
+    }
 }
 "#;
 

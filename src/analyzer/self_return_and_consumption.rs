@@ -33,6 +33,44 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// True when the method returns a new instance of the parent type built from `self.field`
+    /// reads (snapshot/clone/factory), not by consuming bare `self`.
+    ///
+    /// Example: `fn snapshot(self) -> Scene { Scene { name: self.name, ... } }` → `&self`
+    pub(super) fn function_returns_new_instance_from_self_fields(
+        &self,
+        func: &FunctionDecl,
+    ) -> bool {
+        use crate::parser::{Statement, Type};
+
+        let parent_type = match &func.parent_type {
+            Some(name) => name,
+            None => return false,
+        };
+        let return_type_name = match &func.return_type {
+            Some(Type::Custom(name)) if name == parent_type => name,
+            _ => return false,
+        };
+
+        let return_expr = match func.body.last() {
+            Some(Statement::Return {
+                value: Some(expr), ..
+            }) => expr,
+            Some(Statement::Expression { expr, .. }) => expr,
+            _ => return false,
+        };
+
+        match return_expr {
+            Expression::StructLiteral { name, fields, .. } if name == return_type_name => {
+                // Consuming builder embeds bare `self`; snapshot/factory reads fields instead.
+                !fields.iter().any(
+                    |(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self"),
+                )
+            }
+            _ => false,
+        }
+    }
+
     /// True when the function returns a non-Copy `self.field` expression (last statement).
     /// Check if self is moved into a returned struct literal (e.g., `OtherType { field: self }`)
     /// or returned directly as a value. This means self must be consumed (owned).
@@ -722,9 +760,18 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_moves_non_copy_self_field(object)
             }
             // Struct literal: Foo { field: self.field, ... }
-            Expression::StructLiteral { fields, .. } => fields
-                .iter()
-                .any(|(_, v)| self.expression_moves_non_copy_self_field(v)),
+            // Field reads are clones under &self (snapshot/factory), not moves of self.
+            Expression::StructLiteral { fields, .. } => {
+                if fields.iter().any(
+                    |(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self"),
+                ) {
+                    return true;
+                }
+                fields.iter().any(|(_, v)| {
+                    !self.expression_is_self_field_access(v)
+                        && self.expression_moves_non_copy_self_field(v)
+                })
+            }
             // Block expression
             Expression::Block { statements, .. } => statements
                 .iter()
@@ -799,48 +846,45 @@ impl<'ast> Analyzer<'ast> {
 
     /// Look up the type of a field on `self` using the struct definition from the program.
     pub(crate) fn lookup_field_type_for_self(&self, field: &str) -> Option<Type> {
-        let ctx = self.self_impl_context.as_ref()?;
-        let program = ctx.program();
-        let struct_name = &ctx.impl_type_base;
+        if let Some(ctx) = self.self_impl_context.as_ref() {
+            let program = ctx.program();
+            let struct_name = &ctx.impl_type_base;
 
-        for item in &program.items {
-            if let crate::parser::Item::Struct { decl, .. } = item {
-                if decl.name == *struct_name {
-                    for sf in &decl.fields {
-                        if sf.name == field {
-                            return Some(sf.field_type.clone());
+            for item in &program.items {
+                if let crate::parser::Item::Struct { decl, .. } = item {
+                    if decl.name == *struct_name {
+                        for sf in &decl.fields {
+                            if sf.name == field {
+                                return Some(sf.field_type.clone());
+                            }
                         }
                     }
                 }
             }
         }
-        None
+
+        self.self_impl_context
+            .as_ref()
+            .map(|ctx| ctx.impl_type_base.as_str())
+            .and_then(|struct_name| {
+                self.global_struct_field_types
+                    .get(struct_name)
+                    .and_then(|fields| fields.get(field).cloned())
+            })
     }
 
     pub(crate) fn expression_returns_self_type(&self, expr: &Expression, type_name: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == "self" => true,
             Expression::StructLiteral { name, fields, .. } if name == type_name => {
-                // Snapshot/clone-factory pattern: if ANY field value clones a non-Copy
-                // self field (e.g., `self.name.clone()`), this method only reads from
-                // self and constructs an independent instance — not a consuming builder.
-                !self.struct_literal_clones_self_fields(fields)
+                // Consuming builder embeds bare `self`. Snapshot/factory patterns construct a
+                // new instance from `self.field` reads (or clones) without consuming `self`.
+                fields.iter().any(
+                    |(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self"),
+                )
             }
             _ => false,
         }
-    }
-
-    /// True when at least one field value in the struct literal is a clone of
-    /// a self field (e.g., `self.name.clone()`). This indicates a
-    /// snapshot/factory pattern that should use `&self`, not owned `self`.
-    fn struct_literal_clones_self_fields(&self, fields: &[(String, &Expression)]) -> bool {
-        fields.iter().any(|(_, value)| {
-            matches!(value,
-                Expression::MethodCall { method, object, .. }
-                if matches!(method.as_str(), "clone" | "to_owned" | "to_vec")
-                && self.expression_is_self_field_access(object)
-            )
-        })
     }
 
     /// Check if a function uses a specific identifier (e.g., "self")

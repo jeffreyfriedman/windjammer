@@ -106,10 +106,11 @@ pub fn caller(s: string) {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // s is Owned, param needs Borrowed. Should add &
+    // s is Owned (&str API), param needs Borrowed. Phase 2: both use &str, so
+    // direct pass compiles; legacy form takes_ref(&s) also valid.
     assert!(
-        result.contains("takes_ref(&s)"),
-        "Should auto-borrow owned to &param. Got:\n{}",
+        result.contains("takes_ref(&s)") || result.contains("takes_ref(s)"),
+        "Should pass string to borrowed param. Got:\n{}",
         result
     );
 }

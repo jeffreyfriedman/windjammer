@@ -324,11 +324,20 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if let Expression::Identifier { ref name, .. } = value {
+            // Match/for bindings from borrowed scrutinees: Copy targets need * not .clone().
+            if self.borrowed_iterator_vars.contains(name) && !value_str.starts_with('*') {
+                let target_type = self.infer_expression_type(target);
+                if target_type.as_ref().is_some_and(|t| self.is_type_copy(t)) {
+                    value_str = format!("*{}", value_str);
+                }
+            }
+
             if let Some(ref analysis) = self.auto_clone_analysis {
                 if analysis
                     .needs_clone(name, self.current_statement_idx)
                     .is_some()
                     && !value_str.ends_with(".clone()")
+                    && !value_str.starts_with('*')
                 {
                     value_str = format!("{}.clone()", value_str);
                 }
@@ -343,15 +352,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
                 {
                     value_str = format!("{}.into()", value_str);
-                }
-            }
-            // E0308 FIX: match-bound variables from &/&mut scrutinees are references.
-            // When assigning to a Copy-type field (e.g. self.x = min_x where min_x: &mut f32),
-            // auto-deref the value.
-            if self.borrowed_iterator_vars.contains(name) && !value_str.starts_with('*') {
-                let target_type = self.infer_expression_type(target);
-                if target_type.as_ref().is_some_and(|t| self.is_type_copy(t)) {
-                    value_str = format!("*{}", value_str);
                 }
             }
         }

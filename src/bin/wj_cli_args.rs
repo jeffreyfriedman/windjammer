@@ -111,6 +111,10 @@ pub enum Commands {
         #[arg(long)]
         no_cargo: bool,
 
+        /// Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)
+        #[arg(long)]
+        no_lint: bool,
+
         /// Skip Cargo.toml generation (use project-maintained manifest)
         #[arg(long)]
         no_generate_cargo_toml: bool,

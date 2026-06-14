@@ -99,6 +99,8 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
 
+                        self.coerce_return_ref_to_owned_copy(&mut expr_str, expr);
+
                         self.apply_owned_string_tail_coercion(&mut expr_str, expr, true);
 
                         // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return

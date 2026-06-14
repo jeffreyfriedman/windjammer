@@ -25,6 +25,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.function_returns_self_type(func) {
             return true;
         }
+        if super::self_analysis::function_returns_new_instance_from_self_fields(func) {
+            // Non-Copy: field-read rebuild is snapshot/clone (`&self`). Copy types use
+            // cheap by-value receivers for consuming transforms like `double(self) -> Point`.
+            return self.current_struct_is_copy();
+        }
         if super::self_analysis::function_flows_self_through_local(func) {
             return true;
         }

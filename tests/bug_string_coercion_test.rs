@@ -211,10 +211,13 @@ fn render(score: i32) {
         "Should keep variable assignment for format! (may be optimized to write!)"
     );
 
-    // Should pass the variable (with or without &)
+    // Should pass the variable via FFI wrapper without redundant .to_string() on String
     assert!(
-        rust_code.contains("draw_text(&msg,") || rust_code.contains("draw_text(msg,"),
-        "Should pass msg variable"
+        rust_code.contains("draw_text(windjammer_runtime::ffi::string_to_ffi(msg)")
+            || rust_code.contains("draw_text(&msg,")
+            || rust_code.contains("draw_text(msg,"),
+        "Should pass msg variable without msg.to_string() inside string_to_ffi. Got:\n{}",
+        rust_code
     );
 
     // Cleanup

@@ -12,12 +12,8 @@
 
 /// Test: Trait Implementation Self Mutation
 ///
-/// When a trait method declares `fn method(self, ...)` (no & or &mut),
-/// but the implementation mutates self, the compiler should infer `&mut self`
-/// for the implementation.
-///
-/// This is a critical feature for game engines where traits define interfaces
-/// but implementations need to mutate state.
+/// Omit `self` in source; impl bodies that mutate fields upgrade the trait contract
+/// via infer_trait_signatures_from_impls.
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
@@ -26,7 +22,7 @@ mod test_utils;
 fn test_trait_method_impl_mutates_self() {
     let code = r#"
         trait GameLoop {
-            fn update(self, delta: f32) {
+            fn update(delta: f32) {
                 // Default: do nothing
             }
         }
@@ -36,7 +32,7 @@ fn test_trait_method_impl_mutates_self() {
         }
         
         impl GameLoop for Game {
-            fn update(self, delta: f32) {
+            fn update(delta: f32) {
                 self.frame_count = self.frame_count + 1
             }
         }
@@ -44,11 +40,9 @@ fn test_trait_method_impl_mutates_self() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
-    // The trait should declare `fn update(&self, delta: f32)` (read-only default)
-    // But the impl should use `fn update(&mut self, delta: f32)` (mutates self)
     assert!(
         generated.contains("fn update(&mut self, delta: f32)"),
-        "Implementation should use &mut self when it mutates self, got:\n{}",
+        "Mutating impl upgrades trait to &mut self. Got:\n{}",
         generated
     );
 }
@@ -58,7 +52,7 @@ fn test_trait_method_impl_mutates_self() {
 fn test_trait_method_impl_reads_self() {
     let code = r#"
         trait GameLoop {
-            fn render(self) {
+            fn render() {
                 // Default: do nothing
             }
         }
@@ -68,18 +62,17 @@ fn test_trait_method_impl_reads_self() {
         }
         
         impl GameLoop for Game {
-            fn render(self) {
-                println!("Frame: {}", self.frame_count)
+            fn render() {
+                println("Frame: {}", self.frame_count)
             }
         }
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
-    // Both trait and impl should use `&self` (read-only)
     assert!(
         generated.contains("fn render(&self)"),
-        "Implementation should use &self when it only reads self, got:\n{}",
+        "Read-only access uses &self. Got:\n{}",
         generated
     );
 }
@@ -89,7 +82,7 @@ fn test_trait_method_impl_reads_self() {
 fn test_trait_method_impl_consumes_self() {
     let code = r#"
         trait GameLoop {
-            fn cleanup(self) {
+            fn cleanup() {
                 // Default: do nothing
             }
         }
@@ -99,19 +92,17 @@ fn test_trait_method_impl_consumes_self() {
         }
         
         impl GameLoop for Game {
-            fn cleanup(self) {
-                println!("Cleanup: {}", self.name)
+            fn cleanup() {
+                println("Cleanup: {}", self.name)
             }
         }
     "#;
 
     let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
-    // Both should use `&self` for Copy types (string becomes &str for read-only)
-    // Or `self` if truly consuming
     assert!(
         generated.contains("fn cleanup(&self)") || generated.contains("fn cleanup(self)"),
-        "Implementation should use &self or self for read-only access, got:\n{}",
+        "Read-only access uses &self or owned self. Got:\n{}",
         generated
     );
 }
@@ -125,14 +116,13 @@ fn test_trait_method_default_impl_mutates() {
         }
         
         trait Incrementable {
-            fn increment(self) {
-                // This would mutate if we had access to self
-                // But trait methods can't access self fields directly
+            fn increment() {
+                // Default: no-op
             }
         }
         
         impl Incrementable for Counter {
-            fn increment(self) {
+            fn increment() {
                 self.count = self.count + 1
             }
         }
@@ -140,10 +130,9 @@ fn test_trait_method_default_impl_mutates() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation should succeed");
 
-    // The impl should use `&mut self` because it mutates
     assert!(
         generated.contains("fn increment(&mut self)"),
-        "Implementation should use &mut self when it mutates self, got:\n{}",
+        "Mutating impl upgrades trait to &mut self. Got:\n{}",
         generated
     );
 }

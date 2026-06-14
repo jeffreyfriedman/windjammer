@@ -6,7 +6,6 @@
     feature = "conformance_tests",
     feature = "integration_tests",
 )))]
-
 /// TDD Test: Orchestrator methods calling 3+ subsystem mutating methods
 ///
 /// Bug: Game state orchestrator methods like `update()` only delegate to
@@ -15,7 +14,6 @@
 /// so the analyzer infers &self instead of &mut self.
 ///
 /// This is the dominant pattern causing many E0596 errors in large game codebases.
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

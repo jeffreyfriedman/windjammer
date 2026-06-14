@@ -87,7 +87,7 @@ impl ModuleCompiler {
 
         // Run the cross-file trait inference
         self.analyzer
-            .infer_trait_signatures_from_impls(&merged_program)
+            .infer_trait_signatures_from_impls(&merged_program, &self.global_signatures)
             .map_err(|e| anyhow::anyhow!("Trait inference error: {}", e))?;
 
         Ok(())

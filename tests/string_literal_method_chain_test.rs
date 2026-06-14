@@ -79,10 +79,10 @@ pub fn test_chain() {
 
     let output = compile_wj(code);
 
-    // All string literals in chained calls should get .to_string()
+    // new() stores in struct literal → &str at call site; push/assignment still need .to_string().
     assert!(
-        output.contains(r#""test".to_string()"#),
-        "String literal 'test' should get .to_string() in new(): {}",
+        output.contains("Builder::new(\"test\")") && !output.contains("Builder::new(\"test\".to_string())"),
+        "Struct-literal new() passes literal as &str: {}",
         output
     );
     assert!(

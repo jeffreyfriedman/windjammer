@@ -36,11 +36,11 @@ fn parse_and_generate(code: &str) -> String {
 fn test_trait_impl_ref_self_matching() {
     let source = r#"
 trait GameLoop {
-    fn init(self) {
+    fn init() {
         println("Default init");
     }
     
-    fn update(self) {
+    fn update() {
         println("Default update");
     }
 }
@@ -56,11 +56,11 @@ impl TestGame {
 }
 
 impl GameLoop for TestGame {
-    fn init(self) {
+    fn init() {
         println("TestGame init");
     }
     
-    fn update(self) {
+    fn update() {
         println("TestGame update");
     }
 }

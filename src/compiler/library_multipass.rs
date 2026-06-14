@@ -651,7 +651,7 @@ pub(crate) fn build_library_multipass(
         }
 
         let merged_program = crate::parser::Program { items: all_items };
-        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program) {
+        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program, &global_registry) {
             Ok(()) => shared_analyzer.analyzed_trait_methods.clone(),
             Err(e) => {
                 eprintln!("Cross-file trait inference warning: {}", e);
@@ -1006,7 +1006,7 @@ fn analyze_file_for_step4b(
         .map_err(|e| format!("Final analysis error: {}", e))?;
 
     analyzer
-        .infer_trait_signatures_from_impls(program)
+        .infer_trait_signatures_from_impls(program, &registry)
         .map_err(|e| e.to_string())?;
 
     let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();

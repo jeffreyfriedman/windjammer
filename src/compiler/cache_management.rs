@@ -85,6 +85,14 @@ fn merged_mod_rs_for_mod_wj(
         mod_rs.push(parent);
     }
     mod_rs.push("mod.rs");
+    if mod_rs.exists() {
+        return Some(mod_rs);
+    }
+    // Library builds at crate root emit lib.rs instead of mod.rs
+    let lib_rs = output_dir.join("lib.rs");
+    if parent.as_os_str().is_empty() && lib_rs.exists() {
+        return Some(lib_rs);
+    }
     Some(mod_rs)
 }
 
@@ -291,6 +299,8 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
         if !is_library_source_under_root(file, src_base) {
             continue;
         }
+        // Re-read from disk so fingerprint validation matches what was written at codegen time.
+        let source = std::fs::read_to_string(file).unwrap_or(source.clone());
         let output_file =
             match crate::project_paths::resolve_wj_output_path_library(src_base, file, output) {
                 Ok(p) => p,
@@ -301,7 +311,7 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
             };
         let cache_valid = if let Some(epoch) = dep_epoch {
             is_library_codegen_cache_valid_with_dep_epoch(
-                source,
+                &source,
                 file,
                 &output_file,
                 src_base,
@@ -309,7 +319,7 @@ pub fn find_stale_codegen_outputs_with_dep_epoch(
                 epoch,
             )
         } else {
-            is_library_codegen_cache_valid(source, file, &output_file, src_base, output, dep_roots)
+            is_library_codegen_cache_valid(&source, file, &output_file, src_base, output, dep_roots)
         };
         if !cache_valid {
             stale.push(file.clone());

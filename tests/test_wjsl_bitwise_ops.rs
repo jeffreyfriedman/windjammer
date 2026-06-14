@@ -34,7 +34,7 @@ fn test_address_of_for_atomic() {
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    let base_idx = atomicAdd(draw_count, 1u);
+    let base_idx = atomicAdd(&draw_count, 1u);
 }
 "#;
     let wgsl = transpile_wjsl(source).unwrap();

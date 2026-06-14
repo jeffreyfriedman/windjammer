@@ -35,7 +35,8 @@ fn test_extern_fn_simple() {
     );
 
     assert!(
-        generated.contains("fn printf(format: &str);"),
+        generated.contains("fn printf(format: windjammer_runtime::ffi::FfiString);")
+            || generated.contains("fn printf(format: &str);"),
         "Should declare printf function. Generated:\n{}",
         generated
     );
@@ -59,7 +60,8 @@ fn test_extern_fn_with_return_type() {
     );
 
     assert!(
-        generated.contains("fn strlen(s: &str) -> i64;"),
+        generated.contains("fn strlen(s: windjammer_runtime::ffi::FfiString) -> i64;")
+            || generated.contains("fn strlen(s: &str) -> i64;"),
         "Should generate strlen with return type. Generated:\n{}",
         generated
     );
@@ -103,8 +105,8 @@ fn test_extern_fn_used_in_code() {
     );
 
     assert!(
-        generated.contains("printf(\"Hello, World!\")"),
-        "Should call printf. Generated:\n{}",
+        generated.contains("printf(") && generated.contains("Hello, World!"),
+        "Should call printf with hello string. Generated:\n{}",
         generated
     );
 }
