@@ -26,6 +26,9 @@
 .DS_Store
 Thumbs.db
 
+# Local issue tracking (bd/beads — per-clone, not shared in git)
+.beads/
+
 # Generated Rust files in stdlib
 std/**/*.rs
 !std/**/lib.rs
