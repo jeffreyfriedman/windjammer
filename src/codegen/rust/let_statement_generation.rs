@@ -39,9 +39,10 @@ impl<'ast> CodeGenerator<'ast> {
         // mutates the value obtained from x (via match/if-let), upgrade get→get_mut.
         if let Some(vn) = var_name {
             if super::self_analysis::is_self_field_get_call(value)
-                && self.let_binding_value_is_mutated_downstream(vn) {
-                    self.upgrade_get_to_get_mut = true;
-                }
+                && self.let_binding_value_is_mutated_downstream(vn)
+            {
+                self.upgrade_get_to_get_mut = true;
+            }
         }
 
         // Mutability: explicit via `let mut`, or auto-inferred when the
@@ -522,9 +523,10 @@ impl<'ast> CodeGenerator<'ast> {
                             ..
                         }
                     )
-                    && !string_utilities::already_owned_string_expr(&value_str) {
-                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
-                    }
+                    && !string_utilities::already_owned_string_expr(&value_str)
+                {
+                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
+                }
 
                 // E0507: `let x = self.field` through `&self`/`&mut self`:
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)

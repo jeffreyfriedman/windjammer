@@ -162,7 +162,9 @@ fn collect_annotated_locals(stmts: &[&Statement<'_>], out: &mut HashMap<String, 
 }
 
 fn collect_annotated_locals_in_expr(expr: &Expression<'_>, out: &mut HashMap<String, Type>) {
-    if let Expression::Block { statements, .. } = expr { collect_annotated_locals(statements, out) }
+    if let Expression::Block { statements, .. } = expr {
+        collect_annotated_locals(statements, out)
+    }
 }
 
 fn vec_element_struct_name(ty: &Type) -> Option<String> {
