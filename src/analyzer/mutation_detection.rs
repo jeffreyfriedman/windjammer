@@ -594,7 +594,6 @@ impl<'ast> Analyzer<'ast> {
     /// Check if the parameter is the receiver of method calls that could potentially mutate.
     /// Returns true if there are method calls on the parameter that aren't known to be read-only.
     /// This catches patterns like `loader.load(...)` where .load() could require &mut self.
-    #[allow(dead_code)]
     pub(super) fn has_potentially_mutating_method_call(
         &self,
         name: &str,

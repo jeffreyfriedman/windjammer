@@ -156,7 +156,8 @@ impl World {
         // Should keep as-is or simplify to entity_ref.id
         assert!(
             rust_code.contains("contains((*entity_ref).id)")
-                || rust_code.contains("contains(entity_ref.id)"),
+                || rust_code.contains("contains(entity_ref.id)")
+                || rust_code.contains("contains((entity_ref).id)"),
             "Should preserve deref access pattern. Generated:\n{}",
             rust_code
         );
