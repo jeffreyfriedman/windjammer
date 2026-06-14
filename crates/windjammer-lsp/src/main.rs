@@ -8,6 +8,7 @@ pub mod database;
 mod debug_adapter;
 mod diagnostics;
 mod hover;
+mod ide_queries;
 mod inlay_hints;
 mod refactoring;
 mod semantic_tokens;

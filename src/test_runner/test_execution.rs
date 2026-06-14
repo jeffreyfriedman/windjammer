@@ -7,12 +7,31 @@ use std::path::{Path, PathBuf};
 use super::test_discovery::TestFunction;
 use super::util::copy_dir_recursive;
 
+/// True when `dir` contains at least one `.wj` source file (recursively).
+fn directory_has_wj_sources(dir: &Path) -> bool {
+    use std::fs;
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if directory_has_wj_sources(&path) {
+                return true;
+            }
+        } else if path.extension().is_some_and(|e| e == "wj") {
+            return true;
+        }
+    }
+    false
+}
+
 /// Detect and compile the library being tested (if it exists)
 /// Returns (library_name, library_path) for Cargo dependency, or None
 fn detect_and_compile_library(
     project_root: &Path,
     test_output_dir: &Path,
-) -> Result<Option<(String, PathBuf)>> {
+) -> Result<Option<(String, String, PathBuf)>> {
     use std::fs;
 
     // Look for wj.toml or windjammer.toml
@@ -37,6 +56,11 @@ fn detect_and_compile_library(
     let src_dir = project_root.join("src");
     if !src_dir.exists() || !src_dir.is_dir() {
         return Ok(None); // No library to compile
+    }
+
+    // Rust-only `src/` (e.g. windjammer compiler) is not a Windjammer library project.
+    if !directory_has_wj_sources(&src_dir) {
+        return Ok(None);
     }
 
     // Get library name from config or infer from directory
@@ -297,9 +321,17 @@ fn detect_and_compile_library(
                 }
             }
 
+            let cargo_toml_path = lib_output_dir.join("Cargo.toml");
+            if !cargo_toml_path.exists() {
+                eprintln!(
+                    "WARNING: Library compile produced no Cargo.toml at {} — skipping library dependency",
+                    cargo_toml_path.display()
+                );
+                return Ok(None);
+            }
+
             println!("   {} Library compiled successfully", "✓".green().bold());
-            // Return the test library package name (with -testlib suffix) for Cargo dependency
-            Ok(Some((test_lib_package_name, lib_output_dir)))
+            Ok(Some((test_lib_name, test_lib_package_name, lib_output_dir)))
         }
         Err(e) => {
             println!("   {} Library compilation failed: {}", "✗".red().bold(), e);
@@ -631,11 +663,35 @@ pub fn path_to_toml_string(path: &Path) -> String {
 fn find_windjammer_runtime_path() -> Result<PathBuf> {
     use std::env;
 
-    // TDD FIX: Use CARGO_MANIFEST_DIR when available (set during cargo test/build)
-    // This gives us the windjammer compiler's directory directly
+    // Compiled into the `wj` binary: always valid when built from the windjammer repo.
+    let compiler_runtime =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+    if compiler_runtime.join("Cargo.toml").exists() {
+        return Ok(compiler_runtime);
+    }
+
+    // Installed `wj` binary: walk up from the executable location.
+    if let Ok(exe_path) = env::current_exe() {
+        let mut search = exe_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+        for _ in 0..8 {
+            let candidate = search.join("crates/windjammer-runtime");
+            if candidate.join("Cargo.toml").exists() {
+                return Ok(candidate);
+            }
+            if let Some(parent) = search.parent() {
+                search = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Runtime env var (e.g. `cargo test` subprocess with CARGO_MANIFEST_DIR set).
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let manifest_path = PathBuf::from(manifest_dir);
-        let runtime_path = manifest_path.join("crates/windjammer-runtime");
+        let runtime_path = PathBuf::from(manifest_dir).join("crates/windjammer-runtime");
         if runtime_path.join("Cargo.toml").exists() {
             return Ok(runtime_path);
         }
@@ -716,17 +772,9 @@ fn find_windjammer_runtime_path() -> Result<PathBuf> {
         }
     }
 
-    // Last resort: assume it's in the workspace (try to make it absolute)
-    let fallback_path = PathBuf::from("./crates/windjammer-runtime");
-    if fallback_path.exists() {
-        // Try to canonicalize to get absolute path
-        if let Ok(canonical) = fallback_path.canonicalize() {
-            return Ok(canonical);
-        }
-    }
-
-    // Final fallback: return relative path and hope for the best
-    Ok(fallback_path)
+    anyhow::bail!(
+        "could not locate windjammer-runtime (searched compiler manifest, executable path, and cwd ancestors)"
+    )
 }
 
 /// Generate Rust test harness from Windjammer tests
@@ -767,11 +815,25 @@ pub(crate) fn generate_test_harness(
         ));
         let mut rust_code = fs::read_to_string(&output_file)?;
 
-        // Add test attributes to test functions
+        // Add #[test] when codegen did not; skip when auto-test attribute already emitted.
         for test in file_tests.iter() {
-            let test_fn = format!("fn {}()", test.name);
-            let test_attr = format!("#[test]\nfn {}()", test.name);
-            rust_code = rust_code.replace(&test_fn, &test_attr);
+            let already_marked = [
+                format!("#[test]\npub fn {}()", test.name),
+                format!("#[test]\nfn {}()", test.name),
+                format!("#[test]\n#[inline]\npub fn {}()", test.name),
+                format!("#[test]\n#[inline]\nfn {}()", test.name),
+            ]
+            .iter()
+            .any(|pat| rust_code.contains(pat));
+            if already_marked {
+                continue;
+            }
+            for sig in [format!("pub fn {}()", test.name), format!("fn {}()", test.name)] {
+                if rust_code.contains(&sig) {
+                    rust_code = rust_code.replace(&sig, &format!("#[test]\n{}", sig));
+                    break;
+                }
+            }
         }
 
         // Write back
@@ -780,6 +842,8 @@ pub(crate) fn generate_test_harness(
 
     // Detect and compile the library if it exists
     let library_dependency = detect_and_compile_library(project_root, output_dir)?;
+
+    let _ = crate::rust_integration_tests::sync_rust_integration_tests(project_root);
 
     // TDD FIX: Copy windjammer-runtime to test directory so tests can find it
     // THE WINDJAMMER WAY: Self-contained test environments
@@ -838,11 +902,12 @@ pub(crate) fn generate_test_harness(
         "✓".green().bold()
     );
 
-    let library_dep_str = if let Some((lib_name, lib_path)) = library_dependency {
+    let library_dep_str = if let Some((lib_crate_name, lib_package_name, lib_path)) = library_dependency {
         format!(
-            "\n{} = {{ path = \"{}\" }}",
-            lib_name,
-            path_to_toml_string(&lib_path)
+            "\n{} = {{ path = \"{}\", package = \"{}\" }}",
+            lib_crate_name,
+            path_to_toml_string(&lib_path),
+            lib_package_name
         )
     } else {
         String::new()

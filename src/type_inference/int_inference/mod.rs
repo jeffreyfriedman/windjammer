@@ -199,9 +199,8 @@ impl IntInference {
         self.module_re_exports = re_exports;
     }
 
-    /// Main entry point: Infer integer types for a program
-    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
-        self.imported_type_registry_keys.clear();
+    /// Register signatures/metadata from a program (no constraint collection).
+    pub fn prepare_program<'ast>(&mut self, program: &Program<'ast>) {
         if let Some(first_item) = program.items.first() {
             if let Some(loc) = first_item.location() {
                 self.set_current_file(loc.file.to_string_lossy().to_string());
@@ -216,12 +215,65 @@ impl IntInference {
         }
 
         self.register_use_imports_from_items(&program.items);
+    }
 
-        for item in &program.items {
+    /// Collect integer constraints from a program (call [`Self::finish_solve`] after merging).
+    pub fn collect_program_constraints<'ast>(&mut self, program: &Program<'ast>) {
+        if let Some(first_item) = program.items.first() {
+            if let Some(loc) = first_item.location() {
+                self.set_current_file(loc.file.to_string_lossy().to_string());
+            }
+        }
+        for item in program.items.iter() {
             self.collect_item_constraints(item);
         }
+    }
 
+    /// Merge parallel per-file inference state before a single solve pass.
+    pub fn merge_parallel_state(&mut self, other: Self) {
+        self.constraints.extend(other.constraints);
+        self.inferred_types.extend(other.inferred_types);
+        self.errors.extend(other.errors);
+        // Do not merge var_assignments / var_types — function-local scratch during
+        // collection; merging bare names across files causes false type conflicts.
+        self.const_types.extend(other.const_types);
+        self.expr_id_cache.extend(other.expr_id_cache);
+        self.next_seq_id = self.next_seq_id.max(other.next_seq_id);
+        self.next_file_id = self.next_file_id.max(other.next_file_id);
+        for (k, v) in other.file_name_to_id {
+            self.file_name_to_id.entry(k).or_insert(v);
+        }
+        for (k, v) in other.id_to_file_name {
+            self.id_to_file_name.entry(k).or_insert(v);
+        }
+        self.imported_type_registry_keys
+            .extend(other.imported_type_registry_keys);
+    }
+
+    /// Run constraint unification after all programs have been collected.
+    pub fn finish_solve(&mut self) {
         self.solve_constraints();
+    }
+
+    /// Clear cross-file import registry before a multi-file inference pass.
+    pub fn reset_imported_type_registry(&mut self) {
+        self.imported_type_registry_keys.clear();
+    }
+
+    /// Main entry point: Infer integer types for a program
+    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.reset_imported_type_registry();
+        self.prepare_program(program);
+        self.collect_program_constraints(program);
+        self.finish_solve();
+    }
+
+    /// Export inferred variable types for IDE/MCP consumers.
+    pub fn export_var_types(&self) -> std::collections::HashMap<String, String> {
+        self.var_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), format_type_for_ide(ty)))
+            .collect()
     }
 
     /// TDD FIX: Substitute generic type parameters with concrete types
@@ -784,6 +836,10 @@ impl IntInference {
             _ => {}
         }
     }
+}
+
+fn format_type_for_ide(ty: &Type) -> String {
+    crate::type_display::format_wj_type(ty)
 }
 
 include!("literal_inference.rs");

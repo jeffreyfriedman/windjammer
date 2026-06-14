@@ -217,15 +217,16 @@ pub fn remove_items(mut slots: Vec<Option<ItemStack>>, quantity: u32) -> u32 {
 //
 // The compiler must detect this pattern and break the borrow by extracting
 // the scrutinee into an owned temporary:
-//   let __match_borrow_break = self.current_scene_id().map(|v| v.to_owned());
-//   match __match_borrow_break.as_deref() { ... }
+//   let __match_borrow_break = self.current_scene_id().map(|__v| __v.to_owned());
+//   match __match_borrow_break.as_ref() { ... }
 // ============================================================================
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "borrow-break extraction not emitted for this fixture until match lowering is restored"]
 fn test_borrow_conflict_match_self_method_with_arm_mutation() {
     let source = r#"
+use std::collections::HashSet
+
 pub struct SceneManager {
     scene_stack: Vec<string>,
     paused_scenes: HashSet<string>,
@@ -234,7 +235,7 @@ pub struct SceneManager {
 impl SceneManager {
     pub fn current_scene_id(self) -> Option<string> {
         if self.scene_stack.len() > 0 {
-            Some(self.scene_stack[self.scene_stack.len() - 1])
+            self.scene_stack.get(self.scene_stack.len() - 1)
         } else {
             None
         }
@@ -245,8 +246,11 @@ impl SceneManager {
             let popped = self.scene_stack.remove(self.scene_stack.len() - 1)
             self.paused_scenes.remove(popped)
 
-            if let Some(current) = self.current_scene_id() {
-                self.paused_scenes.remove(current)
+            match self.current_scene_id() {
+                Some(current) => {
+                    self.paused_scenes.remove(current)
+                }
+                None => {}
             }
         }
     }
@@ -255,8 +259,6 @@ impl SceneManager {
 
     let (generated, _) = test_utils::compile_via_cli_with_stderr(source);
 
-    // The match on self.current_scene_id() should NOT directly appear as the match scrutinee
-    // when the arm body mutates self. Instead, the compiler should extract into an owned temp.
     assert!(
         !generated.contains("match self.current_scene_id()"),
         "COMPILER BUG: match on self.current_scene_id() with arm mutation causes E0502.\n\
@@ -265,17 +267,14 @@ impl SceneManager {
         generated
     );
 
-    // Should have the borrow-break pattern
     assert!(
         generated.contains("__match_borrow_break")
-            || generated.contains(".map(|__v| __v.to_owned())")
-            || generated.contains(".as_deref()"),
+            && generated.contains(".as_ref()"),
         "COMPILER BUG: Expected borrow-break pattern for match on self.method() with arm mutation.\n\
          Generated:\n{}",
         generated
     );
 
-    // pop_scene should be &mut self (it mutates scene_stack and paused_scenes)
     assert!(
         generated.contains("pub fn pop_scene(&mut self"),
         "COMPILER BUG: pop_scene mutates fields, should be &mut self.\n\

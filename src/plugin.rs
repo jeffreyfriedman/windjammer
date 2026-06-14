@@ -25,6 +25,12 @@ pub fn execute_plugin(plugin_name: &str, args: &[String]) -> Result<i32> {
             .join(&binary_name)
             .join("target/release")
             .join(&binary_name),
+        PathBuf::from("..")
+            .join("windjammer-game")
+            .join("wj-plugins")
+            .join(&binary_name)
+            .join("target/release")
+            .join(&binary_name),
     ];
 
     for local_plugin in &locations {

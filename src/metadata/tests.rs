@@ -181,6 +181,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
         copy_structs: vec![],
         non_copy_structs: vec![],
         version: "0.1.0".to_string(),
+        analysis_fingerprint: None,
     };
     let cache_path = proj.join(".wj-cache/rendering/voxel_renderer.wj.meta");
     std::fs::write(&cache_path, serde_json::to_string(&stale_meta).unwrap()).unwrap();

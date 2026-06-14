@@ -140,9 +140,16 @@ impl WindjammerLanguageServer {
                 cache.insert(uri.clone(), entry);
             }
 
-            // Analyze the file with the old analysis DB (for now)
-            // TODO: Eventually migrate analysis to Salsa queries
-            let diagnostics = self.analysis_db.analyze_file(&uri, &content);
+            // Full compiler diagnostics via shared ide_analysis pipeline (Salsa-backed)
+            let diagnostics = {
+                let mut db = self.salsa_db.lock().unwrap();
+                let source_file = db.set_source_text(uri.clone(), content.clone());
+                let analysis = db.get_ide_analysis(source_file);
+                crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics)
+            };
+
+            // Keep ownership-only analysis for inlay hints until ide_analysis exports it
+            let _ = self.analysis_db.analyze_file(&uri, &content);
 
             // Update providers with Salsa-parsed program
             // Update hover provider

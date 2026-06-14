@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use super::cache_management::write_if_changed;
 use super::dependency_resolution::{find_dependency_metadata_roots, find_wj_files};
 use super::library_multipass::build_library_multipass;
+use super::salsa_library_build::build_library;
 
 /// Check if a Type is Copy in single-file context (overrides stale metadata Copy).
 fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
@@ -84,7 +85,7 @@ pub fn build_project_ext(
             .unwrap_or(false)
     });
     if wj_files.len() > 1 || (library && has_nested_structure) {
-        return build_library_multipass(
+        return build_library(
             &wj_files,
             path,
             output,
@@ -251,6 +252,7 @@ pub fn build_project_ext(
             file,
             analyzer.get_copy_structs(),
             target,
+            &ancestor_roots,
         )?;
     }
 

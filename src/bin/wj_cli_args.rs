@@ -270,6 +270,13 @@ pub enum Commands {
         code: String,
     },
 
+    /// Generate agent index artifacts for MCP (errors, stdlib, spec JSON)
+    AgentIndex {
+        /// Output directory
+        #[arg(short, long, default_value = "agent_index")]
+        output: PathBuf,
+    },
+
     /// Compile .wjsl shader to WGSL (with type checking)
     ShaderCompile {
         /// Path to .wjsl file

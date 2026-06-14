@@ -490,18 +490,20 @@ impl<'ast> Analyzer<'ast> {
                         let mut analyzed_func =
                             self.analyze_trait_method(&func, &registry, Some(decl.name.as_str()))?;
 
-                        // PHASE 7: Detect const/static optimizations
-                        analyzed_func.const_static_optimizations =
-                            self.detect_const_static_opportunities(&analyzed_func);
+                        if !self.convergence_only {
+                            // PHASE 7: Detect const/static optimizations
+                            analyzed_func.const_static_optimizations =
+                                self.detect_const_static_opportunities(&analyzed_func);
 
-                        // PHASE 8: Detect SmallVec optimizations
-                        analyzed_func.smallvec_optimizations =
-                            self.detect_smallvec_opportunities(&func);
+                            // PHASE 8: Detect SmallVec optimizations
+                            analyzed_func.smallvec_optimizations =
+                                self.detect_smallvec_opportunities(&func);
 
-                        // PHASE 9: Detect Cow optimizations
-                        analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
+                            // PHASE 9: Detect Cow optimizations
+                            analyzed_func.cow_optimizations = self.detect_cow_opportunities(&func);
 
-                        analyzed_func.cache_locality = self.analyze_cache_locality(program, &func);
+                            analyzed_func.cache_locality = self.analyze_cache_locality(program, &func);
+                        }
 
                         // THE WINDJAMMER WAY: Store analyzed trait method for trait impl matching
                         // BUT: Don't overwrite if cross-file inference has already set it!

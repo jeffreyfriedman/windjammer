@@ -50,9 +50,14 @@ pub mod source_map_cache; // Source map caching for performance
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_runner; // Test framework and execution
+pub mod test_module_gate;
+pub mod rust_integration_tests;
 pub mod test_utils; // Syntax highlighting for error snippets
 pub mod type_classification;
+pub mod type_display;
 pub mod type_inference; // Expression-level float type inference
+pub mod ide_analysis;
+pub mod agent_index;
 pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
 mod cli_args;
