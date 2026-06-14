@@ -17,6 +17,11 @@ path = "src/lib.rs"
 name = "windjammer-mcp"
 path = "src/main.rs"
 
+build = "build.rs"
+
+[build-dependencies]
+chrono = "0.4"
+
 [dependencies]
 # Core Windjammer dependencies
 windjammer = { path = "../..", version = "0.47.0" }
@@ -37,6 +42,7 @@ thiserror = "1.0"
 
 # Validation
 validator = { version = "0.20", features = ["derive"] }
+schemars = { version = "0.8", features = ["derive"] }
 
 # Logging
 tracing = "0.1"

@@ -5,6 +5,7 @@
 use crate::error::{McpError, McpResult};
 use crate::protocol::{Range, ToolCallResult};
 use crate::tools::text_response;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -14,7 +15,7 @@ use windjammer::lexer::Lexer;
 use windjammer::parser::{Expression, Parser, Statement, Type};
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ExtractFunctionRequest {
     /// Source code to refactor
     pub code: String,

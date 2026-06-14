@@ -7,17 +7,7 @@ use std::path::Path;
 use super::file_operations::{copy_project_src_tree_into_output, copy_sibling_rs_from_parent};
 use super::path_utilities::{is_submodule_output_dir, source_dir_for_output};
 
-/// True when a module name represents a test module that should be gated with `#[cfg(test)]`.
-fn is_test_module(name: &str) -> bool {
-    name == "tests"
-        || name == "test_runtime"
-        || name == "test_output"
-        || name == "test_plugins"
-        || name == "tests_build"
-        || name.ends_with("_test")
-        || name.ends_with("_tests")
-        || name.starts_with("test_")
-}
+use crate::test_module_gate::is_test_module;
 
 /// Parse `pub mod name;` lines from mod.wj (subset of module_system parsing; keeps build_utils free of `module_system`).
 fn pub_mod_names_from_mod_wj(content: &str) -> HashSet<String> {
@@ -61,6 +51,10 @@ fn should_merge_extra_module(name: &str, sibling_source_dir: Option<&Path>) -> b
     let Ok(text) = std::fs::read_to_string(&mod_wj) else {
         return true;
     };
+    // Test modules are always auto-discovered (pit of success: no manual registration).
+    if is_test_module(name) {
+        return true;
+    }
     let declared = pub_mod_names_from_mod_wj(&text);
     // If mod.wj has no explicit pub mod declarations, auto-discover all sibling modules.
     // An empty mod.wj is a directory marker, not an exclusion list.

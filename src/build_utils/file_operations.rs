@@ -97,6 +97,15 @@ pub(crate) fn copy_sibling_rs_from_parent(output_dir: &Path) -> std::io::Result<
         if matches!(stem, "build" | "main" | "lib") {
             continue;
         }
+        // Never copy wj test harness outputs into a library output dir (e.g. player_test.rs
+        // transpiled next to lib/ would otherwise become a spurious lib module).
+        if stem.ends_with("_test")
+            || stem.ends_with("_tests")
+            || stem.starts_with("test_")
+            || stem == "tests"
+        {
+            continue;
+        }
         let dest = output_dir.join(p.file_name().unwrap());
         if !dest.exists() {
             fs::copy(&p, &dest)?;

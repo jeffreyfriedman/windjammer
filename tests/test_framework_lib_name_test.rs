@@ -25,7 +25,6 @@ use tempfile::tempdir;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "wj test: test package build fails with E0432 (my_game_core not linked in test harness) — not the lib.rs `pub mod mod` issue fixed in main.rs/test_runner.rs"]
 fn test_library_uses_correct_lib_name() {
     let _tmp = tempdir().expect("tempdir");
     let test_dir = _tmp.path().to_path_buf();
@@ -50,13 +49,13 @@ path = "src/lib.rs"
 
     // Create a simple Windjammer file
     let wj_content = r#"
-struct Player {
+pub struct Player {
     name: string,
     health: i32
 }
 
 impl Player {
-    fn new(name: string) -> Player {
+    pub fn new(name: string) -> Player {
         Player { name, health: 100 }
     }
 }

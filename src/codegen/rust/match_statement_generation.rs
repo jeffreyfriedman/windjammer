@@ -96,8 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
 
             let match_binds_refs_early_check = self.match_expression_binds_refs(value)
                 || self.expression_type_contains_reference(value);
-            let needs_borrow_break_check = match_binds_refs_early_check
-                && self.match_scrutinee_is_self_method_call(value)
+            let needs_borrow_break_check = self.match_scrutinee_is_self_method_call(value)
                 && self.match_arms_mutate_self(arms);
 
             if !needs_borrow_break_check
@@ -512,9 +511,7 @@ impl<'ast> CodeGenerator<'ast> {
             value_str
         };
 
-        let match_binds_refs_early = self.match_expression_binds_refs(value);
-        let needs_borrow_break = match_binds_refs_early
-            && self.match_scrutinee_is_self_method_call(value)
+        let needs_borrow_break = self.match_scrutinee_is_self_method_call(value)
             && self.match_arms_mutate_self(arms);
 
         let mut output = self.indent();

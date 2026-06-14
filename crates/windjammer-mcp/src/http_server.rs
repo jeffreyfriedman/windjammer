@@ -269,7 +269,7 @@ impl McpHttpServer {
         // For now, return a placeholder response
         let response = JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
-            id: request.rpc.id.clone(),
+            id: request.rpc.id.clone().unwrap_or(serde_json::Value::Null),
             result: Some(serde_json::json!({
                 "message": "Not yet implemented"
             })),
@@ -383,7 +383,7 @@ mod tests {
         let request = McpHttpRequest {
             rpc: crate::protocol::JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
-                id: serde_json::json!(1),
+                id: Some(serde_json::json!(1)),
                 method: "test".to_string(),
                 params: serde_json::json!({}),
             },
@@ -421,7 +421,7 @@ mod tests {
         let request = McpHttpRequest {
             rpc: crate::protocol::JsonRpcRequest {
                 jsonrpc: "2.0".to_string(),
-                id: serde_json::json!(1),
+                id: Some(serde_json::json!(1)),
                 method: "test".to_string(),
                 params: serde_json::json!({}),
             },

@@ -18,7 +18,7 @@ fn generate_test_all_rs() {
             let path = entry.path();
             if path.extension().map_or(false, |e| e == "rs") {
                 let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                if name == "all" || name == "common" {
+                if name == "all" || name == "common" || name == "lib" {
                     continue;
                 }
                 modules.push(name);
