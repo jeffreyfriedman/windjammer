@@ -14,9 +14,12 @@ pub mod change_signature;
 pub mod extract_function;
 pub mod inline;
 pub mod introduce_variable;
+pub mod mcp_bridge;
 pub mod move_item;
 pub mod preview;
 pub mod scope_analyzer;
+
+pub use mcp_bridge::apply_workspace_edit;
 
 use crate::database::WindjammerDatabase;
 use tower_lsp::lsp_types::*;

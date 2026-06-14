@@ -140,19 +140,27 @@ impl WindjammerLanguageServer {
                 cache.insert(uri.clone(), entry);
             }
 
-            // Full compiler diagnostics via shared ide_analysis pipeline (Salsa-backed)
+            // Full compiler diagnostics + inlay hints via shared ide_analysis pipeline
             let diagnostics = {
                 let mut db = self.salsa_db.lock().unwrap();
                 let source_file = db.set_source_text(uri.clone(), content.clone());
                 let analysis = db.get_ide_analysis(source_file);
-                crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics)
+                let symbols = db.get_symbols(source_file).clone();
+                let diagnostics = crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics);
+                let inlay_hints =
+                    crate::ide_queries::to_inlay_hints(&analysis, &symbols, &content);
+
+                let mut inlay_hints_provider = InlayHintsProvider::new();
+                inlay_hints_provider.update_hints(inlay_hints);
+                let inlay_hints_providers = self.inlay_hints_providers.lock().unwrap();
+                inlay_hints_providers.insert(uri.clone(), inlay_hints_provider);
+
+                diagnostics
             };
 
-            // Keep ownership-only analysis for inlay hints until ide_analysis exports it
-            let _ = self.analysis_db.analyze_file(&uri, &content);
+            self.diagnostics.publish(&uri, diagnostics).await;
 
             // Update providers with Salsa-parsed program
-            // Update hover provider
             {
                 let mut hover_provider = HoverProvider::new();
                 hover_provider.update_program(program_owned.clone());
@@ -160,7 +168,6 @@ impl WindjammerLanguageServer {
                 hover_providers.insert(uri.clone(), hover_provider);
             }
 
-            // Update completion provider
             {
                 let mut completion_provider = CompletionProvider::new();
                 completion_provider.update_program(program_owned.clone());
@@ -168,27 +175,12 @@ impl WindjammerLanguageServer {
                 completion_providers.insert(uri.clone(), completion_provider);
             }
 
-            // Note: RefactoringEngine is created on-demand in code_action handler
-
-            // Update semantic tokens provider
             {
                 let mut semantic_tokens_provider = SemanticTokensProvider::new();
                 semantic_tokens_provider.update_program(program_owned.clone(), content.clone());
                 let semantic_tokens_providers = self.semantic_tokens_providers.lock().unwrap();
                 semantic_tokens_providers.insert(uri.clone(), semantic_tokens_provider);
             }
-
-            // Update inlay hints provider with ownership analysis
-            let analyzed_functions = self.analysis_db.get_analyzed_functions(&uri);
-            if !analyzed_functions.is_empty() {
-                let mut inlay_hints_provider = InlayHintsProvider::new();
-                inlay_hints_provider.update_analyzed_functions(analyzed_functions);
-                let inlay_hints_providers = self.inlay_hints_providers.lock().unwrap();
-                inlay_hints_providers.insert(uri.clone(), inlay_hints_provider);
-            }
-
-            // Publish diagnostics to the client
-            self.diagnostics.publish(&uri, diagnostics).await;
         }
     }
 
