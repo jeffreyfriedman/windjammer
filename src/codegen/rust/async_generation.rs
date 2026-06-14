@@ -43,7 +43,11 @@ impl<'ast> CodeGenerator<'ast> {
         inclusive: bool,
     ) -> String {
         // If end is .len() (returns usize), cast start to usize to avoid type mismatch
-        let end_is_len = matches!(end, Expression::MethodCall { method, .. } if method == "len");
+        let end_is_len = matches!(
+            end,
+            Expression::MethodCall { method, .. }
+                if matches!(method.as_str(), "len" | "capacity" | "count")
+        );
 
         let mut start_str = self.generate_expression(start);
 

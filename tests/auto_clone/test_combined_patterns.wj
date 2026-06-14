@@ -5,11 +5,11 @@ struct Repository {
 }
 
 impl Repository {
-    fn get_files(&self) -> Vec<string> {
+    fn get_files(self) -> Vec<string> {
         self.files.clone()
     }
     
-    fn get_file_at(&self, idx: int) -> string {
+    fn get_file_at(self, idx: int) -> string {
         self.files[idx as usize].clone()
     }
 }

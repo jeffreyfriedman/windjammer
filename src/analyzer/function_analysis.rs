@@ -91,6 +91,41 @@ impl<'ast> Analyzer<'ast> {
         Ok(analyzed)
     }
 
+    /// Infer `self` receiver ownership for impl methods. Windjammer always writes bare
+    /// `self` in source; codegen maps to `&self`, `&mut self`, or owned `self`.
+    fn infer_impl_self_receiver_ownership(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+    ) -> OwnershipMode {
+        if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
+            return OwnershipMode::MutBorrowed;
+        }
+        let modifies_fields =
+            self.function_modifies_self_fields_with_registry(func, Some(registry));
+        let returns_self = self.function_returns_self(func);
+        let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+        let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
+
+        let consumes_self = (!snapshot_factory && body_moves_fields)
+            || self.function_moves_self_into_return(func)
+            || (!snapshot_factory
+                && (returns_self
+                    || self.function_body_consumes_bare_self(func)
+                    || self.function_calls_consuming_method_on_self(func, registry)
+                    || self.function_matches_on_self(func)
+                    || self.function_consumes_self_field_elements(func, Some(registry))));
+        if consumes_self {
+            OwnershipMode::Owned
+        } else if modifies_fields {
+            OwnershipMode::MutBorrowed
+        } else if self.is_used_in_binary_op("self", &func.body) {
+            OwnershipMode::Owned
+        } else {
+            OwnershipMode::Borrowed
+        }
+    }
+
     pub(crate) fn analyze_function(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -119,28 +154,23 @@ impl<'ast> Analyzer<'ast> {
                 self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
             let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+            let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-            let self_ownership = if returns_self {
-                // Builder pattern: mut self (owned)
-                OwnershipMode::Owned
-            } else if body_moves_fields {
-                // Body moves non-Copy self fields (e.g., Foo { f: self.bindings }) → must own
-                OwnershipMode::Owned
-            } else if self.function_matches_on_self(func) {
-                // TDD FIX for E0606: match self { ... } consumes self
-                OwnershipMode::Owned
-            } else if self.function_consumes_self_field_elements(func, Some(registry)) {
-                // TDD FIX for E0507: for item in self.items { item.consume() }
-                // Iterating over self.field and calling consuming methods requires owned self
+            let consumes_self = (!snapshot_factory && body_moves_fields)
+                || self.function_moves_self_into_return(func)
+                || (!snapshot_factory
+                    && (returns_self
+                        || self.function_body_consumes_bare_self(func)
+                        || self.function_calls_consuming_method_on_self(func, registry)
+                        || self.function_matches_on_self(func)
+                        || self.function_consumes_self_field_elements(func, Some(registry))));
+            let self_ownership = if consumes_self {
                 OwnershipMode::Owned
             } else if modifies_fields {
-                // Mutating method: &mut self
                 OwnershipMode::MutBorrowed
             } else if self.is_used_in_binary_op("self", &func.body) {
-                // Copy types in operators: self (owned)
                 OwnershipMode::Owned
             } else {
-                // Read-only: &self
                 OwnershipMode::Borrowed
             };
 
@@ -152,14 +182,21 @@ impl<'ast> Analyzer<'ast> {
         for (i, param) in func.parameters.iter().enumerate() {
             let mode = match param.ownership {
                 OwnershipHint::Owned => {
-                    // DOGFOODING FIX #1: Respect explicit ownership annotations!
-                    // If user writes `self` (not `&self` or `&mut self`), they want OWNED.
-                    // Bug was: analyzer checked modifies_fields and downgraded to &mut self
-                    // Fix: When Owned is explicit, use it - don't analyze or modify!
-                    // Analysis should ONLY happen for OwnershipHint::Inferred.
-                    OwnershipMode::Owned
+                    // Windjammer writes `self` without & — in impl methods, infer receiver
+                    // ownership from body usage (distance(self) → &self, not owned self).
+                    if param.name == "self" && func.parent_type.is_some() {
+                        self.infer_impl_self_receiver_ownership(func, registry)
+                    } else {
+                        OwnershipMode::Owned
+                    }
                 }
-                OwnershipHint::Mut => OwnershipMode::MutBorrowed,
+                OwnershipHint::Mut => {
+                    if Self::is_generic_type_param(&param.type_) {
+                        OwnershipMode::Owned
+                    } else {
+                        OwnershipMode::MutBorrowed
+                    }
+                }
                 OwnershipHint::Ref => {
                     // SMART FIX: If user wrote &self but function modifies fields, upgrade to &mut self
                     // This prevents a common user error
@@ -189,43 +226,32 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            // WINDJAMMER FIX: Do NOT make self Owned for returning non-Copy fields.
-                            // Getters like `fn id(self) -> String { self.id }` should be &self
-                            // with the codegen auto-cloning the returned field. This prevents
-                            // cascading E0382 at callsites.
                             let body_moves_fields =
                                 self.function_body_moves_non_copy_self_fields(func);
+                            let snapshot_factory =
+                                self.function_returns_new_instance_from_self_fields(func);
 
-                            if returns_self || body_moves_fields {
-                                OwnershipMode::Owned
-                            } else if self.function_moves_self_into_return(func) {
-                                // self is moved into a struct literal or returned directly
-                                OwnershipMode::Owned
-                            } else if self.function_matches_on_self(func) {
-                                // TDD FIX for E0606: match self { ... } consumes self
-                                // Match expressions move the scrutinee value, requiring owned self
-                                OwnershipMode::Owned
-                            } else if self
-                                .function_consumes_self_field_elements(func, Some(registry))
-                            {
-                                // TDD FIX for E0507: for item in self.items { item.consume() }
+                            let consumes_self = (!snapshot_factory && body_moves_fields)
+                                || self.function_moves_self_into_return(func)
+                                || (!snapshot_factory
+                                    && (returns_self
+                                        || self.function_body_consumes_bare_self(func)
+                                        || self.function_calls_consuming_method_on_self(
+                                            func, registry,
+                                        )
+                                        || self.function_matches_on_self(func)
+                                        || self.function_consumes_self_field_elements(
+                                            func,
+                                            Some(registry),
+                                        )));
+                            if consumes_self {
                                 OwnershipMode::Owned
                             } else if modifies_fields {
-                                // Mutating method that doesn't return self: use `&mut self`
                                 OwnershipMode::MutBorrowed
+                            } else if self.is_used_in_binary_op("self", &func.body) {
+                                OwnershipMode::Owned
                             } else {
-                                // Check if self is used in binary operations (for Copy types like Vec2, Vec3)
-                                // If self is used in operators (self.x * other.y, etc.), keep it owned
-                                // This is especially important for math operations on Copy types
-                                if self.is_used_in_binary_op("self", &func.body) {
-                                    OwnershipMode::Owned
-                                } else {
-                                    // Default to borrowed for read-only methods
-                                    // This is correct whether or not the method accesses self.fields
-                                    // - If it accesses fields: &self works because we only read
-                                    // - If it doesn't access self at all: &self is fine, no need to consume
-                                    OwnershipMode::Borrowed
-                                }
+                                OwnershipMode::Borrowed
                             }
                         }
                     } else {
@@ -233,20 +259,49 @@ impl<'ast> Analyzer<'ast> {
                         // Mutated Copy types should be &mut, not Owned
                         let is_copy = self.is_copy_type(&param.type_);
 
-                        if is_copy {
-                            if self.is_mutated(&param.name, &func.body, registry)
-                                || matches!(
-                                    self.infer_passthrough_ownership(
-                                        &param.name,
-                                        &param.type_,
-                                        &func.body,
-                                        registry,
-                                        &func.name,
-                                        func,
-                                    ),
-                                    Some(OwnershipMode::MutBorrowed)
-                                )
-                            {
+                        if param.is_mutable {
+                            if Self::is_generic_type_param(&param.type_) {
+                                OwnershipMode::Owned
+                            } else {
+                                let passthrough = self.infer_passthrough_ownership(
+                                    &param.name,
+                                    &param.type_,
+                                    &func.body,
+                                    registry,
+                                    &func.name,
+                                    func,
+                                );
+                                if passthrough == Some(OwnershipMode::MutBorrowed) {
+                                    OwnershipMode::Owned
+                                } else {
+                                    OwnershipMode::MutBorrowed
+                                }
+                            }
+                        } else if is_copy {
+                            let mutated = self.is_mutated(
+                                &param.name,
+                                &func.body,
+                                registry,
+                                Some(&param.type_),
+                            );
+                            let passthrough_mut = matches!(
+                                self.infer_passthrough_ownership(
+                                    &param.name,
+                                    &param.type_,
+                                    &func.body,
+                                    registry,
+                                    &func.name,
+                                    func,
+                                ),
+                                Some(OwnershipMode::MutBorrowed)
+                            );
+                            if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
+                                eprintln!(
+                                    "  [OWNERSHIP-COPY] {} in {}: is_copy=true mutated={} passthrough_mut={} (type: {:?})",
+                                    param.name, func.name, mutated, passthrough_mut, param.type_
+                                );
+                            }
+                            if mutated || passthrough_mut {
                                 OwnershipMode::MutBorrowed
                             } else {
                                 OwnershipMode::Owned
@@ -280,59 +335,111 @@ impl<'ast> Analyzer<'ast> {
             inferred_ownership.insert(param.name.clone(), mode);
         }
 
-        // PHASE 2 OPTIMIZATION: Detect unnecessary clones
-        let clone_optimizations = self.detect_unnecessary_clones(func);
+        // During multipass convergence, skip expensive optimization detectors.
+        // Only ownership inference matters for convergence; codegen-only
+        // optimizations run in the final pass.
+        let (
+            clone_optimizations,
+            struct_mapping_optimizations,
+            string_optimizations,
+            assignment_optimizations,
+            defer_drop_optimizations,
+            auto_clone_analysis,
+            mutated_variables,
+            mutated_parameters,
+            const_static_optimizations,
+            smallvec_optimizations,
+            cow_optimizations,
+            cache_locality,
+            str_ref_optimizable_params,
+            inferred_param_types,
+        ) = if self.convergence_only {
+            // str_ref analysis is cheap and affects signatures (param_types change
+            // from String to &str), so it MUST run during convergence.
+            // Only skip the truly expensive codegen-only optimizations.
+            let str_ref_optimizable_params =
+                self.analyze_str_ref_optimizable_params(func, registry);
+            let inferred_param_types: Vec<Type> = func
+                .parameters
+                .iter()
+                .map(|param| {
+                    if str_ref_optimizable_params.contains(&param.name) {
+                        Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else {
+                        param.type_.clone()
+                    }
+                })
+                .collect();
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                AutoCloneAnalysis::default(),
+                HashSet::new(),
+                HashSet::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                super::CacheLocalityAnalysis::default(),
+                str_ref_optimizable_params,
+                inferred_param_types,
+            )
+        } else {
+            let clone_optimizations = self.detect_unnecessary_clones(func);
+            let struct_mapping_optimizations = self.detect_struct_mappings(func);
+            let string_optimizations = self.detect_string_optimizations(func);
+            let assignment_optimizations = self.detect_assignment_optimizations(func);
+            let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
+            let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
 
-        // PHASE 3 OPTIMIZATION: Detect struct mapping opportunities
-        let struct_mapping_optimizations = self.detect_struct_mappings(func);
+            self.track_mutations(&func.body, registry);
+            let mutated_variables = self.mutated_variables.clone();
 
-        // PHASE 4 OPTIMIZATION: Detect string operation opportunities
-        let string_optimizations = self.detect_string_optimizations(func);
-
-        // PHASE 5: Detect assignment operations that can use compound operators
-        let assignment_optimizations = self.detect_assignment_optimizations(func);
-        let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
-
-        // AUTO-CLONE: Analyze where clones should be automatically inserted
-        let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
-
-        // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
-        self.track_mutations(&func.body, registry);
-        let mutated_variables = self.mutated_variables.clone();
-
-        // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
-        let mut mutated_parameters = HashSet::new();
-        for param in &func.parameters {
-            if self.is_mutated(&param.name, &func.body, registry) {
-                mutated_parameters.insert(param.name.clone());
-            }
-        }
-
-        // PHASE 7-9: Additional optimizations (future implementation)
-        let const_static_optimizations = Vec::new(); // TODO: Implement detection
-        let smallvec_optimizations = Vec::new(); // TODO: Implement detection
-        let cow_optimizations = Vec::new(); // TODO: Implement detection
-
-        // PHASE 2: Analyze which string parameters can use &str optimization
-        let str_ref_optimizable_params = self.analyze_str_ref_optimizable_params(func, registry);
-
-        // Build inferred parameter types based on Phase 2 analysis
-        let inferred_param_types: Vec<Type> = func
-            .parameters
-            .iter()
-            .map(|param| {
-                // Check if this parameter can be optimized to &str (instead of &String)
-                let can_use_str_ref = str_ref_optimizable_params.contains(&param.name);
-
-                if can_use_str_ref {
-                    // Optimize to &str (not &String)
-                    Type::Reference(Box::new(Type::Custom("str".to_string())))
-                } else {
-                    // Keep original type (will become &String for string params)
-                    param.type_.clone()
+            let mut mutated_parameters = HashSet::new();
+            for param in &func.parameters {
+                if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
+                    mutated_parameters.insert(param.name.clone());
                 }
-            })
-            .collect();
+            }
+
+            let const_static_optimizations = Vec::new();
+            let smallvec_optimizations = Vec::new();
+            let cow_optimizations = Vec::new();
+            let cache_locality = super::CacheLocalityAnalysis::default();
+            let str_ref_optimizable_params =
+                self.analyze_str_ref_optimizable_params(func, registry);
+
+            let inferred_param_types: Vec<Type> = func
+                .parameters
+                .iter()
+                .map(|param| {
+                    if str_ref_optimizable_params.contains(&param.name) {
+                        Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else {
+                        param.type_.clone()
+                    }
+                })
+                .collect();
+
+            (
+                clone_optimizations,
+                struct_mapping_optimizations,
+                string_optimizations,
+                assignment_optimizations,
+                defer_drop_optimizations,
+                auto_clone_analysis,
+                mutated_variables,
+                mutated_parameters,
+                const_static_optimizations,
+                smallvec_optimizations,
+                cow_optimizations,
+                cache_locality,
+                str_ref_optimizable_params,
+                inferred_param_types,
+            )
+        };
 
         Ok(AnalyzedFunction {
             decl: func.clone(),
@@ -349,6 +456,7 @@ impl<'ast> Analyzer<'ast> {
             const_static_optimizations,
             smallvec_optimizations,
             cow_optimizations,
+            cache_locality,
             str_ref_optimizable_params,
         })
     }
@@ -407,6 +515,9 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
         } else if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
+            // Defer mutable trait registry updates until after this immutable borrow ends.
+            let mut self_receiver_upgrades: Vec<(String, String, String, OwnershipMode)> =
+                Vec::new();
             // Find the matching trait method
             if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name) {
                 // Override ALL parameters to match trait signature
@@ -435,25 +546,43 @@ impl<'ast> Analyzer<'ast> {
                             None
                         };
 
-                        // When the trait has concrete ownership data (from default
-                        // impl or from a previous impl upgrade), the impl must match.
-                        // When the trait has NO data (abstract method, never analyzed),
-                        // the impl's own body analysis drives ownership, and the trait
-                        // entry will be upgraded in the post-analysis merge step.
-                        let final_mode = if let Some(mode) = trait_mode {
+                        let impl_body_mode =
+                            analyzed.inferred_ownership.get(&impl_param.name).copied();
+                        let final_mode = if impl_param.name == "self" {
+                            match (trait_mode, impl_body_mode) {
+                                (Some(trait_m), Some(impl_m)) => {
+                                    Self::merge_borrow_trait_receivers(trait_m, impl_m)
+                                }
+                                (Some(trait_m), None) => trait_m,
+                                (None, Some(impl_m)) => impl_m,
+                                (None, None) => self.convert_ownership_hint_to_mode(
+                                    &trait_param.ownership,
+                                    &trait_param.name,
+                                ),
+                            }
+                        } else if let Some(mode) = trait_mode {
                             mode
                         } else {
-                            analyzed
-                                .inferred_ownership
-                                .get(&impl_param.name)
-                                .copied()
-                                .unwrap_or_else(|| {
-                                    self.convert_ownership_hint_to_mode(
-                                        &trait_param.ownership,
-                                        &trait_param.name,
-                                    )
-                                })
+                            impl_body_mode.unwrap_or_else(|| {
+                                self.convert_ownership_hint_to_mode(
+                                    &trait_param.ownership,
+                                    &trait_param.name,
+                                )
+                            })
                         };
+
+                        if impl_param.name == "self" {
+                            if let Some(trait_m) = trait_mode {
+                                if final_mode != trait_m {
+                                    self_receiver_upgrades.push((
+                                        trait_name.to_string(),
+                                        trait_key.to_string(),
+                                        func.name.clone(),
+                                        final_mode,
+                                    ));
+                                }
+                            }
+                        }
 
                         // INSERT or UPDATE with the final ownership mode
                         analyzed
@@ -462,17 +591,16 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-        }
-
-        // E0186 / E0053: Impl receiver must match the trait — never infer only from the impl body.
-        // Replacing analyzed_trait_methods with the impl used to drop implicit `self` when the impl
-        // body was empty or omitted `self`, producing trait/impl mismatches in Rust.
-        if let Some(self_mode) =
-            self.trait_method_receiver_ownership(trait_name, trait_key, &func.name)
-        {
-            analyzed
-                .inferred_ownership
-                .insert("self".to_string(), self_mode);
+            for (upgrade_trait_name, upgrade_trait_key, method_name, receiver) in
+                self_receiver_upgrades
+            {
+                self.upgrade_trait_method_self_receiver(
+                    &upgrade_trait_name,
+                    &upgrade_trait_key,
+                    &method_name,
+                    receiver,
+                );
+            }
         }
 
         // E0053: Parameter types in generated Rust must match the trait declaration (impls may
@@ -546,6 +674,16 @@ impl<'ast> Analyzer<'ast> {
                     _ => {
                         // Not an explicit reference, use inference
                     }
+                }
+
+                if Self::is_windjammer_text_param_type(&param.type_)
+                    && self.is_only_hashmap_lookup_key_param(
+                        &param.name,
+                        &func.decl.body,
+                        &func.decl,
+                    )
+                {
+                    return OwnershipMode::Borrowed;
                 }
 
                 let inferred = func
@@ -664,6 +802,25 @@ impl<'ast> Analyzer<'ast> {
             return_ownership: OwnershipMode::Owned, // For now, always owned
             has_self_receiver,
             is_extern: func.decl.is_extern,
+        }
+    }
+
+    /// Register all analyzed trait methods into a signature registry under
+    /// `TraitName::method_name` keys.
+    pub fn register_trait_methods_in_registry(
+        &self,
+        trait_methods: &std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, AnalyzedFunction<'_>>,
+        >,
+        registry: &mut super::SignatureRegistry,
+    ) {
+        for (trait_name, methods) in trait_methods {
+            for (method_name, analyzed_func) in methods {
+                let sig = self.build_signature(analyzed_func);
+                let qualified_name = format!("{}::{}", trait_name, method_name);
+                registry.add_function(qualified_name, sig);
+            }
         }
     }
 }

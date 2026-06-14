@@ -1,0 +1,358 @@
+{
+  "module_path": "String",
+  "structs": {},
+  "functions": {
+    "String::push_str": {
+      "params": ["MutableReference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::push": {
+      "params": ["MutableReference(String)", "Custom(\"char\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::clear": {
+      "params": ["MutableReference(String)"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "String::truncate": {
+      "params": ["MutableReference(String)", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::reserve": {
+      "params": ["MutableReference(String)", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::with_capacity": {
+      "params": ["Custom(\"usize\")"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false
+    },
+    "String::shrink_to_fit": {
+      "params": ["MutableReference(String)"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "String::insert": {
+      "params": ["MutableReference(String)", "Custom(\"usize\")", "Custom(\"char\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::remove": {
+      "params": ["MutableReference(String)", "Custom(\"usize\")"],
+      "return_type": "Custom(\"char\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::make_ascii_lowercase": {
+      "params": ["MutableReference(String)"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "String::make_ascii_uppercase": {
+      "params": ["MutableReference(String)"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "String::len": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::is_empty": {
+      "params": ["Reference(String)"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::contains": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::starts_with": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::ends_with": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::capacity": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::as_str": {
+      "params": ["Reference(String)"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::as_bytes": {
+      "params": ["Reference(String)"],
+      "return_type": "Reference(Custom(\"u8\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::as_ptr": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"ptr\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::clone": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_owned": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_string": {
+      "params": ["Reference(String)"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_lowercase": {
+      "params": ["Reference(String)"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_uppercase": {
+      "params": ["Reference(String)"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_ascii_lowercase": {
+      "params": ["Reference(String)"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::to_ascii_uppercase": {
+      "params": ["Reference(String)"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::trim": {
+      "params": ["Reference(String)"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::trim_start": {
+      "params": ["Reference(String)"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::trim_end": {
+      "params": ["Reference(String)"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::strip_prefix": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Option(Reference(Custom(\"str\")))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::strip_suffix": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Option(Reference(Custom(\"str\")))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::is_ascii": {
+      "params": ["Reference(String)"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::repeat": {
+      "params": ["Reference(String)", "Custom(\"usize\")"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::replacen": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))", "Reference(Custom(\"str\"))", "Custom(\"usize\")"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed", "Borrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "String::rfind": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Option(Custom(\"usize\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::match_indices": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::lines": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::chars": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::bytes": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::split": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::splitn": {
+      "params": ["Reference(String)", "Custom(\"usize\")", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Owned", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::rsplit": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::split_whitespace": {
+      "params": ["Reference(String)"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

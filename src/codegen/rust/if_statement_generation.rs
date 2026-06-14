@@ -38,16 +38,17 @@ impl<'ast> CodeGenerator<'ast> {
             if self.inferred_borrowed_params.contains(name.as_str())
                 || self.borrowed_iterator_vars.contains(name)
             {
-                let is_bool_ref = self
-                    .infer_expression_type(condition)
-                    .as_ref()
-                    .is_some_and(|t| {
-                        matches!(t,
-                            Type::Reference(inner) | Type::MutableReference(inner)
-                            if matches!(&**inner, Type::Bool)
-                        )
-                    });
-                if is_bool_ref && !cond_str.starts_with('*') {
+                let inferred_type = self.infer_expression_type(condition);
+                let is_bool_ref = inferred_type.as_ref().is_some_and(|t| {
+                    matches!(t,
+                        Type::Reference(inner) | Type::MutableReference(inner)
+                        if matches!(&**inner, Type::Bool)
+                    )
+                });
+                // If type is unknown (None) but the variable is borrowed and used
+                // in an if-condition, the only valid Rust type is &bool — deref it.
+                let type_unknown = inferred_type.is_none();
+                if (is_bool_ref || type_unknown) && !cond_str.starts_with('*') {
                     format!("*{}", cond_str)
                 } else {
                     cond_str

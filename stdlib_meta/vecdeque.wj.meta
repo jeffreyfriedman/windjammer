@@ -1,0 +1,190 @@
+{
+  "module_path": "VecDeque",
+  "structs": {},
+  "functions": {
+    "VecDeque::push_front": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::push_back": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::pop_front": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::pop_back": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::push": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::pop": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::insert": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"usize\")", "Custom(\"T\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::remove": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"usize\")"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::clear": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::len": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::is_empty": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::contains": {
+      "params": ["Reference(Custom(\"VecDeque\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::iter": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::iter_mut": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::into_iter": {
+      "params": ["Custom(\"VecDeque\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::clone": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::retain": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::reserve": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))", "Custom(\"usize\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "VecDeque::capacity": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::with_capacity": {
+      "params": ["Custom(\"usize\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false
+    },
+    "VecDeque::sort": {
+      "params": ["MutableReference(Custom(\"VecDeque\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::first": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "VecDeque::last": {
+      "params": ["Reference(Custom(\"VecDeque\"))"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "VecDeque",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

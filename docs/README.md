@@ -36,6 +36,9 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) - Testing approach (TDD + Dogfooding)
 - [`TOOLING_VISION.md`](TOOLING_VISION.md) - Tooling ecosystem
 
+**Game Host Framework (vision & positioning)**  
+Companion repo **`game-host`**: [`../game-host/VISION.md`](../game-host/VISION.md), [`../game-host/COMPETITIVE_POSITIONING.md`](../game-host/COMPETITIVE_POSITIONING.md).
+
 **Project Management:**
 - [`PUBLISHING.md`](PUBLISHING.md) - Publishing and release process
 - [`VERSIONING_POLICY.md`](VERSIONING_POLICY.md) - Versioning strategy

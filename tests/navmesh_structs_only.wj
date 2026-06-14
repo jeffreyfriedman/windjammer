@@ -31,7 +31,7 @@ impl Navmesh {
         }
     }
     
-    pub fn add_triangle(&mut self, v0: Vec3, v1: Vec3, v2: Vec3) -> u32 {
+    pub fn add_triangle(self, v0: Vec3, v1: Vec3, v2: Vec3) -> u32 {
         let id = self.triangles.len() as u32
         self.triangles.push(Triangle { id, v0, v1, v2 })
         id

@@ -11,7 +11,8 @@ use crate::CompilationTarget;
 
 impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_private: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_pub: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut out_lines: Vec<String> = Vec::new();
         for line in block.lines() {
             let trimmed = line.trim();
@@ -30,6 +31,11 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 out_lines.push(line.to_string());
                 continue;
+            };
+            let seen = if is_pub {
+                &mut seen_pub
+            } else {
+                &mut seen_private
             };
             let rest = after_use.trim().trim_end_matches(';').trim();
             if rest.contains("::*") {
@@ -108,6 +114,62 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // PRE-PASS: Collect structs that explicitly opt out of Copy via @derive() without Copy.
+        // When a user writes @derive(Debug, Clone) without Copy, that's an intentional opt-out.
+        for item in &program.items {
+            if let Item::Struct { decl: s, .. } = item {
+                let has_derive_without_copy = s.decorators.iter().any(|d| {
+                    d.name == "derive" && !d.arguments.iter().any(|(_, arg)| {
+                        matches!(arg, Expression::Identifier { name, .. } if name == "Copy")
+                    })
+                });
+                if has_derive_without_copy {
+                    self.non_copy_types_registry.insert(s.name.clone());
+                }
+            }
+        }
+
+        // PRE-PASS: Populate copy_types_registry for all structs/enums whose fields
+        // are all Copy. Iterates until stable so transitive dependencies resolve
+        // regardless of declaration order. Respects explicit non-Copy opt-outs.
+        {
+            let mut changed = true;
+            while changed {
+                changed = false;
+                for item in &program.items {
+                    match item {
+                        Item::Struct { decl: s, .. } => {
+                            if self.copy_types_registry.contains(&s.name)
+                                || self.types_with_drop.contains(&s.name)
+                                || self.non_copy_types_registry.contains(&s.name)
+                            {
+                                continue;
+                            }
+                            let all_types: Vec<&Type> = if let Some(ref tf) = s.tuple_fields {
+                                tf.iter().collect()
+                            } else {
+                                s.fields.iter().map(|f| &f.field_type).collect()
+                            };
+                            if all_types.iter().all(|t| self.is_copy_type_with_registry(t)) {
+                                self.copy_types_registry.insert(s.name.clone());
+                                changed = true;
+                            }
+                        }
+                        Item::Enum { decl: e, .. } => {
+                            if self.copy_types_registry.contains(&e.name) {
+                                continue;
+                            }
+                            if self.all_enum_variants_are_copy(&e.variants) {
+                                self.copy_types_registry.insert(e.name.clone());
+                                changed = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
             if let Item::BoundAlias { name, traits, .. } = item {
@@ -142,6 +204,13 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(last_segment) = path.last() {
                     self.module_alias_map
                         .insert(alias_name.clone(), last_segment.clone());
+                }
+            }
+            if let Item::Use { path, .. } = item {
+                if path.len() == 2 && path[0] == "std" {
+                    if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(&path[1]) {
+                        self.runtime_std_module_imports.insert(path[1].clone());
+                    }
                 }
             }
         }
@@ -238,11 +307,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if *is_pub {
                     has_explicit_pub_use = true;
                 }
-                let use_stmt = self.generate_use(path, alias.as_deref());
+                let use_stmt = self.generate_use(path, alias.as_deref(), *is_pub);
                 if !use_stmt.trim().is_empty() {
-                    if *is_pub {
-                        imports.push_str("pub ");
-                    }
+                    // Don't prepend pub - it's already in use_stmt
                     imports.push_str(&use_stmt);
                 }
             }
@@ -284,11 +351,7 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     ..
                 } => {
-                    let pub_prefix = if *is_pub || self.is_module {
-                        "pub "
-                    } else {
-                        ""
-                    };
+                    let pub_prefix = if *is_pub { "pub " } else { "" };
 
                     // Special case: string constants should use &'static str, not String
                     let rust_type = if matches!(type_, Type::String)
@@ -715,6 +778,25 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             output.push('\n');
         }
         output.push_str(&body);
+
+        if std::env::var("WJ_EMIT_AOSOA_HINTS").ok().as_deref() == Some("1") {
+            let hints = crate::codegen::rust::aosoa_transform::emit_aosoa_hints(program, analyzed);
+            if !hints.is_empty() {
+                output
+                    .push_str("\n\n// --- Windjammer cache locality (WJ_EMIT_AOSOA_HINTS=1) ---\n");
+                output.push_str(&hints);
+            }
+        }
+
+        if let Ok(report_path) = std::env::var("WJ_CACHE_LOCALITY_JSON") {
+            let json = crate::analyzer::cache_locality_json_report(analyzed);
+            if let Err(e) = std::fs::write(&report_path, json) {
+                eprintln!(
+                    "windjammer: WJ_CACHE_LOCALITY_JSON failed to write {}: {}",
+                    report_path, e
+                );
+            }
+        }
 
         output
     }

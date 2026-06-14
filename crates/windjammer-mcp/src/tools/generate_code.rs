@@ -3,14 +3,15 @@
 use crate::error::{McpError, McpResult};
 use crate::protocol::ToolCallResult;
 use crate::tools::text_response;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Deserialize)]
-struct GenerateCodeRequest {
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GenerateCodeRequest {
     description: String,
     #[allow(dead_code)]
     context: Option<Value>,

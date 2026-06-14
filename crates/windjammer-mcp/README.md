@@ -24,11 +24,20 @@ The Windjammer Model Context Protocol (MCP) server enables AI assistants (Claude
 
 ## Quick Start
 
-### Installation
+### Local development (keep MCP in sync)
+
+After compiler or tool catalog changes:
 
 ```bash
-cargo install windjammer-mcp
+cd windjammer
+cargo build --release -p windjammer-mcp
+./target/release/wj agent-index -o agent_index
+# Reload MCP servers in Cursor (.cursor/mcp.json)
 ```
+
+`agent_index/` powers MCP `resources/read` and `explain_error`. CI fails if `tools/manifest.json` drifts from `tools/catalog.rs`.
+
+### Installation
 
 Or build from source:
 

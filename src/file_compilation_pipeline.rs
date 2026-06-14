@@ -15,17 +15,31 @@ use crate::output_generation::{
     generate_main_rust_code, write_single_file_outputs, MainCodegenOutcome,
 };
 
+/// Walk up from `start` to find a directory containing `metadata.json` (typically `src/`).
+fn metadata_search_root(start: &Path) -> std::path::PathBuf {
+    let mut dir = start.to_path_buf();
+    loop {
+        if dir.join("metadata.json").exists() {
+            return dir;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    start.to_path_buf()
+}
+
 pub fn compile_file(
     input_path: &Path,
     output_dir: &Path,
     target: CompilationTarget,
 ) -> Result<(HashSet<String>, Vec<String>)> {
     let mut module_compiler = ModuleCompiler::new(target, true);
-    // For single-file compilation, use parent directory as source root
-    let source_root = input_path.parent().unwrap_or(Path::new("."));
+    // Search upward for metadata.json so subdir single-file builds see crate signatures.
+    let source_root = metadata_search_root(input_path.parent().unwrap_or(Path::new(".")));
     let is_multi_file = false; // Single file compilation
     compile_file_with_compiler(
-        source_root,
+        &source_root,
         input_path,
         output_dir,
         &mut module_compiler,
@@ -172,15 +186,23 @@ fn compile_file_impl(
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
-    // Emit parser warnings (W0010: non-canonical string types, etc.)
+    // Emit parser diagnostics (W0010: non-canonical string types, etc.)
+    // W0010 normalizes the type before erroring, so codegen still works.
+    // We track errors and fail after writing output so the user sees the generated code.
+    let mut has_lint_errors = false;
     for w in wj_parser.warnings() {
+        let level = if w.is_error { "error" } else { "warning" };
         eprintln!(
-            "warning: {} [{}:{}:{}]",
+            "{}: {} [{}:{}:{}]",
+            level,
             w.message,
             w.file.as_deref().unwrap_or("<unknown>"),
             w.line.unwrap_or(0),
             w.column.unwrap_or(0),
         );
+        if w.is_error {
+            has_lint_errors = true;
+        }
     }
 
     // Content-based shader detection: skip files with @vertex/@fragment/@compute
@@ -378,7 +400,9 @@ fn compile_file_impl(
     // Provide cross-file struct field types for nested field chain resolution
     module_compiler
         .analyzer
-        .set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
+        .set_global_struct_field_types(std::sync::Arc::new(
+            module_compiler.global_struct_field_types.clone(),
+        ));
 
     // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {
@@ -464,19 +488,9 @@ fn compile_file_impl(
         }
     }
 
-    // Infer trait bounds
-    let mut inference_engine = inference::InferenceEngine::new();
-    let mut inferred_bounds_map = std::collections::HashMap::new();
-    for item in &program.items {
-        if let parser::Item::Function { decl: func, .. } = item {
-            let bounds = inference_engine.infer_function_bounds(func);
-            if !bounds.is_empty() {
-                inferred_bounds_map.insert(func.name.clone(), bounds);
-            }
-        }
-    }
+    let inferred_bounds_map = inference::collect_inferred_bounds(&program.items);
 
-    match generate_main_rust_code(
+    let result = match generate_main_rust_code(
         target,
         source_root,
         input_path,
@@ -502,5 +516,13 @@ fn compile_file_impl(
             &signatures,
             rust_code,
         ),
+    };
+
+    if has_lint_errors {
+        return Err(anyhow::anyhow!(
+            "Rust leakage errors detected -- see diagnostics above"
+        ));
     }
+
+    result
 }

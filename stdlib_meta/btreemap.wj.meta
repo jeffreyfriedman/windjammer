@@ -1,0 +1,110 @@
+{
+  "module_path": "BTreeMap",
+  "structs": {},
+  "functions": {
+    "BTreeMap::insert": {
+      "params": ["MutableReference(Custom(\"BTreeMap\"))", "Custom(\"K\")", "Custom(\"V\")"],
+      "return_type": "Option(Custom(\"V\"))",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["MutBorrowed", "Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::remove": {
+      "params": ["MutableReference(Custom(\"BTreeMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(Custom(\"V\"))",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::clear": {
+      "params": ["MutableReference(Custom(\"BTreeMap\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::entry": {
+      "params": ["MutableReference(Custom(\"BTreeMap\"))", "Custom(\"K\")"],
+      "return_type": "Custom(\"Entry\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::get": {
+      "params": ["Reference(Custom(\"BTreeMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(Reference(Custom(\"V\")))",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::get_mut": {
+      "params": ["MutableReference(Custom(\"BTreeMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Option(MutableReference(Custom(\"V\")))",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::contains_key": {
+      "params": ["Reference(Custom(\"BTreeMap\"))", "Reference(Custom(\"K\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::len": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::is_empty": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::keys": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::values": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::iter": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeMap::clone": {
+      "params": ["Reference(Custom(\"BTreeMap\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "BTreeMap",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

@@ -90,78 +90,66 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Determine separator: :: for static calls, . for instance methods
+        // Determine separator: :: for static/module calls, . for instance methods
         // - Type/Module (starts with uppercase): use ::
         // - Variable (starts with lowercase): use .
         let separator = match object {
             Expression::Call { .. } | Expression::MethodCall { .. } => ".", // Instance method on return value
             Expression::Identifier { name, .. } => {
-                // Check for known module/crate names that should use ::
-                // Note: Avoid common variable names like "path", "config" which are used as variables
-                let known_modules = [
-                    "std",
-                    "serde_json",
-                    "serde",
-                    "tokio",
-                    "reqwest",
-                    "sqlx",
-                    "chrono",
-                    "sha2",
-                    "bcrypt",
-                    "base64",
-                    "rand",
-                    "Vec",
-                    "String",
-                    "Option",
-                    "Result",
-                    "Box",
-                    "Arc",
-                    "Mutex",
-                    "Utc",
-                    "Local",
-                    "DEFAULT_COST",
-                    // Stdlib modules (avoid common variable names)
-                    "mime",
-                    "http",
-                    "fs",
-                    "strings",
-                    // NOTE: "json" removed - it's a common variable name!
-                    // Use "serde_json" for the module instead
-                    "regex",
-                    "cli",
-                    "log",
-                    "crypto",
-                    "io",
-                    "env",
-                    "time",
-                    "sync",
-                    "thread",
-                    "collections",
-                    "cmp",
-                ];
-
-                // Type or module (uppercase) vs variable (lowercase)
-                if name.chars().next().is_some_and(|c| c.is_uppercase())
-                    || name.contains('.')
-                    || known_modules.contains(&name.as_str())
-                {
-                    "::" // Vec::new(), std::fs::read(), serde_json::to_string()
+                // Enum variant paths parse as one identifier: `ShaderFile::HiZCull.to_path()`
+                if Self::is_enum_variant_qualified_path(name) {
+                    "."
                 } else {
-                    "." // x.abs(), value.method()
+                    // Check for known module/crate names that should use ::
+                    // Note: Avoid common variable names like "path", "config" which are used as variables
+                    // Only unambiguous module/type names — never short names used as variables (io, log, fs, …).
+                    let known_modules = [
+                        "std",
+                        "serde_json",
+                        "serde",
+                        "tokio",
+                        "reqwest",
+                        "sqlx",
+                        "chrono",
+                        "sha2",
+                        "bcrypt",
+                        "base64",
+                        "rand",
+                        "Vec",
+                        "String",
+                        "Option",
+                        "Result",
+                        "Box",
+                        "Arc",
+                        "Mutex",
+                        "Utc",
+                        "Local",
+                        "DEFAULT_COST",
+                    ];
+
+                    // Type or module (uppercase) vs variable (lowercase)
+                    if name.chars().next().is_some_and(|c| c.is_uppercase())
+                        || name.contains('.')
+                        || known_modules.contains(&name.as_str())
+                        || self.is_imported_runtime_std_module(name)
+                    {
+                        "::" // Vec::new(), std::fs::read(), serde_json::to_string()
+                    } else {
+                        "." // x.abs(), value.method()
+                    }
                 }
             }
             Expression::FieldAccess { ref object, .. } => {
-                // Check if this is a module path (e.g., std::fs) or a field access (e.g., self.count)
-                // If the object is an identifier that looks like a module, use ::
-                // Otherwise, use . for instance methods on fields
+                // Type::Variant.method() in Windjammer (enum variant receiver) must lower to
+                // `(Type::Variant).method()` in Rust — not `Type::Variant::method()`.
                 match object {
                     Expression::Identifier { name, .. }
-                        if (name.chars().next().is_some_and(|c| c.is_uppercase())
-                            || name == "std") =>
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) =>
                     {
-                        "::" // Module::path::method() -> static method
+                        "." // ShaderFile::HiZCull.to_path() → (ShaderFile::HiZCull).to_path()
                     }
-                    _ => ".", // Default to instance method
+                    Expression::Identifier { name, .. } if name == "std" => "::",
+                    _ => ".", // self.field.method()
                 }
             }
             _ => ".", // Instance method on expressions
@@ -232,35 +220,39 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // TDD FIX (Bug #3): Extract format!() macros in method arguments too
+        // TDD FIX (Bug #3): Extract format!() / write!-block macros in method arguments too
+        let needs_format_temp = |arg_str: &str| -> bool {
+            arg_str.contains("format!(") || arg_str.contains("write!(&mut __s,")
+        };
         let has_format_arg = processed_args
             .iter()
-            .any(|arg_str| arg_str.contains("format!("));
+            .any(|arg_str| needs_format_temp(arg_str));
 
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
             let mut temp_decls = String::new();
-            let mut temp_counter = 0;
+            let mut temp_counter = 0i32;
             let fixed_args: Vec<String> = processed_args
                 .iter()
                 .map(|arg_str| {
-                    if arg_str.starts_with("format!(") || arg_str.starts_with("&format!(") {
-                        // Strip leading & if present (was added by argument processing)
-                        let format_expr = if arg_str.starts_with("&") {
-                            arg_str.strip_prefix("&").unwrap()
-                        } else {
-                            arg_str
-                        };
-                        // Extract to temp var
+                    let has_borrow_prefix = arg_str.starts_with('&');
+                    let inner = if has_borrow_prefix {
+                        &arg_str[1..]
+                    } else {
+                        arg_str.as_str()
+                    };
+                    let needs_extract = inner.starts_with("format!(")
+                        || (inner.starts_with('{') && inner.contains("write!(&mut __s,"));
+                    if needs_extract {
                         let temp_name = format!("_temp{}", temp_counter);
                         temp_counter += 1;
-                        temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
+                        temp_decls.push_str(&format!("let {} = {}; ", temp_name, inner));
 
                         // When the method expects &str (push_str, extend_from_slice),
                         // add & to pass borrowed temp. Otherwise, pass owned value.
                         let method_needs_borrow =
                             matches!(method, "push_str" | "extend_from_slice");
-                        if arg_str.starts_with("&") || method_needs_borrow {
+                        if has_borrow_prefix || method_needs_borrow {
                             format!("&{}", temp_name)
                         } else {
                             temp_name
@@ -304,5 +296,19 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         base_expr
+    }
+
+    /// `Type::Variant` in expressions is parsed as a single qualified identifier, not FieldAccess.
+    pub(in crate::codegen::rust) fn is_enum_variant_qualified_path(name: &str) -> bool {
+        let mut parts = name.split("::");
+        let type_name = parts.next();
+        let variant = parts.next();
+        parts.next().is_none()
+            && type_name.is_some_and(|t| t.chars().next().is_some_and(|c| c.is_uppercase()))
+            && variant.is_some_and(|v| {
+                !v.is_empty()
+                    && !v.starts_with('<')
+                    && v.chars().all(|c| c.is_alphanumeric() || c == '_')
+            })
     }
 }

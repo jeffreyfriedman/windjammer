@@ -12,6 +12,7 @@ impl MethodCallAnalyzer {
         ctx: &MethodCallContext<'_, '_>,
         arg_count: usize,
         receiver_type_name: Option<&str>,
+        local_var_types: Option<&std::collections::HashMap<String, Type>>,
     ) -> bool {
         let usize_variables = ctx.usize_variables;
         let current_function_params = ctx.current_function_params;
@@ -23,14 +24,17 @@ impl MethodCallAnalyzer {
                 &p.name == name && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
             });
             let is_borrowed_iter_var = borrowed_iterator_vars.contains(name);
-            let is_rust_str_param = current_function_params.iter().any(|p| {
+            let param_is_ref = current_function_params.iter().any(|p| {
                 p.name == *name
-                    && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                        || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                            && inferred_borrowed_params.contains(name)))
+                    && crate::codegen::rust::types::param_generates_as_rust_ref(
+                        &p.type_,
+                        &p.name,
+                        inferred_borrowed_params,
+                    )
             });
+            let is_str_ref_optimized = ctx.str_ref_optimized_params.contains(name.as_str());
 
-            is_ref_param || is_borrowed_iter_var || is_rust_str_param
+            is_ref_param || is_borrowed_iter_var || param_is_ref || is_str_ref_optimized
         } else {
             false
         };
@@ -58,13 +62,11 @@ impl MethodCallAnalyzer {
                 if let Expression::Identifier { name, .. } = arg {
                     let is_already_ref = current_function_params.iter().any(|p| {
                         p.name == *name
-                            && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                || matches!(
-                                    &p.type_,
-                                    Type::Reference(_) | Type::MutableReference(_)
-                                )
-                                || (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                    && inferred_borrowed_params.contains(name)))
+                            && crate::codegen::rust::types::param_generates_as_rust_ref(
+                                &p.type_,
+                                &p.name,
+                                inferred_borrowed_params,
+                            )
                     });
                     if is_already_ref {
                         return false;
@@ -74,7 +76,12 @@ impl MethodCallAnalyzer {
             }
 
             if super::super::stdlib_method_traits::is_map_key_method(method)
-                && Self::is_copy_type(arg, usize_variables, current_function_params)
+                && Self::is_copy_type_with_locals(
+                    arg,
+                    usize_variables,
+                    current_function_params,
+                    local_var_types,
+                )
             {
                 let arg_name = if let Expression::Identifier { name, .. } = arg {
                     Some(name.as_str())
@@ -93,11 +100,12 @@ impl MethodCallAnalyzer {
                 if looks_like_hashmap_key {
                     if let Some(name) = arg_name {
                         let is_already_map_key_ref = current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && (matches!(&p.type_, Type::Custom(s) if s == "str")
-                                    || (crate::codegen::rust::types::is_windjammer_text_type(
-                                        &p.type_,
-                                    ) && inferred_borrowed_params.contains(name)))
+                            p.name == name
+                                && crate::codegen::rust::types::param_generates_as_rust_ref(
+                                    &p.type_,
+                                    &p.name,
+                                    inferred_borrowed_params,
+                                )
                         });
                         if is_already_map_key_ref {
                             return false;
@@ -120,7 +128,12 @@ impl MethodCallAnalyzer {
             return true;
         }
 
-        if Self::is_copy_type(arg, usize_variables, current_function_params) {
+        if Self::is_copy_type_with_locals(
+            arg,
+            usize_variables,
+            current_function_params,
+            local_var_types,
+        ) {
             return false;
         }
 

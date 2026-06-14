@@ -4,7 +4,7 @@
 
 use crate::parser::*;
 
-use super::{Analyzer, OwnershipMode, SignatureRegistry};
+use super::{Analyzer, FunctionSignature, OwnershipMode, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
     /// THE WINDJAMMER WAY: Check if an expression contains a specific identifier
@@ -56,6 +56,7 @@ impl<'ast> Analyzer<'ast> {
         name: &str,
         statements: &[&'ast Statement<'ast>],
         registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
     ) -> bool {
         for stmt in statements {
             match stmt {
@@ -75,19 +76,19 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 Statement::Expression { expr, .. } => {
-                    if self.has_mutable_method_call(name, expr, registry) {
+                    if self.has_mutable_method_call(name, expr, registry, param_type_hint) {
                         return true;
                     }
                 }
                 Statement::Let { value, .. } => {
-                    if self.has_mutable_method_call(name, value, registry) {
+                    if self.has_mutable_method_call(name, value, registry, param_type_hint) {
                         return true;
                     }
                 }
                 Statement::Return {
                     value: Some(expr), ..
                 } => {
-                    if self.has_mutable_method_call(name, expr, registry) {
+                    if self.has_mutable_method_call(name, expr, registry, param_type_hint) {
                         return true;
                     }
                 }
@@ -97,52 +98,59 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    if self.has_mutable_method_call(name, condition, registry) {
+                    if self.has_mutable_method_call(name, condition, registry, param_type_hint) {
                         return true;
                     }
-                    if self.is_mutated(name, then_block, registry) {
+                    if self.is_mutated(name, then_block, registry, param_type_hint) {
                         return true;
                     }
                     if let Some(else_b) = else_block {
-                        if self.is_mutated(name, else_b, registry) {
+                        if self.is_mutated(name, else_b, registry, param_type_hint) {
                             return true;
                         }
                     }
                 }
                 Statement::Loop { body, .. } => {
-                    if self.is_mutated(name, body, registry) {
+                    if self.is_mutated(name, body, registry, param_type_hint) {
                         return true;
                     }
                 }
                 Statement::While {
                     condition, body, ..
                 } => {
-                    if self.has_mutable_method_call(name, condition, registry) {
+                    if self.has_mutable_method_call(name, condition, registry, param_type_hint) {
                         return true;
                     }
-                    if self.is_mutated(name, body, registry) {
+                    if self.is_mutated(name, body, registry, param_type_hint) {
                         return true;
                     }
                 }
                 Statement::For { iterable, body, .. } => {
-                    if self.has_mutable_method_call(name, iterable, registry) {
+                    if self.has_mutable_method_call(name, iterable, registry, param_type_hint) {
                         return true;
                     }
-                    if self.is_mutated(name, body, registry) {
+                    if self.is_mutated(name, body, registry, param_type_hint) {
                         return true;
                     }
                 }
                 Statement::Match { value, arms, .. } => {
-                    if self.has_mutable_method_call(name, value, registry) {
+                    if self.has_mutable_method_call(name, value, registry, param_type_hint) {
                         return true;
                     }
                     for arm in arms {
                         if let Some(guard) = arm.guard {
-                            if self.has_mutable_method_call(name, guard, registry) {
+                            if self.has_mutable_method_call(name, guard, registry, param_type_hint)
+                            {
                                 return true;
                             }
                         }
-                        if self.is_mutated_in_match_arm_body(name, value, arm, registry) {
+                        if self.is_mutated_in_match_arm_body(
+                            name,
+                            value,
+                            arm,
+                            registry,
+                            param_type_hint,
+                        ) {
                             return true;
                         }
                     }
@@ -160,13 +168,16 @@ impl<'ast> Analyzer<'ast> {
         scrutinee: &Expression<'ast>,
         arm: &MatchArm<'ast>,
         registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
     ) -> bool {
         if self.if_let_some_mutates_indexed_binding_of_param(name, scrutinee, arm, registry) {
             return true;
         }
         match &arm.body {
-            Expression::Block { statements, .. } => self.is_mutated(name, statements, registry),
-            _ => self.has_mutable_method_call(name, arm.body, registry),
+            Expression::Block { statements, .. } => {
+                self.is_mutated(name, statements, registry, param_type_hint)
+            }
+            _ => self.has_mutable_method_call(name, arm.body, registry, param_type_hint),
         }
     }
 
@@ -256,12 +267,12 @@ impl<'ast> Analyzer<'ast> {
         expr: &Expression<'ast>,
         registry: &SignatureRegistry,
     ) -> bool {
-        if self.has_mutable_method_call(binding, expr, registry) {
+        if self.has_mutable_method_call(binding, expr, registry, None) {
             return true;
         }
         if let Expression::MethodCall { object, method, .. } = expr {
             if self.is_in_receiver_chain(binding, object) {
-                return !crate::method_registry::is_known_readonly_method(method);
+                return !super::stdlib_method_traits::is_known_readonly(method);
             }
         }
         false
@@ -301,7 +312,7 @@ impl<'ast> Analyzer<'ast> {
                 .any(|s| self.stmt_mutates_binding_in_tree(s, binding, registry)),
             Statement::Match { arms, .. } => arms.iter().any(|arm| {
                 if let Some(g) = arm.guard {
-                    if self.has_mutable_method_call(binding, g, registry) {
+                    if self.has_mutable_method_call(binding, g, registry, None) {
                         return true;
                     }
                 }
@@ -362,24 +373,80 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Resolve the type at the end of a field-access chain rooted at `param_name`.
+    fn resolve_field_chain_type_for_param(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        param_type_hint: Option<&Type>,
+    ) -> Option<Type> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                let base =
+                    self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
+                self.lookup_field_type_on_struct(&base, field)
+            }
+            Expression::Identifier { name, .. } if name == param_name => param_type_hint.cloned(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn has_mutable_method_call(
         &self,
         name: &str,
         expr: &Expression,
         registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                // Check if the parameter is in the DIRECT receiver chain (not just any argument).
-                // This catches: param.set(), param.field.push(), self.camera.move_to()
-                // But NOT: f.cross(param).normalize() (param is an argument, not a receiver)
                 if self.is_in_receiver_chain(name, object) {
-                    // THE PROPER SOLUTION: Look up method signature in SignatureRegistry
-                    //
-                    // COLLISION GUARD: If multiple types have a method with the same name
-                    // (e.g., Vec::clear(&mut self) vs MannequinCache::clear(&self)),
-                    // the registry stores only the last one registered. We can't trust the
-                    // result when there's a collision — fall through to conservative default.
+                    // PRIORITY 1: Type-qualified registry lookup when we know the receiver type.
+                    // This prevents cross-type collisions where `set_lighting` from TypeA
+                    // shadows `VoxelGPURenderer::set_lighting` in the bare-name registry.
+                    let mut qualified_attempted = false;
+                    if let Expression::Identifier { name: recv, .. } = &**object {
+                        if recv == name {
+                            if let Some(param_ty) = param_type_hint {
+                                if let Type::Custom(type_name) = param_ty {
+                                    qualified_attempted = true;
+                                    if let Some(sig) = registry
+                                        .get_signature(&format!("{}::{}", type_name, method))
+                                    {
+                                        if sig.has_self_receiver {
+                                            if let Some(mode) = sig.param_ownership.first() {
+                                                return matches!(mode, OwnershipMode::MutBorrowed);
+                                            }
+                                        }
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // PRIORITY 1b: For chained field access (param.field.method()),
+                    // resolve the intermediate field type and use it for qualified lookup.
+                    // Example: game_state.inventory.has_item() → resolve inventory to Inventory,
+                    // then look up Inventory::has_item instead of GameState::has_item.
+                    if let Some(receiver_type) =
+                        self.resolve_field_chain_type_for_param(name, object, param_type_hint)
+                    {
+                        if let Type::Custom(recv_type_name) = &receiver_type {
+                            qualified_attempted = true;
+                            let qname = format!("{}::{}", recv_type_name, method);
+                            if let Some(sig) = registry.get_signature(&qname) {
+                                if sig.has_self_receiver {
+                                    if let Some(mode) = sig.param_ownership.first() {
+                                        return matches!(mode, OwnershipMode::MutBorrowed);
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+
+                    // PRIORITY 2: Unqualified lookup (only when no collision).
                     if !registry.has_collision(method) {
                         if let Some(sig) = registry.get_signature(method) {
                             if sig.has_self_receiver {
@@ -387,46 +454,96 @@ impl<'ast> Analyzer<'ast> {
                                     if matches!(mode, OwnershipMode::MutBorrowed) {
                                         return true;
                                     }
-                                    // Registry found an unambiguous signature, it says not &mut self — trust it
                                     return false;
                                 }
                             }
-                            // Registry has it but no self receiver — not a mutation
                             return false;
                         }
                     }
 
-                    if crate::method_registry::mutates_receiver(method) {
-                        return true;
+                    // When we attempted a type-qualified lookup for a USER type
+                    // but the method wasn't found, skip the generic heuristic.
+                    // The method may not be analyzed yet; multi-pass convergence
+                    // will resolve it once the method IS registered.
+                    // BUT: For stdlib types (Vec, HashMap, String), the heuristic
+                    // is always correct, so don't skip it.
+                    let is_stdlib_type = param_type_hint.is_some_and(|ty| {
+                        crate::type_classification::is_stdlib_collection_or_wrapper(ty)
+                    });
+                    if !qualified_attempted || is_stdlib_type {
+                        if super::stdlib_method_traits::method_mutates_receiver(method) {
+                            return true;
+                        }
                     }
 
-                    // Method is known readonly in stdlib registry — not a mutation
-                    if crate::method_registry::is_known_readonly_method(method) {
+                    if super::stdlib_method_traits::is_known_readonly(method) {
                         return false;
                     }
 
-                    // UNKNOWN METHOD (or COLLISION): not unambiguously resolved.
-                    // Conservative default: assume mutation. This is correct because:
-                    // 1. External Rust methods (e.g. VoxelGPURenderer::add_primitive)
-                    //    are often &mut self but we have no metadata for them.
-                    // 2. It's safer to infer &mut (compiles if actually &self due to
-                    //    auto-reborrow) than to infer & (fails to compile if actually &mut self).
-                    // 3. The Windjammer philosophy: compiler does the work, not the user.
-                    return true;
+                    // Copy field receiver: `v.x.to_le_bytes()` cannot mutate binding `v`.
+                    if let Some(field_ty) =
+                        self.resolve_field_chain_type_for_param(name, object, param_type_hint)
+                    {
+                        if self.is_copy_type(&field_ty) {
+                            return false;
+                        }
+                    }
+
+                    // Fallback: unique qualified method lookup (any type with this method).
+                    if let Expression::Identifier { name: recv, .. } = &**object {
+                        if recv == name {
+                            if let Some(sig) = Self::unique_qualified_method_sig(registry, method) {
+                                if sig.has_self_receiver {
+                                    if let Some(mode) = sig.param_ownership.first() {
+                                        return matches!(mode, OwnershipMode::MutBorrowed);
+                                    }
+                                }
+                                return false;
+                            }
+                        }
+                    }
+
+                    // UNKNOWN METHOD: When we attempted a type-qualified lookup
+                    // (had a type hint) but the method wasn't in the registry,
+                    // assume non-mutation and rely on multi-pass convergence.
+                    // Without a type hint, conservatively assume mutation.
+                    return !qualified_attempted;
+                }
+
+                // Check if param is passed as an argument to a method whose
+                // corresponding parameter has MutBorrowed ownership.
+                // Example: obj.apply(state) where apply expects &mut DialogueState
+                // → state must be MutBorrowed.
+                if let Expression::MethodCall { arguments, .. } = expr {
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                            if let Some(sig) = registry.lookup_method(method) {
+                                if sig
+                                    .param_ownership_for_arg(i)
+                                    .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
                 }
                 false
             }
-            Expression::TryOp { expr, .. } => self.has_mutable_method_call(name, expr, registry),
+            Expression::TryOp { expr, .. } => {
+                self.has_mutable_method_call(name, expr, registry, param_type_hint)
+            }
             Expression::Block { statements, .. } => {
                 for s in statements {
                     match s {
                         Statement::Expression { expr, .. } => {
-                            if self.has_mutable_method_call(name, expr, registry) {
+                            if self.has_mutable_method_call(name, expr, registry, param_type_hint) {
                                 return true;
                             }
                         }
                         Statement::Let { value, .. } => {
-                            if self.has_mutable_method_call(name, value, registry) {
+                            if self.has_mutable_method_call(name, value, registry, param_type_hint)
+                            {
                                 return true;
                             }
                         }
@@ -437,48 +554,46 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Call { arguments, .. } => {
                 for (_label, arg) in arguments {
-                    if self.has_mutable_method_call(name, arg, registry) {
+                    if self.has_mutable_method_call(name, arg, registry, param_type_hint) {
                         return true;
                     }
                 }
                 false
             }
             Expression::Unary { operand, .. } => {
-                self.has_mutable_method_call(name, operand, registry)
+                self.has_mutable_method_call(name, operand, registry, param_type_hint)
             }
             Expression::Binary { left, right, .. } => {
-                self.has_mutable_method_call(name, left, registry)
-                    || self.has_mutable_method_call(name, right, registry)
+                self.has_mutable_method_call(name, left, registry, param_type_hint)
+                    || self.has_mutable_method_call(name, right, registry, param_type_hint)
             }
             Expression::Tuple { elements, .. } => {
                 for e in elements {
-                    if self.has_mutable_method_call(name, e, registry) {
+                    if self.has_mutable_method_call(name, e, registry, param_type_hint) {
                         return true;
                     }
                 }
                 false
             }
             Expression::Index { object, index, .. } => {
-                self.has_mutable_method_call(name, object, registry)
-                    || self.has_mutable_method_call(name, index, registry)
+                self.has_mutable_method_call(name, object, registry, param_type_hint)
+                    || self.has_mutable_method_call(name, index, registry, param_type_hint)
             }
             Expression::FieldAccess { object, .. } => {
-                self.has_mutable_method_call(name, object, registry)
+                self.has_mutable_method_call(name, object, registry, param_type_hint)
             }
             _ => false,
         }
     }
 
     /// Known read-only methods that always take &self (not &mut self).
-    /// Delegates to the centralized method_registry — single source of truth.
     pub(super) fn is_known_readonly_method(method: &str) -> bool {
-        crate::method_registry::is_known_readonly_method(method)
+        super::stdlib_method_traits::is_known_readonly(method)
     }
 
     /// Check if the parameter is the receiver of method calls that could potentially mutate.
     /// Returns true if there are method calls on the parameter that aren't known to be read-only.
     /// This catches patterns like `loader.load(...)` where .load() could require &mut self.
-    #[allow(dead_code)]
     pub(super) fn has_potentially_mutating_method_call(
         &self,
         name: &str,
@@ -599,6 +714,93 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Like [`Self::has_potentially_mutating_method_call`] but only for calls under `?`.
+    /// Example: `loader.load(...)?` must not leave `loader` as `&T` when `.load()` may need &mut.
+    pub(super) fn has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            if self.stmt_has_potentially_mutating_method_call_in_tryop(name, stmt) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn stmt_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, expr)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+            }
+            Statement::Return { value: Some(v), .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, v)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
+                    || self.has_potentially_mutating_method_call_in_tryop(name, then_block)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.has_potentially_mutating_method_call_in_tryop(name, b)
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
+                    || self.has_potentially_mutating_method_call_in_tryop(name, body)
+            }
+            Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                self.has_potentially_mutating_method_call_in_tryop(name, body)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
+                    || arms.iter().any(|arm| {
+                        self.expr_has_potentially_mutating_method_call_in_tryop(name, arm.body)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn expr_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::TryOp { expr, .. } => {
+                self.expr_has_potentially_mutating_method_call(name, expr)
+            }
+            Expression::Block { statements, .. } => {
+                self.has_potentially_mutating_method_call_in_tryop(name, statements)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, left)
+                    || self.expr_has_potentially_mutating_method_call_in_tryop(name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(name, operand)
+            }
+            _ => false,
+        }
+    }
+
     /// Track which local variables are mutated in a function body
     /// This enables automatic `mut` inference - users don't need to write `let mut x`
     pub fn track_mutations(
@@ -687,7 +889,7 @@ impl<'ast> Analyzer<'ast> {
     ) {
         if let Expression::MethodCall { object, .. } = expr {
             if let Some(root) = Self::receiver_root_local_identifier(object) {
-                if root != "self" && self.has_mutable_method_call(root, expr, registry) {
+                if root != "self" && self.has_mutable_method_call(root, expr, registry, None) {
                     self.mutated_variables.insert(root.to_string());
                 }
             }
@@ -762,5 +964,25 @@ impl<'ast> Analyzer<'ast> {
             }
             _ => {}
         }
+    }
+
+    /// When exactly one registry entry matches `Type::method`, trust its self ownership.
+    fn unique_qualified_method_sig<'a>(
+        registry: &'a SignatureRegistry,
+        method: &str,
+    ) -> Option<&'a FunctionSignature> {
+        if registry.has_collision(method) {
+            return None;
+        }
+        let pattern = format!("::{}", method);
+        let mut matches = registry
+            .signatures
+            .iter()
+            .filter(|(key, _)| key.ends_with(&pattern));
+        let first = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some(first.1)
     }
 }
