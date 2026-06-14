@@ -16,7 +16,7 @@ fn generate_test_all_rs() {
     if let Ok(entries) = fs::read_dir(tests_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "rs") {
+            if path.extension().is_some_and(|e| e == "rs") {
                 let name = path.file_stem().unwrap().to_string_lossy().to_string();
                 if name == "all" || name == "common" || name == "lib" {
                     continue;

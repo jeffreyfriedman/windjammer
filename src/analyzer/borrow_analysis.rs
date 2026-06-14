@@ -225,6 +225,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_consuming_method(param_name, left, registry)
                     || self.expr_calls_consuming_method(param_name, right, registry)
             }
+            Expression::TryOp { expr, .. } => {
+                self.expr_calls_consuming_method(param_name, expr, registry)
+            }
             _ => false,
         }
     }
