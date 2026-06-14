@@ -190,8 +190,7 @@ impl<'ast> Analyzer<'ast> {
                                 || self.function_body_consumes_bare_self(func)
                                 || self.function_calls_consuming_method_on_self(func, registry)
                                 || self.function_matches_on_self(func)
-                                || self
-                                    .function_consumes_self_field_elements(func, Some(registry));
+                                || self.function_consumes_self_field_elements(func, Some(registry));
                             if consumes_self {
                                 OwnershipMode::Owned
                             } else if modifies_fields {

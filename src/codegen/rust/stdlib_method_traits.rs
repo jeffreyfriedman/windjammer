@@ -249,9 +249,10 @@ pub fn method_is_map_key_qualified(
             if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
                 if sig.has_self_receiver
                     && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
-                    && first_arg_type(sig).is_some_and(is_reference_type) {
-                        return true;
-                    }
+                    && first_arg_type(sig).is_some_and(is_reference_type)
+                {
+                    return true;
+                }
             }
         }
         return false;
