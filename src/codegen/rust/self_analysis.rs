@@ -80,7 +80,7 @@ fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>)
         Statement::For { pattern, body, .. } => {
             collect_locals_from_pattern(pattern, locals);
             for s in body {
-                collect_locals_from_statement(*s, locals);
+                collect_locals_from_statement(s, locals);
             }
         }
         Statement::If {
@@ -89,11 +89,11 @@ fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>)
             ..
         } => {
             for s in then_block {
-                collect_locals_from_statement(*s, locals);
+                collect_locals_from_statement(s, locals);
             }
             if let Some(else_b) = else_block {
                 for s in else_b {
-                    collect_locals_from_statement(*s, locals);
+                    collect_locals_from_statement(s, locals);
                 }
             }
         }
@@ -102,7 +102,7 @@ fn collect_locals_from_statement(stmt: &Statement, locals: &mut HashSet<String>)
         | Statement::Thread { body, .. }
         | Statement::Async { body, .. } => {
             for s in body {
-                collect_locals_from_statement(*s, locals);
+                collect_locals_from_statement(s, locals);
             }
         }
         Statement::Match { arms, .. } => {
@@ -308,7 +308,8 @@ fn statement_only_clones_element(stmt: &Statement) -> bool {
 }
 
 fn expression_only_clones(expr: &Expression) -> bool {
-    match expr {
+    matches!(
+        expr,
         Expression::MethodCall { method, .. }
             if matches!(
                 method.as_str(),
@@ -323,12 +324,8 @@ fn expression_only_clones(expr: &Expression) -> bool {
                     | "push_back"
                     | "add"
                     | "fill"
-            ) =>
-        {
-            true
-        }
-        _ => false,
-    }
+            )
+    )
 }
 
 fn expression_is_bare_self(expr: &Expression) -> bool {

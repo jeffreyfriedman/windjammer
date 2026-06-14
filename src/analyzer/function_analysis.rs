@@ -120,17 +120,13 @@ impl<'ast> Analyzer<'ast> {
             let returns_self = self.function_returns_self(func);
             let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
 
-            let self_ownership = if returns_self {
-                OwnershipMode::Owned
-            } else if body_moves_fields {
-                OwnershipMode::Owned
-            } else if self.function_body_consumes_bare_self(func) {
-                OwnershipMode::Owned
-            } else if self.function_calls_consuming_method_on_self(func, registry) {
-                OwnershipMode::Owned
-            } else if self.function_matches_on_self(func) {
-                OwnershipMode::Owned
-            } else if self.function_consumes_self_field_elements(func, Some(registry)) {
+            let consumes_self = returns_self
+                || body_moves_fields
+                || self.function_body_consumes_bare_self(func)
+                || self.function_calls_consuming_method_on_self(func, registry)
+                || self.function_matches_on_self(func)
+                || self.function_consumes_self_field_elements(func, Some(registry));
+            let self_ownership = if consumes_self {
                 OwnershipMode::Owned
             } else if modifies_fields {
                 OwnershipMode::MutBorrowed
@@ -188,28 +184,22 @@ impl<'ast> Analyzer<'ast> {
                             let body_moves_fields =
                                 self.function_body_moves_non_copy_self_fields(func);
 
-                            if returns_self || body_moves_fields {
-                                OwnershipMode::Owned
-                            } else if self.function_moves_self_into_return(func) {
-                                OwnershipMode::Owned
-                            } else if self.function_body_consumes_bare_self(func) {
-                                OwnershipMode::Owned
-                            } else if self.function_calls_consuming_method_on_self(func, registry) {
-                                OwnershipMode::Owned
-                            } else if self.function_matches_on_self(func) {
-                                OwnershipMode::Owned
-                            } else if self
-                                .function_consumes_self_field_elements(func, Some(registry))
-                            {
+                            let consumes_self = returns_self
+                                || body_moves_fields
+                                || self.function_moves_self_into_return(func)
+                                || self.function_body_consumes_bare_self(func)
+                                || self.function_calls_consuming_method_on_self(func, registry)
+                                || self.function_matches_on_self(func)
+                                || self
+                                    .function_consumes_self_field_elements(func, Some(registry));
+                            if consumes_self {
                                 OwnershipMode::Owned
                             } else if modifies_fields {
                                 OwnershipMode::MutBorrowed
+                            } else if self.is_used_in_binary_op("self", &func.body) {
+                                OwnershipMode::Owned
                             } else {
-                                if self.is_used_in_binary_op("self", &func.body) {
-                                    OwnershipMode::Owned
-                                } else {
-                                    OwnershipMode::Borrowed
-                                }
+                                OwnershipMode::Borrowed
                             }
                         }
                     } else {

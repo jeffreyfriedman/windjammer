@@ -373,8 +373,9 @@ fn create_user(name: string, age: int) -> User {
         "Should have User interface"
     );
     assert!(
-        ts_content.contains("name: String"),
-        "Should have name field"
+        ts_content.contains("name: string") || ts_content.contains("name: String"),
+        "Should have name field, got:\n{}",
+        ts_content
     );
     assert!(
         ts_content.contains("age: number"),

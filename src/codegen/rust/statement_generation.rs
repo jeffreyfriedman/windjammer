@@ -460,7 +460,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             if let Expression::Identifier { name, .. } = &**function {
                 if name == "Some" && arguments.len() == 1 {
-                    let inner_str = self.generate_expression_immut(&arguments[0].1);
+                    let inner_str = self.generate_expression_immut(arguments[0].1);
                     return Some(inner_str);
                 }
             }

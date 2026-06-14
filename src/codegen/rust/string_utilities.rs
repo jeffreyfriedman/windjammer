@@ -16,7 +16,7 @@ pub fn untyped_let_rhs_needs_string_ascription(value: &Expression) -> bool {
         Expression::Block { statements, .. } => statements.iter().any(|stmt| match stmt {
             Statement::Match { arms, .. } => arms
                 .iter()
-                .any(|arm| match_arm_needs_string_ascription(&arm.body)),
+                .any(|arm| match_arm_needs_string_ascription(arm.body)),
             Statement::If {
                 then_block,
                 else_block,

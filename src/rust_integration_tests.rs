@@ -24,12 +24,9 @@ pub fn find_project_root_with_tests(start: &Path) -> Option<PathBuf> {
             candidates.push(grand.to_path_buf());
         }
     }
-    for root in candidates {
-        if root.join("tests").is_dir() {
-            return Some(root);
-        }
-    }
-    None
+    candidates
+        .into_iter()
+        .find(|root| root.join("tests").is_dir())
 }
 
 fn is_excluded_test_root_file(name: &str) -> bool {

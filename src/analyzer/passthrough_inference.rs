@@ -86,7 +86,7 @@ impl<'ast> Analyzer<'ast> {
             Expression::Index { object: inner, .. } => {
                 let collection_type = self.infer_receiver_type_base(inner, func)?;
                 self.lookup_struct_fields_for_type(&collection_type)
-                    .and_then(|_| None)
+                    .and(None)
                     .or_else(|| {
                         // Vec<T>, array, etc.: strip Vec wrapper to get element type.
                         // Look up the collection type as a generic (e.g. Vec<DialogueConsequence>).

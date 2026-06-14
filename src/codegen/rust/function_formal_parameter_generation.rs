@@ -238,9 +238,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 "self"
                             } else if body_modifies {
                                 "&mut self"
-                            } else if returns_self {
-                                "self"
-                            } else if !self.in_trait_impl && self.current_struct_is_copy() {
+                            } else if returns_self
+                                || (!self.in_trait_impl && self.current_struct_is_copy())
+                            {
                                 "self"
                             } else {
                                 "&self"

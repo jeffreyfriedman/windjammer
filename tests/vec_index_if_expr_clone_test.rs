@@ -85,7 +85,7 @@ impl Inventory {
 
     // Same fix needed: labels[0] must be safe
     let has_clone = generated.contains("labels[0].clone()")
-        || generated.contains("labels[0]").then(|| generated.contains("(&labels[0])")).unwrap_or(false);
+        || if generated.contains("labels[0]") { generated.contains("(&labels[0])") } else { false };
     let has_borrow = generated.contains("&labels[0]");
     let has_to_string = generated.contains("labels[0].to_string()");
     assert!(

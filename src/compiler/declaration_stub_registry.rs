@@ -140,6 +140,7 @@ pub fn collect_per_file_declaration_stubs(
 }
 
 /// Merge per-file contributions in source order (deterministic last-wins for float sig keys).
+#[allow(clippy::too_many_arguments)]
 pub fn merge_declaration_stub_contributions(
     global_registry: &mut SignatureRegistry,
     global_float_signatures: &mut HashMap<

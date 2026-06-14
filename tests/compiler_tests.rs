@@ -110,10 +110,12 @@ fn test_structs_and_impl() {
         "Associated function should be generated"
     );
 
-    // Check method with &self
+    // Check method with &self or owned self (Copy structs use by-value receiver)
     assert!(
-        generated.contains("fn distance(&self)"),
-        "Method with &self should be generated"
+        generated.contains("fn distance(&self)")
+            || generated.contains("fn distance(self)"),
+        "Method receiver should be &self or self (Copy): {}",
+        generated
     );
 
     println!("✓ Structs and impl blocks work");
