@@ -1,7 +1,6 @@
 use tower_lsp::{LspService, Server};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-mod analysis;
 mod cache;
 mod completion;
 pub mod database;
@@ -13,7 +12,6 @@ mod inlay_hints;
 mod refactoring;
 mod semantic_tokens;
 mod server;
-mod symbol_table;
 
 use server::WindjammerLanguageServer;
 
