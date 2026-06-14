@@ -311,7 +311,7 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
 /// becomes `Type::String`. When the ownership analyzer infers a `Type::String`
 /// parameter as borrowed, the formal parameter generates as `&str` in Rust.
 /// All three representations (`Custom("str")`, `String` + borrowed,
-/// `Reference(String)`) produce `&str` — this function unifies them.
+/// `Reference(Custom("str"))`) produce `&str`; `Reference(String)` produces `&String`.
 ///
 /// All call-sites that decide whether to add `&` to a method argument MUST use
 /// this function instead of ad-hoc inline checks.
@@ -414,13 +414,15 @@ mod tests {
 
     #[test]
     fn test_reference_types() {
-        assert_eq!(
-            type_to_rust(&Type::Reference(Box::new(Type::String))),
-            "&str"
-        );
+        // Phase 2 &str (inferred string-ref optimization)
         assert_eq!(
             type_to_rust(&Type::Reference(Box::new(Type::Custom("str".to_string())))),
             "&str"
+        );
+        // &String for contains/Vec<String> passthrough (inferred Reference(String))
+        assert_eq!(
+            type_to_rust(&Type::Reference(Box::new(Type::String))),
+            "&String"
         );
         assert_eq!(type_to_rust(&Type::Reference(Box::new(Type::Int))), "&i64");
     }
