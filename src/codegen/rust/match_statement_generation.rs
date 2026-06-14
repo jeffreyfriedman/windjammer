@@ -96,8 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
 
             let match_binds_refs_early_check = self.match_expression_binds_refs(value)
                 || self.expression_type_contains_reference(value);
-            let needs_borrow_break_check = match_binds_refs_early_check
-                && self.match_scrutinee_is_self_method_call(value)
+            let needs_borrow_break_check = self.match_scrutinee_is_self_method_call(value)
                 && self.match_arms_mutate_self(arms);
 
             if !needs_borrow_break_check
@@ -110,7 +109,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } = value
                 {
-                    if method == "as_str"
+                    if super::rust_stdlib_annotations::is_strip_redundant(method)
                         && arguments.is_empty()
                         && self.expression_produces_str_ref(object)
                     {
@@ -140,7 +139,32 @@ impl<'ast> CodeGenerator<'ast> {
                     ""
                 };
                 let value_str = if scrutinee_ref_prefix.is_empty() {
-                    value_str
+                    // TDD FIX: When scrutinee is a non-Copy Option field on borrowed/mut-borrowed
+                    // self, and we stripped the &/&mut prefix (because binding is used as owned),
+                    // we need .clone() to avoid moving out of the borrow.
+                    if self.match_scrutinee_is_self_field(value) {
+                        if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
+                            if !self.is_type_copy(&inner) {
+                                let root = self.root_identifier_of_field_or_index_chain(value);
+                                let is_behind_borrow = root.is_some_and(|r| {
+                                    r == "self"
+                                        || self.inferred_borrowed_params.contains(r)
+                                        || self.inferred_mut_borrowed_params.contains(r)
+                                });
+                                if is_behind_borrow {
+                                    format!("{}.clone()", value_str)
+                                } else {
+                                    value_str
+                                }
+                            } else {
+                                value_str
+                            }
+                        } else {
+                            value_str
+                        }
+                    } else {
+                        value_str
+                    }
                 } else if scrutinee_ref_prefix == "&mut "
                     && value_str.starts_with('&')
                     && !value_str.starts_with("&mut")
@@ -159,14 +183,21 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut bound_vars = std::collections::HashSet::new();
                 self.extract_pattern_bindings(&main_arm.pattern, &mut bound_vars);
 
-                let added_borrowed: Vec<String> = if match_binds_refs_early_check {
-                    bound_vars.iter().cloned().collect()
-                } else {
-                    Vec::new()
-                };
+                for var in &bound_vars {
+                    self.match_arm_bindings.insert(var.clone());
+                }
+
+                let added_borrowed: Vec<String> =
+                    if match_binds_refs_early_check || !scrutinee_ref_prefix.is_empty() {
+                        bound_vars.iter().cloned().collect()
+                    } else {
+                        Vec::new()
+                    };
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.insert(var.clone());
                 }
+
+                let bound_vars_for_cleanup = bound_vars.clone();
 
                 self.local_variable_scopes.push(bound_vars);
 
@@ -242,7 +273,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             .find(|(n, _)| n == name)
                                             .map(|(_, t)| t);
                                         let is_copy =
-                                            binding_type.is_some_and(|t| self.is_type_copy(t));
+                                            binding_type.is_some_and(|t| self.is_copy_pointee(t));
                                         // Generate all but last, then the derefed last
                                         let all_but_last = &statements[..statements.len() - 1];
                                         output.push_str(&self.generate_block(all_but_last));
@@ -275,6 +306,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         for (var_name, _) in &match_bound_type_entries {
                                             self.local_var_types.remove(var_name);
                                         }
+                                        for var in &bound_vars_for_cleanup {
+                                            self.match_arm_bindings.remove(var);
+                                        }
                                         return output;
                                     }
                                 }
@@ -292,7 +326,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     .iter()
                                     .find(|(n, _)| n == name)
                                     .map(|(_, t)| t);
-                                let is_copy = binding_type.is_some_and(|t| self.is_type_copy(t));
+                                let is_copy = binding_type.is_some_and(|t| self.is_copy_pointee(t));
                                 if is_copy {
                                     body_str = format!("*{}", body_str);
                                 } else {
@@ -331,6 +365,9 @@ impl<'ast> CodeGenerator<'ast> {
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.remove(var);
                 }
+                for var in &bound_vars_for_cleanup {
+                    self.match_arm_bindings.remove(var);
+                }
 
                 return output;
             }
@@ -351,7 +388,7 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = value
         {
-            if method == "as_str"
+            if super::rust_stdlib_annotations::is_strip_redundant(method)
                 && arguments.is_empty()
                 && self.expression_produces_str_ref(object)
             {
@@ -366,7 +403,7 @@ impl<'ast> CodeGenerator<'ast> {
         } = value
         {
             if let Expression::FieldAccess { object, field, .. } = &**function {
-                if field == "as_str"
+                if super::rust_stdlib_annotations::is_strip_redundant(field)
                     && arguments.is_empty()
                     && self.expression_produces_str_ref(object)
                 {
@@ -452,6 +489,9 @@ impl<'ast> CodeGenerator<'ast> {
                             } else {
                                 format!("*{}", value_str)
                             }
+                        } else if root_name == "self" {
+                            // self is already &Self — no extra & needed.
+                            value_str
                         } else {
                             // Non-Copy type behind shared ref: need & prefix to prevent
                             // moving out of the borrow. Match ergonomics will auto-ref bindings.
@@ -470,10 +510,8 @@ impl<'ast> CodeGenerator<'ast> {
             value_str
         };
 
-        let match_binds_refs_early = self.match_expression_binds_refs(value);
-        let needs_borrow_break = match_binds_refs_early
-            && self.match_scrutinee_is_self_method_call(value)
-            && self.match_arms_mutate_self(arms);
+        let needs_borrow_break =
+            self.match_scrutinee_is_self_method_call(value) && self.match_arms_mutate_self(arms);
 
         let mut output = self.indent();
 
@@ -487,27 +525,13 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
-                // TDD FIX: Don't add .as_str() if value_str already has it OR if it's already &str
-                // value_str may have been simplified (redundant .as_str() removed)
-                if !value_str.ends_with(".as_str()") {
-                    // Check if the simplified value_str is an identifier that's already &str
-                    let is_borrowed_param = self.inferred_borrowed_params.contains(&value_str);
-                    let is_string_type_param = self.current_function_params.iter().any(|p| {
-                        p.name == value_str
-                            && (matches!(p.type_, crate::parser::Type::String)
-                                || matches!(p.type_, crate::parser::Type::Custom(ref n) if n == "str" || n == "string" || n == "&str"))
-                    });
-                    if is_borrowed_param || is_string_type_param {
-                        // Already &str, don't add .as_str()
-                        output.push_str(&value_str);
-                    } else {
-                        // Not &str, add .as_str()
-                        output.push_str(&format!("{}.as_str()", value_str));
-                    }
-                } else {
-                    // Already has .as_str()
-                    output.push_str(&value_str);
-                }
+                let scrutinee =
+                    crate::codegen::rust::string_utilities::maybe_append_as_str_for_match(
+                        &value_str,
+                        &self.inferred_borrowed_params,
+                        &self.current_function_params,
+                    );
+                output.push_str(&scrutinee);
             } else {
                 output.push_str(&value_str);
             }
@@ -749,8 +773,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             );
 
-            if needs_string_conversion && is_string_literal && !arm_str.ends_with(".to_string()") {
-                arm_str = format!("{}.to_string()", arm_str);
+            if needs_string_conversion
+                && is_string_literal
+                && !string_utilities::already_owned_string_expr(&arm_str)
+            {
+                arm_str = string_utilities::coerce_expr_to_owned_string(&arm_str);
             }
 
             output.push_str(&arm_str);

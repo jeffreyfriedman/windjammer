@@ -5,8 +5,10 @@
 use crate::auto_clone::AutoCloneAnalysis;
 use crate::parser::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 mod borrow_analysis;
+mod cache_locality;
 mod forbidden_patterns;
 mod function_analysis;
 mod generic_analysis;
@@ -24,6 +26,8 @@ mod self_field_mutation;
 mod self_mutating_calls;
 mod self_return_and_consumption;
 mod signature_registry;
+pub mod simd_loops;
+pub mod stdlib_method_traits;
 mod string_optimization;
 mod trait_analysis;
 mod type_checking;
@@ -31,6 +35,10 @@ pub mod type_collector;
 mod usage_tracking;
 
 pub use signature_registry::{FunctionSignature, SignatureRegistry};
+
+pub use cache_locality::{
+    cache_locality_json_report, AccessPatternKind, AoSoACandidate, CacheLocalityAnalysis,
+};
 
 // Type alias for complex return type
 type ProgramAnalysisResult<'ast> = (
@@ -67,6 +75,8 @@ pub struct AnalyzedFunction<'ast> {
     pub smallvec_optimizations: Vec<SmallVecOptimization>,
     // PHASE 9 OPTIMIZATION: Track string/data that can use Cow
     pub cow_optimizations: Vec<CowOptimization>,
+    /// Cache locality: AoSoA / SoA loop candidates (ECS-style Vec<Struct> iteration).
+    pub cache_locality: CacheLocalityAnalysis,
     // STRING PARAMETER OPTIMIZATION (Phase 2): Track which string params can use &str
     pub str_ref_optimizable_params: HashSet<String>,
 }
@@ -255,7 +265,8 @@ pub struct Analyzer<'ast> {
     // Track enum definitions to determine if they're Copy
     copy_enums: HashSet<String>,
     // Track struct definitions with @derive(Copy) to determine if they're Copy
-    copy_structs: HashSet<String>,
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ library files.
+    copy_structs: Arc<HashSet<String>>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl<'ast>>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
@@ -269,21 +280,35 @@ pub struct Analyzer<'ast> {
     self_impl_context: Option<ImplSelfFieldContext<'ast>>,
     /// Cross-file struct field type registry for nested field chain resolution.
     /// Maps struct_name → { field_name → Type }.
-    global_struct_field_types: HashMap<String, HashMap<String, Type>>,
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
+    global_struct_field_types: Arc<HashMap<String, HashMap<String, Type>>>,
+    /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
+    /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
+    struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
+    /// When true, skip expensive optimization detectors (clone, struct mapping,
+    /// string, cache locality, etc.) during multipass convergence.
+    /// Only ownership inference runs. Final pass sets this to false.
+    pub convergence_only: bool,
 }
 
 impl<'ast> Analyzer<'ast> {
     pub(super) fn new_empty(global_copy_structs: HashSet<String>) -> Self {
+        Self::new_empty_shared(Arc::new(global_copy_structs))
+    }
+
+    pub(super) fn new_empty_shared(copy_structs: Arc<HashSet<String>>) -> Self {
         Self {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
-            copy_structs: global_copy_structs,
+            copy_structs,
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
             self_impl_context: None,
-            global_struct_field_types: HashMap::new(),
+            global_struct_field_types: Arc::new(HashMap::new()),
+            struct_defining_module_paths: Arc::new(HashMap::new()),
+            convergence_only: false,
         }
     }
 

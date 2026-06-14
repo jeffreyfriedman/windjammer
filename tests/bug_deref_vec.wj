@@ -1,4 +1,4 @@
-// TDD: Test Vec<String> element comparison with borrowed param
+// TDD: Test Vec<string> element comparison with borrowed param
 // This should reproduce the exact Bug #5 scenario
 
 fn find_in_vec(items: Vec<string>, target: string) -> bool {

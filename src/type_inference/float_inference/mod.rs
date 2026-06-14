@@ -216,10 +216,8 @@ impl FloatInference {
         self.external_crate_metadata_paths = paths.clone();
     }
 
-    /// Main entry point: Infer float types for a program
-    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
-        self.imported_type_registry_keys.clear();
-        // TDD FIX: Extract file from program's source locations for file-aware ExprIds
+    /// Register signatures/metadata from a program (no constraint collection).
+    pub fn prepare_program<'ast>(&mut self, program: &Program<'ast>) {
         if let Some(first_item) = program.items.first() {
             if let Some(loc) = first_item.location() {
                 self.set_current_file(loc.file.to_string_lossy().to_string());
@@ -233,18 +231,56 @@ impl FloatInference {
             self.register_const_and_static(item);
         }
 
-        // TDD FIX: Load metadata from imported modules for cross-module inference
         self.load_imported_metadata(program);
-
         self.register_use_imports_from_items(&program.items);
+    }
 
-        // Pass 1: Collect constraints from all expressions
+    /// Collect float constraints from a program (call [`Self::finish_solve`] after merging).
+    pub fn collect_program_constraints<'ast>(&mut self, program: &Program<'ast>) {
+        if let Some(first_item) = program.items.first() {
+            if let Some(loc) = first_item.location() {
+                self.set_current_file(loc.file.to_string_lossy().to_string());
+            }
+        }
         for item in program.items.iter() {
             self.collect_item_constraints(item);
         }
+    }
 
-        // Pass 2: Solve constraints (unification)
+    /// Merge parallel per-file inference state before a single solve pass.
+    pub fn merge_parallel_state(&mut self, other: Self) {
+        self.constraints.extend(other.constraints);
+        self.inferred_types.extend(other.inferred_types);
+        self.errors.extend(other.errors);
+        // Do not merge var_assignments / var_types / var_element_types — per-file scratch.
+        self.const_types.extend(other.const_types);
+        self.expr_id_cache.extend(other.expr_id_cache);
+        self.next_seq_id = self.next_seq_id.max(other.next_seq_id);
+        self.next_file_id = self.next_file_id.max(other.next_file_id);
+        for (k, v) in other.file_name_to_id {
+            self.file_name_to_id.entry(k).or_insert(v);
+        }
+        self.imported_type_registry_keys
+            .extend(other.imported_type_registry_keys);
+        self.type_aliases.extend(other.type_aliases);
+    }
+
+    /// Run constraint unification after all programs have been collected.
+    pub fn finish_solve(&mut self) {
         self.solve_constraints();
+    }
+
+    /// Clear cross-file import registry before a multi-file inference pass.
+    pub fn reset_imported_type_registry(&mut self) {
+        self.imported_type_registry_keys.clear();
+    }
+
+    /// Main entry point: Infer float types for a program
+    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.reset_imported_type_registry();
+        self.prepare_program(program);
+        self.collect_program_constraints(program);
+        self.finish_solve();
     }
 
     fn lookup_struct_fields(&self, type_name: &str) -> Option<&HashMap<String, Type>> {

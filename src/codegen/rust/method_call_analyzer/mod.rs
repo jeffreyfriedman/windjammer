@@ -10,7 +10,7 @@ mod registry_lookup;
 mod stdlib_ref;
 
 use crate::analyzer::OwnershipMode;
-use crate::parser::{Expression, Literal, Parameter, Type};
+use crate::parser::{Expression, Literal, OwnershipHint, Parameter, Type};
 use std::collections::HashSet;
 
 /// Context for method call analysis, grouping related parameter collections
@@ -19,10 +19,33 @@ pub struct MethodCallContext<'a, 'ast> {
     pub current_function_params: &'a [Parameter<'ast>],
     pub borrowed_iterator_vars: &'a HashSet<String>,
     pub inferred_borrowed_params: &'a HashSet<String>,
+    pub str_ref_optimized_params: &'a HashSet<String>,
 }
 
 /// Analyzes method calls to determine what automatic conversions are needed
 pub struct MethodCallAnalyzer;
+
+/// Whether a named argument already generates as a Rust reference at the call site.
+fn arg_identifier_already_generates_as_rust_ref(
+    name: &str,
+    current_function_params: &[Parameter],
+    inferred_borrowed_params: &HashSet<String>,
+    str_ref_optimized_params: &HashSet<String>,
+    borrowed_iterator_vars: &HashSet<String>,
+) -> bool {
+    if borrowed_iterator_vars.contains(name) || str_ref_optimized_params.contains(name) {
+        return true;
+    }
+    current_function_params.iter().any(|param| {
+        param.name == name
+            && (matches!(param.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
+                || crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &param.type_,
+                    &param.name,
+                    inferred_borrowed_params,
+                ))
+    })
+}
 
 impl MethodCallAnalyzer {
     /// True when codegen spells the callee's formal parameter `sig_param_idx` as `&str` in Rust
@@ -71,6 +94,7 @@ impl MethodCallAnalyzer {
             >,
         >,
         match_arm_bindings: &HashSet<String>,
+        str_ref_optimized_params: &HashSet<String>,
     ) -> bool {
         let is_string_literal = matches!(
             arg,
@@ -136,6 +160,14 @@ impl MethodCallAnalyzer {
 
         if let Expression::Identifier { name, .. } = arg {
             if match_arm_bindings.contains(name.as_str()) {
+                if let Some(var_types) = local_var_types {
+                    if let Some(ty) = var_types.get(name.as_str()) {
+                        if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                            return false;
+                        }
+                    }
+                }
+
                 if let Some(sig) = method_signature {
                     let sig_param_idx = if sig.has_self_receiver {
                         param_idx + 1
@@ -164,6 +196,20 @@ impl MethodCallAnalyzer {
             }
         }
 
+        // Must run before registry_lookup: stdlib signatures say HashMap.get wants `&K`, but
+        // `key: str` / `key: &string` already spell as `&str` in Rust — adding `&` → &&str.
+        if let Expression::Identifier { name, .. } = arg {
+            if arg_identifier_already_generates_as_rust_ref(
+                name,
+                current_function_params,
+                inferred_borrowed_params,
+                str_ref_optimized_params,
+                borrowed_iterator_vars,
+            ) {
+                return false;
+            }
+        }
+
         if let Some(receiver_type) = receiver_type_name {
             if let Some(decision) = registry_lookup::ref_from_signature_registries(
                 receiver_type,
@@ -176,14 +222,17 @@ impl MethodCallAnalyzer {
                 current_function_params,
                 borrowed_iterator_vars,
                 inferred_borrowed_params,
+                str_ref_optimized_params,
             ) {
                 return decision;
             }
         }
 
         if matches!(arg, Expression::MethodCall { .. }) {
-            let is_map_key_method =
-                crate::method_registry::is_map_key_method(method) && param_idx == 0;
+            let is_map_key_method = matches!(
+                method,
+                "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
+            ) && param_idx == 0;
             let is_known_map = receiver_type_name.is_some_and(|n| {
                 let base = n.split('<').next().unwrap_or(n);
                 crate::type_classification::is_map_type(base)
@@ -217,33 +266,24 @@ impl MethodCallAnalyzer {
 
         let is_hashmap_key_method = matches!(
             method,
-            "contains_key" | "get" | "get_mut" | "remove" | "get_key_value"
-        ) && param_idx == 0;
+            "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
+        ) && param_idx == 0
+            && receiver_type_name.is_some_and(|n| {
+                let base = n.split('<').next().unwrap_or(n);
+                crate::type_classification::is_map_type(base)
+            });
 
         if is_hashmap_key_method {
             if let Expression::Identifier { name, .. } = arg {
-                let is_string_type =
-                    |t: &Type| crate::codegen::rust::types::is_windjammer_text_type(t);
-                let is_wj_str_param = current_function_params.iter().any(|param| {
-                    param.name == *name && matches!(&param.type_, Type::Custom(s) if s == "str")
-                });
-                let is_borrowed_string_param = current_function_params
-                    .iter()
-                    .any(|param| param.name == *name && is_string_type(&param.type_))
-                    && inferred_borrowed_params.contains(name);
-
-                if is_wj_str_param || is_borrowed_string_param {
+                if arg_identifier_already_generates_as_rust_ref(
+                    name,
+                    current_function_params,
+                    inferred_borrowed_params,
+                    str_ref_optimized_params,
+                    borrowed_iterator_vars,
+                ) {
                     return false;
                 }
-            }
-        }
-
-        if let Expression::Identifier { name, .. } = arg {
-            if current_function_params.iter().any(|param| {
-                param.name == *name
-                    && matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
-            }) {
-                return false;
             }
         }
 
@@ -286,19 +326,21 @@ impl MethodCallAnalyzer {
             }
         }
 
-        let is_stdlib_method = crate::method_registry::is_known_stdlib_method(method);
-
-        if is_stdlib_method {
-            let ctx = MethodCallContext {
-                usize_variables,
-                current_function_params,
-                borrowed_iterator_vars,
-                inferred_borrowed_params,
-            };
-            return Self::needs_stdlib_ref(method, arg, &ctx, arg_count, receiver_type_name);
-        }
-
-        false
+        let ctx = MethodCallContext {
+            usize_variables,
+            current_function_params,
+            borrowed_iterator_vars,
+            inferred_borrowed_params,
+            str_ref_optimized_params,
+        };
+        Self::needs_stdlib_ref(
+            method,
+            arg,
+            &ctx,
+            arg_count,
+            receiver_type_name,
+            local_var_types,
+        )
     }
 }
 

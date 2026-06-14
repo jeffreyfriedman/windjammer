@@ -1,0 +1,126 @@
+{
+  "module_path": "Iterator",
+  "structs": {},
+  "functions": {
+    "Iterator::filter": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::map": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::any": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::all": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::find": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"T\"))",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::find_map": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"U\"))",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::position": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"usize\"))",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::take_while": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::skip_while": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::map_while": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::partition": {
+      "params": ["Custom(\"Iterator\")", "Custom(\"Fn\")"],
+      "return_type": "Custom(\"T\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::rposition": {
+      "params": ["MutableReference(Custom(\"Iterator\"))", "Custom(\"Fn\")"],
+      "return_type": "Option(Custom(\"usize\"))",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::count": {
+      "params": ["Custom(\"Iterator\")"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::enumerate": {
+      "params": ["Custom(\"Iterator\")"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "Iterator::clone": {
+      "params": ["Reference(Custom(\"Iterator\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "Iterator",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

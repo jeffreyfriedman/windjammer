@@ -23,31 +23,28 @@ impl<'ast> CodeGenerator<'ast> {
         if method == "clone" {
             self.in_explicit_clone_call = true;
         }
+        // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
+        // since those methods already produce an owned value.
+        let prev_coerce = self.coerce_string_literals_to_owned;
+        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter") || method == "to_string"
+        {
+            self.coerce_string_literals_to_owned = false;
+        }
         let mut obj_str = self.generate_expression_with_precedence(object);
+        self.coerce_string_literals_to_owned = prev_coerce;
         self.in_field_access_object = prev_field_access;
         self.in_explicit_clone_call = prev_explicit_clone;
-        // E0507: `collection[i].method(args)` when the method consumes `self` (owned receiver)
-        // must clone the element: `self.tracks[i].clone().sample(t)` (otherwise move out of &Vec).
-        if matches!(object, Expression::Index { .. }) {
-            if let Some(recv_ty) = self.infer_expression_type(object) {
-                if !self.is_type_copy(&recv_ty) {
-                    if let Some(tn) = Self::type_to_name(&recv_ty) {
-                        let qualified = format!("{}::{}", tn, method);
-                        let sig_opt = self
-                            .signature_registry
-                            .get_signature(&qualified)
-                            .or_else(|| self.signature_registry.get_signature(method));
-                        if let Some(sig) = sig_opt {
-                            if sig.has_self_receiver
-                                && sig.param_ownership.first()
-                                    == Some(&crate::analyzer::OwnershipMode::Owned)
-                                && !obj_str.ends_with(".clone()")
-                            {
-                                obj_str = format!("{}.clone()", obj_str);
-                            }
-                        }
-                    }
-                }
+        // E0507: `collection[i].method(args)` on non-Copy elements must clone before the call.
+        // Rust cannot move out of a Vec index. Even when the registry says `&self`, library
+        // multipass metadata can disagree with the emitted receiver (`self` vs `&self`), so
+        // always clone indexed non-Copy receivers (extra clone on `&self` methods is correct).
+        if matches!(object, Expression::Index { .. }) && !obj_str.ends_with(".clone()") {
+            let is_copy = self
+                .infer_expression_type(object)
+                .as_ref()
+                .is_some_and(|t| self.is_type_copy(t));
+            if !is_copy {
+                obj_str = format!("{}.clone()", obj_str);
             }
         }
 
@@ -55,7 +52,13 @@ impl<'ast> CodeGenerator<'ast> {
         // and the variable is a borrowed iterator variable (from `for x in &collection`).
         // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
         if let Expression::Identifier { name, .. } = object {
-            if self.borrowed_iterator_vars.contains(name) && method != "clone" {
+            let is_type_preserving =
+                matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter");
+            let is_borrowed_iter =
+                self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
+            let is_mut_borrowed_param =
+                self.inferred_mut_borrowed_params.contains(name) && !is_type_preserving;
+            if is_borrowed_iter || is_mut_borrowed_param {
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
                         if let Some(tn) = Self::type_to_name(&recv_ty) {
@@ -63,7 +66,30 @@ impl<'ast> CodeGenerator<'ast> {
                             let sig_opt = self
                                 .signature_registry
                                 .get_signature(&qualified)
-                                .or_else(|| self.signature_registry.get_signature(method));
+                                .or_else(|| {
+                                    let base = tn.split('<').next().unwrap_or(&tn);
+                                    if base != tn {
+                                        let base_q = format!("{base}::{method}");
+                                        self.signature_registry.get_signature(&base_q)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .or_else(|| {
+                                    // For `Box<dyn Trait>`, extract the trait name from
+                                    // the Parameterized type and look up `Trait::method`.
+                                    Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
+                                        let trait_q = format!("{trait_name}::{method}");
+                                        self.signature_registry.get_signature(&trait_q)
+                                    })
+                                })
+                                .or_else(|| {
+                                    // Suffix match: find any `::method` in the registry.
+                                    // Conservative for ownership check (any mutating method
+                                    // prevents spurious clone).
+                                    self.signature_registry
+                                        .find_signature_ending_with(&format!("::{method}"))
+                                });
                             if let Some(sig) = sig_opt {
                                 if sig.has_self_receiver
                                     && sig.param_ownership.first()
@@ -72,7 +98,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     obj_str = format!("{}.clone()", obj_str);
                                 }
+                            } else if is_borrowed_iter
+                                && !is_mut_borrowed_param
+                                && !obj_str.ends_with(".clone()")
+                            {
+                                // Unknown signature on borrowed iterator var — clone conservatively (E0507).
+                                obj_str = format!("{}.clone()", obj_str);
                             }
+                            // For &mut params with unknown signatures, do NOT clone.
+                            // &mut refs can call &self and &mut self methods without cloning.
                         }
                     }
                 }
@@ -93,7 +127,7 @@ impl<'ast> CodeGenerator<'ast> {
         //   node.children.unwrap() where node is &Node → ERROR: cannot move from &Option
         //   node.children.clone().unwrap() → ✅ OK
         // THE WINDJAMMER WAY: Users write .unwrap() naturally, compiler handles ownership
-        if method == "unwrap" {
+        if matches!(method, "unwrap" | "first" | "last") {
             // Check if object is a field access (node.children) that needs clone
             let needs_clone = if let Expression::FieldAccess {
                 object: field_obj, ..
@@ -126,5 +160,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         obj_str
+    }
+
+    /// Extract the trait name from `Box<dyn Trait>`, `dyn Trait`, or `TraitObject("Trait")`.
+    fn extract_dyn_trait_name(ty: &crate::parser::Type) -> Option<&str> {
+        use crate::parser::Type;
+        match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::extract_dyn_trait_name(inner)
+            }
+            Type::Parameterized(name, params) if name == "Box" => params
+                .first()
+                .and_then(|inner| Self::extract_dyn_trait_name(inner)),
+            Type::TraitObject(name) => Some(name.as_str()),
+            Type::Custom(name) => name.strip_prefix("dyn "),
+            _ => None,
+        }
     }
 }

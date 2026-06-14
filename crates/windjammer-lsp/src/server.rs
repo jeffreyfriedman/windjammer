@@ -5,10 +5,11 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use crate::analysis::AnalysisDatabase;
 use crate::cache::{CacheEntry, CacheManager};
 use crate::completion::CompletionProvider;
-use crate::database::{ParallelConfig, WindjammerDatabase};
+use crate::database::{
+    ParallelConfig, Symbol as DbSymbol, SymbolKind as DbSymbolKind, WindjammerDatabase,
+};
 use crate::diagnostics::DiagnosticsEngine;
 use crate::hover::HoverProvider;
 use crate::inlay_hints::InlayHintsProvider;
@@ -17,10 +18,9 @@ use crate::semantic_tokens::SemanticTokensProvider;
 
 /// The Windjammer Language Server
 ///
-/// Handles LSP requests and manages the analysis database
+/// Handles LSP requests via the Salsa incremental analysis database
 pub struct WindjammerLanguageServer {
     client: Client,
-    analysis_db: Arc<AnalysisDatabase>,
     /// Salsa incremental computation database (Mutex for Send + Sync)
     salsa_db: Arc<Mutex<WindjammerDatabase>>,
     /// Parallel processing configuration (for future parallel analysis)
@@ -66,7 +66,6 @@ impl WindjammerLanguageServer {
 
         Self {
             client: client.clone(),
-            analysis_db: Arc::new(AnalysisDatabase::new()),
             salsa_db: Arc::new(Mutex::new(WindjammerDatabase::new())),
             parallel_config,
             cache_manager: Arc::new(Mutex::new(cache_manager)),
@@ -140,12 +139,26 @@ impl WindjammerLanguageServer {
                 cache.insert(uri.clone(), entry);
             }
 
-            // Analyze the file with the old analysis DB (for now)
-            // TODO: Eventually migrate analysis to Salsa queries
-            let diagnostics = self.analysis_db.analyze_file(&uri, &content);
+            // Full compiler diagnostics + inlay hints via shared ide_analysis pipeline
+            let diagnostics = {
+                let mut db = self.salsa_db.lock().unwrap();
+                let source_file = db.set_source_text(uri.clone(), content.clone());
+                let analysis = db.get_ide_analysis(source_file);
+                let symbols = db.get_symbols(source_file).clone();
+                let diagnostics = crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics);
+                let inlay_hints = crate::ide_queries::to_inlay_hints(&analysis, &symbols, &content);
+
+                let mut inlay_hints_provider = InlayHintsProvider::new();
+                inlay_hints_provider.update_hints(inlay_hints);
+                let inlay_hints_providers = self.inlay_hints_providers.lock().unwrap();
+                inlay_hints_providers.insert(uri.clone(), inlay_hints_provider);
+
+                diagnostics
+            };
+
+            self.diagnostics.publish(&uri, diagnostics).await;
 
             // Update providers with Salsa-parsed program
-            // Update hover provider
             {
                 let mut hover_provider = HoverProvider::new();
                 hover_provider.update_program(program_owned.clone());
@@ -153,7 +166,6 @@ impl WindjammerLanguageServer {
                 hover_providers.insert(uri.clone(), hover_provider);
             }
 
-            // Update completion provider
             {
                 let mut completion_provider = CompletionProvider::new();
                 completion_provider.update_program(program_owned.clone());
@@ -161,27 +173,12 @@ impl WindjammerLanguageServer {
                 completion_providers.insert(uri.clone(), completion_provider);
             }
 
-            // Note: RefactoringEngine is created on-demand in code_action handler
-
-            // Update semantic tokens provider
             {
                 let mut semantic_tokens_provider = SemanticTokensProvider::new();
                 semantic_tokens_provider.update_program(program_owned.clone(), content.clone());
                 let semantic_tokens_providers = self.semantic_tokens_providers.lock().unwrap();
                 semantic_tokens_providers.insert(uri.clone(), semantic_tokens_provider);
             }
-
-            // Update inlay hints provider with ownership analysis
-            let analyzed_functions = self.analysis_db.get_analyzed_functions(&uri);
-            if !analyzed_functions.is_empty() {
-                let mut inlay_hints_provider = InlayHintsProvider::new();
-                inlay_hints_provider.update_analyzed_functions(analyzed_functions);
-                let inlay_hints_providers = self.inlay_hints_providers.lock().unwrap();
-                inlay_hints_providers.insert(uri.clone(), inlay_hints_provider);
-            }
-
-            // Publish diagnostics to the client
-            self.diagnostics.publish(&uri, diagnostics).await;
         }
     }
 
@@ -295,6 +292,79 @@ impl WindjammerLanguageServer {
                 }
             }
         }
+    }
+
+    fn symbol_to_lsp_range(symbol: &DbSymbol) -> Range {
+        if let Some(r) = &symbol.range {
+            Range {
+                start: Position {
+                    line: r.start_line,
+                    character: r.start_character,
+                },
+                end: Position {
+                    line: r.end_line,
+                    character: r.end_character,
+                },
+            }
+        } else {
+            Range {
+                start: Position {
+                    line: symbol.line,
+                    character: symbol.character,
+                },
+                end: Position {
+                    line: symbol.line,
+                    character: symbol.character + symbol.name.len() as u32,
+                },
+            }
+        }
+    }
+
+    fn db_symbol_kind_to_lsp(kind: DbSymbolKind) -> SymbolKind {
+        match kind {
+            DbSymbolKind::Function => SymbolKind::FUNCTION,
+            DbSymbolKind::Struct => SymbolKind::STRUCT,
+            DbSymbolKind::Enum => SymbolKind::ENUM,
+            DbSymbolKind::Trait => SymbolKind::INTERFACE,
+            DbSymbolKind::Impl => SymbolKind::CLASS,
+            DbSymbolKind::Const => SymbolKind::CONSTANT,
+            DbSymbolKind::Static => SymbolKind::VARIABLE,
+        }
+    }
+
+    fn symbol_to_symbol_information(&self, uri: Url, symbol: &DbSymbol) -> SymbolInformation {
+        SymbolInformation {
+            name: symbol.name.clone(),
+            kind: Self::db_symbol_kind_to_lsp(symbol.kind),
+            tags: None,
+            deprecated: None,
+            location: Location {
+                uri,
+                range: Self::symbol_to_lsp_range(symbol),
+            },
+            container_name: None,
+        }
+    }
+
+    fn find_callable_function<'a>(
+        program: &'a windjammer::parser::Program,
+        name: &str,
+    ) -> Option<&'a windjammer::parser::FunctionDecl<'a>> {
+        use windjammer::parser::Item;
+        for item in &program.items {
+            match item {
+                Item::Function { decl, .. } if decl.name == name => return Some(decl),
+                Item::Impl { block, .. } => {
+                    for method in &block.functions {
+                        if method.name == name {
+                            return Some(method);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Get the word at a given position in a document
@@ -580,20 +650,6 @@ impl LanguageServer for WindjammerLanguageServer {
                 );
                 return Ok(Some(GotoDefinitionResponse::Scalar(loc)));
             }
-
-            // Fallback to old single-file search
-            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                if let Some(symbol_def) = symbol_table.find_symbol(&name) {
-                    tracing::debug!(
-                        "Found definition for '{}' at {:?} (fallback)",
-                        name,
-                        symbol_def.location
-                    );
-                    return Ok(Some(GotoDefinitionResponse::Scalar(
-                        symbol_def.location.clone(),
-                    )));
-                }
-            }
         }
 
         Ok(None)
@@ -636,29 +692,6 @@ impl LanguageServer for WindjammerLanguageServer {
                     self.documents.len()
                 );
                 return Ok(Some(locations));
-            }
-
-            // Fallback to old single-file search if Salsa finds nothing
-            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                let refs = symbol_table.find_references(&name);
-
-                if !refs.is_empty() {
-                    let mut locations: Vec<Location> =
-                        refs.iter().map(|r| r.location.clone()).collect();
-
-                    if params.context.include_declaration {
-                        if let Some(symbol_def) = symbol_table.find_symbol(&name) {
-                            locations.push(symbol_def.location.clone());
-                        }
-                    }
-
-                    tracing::debug!(
-                        "Found {} references to '{}' (fallback)",
-                        locations.len(),
-                        name
-                    );
-                    return Ok(Some(locations));
-                }
             }
         }
 
@@ -731,58 +764,6 @@ impl LanguageServer for WindjammerLanguageServer {
                     change_annotations: None,
                 }));
             }
-
-            // Fallback to old single-file rename
-            if let Some(symbol_table) = self.analysis_db.get_symbol_table(&uri) {
-                let refs = symbol_table.find_references(&old_name);
-
-                if !refs.is_empty() || symbol_table.find_symbol(&old_name).is_some() {
-                    use std::collections::HashMap;
-                    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-
-                    // Create text edits for all references
-                    for reference in refs {
-                        let text_edit = TextEdit {
-                            range: reference.location.range,
-                            new_text: new_name.clone(),
-                        };
-
-                        changes
-                            .entry(reference.location.uri.clone())
-                            .or_default()
-                            .push(text_edit);
-                    }
-
-                    // Also rename the definition
-                    if let Some(symbol_def) = symbol_table.find_symbol(&old_name) {
-                        let text_edit = TextEdit {
-                            range: symbol_def.location.range,
-                            new_text: new_name.clone(),
-                        };
-
-                        changes
-                            .entry(symbol_def.location.uri.clone())
-                            .or_default()
-                            .push(text_edit);
-                    }
-
-                    if !changes.is_empty() {
-                        tracing::debug!(
-                            "Renaming '{}' to '{}' with {} edits across {} files (fallback)",
-                            old_name,
-                            new_name,
-                            changes.values().map(|v| v.len()).sum::<usize>(),
-                            changes.len()
-                        );
-
-                        return Ok(Some(WorkspaceEdit {
-                            changes: Some(changes),
-                            document_changes: None,
-                            change_annotations: None,
-                        }));
-                    }
-                }
-            }
         }
 
         Ok(None)
@@ -795,223 +776,26 @@ impl LanguageServer for WindjammerLanguageServer {
         let uri = params.text_document.uri.clone();
         tracing::debug!("Document symbol: {}", uri);
 
-        // Get the program for this file
-        let program = match self.analysis_db.get_program(&uri) {
-            Some(prog) => prog,
+        let content = match self.documents.get(&uri) {
+            Some(content) => content.clone(),
             None => return Ok(None),
         };
 
-        let mut symbols = Vec::new();
+        let symbols = {
+            let mut db = self.salsa_db.lock().unwrap();
+            let source_file = db.set_source_text(uri.clone(), content);
+            db.get_symbols(source_file).clone()
+        };
 
-        // Collect symbols from all items
-        for item in &program.items {
-            match item {
-                windjammer::parser::Item::Function {
-                    decl: func,
-                    location: _,
-                } => {
-                    symbols.push(SymbolInformation {
-                        name: func.name.clone(),
-                        kind: SymbolKind::FUNCTION,
-                        tags: None,
-                        deprecated: None,
-                        location: Location {
-                            uri: uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        },
-                        container_name: None,
-                    });
-                }
-                windjammer::parser::Item::Struct {
-                    decl: s,
-                    location: _,
-                } => {
-                    symbols.push(SymbolInformation {
-                        name: s.name.clone(),
-                        kind: SymbolKind::STRUCT,
-                        tags: None,
-                        deprecated: None,
-                        location: Location {
-                            uri: uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        },
-                        container_name: None,
-                    });
+        let symbol_infos: Vec<SymbolInformation> = symbols
+            .iter()
+            .map(|symbol| self.symbol_to_symbol_information(uri.clone(), symbol))
+            .collect();
 
-                    // Add struct fields
-                    for field in &s.fields {
-                        symbols.push(SymbolInformation {
-                            name: field.name.clone(),
-                            kind: SymbolKind::FIELD,
-                            tags: None,
-                            deprecated: None,
-                            location: Location {
-                                uri: uri.clone(),
-                                range: Range {
-                                    start: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                    end: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                },
-                            },
-                            container_name: Some(s.name.clone()),
-                        });
-                    }
-                }
-                windjammer::parser::Item::Enum {
-                    decl: e,
-                    location: _,
-                } => {
-                    symbols.push(SymbolInformation {
-                        name: e.name.clone(),
-                        kind: SymbolKind::ENUM,
-                        tags: None,
-                        deprecated: None,
-                        location: Location {
-                            uri: uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        },
-                        container_name: None,
-                    });
-
-                    // Add enum variants
-                    for variant in &e.variants {
-                        symbols.push(SymbolInformation {
-                            name: variant.name.clone(),
-                            kind: SymbolKind::ENUM_MEMBER,
-                            tags: None,
-                            deprecated: None,
-                            location: Location {
-                                uri: uri.clone(),
-                                range: Range {
-                                    start: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                    end: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                },
-                            },
-                            container_name: Some(e.name.clone()),
-                        });
-                    }
-                }
-                windjammer::parser::Item::Trait {
-                    decl: t,
-                    location: _,
-                } => {
-                    symbols.push(SymbolInformation {
-                        name: t.name.clone(),
-                        kind: SymbolKind::INTERFACE,
-                        tags: None,
-                        deprecated: None,
-                        location: Location {
-                            uri: uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        },
-                        container_name: None,
-                    });
-                }
-                windjammer::parser::Item::Impl {
-                    block: impl_block,
-                    location: _,
-                } => {
-                    // Add impl block methods
-                    for method in &impl_block.functions {
-                        symbols.push(SymbolInformation {
-                            name: method.name.clone(),
-                            kind: SymbolKind::METHOD,
-                            tags: None,
-                            deprecated: None,
-                            location: Location {
-                                uri: uri.clone(),
-                                range: Range {
-                                    start: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                    end: Position {
-                                        line: 0,
-                                        character: 0,
-                                    },
-                                },
-                            },
-                            container_name: Some(impl_block.type_name.clone()),
-                        });
-                    }
-                }
-                windjammer::parser::Item::Static { name, .. } => {
-                    symbols.push(SymbolInformation {
-                        name: name.clone(),
-                        kind: SymbolKind::CONSTANT,
-                        tags: None,
-                        deprecated: None,
-                        location: Location {
-                            uri: uri.clone(),
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        },
-                        container_name: None,
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        if symbols.is_empty() {
+        if symbol_infos.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(DocumentSymbolResponse::Flat(symbols)))
+            Ok(Some(DocumentSymbolResponse::Flat(symbol_infos)))
         }
     }
 
@@ -1024,125 +808,19 @@ impl LanguageServer for WindjammerLanguageServer {
 
         let mut results = Vec::new();
 
-        // Search across all documents in the workspace
         for entry in self.documents.iter() {
             let uri = entry.key().clone();
+            let content = entry.value().clone();
 
-            // Get the program for this file
-            if let Some(program) = self.analysis_db.get_program(&uri) {
-                // Search through all items
-                for item in &program.items {
-                    match item {
-                        windjammer::parser::Item::Function {
-                            decl: func,
-                            location: _,
-                        } => {
-                            if func.name.to_lowercase().contains(&query) {
-                                results.push(SymbolInformation {
-                                    name: func.name.clone(),
-                                    kind: SymbolKind::FUNCTION,
-                                    tags: None,
-                                    deprecated: None,
-                                    location: Location {
-                                        uri: uri.clone(),
-                                        range: Range {
-                                            start: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                            end: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                        },
-                                    },
-                                    container_name: None,
-                                });
-                            }
-                        }
-                        windjammer::parser::Item::Struct {
-                            decl: s,
-                            location: _,
-                        } => {
-                            if s.name.to_lowercase().contains(&query) {
-                                results.push(SymbolInformation {
-                                    name: s.name.clone(),
-                                    kind: SymbolKind::STRUCT,
-                                    tags: None,
-                                    deprecated: None,
-                                    location: Location {
-                                        uri: uri.clone(),
-                                        range: Range {
-                                            start: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                            end: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                        },
-                                    },
-                                    container_name: None,
-                                });
-                            }
-                        }
-                        windjammer::parser::Item::Enum {
-                            decl: e,
-                            location: _,
-                        } => {
-                            if e.name.to_lowercase().contains(&query) {
-                                results.push(SymbolInformation {
-                                    name: e.name.clone(),
-                                    kind: SymbolKind::ENUM,
-                                    tags: None,
-                                    deprecated: None,
-                                    location: Location {
-                                        uri: uri.clone(),
-                                        range: Range {
-                                            start: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                            end: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                        },
-                                    },
-                                    container_name: None,
-                                });
-                            }
-                        }
-                        windjammer::parser::Item::Trait {
-                            decl: t,
-                            location: _,
-                        } => {
-                            if t.name.to_lowercase().contains(&query) {
-                                results.push(SymbolInformation {
-                                    name: t.name.clone(),
-                                    kind: SymbolKind::INTERFACE,
-                                    tags: None,
-                                    deprecated: None,
-                                    location: Location {
-                                        uri: uri.clone(),
-                                        range: Range {
-                                            start: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                            end: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                        },
-                                    },
-                                    container_name: None,
-                                });
-                            }
-                        }
-                        _ => {}
-                    }
+            let file_symbols = {
+                let mut db = self.salsa_db.lock().unwrap();
+                let source_file = db.set_source_text(uri.clone(), content);
+                db.get_symbols(source_file).clone()
+            };
+
+            for symbol in file_symbols {
+                if symbol.name.to_lowercase().contains(&query) {
+                    results.push(self.symbol_to_symbol_information(uri.clone(), &symbol));
                 }
             }
         }
@@ -1246,10 +924,11 @@ impl LanguageServer for WindjammerLanguageServer {
             None => return Ok(None),
         };
 
-        // Get the program for this file
-        let program = match self.analysis_db.get_program(&uri) {
-            Some(prog) => prog,
-            None => return Ok(None),
+        // Get parsed program via Salsa
+        let program = {
+            let mut db = self.salsa_db.lock().unwrap();
+            let source_file = db.set_source_text(uri.clone(), content.clone());
+            db.get_program(source_file).clone()
         };
 
         // Find function at cursor position (simplified - look for function name before cursor)
@@ -1276,73 +955,53 @@ impl LanguageServer for WindjammerLanguageServer {
                 .to_string();
 
             if !func_name.is_empty() {
-                // Find this function in the program
-                for item in &program.items {
-                    if let windjammer::parser::Item::Function {
-                        decl: _func_decl,
-                        location: _,
-                    } = item
-                    {
-                        // Get analyzed function for this declaration
-                        let analyzed_funcs = self.analysis_db.get_analyzed_functions(&uri);
-                        let func = analyzed_funcs.iter().find(|f| f.decl.name == func_name);
+                if let Some(func_decl) = Self::find_callable_function(&program, &func_name) {
+                    // Build signature string
+                    let params_str: Vec<String> = func_decl
+                        .parameters
+                        .iter()
+                        .map(|p| format!("{}: {}", p.name, self.type_to_string(&p.type_)))
+                        .collect();
 
-                        if let Some(func) = func {
-                            // Build signature string
-                            let params_str: Vec<String> = func
-                                .decl
-                                .parameters
-                                .iter()
-                                .map(|p| format!("{}: {}", p.name, self.type_to_string(&p.type_)))
-                                .collect();
+                    let return_str = func_decl
+                        .return_type
+                        .as_ref()
+                        .map(|t| format!(" -> {}", self.type_to_string(t)))
+                        .unwrap_or_default();
 
-                            let return_str = func
-                                .decl
-                                .return_type
-                                .as_ref()
-                                .map(|t| format!(" -> {}", self.type_to_string(t)))
-                                .unwrap_or_default();
+                    let signature_label =
+                        format!("fn {}({}){}", func_name, params_str.join(", "), return_str);
 
-                            let signature_label = format!(
-                                "fn {}({}){}",
-                                func_name,
-                                params_str.join(", "),
-                                return_str
-                            );
+                    // Calculate active parameter based on comma count
+                    let params_section = &before_cursor[paren_pos + 1..];
+                    let comma_count = params_section.matches(',').count();
+                    let active_param =
+                        comma_count.min(func_decl.parameters.len().saturating_sub(1));
 
-                            // Calculate active parameter based on comma count
-                            let params_section = &before_cursor[paren_pos + 1..];
-                            let comma_count = params_section.matches(',').count();
-                            let active_param =
-                                comma_count.min(func.decl.parameters.len().saturating_sub(1));
+                    // Build parameter information
+                    let parameters: Vec<ParameterInformation> = func_decl
+                        .parameters
+                        .iter()
+                        .map(|p| ParameterInformation {
+                            label: ParameterLabel::Simple(format!(
+                                "{}: {}",
+                                p.name,
+                                self.type_to_string(&p.type_)
+                            )),
+                            documentation: None,
+                        })
+                        .collect();
 
-                            // Build parameter information
-                            let parameters: Vec<ParameterInformation> = func
-                                .decl
-                                .parameters
-                                .iter()
-                                .map(|p| ParameterInformation {
-                                    label: ParameterLabel::Simple(format!(
-                                        "{}: {}",
-                                        p.name,
-                                        self.type_to_string(&p.type_)
-                                    )),
-                                    documentation: None,
-                                })
-                                .collect();
-
-                            return Ok(Some(SignatureHelp {
-                                signatures: vec![SignatureInformation {
-                                    label: signature_label,
-                                    documentation: None,
-                                    parameters: Some(parameters),
-                                    active_parameter: Some(active_param as u32),
-                                }],
-                                active_signature: Some(0),
-                                active_parameter: Some(active_param as u32),
-                            }));
-                        }
-                    }
+                    return Ok(Some(SignatureHelp {
+                        signatures: vec![SignatureInformation {
+                            label: signature_label,
+                            documentation: None,
+                            parameters: Some(parameters),
+                            active_parameter: Some(active_param as u32),
+                        }],
+                        active_signature: Some(0),
+                        active_parameter: Some(active_param as u32),
+                    }));
                 }
             }
         }

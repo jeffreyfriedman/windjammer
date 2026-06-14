@@ -30,28 +30,70 @@ impl FloatInference {
             }
         }
 
-        if (method == "min" || method == "max") && arguments.len() == 1 {
+        const SELF_ARG_METHODS: &[&str] = &[
+            "min", "max", "clamp", "copysign", "atan2", "hypot", "powf",
+        ];
+        // Only add float constraints when the receiver is actually a float type.
+        // Struct builder methods (e.g. Slider::max) share names with numeric methods
+        // but must not trigger float inference constraints.
+        if SELF_ARG_METHODS.contains(&method) && method_return_type.is_some() {
             let receiver_id = self.get_expr_id(object);
-            let arg_id = self.get_expr_id(arguments[0].1);
-
-            self.constraints.push(Constraint::MustMatch(
-                receiver_id,
-                arg_id,
-                format!(".{}() argument must match receiver type", method),
-            ));
+            for (_label, arg) in arguments.iter() {
+                let arg_id = self.get_expr_id(arg);
+                self.constraints.push(Constraint::MustMatch(
+                    receiver_id,
+                    arg_id,
+                    format!(".{}() argument must match receiver type", method),
+                ));
+            }
+            if let Some(ref float_ty) = method_return_type {
+                for (_label, arg) in arguments.iter() {
+                    let arg_id = self.get_expr_id(arg);
+                    match float_ty {
+                        FloatType::F32 => {
+                            self.constraints.push(Constraint::MustBeF32(
+                                arg_id,
+                                format!(".{}() arg must be f32 (matches receiver)", method),
+                            ));
+                        }
+                        FloatType::F64 => {
+                            self.constraints.push(Constraint::MustBeF64(
+                                arg_id,
+                                format!(".{}() arg must be f64 (matches receiver)", method),
+                            ));
+                        }
+                        FloatType::Unknown => {}
+                    }
+                }
+            }
         }
 
-        let method_sig = self
-            .function_signatures
-            .iter()
-            .filter(|(func_name, (params, _))| {
-                let name_match = func_name.split("::").last() == Some(method);
-                let param_match =
-                    params.len() == arguments.len() + 1 || params.len() == arguments.len();
-                name_match && param_match
-            })
-            .map(|(_, (params, ret))| (params.clone(), ret.clone()))
-            .next();
+        // Look up method signature, preferring the receiver's own type to avoid
+        // collisions (e.g. Slider::max vs f64::max).
+        let receiver_type_name = self
+            .infer_type_from_expression(object)
+            .and_then(|ty| match ty {
+                Type::Custom(name) => Some(name),
+                _ => None,
+            });
+
+        let method_sig = if let Some(ref type_name) = receiver_type_name {
+            let qualified = format!("{}::{}", type_name, method);
+            self.function_signatures
+                .get(&qualified)
+                .map(|(params, ret)| (params.clone(), ret.clone()))
+        } else {
+            self.function_signatures
+                .iter()
+                .filter(|(func_name, (params, _))| {
+                    let name_match = func_name.split("::").last() == Some(method);
+                    let param_match =
+                        params.len() == arguments.len() + 1 || params.len() == arguments.len();
+                    name_match && param_match
+                })
+                .map(|(_, (params, ret))| (params.clone(), ret.clone()))
+                .next()
+        };
 
         if let Some((param_types, _)) = method_sig {
             let param_offset = if param_types.len() == arguments.len() + 1 {

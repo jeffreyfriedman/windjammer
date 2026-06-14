@@ -1,0 +1,187 @@
+{
+  "WJ0001": {
+    "causes": [
+      "Typo in the variable name",
+      "Variable not declared before use",
+      "Variable is out of scope (declared in a different block)"
+    ],
+    "code": "WJ0001",
+    "example": "// Wrong:\nprintln!(\"{}\", total)  // 'total' not declared\n\n// Correct:\nlet total = 100\nprintln!(\"{}\", total)",
+    "explanation": "The compiler cannot find a variable with this name in the current scope. This usually means the variable hasn't been declared yet, or it's out of scope.",
+    "rust_codes": [
+      "E0425"
+    ],
+    "solutions": [
+      "Check the spelling of the variable name",
+      "Declare the variable before using it: let x = 42",
+      "Make sure the variable is in scope"
+    ],
+    "title": "Variable not found"
+  },
+  "WJ0002": {
+    "causes": [
+      "Typo in the function name",
+      "Function not defined",
+      "Module not imported"
+    ],
+    "code": "WJ0002",
+    "example": "// Wrong:\nproces_data(items)  // Typo: 'proces' instead of 'process'\n\n// Correct:\nprocess_data(items)",
+    "explanation": "The compiler cannot find a function with this name. This might be because the function hasn't been defined, or the module containing it hasn't been imported.",
+    "rust_codes": [
+      "E0425"
+    ],
+    "solutions": [
+      "Check the spelling of the function name",
+      "Define the function before calling it",
+      "Import the module: use std::collections::HashMap"
+    ],
+    "title": "Function not found"
+  },
+  "WJ0003": {
+    "causes": [
+      "Passing wrong type to function",
+      "Assigning wrong type to variable",
+      "Returning wrong type from function"
+    ],
+    "code": "WJ0003",
+    "example": "// Wrong:\nlet x: int = \"42\"  // String, not int\n\n// Correct:\nlet x: int = \"42\".parse()  // Convert to int",
+    "explanation": "The compiler expected one type but found another. In Windjammer, types must match exactly. You may need to convert between types explicitly.",
+    "rust_codes": [
+      "E0308"
+    ],
+    "solutions": [
+      "Use .parse() to convert string to number: \"42\".parse()",
+      "Use .to_string() to convert number to string: 42.to_string()",
+      "Check the function signature for expected types"
+    ],
+    "title": "Type mismatch"
+  },
+  "WJ0004": {
+    "causes": [
+      "Trying to modify an immutable variable",
+      "Forgot 'mut' keyword"
+    ],
+    "code": "WJ0004",
+    "example": "// Wrong:\nlet x = 10\nx = 20  // Error: x is immutable\n\n// Correct:\nlet mut x = 10\nx = 20  // Works!",
+    "explanation": "Variables in Windjammer are immutable by default. To modify a variable, you must declare it as mutable using 'let mut'.",
+    "rust_codes": [
+      "E0384",
+      "E0596"
+    ],
+    "solutions": [
+      "Declare the variable as mutable: let mut x = 42",
+      "Create a new variable instead of modifying the existing one"
+    ],
+    "title": "Cannot modify immutable variable"
+  },
+  "WJ0005": {
+    "causes": [
+      "Typo in the type name",
+      "Type not defined",
+      "Module not imported"
+    ],
+    "code": "WJ0005",
+    "example": "// Wrong:\nlet map: HashMapp<string, int> = ...  // Typo\n\n// Correct:\nlet map: HashMap<string, int> = ...",
+    "explanation": "The compiler cannot find a type with this name. This might be a typo, or the type might be defined in a module that hasn't been imported.",
+    "rust_codes": [
+      "E0412"
+    ],
+    "solutions": [
+      "Check the spelling of the type name",
+      "Define the type (struct, enum, etc.)",
+      "Import the module containing the type"
+    ],
+    "title": "Type not found"
+  },
+  "WJ0006": {
+    "causes": [
+      "Typo in the module name",
+      "Module file doesn't exist",
+      "Module not in the correct directory"
+    ],
+    "code": "WJ0006",
+    "example": "// Wrong:\nuse std::colections::HashMap  // Typo\n\n// Correct:\nuse std::collections::HashMap",
+    "explanation": "The compiler cannot find a module with this name. Check that the module exists and is in the correct location.",
+    "rust_codes": [
+      "E0433"
+    ],
+    "solutions": [
+      "Check the spelling of the module name",
+      "Create the module file",
+      "Check the module is in the correct location"
+    ],
+    "title": "Module not found"
+  },
+  "WJ0007": {
+    "causes": [
+      "Value passed to function that takes ownership",
+      "Value assigned to another variable",
+      "Auto-clone system couldn't insert clone automatically"
+    ],
+    "code": "WJ0007",
+    "example": "// Usually handled automatically, but if not:\nlet data = vec![1, 2, 3]\nprocess(data.clone())  // Explicit clone\nprintln!(\"{}\", data.len())",
+    "explanation": "This value was moved to another location and can no longer be used here. In Windjammer, most values can only be used once unless they implement Copy. However, the auto-clone system should handle most cases automatically.",
+    "rust_codes": [
+      "E0382"
+    ],
+    "solutions": [
+      "Use a reference (&) instead: process(&data)",
+      "Clone explicitly: process(data.clone())",
+      "Restructure code to avoid multiple uses"
+    ],
+    "title": "Value was moved"
+  },
+  "WJ0008": {
+    "causes": [
+      "Multiple mutable borrows",
+      "Mutable borrow while immutable borrow exists"
+    ],
+    "code": "WJ0008",
+    "example": "// Wrong:\nlet mut x = 5\nlet y = &x\nlet z = &mut x  // Error: already borrowed\n\n// Correct:\nlet mut x = 5\nlet y = &x\n// Use y first, then borrow mutably\nlet z = &mut x",
+    "explanation": "You're trying to borrow a value as mutable, but it's already borrowed as immutable, or vice versa. Windjammer enforces Rust's borrowing rules to ensure memory safety.",
+    "rust_codes": [
+      "E0502",
+      "E0503"
+    ],
+    "solutions": [
+      "Ensure borrows don't overlap in scope",
+      "Use only one mutable borrow at a time",
+      "Restructure code to avoid conflicting borrows"
+    ],
+    "title": "Cannot borrow as mutable"
+  },
+  "WJ0009": {
+    "causes": [
+      "Forgot to initialize a field",
+      "Typo in field name"
+    ],
+    "code": "WJ0009",
+    "example": "// Wrong:\nlet user = User {\n    name: \"Alice\"\n    // Missing 'age' field\n}\n\n// Correct:\nlet user = User {\n    name: \"Alice\",\n    age: 30\n}",
+    "explanation": "When creating a struct, you must provide values for all fields.",
+    "rust_codes": [
+      "E0063"
+    ],
+    "solutions": [
+      "Add the missing field",
+      "Check field names match struct definition"
+    ],
+    "title": "Missing field in struct"
+  },
+  "WJ0010": {
+    "causes": [
+      "Missing match arms",
+      "Forgot wildcard pattern"
+    ],
+    "code": "WJ0010",
+    "example": "// Wrong:\nmatch value {\n    Some(x) => println!(\"{}\", x)\n    // Missing None case\n}\n\n// Correct:\nmatch value {\n    Some(x) => println!(\"{}\", x),\n    None => println!(\"No value\")\n}",
+    "explanation": "Your match expression doesn't cover all possible cases. Windjammer requires all patterns to be handled for safety.",
+    "rust_codes": [
+      "E0004"
+    ],
+    "solutions": [
+      "Add missing match arms",
+      "Add a wildcard pattern: _ => ..."
+    ],
+    "title": "Pattern match not exhaustive"
+  }
+}

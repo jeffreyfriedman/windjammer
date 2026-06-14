@@ -4,7 +4,7 @@ use crate::error::{McpError, McpResult};
 use crate::protocol::*;
 use crate::tools::ToolRegistry;
 use anyhow::Context;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
@@ -65,7 +65,7 @@ impl McpServer {
                     debug!("Received request: {}", trimmed);
 
                     match self.handle_request(trimmed).await {
-                        Ok(response) => {
+                        Ok(Some(response)) => {
                             let response_json = serde_json::to_string(&response)?;
                             debug!("Sending response: {}", response_json);
 
@@ -73,13 +73,16 @@ impl McpServer {
                             stdout.write_all(b"\n").await?;
                             stdout.flush().await?;
                         }
+                        Ok(None) => {
+                            debug!("Notification handled (no response)");
+                        }
                         Err(e) => {
                             error!("Error handling request: {}", e);
 
                             // Try to extract request ID if possible
                             let error_response =
                                 if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(trimmed) {
-                                    self.create_error_response(req.id, e)
+                                    self.create_error_response(req.id.unwrap_or(Value::Null), e)
                                 } else {
                                     self.create_error_response(Value::Null, e)
                                 };
@@ -102,23 +105,23 @@ impl McpServer {
         Ok(())
     }
 
-    /// Handle a JSON-RPC request
-    async fn handle_request(&self, request_str: &str) -> McpResult<JsonRpcResponse> {
+    /// Handle a JSON-RPC request. Returns `None` for notifications (no response).
+    async fn handle_request(&self, request_str: &str) -> McpResult<Option<JsonRpcResponse>> {
         let request: JsonRpcRequest =
             serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
 
         debug!("Handling method: {}", request.method);
 
+        let is_notification = request.id.is_none();
+
         let result = match request.method.as_str() {
             "initialize" => self.handle_initialize(request.params).await?,
-            "initialized" => {
-                // Notification - no response needed
-                return Ok(JsonRpcResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: request.id,
-                    result: Some(Value::Null),
-                    error: None,
-                });
+            "initialized" | "notifications/initialized" => {
+                *self.initialized.lock().await = true;
+                if is_notification {
+                    return Ok(None);
+                }
+                Value::Null
             }
             "shutdown" => {
                 info!("Received shutdown request");
@@ -126,6 +129,9 @@ impl McpServer {
             }
             "tools/list" => self.handle_list_tools().await?,
             "tools/call" => self.handle_tool_call(request.params).await?,
+            "resources/list" => self.handle_resources_list().await?,
+            "resources/read" => self.handle_resources_read(request.params).await?,
+            "ping" => serde_json::json!({}),
             _ => {
                 return Err(McpError::JsonRpcError {
                     message: format!("Unknown method: {}", request.method),
@@ -133,12 +139,12 @@ impl McpServer {
             }
         };
 
-        Ok(JsonRpcResponse {
+        Ok(Some(JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
-            id: request.id,
+            id: request.id.unwrap_or(Value::Null),
             result: Some(result),
             error: None,
-        })
+        }))
     }
 
     /// Handle initialize request
@@ -166,7 +172,12 @@ impl McpServer {
         let result = InitializeResult {
             protocol_version: crate::MCP_VERSION.to_string(),
             capabilities: ServerCapabilities {
-                tools: self.tools.list_tools(),
+                tools: ToolsCapability {
+                    list_changed: false,
+                },
+                resources: Some(ResourcesCapability {
+                    list_changed: false,
+                }),
                 experimental: Value::Null,
             },
             server_info: ServerInfo {
@@ -181,7 +192,7 @@ impl McpServer {
     /// Handle tools/list request
     async fn handle_list_tools(&self) -> McpResult<Value> {
         let tools = self.tools.list_tools();
-        Ok(serde_json::to_value(tools)?)
+        Ok(serde_json::json!({ "tools": tools }))
     }
 
     /// Handle tools/call request
@@ -204,6 +215,38 @@ impl McpServer {
             .await?;
 
         Ok(serde_json::to_value(result)?)
+    }
+
+    async fn handle_resources_list(&self) -> McpResult<Value> {
+        let resources: Vec<Value> = crate::agent_index::resource_uri_list()
+            .into_iter()
+            .map(|(uri, name)| {
+                json!({
+                    "uri": uri,
+                    "name": name,
+                    "mimeType": "application/json"
+                })
+            })
+            .collect();
+        Ok(json!({ "resources": resources }))
+    }
+
+    async fn handle_resources_read(&self, params: Value) -> McpResult<Value> {
+        let uri = params.get("uri").and_then(|v| v.as_str()).ok_or_else(|| {
+            McpError::ValidationError {
+                field: "uri".to_string(),
+                message: "Missing resource uri".to_string(),
+            }
+        })?;
+        let contents = crate::agent_index::read_resource(uri)
+            .map_err(|e| McpError::InternalError { message: e })?;
+        Ok(json!({
+            "contents": [{
+                "uri": uri,
+                "mimeType": "application/json",
+                "text": contents
+            }]
+        }))
     }
 
     /// Create an error response
@@ -249,11 +292,9 @@ mod tests {
         let server = McpServer::new().await.unwrap();
 
         let params = serde_json::json!({
-            "protocol_version": crate::MCP_VERSION,
-            "capabilities": {
-                "experimental": null
-            },
-            "client_info": {
+            "protocolVersion": crate::MCP_VERSION,
+            "capabilities": {},
+            "clientInfo": {
                 "name": "test-client",
                 "version": "1.0.0"
             }
@@ -268,6 +309,6 @@ mod tests {
     async fn test_handle_list_tools() {
         let server = McpServer::new().await.unwrap();
         let result = server.handle_list_tools().await.unwrap();
-        assert!(result.is_array());
+        assert!(result.get("tools").and_then(|v| v.as_array()).is_some());
     }
 }

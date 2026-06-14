@@ -3,6 +3,7 @@
 use crate::error::{McpError, McpResult};
 use crate::protocol::ToolCallResult;
 use crate::tools::{error_response, text_response};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -11,8 +12,8 @@ use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Deserialize)]
-struct ParseCodeRequest {
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ParseCodeRequest {
     code: String,
     #[serde(default = "default_true")]
     include_diagnostics: bool,

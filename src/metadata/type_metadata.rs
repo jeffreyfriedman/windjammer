@@ -122,6 +122,7 @@ impl ModuleMetadata {
             "Float" => Some(Type::Float),
             "Bool" => Some(Type::Bool),
             "String" => Some(Type::String),
+            "string" | "Custom(\"string\")" => Some(Type::String),
             s if s.starts_with("Array(") && s.ends_with(')') => {
                 // Array(Custom("f32"), 16) or Array(InnerType, N)
                 let inner = &s[6..s.len() - 1];
@@ -145,8 +146,15 @@ impl ModuleMetadata {
                 let inner = &s[7..s.len() - 1];
                 Self::deserialize_type(inner).map(|t| Type::Option(Box::new(t)))
             }
+            s if s.starts_with("Reference(") && s.ends_with(')') => {
+                let inner = &s[10..s.len() - 1];
+                Self::deserialize_type(inner).map(|t| Type::Reference(Box::new(t)))
+            }
+            s if s.starts_with("MutableReference(") && s.ends_with(')') => {
+                let inner = &s[17..s.len() - 1];
+                Self::deserialize_type(inner).map(|t| Type::MutableReference(Box::new(t)))
+            }
             s if s.starts_with("Custom(") => {
-                // Custom("TypeName") - extract the inner string
                 let rest = s
                     .strip_prefix("Custom(\"")
                     .and_then(|r| r.strip_suffix("\")"));

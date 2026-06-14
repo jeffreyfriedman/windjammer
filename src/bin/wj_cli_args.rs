@@ -111,6 +111,10 @@ pub enum Commands {
         #[arg(long)]
         no_cargo: bool,
 
+        /// Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)
+        #[arg(long)]
+        no_lint: bool,
+
         /// Skip Cargo.toml generation (use project-maintained manifest)
         #[arg(long)]
         no_generate_cargo_toml: bool,
@@ -268,6 +272,13 @@ pub enum Commands {
     Explain {
         /// Error code to explain (e.g., WJ0001, E0425)
         code: String,
+    },
+
+    /// Generate agent index artifacts for MCP (errors, stdlib, spec JSON)
+    AgentIndex {
+        /// Output directory
+        #[arg(short, long, default_value = "agent_index")]
+        output: PathBuf,
     },
 
     /// Compile .wjsl shader to WGSL (with type checking)

@@ -73,13 +73,15 @@ pub use crate::parser::ast::*;
 // SECTION 2: PARSER CORE
 // ============================================================================
 
-/// A structured warning emitted during parsing.
+/// A structured diagnostic emitted during parsing.
 #[derive(Debug, Clone)]
 pub struct ParseWarning {
     pub message: String,
     pub file: Option<String>,
     pub line: Option<usize>,
     pub column: Option<usize>,
+    /// When true, this diagnostic is an error that should halt compilation.
+    pub is_error: bool,
 }
 
 pub struct Parser {
@@ -170,6 +172,23 @@ impl Parser {
             file,
             line,
             column,
+            is_error: false,
+        });
+    }
+
+    pub(crate) fn emit_error_diagnostic(
+        &mut self,
+        message: String,
+        file: Option<String>,
+        line: Option<usize>,
+        column: Option<usize>,
+    ) {
+        self.warnings.push(ParseWarning {
+            message,
+            file,
+            line,
+            column,
+            is_error: true,
         });
     }
 

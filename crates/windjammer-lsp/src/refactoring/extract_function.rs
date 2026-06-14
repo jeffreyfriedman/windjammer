@@ -10,6 +10,14 @@ use crate::database::WindjammerDatabase;
 use tower_lsp::lsp_types::*;
 use windjammer::parser::Parameter;
 
+/// Result of extract-function refactoring for MCP / preview consumers.
+#[derive(Debug, Clone)]
+pub struct ExtractFunctionResult {
+    pub edit: WorkspaceEdit,
+    pub function_signature: String,
+    pub captured_variables: Vec<String>,
+}
+
 /// Extract selected code into a new function
 pub struct ExtractFunction<'a> {
     #[allow(dead_code)]
@@ -22,6 +30,63 @@ impl<'a> ExtractFunction<'a> {
     /// Create a new extract function refactoring
     pub fn new(db: &'a WindjammerDatabase, uri: Url, range: Range) -> Self {
         Self { db, uri, range }
+    }
+
+    /// Execute and return workspace edit plus metadata for MCP responses.
+    pub fn execute_with_metadata(
+        &self,
+        function_name: &str,
+        source: &str,
+    ) -> Result<ExtractFunctionResult, String> {
+        let analysis = self.analyze_scope()?;
+        let edit = self.execute(function_name, source)?;
+        let parameters: Vec<Parameter> = analysis
+            .parameters
+            .iter()
+            .map(|var| Parameter {
+                name: var.name.clone(),
+                pattern: None,
+                type_: windjammer::parser::Type::Custom(
+                    var.type_name
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string()),
+                ),
+                ownership: windjammer::parser::OwnershipHint::Inferred,
+                is_mutable: false,
+                decorators: Vec::new(),
+            })
+            .collect();
+        let return_type = if analysis.return_values.is_empty() {
+            None
+        } else if analysis.return_values.len() == 1 {
+            Some(windjammer::parser::Type::Custom(
+                analysis.return_values[0]
+                    .type_name
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+            ))
+        } else {
+            let types: Vec<windjammer::parser::Type> = analysis
+                .return_values
+                .iter()
+                .map(|var| {
+                    windjammer::parser::Type::Custom(
+                        var.type_name
+                            .clone()
+                            .unwrap_or_else(|| "unknown".to_string()),
+                    )
+                })
+                .collect();
+            Some(windjammer::parser::Type::Tuple(types))
+        };
+        let function_signature =
+            ast_utils::generate_function_signature(function_name, &parameters, &return_type);
+        let captured_variables = analysis.parameters.iter().map(|v| v.name.clone()).collect();
+        Ok(ExtractFunctionResult {
+            edit,
+            function_signature,
+            captured_variables,
+        })
     }
 
     /// Execute the refactoring

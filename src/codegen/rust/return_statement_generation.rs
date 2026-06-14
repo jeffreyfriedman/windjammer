@@ -38,82 +38,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // WINDJAMMER PHILOSOPHY: Auto-convert string literals in return statements
-            // when the function returns String
-            let returns_string = match &self.current_function_return_type {
-                Some(Type::String) => true,
-                Some(Type::Custom(name)) if name == "String" => true,
-                _ => false,
-            };
+            self.apply_owned_string_tail_coercion(&mut return_str, e, false);
 
-            if returns_string {
-                // String literal needs .to_string()
-                if matches!(
-                    e,
-                    Expression::Literal {
-                        value: Literal::String(_),
-                        ..
-                    }
-                ) && !return_str.ends_with(".to_string()")
-                    && return_str != "String::new()"
-                {
-                    return_str = format!("{}.to_string()", return_str);
-                }
-                // param.clone() where param: &str → param.to_string()
-                // &str.clone() returns &str, but we need String
-                else if let Expression::MethodCall { method, object, .. } = e {
-                    if method == "clone" {
-                        if let Expression::Identifier { name, .. } = &**object {
-                            // Check if this identifier is a borrowed string parameter
-                            let is_string_type = self.current_function_params.iter().any(|p| {
-                                p.name == *name
-                                    && (matches!(p.type_, Type::String)
-                                        || matches!(p.type_, Type::Custom(ref n) if n == "string"))
-                            });
-                            let is_borrowed_str_param =
-                                self.inferred_borrowed_params.contains(name) && is_string_type;
-
-                            if is_borrowed_str_param {
-                                // Replace .clone() with .to_string()
-                                return_str = return_str.replace(".clone()", ".to_string()");
-                            }
-                        }
-                    }
-                }
-                // self.field needs .clone() when self is borrowed
-                // BUT: Skip .clone() for Copy types (f32, i32, bool, etc.)
-                else if let Expression::FieldAccess { object, .. } = e {
-                    if let Expression::Identifier { name: obj_name, .. } = &**object {
-                        if obj_name == "self" && !return_str.ends_with(".clone()") {
-                            let self_is_borrowed = self.current_function_params.iter().any(|p| {
-                                p.name == "self"
-                                    && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                            });
-                            if self_is_borrowed {
-                                let is_copy = self
-                                    .infer_expression_type(e)
-                                    .as_ref()
-                                    .is_some_and(|t| self.is_type_copy(t));
-                                if !is_copy {
-                                    return_str = format!("{}.clone()", return_str);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // FIXED: Auto-cast usize to i64 when function returns int
-            // WINDJAMMER PHILOSOPHY: Compiler handles type conversions automatically
-            let returns_int = match &self.current_function_return_type {
-                Some(Type::Int) => true,
-                Some(Type::Custom(name)) if name == "i64" || name == "int" => true,
-                _ => false,
-            };
-
-            if returns_int && self.expression_produces_usize(e) {
-                // .len() returns usize, but function expects i64 - auto-cast!
-                return_str = format!("{} as i64", return_str);
+            {
+                let target = match &self.current_function_return_type {
+                    Some(Type::Int) => Some("int"),
+                    Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                    _ => None,
+                };
+                self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
             }
 
             let returns_option_owned = self.returns_option_owned_type();
@@ -138,7 +71,26 @@ impl<'ast> CodeGenerator<'ast> {
             // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
             // Never apply to &mut … — functions returning &mut T must pass the reference through
             // (e.g. return &mut self.items[i], not (&mut self.items[i]).clone()).
-            if return_str.starts_with("&")
+            let mut needs_index_return_clone = false;
+            if matches!(e, Expression::Index { .. })
+                && !return_str.ends_with(".clone()")
+                && !return_str.starts_with("&mut")
+            {
+                let expects_owned = !matches!(
+                    &self.current_function_return_type,
+                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                );
+                if expects_owned {
+                    let is_copy = self
+                        .infer_expression_type(e)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    needs_index_return_clone = !is_copy;
+                }
+            }
+            if needs_index_return_clone {
+                return_str = format!("{}.clone()", return_str);
+            } else if return_str.starts_with("&")
                 && !return_str.starts_with("&mut")
                 && !return_str.ends_with(".clone()")
             {
@@ -152,12 +104,16 @@ impl<'ast> CodeGenerator<'ast> {
                         _ => t,
                     });
                     if let Some(inner) = inner_type {
-                        if !self.is_type_copy(&inner) {
+                        if self.is_type_copy(&inner) && !return_str.starts_with('*') {
+                            return_str = format!("*{}", return_str);
+                        } else if !self.is_type_copy(&inner) {
                             return_str = format!("({}).clone()", return_str);
                         }
                     }
                 }
             }
+
+            self.coerce_return_ref_to_owned_copy(&mut return_str, e);
 
             // `let (a, b) = &vec[i]` in Rust: Copy fields like `i32` are still `&i32` bindings.
             // When we record `Type::Reference(i32)` in local_var_types, `return b` must become `*b`.

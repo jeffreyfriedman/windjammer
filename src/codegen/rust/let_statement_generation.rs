@@ -9,7 +9,7 @@
 
 use crate::parser::*;
 
-use super::CodeGenerator;
+use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a let statement
@@ -34,6 +34,16 @@ impl<'ast> CodeGenerator<'ast> {
             Pattern::Identifier(name) => Some(name.as_str()),
             _ => None,
         };
+
+        // TDD FIX (E0596): When `let x = self.field.get(key)` and downstream code
+        // mutates the value obtained from x (via match/if-let), upgrade get→get_mut.
+        if let Some(vn) = var_name {
+            if super::self_analysis::is_self_field_get_call(value)
+                && self.let_binding_value_is_mutated_downstream(vn)
+            {
+                self.upgrade_get_to_get_mut = true;
+            }
+        }
 
         // Mutability: explicit via `let mut`, or auto-inferred when the
         // variable is later used with a &mut self method call.
@@ -311,8 +321,8 @@ impl<'ast> CodeGenerator<'ast> {
                             ..
                         } if !s.is_empty()
                     ) || matches!(value, Expression::Identifier { .. });
-                    if should_convert && !value_str.ends_with(".to_string()") {
-                        value_str = format!("{}.to_string()", value_str);
+                    if should_convert && !string_utilities::already_owned_string_expr(&value_str) {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                     if let Expression::Literal {
                         value: Literal::String(s),
@@ -349,6 +359,8 @@ impl<'ast> CodeGenerator<'ast> {
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
+                } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
+                    output.push_str(": String");
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -379,8 +391,8 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     if s.is_empty() {
                         value_str = "String::new()".to_string();
-                    } else if !value_str.ends_with(".to_string()") {
-                        value_str = format!("{}.to_string()", value_str);
+                    } else if !string_utilities::already_owned_string_expr(&value_str) {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                 }
 
@@ -450,11 +462,13 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         if s.is_empty() {
                             value_str = "String::new()".to_string();
-                        } else {
-                            value_str = format!("{}.to_string()", value_str);
+                        } else if !string_utilities::already_owned_string_expr(&value_str) {
+                            value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                         }
-                    } else if matches!(value, Expression::Identifier { .. }) {
-                        value_str = format!("{}.to_string()", value_str);
+                    } else if matches!(value, Expression::Identifier { .. })
+                        && !string_utilities::already_owned_string_expr(&value_str)
+                    {
+                        value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
                 }
 
@@ -479,6 +493,8 @@ impl<'ast> CodeGenerator<'ast> {
                     let ty = self.local_var_types.get(vn).unwrap().clone();
                     output.push_str(": ");
                     output.push_str(&self.type_to_rust(&ty));
+                } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
+                    output.push_str(": String");
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -507,8 +523,9 @@ impl<'ast> CodeGenerator<'ast> {
                             ..
                         }
                     )
+                    && !string_utilities::already_owned_string_expr(&value_str)
                 {
-                    value_str = format!("{}.to_string()", value_str);
+                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 }
 
                 // E0507: `let x = self.field` through `&self`/`&mut self`:
@@ -547,5 +564,159 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         output
+    }
+
+    /// Check if a let-bound variable's value (from HashMap.get()) is mutated
+    /// in subsequent match/if-let statements in the current function body.
+    fn let_binding_value_is_mutated_downstream(&self, var_name: &str) -> bool {
+        let current_idx = self.current_block_local_idx;
+        let body = &self.current_function_body;
+
+        for stmt in body.iter().skip(current_idx + 1) {
+            if self.stmt_has_match_that_mutates_get_binding(stmt, var_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_has_match_that_mutates_get_binding(
+        &self,
+        stmt: &Statement<'ast>,
+        var_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Match { value, arms, .. } => {
+                let is_scrutinee =
+                    matches!(value, Expression::Identifier { name, .. } if name == var_name);
+                if is_scrutinee {
+                    for arm in arms.iter() {
+                        if let Some(binding) =
+                            super::self_analysis::extract_some_binding(&arm.pattern)
+                        {
+                            if self.match_body_has_mutating_call(arm.body, binding) {
+                                return true;
+                            }
+                        }
+                        if let Some(bindings) =
+                            super::self_analysis::extract_tuple_some_bindings(&arm.pattern)
+                        {
+                            for binding in &bindings {
+                                if self.match_body_has_mutating_call(arm.body, binding) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Handle tuple scrutinee: match (a_opt, b_opt) { (Some(a), Some(b)) => ... }
+                if let Expression::Tuple { .. } = *value {
+                    for arm in arms.iter() {
+                        if let Some(binding) =
+                            super::self_analysis::find_binding_for_var_in_tuple_match(
+                                value,
+                                var_name,
+                                &arm.pattern,
+                            )
+                        {
+                            if self.match_body_has_mutating_call(arm.body, binding) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                false
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_has_match_that_mutates_get_binding(s, var_name))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_has_match_that_mutates_get_binding(s, var_name))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn match_body_has_mutating_call(&self, body: &Expression<'ast>, var_name: &str) -> bool {
+        match body {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
+            Expression::MethodCall { object, method, .. } => {
+                if matches!(&**object, Expression::Identifier { name, .. } if name == var_name) {
+                    return !super::self_analysis::is_known_readonly_method_name(method);
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn stmt_has_mutating_method_on_var(&self, stmt: &Statement<'ast>, var_name: &str) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_has_mutating_method_on_var(expr, var_name)
+            }
+            Statement::Assignment { target, .. } => {
+                super::self_analysis::expression_references_variable_or_field(target, var_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_has_mutating_method_on_var(s, var_name))
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| self.expr_has_mutating_method_on_var(arm.body, var_name)),
+            Statement::Let { value, .. } => self.expr_has_mutating_method_on_var(value, var_name),
+            _ => false,
+        }
+    }
+
+    fn expr_has_mutating_method_on_var(&self, expr: &Expression<'ast>, var_name: &str) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                let is_var =
+                    matches!(&**object, Expression::Identifier { name, .. } if name == var_name);
+                let is_field_of_var =
+                    if let Expression::FieldAccess { object: inner, .. } = &**object {
+                        matches!(&**inner, Expression::Identifier { name, .. } if name == var_name)
+                    } else {
+                        false
+                    };
+                if (is_var || is_field_of_var)
+                    && !super::self_analysis::is_known_readonly_method_name(method)
+                {
+                    return true;
+                }
+                false
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
+            _ => false,
+        }
     }
 }

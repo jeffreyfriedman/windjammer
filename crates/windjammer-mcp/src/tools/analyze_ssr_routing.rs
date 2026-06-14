@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AnalyzeSsrRoutingArgs {
     pub code: String,
     pub analysis_type: String, // "ssr", "routing", "both"

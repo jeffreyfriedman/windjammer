@@ -31,6 +31,7 @@ pub fn run(cli: Cli) -> Result<()> {
             library,
             module_file,
             no_cargo,
+            no_lint,
             no_generate_cargo_toml,
             metadata,
         } => {
@@ -58,6 +59,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 library,
                 module_file,
                 !no_cargo,
+                !no_lint,
                 no_generate_cargo_toml,
                 &metadata,
             )?;
@@ -137,6 +139,9 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Commands::Docs { output, format } => cmd_generate_docs(&output, &format)?,
         Commands::Explain { code } => cmd_explain(&code)?,
+        Commands::AgentIndex { output } => {
+            windjammer::agent_index::generate_agent_index(&output)?;
+        }
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
         Commands::Errors { file, output } => cmd_errors_tui(&file, &output)?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
@@ -276,6 +281,7 @@ fn cmd_errors_tui(file: &std::path::Path, output: &std::path::Path) -> Result<()
         false,
         false,
         false,
+        true,
         false,
         &[],
     )

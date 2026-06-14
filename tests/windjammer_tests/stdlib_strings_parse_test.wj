@@ -1,0 +1,67 @@
+// TDD: std::strings parse/split APIs for line-oriented formats (.wjscene, config).
+use std::strings
+
+pub fn test_split_lines_crlf_and_trailing_newline() {
+    let text = "a\nb\r\nc\n"
+    let lines = strings.split_lines(text)
+    assert_eq(lines.len() as i32, 4)
+    assert(lines[0] == "a", "first line")
+    assert(lines[1] == "b", "second line")
+    assert(lines[2] == "c", "third line")
+    assert(lines[3] == "", "trailing empty line")
+}
+
+pub fn test_split_whitespace_tabs() {
+    let parts = strings.split_whitespace("  hello\tworld  ")
+    assert_eq(parts.len() as i32, 2)
+    assert(parts[0] == "hello", "first token")
+    assert(parts[1] == "world", "second token")
+}
+
+pub fn test_parse_i32_signed_and_trim() {
+    assert_eq(strings.parse_i32("-42"), -42)
+    assert_eq(strings.parse_i32("  7 "), 7)
+    assert_eq(strings.parse_i32("bad"), 0)
+}
+
+pub fn test_parse_f32_decimal() {
+    assert_approx(strings.parse_f32("3.14"), 3.14, 0.001)
+    assert_approx(strings.parse_f32("-2.5"), -2.5, 0.001)
+}
+
+pub fn test_parse_bool() {
+    assert(strings.parse_bool("true"), "true")
+    assert(!strings.parse_bool("false"), "false")
+}
+
+pub fn test_byte_at_ascii() {
+    assert_eq(strings.byte_at("ABC", 0) as i32, 65)
+    assert_eq(strings.byte_at("ABC", 2) as i32, 67)
+    assert_eq(strings.byte_at("ABC", 99) as i32, 0)
+}
+
+pub fn test_join_delimiter() {
+    let parts = vec!["a", "b", "c"]
+    let joined = strings.join(parts, "-")
+    assert(joined == "a-b-c", "joined")
+}
+
+pub fn test_chars_and_from_chars() {
+    let codepoints = strings.chars("Hi!")
+    assert_eq(codepoints.len() as i32, 3)
+    let rebuilt = strings.from_chars(codepoints)
+    assert(rebuilt == "Hi!", "from_chars roundtrip")
+    let slice = strings.substring_chars("Hi!", 0, 1)
+    assert(slice == "H", "first char via substring")
+}
+
+pub fn test_substring_chars() {
+    let slice = strings.substring_chars("Hello", 1, 4)
+    assert(slice == "ell", "substring_chars")
+}
+
+pub fn test_trim_and_starts_with() {
+    assert(strings.trim("  x  ") == "x", "trim")
+    assert(strings.starts_with("prefix", "pre"), "starts_with")
+    assert(strings.is_empty(""), "is_empty")
+}

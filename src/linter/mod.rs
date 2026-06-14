@@ -343,6 +343,7 @@ mod owned_but_not_returned_tests {
             const_static_optimizations: vec![],
             smallvec_optimizations: vec![],
             cow_optimizations: vec![],
+            cache_locality: crate::analyzer::CacheLocalityAnalysis::default(),
             str_ref_optimizable_params: HashSet::new(),
         };
 

@@ -3,17 +3,19 @@
 use crate::error::{McpError, McpResult};
 use crate::protocol::{Position, ToolCallResult};
 use crate::tools::text_response;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use windjammer::ide_analysis::{analyze_source, analyze_source_at_point, IdeAnalysisOptions};
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Deserialize)]
-struct AnalyzeTypesRequest {
-    #[allow(dead_code)]
-    code: String,
-    cursor_position: Option<Position>,
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AnalyzeTypesRequest {
+    pub code: String,
+    pub cursor_position: Option<Position>,
 }
 
 #[derive(Debug, Serialize)]
@@ -23,6 +25,8 @@ struct AnalyzeTypesResponse {
     inferred_types: Option<std::collections::HashMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     type_at_cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostics: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
@@ -37,13 +41,37 @@ pub async fn handle(
             message: e.to_string(),
         })?;
 
-    // TODO: Implement actual type inference using the analyzer
-    // For now, return a placeholder response
+    let options = IdeAnalysisOptions {
+        enable_lint: true,
+        file_path: PathBuf::from("mcp_input.wj"),
+    };
+
+    let result = if let Some(pos) = request.cursor_position {
+        analyze_source_at_point(&request.code, options, pos.line as u32, pos.column as u32)
+    } else {
+        analyze_source(&request.code, options)
+    };
+
+    let diagnostics: Vec<String> = result
+        .diagnostics
+        .iter()
+        .map(|d| d.message.clone())
+        .collect();
+
     let response = AnalyzeTypesResponse {
-        success: true,
-        inferred_types: Some(std::collections::HashMap::new()),
-        type_at_cursor: request.cursor_position.map(|_| "i64".to_string()),
-        error: None,
+        success: result.success,
+        inferred_types: Some(result.inferred_types),
+        type_at_cursor: result.type_at_point,
+        diagnostics: if diagnostics.is_empty() {
+            None
+        } else {
+            Some(diagnostics)
+        },
+        error: if result.success {
+            None
+        } else {
+            Some("Analysis reported errors".to_string())
+        },
     };
 
     let response_json =

@@ -37,6 +37,7 @@ impl DecoratorRegistry {
             wrapping_decorators: vec![
                 "timeout",
                 "bench",
+                "profile",
                 "requires",
                 "ensures",
                 "property_test",
@@ -148,5 +149,11 @@ mod tests {
         let reg = DecoratorRegistry::new();
         assert!(!reg.should_skip_for_backend("export", CompilationTarget::Wasm));
         assert!(reg.should_skip_for_backend("export", CompilationTarget::Rust));
+    }
+
+    #[test]
+    fn test_profile_is_wrapping_decorator() {
+        let reg = DecoratorRegistry::new();
+        assert!(reg.is_wrapping_decorator("profile"));
     }
 }

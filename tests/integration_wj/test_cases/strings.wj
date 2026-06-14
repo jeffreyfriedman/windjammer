@@ -1,4 +1,4 @@
-// Integration Test: String Operations
+// Integration Test: string Operations
 //
 // Covers: literals, concatenation, interpolation
 // EXPECTED: All backends produce identical output ending with PASSED

@@ -254,17 +254,29 @@ impl<'ast> CodeGenerator<'ast> {
             } => self
                 .infer_expression_type(operand)
                 .map(|t| Type::MutableReference(Box::new(t))),
+            // *expr → unwrap Reference/MutableReference to get inner type
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                operand,
+                ..
+            } => self.infer_expression_type(operand).map(|t| match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+                _ => t,
+            }),
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall { object, method, .. } => {
                 // Check well-known methods first
-                if method == "len" || method == "count" || method == "capacity" {
+                if matches!(method.as_str(), "len" | "capacity" | "count") {
                     return Some(Type::Custom("usize".to_string()));
                 }
                 // .clone() returns the same type as the object
                 // This enables type inference through cloned iterables:
                 //   for x in &collection.clone() → x has same element type as collection
-                if method == "clone" {
+                if matches!(
+                    method.as_str(),
+                    "clone" | "to_owned" | "to_vec" | "into_iter"
+                ) {
                     return self.infer_expression_type(object);
                 }
                 // TDD FIX: .unwrap() on Option<T> → T
@@ -279,7 +291,22 @@ impl<'ast> CodeGenerator<'ast> {
                 // extract_iterator_element_type can extract the element type.
                 // This enables type inference for loop variables:
                 //   for brick in self.bricks.iter_mut() → brick: Brick
-                if method == "iter" || method == "iter_mut" || method == "into_iter" {
+                if matches!(
+                    method.as_str(),
+                    "iter"
+                        | "iter_mut"
+                        | "into_iter"
+                        | "keys"
+                        | "values"
+                        | "values_mut"
+                        | "drain"
+                        | "lines"
+                        | "chars"
+                        | "bytes"
+                        | "split"
+                        | "split_whitespace"
+                        | "enumerate"
+                ) {
                     if let Some(obj_type) = self.infer_expression_type(object) {
                         return Some(obj_type);
                     }
@@ -329,10 +356,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // Final fallback: try simple method name
-                self.signature_registry
-                    .get_signature(method)
-                    .and_then(|sig| sig.return_type.clone())
+                // No type context available — don't do bare lookup to avoid
+                // picking a different type's method (e.g., "new" → wrong type).
+                None
             }
             // Block expression: infer from the last statement's expression
             // Handles: let x = { if cond { 64.0 } else { 32.0 } }
@@ -402,6 +428,11 @@ impl<'ast> CodeGenerator<'ast> {
                     // Instance call: Call(FieldAccess(receiver, method), args) — same return type
                     // rules as MethodCall so we do not fall through to unqualified `acos` → f64.
                     let recv_ty = self.infer_expression_type(object);
+                    if let Some(ref ot) = recv_ty {
+                        if let Some(ret) = Self::stdlib_method_return_type(ot, field) {
+                            return Some(ret);
+                        }
+                    }
                     if let Some(t) = Self::rust_primitive_float_method_return_type(
                         recv_ty.as_ref(),
                         field.as_str(),

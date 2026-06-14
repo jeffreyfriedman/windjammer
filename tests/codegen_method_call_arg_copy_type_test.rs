@@ -1,0 +1,100 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+use std::fs;
+/// TDD: Method call results that are Copy types should not be borrowed/cloned
+///
+/// Bug: When passing `input.is_key_down(Key::W)` (returns bool) as an argument,
+/// the compiler generates `&input.is_key_down(Key::W).clone()` instead of just
+/// passing the bool directly.
+///
+/// This is wrong because:
+/// 1. bool is Copy, so no ownership transfer issues
+/// 2. The function expects `bool`, not `&bool`
+/// 3. `.clone()` is unnecessary for Copy types
+///
+/// Root cause: The analyzer is over-eagerly borrowing method call results
+use std::process::Command;
+use tempfile::TempDir;
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_method_call_bool_arg_not_borrowed() {
+    let source = r#"
+struct Input {}
+
+impl Input {
+    fn is_key_down(self) -> bool {
+        true
+    }
+}
+
+struct Paddle {}
+
+impl Paddle {
+    fn update(self, value: bool) {
+        // Do something with value
+    }
+}
+
+fn test_function() {
+    let mut paddle = Paddle {}
+    let input = Input {}
+    
+    // This should generate: paddle.update(input.is_key_down())
+    // NOT: paddle.update(input.is_key_down())
+    paddle.update(input.is_key_down())
+}
+"#;
+
+    let temp_dir = TempDir::new().unwrap();
+    let input_path = temp_dir.path().join("test_input.wj");
+    let output_dir = temp_dir.path().join("build");
+    fs::write(&input_path, source).unwrap();
+
+    let output = Command::new(test_utils::wj_binary())
+        .args([
+            "build",
+            input_path.to_str().unwrap(),
+            "--no-cargo",
+            "--output",
+            output_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute wj");
+
+    assert!(output.status.success(), "Compilation failed");
+
+    let generated = fs::read_to_string(output_dir.join("test_input.rs"))
+        .expect("Failed to read generated file");
+
+    // Should NOT have unnecessary borrow
+    assert!(
+        !generated.contains("&input.is_key_down()"),
+        "Should not borrow Copy type method result"
+    );
+
+    // Should NOT have unnecessary clone
+    assert!(
+        !generated.contains(".clone()"),
+        "Should not clone Copy type (bool)"
+    );
+
+    // Should have direct call
+    assert!(
+        generated.contains("paddle.update(input.is_key_down())"),
+        "Should pass bool directly without borrow or clone"
+    );
+}

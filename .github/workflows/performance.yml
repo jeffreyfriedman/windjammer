@@ -61,7 +61,7 @@ jobs:
           sudo apt-get install -y wrk
       
       - name: Install SQLx CLI
-        run: cargo install sqlx-cli --no-default-features --features postgres
+        run: cargo install sqlx-cli --version 0.8.6 --locked --no-default-features --features postgres
       
       - name: Run database migrations
         working-directory: examples/taskflow/rust
@@ -101,7 +101,7 @@ jobs:
           
           # Health check benchmark
           wrk -t4 -c100 -d30s --latency http://localhost:3001/health \
-            > benchmarks/results/rust_health.txt
+            > benchmarks/results/rust_health.txt 2>&1
           
           echo "Benchmark results:"
           cat benchmarks/results/rust_health.txt
@@ -110,15 +110,14 @@ jobs:
         id: analyze
         run: |
           # Extract RPS (remove any non-numeric characters except decimal point)
-          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}' | tr -cd '0-9.')
-          # Extract P99 latency (keep the unit)
-          P99=$(grep "99%" benchmarks/results/rust_health.txt | awk '{print $2}')
+          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}' | tr -cd '0-9.' | tr -d '\n')
+          # Match wrk latency line only (avoid false positives like "99.12%" in +/- Stdev)
+          P99=$(grep -E '^[[:space:]]+99%' benchmarks/results/rust_health.txt | awk '{print $2}' | tr -d '\n')
           
-          # Use multiline string format for GitHub Actions output
           {
-            echo "rps=${RPS}"
-            echo "p99=${P99}"
-          } >> "$GITHUB_OUTPUT"
+            echo "rps=${RPS}" >> "$GITHUB_OUTPUT"
+            echo "p99=${P99}" >> "$GITHUB_OUTPUT"
+          }
           
           echo "## Performance Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -130,7 +129,7 @@ jobs:
           # TODO: Compare with baseline from previous runs
           # For now, just check basic thresholds
           
-          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}' | tr -d '\n')
+          RPS=$(grep "Requests/sec:" benchmarks/results/rust_health.txt | awk '{print $2}' | tr -cd '0-9.' | tr -d '\n')
           
           # Expect at least 5000 RPS for health endpoint
           THRESHOLD=5000

@@ -7,6 +7,16 @@ pub fn var(key: &str) -> Result<String, String> {
     std::env::var(key).map_err(|e| e.to_string())
 }
 
+/// Get an environment variable or return a default
+pub fn get_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+/// Get an environment variable (optional)
+pub fn get(key: &str) -> Option<String> {
+    std::env::var(key).ok()
+}
+
 /// Set an environment variable
 pub fn set_var(key: &str, value: &str) {
     std::env::set_var(key, value);

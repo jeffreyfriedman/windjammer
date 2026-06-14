@@ -60,6 +60,9 @@ pub struct CodeGenerator<'ast> {
     // Local index within the current block (0-based enumerate index).
     // Used by variable_is_only_field_accessed and other block-relative analyses.
     pub(crate) current_block_local_idx: usize,
+    // OPTION TAKE/REPLACE: Block-local indices of statements to skip because
+    // they were folded into a preceding `.take()` or `.replace()`.
+    pub(crate) skip_block_indices: std::collections::HashSet<usize>,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
@@ -120,6 +123,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) borrowed_iterator_vars: std::collections::HashSet<String>,
     // Track variables bound in for-loops with &mut iteration (need * for compound assignments)
     pub(crate) mut_borrowed_iterator_vars: std::collections::HashSet<String>,
+    // When true, emit `get_mut` instead of `get` for the next HashMap method call.
+    // Set by statement_generation when a let-binding from .get() has a mutated downstream value.
+    pub(crate) upgrade_get_to_get_mut: bool,
     // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
     // These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
@@ -195,6 +201,8 @@ pub struct CodeGenerator<'ast> {
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
+    /// Enums known to be non-Copy from library scan (e.g. `Value` with `String` variants).
+    pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
@@ -250,6 +258,9 @@ pub struct CodeGenerator<'ast> {
     /// e.g., `use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }
     /// Used to resolve qualified calls through aliases for signature lookup.
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
+    /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
+    /// Used to emit `module::fn` instead of `module.fn` for free functions.
+    pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
@@ -257,6 +268,11 @@ pub struct CodeGenerator<'ast> {
     /// Used by generate_use to add `self::` prefix for `pub use` re-exports
     /// of items from inline sibling modules (Rust requires `self::` for these).
     pub(crate) inline_module_names: std::collections::HashSet<String>,
+    /// Methods whose self receiver was upgraded from Borrowed to MutBorrowed
+    /// during codegen (body-modification analysis). Used to update registry
+    /// before writing metadata so cross-file builds see correct ownership.
+    /// Key: qualified method name (e.g., "UnifiedRenderer::render_mesh").
+    pub(crate) self_receiver_upgrades: std::collections::HashMap<String, OwnershipMode>,
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -293,6 +309,17 @@ impl<'ast> CodeGenerator<'ast> {
         if self.recursion_depth > 0 {
             self.recursion_depth -= 1;
         }
+    }
+
+    /// True when `name` refers to an imported `use std::…` runtime module (not a local variable).
+    pub(in crate::codegen::rust) fn is_imported_runtime_std_module(&self, name: &str) -> bool {
+        if self.runtime_std_module_imports.contains(name) {
+            return true;
+        }
+        if let Some(original) = self.module_alias_map.get(name) {
+            return self.runtime_std_module_imports.contains(original);
+        }
+        false
     }
 
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -337,6 +364,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_statement_idx: 0,
             auto_clone_counter: 0,
             current_block_local_idx: 0,
+            skip_block_indices: std::collections::HashSet::new(),
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),
@@ -354,6 +382,7 @@ impl<'ast> CodeGenerator<'ast> {
             for_loop_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
             mut_borrowed_iterator_vars: std::collections::HashSet::new(),
+            upgrade_get_to_get_mut: false,
             match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
@@ -389,6 +418,7 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
+            non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
             in_struct_literal_field: false,
             in_owned_value_context: false,
@@ -408,8 +438,10 @@ impl<'ast> CodeGenerator<'ast> {
             extern_submodule_qualifiers: std::collections::HashMap::new(),
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
+            runtime_std_module_imports: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             inline_module_names: std::collections::HashSet::new(),
+            self_receiver_upgrades: std::collections::HashMap::new(),
         }
     }
 
@@ -477,6 +509,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
     pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.copy_types_registry = registry;
+    }
+
+    pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
+        self.non_copy_types_registry = registry;
     }
 
     /// Look up a method signature by receiver type and method name
@@ -650,6 +686,22 @@ impl<'ast> CodeGenerator<'ast> {
         let mut gen = Self::new(registry, target);
         gen.is_module = true;
         gen
+    }
+
+    /// Apply codegen self-receiver upgrades to a registry snapshot.
+    /// When codegen determines a method needs `&mut self` (via body-modification
+    /// analysis) but the analyzer only inferred `Borrowed`, update the registry
+    /// so metadata reflects the actual generated code for cross-file builds.
+    pub fn apply_self_receiver_upgrades(&self, registry: &mut SignatureRegistry) {
+        for (qualified_name, upgrade_mode) in &self.self_receiver_upgrades {
+            if let Some(sig) = registry.signatures.get_mut(qualified_name) {
+                if sig.has_self_receiver && !sig.param_ownership.is_empty() {
+                    if sig.param_ownership[0] != *upgrade_mode {
+                        sig.param_ownership[0] = *upgrade_mode;
+                    }
+                }
+            }
+        }
     }
 
     pub(crate) fn indent(&self) -> String {
@@ -826,4 +878,262 @@ impl<'ast> CodeGenerator<'ast> {
             (other, _) => other.to_string(),
         }
     }
+
+    /// Whether a named identifier (from `current_function_params`) already generates
+    /// as a Rust reference, accounting for all three ref-tracking systems:
+    ///  - `inferred_borrowed_params` (analyzer ownership inference)
+    ///  - `str_ref_optimized_params` (Phase 2 string→&str optimization)
+    ///  - explicit `Reference`/`MutableReference`/`Custom("str")` AST types
+    pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
+        if self.borrowed_iterator_vars.contains(name) {
+            return true;
+        }
+        if self.str_ref_optimized_params.contains(name) {
+            return true;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(
+                    p.ownership,
+                    crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
+                ) || crate::codegen::rust::types::param_generates_as_rust_ref(
+                    &p.type_,
+                    &p.name,
+                    &self.inferred_borrowed_params,
+                ))
+        })
+    }
+
+    /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.
+    ///
+    /// Returns the (possibly cloned) expression string. Skips the clone when:
+    /// - The binding is already cloned (ends with `.clone()`)
+    /// - The binding's type implements `Copy`
+    ///
+    /// This consolidates the identical check previously duplicated in
+    /// `regular_call_arguments`, `function_call_generation`, and other
+    /// argument-generation paths.
+    pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
+        let dominated = self
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
+
+        if !dominated || arg_str.ends_with(".clone()") {
+            return arg_str.to_string();
+        }
+
+        let binding_is_copy = self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| self.is_type_copy(&p.type_))
+            || self
+                .local_var_types
+                .get(name)
+                .is_some_and(|t| self.is_type_copy(t));
+
+        if binding_is_copy {
+            return arg_str.to_string();
+        }
+
+        if arg_str.contains(" as ") && !arg_str.starts_with('(') {
+            format!("({}).clone()", arg_str)
+        } else {
+            format!("{}.clone()", arg_str)
+        }
+    }
+
+    /// Deref `&Copy` / `&mut Copy` expressions when the function returns an owned Copy type.
+    /// Handles `.get().unwrap()` chains and other reference-producing expressions.
+    pub(crate) fn coerce_return_ref_to_owned_copy(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+    ) {
+        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") {
+            return;
+        }
+        let expects_owned = !matches!(
+            &self.current_function_return_type,
+            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+        );
+        if !expects_owned {
+            return;
+        }
+        if let Some(Type::Reference(inner)) = self.infer_expression_type(expr) {
+            if self.is_type_copy(inner.as_ref()) {
+                *expr_str = format!("*{}", expr_str);
+            }
+        }
+    }
+
+    /// Apply owned-String tail coercion to an implicit-return or explicit-return expression.
+    ///
+    /// When a function returns `String`, this converts string literals to owned form,
+    /// rewrites borrowed-param `.clone()` to `.to_string()`, and clones `self.field`
+    /// when `self` is borrowed. Used by block implicit returns and `return` statements.
+    ///
+    /// `respect_suppress`: if true, checks `suppress_string_conversion` and `.as_str()` usage.
+    pub(crate) fn apply_owned_string_tail_coercion(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+        respect_suppress: bool,
+    ) {
+        let returns_string = super::string_utilities::return_type_expects_owned_string(
+            &self.current_function_return_type,
+        );
+        let in_match_needing_string = self.in_match_arm_needing_string;
+
+        if !returns_string && !in_match_needing_string {
+            return;
+        }
+
+        if respect_suppress {
+            if expr_str.contains(".as_str()") {
+                return;
+            }
+            if self.suppress_string_conversion.get() {
+                return;
+            }
+        }
+
+        if matches!(
+            expr,
+            crate::parser::Expression::Literal {
+                value: crate::parser::Literal::String(_),
+                ..
+            }
+        ) && !super::string_utilities::already_owned_string_expr(expr_str)
+        {
+            *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
+        } else {
+            super::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                expr_str,
+                expr,
+                &self.inferred_borrowed_params,
+                &self.current_function_params,
+            );
+        }
+
+        self.maybe_clone_borrowed_self_field(expr_str, expr);
+    }
+
+    /// If `expr` is `self.field` and `self` is borrowed, append `.clone()` for non-Copy fields.
+    pub(crate) fn maybe_clone_borrowed_self_field(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+    ) {
+        if let crate::parser::Expression::FieldAccess { object, .. } = expr {
+            if let crate::parser::Expression::Identifier { name: obj_name, .. } = &**object {
+                if obj_name == "self" && !expr_str.ends_with(".clone()") {
+                    let self_is_borrowed = self.current_function_params.iter().any(|p| {
+                        p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    });
+                    if self_is_borrowed {
+                        let is_copy = self
+                            .infer_expression_type(expr)
+                            .as_ref()
+                            .is_some_and(|t| self.is_type_copy(t));
+                        if !is_copy {
+                            *expr_str = format!("{}.clone()", expr_str);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Clone a FieldAccess argument whose root identifier is borrowed when the callee expects Owned.
+    ///
+    /// Traces through nested field accesses (e.g. `stack.item.id`) to find the root,
+    /// then checks if it's borrowed (iterator var, inferred borrow, or explicit `Ref` hint).
+    /// Appends `.clone()` for non-Copy types that don't already have it.
+    pub(crate) fn maybe_clone_borrowed_field_for_owned_param(
+        &self,
+        arg: &crate::parser::Expression,
+        arg_str: &mut String,
+    ) -> bool {
+        if let crate::parser::Expression::FieldAccess { .. } = arg {
+            let root_name = self.extract_root_identifier(arg);
+            if let Some(ref name) = root_name {
+                let is_borrowed_iter = self.borrowed_iterator_vars.contains(name);
+                let is_explicit_ref = self.current_function_params.iter().any(|p| {
+                    p.name == *name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                });
+                let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
+
+                if (is_borrowed_iter || is_explicit_ref || is_inferred_borrowed)
+                    && !arg_str.ends_with(".clone()")
+                {
+                    let is_copy = self
+                        .infer_expression_type(arg)
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    if !is_copy {
+                        *arg_str = format!("{}.clone()", arg_str);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Clone a Vec-index expression (`&vec[i]`) when the callee expects Owned and the element is non-Copy.
+    pub(crate) fn maybe_clone_index_for_owned_param(
+        &self,
+        arg: &crate::parser::Expression,
+        arg_str: &mut String,
+    ) -> bool {
+        if let crate::parser::Expression::Index { .. } = arg {
+            if arg_str.starts_with('&') && !arg_str.ends_with(".clone()") {
+                if let Some(inner) = self.infer_expression_type(arg) {
+                    if !self.is_type_copy(&inner) {
+                        *arg_str = format!("({}).clone()", arg_str);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Enter argument-generation scope. Saves context flags that must be
+    /// restored after `generate_expression` returns so that nested calls
+    /// don't leak context into the outer expression.
+    ///
+    /// Drop the returned guard to restore the previous flag values.
+    pub(crate) fn arg_gen_scope(&mut self) -> ArgGenScope {
+        let saved = ArgGenScope {
+            in_field_access_object: self.in_field_access_object,
+            in_call_argument_generation: self.in_call_argument_generation,
+            coerce_string_literals_to_owned: self.coerce_string_literals_to_owned,
+            in_match_arm_needing_string: self.in_match_arm_needing_string,
+        };
+        self.in_field_access_object = false;
+        self.in_call_argument_generation = true;
+        self.coerce_string_literals_to_owned = false;
+        self.in_match_arm_needing_string = false;
+        saved
+    }
+
+    /// Restore context flags saved by `arg_gen_scope`.
+    pub(crate) fn restore_arg_gen_scope(&mut self, scope: ArgGenScope) {
+        self.in_field_access_object = scope.in_field_access_object;
+        self.in_call_argument_generation = scope.in_call_argument_generation;
+        self.coerce_string_literals_to_owned = scope.coerce_string_literals_to_owned;
+        self.in_match_arm_needing_string = scope.in_match_arm_needing_string;
+    }
+}
+
+/// Saved state of argument-generation context flags.
+/// Created by `CodeGenerator::arg_gen_scope()` and consumed by `restore_arg_gen_scope()`.
+pub(crate) struct ArgGenScope {
+    in_field_access_object: bool,
+    in_call_argument_generation: bool,
+    coerce_string_literals_to_owned: bool,
+    in_match_arm_needing_string: bool,
 }

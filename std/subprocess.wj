@@ -1,0 +1,54 @@
+// std/subprocess - Interactive subprocess I/O (Windjammer API)
+//
+// Implementation: windjammer_runtime::subprocess → std::process (Rust)
+// Import: use std::subprocess
+//
+// Opaque handle pattern — swap backend without changing call sites.
+
+struct SubprocessHandle {
+    pub id: u64,
+}
+
+fn invalid_handle() -> SubprocessHandle {
+    SubprocessHandle { id: 0 }
+}
+
+fn is_valid(handle: SubprocessHandle) -> bool {
+    handle.id != 0
+}
+
+fn spawn(program: string, args: Vec<string>) -> Result<SubprocessHandle, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn write_line(handle: SubprocessHandle, line: string) -> Result<(), string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn read_line(handle: SubprocessHandle) -> Result<string, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn read_line_until_prefix(handle: SubprocessHandle, prefix: string) -> Result<string, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn frames_in_agent_command(command: string) -> int {
+    1
+}
+
+fn read_agent_obs_n(handle: SubprocessHandle, count: int) -> Result<string, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn kill(handle: SubprocessHandle) -> Result<(), string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn wait(handle: SubprocessHandle) -> Result<int, string> {
+    Err("use std::subprocess import — maps to runtime")
+}
+
+fn close(handle: SubprocessHandle) -> Result<(), string> {
+    Err("use std::subprocess import — maps to runtime")
+}

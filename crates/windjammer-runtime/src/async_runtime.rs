@@ -23,6 +23,11 @@ where
     rt.block_on(future)
 }
 
+/// Blocking sleep (milliseconds) — for tests and sync callers.
+pub fn sleep_ms_blocking(ms: u64) {
+    block_on(async { sleep_ms(ms).await });
+}
+
 /// Sleep for a duration (milliseconds)
 pub async fn sleep_ms(ms: u64) {
     tokio::time::sleep(tokio::time::Duration::from_millis(ms)).await;
@@ -49,5 +54,12 @@ mod tests {
     fn test_block_on() {
         let result = block_on(async { 42 });
         assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn test_sleep_ms_blocking() {
+        let start = std::time::Instant::now();
+        sleep_ms_blocking(25);
+        assert!(start.elapsed().as_millis() >= 20);
     }
 }

@@ -23,7 +23,7 @@ impl Navmesh {
         }
     }
     
-    pub fn add_triangle(&mut self, id: u32) -> u32 {
+    pub fn add_triangle(self, id: u32) -> u32 {
         // BUG: Parser fails on this line!
         // It sees Triangle::new and thinks :: is part of generic syntax
         self.triangles.push(Triangle::new(id))

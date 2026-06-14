@@ -8,6 +8,7 @@
 //! - Closures, blocks, match expressions
 //! - Cast, try, await, range expressions
 
+use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
 use super::constant_folding;
@@ -76,6 +77,16 @@ impl<'ast> CodeGenerator<'ast> {
                             if crate::codegen::rust::types::is_windjammer_text_type(&inner))
                         {
                             // Skip the *, just generate the operand (keeping it as &String)
+                            return self.generate_expression_immut(operand);
+                        }
+                    }
+                }
+
+                // Strip explicit & when operand is already a reference type
+                // (e.g., user writes `&key` but key: str → &str, so &key = &&str)
+                if matches!(op, UnaryOp::Ref) {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        if self.identifier_already_ref(name) {
                             return self.generate_expression_immut(operand);
                         }
                     }
@@ -163,7 +174,7 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
-                if method == "as_str"
+                if super::rust_stdlib_annotations::is_strip_redundant(method)
                     && arguments.is_empty()
                     && self.expression_produces_str_ref(object)
                 {
@@ -207,48 +218,34 @@ impl<'ast> CodeGenerator<'ast> {
                 };
 
                 let needs_usize_first_arg = func_name.is_some_and(|name| {
-                    name == "Vec::with_capacity"
-                        || name == "HashMap::with_capacity"
-                        || name == "String::with_capacity"
-                        || name == "Vec::reserve"
+                    let method_part = name.rsplit("::").next().unwrap_or(name);
+                    matches!(method_part, "with_capacity" | "reserve")
                 });
 
-                // Resolve the full method signature for instance method calls
-                // (parsed as Call(FieldAccess(object, method_name))).
-                // For `sys.register_function("fire")`, the parser produces:
-                //   Call { function: FieldAccess { object: Identifier("sys"), field: "register_function" } }
-                // We need to resolve `sys`'s type to find `SystemCoverage::register_function` in the registry.
-                let instance_method_sig = match function {
-                    Expression::FieldAccess { object, field, .. } => {
-                        self.infer_type_name(object).and_then(|tn| {
-                            let qualified = format!("{}::{}", tn, field);
-                            self.signature_registry.get_signature(&qualified).cloned()
-                        })
-                    }
+                // Unified signature resolution for immut path.
+                let receiver_type = match function {
+                    Expression::FieldAccess { object, .. } => self.infer_type_name(object),
                     _ => None,
                 };
 
-                // PHASE 2 CALL-SITE OPTIMIZATION: Look up function signature to check for &str parameters
-                // If a parameter is &str and we're passing a string literal, pass it directly (no .to_string())
-                let param_types: Option<Vec<Type>> = if instance_method_sig.is_some() {
-                    instance_method_sig
-                        .as_ref()
-                        .map(|sig| sig.param_types.clone())
-                } else {
-                    func_name.and_then(|name| {
-                        // Try direct lookup first (e.g., "Thing::new")
-                        self.signature_registry
-                            .get_signature(name)
-                            .or_else(|| {
-                                // Fallback: Try finding by suffix (e.g., "::new" matches "Thing::new")
-                                let method_name =
-                                    name.rsplit_once("::").map(|(_, m)| m).unwrap_or(name);
-                                self.signature_registry
-                                    .find_signature_ending_with(method_name)
-                            })
-                            .map(|sig| sig.param_types.clone())
+                let resolved_sig = func_name.and_then(|name| {
+                    crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+                        &self.signature_registry,
+                        name,
+                        receiver_type.as_deref(),
+                        arguments.len(),
+                        &self.module_alias_map,
+                    )
+                    .filter(|r| {
+                        !matches!(
+                            r.resolution_method,
+                            crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
+                        )
                     })
-                };
+                });
+
+                let param_types: Option<Vec<Type>> =
+                    resolved_sig.as_ref().map(|r| r.sig.param_types.clone());
 
                 let mut arg_strings = Vec::new();
                 for (idx, (_label, arg)) in arguments.iter().enumerate() {
@@ -305,8 +302,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                     // Ownership-based string coercion for instance method calls
                     // (Call(FieldAccess) path — same logic as MethodCall path)
-                    if let Some(ref sig) = instance_method_sig {
-                        let sig_param_idx = if sig.has_self_receiver { idx + 1 } else { idx };
+                    if let Some(ref r) = resolved_sig {
+                        let sig = &r.sig;
+                        let sig_param_idx = sig.arg_param_index(idx);
                         if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
                             match ownership {
                                 crate::analyzer::OwnershipMode::Owned => {
@@ -320,8 +318,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     if is_str_lit {
                                         let is_explicit_str_ref = sig.param_types.get(sig_param_idx)
                                             .is_some_and(|t| matches!(t, Type::Reference(inner) if
-                                                matches!(**inner, Type::String) ||
-                                                matches!(**inner, Type::Custom(ref s) if s == "str")
+                                                matches!(&**inner, Type::String) ||
+                                                matches!(&**inner, Type::Custom(s) if s == "str")
                                             ));
                                         if !is_explicit_str_ref {
                                             arg_str = format!("{}.to_string()", arg_str);
@@ -331,7 +329,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 crate::analyzer::OwnershipMode::Borrowed => {
                                     if is_string_literal {
                                         let param_is_str_ref_explicit = sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                                            matches!(t, Type::Reference(inner) if matches!(**inner, Type::Custom(ref name) if name == "str"))
+                                            matches!(t, Type::Reference(inner) if matches!(&**inner, Type::Custom(name) if name == "str"))
                                         });
                                         if !param_is_str_ref_explicit {
                                             let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(|t| {
@@ -390,26 +388,44 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str: String,
         string_literal_converted: bool,
     ) -> String {
+        let callee_wants_borrowed_str = |sig: &crate::analyzer::FunctionSignature, idx: usize| {
+            sig.param_ownership
+                .get(idx)
+                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
+                && sig
+                    .param_types
+                    .get(idx)
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+        };
+
         if string_literal_converted {
             return arg_str;
         }
         if arg_str.starts_with('&') {
             return arg_str;
         }
-        if !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+        // If the argument is already a reference (str_ref_optimized param or
+        // inferred borrowed), adding & would create &&str.
+        if let Expression::Identifier { name, .. } = arg_to_generate {
+            if self.identifier_already_ref(name) {
+                return arg_str;
+            }
+        }
+        let wants_str = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
             method_signature,
             sig_param_idx,
-        ) {
+        ) || method_signature
+            .as_ref()
+            .is_some_and(|sig| callee_wants_borrowed_str(sig, sig_param_idx));
+        if !wants_str {
             return arg_str;
         }
-        if let Expression::FieldAccess { .. } = arg_to_generate {
-            if self
-                .infer_expression_type(arg_to_generate)
-                .as_ref()
-                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
-            {
-                return format!("&{}", arg_str);
-            }
+        // When callee expects &str and arg produces an owned String, add &.
+        // &String auto-derefs to &str. Only skip for bare string literals
+        // (already &str) which are handled by string_literal_converted above.
+        let is_bare_str_literal = arg_str.starts_with('"') && !arg_str.ends_with(".to_string()");
+        if !is_bare_str_literal {
+            return format!("&{arg_str}");
         }
         arg_str
     }
@@ -440,7 +456,10 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         expr_str: &str,
     ) -> String {
-        if expr_str.contains(".clone()") || expr_str.contains(".to_string()") {
+        if expr_str.contains(".clone()")
+            || expr_str.contains(".to_string()")
+            || expr_str.ends_with(".into()")
+        {
             return expr_str.to_string();
         }
         let Some(ty) = self.infer_expression_type(expr) else {
@@ -615,18 +634,12 @@ impl<'ast> CodeGenerator<'ast> {
         // Int: Check IntInference first (i32, i64, u32, etc.)
         // Float: Check FloatInference (f32, f64)
         match lit {
-            Literal::String(s) => {
-                if s.is_empty() && self.should_coerce_string_literal_to_owned() {
-                    // Use `"".to_string()` (not `String::new()`) so implicit-return / match-arm
-                    // post-processing does not append another `.to_string()` (E0308 / redundant call).
-                    "\"\".to_string()".to_string()
+            Literal::String(_) => {
+                let base = crate::codegen::rust::literals::generate_literal(lit);
+                if self.should_coerce_string_literal_to_owned() {
+                    crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&base)
                 } else {
-                    let base = crate::codegen::rust::literals::generate_literal(lit);
-                    if self.should_coerce_string_literal_to_owned() {
-                        format!("{}.to_string()", base)
-                    } else {
-                        base
-                    }
+                    base
                 }
             }
             Literal::IntSuffixed(i, suffix) => {
@@ -644,6 +657,30 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::literals::generate_literal(lit)
             }
             Literal::Float(f) => {
+                // Struct field annotations beat float inference (avoids `100.0_f64` in `f32` slots).
+                if self.in_struct_literal_field {
+                    if let (Some(struct_name), Some(field_name)) = (
+                        &self.current_struct_literal_name,
+                        &self.current_struct_field_name,
+                    ) {
+                        if let Some(field_type) = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|fields| fields.get(field_name))
+                        {
+                            if let Some(suffix) =
+                                float_type_utilities::try_extract_float_type(field_type)
+                            {
+                                let s = f.to_string();
+                                return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                                    format!("{}.0_{}", s, suffix)
+                                } else {
+                                    format!("{}_{}", s, suffix)
+                                };
+                            }
+                        }
+                    }
+                }
+
                 // Priority 1: Use inference engine results (most accurate)
                 if let Some(inference) = &self.float_inference {
                     use crate::type_inference::FloatType;

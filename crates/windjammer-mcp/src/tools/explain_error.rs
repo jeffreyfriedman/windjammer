@@ -3,14 +3,15 @@
 use crate::error::{McpError, McpResult};
 use crate::protocol::ToolCallResult;
 use crate::tools::text_response;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use windjammer_lsp::database::WindjammerDatabase;
 
-#[derive(Debug, Deserialize)]
-struct ExplainErrorRequest {
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExplainErrorRequest {
     error: String,
     code_context: Option<String>,
 }
@@ -35,7 +36,7 @@ pub async fn handle(
         })?;
 
     let (explanation, suggestion, corrected_code) =
-        explain_error(&request.error, request.code_context.as_deref());
+        explain_error_with_catalog(&request.error, request.code_context.as_deref());
 
     let response = ExplainErrorResponse {
         success: true,
@@ -52,8 +53,53 @@ pub async fn handle(
     Ok(text_response(response_json))
 }
 
-/// Explain common Windjammer errors
-fn explain_error(error: &str, code_context: Option<&str>) -> (String, String, Option<String>) {
+/// Explain errors using agent index catalog first, then heuristics.
+fn explain_error_with_catalog(
+    error: &str,
+    code_context: Option<&str>,
+) -> (String, String, Option<String>) {
+    // Try WJ code in error message
+    for token in error.split_whitespace() {
+        if token.starts_with("WJ") && token.len() >= 6 {
+            if let Ok(catalog) = crate::agent_index::load_errors_json() {
+                if let Some(entry) = catalog.get(token.trim_matches(|c: char| !c.is_alphanumeric()))
+                {
+                    if let Some(obj) = entry.as_object() {
+                        let explanation = obj
+                            .get("explanation")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("See error catalog")
+                            .to_string();
+                        let suggestion = obj
+                            .get("solutions")
+                            .and_then(|v| v.as_array())
+                            .and_then(|a| a.first())
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("See Windjammer error catalog")
+                            .to_string();
+                        let corrected = obj
+                            .get("example")
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                        return (explanation, suggestion, corrected);
+                    }
+                }
+            }
+            let registry = windjammer::error_codes::get_registry();
+            if let Some(wj) = registry.get(token.trim_matches(|c: char| !c.is_alphanumeric())) {
+                let suggestion = wj.solutions.first().cloned().unwrap_or_default();
+                return (wj.explanation.clone(), suggestion, wj.example.clone());
+            }
+        }
+    }
+    explain_error_heuristic(error, code_context)
+}
+
+/// Heuristic fallback for unstructured compiler errors
+fn explain_error_heuristic(
+    error: &str,
+    code_context: Option<&str>,
+) -> (String, String, Option<String>) {
     let error_lower = error.to_lowercase();
 
     // Type mismatch errors

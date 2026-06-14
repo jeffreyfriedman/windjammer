@@ -197,7 +197,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        return !crate::method_registry::is_known_readonly_method(method);
+                        let recv_type = self.infer_type_name(object);
+                        return !crate::codegen::rust::stdlib_method_traits::is_known_readonly_qualified(
+                            method,
+                            recv_type.as_deref(),
+                            &self.signature_registry,
+                        );
                     }
                 }
                 false
@@ -234,9 +239,17 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 i
             };
-            let Some(&OwnershipMode::MutBorrowed) = sig.param_ownership.get(pidx) else {
+            let needs_mut_borrow = sig
+                .param_ownership
+                .get(pidx)
+                .is_some_and(|&o| o == OwnershipMode::MutBorrowed)
+                || sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)));
+            if !needs_mut_borrow {
                 continue;
-            };
+            }
             let matches_var = |e: &Expression| match e {
                 Expression::Identifier { name, .. } => name == var_name,
                 Expression::Unary {
@@ -287,7 +300,7 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         for (i, (_label, arg)) in arguments.iter().enumerate() {
-            let sig_param_idx = if sig.has_self_receiver { i + 1 } else { i };
+            let sig_param_idx = sig.arg_param_index(i);
 
             let mut_borrow_via_ownership = sig
                 .param_ownership
@@ -327,10 +340,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
-                        if self.is_mutating_method(method) {
-                            return true;
-                        }
-
+                        // PRIORITY 1: Type-qualified SignatureRegistry lookup
                         let type_name = self
                             .current_function_params
                             .iter()
@@ -347,7 +357,7 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                             .or_else(|| self.infer_local_var_type_from_body(var_name));
 
-                        if let Some(type_name) = type_name {
+                        if let Some(ref type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
                             if let Some(sig) =
                                 self.signature_registry.get_signature(&qualified_name)
@@ -365,10 +375,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            // Generic type param: resolve trait bounds and
-                            // check if any bound trait declares &mut self
+                            // Generic type param: resolve trait bounds
                             for (tp_name, bounds) in &self.current_function_type_bounds {
-                                if tp_name == &type_name {
+                                if tp_name == type_name {
                                     for bound_trait in bounds {
                                         let trait_qualified =
                                             format!("{}::{}", bound_trait, method);
@@ -391,6 +400,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
+                        }
+
+                        // PRIORITY 2: Fallback to method_registry for stdlib methods
+                        if self.is_mutating_method(method) {
+                            return true;
                         }
                     }
                 }
@@ -439,7 +453,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn is_mutating_method(&self, method: &str) -> bool {
-        crate::method_registry::mutates_receiver(method)
+        crate::codegen::rust::stdlib_method_traits::method_mutates_receiver(method)
     }
 
     pub(crate) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {

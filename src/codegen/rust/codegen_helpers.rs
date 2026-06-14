@@ -160,7 +160,11 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             arguments,
             ..
         } => {
-            if method == "clone" && clone_receiver_is_self_dense_path(object) {
+            if matches!(
+                method.as_str(),
+                "clone" | "to_owned" | "to_vec" | "into_iter"
+            ) && clone_receiver_is_self_dense_path(object)
+            {
                 return true;
             }
             if expr_may_need_generic_clone_bound(object) {
@@ -192,8 +196,17 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             }
             false
         }
-        Expression::FieldAccess { object, .. } => expr_may_need_generic_clone_bound(object),
+        Expression::FieldAccess { object, field, .. } => {
+            if field == "dense" && is_self_dense_access(expr) {
+                return true;
+            }
+            expr_may_need_generic_clone_bound(object)
+        }
         Expression::Index { object, index, .. } => {
+            // Generic impls returning `self.dense[i]` codegen adds `.clone()` on the element.
+            if is_self_dense_access(object) {
+                return true;
+            }
             expr_may_need_generic_clone_bound(object) || expr_may_need_generic_clone_bound(index)
         }
         Expression::StructLiteral { fields, .. } => fields

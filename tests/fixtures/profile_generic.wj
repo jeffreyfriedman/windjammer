@@ -1,0 +1,6 @@
+// TDD: @profile uses wrapping codegen path — must preserve generic <T>
+
+@profile("identity_zone")
+pub fn identity<T>(value: T) -> T {
+    value
+}

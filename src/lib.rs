@@ -4,6 +4,7 @@
 
 use clap::ValueEnum;
 
+pub mod agent_index;
 pub mod analyzer;
 pub mod auto_clone;
 pub mod auto_fix;
@@ -15,12 +16,12 @@ pub mod error;
 pub mod error_codes;
 pub mod errors;
 pub mod fuzzy_matcher;
+pub mod ide_analysis;
 pub mod inference;
 pub mod interpreter;
 pub mod lexer;
 pub mod linter;
 pub mod metadata;
-pub mod method_registry;
 pub mod module_system;
 pub mod parser;
 pub mod parser_impl;
@@ -42,6 +43,7 @@ pub mod lib_rs_generator;
 pub mod shader;
 pub mod test_utils;
 pub mod type_classification;
+pub mod type_display;
 pub mod type_inference;
 pub mod type_registry;
 pub mod wjsl;
@@ -71,12 +73,16 @@ pub mod file_compiler; // Single-file compilation
 mod output_generation;
 #[cfg(feature = "cli")]
 pub mod plugin;
+pub mod rust_integration_tests;
+pub mod test_module_gate;
 #[cfg(feature = "cli")]
 pub mod test_runner;
 
 /// Build a Windjammer project - compiles .wj files to Rust.
 /// Used by integration tests and CLI.
 pub use compiler::{build_project, build_project_ext};
+
+pub use rust_integration_tests::sync_rust_integration_tests;
 
 // CLI exports (used by cli/build.rs, cli/test.rs, wj binary)
 #[cfg(feature = "cli")]

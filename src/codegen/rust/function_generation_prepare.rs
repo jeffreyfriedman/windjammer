@@ -155,6 +155,16 @@ impl<'ast> CodeGenerator<'ast> {
             self.str_ref_optimized_params.insert(param_name.clone());
         }
 
+        // Any parameter the analyzer lowered to `Reference(str)` generates as `&str` in Rust.
+        // Call-site borrow helpers must treat these as already referenced (map.get(key) not get(&key)).
+        for (idx, param) in func.parameters.iter().enumerate() {
+            if let Some(Type::Reference(inner)) = analyzed.inferred_param_types.get(idx) {
+                if matches!(&**inner, Type::Custom(s) if s == "str") {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                }
+            }
+        }
+
         // Track explicit &String/&string params that become &str via type_to_rust
         // (Type::Reference(String) → "&str"). These aren't Phase 2 optimized but still
         // need .to_string() conversions in the body (e.g., Some(s) → Some(s.to_string())).

@@ -32,6 +32,7 @@ This is your complete guide to the Windjammer Game Framework - the game engine t
   - Performance highlights
   - Unique innovations
   - Market positioning
+  - Canonical game-framework vision lives in **`windjammer-game`**: **[`../windjammer-game/VISION.md`](../windjammer-game/VISION.md)**
 
 - **[Competitive Analysis](COMPETITIVE_ANALYSIS.md)** (521 lines)
   - Detailed Unity/Unreal/Godot comparison

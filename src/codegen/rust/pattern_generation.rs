@@ -231,15 +231,21 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(ty) = self.local_var_types.get(name) {
                     return matches!(ty, Type::Reference(_) | Type::MutableReference(_));
                 }
+                if name == "self" && self.inferred_borrowed_params.contains("self") {
+                    return true;
+                }
                 false
             }
             Expression::FieldAccess { object, .. } => {
-                // If object is self, check if self is borrowed
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                     if obj_name == "self" {
                         return self.current_function_params.iter().any(|p| {
                             p.name == "self"
-                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                && matches!(
+                                    p.ownership,
+                                    crate::parser::OwnershipHint::Ref
+                                        | crate::parser::OwnershipHint::Mut
+                                )
                         });
                     }
                 }
@@ -253,21 +259,41 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             }
-            Expression::MethodCall { .. } => {
-                // Method calls might return references
+            Expression::MethodCall { method, .. } => {
                 if let Some(ty) = self.infer_expression_type(expr) {
-                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                } else {
-                    false
+                    if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                        return true;
+                    }
+                    // HashMap.get()/BTreeMap.get() returns Option<&V>.
+                    // Custom methods like Map::get -> Option<i32> return owned values.
+                    if method == "get" {
+                        if let Type::Option(inner) = ty {
+                            return matches!(
+                                inner.as_ref(),
+                                Type::Reference(_) | Type::MutableReference(_)
+                            );
+                        }
+                    }
                 }
+                false
             }
-            Expression::Call { .. } => {
-                // Function calls might return references
+            Expression::Call { function, .. } => {
                 if let Some(ty) = self.infer_expression_type(expr) {
-                    matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                } else {
-                    false
+                    if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                        return true;
+                    }
+                    if let Expression::FieldAccess { field, .. } = function {
+                        if field == "get" {
+                            if let Type::Option(inner) = ty {
+                                return matches!(
+                                    inner.as_ref(),
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                );
+                            }
+                        }
+                    }
                 }
+                false
             }
             _ => false,
         }

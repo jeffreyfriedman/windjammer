@@ -139,11 +139,9 @@ impl IntInference {
             (vec![Type::Custom("usize".to_string())], None),
         );
 
-        // HashMap<K,V> methods
-        self.function_signatures.insert(
-            "HashMap::with_capacity".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
+        // HashMap<K,V> methods - REMOVED: Now auto-collected from std/collections.wj!
+        // The Windjammer stdlib defines HashMap, and the compiler automatically
+        // discovers its methods during analysis. No hard-coding needed!
 
         // String methods
         self.function_signatures.insert(
@@ -170,7 +168,10 @@ impl IntInference {
         &mut self,
         signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     ) {
-        self.function_signatures = signatures;
+        // TDD FIX: Merge instead of replace to preserve stdlib HashMap/Vec methods
+        for (key, value) in signatures {
+            self.function_signatures.insert(key, value);
+        }
     }
 
     pub fn set_global_struct_field_types(
@@ -198,9 +199,8 @@ impl IntInference {
         self.module_re_exports = re_exports;
     }
 
-    /// Main entry point: Infer integer types for a program
-    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
-        self.imported_type_registry_keys.clear();
+    /// Register signatures/metadata from a program (no constraint collection).
+    pub fn prepare_program<'ast>(&mut self, program: &Program<'ast>) {
         if let Some(first_item) = program.items.first() {
             if let Some(loc) = first_item.location() {
                 self.set_current_file(loc.file.to_string_lossy().to_string());
@@ -215,12 +215,123 @@ impl IntInference {
         }
 
         self.register_use_imports_from_items(&program.items);
+    }
 
-        for item in &program.items {
+    /// Collect integer constraints from a program (call [`Self::finish_solve`] after merging).
+    pub fn collect_program_constraints<'ast>(&mut self, program: &Program<'ast>) {
+        if let Some(first_item) = program.items.first() {
+            if let Some(loc) = first_item.location() {
+                self.set_current_file(loc.file.to_string_lossy().to_string());
+            }
+        }
+        for item in program.items.iter() {
             self.collect_item_constraints(item);
         }
+    }
 
+    /// Merge parallel per-file inference state before a single solve pass.
+    pub fn merge_parallel_state(&mut self, other: Self) {
+        self.constraints.extend(other.constraints);
+        self.inferred_types.extend(other.inferred_types);
+        self.errors.extend(other.errors);
+        // Do not merge var_assignments / var_types — function-local scratch during
+        // collection; merging bare names across files causes false type conflicts.
+        self.const_types.extend(other.const_types);
+        self.expr_id_cache.extend(other.expr_id_cache);
+        self.next_seq_id = self.next_seq_id.max(other.next_seq_id);
+        self.next_file_id = self.next_file_id.max(other.next_file_id);
+        for (k, v) in other.file_name_to_id {
+            self.file_name_to_id.entry(k).or_insert(v);
+        }
+        for (k, v) in other.id_to_file_name {
+            self.id_to_file_name.entry(k).or_insert(v);
+        }
+        self.imported_type_registry_keys
+            .extend(other.imported_type_registry_keys);
+    }
+
+    /// Run constraint unification after all programs have been collected.
+    pub fn finish_solve(&mut self) {
         self.solve_constraints();
+    }
+
+    /// Clear cross-file import registry before a multi-file inference pass.
+    pub fn reset_imported_type_registry(&mut self) {
+        self.imported_type_registry_keys.clear();
+    }
+
+    /// Main entry point: Infer integer types for a program
+    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.reset_imported_type_registry();
+        self.prepare_program(program);
+        self.collect_program_constraints(program);
+        self.finish_solve();
+    }
+
+    /// Export inferred variable types for IDE/MCP consumers.
+    pub fn export_var_types(&self) -> std::collections::HashMap<String, String> {
+        self.var_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), format_type_for_ide(ty)))
+            .collect()
+    }
+
+    /// TDD FIX: Substitute generic type parameters with concrete types
+    /// E.g., for HashMap<u32, String>::insert, parameter type K becomes u32
+    /// Takes parsed Type enums, not strings
+    fn substitute_generic_params_typed(&self, ty: &Type, generics: &[Type]) -> Type {
+        match ty {
+            Type::Custom(name) if name.len() == 1 => {
+                // Single-letter types like K, V, T are likely generics
+                let ch = name.chars().next().unwrap();
+                if ch.is_ascii_uppercase() {
+                    // Common generic parameter names and their indices
+                    let idx = match ch {
+                        'K' => 0, // Key type (HashMap)
+                        'V' => 1, // Value type (HashMap)
+                        'T' => 0, // Generic T (Vec, Option, etc.)
+                        'U' => 1, // Second generic
+                        'E' => 1, // Error type (Result)
+                        _ => return ty.clone(),
+                    };
+                    if let Some(concrete) = generics.get(idx) {
+                        return concrete.clone();
+                    }
+                }
+                ty.clone()
+            }
+            Type::Option(inner) => Type::Option(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
+            Type::Result(ok, err) => Type::Result(
+                Box::new(self.substitute_generic_params_typed(ok, generics)),
+                Box::new(self.substitute_generic_params_typed(err, generics)),
+            ),
+            Type::Vec(inner) => Type::Vec(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
+            _ => ty.clone(),
+        }
+    }
+
+    /// Parse a type from a string representation (e.g., "u32" → Type::Custom("u32"))
+    fn parse_type_from_string(&self, s: &str) -> Type {
+        match s {
+            "i32" => Type::Int32,
+            "i64" => Type::Int,
+            "u64" => Type::Custom("u64".to_string()), // Specific u64
+            "u32" => Type::Custom("u32".to_string()), // Specific u32, NOT Type::Uint!
+            "usize" => Type::Custom("usize".to_string()),
+            "u8" => Type::Custom("u8".to_string()),
+            "i8" => Type::Custom("i8".to_string()),
+            "u16" => Type::Custom("u16".to_string()),
+            "i16" => Type::Custom("i16".to_string()),
+            "f32" => Type::Float,
+            "f64" => Type::Float,
+            "bool" => Type::Bool,
+            "string" => Type::String,
+            _ => Type::Custom(s.to_string()),
+        }
     }
 
     fn lookup_struct_fields(&self, type_name: &str) -> Option<&HashMap<String, Type>> {
@@ -721,6 +832,10 @@ impl IntInference {
             _ => {}
         }
     }
+}
+
+fn format_type_for_ide(ty: &Type) -> String {
+    crate::type_display::format_wj_type(ty)
 }
 
 include!("literal_inference.rs");

@@ -15,7 +15,7 @@ impl TestData {
     }
     
     // Should infer .iter() - read-only iteration
-    fn sum_items(&self) -> i32 {
+    fn sum_items(self) -> i32 {
         let mut total = 0
         for item in self.items {
             total = total + item
@@ -24,14 +24,14 @@ impl TestData {
     }
     
     // Should infer .iter() - field access
-    fn print_names(&self) {
+    fn print_names(self) {
         for name in self.names {
             println!("{}", name)
         }
     }
     
     // Should NOT double .iter() when already present
-    fn count_positive(&self) -> i32 {
+    fn count_positive(self) -> i32 {
         let mut count = 0
         for item in self.items {
             if item > 0 {
@@ -42,8 +42,8 @@ impl TestData {
     }
     
     // Should NOT add .iter() after .enumerate()
-    fn print_with_index(&self) {
-        for (i, item) in self.items.iter().enumerate() {
+    fn print_with_index(self) {
+        for (i, item) in self.items.enumerate() {
             println!("{}: {}", i, item)
         }
     }
