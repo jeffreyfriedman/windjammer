@@ -693,10 +693,21 @@ impl<'ast> CodeGenerator<'ast> {
                         &self.str_ref_optimized_params,
                     );
                     if should_ref {
-                        if let Expression::Cast { .. } = arg_to_generate {
-                            arg_str = format!("&({})", arg_str);
-                        } else {
-                            arg_str = format!("&{}", arg_str);
+                        let push_owned_string = matches!(
+                            method,
+                            "push" | "insert" | "append" | "push_front" | "push_back" | "add"
+                        ) && matches!(arg_to_generate, Expression::Identifier { name, .. }
+                            if !self.inferred_borrowed_params.contains(name.as_str())
+                                && !self.borrowed_iterator_vars.contains(name)
+                                && self
+                                    .infer_expression_type(arg_to_generate)
+                                    .is_some_and(|t| matches!(t, Type::String)));
+                        if !push_owned_string {
+                            if let Expression::Cast { .. } = arg_to_generate {
+                                arg_str = format!("&({})", arg_str);
+                            } else {
+                                arg_str = format!("&{}", arg_str);
+                            }
                         }
                     }
                 }
