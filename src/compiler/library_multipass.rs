@@ -279,6 +279,8 @@ pub(crate) fn build_library_multipass(
         super::dependency_resolution::find_dependency_metadata_roots(&src_base, external_paths);
     let dep_epoch_snapshot = super::incremental::dep_metadata_epoch(&dep_roots);
 
+    super::cache_management::invalidate_meta_cache_on_compiler_change(&src_base, output);
+
     let dependency_graph =
         super::incremental::DependencyGraph::build(&sources, &parsed_programs, &src_base);
 
@@ -451,40 +453,60 @@ pub(crate) fn build_library_multipass(
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
     let step3_start = Instant::now();
+    let mut global_registry = std::sync::Arc::new(global_registry);
 
     loop {
         let round_start = Instant::now();
-        let mut new_registry = global_registry.clone();
+        let global_arc = std::sync::Arc::clone(&global_registry);
+        let mut pass_changed = false;
 
-        // Re-analyze ALL files with current global registry (parallel per file).
-        let file_registries: Vec<SignatureRegistry> = (0..sources.len())
-            .into_par_iter()
-            .map(|i| {
-                if !reanalysis_set.contains(&i) {
-                    return Ok(SignatureRegistry::empty());
-                }
-                let (file, _source) = &sources[i];
-                let program = &parsed_programs[i];
-                let mut analyzer = Analyzer::for_library_pass(
-                    global_copy_structs.clone(),
-                    global_struct_fields.clone(),
-                    struct_defining_module_paths.clone(),
-                );
-                analyzer.convergence_only = true;
-                analyzer
-                    .analyze_program_with_global_signatures(program, &global_registry)
-                    .map(|(_, file_registry, _)| file_registry)
-                    .map_err(|e| {
-                        format!(
-                            "Analysis error in pass {} for {}: {}",
-                            pass_number,
-                            file.display(),
-                            e
-                        )
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| anyhow::anyhow!(e))?;
+        if sources.len() > 16 {
+            eprintln!(
+                "⟳ Ownership convergence pass {} ({} files)...",
+                pass_number,
+                sources.len()
+            );
+        }
+
+        // Re-analyze files in bounded batches — layered registries avoid per-file full clones.
+        // global registry once per worker and OOMs (exit 137) on large crates.
+        let mut file_registries: Vec<SignatureRegistry> =
+            vec![SignatureRegistry::empty(); sources.len()];
+        for batch_start in (0..sources.len()).step_by(STEP4B_REGISTRY_BATCH_SIZE) {
+            let batch_end = (batch_start + STEP4B_REGISTRY_BATCH_SIZE).min(sources.len());
+            let batch: Vec<usize> = (batch_start..batch_end).collect();
+            let batch_results: Vec<(usize, SignatureRegistry)> = batch
+                .into_par_iter()
+                .map(|i| -> Result<(usize, SignatureRegistry), String> {
+                    if !reanalysis_set.contains(&i) {
+                        return Ok((i, SignatureRegistry::empty()));
+                    }
+                    let (file, _source) = &sources[i];
+                    let program = &parsed_programs[i];
+                    let mut analyzer = Analyzer::for_library_pass(
+                        global_copy_structs.clone(),
+                        global_struct_fields.clone(),
+                        struct_defining_module_paths.clone(),
+                    );
+                    analyzer.convergence_only = true;
+                    analyzer
+                        .analyze_program_with_global_arc(program, &global_arc)
+                        .map(|(_, file_registry, _)| (i, file_registry))
+                        .map_err(|e| {
+                            format!(
+                                "Analysis error in pass {} for {}: {}",
+                                pass_number,
+                                file.display(),
+                                e
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!(e))?;
+            for (i, reg) in batch_results {
+                file_registries[i] = reg;
+            }
+        }
 
         for (i, (file, _source)) in sources.iter().enumerate() {
             let file_registry = &file_registries[i];
@@ -501,11 +523,13 @@ pub(crate) fn build_library_multipass(
                     .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
-                let should_insert = match global_registry.signatures.get(name) {
+                let should_insert = match global_registry.get_signature(name) {
                     None => true,
                     Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
                 };
                 if should_insert {
+                    pass_changed = true;
+                    let new_registry = std::sync::Arc::make_mut(&mut global_registry);
                     new_registry.signatures.insert(name.clone(), sig.clone());
                     // Keep module-qualified aliases in sync when ownership changes
                     if !file_stem.is_empty() {
@@ -524,20 +548,10 @@ pub(crate) fn build_library_multipass(
 
         profile_phase(&format!("Step 3 round {}", pass_number), round_start);
 
-        // Convergence check: did any signatures change in this pass?
-        let changed = new_registry.signatures.iter().any(|(name, sig)| {
-            match global_registry.signatures.get(name) {
-                None => true,
-                Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
-            }
-        });
-
-        if !changed || pass_number >= MAX_GLOBAL_PASSES {
-            global_registry = new_registry;
+        if !pass_changed || pass_number >= MAX_GLOBAL_PASSES {
             break;
         }
 
-        global_registry = new_registry;
         pass_number += 1;
     }
     profile_phase("Step 3 total", step3_start);
@@ -622,6 +636,9 @@ pub(crate) fn build_library_multipass(
     super::bail_on_inference_errors(&global_int_inference.errors, "Int", None)?;
     profile_phase("Step 4A: Float/Int inference", step4a_start);
 
+    let global_float_inference = std::sync::Arc::new(global_float_inference);
+    let global_int_inference = std::sync::Arc::new(global_int_inference);
+
     let type_defining_modules =
         super::dependency_resolution::build_type_defining_modules_for_library(&sources, &src_base)?;
     let extern_submodule_qualifiers =
@@ -651,7 +668,7 @@ pub(crate) fn build_library_multipass(
         }
 
         let merged_program = crate::parser::Program { items: all_items };
-        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program, &global_registry) {
+        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program, global_registry.as_ref()) {
             Ok(()) => shared_analyzer.analyzed_trait_methods.clone(),
             Err(e) => {
                 eprintln!("Cross-file trait inference warning: {}", e);
@@ -682,9 +699,11 @@ pub(crate) fn build_library_multipass(
         );
     }
 
-    // Phase 1: Analyze files in bounded batches to build final registry without retaining
-    // all per-file analysis in memory (664+ engine files OOM with exit 137 otherwise).
-    let mut final_global_registry = global_registry.clone();
+    // Step 4B: Single sequential pass — analyze, merge registry, codegen per file.
+    // Avoids duplicate full-crate re-analysis (Phase 1 batch + Phase 2 re-run was ~2× cost
+    // and ~19 min/file on the 664-file engine).
+    let step4b_start = Instant::now();
+    let mut final_global_registry = global_registry;
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
 
@@ -707,72 +726,29 @@ pub(crate) fn build_library_multipass(
         }
     }
 
-    let step4b_phase1_start = Instant::now();
-    struct Phase1RegistryResult {
-        index: usize,
-        registry: SignatureRegistry,
-        file_stem: String,
-        module_path: String,
-        lint_errors: Vec<String>,
-    }
-
-    let global_registry_for_phase1 = global_registry.clone();
     let global_analyzed_trait_methods_arc = std::sync::Arc::new(global_analyzed_trait_methods);
 
-    for batch_start in (0..sources.len()).step_by(STEP4B_REGISTRY_BATCH_SIZE) {
-        let batch_end = (batch_start + STEP4B_REGISTRY_BATCH_SIZE).min(sources.len());
-        let batch: Vec<usize> = (batch_start..batch_end).collect();
-        let mut batch_results: Vec<Phase1RegistryResult> = batch
-            .into_par_iter()
-            .map(|i| -> Result<Phase1RegistryResult, String> {
-                let analysis = analyze_file_for_step4b(
-                    i,
-                    &sources,
-                    &parsed_programs,
-                    &stripped_programs,
-                    &src_base,
-                    output,
-                    &global_registry_for_phase1,
-                    &global_copy_structs,
-                    &global_struct_fields,
-                    &struct_defining_module_paths,
-                    &global_analyzed_trait_methods_arc,
-                    enable_lint,
-                )?;
-                Ok(Phase1RegistryResult {
-                    index: i,
-                    registry: analysis.registry,
-                    file_stem: analysis.file_stem,
-                    module_path: analysis.module_path,
-                    lint_errors: analysis.lint_errors,
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| anyhow::anyhow!(e))?;
-        batch_results.sort_by_key(|r| r.index);
-        for result in batch_results {
-            deferred_lint_errors.extend(result.lint_errors);
-            final_global_registry.merge(&result.registry);
-            final_global_registry.register_module_aliases(
-                &result.registry,
-                &result.file_stem,
-                &result.module_path,
+    let user_file_indices: Vec<usize> = sources
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (f, _))| f.strip_prefix(&src_base).ok().map(|_| i))
+        .collect();
+    let user_file_count = user_file_indices.len();
+    let mut step_done = 0usize;
+
+    for i in user_file_indices {
+        let file = &sources[i].0;
+        step_done += 1;
+        if user_file_count > 16 {
+            eprintln!(
+                "⟳ Analyze+codegen: file {}/{} ({})...",
+                step_done,
+                user_file_count,
+                file.file_name().and_then(|n| n.to_str()).unwrap_or("?")
             );
         }
-    }
-    let final_global_registry = std::sync::Arc::new(final_global_registry);
-    profile_phase(
-        "Step 4B Phase 1: Final analysis (batched parallel)",
-        step4b_phase1_start,
-    );
 
-    // Phase 2: Sequential analyze + codegen — one file in memory at a time.
-    let step4b_phase2_start = Instant::now();
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        // Stdlib injects (outside src_base) participate in analysis only — no crate output.
-        if file.strip_prefix(&src_base).is_err() {
-            continue;
-        }
+        let file_start = Instant::now();
         let analysis = analyze_file_for_step4b(
             i,
             &sources,
@@ -780,7 +756,7 @@ pub(crate) fn build_library_multipass(
             &stripped_programs,
             &src_base,
             output,
-            final_global_registry.as_ref(),
+            &final_global_registry,
             &global_copy_structs,
             &global_struct_fields,
             &struct_defining_module_paths,
@@ -788,12 +764,32 @@ pub(crate) fn build_library_multipass(
             enable_lint,
         )
         .map_err(|e| anyhow::anyhow!(e))?;
+        if user_file_count > 16 {
+            let secs = file_start.elapsed().as_secs_f64();
+            if secs >= 5.0 {
+                eprintln!(
+                    "  ⏱ {} took {:.1}s",
+                    file.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                    secs
+                );
+            }
+        }
         let program: &crate::parser::Program<'static> =
             stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]);
 
-        // Build full registry: shared global (Arc) + per-file local overlay
-        let mut full_registry = final_global_registry.as_ref().clone();
-        full_registry.merge(&analysis.registry);
+        deferred_lint_errors.extend(analysis.lint_errors);
+
+        {
+            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+            reg.merge(&analysis.registry);
+            reg.register_module_aliases(
+                &analysis.registry,
+                &analysis.file_stem,
+                &analysis.module_path,
+            );
+        }
+
+        let mut full_registry = analysis.registry.clone();
         {
             let mut tmp_analyzer = Analyzer::for_library_pass(
                 global_copy_structs.clone(),
@@ -807,8 +803,7 @@ pub(crate) fn build_library_multipass(
             );
         }
 
-        let registry_snapshot = full_registry.clone();
-        for (name, sig) in &registry_snapshot.signatures {
+        for (name, sig) in &full_registry.signatures {
             if !sig.param_ownership.is_empty()
                 && (crate::metadata::signature_targets_local_struct(name, &local_struct_names)
                     || (!name.contains("::") && crate_metadata.functions.contains_key(name)))
@@ -818,7 +813,6 @@ pub(crate) fn build_library_multipass(
         }
 
         if !dirty_set.contains(&i) && analysis.output_file.exists() {
-            // Guardrail: never skip codegen if fingerprint validation would fail.
             let (_, source) = &sources[i];
             if !super::cache_management::is_library_codegen_cache_valid(
                 source,
@@ -838,6 +832,7 @@ pub(crate) fn build_library_multipass(
         }
 
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
+        codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
         codegen.set_copy_types_registry((*global_copy_structs).clone());
         codegen.set_non_copy_types_registry(global_non_copy_types.clone());
         codegen.set_global_struct_field_types((*global_struct_fields).clone());
@@ -847,16 +842,14 @@ pub(crate) fn build_library_multipass(
         codegen.set_type_defining_modules(type_defining_modules.clone());
         codegen.set_extern_submodule_qualifiers(extern_submodule_qualifiers.clone());
         codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
-        codegen.set_float_inference(global_float_inference.clone());
-        codegen.set_int_inference(global_int_inference.clone());
+        codegen.set_shared_float_inference(std::sync::Arc::clone(&global_float_inference));
+        codegen.set_shared_int_inference(std::sync::Arc::clone(&global_int_inference));
 
         super::apply_inferred_bounds_to_codegen(&mut codegen, program);
-        let mut registry_snapshot_mut = registry_snapshot;
         super::write_generated_rust_and_meta(
             &mut codegen,
             program,
             &analysis.analyzed_functions,
-            &mut registry_snapshot_mut,
             &analysis.output_file,
             file,
             analysis.copy_structs.clone(),
@@ -865,7 +858,10 @@ pub(crate) fn build_library_multipass(
             Some(dep_epoch_snapshot),
         )?;
     }
-    profile_phase("Step 4B Phase 2: Code generation", step4b_phase2_start);
+    profile_phase(
+        "Step 4B: Analysis + codegen (sequential)",
+        step4b_start,
+    );
 
     // Emit metadata.json — refresh ONLY locally-defined function signatures from the
     // converged registry. Dumping the full merged registry (engine + game) creates
@@ -909,6 +905,7 @@ pub(crate) fn build_library_multipass(
             output,
             Some((output, src_base.as_path())),
         )?;
+        crate::build_utils::cleanup_stale_module_files(output)?;
         if let Some(project_root) =
             crate::rust_integration_tests::find_project_root_with_tests(src_base.as_path())
         {
@@ -971,7 +968,7 @@ fn analyze_file_for_step4b(
     stripped_programs: &[Option<crate::parser::Program<'static>>],
     src_base: &Path,
     output: &Path,
-    global_registry: &SignatureRegistry,
+    global_registry: &std::sync::Arc<SignatureRegistry>,
     global_copy_structs: &std::sync::Arc<std::collections::HashSet<String>>,
     global_struct_fields: &std::sync::Arc<
         HashMap<String, HashMap<String, crate::parser::ast::types::Type>>,
@@ -996,18 +993,15 @@ fn analyze_file_for_step4b(
         global_struct_fields.clone(),
         struct_defining_module_paths.clone(),
     );
+    analyzer.ownership_preconverged = true;
 
     analyzer
         .register_traits_from_program(program)
         .map_err(|e| format!("Trait registration: {}", e))?;
 
     let (analyzed_functions, registry, _) = analyzer
-        .analyze_program_with_global_signatures(program, global_registry)
+        .analyze_program_with_global_arc(program, global_registry)
         .map_err(|e| format!("Final analysis error: {}", e))?;
-
-    analyzer
-        .infer_trait_signatures_from_impls(program, &registry)
-        .map_err(|e| e.to_string())?;
 
     let mut merged_trait_methods = analyzer.analyzed_trait_methods.clone();
     for (trait_name, methods) in global_analyzed_trait_methods.iter() {

@@ -85,6 +85,21 @@ pub fn apply_mut_borrow_coercion(
     if is_identifier_already_mut_ref(arg, current_function_params, inferred_mut_borrowed_params) {
         return false;
     }
+    // Owned non-mut parameters cannot be `&mut` coerced (E0596). Downgrade to shared borrow
+    // when the callee signature was over-inferred as MutBorrowed (read-only field/index chains).
+    if let Expression::Identifier { name, .. } = arg {
+        let is_owned_non_mut_param = current_function_params.iter().any(|p| {
+            p.name == *name
+                && !matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+                && !inferred_mut_borrowed_params.contains(name)
+        });
+        if is_owned_non_mut_param {
+            if !arg_str.starts_with('&') {
+                super::rust_coercion_rules::Coercion::Borrow.apply(arg_str);
+            }
+            return true;
+        }
+    }
     strip_trailing_clone(arg_str);
     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
         *arg_str = arg_str[1..].to_string();

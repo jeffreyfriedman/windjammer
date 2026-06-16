@@ -322,6 +322,19 @@ impl<'ast> CodeGenerator<'ast> {
         if value_str.contains(".clone()") || value_str.ends_with(".to_string()") {
             return value_str.to_string();
         }
+        if let Expression::Identifier { name, .. } = value {
+            if self.inferred_borrowed_params.contains(name) {
+                let is_copy = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                    .map(|p| self.is_type_copy(&p.type_))
+                    .unwrap_or(false);
+                if !is_copy {
+                    return format!("{}.clone()", value_str);
+                }
+            }
+        }
         let Some(ty) = self.infer_expression_type(value) else {
             return value_str.to_string();
         };
@@ -586,19 +599,32 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Strip `&` / `&mut` so `.clone()` produces an owned value, not `&(expr.clone())`.
+    pub(in crate::codegen::rust) fn strip_leading_borrow_prefix(&self, expr_str: &str) -> String {
+        if let Some(stripped) = expr_str.strip_prefix("&mut ") {
+            stripped.to_string()
+        } else if let Some(stripped) = expr_str.strip_prefix("& ") {
+            stripped.to_string()
+        } else if expr_str.starts_with('&') && !expr_str.starts_with("&&") {
+            expr_str[1..].trim_start().to_string()
+        } else {
+            expr_str.to_string()
+        }
+    }
+
     /// When `&self` + `if let Some(x) = self.opt` but the arm calls mutating methods on `x`, use `&mut`.
     pub(in crate::codegen::rust) fn effective_option_scrutinee_ref_prefix(
         &self,
         value: &Expression<'ast>,
         some_arm: Option<&MatchArm<'ast>>,
     ) -> &'static str {
+        if let Some(arm) = some_arm {
+            if self.option_match_needs_mut_scrutinee_for_some_arm(arm, value) {
+                return "&mut ";
+            }
+        }
         let base = self.option_scrutinee_ref_prefix(value);
         if base == "&" {
-            if let Some(arm) = some_arm {
-                if self.option_match_needs_mut_scrutinee_for_some_arm(arm, value) {
-                    return "&mut ";
-                }
-            }
             // When the Option's inner type is Copy and the arm body doesn't mutate
             // the binding, no `&` prefix is needed — Option<Copy> auto-copies.
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
@@ -635,12 +661,10 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                         })
                         .unwrap_or(false);
-                    if !body_mutates {
-                        if self.match_scrutinee_is_self_field(value) {
-                            return "& ";
-                        }
+                    if !body_mutates && !self.match_scrutinee_is_self_field(value) {
                         return "";
                     }
+                    // Non-Copy `Option<T>` on `&mut self.field`: keep `&mut` — never downgrade to `&`.
                 }
             }
         }
@@ -738,6 +762,147 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|arm| self_analysis::expression_mutates_fields(&ctx, arm.body))
     }
 
+    /// True when any match/if-let arm calls `self.some_method(...)`.
+    pub(in crate::codegen::rust) fn match_arms_call_self_method(
+        &self,
+        arms: &[crate::parser::MatchArm<'ast>],
+    ) -> bool {
+        arms.iter()
+            .any(|arm| self.expression_calls_self_method(&arm.body))
+    }
+
+    fn expression_calls_self_method(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::MethodCall { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    || self.expression_calls_self_method(object)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_calls_self_method(s)),
+            _ => false,
+        }
+    }
+
+    fn statement_calls_self_method(&self, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self.expression_calls_self_method(expr),
+            Statement::Let { value, .. } => self.expression_calls_self_method(value),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_calls_self_method(expr),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_calls_self_method(s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| self.statement_calls_self_method(s))
+                    })
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.expression_calls_self_method(&arm.body)
+            }),
+            Statement::For { body, .. } | Statement::While { body, .. } => body
+                .iter()
+                .any(|s| self.statement_calls_self_method(s)),
+            _ => false,
+        }
+    }
+
+    /// Borrow-break on `self.field` / `self.field[i]` when arms need `&mut self` — clone enum out.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_clone(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        if !self.match_scrutinee_is_self_field(expr) {
+            return false;
+        }
+        if self.match_scrutinee_option_yields_copy(expr)
+            || self.match_borrow_break_yields_owned_copy_option(expr)
+        {
+            return false;
+        }
+        true
+    }
+
+    /// True when matching on `Option<&T>` where `T: Copy` (e.g. `map.get(&key)` → use `.copied()`).
+    pub(in crate::codegen::rust) fn match_scrutinee_option_yields_copy(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        let Some(ty) = self.infer_expression_type(expr) else {
+            return false;
+        };
+        let Type::Option(inner) = ty else {
+            return false;
+        };
+        let pointee = match inner.as_ref() {
+            Type::Reference(r) | Type::MutableReference(r) => r.as_ref(),
+            _ => return false,
+        };
+        self.is_type_copy(pointee)
+    }
+
+    /// Borrow-break on `self.method()` returning `Option<&Copy>` should use `.copied()`.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_ref_copy_binding(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        if self.match_scrutinee_option_yields_copy(expr) {
+            return true;
+        }
+        if let Expression::MethodCall {
+            object,
+            method,
+            ..
+        } = expr
+        {
+            if method == "get" {
+                if let Expression::FieldAccess { object: root, field, .. } = &**object {
+                    if matches!(&**root, Expression::Identifier { name, .. } if name == "self") {
+                        if let Some(struct_name) = &self.current_struct_name {
+                            let base = struct_name.split('<').next().unwrap_or(struct_name);
+                            if let Some(fields) = self.lookup_struct_field_types(base) {
+                                if let Some(Type::Parameterized(base_ty, args)) =
+                                    fields.get(field.as_str())
+                                {
+                                    if (base_ty == "Map" || base_ty == "HashMap") && args.len() >= 2
+                                    {
+                                        if self.is_type_copy(&args[1]) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Borrow-break on `self.method()` returning owned `Option<Copy>` — match directly, no `.copied()`.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_copy_option(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        let Some(ty) = self.infer_expression_type(expr) else {
+            return false;
+        };
+        let Type::Option(inner) = ty else {
+            return false;
+        };
+        match inner.as_ref() {
+            Type::Reference(_) | Type::MutableReference(_) => false,
+            other => self.is_type_copy(other),
+        }
+    }
+
     pub(in crate::codegen::rust) fn get_assignment_target_type(
         &self,
         target: &Expression,
@@ -786,6 +951,76 @@ impl<'ast> CodeGenerator<'ast> {
         match &self.current_function_return_type {
             Some(Type::Option(inner_type)) => {
                 !matches!(**inner_type, Type::Reference(_) | Type::MutableReference(_))
+            }
+            _ => false,
+        }
+    }
+
+    /// `if let Some(x) = self.opt { self.opt = Some(x) }` needs owned clone borrow-break.
+    pub(in crate::codegen::rust) fn option_arm_reassigns_scrutinee_field(
+        &self,
+        scrutinee: &Expression,
+        body: &Expression<'ast>,
+    ) -> bool {
+        if !self.match_scrutinee_is_self_field(scrutinee) {
+            return false;
+        }
+        self.expression_assigns_to_expression(body, scrutinee)
+    }
+
+    fn expression_assigns_to_expression(
+        &self,
+        expr: &Expression<'ast>,
+        target: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_assigns_to_expression(s, target)),
+            _ => false,
+        }
+    }
+
+    fn statement_assigns_to_expression(
+        &self,
+        stmt: &Statement<'ast>,
+        target: &Expression,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment { target: lhs, .. } => {
+                self.expressions_equivalent_for_assign(lhs, target)
+            }
+            Statement::Expression { expr, .. } => {
+                self.expression_assigns_to_expression(expr, target)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_assigns_to_expression(s, target))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.statement_assigns_to_expression(s, target))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expressions_equivalent_for_assign(&self, left: &Expression, target: &Expression) -> bool {
+        match (left, target) {
+            (Expression::FieldAccess { object: l_obj, field: l_field, .. }, Expression::FieldAccess { object: r_obj, field: r_field, .. }) => {
+                l_field == r_field && self.expressions_equivalent_for_assign(l_obj, r_obj)
+            }
+            (Expression::Identifier { name: l, .. }, Expression::Identifier { name: r, .. }) => {
+                l == r
+            }
+            (Expression::Index { object: l_obj, index: l_idx, .. }, Expression::Index { object: r_obj, index: r_idx, .. }) => {
+                self.expressions_equivalent_for_assign(l_obj, r_obj)
+                    && self.expressions_equivalent_for_assign(l_idx, r_idx)
             }
             _ => false,
         }

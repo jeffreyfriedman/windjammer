@@ -241,7 +241,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             let qualified_key = type_name
                 .as_ref()
                 .map(|tn| format!("{}::{}", tn, call_method));
-            let skip_cast = gen.signature_registry.should_skip_int_to_float_auto_cast(
+            let skip_cast = gen.should_skip_int_to_float_auto_cast_with_global(
                 type_name.as_deref(),
                 call_method,
                 qualified_key.as_deref(),

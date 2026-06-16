@@ -121,10 +121,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
-                        }
-
-                        // E0507: bare `vec[i]` implicit return of non-Copy owned value
-                        if matches!(expr, Expression::Index { .. })
+                        } else if matches!(expr, Expression::Index { .. })
                             && !expr_str.ends_with(".clone()")
                             && !expr_str.starts_with('&')
                         {
@@ -219,6 +216,40 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             let mut expr_str = self.generate_expression(expr);
                             self.coerce_string_literals_to_owned = old_coerce_lit;
+
+                            self.coerce_return_ref_to_owned_copy(&mut expr_str, expr);
+
+                            if expr_str.starts_with("&")
+                                && !expr_str.starts_with("&mut")
+                                && !expr_str.ends_with(".clone()")
+                            {
+                                let expects_owned = !matches!(
+                                    &self.current_function_return_type,
+                                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                                );
+                                if expects_owned {
+                                    if let Some(inner) = self.infer_expression_type(expr) {
+                                        if !self.is_type_copy(&inner) {
+                                            expr_str = format!("({}).clone()", expr_str);
+                                        }
+                                    }
+                                }
+                            } else if matches!(expr, Expression::Index { .. })
+                                && !expr_str.ends_with(".clone()")
+                                && !expr_str.starts_with('&')
+                            {
+                                let expects_owned = !matches!(
+                                    &self.current_function_return_type,
+                                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                                );
+                                if expects_owned {
+                                    if let Some(inner) = self.infer_expression_type(expr) {
+                                        if !self.is_type_copy(&inner) {
+                                            expr_str = format!("{}.clone()", expr_str);
+                                        }
+                                    }
+                                }
+                            }
 
                             // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
                             // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`

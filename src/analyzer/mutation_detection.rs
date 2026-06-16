@@ -386,6 +386,17 @@ impl<'ast> Analyzer<'ast> {
                     self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
                 self.lookup_field_type_on_struct(&base, field)
             }
+            Expression::Index { object, .. } => {
+                let base =
+                    self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
+                match &base {
+                    Type::Vec(inner) | Type::Array(inner, _) => Some((**inner).clone()),
+                    Type::Parameterized(name, params) if name == "Vec" && !params.is_empty() => {
+                        Some(params[0].clone())
+                    }
+                    _ => None,
+                }
+            }
             Expression::Identifier { name, .. } if name == param_name => param_type_hint.cloned(),
             _ => None,
         }

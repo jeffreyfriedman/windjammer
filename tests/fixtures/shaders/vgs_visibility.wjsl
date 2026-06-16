@@ -1,0 +1,142 @@
+// VGS Visibility Pass - GPU-driven Frustum Culling and LOD Selection
+//
+// Inputs:
+// - Cluster buffer (read-only): Spatial hierarchy with bounds
+// - Camera uniforms: View-projection matrix, position, FOV
+//
+// Outputs:
+// - Cluster instances (read-write): visibility flags + selected LOD
+//
+// For each cluster:
+// 1. Test AABB against frustum (6 planes)
+// 2. Calculate screen space error
+// 3. Select appropriate LOD level
+// 4. Mark as visible/invisible
+
+struct Cluster {
+    triangle_count: u32,
+    triangle_offset: u32,
+    vertex_offset: u32,
+    parent_cluster: u32,
+    child_clusters: array<u32, 4>,
+    lod_level: u32,
+    bounds_min: vec3,
+    _pad1: u32,
+    bounds_max: vec3,
+    error_threshold: f32,
+    is_leaf: u32,
+    _pad2: array<u32, 3>,
+}
+
+struct ClusterInstance {
+    visible: u32,
+    lod_level: u32,
+    _pad: vec2<u32>,
+}
+
+struct CameraUniforms {
+    view_proj: mat4x4,
+    position: vec3,
+    _pad1: f32,
+    forward: vec3,
+    fov: f32,
+    screen_width: f32,
+    screen_height: f32,
+    near_plane: f32,
+    far_plane: f32,
+}
+
+struct VisibilityParams {
+    cluster_count: u32,
+    lod_bias: f32,
+    _pad: vec2<u32>,
+}
+
+@group(0) @binding(0) uniform params: VisibilityParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read clusters: array<Cluster>;
+@group(0) @binding(3) storage read_write instances: array<ClusterInstance>;
+
+var<private> frustum_planes: array<vec4, 6>;
+
+@compute @workgroup_size(64, 1, 1)
+fn visibility_pass(@builtin(global_invocation_id) id: vec3<u32>) {
+    let cluster_id = id.x;
+
+    if (cluster_id >= params.cluster_count) {
+        return;
+    }
+
+    let cluster = clusters[cluster_id];
+
+    extract_frustum_planes();
+
+    let visible = frustum_intersects_aabb(cluster.bounds_min, cluster.bounds_max);
+
+    if (!visible) {
+        instances[cluster_id].visible = 0u;
+        instances[cluster_id].lod_level = 0u;
+        return;
+    }
+
+    let center = (cluster.bounds_min + cluster.bounds_max) * 0.5;
+    let distance = length(center - camera.position);
+
+    let bounds_size = length(cluster.bounds_max - cluster.bounds_min);
+    let radius = bounds_size * 0.5;
+    let projection_factor = tan(camera.fov * 0.5 * 0.0174533);
+    let screen_error = (cluster.error_threshold * radius * camera.screen_height) / (distance * projection_factor);
+
+    let mut selected_lod = 0u;
+    if (screen_error < 1.0 * params.lod_bias) {
+        selected_lod = 0u;
+    } else if (screen_error < 2.0 * params.lod_bias) {
+        selected_lod = 1u;
+    } else if (screen_error < 4.0 * params.lod_bias) {
+        selected_lod = 2u;
+    } else {
+        selected_lod = 3u;
+    }
+
+    instances[cluster_id].visible = 1u;
+    instances[cluster_id].lod_level = selected_lod;
+}
+
+fn extract_frustum_planes() -> bool {
+    let m = camera.view_proj;
+
+    frustum_planes[0] = vec4(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]);
+    frustum_planes[1] = vec4(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]);
+    frustum_planes[2] = vec4(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]);
+    frustum_planes[3] = vec4(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]);
+    frustum_planes[4] = vec4(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]);
+    frustum_planes[5] = vec4(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]);
+
+    for (var i = 0; i < 6; i++) {
+        let len = length(frustum_planes[i].xyz);
+        frustum_planes[i] = frustum_planes[i] / len;
+    }
+    return true;
+}
+
+fn frustum_intersects_aabb(bounds_min: vec3, bounds_max: vec3) -> bool {
+    for (var i = 0; i < 6; i++) {
+        let plane = frustum_planes[i];
+        let normal = plane.xyz;
+        let d = plane.w;
+
+        let mut p = bounds_min;
+        if (normal.x >= 0.0) { p.x = bounds_max.x; }
+        if (normal.y >= 0.0) { p.y = bounds_max.y; }
+        if (normal.z >= 0.0) { p.z = bounds_max.z; }
+
+        if (dot(normal, p) + d < 0.0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn tan(x: f32) -> f32 {
+    return x + (x * x * x) / 3.0;
+}

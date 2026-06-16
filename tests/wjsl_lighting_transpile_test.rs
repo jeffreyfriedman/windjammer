@@ -10,22 +10,16 @@
     feature = "parser_tests",
 ))]
 
-use std::path::Path;
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
 
 #[test]
 fn test_lighting_shader_transpile_output() {
-    let shader_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/src/shaders/voxel_lighting.wjsl");
-
-    if !shader_path.exists() {
-        eprintln!("Shader not found at: {}", shader_path.display());
-        return;
-    }
-
+    let shader_path = wjsl_shader_fixtures::fixture_shader_path("voxel_lighting.wjsl");
     let source = std::fs::read_to_string(&shader_path).unwrap();
-    let base_dir = shader_path.parent().unwrap();
+    let base_dir = wjsl_shader_fixtures::shader_fixtures_dir();
 
-    let wgsl = windjammer::wjsl::transpile_wjsl_with_includes(&source, base_dir)
+    let wgsl = windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir)
         .expect("WJSL transpilation should succeed");
 
     // Print the main function and nearby lines
@@ -95,18 +89,11 @@ fn test_lighting_shader_transpile_output() {
 
 #[test]
 fn test_raymarch_shader_transpile_output() {
-    let shader_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/src/shaders/voxel_raymarch.wjsl");
-
-    if !shader_path.exists() {
-        eprintln!("Shader not found at: {}", shader_path.display());
-        return;
-    }
-
+    let shader_path = wjsl_shader_fixtures::fixture_shader_path("voxel_raymarch.wjsl");
     let source = std::fs::read_to_string(&shader_path).unwrap();
-    let base_dir = shader_path.parent().unwrap();
+    let base_dir = wjsl_shader_fixtures::shader_fixtures_dir();
 
-    let wgsl = windjammer::wjsl::transpile_wjsl_with_includes(&source, base_dir)
+    let wgsl = windjammer::wjsl::transpile_wjsl_with_includes(&source, &base_dir)
         .expect("WJSL transpilation should succeed");
 
     eprintln!("=== RAYMARCH TRANSPILED WGSL (GBufferPixel section) ===");
