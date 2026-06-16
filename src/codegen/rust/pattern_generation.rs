@@ -164,16 +164,43 @@ impl<'ast> CodeGenerator<'ast> {
         pattern: &Pattern<'s>,
         body_stmts: &[&Statement<'s>],
         scrutinee_is_ref: bool,
+        body_expr: Option<&Expression<'s>>,
+        scrutinee: Option<&Expression<'s>>,
     ) -> Pattern<'s> {
         use crate::parser::EnumPatternBinding;
+        let binding_type_for = |name: &str| -> Option<Type> {
+            scrutinee.and_then(|scr| {
+                self.infer_match_bound_types_owned(scr, pattern)
+                    .into_iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, t)| t)
+                    .or_else(|| {
+                        self.infer_match_bound_types(scr, pattern)
+                            .into_iter()
+                            .find(|(n, _)| n == name)
+                            .map(|(_, t)| t)
+                    })
+            })
+        };
+        let binding_needs_mut = |name: &str| -> bool {
+            let field_mut = body_stmts
+                .iter()
+                .any(|stmt| self.statement_mutates_variable_field(stmt, name));
+            if field_mut {
+                return true;
+            }
+            if let (Some(body), Some(ty)) = (body_expr, binding_type_for(name)) {
+                if self.binding_receives_mutating_call_with_sig_check(body, name, &ty) {
+                    return true;
+                }
+            }
+            body_stmts.iter().any(|stmt| {
+                self.statement_nonreadonly_method_call_on_var(stmt, name)
+            })
+        };
         match pattern {
             Pattern::Identifier(name) => {
-                let is_mutated = body_stmts.iter().any(|stmt| {
-                    self.statement_mutates_variable_field(stmt, name)
-                        || (scrutinee_is_ref
-                            && self.statement_nonreadonly_method_call_on_var(stmt, name))
-                });
-                if is_mutated {
+                if binding_needs_mut(name) {
                     if scrutinee_is_ref {
                         Pattern::RefMut(name.clone())
                     } else {
@@ -186,12 +213,7 @@ impl<'ast> CodeGenerator<'ast> {
             Pattern::EnumVariant(variant, binding) => {
                 let new_binding = match binding {
                     EnumPatternBinding::Single(name) => {
-                        let is_mutated = body_stmts.iter().any(|stmt| {
-                            self.statement_mutates_variable_field(stmt, name)
-                                || (scrutinee_is_ref
-                                    && self.statement_nonreadonly_method_call_on_var(stmt, name))
-                        });
-                        if is_mutated {
+                        if binding_needs_mut(name) {
                             if scrutinee_is_ref {
                                 EnumPatternBinding::Tuple(vec![Pattern::RefMut(name.clone())])
                             } else {
@@ -205,7 +227,13 @@ impl<'ast> CodeGenerator<'ast> {
                         let new_patterns: Vec<Pattern<'s>> = patterns
                             .iter()
                             .map(|p| {
-                                self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref)
+                                self.upgrade_pattern_mut_bindings(
+                                    p,
+                                    body_stmts,
+                                    scrutinee_is_ref,
+                                    body_expr,
+                                    scrutinee,
+                                )
                             })
                             .collect();
                         EnumPatternBinding::Tuple(new_patterns)
@@ -217,7 +245,15 @@ impl<'ast> CodeGenerator<'ast> {
             Pattern::Tuple(patterns) => {
                 let new_patterns: Vec<Pattern<'s>> = patterns
                     .iter()
-                    .map(|p| self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref))
+                    .map(|p| {
+                        self.upgrade_pattern_mut_bindings(
+                            p,
+                            body_stmts,
+                            scrutinee_is_ref,
+                            body_expr,
+                            scrutinee,
+                        )
+                    })
                     .collect();
                 Pattern::Tuple(new_patterns)
             }

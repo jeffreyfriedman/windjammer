@@ -241,4 +241,38 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         }
     }
+
+    /// When `expr` is `collection[i]`, return the element type name for method lookup.
+    pub(in crate::codegen::rust) fn infer_indexed_element_type_name(
+        &self,
+        expr: &Expression,
+    ) -> Option<String> {
+        let Expression::Index { object, .. } = expr else {
+            return None;
+        };
+        self.infer_expression_type(object)
+            .and_then(|container_ty| Self::extract_iterator_element_type(&container_ty))
+            .and_then(|elem_ty| Self::type_to_name(&elem_ty))
+    }
+
+    /// True when `type_name` declares a method (registry or `Type::method` signature).
+    pub(in crate::codegen::rust) fn method_exists_on_type_name(
+        &self,
+        type_name: &str,
+        method: &str,
+    ) -> bool {
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let in_method_map = self
+            .method_signatures_by_type
+            .get(type_name)
+            .or_else(|| self.method_signatures_by_type.get(base))
+            .is_some_and(|methods| methods.contains_key(method));
+        in_method_map
+            || self
+                .get_signature_with_global(&format!("{type_name}::{method}"))
+                .is_some()
+            || self
+                .get_signature_with_global(&format!("{base}::{method}"))
+                .is_some()
+    }
 }

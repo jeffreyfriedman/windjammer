@@ -31,17 +31,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if arguments.is_empty() {
-            if let Some(receiver_type) = self.infer_type_name(object) {
-                let has_method = self
-                    .method_signatures_by_type
-                    .get(&receiver_type)
-                    .or_else(|| {
-                        receiver_type
-                            .split('<')
-                            .next()
-                            .and_then(|base| self.method_signatures_by_type.get(base))
-                    })
-                    .is_some_and(|methods| methods.contains_key(method));
+            let receiver_type = self
+                .infer_type_name(object)
+                .or_else(|| self.infer_indexed_element_type_name(object));
+            if let Some(receiver_type) = receiver_type {
+                let has_method = self.method_exists_on_type_name(&receiver_type, method);
                 if !has_method {
                     if let Some(fields) = self.lookup_struct_field_types(&receiver_type) {
                         if fields.get(method).is_some_and(|ty| self.is_type_copy(ty)) {
