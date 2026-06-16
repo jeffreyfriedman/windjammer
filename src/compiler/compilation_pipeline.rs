@@ -86,7 +86,7 @@ pub fn build_project_ext(
     if wj_files.len() > 1 || (library && has_nested_structure) {
         return build_library(
             &wj_files,
-            path,
+            base_path,
             output,
             target,
             library,
@@ -187,8 +187,6 @@ pub fn build_project_ext(
         int_inference.infer_program(&program);
         super::bail_on_inference_errors(&int_inference.errors, "Int", Some(file))?;
 
-        let mut registry_snapshot = registry.clone();
-
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
@@ -244,7 +242,6 @@ pub fn build_project_ext(
             &mut codegen,
             &program,
             &analyzed_functions,
-            &mut registry_snapshot,
             &output_file,
             file,
             analyzer.get_copy_structs(),

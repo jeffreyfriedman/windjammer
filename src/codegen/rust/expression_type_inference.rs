@@ -343,14 +343,14 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     if !type_name.is_empty() {
                         let qualified = format!("{}::{}", type_name, method);
-                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                        if let Some(sig) = self.get_signature_with_global(&qualified) {
                             return sig.return_type.clone();
                         }
                         // Also try base name for generic types
                         let base_name = type_name.split('<').next().unwrap_or(&type_name);
                         if base_name != type_name {
                             let qualified = format!("{}::{}", base_name, method);
-                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            if let Some(sig) = self.get_signature_with_global(&qualified) {
                                 return sig.return_type.clone();
                             }
                         }
@@ -408,7 +408,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } = object
                     {
                         let qualified = format!("{}::{}", type_name, field);
-                        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                        if let Some(sig) = self.get_signature_with_global(&qualified) {
                             if let Some(ref ret) = sig.return_type {
                                 return Some(ret.clone());
                             }
@@ -442,7 +442,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Pattern: simple function call → "function_name"
                 if let Expression::Identifier { name, .. } = function {
-                    if let Some(sig) = self.signature_registry.get_signature(name.as_str()) {
+                    if let Some(sig) = self.get_signature_with_global(name.as_str()) {
                         return sig.return_type.clone();
                     }
                 }

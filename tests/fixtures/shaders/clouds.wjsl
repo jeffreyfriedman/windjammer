@@ -1,0 +1,102 @@
+// Nubis-style volumetric cloudscape raymarch (2.5D procedural shell).
+// Uses shared wjsl_std/volumetric helpers. Composites over scene color.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/noise.wjsl"
+use "wjsl_std/volumetric.wjsl"
+
+@group(0) @binding(0) uniform cloud_params: CloudParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32>>;
+
+fn cloud_density(world_pos: vec3<f32>) -> f32 {
+    let cam_y = camera.position.y;
+    let altitude = world_pos.y;
+    if (altitude < cloud_params.shell_bottom || altitude > cloud_params.shell_top) {
+        return 0.0;
+    }
+    let shell_norm = (altitude - cloud_params.shell_bottom)
+        / max(cloud_params.shell_top - cloud_params.shell_bottom, 1.0);
+    let wind_offset = cloud_params.wind_dir * cloud_params.wind_speed * cloud_params.time * 0.01;
+    let sample_pos = world_pos * 0.0003 + wind_offset;
+    let n = fbm(sample_pos, 5);
+    let coverage_mask = smoothstep(1.0 - cloud_params.coverage, 1.0, n);
+    let height_profile = smoothstep(0.0, 0.2, shell_norm) * (1.0 - smoothstep(0.85, 1.0, shell_norm));
+    return coverage_mask * height_profile * cloud_params.density;
+}
+
+fn intersect_cloud_shell(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> vec2<f32> {
+    let bottom = cloud_params.shell_bottom;
+    let top = cloud_params.shell_top;
+    let t_bottom = (bottom - ray_origin.y) / max(ray_dir.y, 1e-5);
+    let t_top = (top - ray_origin.y) / max(ray_dir.y, 1e-5);
+    let t_min = min(t_bottom, t_top);
+    let t_max = max(t_bottom, t_top);
+    if (t_max < 0.0) {
+        return vec2(-1.0, -1.0);
+    }
+    return vec2(max(t_min, 0.0), t_max);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = cloud_params.width;
+    let height = cloud_params.height;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    let scene = color_output[pixel_idx];
+    let gbuf = gbuffer[pixel_idx];
+    let depth = gbuf.depth;
+    let mat = gbuf.normal.w;
+    let has_geometry = (mat > 0.0) && (depth < camera.far_plane) && (scene.a > 0.0);
+
+    let pixel = vec2<f32>(f32(id.x), f32(id.y));
+    let ray_dir = generate_ray(pixel + vec2(0.5, 0.5), camera);
+    let ray_origin = camera.position;
+
+    let shell = intersect_cloud_shell(ray_origin, ray_dir);
+    if (shell.x < 0.0) {
+        return;
+    }
+
+    var t_end = shell.y;
+    if (has_geometry) {
+        t_end = min(t_end, depth);
+    }
+    if (t_end <= shell.x) {
+        return;
+    }
+
+    let steps = 12u;
+    let step_len = (t_end - shell.x) / f32(steps);
+    var transmittance = 1.0;
+    var scattered = vec3(0.0);
+    let sun_dir = normalize(vec3(1.0, 0.4, 0.2));
+    var t = shell.x + step_len * 0.5;
+
+    for (var i = 0u; i < steps; i++) {
+        let pos = ray_origin + ray_dir * t;
+        let density = cloud_density(pos);
+        if (density > 0.0001) {
+            let light_t = vol_march_transmittance_steps(
+                pos, sun_dir, 0.0, 2000.0, 4u, cloud_params.absorption, density
+            );
+            let cos_theta = dot(ray_dir, sun_dir);
+            let phase = vol_hg_phase(cos_theta, cloud_params.phase_g);
+            let sun_contrib = vec3(1.0, 0.95, 0.85) * light_t * phase * cloud_params.silver_intensity;
+            let ambient = vec3(0.4, 0.45, 0.55) * 0.15;
+            let sample_radiance = (sun_contrib + ambient) * density;
+            scattered = scattered + transmittance * sample_radiance * step_len;
+            transmittance = transmittance * vol_beer_lambert(density * cloud_params.absorption, step_len);
+        }
+        if (transmittance < 0.01) { break; }
+        t = t + step_len;
+    }
+
+    let out_rgb = scene.rgb * transmittance + scattered;
+    color_output[pixel_idx] = vec4(out_rgb, 1.0);
+}

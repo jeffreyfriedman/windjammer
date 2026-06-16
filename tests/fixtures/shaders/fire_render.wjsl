@@ -1,0 +1,137 @@
+// Fire Render Shader (WJSL)
+//
+// Renders volumetric fire by raymarching through the temperature grid.
+// Uses blackbody radiation color mapping for physically-based fire appearance.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+
+struct FireRenderParams {
+    source_position: vec3<f32>,
+    _pad0: f32,
+    max_height: f32,
+    absorption: f32,
+    emission_strength: f32,
+    time: f32,
+    screen_width: u32,
+    screen_height: u32,
+    _pad1: u32,
+    _pad2: u32,
+}
+
+@group(0) @binding(0) uniform fire_render_params: FireRenderParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read temperature_grid: array<f32>;
+@group(0) @binding(3) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(4) storage read_write color_output: array<vec4<f32>>;
+
+fn grid_index(x: u32, y: u32, z: u32) -> u32 {
+    return z * 64u * 64u + y * 64u + x;
+}
+
+// Blackbody radiation: temperature to RGB color
+fn blackbody_color(temperature: f32) -> vec3<f32> {
+    let t = clamp(temperature, 0.0, 5.0);
+    let r = smoothstep(0.0, 0.8, t);
+    let g = smoothstep(0.5, 2.5, t) * 0.8;
+    let b = smoothstep(2.0, 4.0, t) * 0.4;
+    return vec3(r, g, b);
+}
+
+// Sample temperature from 3D grid
+fn sample_temperature(world_pos: vec3<f32>) -> f32 {
+    let cell_size = fire_render_params.max_height / 64.0;
+    let rel = world_pos - fire_render_params.source_position;
+    let gx = rel.x / cell_size + 32.0;
+    let gy = rel.y / cell_size;
+    let gz = rel.z / cell_size + 32.0;
+
+    let ix = u32(clamp(gx, 0.0, 63.0));
+    let iy = u32(clamp(gy, 0.0, 63.0));
+    let iz = u32(clamp(gz, 0.0, 63.0));
+
+    return temperature_grid[grid_index(ix, iy, iz)];
+}
+
+// Ray-box intersection
+fn intersect_box(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> vec2<f32> {
+    let half_size = fire_render_params.max_height * 0.5;
+    let box_min = fire_render_params.source_position - vec3(half_size, 0.0, half_size);
+    let box_max = fire_render_params.source_position + vec3(half_size, fire_render_params.max_height, half_size);
+
+    let inv_dir = 1.0 / ray_dir;
+    let t0 = (box_min - ray_origin) * inv_dir;
+    let t1 = (box_max - ray_origin) * inv_dir;
+    let tmin_v = min(t0, t1);
+    let tmax_v = max(t0, t1);
+    let tmin = max(max(tmin_v.x, tmin_v.y), tmin_v.z);
+    let tmax = min(min(tmax_v.x, tmax_v.y), tmax_v.z);
+
+    return vec2(max(tmin, 0.0), tmax);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= fire_render_params.screen_width || id.y >= fire_render_params.screen_height) {
+        return;
+    }
+
+    let pixel_idx = id.y * fire_render_params.screen_width + id.x;
+
+    // Reconstruct ray
+    let u = (f32(id.x) + 0.5) / f32(fire_render_params.screen_width);
+    let v = (f32(id.y) + 0.5) / f32(fire_render_params.screen_height);
+    let ndc_x = u * 2.0 - 1.0;
+    let ndc_y = 1.0 - v * 2.0;
+
+    let inv_proj = camera.inv_proj;
+    let inv_view = camera.inv_view;
+    let clip = vec4(ndc_x, ndc_y, 1.0, 1.0);
+    let view_pos = inv_proj * clip;
+    let view_dir = normalize(view_pos.xyz / view_pos.w);
+    let world_dir4 = inv_view * vec4(view_dir, 0.0);
+    let ray_dir = normalize(world_dir4.xyz);
+    let ray_origin = camera.position;
+
+    let scene_depth = gbuffer[pixel_idx].depth;
+
+    // Intersect fire volume
+    let t_range = intersect_box(ray_origin, ray_dir);
+    if (t_range.x >= t_range.y) { return; }
+
+    let t_start = t_range.x;
+    let mut t_end_val = t_range.y;
+    if (scene_depth > 0.0) {
+        t_end_val = min(t_range.y, scene_depth);
+    }
+    if (t_start >= t_end_val) { return; }
+
+    // Raymarch through fire
+    let step_size = (t_end_val - t_start) / 32.0;
+    let mut accumulated_color = vec3(0.0, 0.0, 0.0);
+    let mut transmittance = 1.0;
+
+    for (let mut i = 0u; i < 32u; i = i + 1u) {
+        let t = t_start + (f32(i) + 0.5) * step_size;
+        let sample_pos = ray_origin + ray_dir * t;
+
+        let temp = sample_temperature(sample_pos);
+        if (temp > 0.01) {
+            let fire_color = blackbody_color(temp);
+            let density = temp * fire_render_params.absorption;
+            let absorption_val = exp(-density * step_size);
+            let emission = fire_color * temp * fire_render_params.emission_strength * step_size;
+
+            accumulated_color = accumulated_color + emission * transmittance;
+            transmittance = transmittance * absorption_val;
+
+            if (transmittance < 0.01) { break; }
+        }
+    }
+
+    // Composite over scene
+    let scene_color = color_output[pixel_idx];
+    let final_color = scene_color.xyz * transmittance + accumulated_color;
+    color_output[pixel_idx] = vec4(final_color, 1.0);
+}

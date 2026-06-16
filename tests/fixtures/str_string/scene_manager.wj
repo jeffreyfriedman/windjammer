@@ -1,0 +1,15 @@
+// Minimal fixture: string params must not codegen as bare `str` in Rust signatures.
+
+pub struct SceneManager {
+    active_scene: string,
+}
+
+impl SceneManager {
+    pub fn load_scene(self, name: string) {
+        self.active_scene = name
+    }
+
+    pub fn has_scene(self, name: string) -> bool {
+        self.active_scene == name
+    }
+}

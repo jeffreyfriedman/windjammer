@@ -1,0 +1,138 @@
+// GPU Skinning Compute Shader
+//
+// Transforms vertices using bone matrices for skeletal animation.
+// Runs as a compute pass before the mesh rendering pass.
+//
+// Input: source vertices + bone matrices + bone weights
+// Output: deformed vertices ready for rasterization
+//
+// Supports up to 4 bone influences per vertex (standard for real-time).
+// Dual quaternion skinning is a future enhancement.
+
+struct SkinningParams {
+    vertex_count: u32,
+    bone_count: u32,
+    max_influences: u32,
+    _pad: u32,
+}
+
+struct SourceVertex {
+    px: f32, py: f32, pz: f32,
+    nx: f32, ny: f32, nz: f32,
+    tx: f32, ty: f32, tz: f32, tw: f32,
+    u: f32, v: f32,
+}
+
+struct SkinData {
+    bone_index_0: u32,
+    bone_index_1: u32,
+    bone_index_2: u32,
+    bone_index_3: u32,
+    weight_0: f32,
+    weight_1: f32,
+    weight_2: f32,
+    weight_3: f32,
+}
+
+@group(0) @binding(0) var<uniform> params: SkinningParams;
+@group(0) @binding(1) var<storage, read> source_vertices: array<SourceVertex>;
+@group(0) @binding(2) var<storage, read> skin_data: array<SkinData>;
+@group(0) @binding(3) var<storage, read> bone_matrices: array<mat4x4<f32>>;
+@group(0) @binding(4) var<storage, read_write> output_vertices: array<SourceVertex>;
+
+fn transform_point(m: mat4x4<f32>, p: vec3<f32>) -> vec3<f32> {
+    let result = m * vec4<f32>(p, 1.0);
+    return result.xyz;
+}
+
+fn transform_direction(m: mat4x4<f32>, d: vec3<f32>) -> vec3<f32> {
+    let result = m * vec4<f32>(d, 0.0);
+    return normalize(result.xyz);
+}
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let vertex_idx = global_id.x;
+    if vertex_idx >= params.vertex_count {
+        return;
+    }
+
+    let src = source_vertices[vertex_idx];
+    let skin = skin_data[vertex_idx];
+
+    let pos = vec3<f32>(src.px, src.py, src.pz);
+    let normal = vec3<f32>(src.nx, src.ny, src.nz);
+    let tangent = vec3<f32>(src.tx, src.ty, src.tz);
+
+    var skinned_pos = vec3<f32>(0.0);
+    var skinned_normal = vec3<f32>(0.0);
+    var skinned_tangent = vec3<f32>(0.0);
+    var total_weight = 0.0;
+
+    // Bone 0
+    if skin.weight_0 > 0.0 {
+        let m = bone_matrices[skin.bone_index_0];
+        skinned_pos = skinned_pos + transform_point(m, pos) * skin.weight_0;
+        skinned_normal = skinned_normal + transform_direction(m, normal) * skin.weight_0;
+        skinned_tangent = skinned_tangent + transform_direction(m, tangent) * skin.weight_0;
+        total_weight = total_weight + skin.weight_0;
+    }
+
+    // Bone 1
+    if skin.weight_1 > 0.0 {
+        let m = bone_matrices[skin.bone_index_1];
+        skinned_pos = skinned_pos + transform_point(m, pos) * skin.weight_1;
+        skinned_normal = skinned_normal + transform_direction(m, normal) * skin.weight_1;
+        skinned_tangent = skinned_tangent + transform_direction(m, tangent) * skin.weight_1;
+        total_weight = total_weight + skin.weight_1;
+    }
+
+    // Bone 2
+    if skin.weight_2 > 0.0 {
+        let m = bone_matrices[skin.bone_index_2];
+        skinned_pos = skinned_pos + transform_point(m, pos) * skin.weight_2;
+        skinned_normal = skinned_normal + transform_direction(m, normal) * skin.weight_2;
+        skinned_tangent = skinned_tangent + transform_direction(m, tangent) * skin.weight_2;
+        total_weight = total_weight + skin.weight_2;
+    }
+
+    // Bone 3
+    if skin.weight_3 > 0.0 {
+        let m = bone_matrices[skin.bone_index_3];
+        skinned_pos = skinned_pos + transform_point(m, pos) * skin.weight_3;
+        skinned_normal = skinned_normal + transform_direction(m, normal) * skin.weight_3;
+        skinned_tangent = skinned_tangent + transform_direction(m, tangent) * skin.weight_3;
+        total_weight = total_weight + skin.weight_3;
+    }
+
+    // Normalize if weights don't sum to 1
+    if total_weight > 0.001 && abs(total_weight - 1.0) > 0.001 {
+        let inv_w = 1.0 / total_weight;
+        skinned_pos = skinned_pos * inv_w;
+        skinned_normal = skinned_normal * inv_w;
+        skinned_tangent = skinned_tangent * inv_w;
+    }
+
+    // Handle zero-weight vertices (keep original)
+    if total_weight < 0.001 {
+        skinned_pos = pos;
+        skinned_normal = normal;
+        skinned_tangent = tangent;
+    }
+
+    var out: SourceVertex;
+    out.px = skinned_pos.x;
+    out.py = skinned_pos.y;
+    out.pz = skinned_pos.z;
+    out.nx = normalize(skinned_normal).x;
+    out.ny = normalize(skinned_normal).y;
+    out.nz = normalize(skinned_normal).z;
+    out.tx = normalize(skinned_tangent).x;
+    out.ty = normalize(skinned_tangent).y;
+    out.tz = normalize(skinned_tangent).z;
+    out.tw = src.tw;
+    out.u = src.u;
+    out.v = src.v;
+
+    output_vertices[vertex_idx] = out;
+}

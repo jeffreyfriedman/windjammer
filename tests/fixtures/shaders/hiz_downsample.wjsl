@@ -1,0 +1,63 @@
+// Hi-Z Downsample Compute Shader (WJSL)
+//
+// Builds a coarse depth pyramid from G-buffer depth data.
+// Each thread reads a 4x4 block and outputs the maximum depth value
+// (conservative - won't cull anything that's actually visible).
+// Output is 1/4 resolution of input.
+//
+// Uses workgroup shared memory to cooperatively reduce 4x4 blocks:
+// 1. Each thread loads one G-buffer depth value
+// 2. Workgroup barrier
+// 3. Thread (0,0) of each 4x4 sub-tile computes max across the block
+//
+// Workgroup: 8x8 threads (processes 8x8 source pixels → 2x2 output pixels)
+
+use "wjsl_std/gbuffer.wjsl"
+
+struct HiZParams {
+    src_width: u32,
+    src_height: u32,
+    dst_width: u32,
+    dst_height: u32,
+}
+
+@group(0) @binding(0) uniform hiz_params: HiZParams;
+@group(0) @binding(1) storage read gbuffer_in: array<GBufferPixel >;
+@group(0) @binding(2) storage read_write hiz_output: array<f32 >;
+
+var<workgroup> tile_depth: array<f32, 64>;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_id) lid: vec3<u32>) {
+    let tid = lid.y * 8u + lid.x;
+
+    // Each thread loads one depth value from G-buffer
+    let mut d = 0.0;
+    if (id.x < hiz_params.src_width && id.y < hiz_params.src_height) {
+        let pidx = id.y * hiz_params.src_width + id.x;
+        d = gbuffer_in[pidx].depth;
+    }
+    tile_depth[tid] = d;
+    workgroupBarrier();
+
+    // Every 4th thread in x and y computes max of its 4x4 sub-block
+    if (lid.x % 4u != 0u || lid.y % 4u != 0u) { return; }
+
+    let mut max_d = 0.0;
+    for (let mut dy = 0u; dy < 4u; dy++) {
+        for (let mut dx = 0u; dx < 4u; dx++) {
+            let lx = lid.x + dx;
+            let ly = lid.y + dy;
+            if (lx < 8u && ly < 8u) {
+                let v = tile_depth[ly * 8u + lx];
+                if (v > max_d) { max_d = v; }
+            }
+        }
+    }
+
+    let out_x = id.x / 4u;
+    let out_y = id.y / 4u;
+    if (out_x < hiz_params.dst_width && out_y < hiz_params.dst_height) {
+        hiz_output[out_y * hiz_params.dst_width + out_x] = max_d;
+    }
+}

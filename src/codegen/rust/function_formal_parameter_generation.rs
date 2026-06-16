@@ -70,7 +70,8 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             let body_modifies = self.function_modifies_self(&analyzed.decl);
-                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
+                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
+                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
                             let self_str = if let Some(ownership_mode) = eff_ownership {
@@ -91,7 +92,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                     OwnershipMode::Owned => {
                                         if self.in_trait_impl {
-                                            "self"
+                                            if body_modifies {
+                                                "mut self"
+                                            } else {
+                                                "self"
+                                            }
                                         } else {
                                             self.owned_self_receiver(&analyzed.decl)
                                         }
@@ -202,7 +207,8 @@ impl<'ast> CodeGenerator<'ast> {
                         if param.name == "self" {
                             let body_modifies = self.function_modifies_self(&analyzed.decl);
                             let returns_self = self.method_returns_impl_struct(&analyzed.decl);
-                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
+                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
+                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);
                             let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
@@ -222,7 +228,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                     OwnershipMode::Owned => {
                                         if self.in_trait_impl {
-                                            "self"
+                                            if body_modifies {
+                                                "mut self"
+                                            } else {
+                                                "self"
+                                            }
                                         } else {
                                             self.owned_self_receiver(&analyzed.decl)
                                         }

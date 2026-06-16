@@ -1,0 +1,888 @@
+// HUD Overlay Panels — second compute pass (full-screen menus/panels)
+// Split from hud_overlay.wjsl to keep Metal shader compile under budget.
+
+struct HudParams {
+    health: f32,
+    max_health: f32,
+    ammo: f32,
+    max_ammo: f32,
+    damage_flash: f32,
+    crosshair_size: f32,
+    energy: f32,
+    max_energy: f32,
+    fps: f32,
+    kill_count: f32,
+    debug_enabled: f32,
+    crosshair_material_id: f32,
+    camera_x: f32,
+    camera_y: f32,
+    camera_z: f32,
+    nearest_enemy_dist: f32,
+    collision_blocked: f32,
+    camera_yaw: f32,
+    camera_pitch: f32,
+    crosshair_hit: f32,
+    level: f32,
+    xp_current: f32,
+    xp_to_next: f32,
+    skill_points: f32,
+    inventory_count: f32,
+    inventory_capacity: f32,
+    weapon_form: f32,
+    wave_number: f32,
+    quest_id: f32,
+    quest_progress: f32,
+    quest_target: f32,
+    death_timer: f32,
+    damage_indicator_angle: f32,
+    damage_indicator_alpha: f32,
+    paused: f32,
+    menu_selection: f32,
+    settings_open: f32,
+    quality_tier: f32,
+    onboarding_timer: f32,
+    dialog_active: f32,
+    dialog_speaker_id: f32,
+    dialog_choice_count: f32,
+    dialog_selected_choice: f32,
+    npc_prompt_active: f32,
+    npc_prompt_id: f32,
+    notify_type: f32,
+    notify_timer: f32,
+    target_health: f32,
+    target_max_health: f32,
+    target_alert: f32,
+    target_visible: f32,
+    metrics_overlay: f32,
+    metrics_frame_ms: f32,
+    metrics_mem_mb: f32,
+    metrics_draw_calls: f32,
+    metrics_mem_budget: f32,
+    metrics_draw_budget: f32,
+    metrics_drill: f32,
+    metrics_game_ms: f32,
+    metrics_render_ms: f32,
+    skill_tree_open: f32,
+    inventory_open: f32,
+    ability_unlock_mask: f32,
+}
+
+@group(0) @binding(0) uniform hud: HudParams;
+@group(0) @binding(1) storage read_write framebuffer: array<vec4<f32> >;
+@group(0) @binding(2) uniform screen_size: vec2<u32 >;
+@group(0) @binding(3) storage read minimap_data: array<f32>;
+
+const SEGMENT_MASKS: array<u32, 11> = array<u32, 11>(
+    0x3Fu, 0x06u, 0x5Bu, 0x4Fu, 0x66u,
+    0x6Du, 0x7Du, 0x07u, 0x7Fu, 0x6Fu,
+    0x40u
+);
+
+
+fn segment_mask(digit: i32) -> u32 {
+    if (digit < 0 || digit > 10) { return 0x40u; }
+    return SEGMENT_MASKS[digit];
+}
+
+
+fn draw_digit_s(px: u32, py: u32, ox: u32, oy: u32, digit: i32, scale: u32) -> bool {
+    let lx = i32(px) - i32(ox);
+    let ly = i32(py) - i32(oy);
+    let w = i32(5 * scale);
+    let h = i32(7 * scale);
+    if (lx < 0 || lx >= w || ly < 0 || ly >= h) { return false; }
+    // Panels pass: Y-flip only (upright text; horizontal mirror needs font-atlas blit fix).
+    let gx = u32(lx) / scale;
+    let gy = 6u - u32(ly) / scale;
+    let mask = segment_mask(digit);
+    if (gy == 0u && gx >= 1u && gx <= 3u && (mask & 1u) != 0u) { return true; }
+    if (gx == 4u && gy >= 1u && gy <= 2u && (mask & 2u) != 0u) { return true; }
+    if (gx == 4u && gy >= 4u && gy <= 5u && (mask & 4u) != 0u) { return true; }
+    if (gy == 6u && gx >= 1u && gx <= 3u && (mask & 8u) != 0u) { return true; }
+    if (gx == 0u && gy >= 4u && gy <= 5u && (mask & 16u) != 0u) { return true; }
+    if (gx == 0u && gy >= 1u && gy <= 2u && (mask & 32u) != 0u) { return true; }
+    if (gy == 3u && gx >= 1u && gx <= 3u && (mask & 64u) != 0u) { return true; }
+    return false;
+}
+
+
+fn draw_number_s(px: u32, py: u32, ox: u32, oy: u32, value: f32, digits: i32, decimals: i32, scale: u32) -> bool {
+    let mut v = value;
+    let is_neg = v < 0.0;
+    if (is_neg) { v = -v; }
+    for (var d = 0; d < decimals; d = d + 1) { v = v * 10.0; }
+    let mut int_val = i32(v + 0.5);
+    let total_chars = digits + select(0, 1, decimals > 0) + select(0, 1, is_neg);
+    let char_width = 6u * scale;
+    for (var ci = total_chars - 1; ci >= 0; ci = ci - 1) {
+        let char_x = ox + u32(ci) * char_width;
+        let from_right = total_chars - 1 - ci;
+        if (decimals > 0 && from_right == decimals) {
+            let dot_x = char_x + 2u * scale;
+            let dot_y = oy;
+            if (px >= dot_x && px < dot_x + scale && py >= dot_y && py < dot_y + scale) { return true; }
+            continue;
+        }
+        if (is_neg && ci == 0) {
+            if (draw_digit_s(px, py, char_x, oy, 10, scale)) { return true; }
+            continue;
+        }
+        let d = int_val % 10;
+        int_val = int_val / 10;
+        if (draw_digit_s(px, py, char_x, oy, d, scale)) { return true; }
+    }
+    return false;
+}
+
+// 7-segment letter masks as array lookup (avoids 30+ branch if-else chain
+// that caused Metal shader compiler to hang during pipeline creation)
+
+const LETTER_MASKS: array<u32, 44> = array<u32, 44>(
+    0x77u, // 0  A
+    0x7Cu, // 1  B
+    0x39u, // 2  C
+    0x5Eu, // 3  D
+    0x79u, // 4  E
+    0x71u, // 5  F
+    0x3Du, // 6  G
+    0x76u, // 7  H
+    0x06u, // 8  I
+    0x1Eu, // 9  J
+    0x76u, // 10 K
+    0x38u, // 11 L
+    0x37u, // 12 M
+    0x37u, // 13 N
+    0x3Fu, // 14 O
+    0x73u, // 15 P
+    0x67u, // 16 Q
+    0x50u, // 17 R
+    0x6Du, // 18 S
+    0x78u, // 19 T
+    0x3Eu, // 20 U
+    0x3Eu, // 21 V
+    0x3Eu, // 22 W
+    0x76u, // 23 X
+    0x6Eu, // 24 Y
+    0x5Bu, // 25 Z
+    0x00u, // 26-35 digits handled by draw_digit_s (placeholder)
+    0x00u, 0x00u, 0x00u, 0x00u,
+    0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
+    0x00u, // 36 space
+    0x08u, // 37 period
+    0x10u, // 38 comma
+    0x40u, // 39 dash
+    0x48u, // 40 colon
+    0x06u, // 41 exclamation
+    0x53u, // 42 question mark
+    0x02u  // 43 apostrophe
+);
+
+
+fn letter_mask(ch: i32) -> u32 {
+    if (ch < 0 || ch > 43) { return 0x00u; }
+    return LETTER_MASKS[ch];
+}
+
+
+fn char_to_code(ascii: u32) -> i32 {
+    if (ascii >= 65u && ascii <= 90u) { return i32(ascii - 65u); }
+    if (ascii >= 97u && ascii <= 122u) { return i32(ascii - 97u); }
+    if (ascii >= 48u && ascii <= 57u) { return i32(ascii - 48u + 26u); }
+    if (ascii == 32u) { return i32(36); }
+    if (ascii == 46u) { return i32(37); }
+    if (ascii == 44u) { return i32(38); }
+    if (ascii == 45u) { return i32(39); }
+    if (ascii == 58u) { return i32(40); }
+    if (ascii == 33u) { return i32(41); }
+    if (ascii == 63u) { return i32(42); }
+    if (ascii == 39u) { return i32(43); }
+    return i32(36);
+}
+
+
+fn draw_char_s(px: u32, py: u32, ox: u32, oy: u32, ch: i32, scale: u32) -> bool {
+    if (ch >= 26 && ch <= 35) {
+        return draw_digit_s(px, py, ox, oy, ch - 26, scale);
+    }
+    return draw_letter_s(px, py, ox, oy, ch, scale);
+}
+
+
+fn draw_letter_s(px: u32, py: u32, ox: u32, oy: u32, ch: i32, scale: u32) -> bool {
+    var code = ch;
+    // Accept ASCII (panels/menus pass 'A'=65) or HUD glyph index (0-43).
+    if (code > 43) {
+        code = char_to_code(u32(code));
+    }
+    let lx = i32(px) - i32(ox);
+    let ly = i32(py) - i32(oy);
+    let w = i32(5 * scale);
+    let h = i32(7 * scale);
+    if (lx < 0 || lx >= w || ly < 0 || ly >= h) { return false; }
+    // Panels pass: Y-flip only (upright text; horizontal mirror needs font-atlas blit fix).
+    let gx = u32(lx) / scale;
+    let gy = 6u - u32(ly) / scale;
+    let mask = letter_mask(code);
+    if (gy == 0u && gx >= 1u && gx <= 3u && (mask & 1u) != 0u) { return true; }
+    if (gx == 4u && gy >= 1u && gy <= 2u && (mask & 2u) != 0u) { return true; }
+    if (gx == 4u && gy >= 4u && gy <= 5u && (mask & 4u) != 0u) { return true; }
+    if (gy == 6u && gx >= 1u && gx <= 3u && (mask & 8u) != 0u) { return true; }
+    if (gx == 0u && gy >= 4u && gy <= 5u && (mask & 16u) != 0u) { return true; }
+    if (gx == 0u && gy >= 1u && gy <= 2u && (mask & 32u) != 0u) { return true; }
+    if (gy == 3u && gx >= 1u && gx <= 3u && (mask & 64u) != 0u) { return true; }
+    return false;
+}
+
+
+/// Character stats sheet — minimap_data[371], values from hud uniforms.
+fn draw_character_stats_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (minimap_data[371] < 0.5) { return vec4(0.0); }
+
+    let panel_w = 360u;
+    let panel_h = 280u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = (height - panel_h) / 2u;
+
+    if (px < panel_x || px >= panel_x + panel_w || py < panel_y || py >= panel_y + panel_h) {
+        return vec4(0.0, 0.0, 0.0, 0.55);
+    }
+
+    let rx = px - panel_x;
+    let ry = py - panel_y;
+    if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+        return vec4(0.35, 0.70, 0.55, 0.95);
+    }
+
+    let mut bg = vec4(0.03, 0.07, 0.06, 0.93);
+    let label = vec4(0.45, 0.85, 0.65, 1.0);
+    let val = vec4(0.90, 0.95, 0.90, 1.0);
+
+    // STATS
+    if (draw_letter_s(px, py, panel_x + 16u, panel_y + 10u, 83, 3u)) { return label; }
+    if (draw_letter_s(px, py, panel_x + 40u, panel_y + 10u, 84, 3u)) { return label; }
+    if (draw_letter_s(px, py, panel_x + 64u, panel_y + 10u, 65, 3u)) { return label; }
+    if (draw_letter_s(px, py, panel_x + 88u, panel_y + 10u, 84, 3u)) { return label; }
+    if (draw_letter_s(px, py, panel_x + 112u, panel_y + 10u, 83, 3u)) { return label; }
+
+    // LVL
+    if (draw_letter_s(px, py, panel_x + 20u, panel_y + 56u, 76, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 60u, panel_y + 56u, hud.level, 2, 0, 2u)) { return val; }
+
+    // HP
+    if (draw_letter_s(px, py, panel_x + 20u, panel_y + 84u, 72, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 60u, panel_y + 84u, hud.health, 3, 0, 2u)) { return val; }
+    if (draw_letter_s(px, py, panel_x + 120u, panel_y + 84u, 47, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 136u, panel_y + 84u, hud.max_health, 3, 0, 2u)) { return val; }
+
+    // EN
+    if (draw_letter_s(px, py, panel_x + 20u, panel_y + 112u, 69, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 60u, panel_y + 112u, hud.energy, 3, 0, 2u)) { return val; }
+
+    // SP
+    if (draw_letter_s(px, py, panel_x + 20u, panel_y + 140u, 83, 2u)) { return label; }
+    if (draw_letter_s(px, py, panel_x + 40u, panel_y + 140u, 80, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 80u, panel_y + 140u, hud.skill_points, 2, 0, 2u)) { return val; }
+
+    // KILLS
+    if (draw_letter_s(px, py, panel_x + 20u, panel_y + 168u, 75, 2u)) { return label; }
+    if (draw_number_s(px, py, panel_x + 80u, panel_y + 168u, hud.kill_count, 3, 0, 2u)) { return val; }
+
+    return bg;
+}
+
+/// Full-screen tactical map — minimap_data[372].
+/// Tech Fabricator crafting panel — reads minimap_data[362..366].
+fn draw_crafting_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (minimap_data[362] < 0.5) { return vec4(0.0); }
+
+    let panel_w = min(width - 80u, 480u);
+    let panel_h = 300u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = (height - panel_h) / 2u;
+
+    if (px < panel_x || px >= panel_x + panel_w || py < panel_y || py >= panel_y + panel_h) {
+        return vec4(0.0, 0.0, 0.0, 0.55);
+    }
+
+    let rx = px - panel_x;
+    let ry = py - panel_y;
+    if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+        return vec4(0.25, 0.55, 0.95, 0.95);
+    }
+
+    let mut bg = vec4(0.02, 0.05, 0.12, 0.93);
+
+    // Title FAB (Tech blue)
+    if (draw_letter_s(px, py, panel_x + 16u, panel_y + 10u, 70, 3u)) { return vec4(0.45, 0.75, 1.0, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 40u, panel_y + 10u, 65, 3u)) { return vec4(0.45, 0.75, 1.0, 1.0); }
+
+    // Ingredient slots (scrap / circuits)
+    let slot_y = panel_y + 60u;
+    let slot_w = 100u;
+    let slot_h = 48u;
+    let s1x = panel_x + 40u;
+    let s2x = panel_x + 160u;
+    if (px >= s1x && px < s1x + slot_w && py >= slot_y && py < slot_y + slot_h) {
+        let filled = minimap_data[363] >= 2.0;
+        if (filled) { return vec4(0.15, 0.35, 0.55, 0.95); }
+        return vec4(0.10, 0.12, 0.16, 0.95);
+    }
+    if (px >= s2x && px < s2x + slot_w && py >= slot_y && py < slot_y + slot_h) {
+        let filled = minimap_data[364] >= 1.0;
+        if (filled) { return vec4(0.15, 0.35, 0.55, 0.95); }
+        return vec4(0.10, 0.12, 0.16, 0.95);
+    }
+
+    // Progress bar
+    let bar_x = panel_x + 40u;
+    let bar_y = panel_y + 140u;
+    let bar_w = panel_w - 80u;
+    let bar_h = 16u;
+    if (px >= bar_x && px < bar_x + bar_w && py >= bar_y && py < bar_y + bar_h) {
+        let prog = clamp(minimap_data[365], 0.0, 1.0);
+        let local = f32(px - bar_x) / f32(bar_w);
+        if (local <= prog) {
+            return vec4(0.2, 0.75, 0.95, 0.95);
+        }
+        return vec4(0.08, 0.10, 0.14, 0.85);
+    }
+
+    // Craft ready indicator
+    if (minimap_data[366] >= 0.5) {
+        if (px >= panel_x + 40u && px < panel_x + 200u && py >= panel_y + 180u && py < panel_y + 210u) {
+            return vec4(0.15, 0.55, 0.35, 0.90);
+        }
+    }
+
+    return bg;
+}
+
+/// Quest journal panel — minimap_data[370] open, title [373..], objective [414..].
+/// Inventory grid panel (I key). Filled slots from inventory_count.
+fn draw_inventory_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (hud.inventory_open < 0.5) { return vec4(0.0); }
+
+    let panel_w = min(width - 100u, 440u);
+    let panel_h = 320u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = (height - panel_h) / 2u;
+
+    if (px < panel_x || px >= panel_x + panel_w || py < panel_y || py >= panel_y + panel_h) {
+        return vec4(0.0);
+    }
+
+    let rx = px - panel_x;
+    let ry = py - panel_y;
+    if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+        return vec4(0.55, 0.75, 0.45, 0.95);
+    }
+
+    let mut bg = vec4(0.04, 0.06, 0.05, 0.92);
+
+    if (draw_letter_s(px, py, panel_x + 16u, panel_y + 10u, 73, 3u)) { return vec4(0.75, 0.9, 0.55, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 40u, panel_y + 10u, 78, 3u)) { return vec4(0.75, 0.9, 0.55, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 64u, panel_y + 10u, 86, 3u)) { return vec4(0.75, 0.9, 0.55, 1.0); }
+
+    let cols = 5u;
+    let slot = 52u;
+    let gap = 8u;
+    let grid_x = panel_x + 20u;
+    let grid_y = panel_y + 52u;
+    let cap = u32(hud.inventory_capacity);
+    let used = u32(hud.inventory_count);
+
+    var si = 0u;
+    while si < cap && si < 20u {
+        let sc = si % cols;
+        let sr = si / cols;
+        let sx = grid_x + sc * (slot + gap);
+        let sy = grid_y + sr * (slot + gap);
+        if (px < sx || px >= sx + slot || py < sy || py >= sy + slot) {
+            si = si + 1u;
+            continue;
+        }
+        let filled = si < used;
+        var slot_col = vec4(0.08, 0.10, 0.08, 0.9);
+        if (filled) {
+            slot_col = vec4(0.15, 0.45, 0.28, 0.98);
+        }
+        let srx = px - sx;
+        let sry = py - sy;
+        if (srx < 2u || srx >= slot - 2u || sry < 2u || sry >= slot - 2u) {
+            return vec4(slot_col.rgb * 1.3, 0.95);
+        }
+        // Item name from minimap_data[455 + slot*11]
+        if (filled && si < 5u) {
+            let base = 455u + si * 11u;
+            let name_len = u32(minimap_data[base]);
+            var ci = 0u;
+            while ci < name_len && ci < 8u {
+                let cc = i32(minimap_data[base + 1u + ci]);
+                if (draw_char_s(px, py, sx + 4u + ci * 8u, sy + slot - 14u, cc, 1u)) {
+                    return vec4(0.85, 0.95, 0.80, 1.0);
+                }
+                ci = ci + 1u;
+            }
+        }
+        return slot_col;
+    }
+
+    return bg;
+}
+
+/// Quest journal panel — minimap_data[370] open, title [373..], objective [414..].
+fn draw_journal_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (minimap_data[370] < 0.5) { return vec4(0.0); }
+
+    let panel_w = min(width - 80u, 520u);
+    let panel_h = 300u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = (height - panel_h) / 2u;
+
+    if (px < panel_x || px >= panel_x + panel_w || py < panel_y || py >= panel_y + panel_h) {
+        return vec4(0.0, 0.0, 0.0, 0.55);
+    }
+
+    let rx = px - panel_x;
+    let ry = py - panel_y;
+    if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+        return vec4(0.45, 0.35, 0.75, 0.95);
+    }
+
+    let mut bg = vec4(0.05, 0.03, 0.10, 0.93);
+    let accent = vec4(0.65, 0.45, 0.95, 1.0);
+    let body = vec4(0.82, 0.80, 0.88, 1.0);
+
+    // JOURNAL header
+    if (draw_letter_s(px, py, panel_x + 16u, panel_y + 10u, 74, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 40u, panel_y + 10u, 79, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 64u, panel_y + 10u, 85, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 88u, panel_y + 10u, 82, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 112u, panel_y + 10u, 78, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 136u, panel_y + 10u, 65, 3u)) { return accent; }
+    if (draw_letter_s(px, py, panel_x + 160u, panel_y + 10u, 76, 3u)) { return accent; }
+
+    let title_len = u32(minimap_data[373]);
+    var ti = 0u;
+    while (ti < title_len && ti < 32u) {
+        let tc = i32(minimap_data[374u + ti]);
+        if (draw_char_s(px, py, panel_x + 20u + ti * 14u, panel_y + 52u, tc, 2u)) { return body; }
+        ti = ti + 1u;
+    }
+
+    let obj_len = u32(minimap_data[414]);
+    var oi = 0u;
+    while (oi < obj_len && oi < 48u) {
+        let oc = i32(minimap_data[415u + oi]);
+        let line = oi / 28u;
+        let col = oi % 28u;
+        if (draw_char_s(px, py, panel_x + 20u + col * 12u, panel_y + 90u + line * 18u, oc, 2u)) {
+            return vec4(0.55, 0.75, 0.55, 1.0);
+        }
+        oi = oi + 1u;
+    }
+
+    return bg;
+}
+
+/// Character stats sheet — minimap_data[371], values from hud uniforms.
+/// Full-screen tactical map — minimap_data[372].
+fn draw_map_overlay_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (minimap_data[372] < 0.5) { return vec4(0.0); }
+
+    let map_radius = min(width, height) / 2u - 80u;
+    let map_cx = width / 2u;
+    let map_cy = height / 2u;
+
+    let dx = i32(px) - i32(map_cx);
+    let dy = i32(py) - i32(map_cy);
+    let dist_sq = dx * dx + dy * dy;
+    let r = i32(map_radius);
+
+    if (dist_sq > (r + 40) * (r + 40)) {
+        return vec4(0.0, 0.0, 0.0, 0.65);
+    }
+    if (dist_sq > r * r) {
+        return vec4(0.0, 0.0, 0.0, 0.65);
+    }
+
+    let dist = sqrt(f32(dist_sq));
+    if (dist > f32(map_radius - 4u) && dist <= f32(map_radius)) {
+        return vec4(0.15, 0.55, 0.85, 0.9);
+    }
+
+    let player_x = minimap_data[0];
+    let player_z = minimap_data[1];
+    let player_yaw = minimap_data[2];
+    let enemy_count = u32(minimap_data[3]);
+    let world_size = minimap_data[4];
+    let scale = f32(map_radius) / (world_size * 0.55);
+    let cos_yaw = cos(player_yaw);
+    let sin_yaw = sin(player_yaw);
+
+    for (var i = 0u; i < min(enemy_count, 24u); i++) {
+        let ex = minimap_data[8u + i * 2u];
+        let ez = minimap_data[9u + i * 2u];
+        let rel_x = ex - player_x;
+        let rel_z = ez - player_z;
+        let rot_x = rel_x * cos_yaw + rel_z * sin_yaw;
+        let rot_z = -rel_x * sin_yaw + rel_z * cos_yaw;
+        let map_ex = i32(f32(map_cx) + rot_x * scale);
+        let map_ey = i32(f32(map_cy) + rot_z * scale);
+        let edx = i32(px) - map_ex;
+        let edy = i32(py) - map_ey;
+        if (edx * edx + edy * edy < 16) {
+            return vec4(1.0, 0.25, 0.15, 0.95);
+        }
+    }
+
+    let pdx = i32(px) - i32(map_cx);
+    let pdy = i32(py) - i32(map_cy);
+    if (abs(pdx) <= 5 && pdy >= -8 && pdy <= 5) {
+        if (pdy <= -abs(pdx)) {
+            return vec4(0.0, 1.0, 0.55, 1.0);
+        }
+    }
+
+    return vec4(0.02, 0.05, 0.12, 0.85);
+}
+
+/// Procedural NPC portrait slot (speaker_id: 1=Commander, 2=Medic, 3=Engineer).
+fn draw_pause_overlay(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (hud.paused < 0.5) { return vec4(0.0); }
+
+    let cx = width / 2u;
+    let cy = height / 2u;
+    let bg_alpha = 0.72;
+
+    // Panel border
+    let panel_w = 280u;
+    let panel_h = 220u;
+    let panel_x = cx - panel_w / 2u;
+    let panel_y = cy - 110u;
+    if (px >= panel_x && px < panel_x + panel_w && py >= panel_y && py < panel_y + panel_h) {
+        let rx = px - panel_x;
+        let ry = py - panel_y;
+        if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+            return vec4(0.2, 0.55, 0.85, 0.9);
+        }
+        return vec4(0.02, 0.04, 0.09, 0.88);
+    }
+
+    // Title "PAUSED" at top
+    let title_y = cy - 80u;
+    let title_scale = 4u;
+    let title_start_x = cx - 60u;
+    if (draw_letter_s(px, py, title_start_x, title_y, 80, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_start_x + 24u, title_y, 65, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_start_x + 48u, title_y, 85, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_start_x + 72u, title_y, 83, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_start_x + 96u, title_y, 69, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_start_x + 120u, title_y, 68, title_scale)) { return vec4(0.9, 0.95, 1.0, 1.0); }
+
+    let item_scale = 2u;
+    let menu_x = cx - 20u;
+    let sel = i32(hud.menu_selection);
+
+    let item0_y = cy - 20u;
+    let item1_y = cy + 10u;
+    let item2_y = cy + 40u;
+
+    let arrow_y = item0_y + u32(sel * 30);
+    if (draw_letter_s(px, py, menu_x - 20u, arrow_y, 62, item_scale)) { return vec4(0.0, 0.8, 1.0, 1.0); }
+
+    var c0 = vec4(0.55, 0.55, 0.6, 0.85);
+    var c1 = c0;
+    var c2 = c0;
+    if (sel == 0) { c0 = vec4(0.0, 0.95, 1.0, 1.0); }
+    if (sel == 1) { c1 = vec4(0.0, 0.95, 1.0, 1.0); }
+    if (sel == 2) { c2 = vec4(0.95, 0.35, 0.35, 1.0); }
+
+    // GO
+    if (draw_letter_s(px, py, menu_x, item0_y, 71, item_scale)) { return c0; }
+    if (draw_letter_s(px, py, menu_x + 14u, item0_y, 79, item_scale)) { return c0; }
+
+    // SET
+    if (draw_letter_s(px, py, menu_x, item1_y, 83, item_scale)) { return c1; }
+    if (draw_letter_s(px, py, menu_x + 14u, item1_y, 69, item_scale)) { return c1; }
+    if (draw_letter_s(px, py, menu_x + 28u, item1_y, 84, item_scale)) { return c1; }
+
+    // END
+    if (draw_letter_s(px, py, menu_x, item2_y, 69, item_scale)) { return c2; }
+    if (draw_letter_s(px, py, menu_x + 14u, item2_y, 78, item_scale)) { return c2; }
+    if (draw_letter_s(px, py, menu_x + 28u, item2_y, 68, item_scale)) { return c2; }
+
+    // Settings submenu
+    if (hud.settings_open > 0.5) {
+        let set_x = cx + 60u;
+        let set_y = cy - 20u;
+        let qsel = i32(hud.quality_tier);
+
+        // Quality tiers: VLO, LO, MED, HI, ULT
+        let tier_names = array<i32, 15>(
+            86, 76, 79,   // VLO
+            76, 79, 32,   // LO
+            77, 69, 68,   // MED
+            72, 73, 32,   // HI
+            85, 76, 84    // ULT
+        );
+
+        for (var t = 0; t < 5; t++) {
+            let ty = set_y + u32(t * 20);
+            var col = vec4(0.5, 0.5, 0.5, 0.8);
+            if (t == qsel) { col = vec4(0.0, 1.0, 0.6, 1.0); }
+
+            for (var c = 0; c < 3; c++) {
+                let ch = tier_names[t * 3 + c];
+                if (ch != 32) {
+                    if (draw_letter_s(px, py, set_x + u32(c * 14), ty, ch, item_scale)) { return col; }
+                }
+            }
+        }
+    }
+
+    return vec4(0.0, 0.0, 0.0, bg_alpha);
+}
+
+// draw_dialog_box, draw_npc_prompt, draw_notification removed - inlined into main()
+// to reduce shader complexity (Metal compiler hangs on large function call trees)
+
+/// Full-screen skill tree panel (T key). Six nodes in 2x3 grid; mask bits = unlocked.
+fn draw_skill_tree_panel(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (hud.skill_tree_open < 0.5) { return vec4(0.0); }
+
+    let panel_w = min(width - 80u, 520u);
+    let panel_h = 340u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = (height - panel_h) / 2u;
+
+    if (px < panel_x || px >= panel_x + panel_w || py < panel_y || py >= panel_y + panel_h) {
+        return vec4(0.0);
+    }
+
+    let rx = px - panel_x;
+    let ry = py - panel_y;
+    if (rx < 3u || rx >= panel_w - 3u || ry < 3u || ry >= panel_h - 3u) {
+        return vec4(0.15, 0.55, 0.95, 0.95);
+    }
+
+    let mut bg = vec4(0.02, 0.04, 0.10, 0.92);
+
+    // Title SKILL
+    let title_y = panel_y + 12u;
+    if (draw_letter_s(px, py, panel_x + 16u, title_y, 83, 3u)) { return vec4(0.4, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 40u, title_y, 75, 3u)) { return vec4(0.4, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 64u, title_y, 73, 3u)) { return vec4(0.4, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, panel_x + 88u, title_y, 76, 3u)) { return vec4(0.4, 0.85, 1.0, 1.0); }
+
+    if (hud.skill_points > 0.0) {
+        if (draw_number_s(px, py, panel_x + panel_w - 80u, title_y, hud.skill_points, 2, 0, 3u)) {
+            return vec4(1.0, 0.85, 0.2, 1.0);
+        }
+    }
+
+    let node_w = 140u;
+    let node_h = 72u;
+    let gap_x = 24u;
+    let gap_y = 16u;
+    let grid_x = panel_x + 24u;
+    let grid_y = panel_y + 56u;
+
+    for (var n = 0; n < 6; n = n + 1) {
+        let col = u32(n % 2);
+        let row = u32(n / 2);
+        let nx = grid_x + col * (node_w + gap_x);
+        let ny = grid_y + row * (node_h + gap_y);
+        if (px < nx || px >= nx + node_w || py < ny || py >= ny + node_h) { continue; }
+
+        let bit = 1u << u32(n);
+        let mask = u32(hud.ability_unlock_mask + 0.5);
+        let unlocked = (mask & bit) != 0u;
+        var node_col = vec4(0.12, 0.14, 0.18, 0.95);
+        if (unlocked) {
+            node_col = vec4(0.08, 0.35, 0.22, 0.98);
+        } else if (hud.skill_points > 0.0) {
+            node_col = vec4(0.10, 0.22, 0.38, 0.98);
+        }
+
+        let nrx = px - nx;
+        let nry = py - ny;
+        if (nrx < 2u || nrx >= node_w - 2u || nry < 2u || nry >= node_h - 2u) {
+            return vec4(node_col.rgb * 1.4, 0.95);
+        }
+        // Ability abbreviations on each node
+        let label_y = ny + node_h - 22u;
+        let label_x = nx + 10u;
+        if (n == 0) {
+            if (draw_letter_s(px, py, label_x, label_y, 80, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 72, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 83, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        } else if (n == 1) {
+            if (draw_letter_s(px, py, label_x, label_y, 83, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 72, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 68, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        } else if (n == 2) {
+            if (draw_letter_s(px, py, label_x, label_y, 84, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 69, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 76, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        } else if (n == 3) {
+            if (draw_letter_s(px, py, label_x, label_y, 82, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 76, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 68, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        } else if (n == 4) {
+            if (draw_letter_s(px, py, label_x, label_y, 67, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 82, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 84, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        } else {
+            if (draw_letter_s(px, py, label_x, label_y, 82, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 14u, label_y, 69, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+            if (draw_letter_s(px, py, label_x + 28u, label_y, 71, 2u)) { return vec4(0.85, 0.95, 1.0, 1.0); }
+        }
+        return node_col;
+    }
+
+    return bg;
+}
+
+/// Inventory grid panel (I key). Filled slots from inventory_count.
+/// Main title menu — reads minimap_data[367..369].
+fn draw_title_menu_overlay(px: u32, py: u32, width: u32, height: u32) -> vec4<f32> {
+    if (minimap_data[367] < 0.5) { return vec4(0.0); }
+
+    let cx = width / 2u;
+    let cy = height / 2u;
+    let bg_alpha = 0.82;
+
+    // Center panel
+    let panel_w = min(width - 120u, 560u);
+    let panel_h = 360u;
+    let panel_x = (width - panel_w) / 2u;
+    let panel_y = cy - 180u;
+    if (px >= panel_x && px < panel_x + panel_w && py >= panel_y && py < panel_y + panel_h) {
+        let rx = px - panel_x;
+        let ry = py - panel_y;
+        if (rx < 4u || rx >= panel_w - 4u || ry < 4u || ry >= panel_h - 4u) {
+            return vec4(0.15, 0.55, 0.95, 0.95);
+        }
+        if (ry < 80u) {
+            return vec4(0.01, 0.03, 0.08, 0.94);
+        }
+    }
+
+    // Title BREACH (scale 4)
+    let title_y = cy - 150u;
+    let title_scale = 4u;
+    let title_x = cx - 130u;
+    if (draw_letter_s(px, py, title_x, title_y, 66, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_x + 28u, title_y, 82, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_x + 56u, title_y, 69, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_x + 84u, title_y, 65, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_x + 112u, title_y, 67, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+    if (draw_letter_s(px, py, title_x + 140u, title_y, 72, title_scale)) { return vec4(0.2, 0.85, 1.0, 1.0); }
+
+    // Subtitle PROTOCOL (scale 3)
+    let sub_y = title_y + 40u;
+    let sub_scale = 3u;
+    let sub_x = cx - 110u;
+    if (draw_letter_s(px, py, sub_x, sub_y, 80, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 22u, sub_y, 82, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 44u, sub_y, 79, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 66u, sub_y, 84, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 88u, sub_y, 79, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 110u, sub_y, 67, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 132u, sub_y, 79, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+    if (draw_letter_s(px, py, sub_x + 154u, sub_y, 76, sub_scale)) { return vec4(0.55, 0.75, 0.95, 1.0); }
+
+    let item_scale = 2u;
+    let menu_x = cx - 30u;
+    let sel = i32(minimap_data[368]);
+    let item0_y = cy + 20u;
+    let item1_y = cy + 50u;
+    let item2_y = cy + 80u;
+
+    let arrow_y = item0_y + u32(sel * 30);
+    if (draw_letter_s(px, py, menu_x - 24u, arrow_y, 62, item_scale)) { return vec4(0.0, 0.9, 1.0, 1.0); }
+
+    var c0 = vec4(0.45, 0.45, 0.5, 0.85);
+    var c1 = c0;
+    var c2 = c0;
+    if (sel == 0) { c0 = vec4(0.0, 0.95, 1.0, 1.0); }
+    if (sel == 1) { c1 = vec4(0.0, 0.95, 1.0, 1.0); }
+    if (sel == 2) { c2 = vec4(0.0, 0.95, 1.0, 1.0); }
+
+    // START
+    if (draw_letter_s(px, py, menu_x, item0_y, 83, item_scale)) { return c0; }
+    if (draw_letter_s(px, py, menu_x + 14u, item0_y, 84, item_scale)) { return c0; }
+    if (draw_letter_s(px, py, menu_x + 28u, item0_y, 65, item_scale)) { return c0; }
+    if (draw_letter_s(px, py, menu_x + 42u, item0_y, 82, item_scale)) { return c0; }
+    if (draw_letter_s(px, py, menu_x + 56u, item0_y, 84, item_scale)) { return c0; }
+
+    // OPT
+    if (draw_letter_s(px, py, menu_x, item1_y, 79, item_scale)) { return c1; }
+    if (draw_letter_s(px, py, menu_x + 14u, item1_y, 80, item_scale)) { return c1; }
+    if (draw_letter_s(px, py, menu_x + 28u, item1_y, 84, item_scale)) { return c1; }
+
+    // CRED
+    if (draw_letter_s(px, py, menu_x, item2_y, 67, item_scale)) { return c2; }
+    if (draw_letter_s(px, py, menu_x + 14u, item2_y, 82, item_scale)) { return c2; }
+    if (draw_letter_s(px, py, menu_x + 28u, item2_y, 69, item_scale)) { return c2; }
+    if (draw_letter_s(px, py, menu_x + 42u, item2_y, 68, item_scale)) { return c2; }
+
+    // Title settings (quality tiers) when [369] active
+    if (minimap_data[369] >= 0.5) {
+        let set_x = cx + 80u;
+        let set_y = cy + 10u;
+        let qsel = i32(hud.quality_tier);
+        let tier_names = array<i32, 15>(
+            86, 76, 79, 76, 79, 32, 77, 69, 68, 72, 73, 32, 85, 76, 84
+        );
+        for (var t = 0; t < 5; t++) {
+            let ty = set_y + u32(t * 20);
+            var col = vec4(0.45, 0.45, 0.5, 0.85);
+            if (t == qsel) { col = vec4(0.0, 1.0, 0.6, 1.0); }
+            for (var c = 0; c < 3; c++) {
+                let ch = tier_names[t * 3 + c];
+                if (ch != 32) {
+                    if (draw_letter_s(px, py, set_x + u32(c * 14), ty, ch, item_scale)) { return col; }
+                }
+            }
+        }
+    }
+
+    // Hint line
+    let hint_y = height - 48u;
+    if (draw_letter_s(px, py, cx - 100u, hint_y, 69, 2u)) { return vec4(0.35, 0.45, 0.55, 0.7); }
+    if (draw_letter_s(px, py, cx - 86u, hint_y, 78, 2u)) { return vec4(0.35, 0.45, 0.55, 0.7); }
+    if (draw_letter_s(px, py, cx - 72u, hint_y, 84, 2u)) { return vec4(0.35, 0.45, 0.55, 0.7); }
+    if (draw_letter_s(px, py, cx - 58u, hint_y, 69, 2u)) { return vec4(0.35, 0.45, 0.55, 0.7); }
+    if (draw_letter_s(px, py, cx - 44u, hint_y, 82, 2u)) { return vec4(0.35, 0.45, 0.55, 0.7); }
+
+    return vec4(0.0, 0.01, 0.04, bg_alpha);
+}
+
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+    let pixel_idx = id.y * width + id.x;
+    var color = framebuffer[pixel_idx];
+    let st = draw_skill_tree_panel(id.x, id.y, width, height);
+    if (st.a > 0.0) { color = vec4(mix(color.rgb, st.rgb, st.a), 1.0); }
+    let inv = draw_inventory_panel(id.x, id.y, width, height);
+    if (inv.a > 0.0) { color = vec4(mix(color.rgb, inv.rgb, inv.a), 1.0); }
+    let cr = draw_crafting_panel(id.x, id.y, width, height);
+    if (cr.a > 0.0) { color = vec4(mix(color.rgb, cr.rgb, cr.a), 1.0); }
+    let jr = draw_journal_panel(id.x, id.y, width, height);
+    if (jr.a > 0.0) { color = vec4(mix(color.rgb, jr.rgb, jr.a), 1.0); }
+    let stt = draw_character_stats_panel(id.x, id.y, width, height);
+    if (stt.a > 0.0) { color = vec4(mix(color.rgb, stt.rgb, stt.a), 1.0); }
+    let mp = draw_map_overlay_panel(id.x, id.y, width, height);
+    if (mp.a > 0.0) { color = vec4(mix(color.rgb, mp.rgb, mp.a), 1.0); }
+    let ti = draw_title_menu_overlay(id.x, id.y, width, height);
+    if (ti.a > 0.0) { color = vec4(mix(color.rgb, ti.rgb, ti.a), 1.0); }
+    let pa = draw_pause_overlay(id.x, id.y, width, height);
+    if (pa.a > 0.0) { color = vec4(mix(color.rgb, pa.rgb, pa.a), 1.0); }
+    framebuffer[pixel_idx] = color;
+}

@@ -10,34 +10,17 @@
     feature = "parser_tests",
 ))]
 
-//! TDD: volumetric_smoke.wjsl transpiles to valid WGSL (raymarched volumetric smoke).
-//! Tests the volumetric smoke compute shader which produces realistic smoke plumes
-//! using raymarching through a procedural density field with light scattering.
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
 
-use std::path::Path;
 
-fn game_shaders_available() -> bool {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders")
-        .exists()
-}
-
-fn transpile_shader(filename: &str) -> String {
-    let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders");
-    let source = std::fs::read_to_string(shader_dir.join(filename))
-        .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
-        .unwrap_or_else(|e| panic!("{} should transpile: {}", filename, e))
-}
+// TDD: volumetric_smoke.wjsl transpiles to valid WGSL (raymarched volumetric smoke).
+// Tests the volumetric smoke compute shader which produces realistic smoke plumes
+// using raymarching through a procedural density field with light scattering.
 
 #[test]
 fn test_wjsl_volumetric_smoke_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
     assert!(
@@ -60,11 +43,7 @@ fn test_wjsl_volumetric_smoke_transpiles() {
 
 #[test]
 fn test_volumetric_smoke_binding_layout() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(
         wgsl.contains("@binding(0)") && wgsl.contains("var<uniform> smoke_params"),
@@ -93,11 +72,7 @@ fn test_volumetric_smoke_binding_layout() {
 
 #[test]
 fn test_volumetric_smoke_raymarching() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(
         wgsl.contains("step_size") || wgsl.contains("march") || wgsl.contains("ray"),
@@ -120,11 +95,7 @@ fn test_volumetric_smoke_raymarching() {
 
 #[test]
 fn test_volumetric_smoke_noise() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(
         wgsl.contains("noise") || wgsl.contains("hash") || wgsl.contains("fract("),
@@ -141,11 +112,7 @@ fn test_volumetric_smoke_noise() {
 
 #[test]
 fn test_volumetric_smoke_light_scattering() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(
         wgsl.contains("scatter") || wgsl.contains("phase") || wgsl.contains("in_scatter"),
@@ -162,11 +129,7 @@ fn test_volumetric_smoke_light_scattering() {
 
 #[test]
 fn test_volumetric_smoke_workgroup_size() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("smoke_volumetric.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("smoke_volumetric.wjsl");
 
     assert!(
         wgsl.contains("@workgroup_size(8, 8, 1)"),

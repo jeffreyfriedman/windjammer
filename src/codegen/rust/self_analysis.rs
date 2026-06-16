@@ -372,9 +372,48 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
     }
 }
 
+/// True when the method's trailing return moves non-Copy `self.field` values into a struct literal.
+pub fn function_return_moves_self_fields(func: &FunctionDecl) -> bool {
+    use crate::parser::{Expression, Statement};
+
+    let return_expr = match func.body.last() {
+        Some(Statement::Return {
+            value: Some(expr), ..
+        }) => expr,
+        Some(Statement::Expression { expr, .. }) => expr,
+        _ => return false,
+    };
+
+    expression_moves_self_fields_in_struct_literal(return_expr)
+}
+
+fn expression_moves_self_fields_in_struct_literal(expr: &Expression) -> bool {
+    match expr {
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
+            match v {
+                Expression::Identifier { name, .. } if name == "self" => true,
+                Expression::FieldAccess { object, .. } => {
+                    matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                }
+                _ => false,
+            }
+        }),
+        _ => false,
+    }
+}
+
 /// Snapshot/factory: returns a new parent-type instance from `self.field` reads, not bare `self`.
-pub fn function_returns_new_instance_from_self_fields(func: &FunctionDecl) -> bool {
+pub fn function_returns_new_instance_from_self_fields(
+    func: &FunctionDecl,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+) -> bool {
     use crate::parser::{Expression, Statement, Type};
+
+    // Mutating then returning `Self { field: self.field, ... }` moves fields — not a snapshot.
+    if function_modifies_self(func, registry, struct_name) {
+        return false;
+    }
 
     let parent_type = match &func.parent_type {
         Some(name) => name,

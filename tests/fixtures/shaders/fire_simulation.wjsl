@@ -1,0 +1,89 @@
+// Fire Simulation Shader (WJSL)
+//
+// Temperature-based volumetric fire simulation using FBM noise.
+// Simulates heat advection, turbulence, and cooling for realistic fire.
+
+use "wjsl_std/noise.wjsl"
+
+struct FireParams {
+    source_position: vec3<f32>,
+    _pad0: f32,
+    source_radius: f32,
+    max_height: f32,
+    intensity: f32,
+    time: f32,
+    wind_x: f32,
+    wind_z: f32,
+    turbulence: f32,
+    cooling_rate: f32,
+}
+
+@group(0) @binding(0) uniform fire_params: FireParams;
+@group(0) @binding(1) storage read_write temperature_grid: array<f32>;
+
+fn grid_index(x: u32, y: u32, z: u32) -> u32 {
+    return z * 64u * 64u + y * 64u + x;
+}
+
+fn is_in_bounds(x: u32, y: u32, z: u32) -> bool {
+    return x < 64u && y < 64u && z < 64u;
+}
+
+// Heat source: inject temperature at fire base
+fn heat_source(world_pos: vec3<f32>) -> f32 {
+    let rel = world_pos - fire_params.source_position;
+    let horizontal_dist = length(vec2(rel.x, rel.z));
+    let height = rel.y;
+
+    if (horizontal_dist > fire_params.source_radius || height > 1.0 || height < -0.5) {
+        return 0.0;
+    }
+
+    let radial = 1.0 - smoothstep(0.0, fire_params.source_radius, horizontal_dist);
+    let vertical = 1.0 - smoothstep(-0.2, 1.0, height);
+    let noise_val = noise3d(world_pos * 3.0 + vec3(fire_params.time * 2.0, 0.0, 0.0));
+    let flicker = 0.7 + 0.3 * noise_val;
+
+    return radial * vertical * fire_params.intensity * flicker;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (!is_in_bounds(id.x, id.y, id.z)) { return; }
+
+    let idx = grid_index(id.x, id.y, id.z);
+    let cell_size = fire_params.max_height / 64.0;
+    let offset_x = (f32(id.x) - 32.0) * cell_size;
+    let offset_y = f32(id.y) * cell_size;
+    let offset_z = (f32(id.z) - 32.0) * cell_size;
+    let world_pos = fire_params.source_position + vec3(offset_x, offset_y, offset_z);
+
+    let mut temp = temperature_grid[idx];
+
+    // Upward advection: sample from below
+    if (id.y > 0u) {
+        let below_idx = grid_index(id.x, id.y - 1u, id.z);
+        let advection = temperature_grid[below_idx] * 0.3;
+        temp = temp + advection;
+    }
+
+    // Wind advection
+    let wind = vec2(fire_params.wind_x, fire_params.wind_z);
+    let wind_offset = wind * fire_params.time;
+    let noise_pos = world_pos + vec3(wind_offset.x, 0.0, wind_offset.y);
+    let turb = fbm(noise_pos * 2.0 + vec3(fire_params.time, 0.0, 0.0), 4);
+    temp = temp + turb * fire_params.turbulence * temp;
+
+    // Cooling: temperature decreases with height and over time
+    let height_factor = f32(id.y) / 64.0;
+    let cooling = fire_params.cooling_rate * (1.0 + height_factor * 2.0);
+    temp = max(temp - cooling * 0.016, 0.0);
+
+    // Heat source injection
+    temp = temp + heat_source(world_pos);
+
+    // Clamp
+    temp = clamp(temp, 0.0, 5.0);
+
+    temperature_grid[idx] = temp;
+}

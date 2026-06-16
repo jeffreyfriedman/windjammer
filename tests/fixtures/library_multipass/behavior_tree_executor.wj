@@ -1,0 +1,36 @@
+pub struct BehaviorTree {
+    nodes: Vec<Node>,
+    node_ids: Vec<NodeId>,
+}
+
+pub struct Node {
+    node_type: i32,
+    children: Vec<NodeId>,
+    name: string,
+}
+
+pub struct NodeId {
+    value: i32,
+}
+
+impl NodeId {
+    pub fn value(self) -> i32 {
+        self.value
+    }
+}
+
+fn lookup_node(tree: BehaviorTree, node_id: i32) -> i32 {
+    let idx = find_index_by_id(tree, node_id)
+    idx
+}
+
+fn find_index_by_id(tree: BehaviorTree, node_id: i32) -> i32 {
+    let mut i = 0
+    while i < tree.node_ids.len() {
+        if tree.node_ids[i].value() == node_id {
+            return i as i32
+        }
+        i = i + 1
+    }
+    -1
+}

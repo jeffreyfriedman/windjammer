@@ -30,6 +30,28 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        if arguments.is_empty() {
+            if let Some(receiver_type) = self.infer_type_name(object) {
+                let has_method = self
+                    .method_signatures_by_type
+                    .get(&receiver_type)
+                    .or_else(|| {
+                        receiver_type
+                            .split('<')
+                            .next()
+                            .and_then(|base| self.method_signatures_by_type.get(base))
+                    })
+                    .is_some_and(|methods| methods.contains_key(method));
+                if !has_method {
+                    if let Some(fields) = self.lookup_struct_field_types(&receiver_type) {
+                        if fields.get(method).is_some_and(|ty| self.is_type_copy(ty)) {
+                            return format!("{}.{}", self.generate_expression(object), method);
+                        }
+                    }
+                }
+            }
+        }
+
         // TDD FIX: Upgrade HashMap.get() to get_mut() when the bound value is mutated downstream
         let effective_method = if method == "get" && self.upgrade_get_to_get_mut {
             self.upgrade_get_to_get_mut = false;

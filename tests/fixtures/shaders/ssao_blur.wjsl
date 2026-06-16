@@ -1,0 +1,112 @@
+// SSAO Bilateral Blur Compute Shader (WJSL)
+//
+// Edge-aware blur for the raw SSAO output. Uses depth and normal
+// differences to prevent bleeding across geometry boundaries.
+// Run twice: once horizontal, once vertical (separable filter).
+// Workgroup: 8x8 threads (64 total)
+
+use "wjsl_std/gbuffer.wjsl"
+
+struct BlurParams {
+    direction_x: f32,
+    direction_y: f32,
+    depth_threshold: f32,
+    normal_threshold: f32,
+}
+
+@group(0) @binding(0) uniform params: BlurParams;
+@group(0) @binding(1) storage read ssao_input: array<f32>;
+@group(0) @binding(2) storage read gbuffer_data: array<f32>;
+@group(0) @binding(3) storage read_write ssao_output: array<f32>;
+@group(0) @binding(4) uniform screen_size: vec2<u32>;
+
+fn load_gbuffer_depth(pixel_idx: u32) -> f32 {
+    let base = gbuffer_base(pixel_idx);
+    return gbuffer_data[base + 8u];
+}
+
+fn load_gbuffer_normal(pixel_idx: u32) -> vec3<f32> {
+    let base = gbuffer_base(pixel_idx);
+    return vec3(gbuffer_data[base + 4u], gbuffer_data[base + 5u], gbuffer_data[base + 6u]);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let center_idx = id.y * width + id.x;
+    let center_ao = ssao_input[center_idx];
+    let center_depth = load_gbuffer_depth(center_idx);
+    let center_normal = normalize(load_gbuffer_normal(center_idx));
+
+    if (center_depth <= 0.0) {
+        ssao_output[center_idx] = 1.0;
+        return;
+    }
+
+    // Gaussian weights for a 9-tap filter (sigma ~2.0)
+    let w0 = 0.227027;
+    let w1 = 0.194594;
+    let w2 = 0.121621;
+    let w3 = 0.054054;
+    let w4 = 0.016216;
+
+    var result = center_ao * w0;
+    var total_weight = w0;
+
+    for (var i = 1; i < 5; i++) {
+        var tap_w = w1;
+        if (i == 2) { tap_w = w2; }
+        if (i == 3) { tap_w = w3; }
+        if (i == 4) { tap_w = w4; }
+
+        let offset_pos = vec2<i32>(
+            i32(id.x) + i * i32(params.direction_x),
+            i32(id.y) + i * i32(params.direction_y)
+        );
+        let offset_neg = vec2<i32>(
+            i32(id.x) - i * i32(params.direction_x),
+            i32(id.y) - i * i32(params.direction_y)
+        );
+
+        // Positive direction
+        if (offset_pos.x >= 0 && offset_pos.x < i32(width) &&
+            offset_pos.y >= 0 && offset_pos.y < i32(height)) {
+            let sample_idx = u32(offset_pos.y) * width + u32(offset_pos.x);
+            let sample_depth = load_gbuffer_depth(sample_idx);
+            let sample_normal = normalize(load_gbuffer_normal(sample_idx));
+
+            let depth_diff = abs(center_depth - sample_depth);
+            let normal_sim = max(dot(center_normal, sample_normal), 0.0);
+
+            let depth_weight = select(0.0, 1.0, depth_diff < params.depth_threshold);
+            let normal_weight = select(0.0, 1.0, normal_sim > params.normal_threshold);
+            let w = tap_w * depth_weight * normal_weight;
+
+            result += ssao_input[sample_idx] * w;
+            total_weight += w;
+        }
+
+        // Negative direction
+        if (offset_neg.x >= 0 && offset_neg.x < i32(width) &&
+            offset_neg.y >= 0 && offset_neg.y < i32(height)) {
+            let sample_idx = u32(offset_neg.y) * width + u32(offset_neg.x);
+            let sample_depth = load_gbuffer_depth(sample_idx);
+            let sample_normal = normalize(load_gbuffer_normal(sample_idx));
+
+            let depth_diff = abs(center_depth - sample_depth);
+            let normal_sim = max(dot(center_normal, sample_normal), 0.0);
+
+            let depth_weight = select(0.0, 1.0, depth_diff < params.depth_threshold);
+            let normal_weight = select(0.0, 1.0, normal_sim > params.normal_threshold);
+            let w = tap_w * depth_weight * normal_weight;
+
+            result += ssao_input[sample_idx] * w;
+            total_weight += w;
+        }
+    }
+
+    ssao_output[center_idx] = result / total_weight;
+}

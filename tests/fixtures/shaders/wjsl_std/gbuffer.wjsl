@@ -1,0 +1,32 @@
+// WJSL Standard Library: GBuffer Types
+//
+// Typed GBufferPixel struct for the voxel pipeline (raymarch/lighting/denoise),
+// and the packed layout constant for post-processing passes.
+//
+// Uses vec4 instead of vec3 to avoid Metal vec3-to-vec4 padding
+// that causes struct field offset misalignment between shader stages.
+// Layout: position.xyz + unused w, normal.xyz + material_id in w
+
+struct GBufferPixel {
+    position: vec4<f32>,
+    normal: vec4<f32>,
+    depth: f32,
+    geometry_source: f32,
+    _pad: vec2<f32>,
+}
+
+fn gbuffer_base(pixel_idx: u32) -> u32 {
+    return pixel_idx * 12u;
+}
+
+fn gbuf_position(g: GBufferPixel) -> vec3<f32> {
+    return g.position.xyz;
+}
+
+fn gbuf_normal(g: GBufferPixel) -> vec3<f32> {
+    return g.normal.xyz;
+}
+
+fn gbuf_material_id(g: GBufferPixel) -> u32 {
+    return u32(g.normal.w);
+}

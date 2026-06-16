@@ -70,7 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     let base = tn.split('<').next().unwrap_or(&tn);
                                     if base != tn {
                                         let base_q = format!("{base}::{method}");
-                                        self.signature_registry.get_signature(&base_q)
+                                        self.get_signature_with_global(&base_q)
                                     } else {
                                         None
                                     }
@@ -80,7 +80,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     // the Parameterized type and look up `Trait::method`.
                                     Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
                                         let trait_q = format!("{trait_name}::{method}");
-                                        self.signature_registry.get_signature(&trait_q)
+                                        self.get_signature_with_global(&trait_q)
                                     })
                                 })
                                 .or_else(|| {

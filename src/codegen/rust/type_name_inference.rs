@@ -31,14 +31,6 @@ impl<'ast> CodeGenerator<'ast> {
                 if name == "self" && self.in_impl_block {
                     return self.current_struct_name.clone();
                 }
-                // Try to infer from struct name if we're in an impl block
-                if self.in_impl_block {
-                    if let Some(struct_name) = &self.current_struct_name {
-                        if self.current_struct_fields.contains(name) {
-                            return Some(struct_name.clone());
-                        }
-                    }
-                }
                 // TDD FIX: Check function parameters for type info
                 // e.g., fn test(validator: Validator) → infer_type_name("validator") = "Validator"
                 for param in &self.current_function_params {
@@ -51,14 +43,22 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // TDD FIX: Check local variable types
-                // e.g., let stack = Stack { .. } → infer_type_name("stack") = "Stack"
+                // Locals shadow struct fields (e.g. `let mut registry = ...` in `new()` when
+                // the struct also has a `registry` field). Must win over field-name fallback.
                 if let Some(var_type) = self.local_var_types.get(name) {
                     if let Some(tn) = Self::type_to_name(var_type) {
                         if tn == "Self" && self.in_impl_block {
                             return self.current_struct_name.clone();
                         }
                         return Some(tn);
+                    }
+                }
+                // Field name in impl without a local binding → current struct type
+                if self.in_impl_block {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if self.current_struct_fields.contains(name) {
+                            return Some(struct_name.clone());
+                        }
                     }
                 }
                 // TDD FIX: Recognize CamelCase identifiers as type names for static method calls.
@@ -110,7 +110,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let obj_type = self.infer_type_name(object);
                 if let Some(ref tn) = obj_type {
                     let qualified = format!("{}::{}", tn, method);
-                    if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                    if let Some(sig) = self.get_signature_with_global(&qualified) {
                         if let Some(ref ret_type) = sig.return_type {
                             if let Some(ret_name) = Self::type_to_name(ret_type) {
                                 return Some(ret_name);
@@ -180,7 +180,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Type::method() — infer type from the object (Type name)
                         if let Some(type_name) = self.infer_type_name(object) {
                             let qualified = format!("{}::{}", type_name, field);
-                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            if let Some(sig) = self.get_signature_with_global(&qualified) {
                                 if let Some(ref ret_type) = sig.return_type {
                                     if let Some(ret_name) = Self::type_to_name(ret_type) {
                                         return Some(ret_name);
@@ -193,7 +193,7 @@ impl<'ast> CodeGenerator<'ast> {
                         None
                     }
                     Expression::Identifier { name, .. } => {
-                        if let Some(sig) = self.signature_registry.get_signature(name) {
+                        if let Some(sig) = self.get_signature_with_global(name) {
                             if let Some(ref ret_type) = sig.return_type {
                                 return Self::type_to_name(ret_type);
                             }

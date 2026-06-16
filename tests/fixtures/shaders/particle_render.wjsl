@@ -1,0 +1,131 @@
+// GPU particle splatting into HDR color buffer (WJSL → WGSL)
+//
+// One thread per particle. Projects to screen space, rasterizes a soft circle with
+// depth test against the G-buffer (linear ray depth per pixel).
+//
+// Note: concurrent splats may race on color_output; use sorting + separate pass or
+// atomic strategies if strict determinism is required.
+
+use "wjsl_std/gbuffer.wjsl"
+
+use "wjsl_std/particles.wjsl"
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+
+@group(0) @binding(0) storage read particles: array<Particle >;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) uniform render_params: ParticleRenderParams;
+@group(0) @binding(3) storage read gbuffer: array<GBufferPixel >;
+@group(0) @binding(4) storage read_write color_output: array<vec4<f32> >;
+@group(0) @binding(5) uniform screen_size: vec2<u32 >;
+
+fn project_world_to_clip(world_pos: vec4<f32>) -> vec4<f32> {
+    let view_pos = camera.view_matrix * world_pos;
+    return camera.proj_matrix * view_pos;
+}
+
+fn scene_depth_linear(pixel_idx: u32, width: u32, height: u32) -> f32 {
+    let max_idx = width * height;
+    if (pixel_idx >= max_idx) {
+        return camera.far_plane * 2.0;
+    }
+    if (pixel_idx >= arrayLength(&gbuffer)) {
+        return camera.far_plane * 2.0;
+    }
+    return gbuffer[pixel_idx].depth;
+}
+
+fn splat_contrib(dist_norm: f32, softness: f32) -> f32 {
+    let edge = clamp(softness, 0.15, 1.0);
+    let t = clamp((1.0 - dist_norm) / edge, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+@compute @workgroup_size(64, 1, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let idx = id.x;
+    let width = screen_size.x;
+    let height = screen_size.y;
+    let max_pixels = width * height;
+
+    let pcount = u32(arrayLength(&particles));
+    if (idx >= pcount) {
+        return;
+    }
+
+    let part = particles[idx];
+    if (part.life <= 0.0) {
+        return;
+    }
+
+    let world = vec4(part.position.x, part.position.y, part.position.z, 1.0);
+    let clip = project_world_to_clip(world);
+
+    if (clip.w <= 1e-5) {
+        return;
+    }
+
+    let ndc = clip.xyz / clip.w;
+    if (ndc.z < 0.0 || ndc.z > 1.0) {
+        return;
+    }
+
+    let screen_x = (ndc.x * 0.5 + 0.5) * f32(width);
+    let screen_y = (1.0 - (ndc.y * 0.5 + 0.5)) * f32(height);
+
+    if (screen_x < -32.0 || screen_x > f32(width) + 32.0 || screen_y < -32.0 || screen_y > f32(height) + 32.0) {
+        return;
+    }
+
+    let cam_to_p = part.position - camera.position;
+    let particle_depth = length(cam_to_p);
+
+    let half_fov = max(render_params.vertical_fov_rad * 0.5, 0.01);
+    let dist = max(particle_depth, camera.near_plane);
+    let radius_px = (part.size * render_params.splat_scale * f32(height)) / (dist * tan(half_fov));
+    let radius_clamped = min(max(radius_px, 1.0), render_params.max_splat_radius_px);
+
+    let min_x = i32(floor(screen_x - radius_clamped));
+    let max_x = i32(ceil(screen_x + radius_clamped));
+    let min_y = i32(floor(screen_y - radius_clamped));
+    let max_y = i32(ceil(screen_y + radius_clamped));
+
+    let min_x_c = max(min_x, 0);
+    let max_x_c = min(max_x, i32(width) - 1);
+    let min_y_c = max(min_y, 0);
+    let max_y_c = min(max_y, i32(height) - 1);
+
+    let rgb = part.color.rgb * part.color.a;
+    let soft = 0.55 + 0.35 * clamp(part.size * 4.0, 0.0, 1.0);
+
+    for (var py = min_y_c; py <= max_y_c; py++) {
+        for (var px = min_x_c; px <= max_x_c; px++) {
+            let dx = f32(px) + 0.5 - screen_x;
+            let dy = f32(py) + 0.5 - screen_y;
+            let d = sqrt(dx * dx + dy * dy);
+            let dn = d / radius_clamped;
+            if (dn > 1.0) {
+                continue;
+            }
+
+            let pidx = u32(py) * width + u32(px);
+            if (pidx >= max_pixels) {
+                continue;
+            }
+
+            let scene_d = scene_depth_linear(pidx, width, height);
+            if (particle_depth >= scene_d - render_params.depth_bias && scene_d > 0.0 && scene_d < camera.far_plane * 1.5) {
+                continue;
+            }
+
+            let falloff = splat_contrib(dn, soft);
+            if (falloff <= 1e-4) {
+                continue;
+            }
+
+            let add = vec4(rgb * falloff, 0.0);
+            let prev = color_output[pidx];
+            color_output[pidx] = prev + add;
+        }
+    }
+}

@@ -47,12 +47,18 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
                 {
                     let ty = self.infer_expression_type(e);
-                    let needs_clone = ty.as_ref().is_some_and(|t| match t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            !self.is_type_copy(inner)
-                        }
-                        _ => false,
-                    });
+                    let is_borrowed_binding = matches!(
+                        e,
+                        Expression::Identifier { name, .. }
+                            if self.borrowed_iterator_vars.contains(name)
+                    );
+                    let needs_clone = is_borrowed_binding
+                        || ty.as_ref().is_some_and(|t| match t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                !self.is_type_copy(inner)
+                            }
+                            _ => false,
+                        });
                     if !needs_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)
@@ -61,6 +67,19 @@ impl<'ast> CodeGenerator<'ast> {
                             if root_is_ref {
                                 let is_copy = ty.as_ref().is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
+                                    s = format!("{}.clone()", s);
+                                }
+                            }
+                        } else if let Expression::Index { object, .. } = e {
+                            let root_is_ref = self.field_access_root_is_behind_reference(object)
+                                || matches!(
+                                    object,
+                                    Expression::FieldAccess { .. }
+                                        if self.field_access_root_is_behind_reference(object)
+                                );
+                            if root_is_ref {
+                                let is_copy = ty.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy && !s.ends_with(".clone()") {
                                     s = format!("{}.clone()", s);
                                 }
                             }
@@ -651,6 +670,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let mut idx_str = self.generate_expression(index);
+
+        // Match/if-let on `.as_ref()` binds `&usize` etc.; array indexing needs owned index.
+        if let Some(ty) = self.infer_expression_type(index) {
+            let pointee = match &ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => Some(inner.as_ref()),
+                _ => None,
+            };
+            if pointee.is_some_and(|t| self.is_type_copy(t)) {
+                idx_str = format!("*({idx_str})");
+            }
+        }
 
         self.maybe_cast_index_to_usize(&mut idx_str, index);
         let final_idx = idx_str;

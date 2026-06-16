@@ -332,15 +332,18 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Merge receiver ownership from impls: strongest wins.
-    /// `Owned` (consuming) > `MutBorrowed` (&mut self) > `Borrowed` (&self).
+    /// `MutBorrowed` beats `Borrowed`; `Owned` only when **both** sides need consumption.
+    /// A single impl that consumes `self` for a void trait method (e.g. calling an owned helper)
+    /// must not force the trait to `self` — cap at `&mut self` unless the trait returns `Self`.
     pub(crate) fn merge_borrow_trait_receivers(
         a: OwnershipMode,
         b: OwnershipMode,
     ) -> OwnershipMode {
         use OwnershipMode::*;
         match (a, b) {
-            (Owned, _) | (_, Owned) => Owned,
+            (Owned, Owned) => Owned,
             (MutBorrowed, _) | (_, MutBorrowed) => MutBorrowed,
+            (Owned, Borrowed) | (Borrowed, Owned) => MutBorrowed,
             _ => Borrowed,
         }
     }

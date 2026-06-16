@@ -1,0 +1,20 @@
+// WJSL Standard Library: Camera Utilities
+//
+// Camera helper functions. CameraUniforms struct is defined in
+// gpu_types_generated.wjsl (single source of truth from .wjgpu).
+
+use "gpu_types_generated.wjsl"
+
+fn generate_ray(pixel: vec2<f32>, cam: CameraUniforms) -> vec3<f32> {
+    let ndc = vec2(
+        (2.0 * pixel.x / cam.screen_size.x - 1.0),
+        (1.0 - 2.0 * pixel.y / cam.screen_size.y)
+    );
+    let clip_near = vec4(ndc.x, ndc.y, -1.0, 1.0);
+    let clip_far  = vec4(ndc.x, ndc.y,  1.0, 1.0);
+    let world_near_h = cam.inv_view * (cam.inv_proj * clip_near);
+    let world_far_h  = cam.inv_view * (cam.inv_proj * clip_far);
+    let world_near = world_near_h.xyz / world_near_h.w;
+    let world_far  = world_far_h.xyz  / world_far_h.w;
+    return normalize(world_far - world_near);
+}

@@ -1,0 +1,117 @@
+// Mesh-Voxel Depth Compositing Shader (WJSL)
+//
+// Composites rasterized mesh output with voxel raymarched output using
+// depth comparison. Enables Control-style hybrid rendering where mesh
+// geometry and voxel environments coexist in the same scene.
+//
+// geometry_source in G-buffer: 0.0 = voxel, 1.0 = mesh
+
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/color.wjsl"
+
+struct CompositeParams {
+    screen_width: u32,
+    screen_height: u32,
+    mesh_count: u32,
+    blend_mode: u32,
+    exposure: f32,
+    gamma: f32,
+    mesh_render_width: u32,
+    mesh_render_height: u32,
+}
+
+fn tonemap_mesh(color: vec3<f32>, exposure: f32, gamma: f32) -> vec3<f32> {
+    let exposed = color * exposure;
+    let mapped = aces_tonemap(exposed);
+    let gamma_inv = 1.0 / gamma;
+    return pow(mapped, vec3(gamma_inv));
+}
+
+@group(0) @binding(0) uniform params: CompositeParams;
+@group(0) @binding(1) storage read voxel_color: array<vec4<f32>>;
+@group(0) @binding(2) storage read mesh_color: array<vec4<f32>>;
+@group(0) @binding(3) storage read voxel_gbuffer: array<GBufferPixel>;
+@group(0) @binding(4) storage read mesh_depth: array<f32>;
+@group(0) @binding(5) storage read_write output_color: array<vec4<f32>>;
+@group(0) @binding(6) storage read_write output_gbuffer: array<GBufferPixel>;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= params.screen_width || id.y >= params.screen_height) {
+        return;
+    }
+
+    let idx = id.y * params.screen_width + id.x;
+    if (idx >= arrayLength(&voxel_color)) {
+        return;
+    }
+
+    let voxel_c = voxel_color[idx];
+    let voxel_g = voxel_gbuffer[idx];
+    let voxel_depth = voxel_g.depth;
+
+    if (params.mesh_count == 0u) {
+        output_color[idx] = voxel_c;
+        output_gbuffer[idx] = voxel_g;
+        return;
+    }
+
+    // Sample mesh buffers at mesh render resolution (may differ from screen resolution)
+    let mw = params.mesh_render_width;
+    let mh = params.mesh_render_height;
+    let mx = min(id.x * mw / params.screen_width, mw - 1u);
+    let my = min(id.y * mh / params.screen_height, mh - 1u);
+    let mesh_idx = my * mw + mx;
+
+    let mesh_d = mesh_depth[mesh_idx];
+    let mesh_c_raw = mesh_color[mesh_idx];
+
+    // No mesh geometry at this pixel
+    if (mesh_d >= 9999.0 || mesh_c_raw.a < 0.001) {
+        output_color[idx] = voxel_c;
+        output_gbuffer[idx] = voxel_g;
+        return;
+    }
+
+    // Tonemap mesh HDR → LDR to match the voxel pipeline output
+    let mesh_ldr = tonemap_mesh(mesh_c_raw.rgb, params.exposure, params.gamma);
+    let mesh_c = vec4(mesh_ldr, mesh_c_raw.a);
+
+    // No voxel geometry at this pixel: only show mesh if it's nearby
+    // (prevents mesh primitives from rendering through solid voxel walls
+    // when the ray march ran out of steps or missed the wall).
+    if (voxel_g.normal.w < 1.0) {
+        if (mesh_d < 8.0) {
+            output_color[idx] = mesh_c;
+            let mut mesh_gbuf = voxel_g;
+            mesh_gbuf.depth = mesh_d;
+            mesh_gbuf.geometry_source = 1.0;
+            output_gbuffer[idx] = mesh_gbuf;
+        } else {
+            output_color[idx] = voxel_c;
+            output_gbuffer[idx] = voxel_g;
+        }
+        return;
+    }
+
+    // Both present -- depth test with bias to prevent Z-fighting between
+    // greedy mesh quads and voxel surfaces at the same depth
+    // Voxel output takes priority over greedy mesh to prevent Z-fighting banding.
+    // Mesh only wins if it's substantially closer (separate object, not same surface).
+    let depth_bias = max(voxel_depth * 0.08, 0.5);
+    if (mesh_d < voxel_depth - depth_bias) {
+        if (mesh_c.a < 1.0 && params.blend_mode == 1u) {
+            let blended = mix(voxel_c.rgb, mesh_c.rgb, mesh_c.a);
+            output_color[idx] = vec4(blended, 1.0);
+        } else {
+            output_color[idx] = mesh_c;
+        }
+        let mut out_g = voxel_g;
+        out_g.depth = mesh_d;
+        out_g.geometry_source = 1.0;
+        output_gbuffer[idx] = out_g;
+    } else {
+        output_color[idx] = voxel_c;
+        output_gbuffer[idx] = voxel_g;
+    }
+}

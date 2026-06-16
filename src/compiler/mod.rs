@@ -148,7 +148,6 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
     program: &crate::parser::Program<'ast>,
     analyzed_functions: &[crate::analyzer::AnalyzedFunction<'ast>],
-    registry_snapshot: &mut crate::analyzer::SignatureRegistry,
     output_file: &std::path::Path,
     source_file: &std::path::Path,
     copy_structs: Vec<String>,
@@ -157,19 +156,22 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     dep_epoch: Option<u64>,
 ) -> anyhow::Result<()> {
     let rust_code = codegen.generate_program(program, analyzed_functions);
-    codegen.apply_self_receiver_upgrades(registry_snapshot);
+    let mut registry = std::mem::take(&mut codegen.signature_registry);
+    codegen.apply_self_receiver_upgrades(&mut registry);
+    codegen.signature_registry = registry;
     cache_management::write_if_changed(output_file, &rust_code)?;
     if target == crate::CompilationTarget::Rust {
         let source = std::fs::read_to_string(source_file)?;
         let fingerprint = Some(if let Some(epoch) = dep_epoch {
-            incremental::fingerprint_for_emit_with_dep_epoch(&source, epoch).into()
+            incremental::compute_fingerprint_with_dep_epoch_and_output(&source, epoch, &rust_code)
+                .into()
         } else {
-            incremental::fingerprint_for_emit(&source, dep_roots).into()
+            incremental::compute_fingerprint_with_output(&source, dep_roots, &rust_code).into()
         });
         crate::metadata::emit_module_meta_for_file_with_fingerprint(
             source_file,
             program,
-            registry_snapshot,
+            &codegen.signature_registry,
             copy_structs,
             fingerprint,
         );

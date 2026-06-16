@@ -25,7 +25,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.function_returns_self_type(func) {
             return true;
         }
-        if super::self_analysis::function_returns_new_instance_from_self_fields(func) {
+        if super::self_analysis::function_returns_new_instance_from_self_fields(
+            func,
+            Some(&self.signature_registry),
+            self.current_struct_name.as_deref(),
+        ) {
             // Non-Copy: field-read rebuild is snapshot/clone (`&self`). Copy types use
             // cheap by-value receivers for consuming transforms like `double(self) -> Point`.
             return self.current_struct_is_copy();
@@ -34,6 +38,9 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if self.function_modifies_self(func) {
+            return true;
+        }
+        if super::self_analysis::function_return_moves_self_fields(func) {
             return true;
         }
         false
@@ -248,7 +255,7 @@ impl<'ast> CodeGenerator<'ast> {
         ];
 
         for pattern in &patterns {
-            if let Some(sig) = self.signature_registry.get_signature(pattern) {
+            if let Some(sig) = self.get_signature_with_global(pattern) {
                 if sig.has_self_receiver {
                     if let Some(&ownership) = sig.param_ownership.first() {
                         return Some(ownership);

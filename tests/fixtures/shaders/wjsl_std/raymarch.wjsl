@@ -1,0 +1,13 @@
+// WJSL Standard Library: Ray March Parameters
+//
+// Shared RayMarchParams struct. SVO node decoding functions vary per shader
+// (different bit layouts), so they stay in individual shader files.
+
+struct RayMarchParams {
+    world_size: vec3<f32>,
+    voxel_size: f32,
+    max_steps: u32,
+    svo_depth: u32,
+    node_count: u32,
+    _pad2: u32,
+}

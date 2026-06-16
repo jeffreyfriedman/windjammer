@@ -1,0 +1,204 @@
+// Atmosphere / Deep Space Procedural Sky (WJSL)
+//
+// Full-screen compute: overwrites sky pixels with procedural starfield,
+// nebula, sun disc + corona. Applies distance fog to geometry pixels.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+
+@group(0) @binding(0) uniform params: AtmosphereParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel >;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32> >;
+
+// === Noise Functions ===
+
+fn hash_2d(p: vec2<f32>) -> f32 {
+    let h = dot(p, vec2(127.1, 311.7));
+    return fract(sin(h) * 43758.5453);
+}
+
+fn hash_3d(p: vec3<f32>) -> f32 {
+    let h = dot(p, vec3(127.1, 311.7, 74.7));
+    return fract(sin(h) * 43758.5453);
+}
+
+fn value_noise(p: vec3<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+
+    let n000 = hash_3d(i + vec3(0.0, 0.0, 0.0));
+    let n100 = hash_3d(i + vec3(1.0, 0.0, 0.0));
+    let n010 = hash_3d(i + vec3(0.0, 1.0, 0.0));
+    let n110 = hash_3d(i + vec3(1.0, 1.0, 0.0));
+    let n001 = hash_3d(i + vec3(0.0, 0.0, 1.0));
+    let n101 = hash_3d(i + vec3(1.0, 0.0, 1.0));
+    let n011 = hash_3d(i + vec3(0.0, 1.0, 1.0));
+    let n111 = hash_3d(i + vec3(1.0, 1.0, 1.0));
+
+    let n00 = mix(n000, n100, u.x);
+    let n10 = mix(n010, n110, u.x);
+    let n01 = mix(n001, n101, u.x);
+    let n11 = mix(n011, n111, u.x);
+
+    let n0 = mix(n00, n10, u.y);
+    let n1 = mix(n01, n11, u.y);
+
+    return mix(n0, n1, u.z);
+}
+
+fn fbm(p: vec3<f32>, octaves: i32) -> f32 {
+    let mut value = 0.0;
+    let mut amplitude = 0.5;
+    let mut pos = p;
+    for (var i = 0; i < octaves; i++) {
+        value += amplitude * value_noise(pos);
+        pos = pos * 2.1;
+        amplitude *= 0.5;
+    }
+    return value;
+}
+
+// === Starfield ===
+
+fn starfield(dir: vec3<f32>) -> vec3<f32> {
+    let mut stars = vec3(0.0);
+
+    let grid_scale = 120.0;
+    let cell = floor(dir * grid_scale);
+    let cell_fract = fract(dir * grid_scale);
+    let r = hash_3d(cell);
+
+    if (r > 0.92) {
+        let center = vec2(hash_3d(cell + vec3(1.0, 0.0, 0.0)),
+                          hash_3d(cell + vec3(0.0, 1.0, 0.0)));
+        let dist = length(cell_fract.xy - center);
+        let brightness = smoothstep(0.12, 0.0, dist) * (0.4 + r * 0.6);
+        let temp = hash_3d(cell + vec3(0.0, 0.0, 1.0));
+        let mut color = vec3(1.0);
+        if (temp < 0.3) {
+            color = vec3(0.7, 0.8, 1.0);
+        } else if (temp < 0.5) {
+            color = vec3(1.0, 0.9, 0.7);
+        } else if (temp < 0.65) {
+            color = vec3(1.0, 0.6, 0.4);
+        }
+        let twinkle = 0.7 + 0.3 * sin(r * 100.0 + hash_3d(cell * 3.0) * 6.28);
+        stars = color * brightness * twinkle;
+    }
+
+    let grid2 = 60.0;
+    let cell2 = floor(dir * grid2);
+    let cf2 = fract(dir * grid2);
+    let r2 = hash_3d(cell2 + vec3(42.0, 0.0, 0.0));
+    if (r2 > 0.97) {
+        let c2 = vec2(hash_3d(cell2 + vec3(7.0, 0.0, 0.0)),
+                       hash_3d(cell2 + vec3(0.0, 7.0, 0.0)));
+        let d2 = length(cf2.xy - c2);
+        let b2 = smoothstep(0.06, 0.0, d2) * 1.5;
+        stars += vec3(0.8, 0.85, 1.0) * b2;
+    }
+
+    return stars;
+}
+
+// === Nebula ===
+
+fn nebula(dir: vec3<f32>) -> vec3<f32> {
+    let p = dir * 2.5;
+
+    let n1 = fbm(p + vec3(0.0, 0.0, 0.0), 4);
+    let n2 = fbm(p + vec3(5.2, 1.3, 0.0), 4);
+    let n3 = fbm(p + vec3(0.0, 3.7, 2.1), 3);
+
+    let deep_blue = vec3(0.02, 0.03, 0.12) * smoothstep(0.3, 0.7, n1);
+    let purple = vec3(0.06, 0.01, 0.10) * smoothstep(0.4, 0.8, n2);
+    let magenta = vec3(0.04, 0.005, 0.03) * smoothstep(0.5, 0.9, n3);
+
+    let galactic_band = exp(-8.0 * dir.y * dir.y) * 0.015;
+    let band_color = vec3(0.03, 0.02, 0.06) * galactic_band;
+
+    return deep_blue + purple + magenta + band_color;
+}
+
+// === Sun and Corona ===
+
+fn sun_and_corona(ray_dir: vec3<f32>) -> vec3<f32> {
+    let sun_dir = normalize(params.sun_direction);
+    let cos_sun = dot(ray_dir, sun_dir);
+    let s = params.sun_size;
+
+    let disc = smoothstep(1.0 - s * 0.5, 1.0, cos_sun);
+    let inner_corona = smoothstep(1.0 - s * 4.0, 1.0 - s * 0.3, cos_sun) * 0.4;
+    let outer_corona = smoothstep(1.0 - s * 16.0, 1.0 - s * 2.0, cos_sun) * 0.08;
+
+    let sun_term = disc + inner_corona + outer_corona;
+
+    let perp = ray_dir - sun_dir * cos_sun;
+    let streak_x = abs(perp.x);
+    let streak_y = abs(perp.y);
+    let flare_h = exp(-streak_y * 40.0 / s) * exp(-streak_x * 8.0 / s) * 0.12;
+    let flare_v = exp(-streak_x * 40.0 / s) * exp(-streak_y * 8.0 / s) * 0.06;
+    let flare = (flare_h + flare_v) * smoothstep(1.0 - s * 20.0, 1.0 - s * 3.0, cos_sun);
+
+    return params.sun_color * (sun_term + flare) * params.sun_intensity;
+}
+
+// === Main Sky Color ===
+
+fn compute_sky_color(ray_dir: vec3<f32>) -> vec3<f32> {
+    let y = ray_dir.y;
+    let up_blend = clamp(y, 0.0, 1.0);
+    let mut base = mix(params.sky_horizon_color, params.sky_top_color, up_blend);
+    let down_blend = clamp(-y, 0.0, 1.0);
+    base = mix(base, params.ground_color, down_blend);
+
+    let stars = starfield(ray_dir);
+    let neb = nebula(ray_dir);
+    let sun = sun_and_corona(ray_dir);
+
+    return base + stars + neb + sun;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = u32(camera.screen_size.x);
+    let height = u32(camera.screen_size.y);
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    let pixel_idx = id.y * width + id.x;
+    if (pixel_idx >= arrayLength(&gbuffer)) {
+        return;
+    }
+
+    let scene = color_output[pixel_idx];
+    let gbuf = gbuffer[pixel_idx];
+    let mat = gbuf.normal.w;
+    let depth = gbuf.depth;
+    let no_geometry = (mat == 0.0) || (depth >= camera.far_plane) || (scene.a == 0.0);
+
+    if (no_geometry) {
+        if (scene.a > 0.5) {
+            // Interior: the lighting pass already filled this pixel with
+            // an ambient gradient. Keep it and apply gentle fog to push
+            // missed-ray areas toward a neutral interior color.
+            let fogged = mix(scene.xyz, params.fog_color, 0.3);
+            color_output[pixel_idx] = vec4(fogged, 1.0);
+        } else {
+            // Truly empty pixel (e.g. through a window to space).
+            let pixel = vec2<f32>(f32(id.x), f32(id.y));
+            let ray_dir = generate_ray(pixel + vec2(0.5, 0.5), camera);
+            let sky = compute_sky_color(ray_dir);
+            color_output[pixel_idx] = vec4(sky, 1.0);
+        }
+        return;
+    }
+
+    let fog_factor = 1.0 - exp(-depth * params.fog_density);
+    let lit = mix(scene.xyz, params.fog_color, fog_factor);
+    color_output[pixel_idx] = vec4(lit, 1.0);
+}
