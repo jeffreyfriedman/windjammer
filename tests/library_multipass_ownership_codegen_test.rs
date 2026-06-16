@@ -1095,3 +1095,262 @@ impl DialogueSystem {
         "mutable string local + String return must coerce &str → String. Got:\n{rs}"
     );
 }
+
+#[test]
+fn test_profile_decorator_impl_method_uses_mut_borrow_not_typed_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/gpu_passes.wj",
+        r#"
+pub struct GpuPasses {
+    count: i32,
+}
+
+impl GpuPasses {
+    @profile("update_params")
+    pub fn update_all_params(self) {
+        self.count = 1
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("rendering/gpu_passes.rs").expect("gpu_passes.rs");
+
+    assert!(
+        rs.contains("pub fn update_all_params(&mut self)")
+            || rs.contains("pub fn update_all_params( &mut self )"),
+        "@profile must reuse self-aware receiver lowering. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("mut self: Self"),
+        "must not emit typed owned self receiver. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_same_call_move_and_field_read_clones_root_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ai/bt_validation.wj",
+        r#"
+pub struct BtDocument {
+    root_id: i32,
+    nodes: Vec<i32>,
+}
+
+pub fn visit_cycle(doc: BtDocument, cur: i32) -> bool {
+    cur == doc.root_id
+}
+
+pub fn consume(_doc: BtDocument) {}
+
+pub fn bt_document_contains_cycle(doc: BtDocument) -> bool {
+    let result = visit_cycle(doc, doc.root_id)
+    consume(doc)
+    result
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ai/bt_validation.rs").expect("bt_validation.rs");
+
+    assert!(
+        rs.contains("visit_cycle(doc, doc.root_id")
+            || rs.contains("visit_cycle(doc.clone(), doc.root_id")
+            || rs.contains("visit_cycle(&doc, doc.root_id"),
+        "same-call root + field must compile (borrow param, &, or clone). Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("doc: &BtDocument")
+            || rs.contains("visit_cycle(doc.clone(),")
+            || rs.contains("visit_cycle(&doc,"),
+        "owned root reused in one call must not move before field read. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_for_in_over_indexed_field_borrows_iterable() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/shader_graph_builder.wj",
+        r#"
+pub enum PassId {
+    A,
+}
+
+pub struct PassDefinition {
+    pass_id: PassId,
+    dependencies: Vec<PassId>,
+}
+
+pub fn count_deps(pass_defs: Vec<PassDefinition>) -> i32 {
+    let mut total = 0
+    let mut pi = 0
+    while pi < pass_defs.len() {
+        for dep_id in pass_defs[pi].dependencies {
+            total = total + 1
+        }
+        pi = pi + 1
+    }
+    total
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/shader_graph_builder.rs")
+        .expect("shader_graph_builder.rs");
+
+    assert!(
+        rs.contains("for dep_id in &pass_defs[pi].dependencies")
+            || rs.contains("for dep_id in & pass_defs[pi].dependencies")
+            || rs.contains("for _dep_id in &pass_defs[pi].dependencies")
+            || rs.contains("for _dep_id in & pass_defs[pi].dependencies"),
+        "indexed field iteration must borrow to avoid partial move. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_copy_field_preferred_over_owned_method_on_ref_receiver() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/gpu_types.wj",
+        r#"
+pub struct StorageRead<T> {
+    buffer_id: u32,
+    data: T,
+}
+
+impl StorageRead<T> {
+    pub fn buffer_id(self) -> u32 {
+        self.buffer_id
+    }
+}
+
+pub struct PassBuilder {}
+
+impl PassBuilder {
+    pub fn bind(self, buffer: StorageRead<i32>) -> PassBuilder {
+        let _id = buffer.buffer_id()
+        self
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("rendering/gpu_types.rs").expect("gpu_types.rs");
+
+    assert!(
+        rs.contains("buffer.buffer_id") && !rs.contains("buffer.buffer_id()"),
+        "Copy field must win over owned method on & receiver. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_mutating_impl_method_call_in_let_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "editor/scene_editor.wj",
+        r#"
+pub struct Scene {
+    next_id: i64,
+}
+
+impl Scene {
+    pub fn new() -> Scene {
+        Scene { next_id: 0 }
+    }
+    pub fn create_entity(&mut self) -> i64 {
+        let id = self.next_id
+        self.next_id = id + 1
+        id
+    }
+}
+
+pub struct SceneEditorState {
+    scene: Scene,
+    selected_entities: Vec<i64>,
+}
+
+impl SceneEditorState {
+    pub fn duplicate_entity(&mut self, _entity_id: i64) -> i64 {
+        self.scene.create_entity()
+    }
+
+    pub fn duplicate_selected(self) -> Vec<i64> {
+        let mut out: Vec<i64> = Vec::new()
+        for entity_id in self.selected_entities {
+            let new_id = self.duplicate_entity(entity_id)
+            out.push(new_id)
+        }
+        out
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("editor/scene_editor.rs").expect("scene_editor.rs");
+
+    assert!(
+        rs.contains("pub fn duplicate_selected(&mut self)"),
+        "mutating method calls in body must infer &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_nested_self_field_snapshot_clones_before_owned_call() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "editor/editor_core.wj",
+        r#"
+pub struct Scene {
+    entities: Vec<i64>,
+}
+
+impl Scene {
+    pub fn new() -> Scene {
+        Scene { entities: Vec::new() }
+    }
+    pub fn snapshot(self) -> Scene {
+        Scene { entities: self.entities }
+    }
+}
+
+pub struct SceneEditorState {
+    scene: Scene,
+}
+
+impl SceneEditorState {
+    pub fn new() -> SceneEditorState {
+        SceneEditorState { scene: Scene::new() }
+    }
+}
+
+pub struct EditorState {
+    scene_editor: SceneEditorState,
+    play_mode_scene_snapshot: Option<Scene>,
+}
+
+impl EditorState {
+    pub fn enter_play_mode(&mut self) {
+        self.play_mode_scene_snapshot = Some(self.scene_editor.scene.snapshot())
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("editor/editor_core.rs").expect("editor_core.rs");
+
+    assert!(
+        rs.contains("self.scene_editor.scene.clone().snapshot()")
+            || rs.contains("self.scene_editor.scene.clone(). snapshot()"),
+        "nested field + owned snapshot must clone field first. Got:\n{rs}"
+    );
+}

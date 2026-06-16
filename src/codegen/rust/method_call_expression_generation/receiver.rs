@@ -159,6 +159,38 @@ impl<'ast> CodeGenerator<'ast> {
             obj_str = format!("{}.as_ref()", obj_str);
         }
 
+        // E0507: `self.nested.field.method()` on borrowed self when method consumes owned receiver.
+        if self.codegen_expression_traces_to_self(object)
+            && (self.inferred_mut_borrowed_params.contains("self")
+                || self.inferred_borrowed_params.contains("self"))
+            && !obj_str.ends_with(".clone()")
+        {
+            if let Some(recv_ty) = self.infer_expression_type(object) {
+                if !self.is_type_copy(&recv_ty) {
+                    let mut needs_clone = false;
+                    if let Some(tn) = Self::type_to_name(&recv_ty) {
+                        let qualified = format!("{}::{}", tn, method);
+                        let sig_opt = self
+                            .signature_registry
+                            .get_signature(&qualified)
+                            .or_else(|| {
+                                let base = tn.split('<').next().unwrap_or(&tn);
+                                self.get_signature_with_global(&format!("{base}::{method}"))
+                            });
+                        needs_clone = sig_opt
+                            .is_some_and(|sig| {
+                                sig.has_self_receiver
+                                    && sig.param_ownership.first()
+                                        == Some(&crate::analyzer::OwnershipMode::Owned)
+                            });
+                    }
+                    if needs_clone {
+                        obj_str = format!("{}.clone()", obj_str);
+                    }
+                }
+            }
+        }
+
         obj_str
     }
 

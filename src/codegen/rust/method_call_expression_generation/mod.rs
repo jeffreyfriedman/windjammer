@@ -35,10 +35,21 @@ impl<'ast> CodeGenerator<'ast> {
                 .infer_type_name(object)
                 .or_else(|| self.infer_indexed_element_type_name(object));
             if let Some(receiver_type) = receiver_type {
-                let has_method = self.method_exists_on_type_name(&receiver_type, method);
-                if !has_method {
-                    if let Some(fields) = self.lookup_struct_field_types(&receiver_type) {
-                        if fields.get(method).is_some_and(|ty| self.is_type_copy(ty)) {
+                let recv_is_ref = matches!(
+                    self.infer_expression_type(object).as_ref(),
+                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                ) || matches!(
+                    object,
+                    Expression::Identifier { name, .. }
+                        if self.inferred_borrowed_params.contains(name)
+                            || self.inferred_mut_borrowed_params.contains(name)
+                );
+                if let Some(fields) = self.lookup_struct_field_types(&receiver_type) {
+                    if fields.get(method).is_some_and(|ty| self.is_type_copy(ty)) {
+                        let has_method = self.method_exists_on_type_name(&receiver_type, method);
+                        // GPU buffer types expose `buffer_id()` methods that take owned `self`
+                        // but call sites hold `&StorageRead<T>` — use the Copy field instead.
+                        if recv_is_ref || !has_method {
                             return format!("{}.{}", self.generate_expression(object), method);
                         }
                     }

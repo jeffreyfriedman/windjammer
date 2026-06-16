@@ -442,11 +442,20 @@ impl AutoCloneAnalysis {
                 let has_later_use = total_uses
                     .iter()
                     .any(|u| u.statement_idx > move_usage.statement_idx);
+                let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                    u.statement_idx == move_usage.statement_idx
+                        && u.kind == UsageKind::Read
+                        && move_usage.kind == UsageKind::Move
+                });
                 let same_stmt_moves = moves
                     .iter()
                     .filter(|m| m.statement_idx == move_usage.statement_idx)
                     .count();
-                if has_later_use || same_stmt_moves > 1 || move_usage.in_loop {
+                if has_later_use
+                    || same_stmt_read_after_move
+                    || same_stmt_moves > 1
+                    || move_usage.in_loop
+                {
                     self.clone_sites.insert(
                         (var_name.to_string(), move_usage.statement_idx),
                         CloneReason::MovedButUsedLater,
@@ -481,6 +490,14 @@ impl AutoCloneAnalysis {
                 .iter()
                 .any(|u| u.statement_idx > move_usage.statement_idx);
 
+            // Same statement: `visit_cycle(doc, doc.root_id, ...)` moves `doc` then reads
+            // `doc.root_id` — clone the move site so the field access still compiles.
+            let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                u.statement_idx == move_usage.statement_idx
+                    && u.kind == UsageKind::Read
+                    && move_usage.kind == UsageKind::Move
+            });
+
             let same_stmt_moves = moves
                 .iter()
                 .filter(|m| m.statement_idx == move_usage.statement_idx)
@@ -488,7 +505,10 @@ impl AutoCloneAnalysis {
 
             // Moves inside loops always need clone -- the loop body executes
             // multiple times, consuming the value on each iteration.
-            let needs_clone = has_later_use || same_stmt_moves > 1 || move_usage.in_loop;
+            let needs_clone = has_later_use
+                || same_stmt_read_after_move
+                || same_stmt_moves > 1
+                || move_usage.in_loop;
 
             if needs_clone {
                 self.clone_sites.insert(
