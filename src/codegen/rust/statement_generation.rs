@@ -753,6 +753,23 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `if let Some(x) = map.get_mut(k)` must match directly — borrow-break to owned
+    /// values prevents mutating through the binding (voxel_world chunk mutation).
+    pub(in crate::codegen::rust) fn match_scrutinee_allows_mut_binding_directly(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        if let Expression::MethodCall { method, .. } = expr {
+            if method == "get_mut" {
+                return true;
+            }
+        }
+        if let Some(Type::Option(inner)) = self.infer_expression_type(expr) {
+            return matches!(inner.as_ref(), Type::MutableReference(_));
+        }
+        false
+    }
+
     pub(in crate::codegen::rust) fn match_arms_mutate_self(
         &self,
         arms: &[crate::parser::MatchArm<'ast>],
