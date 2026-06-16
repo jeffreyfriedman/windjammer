@@ -233,9 +233,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         .all(|o| matches!(o, OwnershipMode::Borrowed));
                 if all_params_borrowed
                     && matches!(arg, Expression::Identifier { .. })
-                    && !arg_str.starts_with('&')
-                    && !arg_str.ends_with(".clone()")
                 {
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     let already_ref = if let Expression::Identifier { name, .. } = arg {
                         gen.identifier_already_ref(name)
                     } else {
@@ -246,7 +245,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     } else {
                         false
                     };
-                    if !already_ref && !is_user_closure_param {
+                    if !already_ref
+                        && !is_user_closure_param
+                        && !arg_str.starts_with('&')
+                    {
                         return vec![format!("&{}", arg_str)];
                     }
                 }

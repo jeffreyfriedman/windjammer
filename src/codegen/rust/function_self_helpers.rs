@@ -71,8 +71,10 @@ impl<'ast> CodeGenerator<'ast> {
             "mut self"
         } else if body_modifies {
             "&mut self"
-        } else {
+        } else if self.current_struct_is_copy() {
             "self"
+        } else {
+            "&self"
         }
     }
 

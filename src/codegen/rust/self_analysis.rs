@@ -891,6 +891,9 @@ pub fn statement_modifies_self(
     struct_name: Option<&str>,
 ) -> bool {
     match stmt {
+        Statement::Let { value, .. } => {
+            expression_modifies_self(value, registry, struct_name)
+        }
         Statement::Assignment { target, .. } => {
             // Check if target is self.field
             expression_is_self_field_modification(target)
