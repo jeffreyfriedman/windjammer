@@ -528,8 +528,8 @@ impl<'ast> CodeGenerator<'ast> {
             value_str
         };
 
-        let needs_borrow_break =
-            (self.match_scrutinee_is_self_method_call(value)
+        let needs_borrow_break = !self.match_scrutinee_allows_mut_binding_directly(value)
+            && (self.match_scrutinee_is_self_method_call(value)
                 || self.match_scrutinee_is_self_field(value))
                 && (self.match_arms_mutate_self(arms)
                     || option_reassigns
