@@ -26,6 +26,22 @@ impl<'ast> CodeGenerator<'ast> {
             .enumerate()
             .map(|(i, e)| {
                 let mut s = self.generate_expression(e);
+                if let Some(ref tuple_types) = return_tuple_types {
+                    if let Some(expected) = tuple_types.get(i) {
+                        if !matches!(
+                            expected,
+                            Type::Reference(_) | Type::MutableReference(_)
+                        ) {
+                            if let Some(stripped) = s.strip_prefix("&mut ") {
+                                s = stripped.to_string();
+                            } else if let Some(stripped) = s.strip_prefix("& ") {
+                                s = stripped.to_string();
+                            } else if s.starts_with('&') && !s.starts_with("&&") {
+                                s = s[1..].trim_start().to_string();
+                            }
+                        }
+                    }
+                }
                 if matches!(
                     e,
                     Expression::Literal {

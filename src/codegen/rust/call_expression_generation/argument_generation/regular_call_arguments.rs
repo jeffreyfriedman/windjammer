@@ -701,11 +701,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
 
             // auto-clone may append `.clone()` for reused locals; borrowed callees need `&T`.
             if let Some(ref sig) = signature {
+                let param_ty = sig.param_type_for_arg(i);
+                let callee_expects_ref = param_ty.is_some_and(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                });
                 if sig
                     .param_ownership_for_arg(i)
                     .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
+                    || callee_expects_ref
                 {
-                    let param_ty = sig.param_type_for_arg(i);
                     let is_text = param_ty
                         .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
                     if !is_text {
