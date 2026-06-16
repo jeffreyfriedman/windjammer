@@ -237,9 +237,17 @@ impl<'ast> CodeGenerator<'ast> {
                         &main_arm.pattern,
                         statements.as_slice(),
                         scrutinee_is_mut_ref,
+                        Some(main_arm.body),
+                        Some(value),
                     )
                 } else {
-                    main_arm.pattern.clone()
+                    self.upgrade_pattern_mut_bindings(
+                        &main_arm.pattern,
+                        &[],
+                        scrutinee_is_mut_ref,
+                        Some(main_arm.body),
+                        Some(value),
+                    )
                 };
 
                 let mut output = self.indent();
@@ -675,6 +683,8 @@ impl<'ast> CodeGenerator<'ast> {
                 &arm.pattern,
                 body_stmts,
                 match_scrutinee_ref_prefix.contains("mut"),
+                Some(arm.body),
+                Some(value),
             );
 
             output.push_str(&self.indent());
