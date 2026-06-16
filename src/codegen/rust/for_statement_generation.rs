@@ -106,8 +106,22 @@ impl<'ast> CodeGenerator<'ast> {
         // is unnecessary and fails when T doesn't implement Clone.
         let prev_field_access = self.in_field_access_object;
         self.in_field_access_object = true;
-        output.push_str(&self.generate_expression(iterable_to_generate));
+        let mut iter_expr = self.generate_expression(iterable_to_generate);
         self.in_field_access_object = prev_field_access;
+
+        // `for pass in self.field` on `&mut self` when the body calls `self.update_*()`:
+        // cannot use `&self.field` (borrow conflict) or bare `self.field` (partial move).
+        // Clone the collection for by-value iteration instead.
+        let needs_owned_self_field_clone = self.inferred_mut_borrowed_params.contains("self")
+            && self.codegen_expression_traces_to_self(iterable)
+            && Self::variable_used_in_statements(body, "self")
+            && !needs_borrow
+            && !needs_mut_borrow
+            && !iter_expr.ends_with(".clone()");
+        if needs_owned_self_field_clone {
+            iter_expr = format!("{}.clone()", iter_expr);
+        }
+        output.push_str(&iter_expr);
         output.push_str(" {\n");
 
         self.indent_level += 1;

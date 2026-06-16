@@ -9,11 +9,20 @@ impl<'ast> CodeGenerator<'ast> {
     /// Only borrow if the base object is borrowed (not owned)
     pub(crate) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                ..
+            } => false,
+            // Subscript/field iteration must borrow to avoid partial moves (E0507).
+            // Example: `for dep in pass_defs[i].dependencies` inside an outer loop.
+            Expression::Index { .. } => true,
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
-                        return self.inferred_borrowed_params.contains("self")
-                            || self.inferred_mut_borrowed_params.contains("self");
+                        if self.inferred_mut_borrowed_params.contains("self") {
+                            return false;
+                        }
+                        return self.inferred_borrowed_params.contains("self");
                     }
                     return self.inferred_borrowed_params.contains(name)
                         || self.inferred_mut_borrowed_params.contains(name)
@@ -21,6 +30,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Expression::FieldAccess { .. } = &**object {
                     return self.should_borrow_for_iteration(object);
+                }
+                if matches!(&**object, Expression::Index { .. }) {
+                    return true;
                 }
                 false
             }

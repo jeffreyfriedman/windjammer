@@ -140,48 +140,18 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|d| d.name == "test" && !d.arguments.is_empty());
 
         if !has_property_test && !has_setup_teardown {
-            // Generate normal parameters
-            let params: Vec<String> = func
-                .parameters
-                .iter()
-                .enumerate()
-                .map(|(idx, param)| {
-                    let param_type = analyzed
-                        .inferred_param_types
-                        .get(idx)
-                        .unwrap_or(&param.type_);
-                    let ownership = analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
-                    let rust_type = self.type_to_rust(param_type);
-
-                    match ownership {
-                        crate::analyzer::OwnershipMode::Borrowed => {
-                            if matches!(
-                                param_type,
-                                Type::Reference(inner)
-                                    if matches!(&**inner, Type::Custom(s) if s == "str")
-                            ) || analyzed.str_ref_optimizable_params.contains(&param.name)
-                            {
-                                format!("{}: &str", param.name)
-                            } else {
-                                format!("{}: &{}", param.name, rust_type)
-                            }
-                        }
-                        crate::analyzer::OwnershipMode::MutBorrowed => {
-                            if crate::analyzer::Analyzer::is_generic_type_param(param_type) {
-                                format!("mut {}: {}", param.name, rust_type)
-                            } else {
-                                format!("{}: &mut {}", param.name, rust_type)
-                            }
-                        }
-                        crate::analyzer::OwnershipMode::Owned => {
-                            format!("mut {}: {}", param.name, rust_type)
-                        }
-                    }
-                })
-                .collect();
+            // Reuse the same self-aware parameter lowering as regular functions.
+            // @profile / @timeout / @bench must not emit `mut self: Self` for impl methods.
+            let mut params = Vec::new();
+            self.extend_implicit_self_parameters(analyzed, func, &mut params);
+            let unused_params = self.compute_unused_formal_parameter_names(func);
+            self.refresh_unused_let_bindings_for_function_body(&func.body);
+            params.extend(self.collect_additional_formal_parameter_strings(
+                analyzed,
+                func,
+                false,
+                &unused_params,
+            ));
             output.push_str(&params.join(", "));
         }
 
