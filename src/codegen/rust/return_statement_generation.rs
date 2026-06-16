@@ -89,7 +89,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             if needs_index_return_clone {
-                return_str = format!("{}.clone()", return_str);
+                if return_str.starts_with('&') && !return_str.starts_with("&mut") {
+                    return_str = format!("({}).clone()", return_str);
+                } else {
+                    return_str = format!("{}.clone()", return_str);
+                }
             } else if return_str.starts_with("&")
                 && !return_str.starts_with("&mut")
                 && !return_str.ends_with(".clone()")

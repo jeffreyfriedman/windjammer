@@ -96,8 +96,11 @@ impl<'ast> CodeGenerator<'ast> {
 
             let match_binds_refs_early_check = self.match_expression_binds_refs(value)
                 || self.expression_type_contains_reference(value);
-            let needs_borrow_break_check = self.match_scrutinee_is_self_method_call(value)
-                && self.match_arms_mutate_self(arms);
+            let needs_borrow_break_check = (self.match_scrutinee_is_self_method_call(value)
+                || self.match_scrutinee_is_self_field(value))
+                && (self.match_arms_mutate_self(arms)
+                    || (self.inferred_mut_borrowed_params.contains("self")
+                        && self.match_arms_call_self_method(arms)));
 
             if !needs_borrow_break_check
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
@@ -422,9 +425,16 @@ impl<'ast> CodeGenerator<'ast> {
         let some_arm = arms.iter().find(|arm| {
             matches!(&arm.pattern, Pattern::EnumVariant(name, _) if name == "Some" || name.ends_with("::Some"))
         });
+        let option_reassigns = some_arm.as_ref().is_some_and(|arm| {
+            self.option_arm_reassigns_scrutinee_field(value, &arm.body)
+        });
         let match_scrutinee_ref_prefix: &str;
         let value_str = if let Some(arm) = some_arm {
-            let p = self.effective_option_scrutinee_ref_prefix(value, Some(arm));
+            let p = if option_reassigns {
+                ""
+            } else {
+                self.effective_option_scrutinee_ref_prefix(value, Some(arm))
+            };
             match_scrutinee_ref_prefix = p;
             if p.is_empty() {
                 value_str
@@ -511,17 +521,61 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         let needs_borrow_break =
-            self.match_scrutinee_is_self_method_call(value) && self.match_arms_mutate_self(arms);
+            (self.match_scrutinee_is_self_method_call(value)
+                || self.match_scrutinee_is_self_field(value))
+                && (self.match_arms_mutate_self(arms)
+                    || option_reassigns
+                    || (self.inferred_mut_borrowed_params.contains("self")
+                        && self.match_arms_call_self_method(arms)));
+        let use_copied_borrow_break =
+            needs_borrow_break && self.match_borrow_break_yields_ref_copy_binding(value);
+        let use_owned_copy_borrow_break = needs_borrow_break
+            && !use_copied_borrow_break
+            && !option_reassigns
+            && self.match_borrow_break_yields_owned_copy_option(value);
+        let use_owned_clone_borrow_break = needs_borrow_break
+            && !use_copied_borrow_break
+            && !use_owned_copy_borrow_break
+            && (self.match_borrow_break_yields_owned_clone(value) || option_reassigns);
+        let borrow_break_as_ref = needs_borrow_break
+            && !use_copied_borrow_break
+            && !use_owned_copy_borrow_break
+            && !use_owned_clone_borrow_break;
 
         let mut output = self.indent();
 
         if needs_borrow_break {
-            output.push_str(&format!(
-                "let __match_borrow_break = {}.map(|__v| __v.to_owned());\n",
-                value_str
-            ));
-            output.push_str(&self.indent());
-            output.push_str("match __match_borrow_break.as_ref()");
+            if use_copied_borrow_break {
+                output.push_str(&format!(
+                    "let __match_borrow_break = {}.copied();\n",
+                    value_str
+                ));
+                output.push_str(&self.indent());
+                output.push_str("match __match_borrow_break");
+            } else if use_owned_copy_borrow_break {
+                output.push_str(&format!(
+                    "let __match_borrow_break = {};\n",
+                    value_str
+                ));
+                output.push_str(&self.indent());
+                output.push_str("match __match_borrow_break");
+            } else if use_owned_clone_borrow_break {
+                let expr = self.generate_expression(value);
+                let raw = self.strip_leading_borrow_prefix(&expr);
+                output.push_str(&format!(
+                    "let __match_borrow_break = {}.clone();\n",
+                    raw
+                ));
+                output.push_str(&self.indent());
+                output.push_str("match __match_borrow_break");
+            } else {
+                output.push_str(&format!(
+                    "let __match_borrow_break = {}.map(|__v| __v.to_owned());\n",
+                    value_str
+                ));
+                output.push_str(&self.indent());
+                output.push_str("match __match_borrow_break.as_ref()");
+            }
         } else {
             output.push_str("match ");
             if has_string_literal && !is_tuple_match {
@@ -541,7 +595,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.indent_level += 1;
 
-        let match_binds_refs = self.match_expression_binds_refs(value);
+        let match_binds_refs = if use_copied_borrow_break
+            || use_owned_copy_borrow_break
+            || use_owned_clone_borrow_break
+        {
+            false
+        } else {
+            self.match_expression_binds_refs(value)
+                || value_str.starts_with('&')
+                || borrow_break_as_ref
+        };
 
         let needs_string_conversion =
             string_utilities::return_type_expects_owned_string(&self.current_function_return_type)
@@ -566,7 +629,7 @@ impl<'ast> CodeGenerator<'ast> {
         // When the scrutinee has been dereferenced (`*self`, `*e`, etc.) for a Copy type,
         // the match operates on an owned value and pattern bindings are owned — NOT refs.
         // Generalized from the original `value_str == "*self"` to handle all Copy params.
-        let owned_bindings_from_copy_deref = if let Some(deref_name) = value_str.strip_prefix('*') {
+        let mut owned_bindings_from_copy_deref = if let Some(deref_name) = value_str.strip_prefix('*') {
             if deref_name == "self" {
                 self.current_struct_name
                     .as_ref()
@@ -583,10 +646,22 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             false
         };
+        if use_copied_borrow_break || use_owned_copy_borrow_break || use_owned_clone_borrow_break {
+            owned_bindings_from_copy_deref = true;
+        }
 
         // When codegen prepends `&` / `&mut` on the scrutinee (`match &node.children`),
         // pattern bindings are reference types even if `match_expression_binds_refs` is false.
-        let scrutinee_prefix_binds_refs = !match_scrutinee_ref_prefix.is_empty();
+        // Same for `match __match_borrow_break.as_ref() { ... }`.
+        // Owned borrow-break clones match on owned enum values — never ref-bindings.
+        let scrutinee_prefix_binds_refs = if use_copied_borrow_break
+            || use_owned_copy_borrow_break
+            || use_owned_clone_borrow_break
+        {
+            false
+        } else {
+            !match_scrutinee_ref_prefix.is_empty() || borrow_break_as_ref
+        };
 
         for arm in arms {
             // Upgrade pattern bindings to `mut` when the arm body mutates them
@@ -615,13 +690,6 @@ impl<'ast> CodeGenerator<'ast> {
             let mut bound_vars = std::collections::HashSet::new();
             self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
 
-            // TDD FIX for E0614: Track match arm bindings as OWNED values
-            // Match arm bindings extract owned values from enums, NOT references
-            // This prevents incorrectly adding * to Copy types like i32 in comparisons
-            for var in &bound_vars {
-                self.match_arm_bindings.insert(var.clone());
-            }
-
             let added_borrowed: Vec<String> =
                 if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
                     && !owned_bindings_from_copy_deref
@@ -634,22 +702,43 @@ impl<'ast> CodeGenerator<'ast> {
                 self.borrowed_iterator_vars.insert(var.clone());
             }
 
+            // Track owned match bindings only — ref bindings stay in borrowed_iterator_vars.
+            for var in &bound_vars {
+                if !added_borrowed.contains(var) {
+                    self.match_arm_bindings.insert(var.clone());
+                }
+            }
+
             // Clone bound_vars before moving it, so we can clean up match_arm_bindings later
             let bound_vars_for_cleanup = bound_vars.clone();
 
             self.local_variable_scopes.push(bound_vars);
 
             let mut match_bound_type_entries: Vec<(String, Type)> =
-                self.infer_match_bound_types(value, &arm.pattern);
+                if use_owned_clone_borrow_break || use_owned_copy_borrow_break {
+                    self.infer_match_bound_types_owned(value, &arm.pattern)
+                } else if use_copied_borrow_break {
+                    self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
+                } else {
+                    self.infer_match_bound_types(value, &arm.pattern)
+                };
             // Wrap binding types with the ref kind matching the
             // generated scrutinee prefix (see if-let equivalent above).
-            if match_scrutinee_ref_prefix == "&mut " {
+            let skip_ref_wrap_on_bound_types = use_copied_borrow_break
+                || use_owned_copy_borrow_break
+                || use_owned_clone_borrow_break;
+            if !skip_ref_wrap_on_bound_types && match_scrutinee_ref_prefix == "&mut " {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {
                         entry.1 = Type::MutableReference(Box::new(entry.1.clone()));
                     }
                 }
-            } else if match_scrutinee_ref_prefix == "& " || match_scrutinee_ref_prefix == "&" {
+            } else if !skip_ref_wrap_on_bound_types
+                && (match_scrutinee_ref_prefix == "& "
+                    || match_scrutinee_ref_prefix == "&"
+                    || ((match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                        && !owned_bindings_from_copy_deref))
+            {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {
                         entry.1 = Type::Reference(Box::new(entry.1.clone()));
@@ -676,6 +765,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.in_match_arm_needing_string = old_in_match_arm;
 
             if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                && !owned_bindings_from_copy_deref
                 && !arm_str.ends_with(".clone()")
             {
                 // Extract the binding name from either a direct identifier

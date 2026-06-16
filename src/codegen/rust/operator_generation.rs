@@ -31,12 +31,24 @@ impl<'ast> CodeGenerator<'ast> {
         if let Expression::Identifier { name, .. } = expr {
             let is_borrowed = self.inferred_borrowed_params.contains(name)
                 || self.borrowed_iterator_vars.contains(&name.to_string())
+                || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                })
                 || self.current_function_params.iter().any(|p| {
                     p.name == *name
                         && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
                 });
             if is_borrowed && !expr_str.starts_with('*') {
                 expr_str = format!("*{}", expr_str);
+            }
+        }
+        if !expr_str.starts_with('*') {
+            if let Some(Type::Reference(inner) | Type::MutableReference(inner)) =
+                self.infer_expression_type(expr)
+            {
+                if self.is_type_copy(inner.as_ref()) {
+                    expr_str = format!("*{}", expr_str);
+                }
             }
         }
         let type_str = self.type_to_rust(type_);

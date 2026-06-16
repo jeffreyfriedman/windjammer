@@ -211,9 +211,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     name,
                     gen.auto_clone_analysis.as_ref(),
                 );
-                if param_wants_owned_string && !arg_str.ends_with(".to_string()") && is_string_const
-                {
-                    arg_str = format!("{}.to_string()", arg_str);
+                if param_wants_owned_string && !arg_str.ends_with(".to_string()") {
+                    let is_text_arg = is_string_const
+                        || gen.str_ref_optimized_params.contains(name)
+                        || gen.inferred_borrowed_params.contains(name)
+                        || gen.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        });
+                    if is_text_arg {
+                        arg_str = format!("{}.to_string()", arg_str);
+                    }
                 }
             }
 
@@ -273,8 +281,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 // - Bare-name calls within the same file are also unambiguous
                 // - Only fallback from module::fn → fn is risky (wrong module)
                 let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-                let has_registry_collision = gen.signature_registry.has_collision(func_name)
-                    || gen.signature_registry.has_collision(simple_name);
+                let has_registry_collision = gen.has_collision_with_global(func_name)
+                    || gen.has_collision_with_global(simple_name);
                 let has_ownership_collision = has_registry_collision
                     && {
                         let sig_args = if sig.has_self_receiver {
@@ -378,15 +386,44 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     false
                                 };
 
+                            let is_copy_scalar = is_copy_param
+                                && sig.param_types.get(i).is_some_and(|t| {
+                                    matches!(
+                                        t,
+                                        Type::Custom(n)
+                                            if matches!(
+                                                n.as_str(),
+                                                "i32" | "i64" | "u32" | "u64" | "usize"
+                                                    | "f32" | "f64" | "bool" | "int" | "float"
+                                                    | "byte"
+                                            )
+                                    )
+                                });
+
                             if !expression_helpers::is_reference_expression(arg)
                                 && !is_param_already_ref
-                                && !is_copy_param
+                                && !is_copy_scalar
                                 && !is_temp_variable
                                 && !is_user_closure_param
                             {
                                 crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                                     .apply(&mut arg_str);
                                 return vec![arg_str];
+                            } else if !expression_helpers::is_reference_expression(arg)
+                                && !arg_str.starts_with('&')
+                                && matches!(
+                                    arg,
+                                    Expression::MethodCall {
+                                        method: m,
+                                        ..
+                                    } if m == "clone"
+                                )
+                            {
+                                // `local.clone()` where callee expects `&T` → `&local`
+                                crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                    &mut arg_str,
+                                );
+                                return vec![format!("&{}", arg_str)];
                             } else {
                                 return vec![arg_str];
                             }
@@ -505,18 +542,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
 
                                     if (is_borrowed_iterator_var
                                         || is_inferred_borrowed
-                                        || is_inferred_mut_borrowed)
+                                        || is_inferred_mut_borrowed
+                                        || gen.str_ref_optimized_params.contains(name))
                                         && !arg_str.ends_with(".clone()")
                                     {
                                         // `*ident` = owned Copy from &/&mut (see Identifier
                                         // in_owned_value_context); do not append .clone().
                                         if !arg_str.trim_start().starts_with('*') {
-                                            let is_text = gen
-                                                .infer_expression_type(arg)
-                                                .as_ref()
-                                                .is_some_and(|t| {
-                                                    crate::codegen::rust::types::is_windjammer_text_type(t)
-                                                });
+                                            let is_text = gen.str_ref_optimized_params.contains(name)
+                                                || gen
+                                                    .infer_expression_type(arg)
+                                                    .as_ref()
+                                                    .is_some_and(|t| {
+                                                        crate::codegen::rust::types::is_windjammer_text_type(t)
+                                                    });
                                             if is_text {
                                                 arg_str =
                                                     format!("{}.to_string()", arg_str);
@@ -575,7 +614,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     .contains("::")
                     .then(|| func_name.rsplit("::").nth(1).unwrap_or(""))
                     .filter(|tn| !tn.is_empty() && tn.chars().next().is_some_and(|c| c.is_ascii_uppercase()));
-                let skip_cast = gen.signature_registry.should_skip_int_to_float_auto_cast(
+                let skip_cast = gen.should_skip_int_to_float_auto_cast_with_global(
                     type_name,
                     method_part,
                     Some(func_name),
@@ -655,6 +694,38 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         };
                         if !already_ref {
                             arg_str = format!("&{}", arg_str);
+                        }
+                    }
+                }
+            }
+
+            // auto-clone may append `.clone()` for reused locals; borrowed callees need `&T`.
+            if let Some(ref sig) = signature {
+                if sig
+                    .param_ownership_for_arg(i)
+                    .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
+                {
+                    let param_ty = sig.param_type_for_arg(i);
+                    let is_text = param_ty
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+                    if !is_text {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
+                        if !arg_str.starts_with('&')
+                            && !expression_helpers::is_reference_expression(arg)
+                        {
+                            let is_user_closure_param =
+                                if let Expression::Identifier { name, .. } = arg {
+                                    gen.in_user_written_closure
+                                        && gen.user_closure_params.contains(name)
+                                } else {
+                                    false
+                                };
+                            if !is_user_closure_param {
+                                crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
+                                    .apply(&mut arg_str);
+                            }
                         }
                     }
                 }

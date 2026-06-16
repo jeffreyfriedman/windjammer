@@ -116,6 +116,11 @@ impl<'ast> CodeGenerator<'ast> {
                         value: crate::parser::Literal::String(_),
                         ..
                     } => Some(Type::String),
+                    Expression::Unary {
+                        op: crate::parser::UnaryOp::Neg,
+                        operand,
+                        ..
+                    } => self.infer_expression_type(operand),
                     Expression::Call { function, .. } => {
                         // Type::method() pattern (e.g., Foo::new())
                         if let Expression::FieldAccess { object, field, .. } = *function {
@@ -394,6 +399,25 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if !string_utilities::already_owned_string_expr(&value_str) {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
+                } else if mutable
+                    && string_utilities::return_type_expects_owned_string(
+                        &self.current_function_return_type,
+                    )
+                    && !string_utilities::already_owned_string_expr(&value_str)
+                    && matches!(value, Expression::Identifier { name, .. }
+                        if self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                    || matches!(
+                                        &p.type_,
+                                        Type::Reference(inner)
+                                            if crate::codegen::rust::types::is_windjammer_text_type(
+                                                inner,
+                                            )
+                                    ))
+                        }))
+                {
+                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 }
 
                 // E0507: `let x = self.field` through `&self`/`&mut self`:
@@ -451,7 +475,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
                 let is_string_type = matches!(t, Type::String)
-                    || matches!(t, Type::Custom(name) if name == "String");
+                    || matches!(t, Type::Custom(name) if name == "String" || name == "string");
 
                 // Convert string literals OR identifiers to String when target is String
                 if is_string_type && value_str != "String::new()" {
@@ -524,6 +548,31 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     )
                     && !string_utilities::already_owned_string_expr(&value_str)
+                {
+                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
+                } else if mutable
+                    && string_utilities::return_type_expects_owned_string(
+                        &self.current_function_return_type,
+                    )
+                    && !string_utilities::already_owned_string_expr(&value_str)
+                    && matches!(value, Expression::Identifier { name, .. }
+                        if self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && (p.type_ == Type::String
+                                    || matches!(
+                                        &p.type_,
+                                        Type::Custom(n) if n == "string" || n == "String"
+                                    )
+                                    || matches!(
+                                        &p.type_,
+                                        Type::Reference(inner)
+                                            if matches!(inner.as_ref(), Type::String)
+                                                || matches!(
+                                                    inner.as_ref(),
+                                                    Type::Custom(s) if s == "str"
+                                                )
+                                    ))
+                        }))
                 {
                     value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 }

@@ -285,6 +285,17 @@ impl MethodCallAnalyzer {
                     return false;
                 }
             }
+            // Tuple/binary/field keys are owned values — HashMap::get/insert need &K.
+            if matches!(
+                arg,
+                Expression::Tuple { .. }
+                    | Expression::Binary { .. }
+                    | Expression::FieldAccess { .. }
+                    | Expression::Unary { .. }
+                    | Expression::Cast { .. }
+            ) {
+                return true;
+            }
         }
 
         if matches!(

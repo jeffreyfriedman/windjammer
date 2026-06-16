@@ -43,6 +43,12 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         use crate::parser::{Statement, Type};
 
+        // Mutating `self` then returning `Self { field: self.field, ... }` moves fields; that is
+        // a consuming builder, not a read-only snapshot that codegen can serve with `&self` + clone.
+        if self.function_modifies_self_fields_with_registry(func, None) {
+            return false;
+        }
+
         let parent_type = match &func.parent_type {
             Some(name) => name,
             None => return false,
@@ -149,25 +155,129 @@ impl<'ast> Analyzer<'ast> {
                 stmt,
                 registry,
                 func.parent_type.as_deref(),
+                Some(func.name.as_str()),
             )
         })
     }
 
-    fn statement_calls_consuming_method_on_self(
+    /// True when the body calls `self.callee(...)` and callee requires owned `self` after inference.
+    pub(super) fn function_calls_explicit_owned_self_method(
         &self,
-        stmt: &Statement,
+        func: &FunctionDecl,
         registry: &super::SignatureRegistry,
-        parent_type: Option<&str>,
     ) -> bool {
+        func.body.iter().any(|stmt| {
+            self.statement_calls_explicit_owned_self_method(
+                stmt,
+                func.parent_type.as_deref(),
+                registry,
+            )
+        })
+    }
+
+    /// Count `self.{method}(...)` calls in a function body (including nested blocks).
+    pub(super) fn count_self_method_calls(&self, func: &FunctionDecl, method: &str) -> usize {
+        func.body
+            .iter()
+            .map(|stmt| self.statement_count_self_method_calls(stmt, method))
+            .sum()
+    }
+
+    fn statement_count_self_method_calls(&self, stmt: &Statement, method: &str) -> usize {
         match stmt {
             Statement::Expression { expr, .. } => {
-                self.expression_calls_consuming_method_on_self(expr, registry, parent_type)
+                self.expression_count_self_method_calls(expr, method)
             }
             Statement::Return {
                 value: Some(expr), ..
-            } => self.expression_calls_consuming_method_on_self(expr, registry, parent_type),
+            } => self.expression_count_self_method_calls(expr, method),
+            Statement::Let { value, .. } => self.expression_count_self_method_calls(value, method),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .map(|s| self.statement_count_self_method_calls(s, method))
+                    .sum::<usize>()
+                    + else_block.as_ref().map_or(0, |b| {
+                        b.iter()
+                            .map(|s| self.statement_count_self_method_calls(s, method))
+                            .sum::<usize>()
+                    })
+            }
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .map(|arm| {
+                    if let Expression::Block { statements, .. } = arm.body {
+                        statements
+                            .iter()
+                            .map(|s| self.statement_count_self_method_calls(s, method))
+                            .sum::<usize>()
+                    } else {
+                        self.expression_count_self_method_calls(&arm.body, method)
+                    }
+                })
+                .sum(),
+            Statement::For { body, .. } | Statement::While { body, .. } => body
+                .iter()
+                .map(|s| self.statement_count_self_method_calls(s, method))
+                .sum(),
+            _ => 0,
+        }
+    }
+
+    fn expression_count_self_method_calls(&self, expr: &Expression, method: &str) -> usize {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method: callee,
+                ..
+            } => {
+                let direct = if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                    && callee.as_str() == method
+                {
+                    1
+                } else {
+                    0
+                };
+                direct + self.expression_count_self_method_calls(object, method)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .map(|s| self.statement_count_self_method_calls(s, method))
+                .sum(),
+            Expression::Binary { left, right, .. } => {
+                self.expression_count_self_method_calls(left, method)
+                    + self.expression_count_self_method_calls(right, method)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_count_self_method_calls(operand, method)
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .map(|(_, arg)| self.expression_count_self_method_calls(arg, method))
+                .sum(),
+            _ => 0,
+        }
+    }
+
+    fn statement_calls_explicit_owned_self_method(
+        &self,
+        stmt: &Statement,
+        parent_type: Option<&str>,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_explicit_owned_self_method(expr, parent_type, registry)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_calls_explicit_owned_self_method(expr, parent_type, registry),
             Statement::Let { value, .. } => {
-                self.expression_calls_consuming_method_on_self(value, registry, parent_type)
+                self.expression_calls_explicit_owned_self_method(value, parent_type, registry)
             }
             Statement::If {
                 then_block,
@@ -175,10 +285,107 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 then_block.iter().any(|s| {
-                    self.statement_calls_consuming_method_on_self(s, registry, parent_type)
+                    self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
                 }) || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
-                        self.statement_calls_consuming_method_on_self(s, registry, parent_type)
+                        self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
+                    })
+                })
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements.iter().any(|s| {
+                        self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
+                    })
+                } else {
+                    self.expression_calls_explicit_owned_self_method(&arm.body, parent_type, registry)
+                }
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_calls_explicit_owned_self_method(
+        &self,
+        expr: &Expression,
+        parent_type: Option<&str>,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                let is_self_receiver =
+                    matches!(&**object, Expression::Identifier { name, .. } if name == "self");
+                if is_self_receiver {
+                    if let Some(pt) = parent_type {
+                        let key = format!("{}::{}", pt, method);
+                        if let Some(sig) = registry.get_signature(&key) {
+                            return sig.has_self_receiver
+                                && sig.param_ownership.first()
+                                    == Some(&super::OwnershipMode::Owned);
+                        }
+                    }
+                }
+                self.expression_calls_explicit_owned_self_method(object, parent_type, registry)
+            }
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
+            }),
+            _ => false,
+        }
+    }
+
+    fn statement_calls_consuming_method_on_self(
+        &self,
+        stmt: &Statement,
+        registry: &super::SignatureRegistry,
+        parent_type: Option<&str>,
+        caller_name: Option<&str>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_consuming_method_on_self(
+                    expr,
+                    registry,
+                    parent_type,
+                    caller_name,
+                )
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_calls_consuming_method_on_self(
+                expr,
+                registry,
+                parent_type,
+                caller_name,
+            ),
+            Statement::Let { value, .. } => {
+                self.expression_calls_consuming_method_on_self(
+                    value,
+                    registry,
+                    parent_type,
+                    caller_name,
+                )
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.statement_calls_consuming_method_on_self(
+                        s,
+                        registry,
+                        parent_type,
+                        caller_name,
+                    )
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        self.statement_calls_consuming_method_on_self(
+                            s,
+                            registry,
+                            parent_type,
+                            caller_name,
+                        )
                     })
                 })
             }
@@ -191,12 +398,45 @@ impl<'ast> Analyzer<'ast> {
         expr: &Expression,
         registry: &super::SignatureRegistry,
         parent_type: Option<&str>,
+        caller_name: Option<&str>,
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 let is_self_receiver =
                     matches!(&**object, Expression::Identifier { name, .. } if name == "self");
                 if is_self_receiver {
+                    if caller_name.is_some_and(|n| n == method.as_str()) {
+                        return true;
+                    }
+                    if let Some(impl_functions) = &self.current_impl_functions {
+                        if let Some(called_func) = impl_functions.get(method.as_str()) {
+                            let callee_self_owned = called_func
+                                .parameters
+                                .iter()
+                                .find(|p| p.name == "self")
+                                .is_some_and(|p| {
+                                    matches!(p.ownership, OwnershipHint::Owned)
+                                        || self.infer_impl_self_receiver_ownership(
+                                            called_func,
+                                            registry,
+                                        ) == super::OwnershipMode::Owned
+                                });
+                            if callee_self_owned {
+                                return true;
+                            }
+                            if let Some(pt) = parent_type {
+                                let key = format!("{}::{}", pt, method);
+                                if let Some(sig) = registry.get_signature(&key) {
+                                    if sig.has_self_receiver
+                                        && sig.param_ownership.first()
+                                            == Some(&super::OwnershipMode::Owned)
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if let Some(pt) = parent_type {
                         let key = format!("{}::{}", pt, method);
                         if let Some(sig) = registry.get_signature(&key) {
@@ -211,11 +451,21 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                self.expression_calls_consuming_method_on_self(object, registry, parent_type)
+                self.expression_calls_consuming_method_on_self(
+                    object,
+                    registry,
+                    parent_type,
+                    caller_name,
+                )
             }
-            Expression::Block { statements, .. } => statements
-                .iter()
-                .any(|s| self.statement_calls_consuming_method_on_self(s, registry, parent_type)),
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_calls_consuming_method_on_self(
+                    s,
+                    registry,
+                    parent_type,
+                    caller_name,
+                )
+            }),
             _ => false,
         }
     }
@@ -760,7 +1010,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_moves_non_copy_self_field(object)
             }
             // Struct literal: Foo { field: self.field, ... }
-            // Field reads are clones under &self (snapshot/factory), not moves of self.
+            // Moving non-Copy `self.field` values into the struct consumes `self` (builder pattern).
+            // Read-only snapshots clone under `&self`; those are excluded via snapshot_factory in
+            // `infer_impl_self_receiver_ownership`.
             Expression::StructLiteral { fields, .. } => {
                 if fields.iter().any(
                     |(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self"),
@@ -768,8 +1020,15 @@ impl<'ast> Analyzer<'ast> {
                     return true;
                 }
                 fields.iter().any(|(_, v)| {
-                    !self.expression_is_self_field_access(v)
-                        && self.expression_moves_non_copy_self_field(v)
+                    if self.expression_is_self_field_access(v) {
+                        if let Expression::FieldAccess { field, .. } = v {
+                            if let Some(ft) = self.lookup_field_type_for_self(field) {
+                                return !self.is_copy_type(&ft);
+                            }
+                        }
+                        return true;
+                    }
+                    self.expression_moves_non_copy_self_field(v)
                 })
             }
             // Block expression

@@ -63,6 +63,9 @@ pub struct AnalysisFingerprint {
     pub content_hash: u64,
     pub compiler_version: String,
     pub dep_metadata_epoch: u64,
+    /// Hash of generated `.rs` at last successful codegen (see build_fingerprint).
+    #[serde(default)]
+    pub output_hash: u64,
 }
 
 impl ModuleMetadata {

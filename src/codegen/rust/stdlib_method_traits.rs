@@ -431,6 +431,29 @@ pub fn is_map_key_method(method: &str) -> bool {
     )
 }
 
+/// Whether a resolved type name or [`Type`] is a map collection receiver.
+pub fn is_map_type_name(name: &str) -> bool {
+    matches!(
+        name.split('<').next().unwrap_or(name),
+        "HashMap" | "BTreeMap" | "Map" | "IndexMap"
+    )
+}
+
+pub fn is_map_type(ty: &crate::parser::Type) -> bool {
+    match ty {
+        crate::parser::Type::Parameterized(base, _)
+            if base == "HashMap" || base == "BTreeMap" || base == "Map" =>
+        {
+            true
+        }
+        crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner) => {
+            is_map_type(inner)
+        }
+        crate::parser::Type::Custom(name) => is_map_type_name(name),
+        _ => false,
+    }
+}
+
 pub fn is_index_taking_method(method: &str) -> bool {
     matches!(
         method,

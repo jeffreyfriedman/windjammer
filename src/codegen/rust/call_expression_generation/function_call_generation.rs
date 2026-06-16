@@ -19,6 +19,17 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         func_str = func_str.replacen("Map::", "HashMap::", 1);
     }
 
+    // Bare `min(a, b)` on floats → Rust float min (no unqualified `min` in scope).
+    if func_name == "min" && arguments.len() == 2 {
+        use crate::type_inference::FloatType;
+        let lc = gen.float_class_for_binary_operand(arguments[0].1);
+        let rc = gen.float_class_for_binary_operand(arguments[1].1);
+        func_str = match (lc, rc) {
+            (Some(FloatType::F64), _) | (_, Some(FloatType::F64)) => "f64::min".to_string(),
+            _ => "f32::min".to_string(),
+        };
+    }
+
     // E0282 turbofish: Vec::new() / HashSet::new() → Vec::<T>::new() / HashSet::<T>::new()
     // when the function return type provides the element type.
     // Skip when suppress_collection_turbofish is set (let binding already has type ascription).
@@ -297,17 +308,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             }
         });
 
-    // Unified signature resolution: single resolver with no bare unqualified lookups.
+    // Unified signature resolution: local registry first, then converged library-wide registry.
     let mut resolved_via_fallback = false;
     if signature.is_none() {
-        let resolved = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-            &gen.signature_registry,
-            func_name,
-            None,
-            arguments.len(),
-            &gen.module_alias_map,
-        );
-        if let Some(r) = resolved {
+        if let Some(r) =
+            gen.resolve_call_signature_with_global(func_name, None, arguments.len())
+        {
             resolved_via_fallback = matches!(
                 r.resolution_method,
                 crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated

@@ -167,6 +167,14 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             {
                 return true;
             }
+            if matches!(method.as_str(), "clone" | "to_owned")
+                && matches!(
+                    &**object,
+                    Expression::FieldAccess { field, .. } if field == "data"
+                )
+            {
+                return true;
+            }
             if expr_may_need_generic_clone_bound(object) {
                 return true;
             }
@@ -197,6 +205,11 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             false
         }
         Expression::FieldAccess { object, field, .. } => {
+            if field == "data"
+                && matches!(&**object, Expression::Identifier { .. })
+            {
+                return true;
+            }
             if field == "dense" && is_self_dense_access(expr) {
                 return true;
             }

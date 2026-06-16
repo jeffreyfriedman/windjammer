@@ -22,6 +22,9 @@ impl IntInference {
                                     // Upgrade from default I32 to specific required type
                                     self.inferred_types.insert(expr_id, int_ty);
                                     changed = true;
+                                } else if int_ty == IntType::I32 && other != IntType::I32 {
+                                    // Wrong generic/default I32 constraint vs specific inferred type — keep specific
+                                    changed = false;
                                 } else if !is_safe_implicit_cast(other, int_ty) {
                                     // Real conflict
                                     let file_path = self

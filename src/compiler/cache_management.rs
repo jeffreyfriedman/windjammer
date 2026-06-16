@@ -208,6 +208,23 @@ pub fn write_compiler_stamp(output: &Path) -> std::io::Result<()> {
     crate::compiler::incremental::write_compiler_stamp(output)
 }
 
+/// When the compiler binary changed since the last build, drop stale analysis meta so
+/// fingerprint checks cannot falsely treat old generated Rust as fresh.
+pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, output: &Path) -> bool {
+    if crate::compiler::incremental::is_compiler_stamp_fresh(output) {
+        return false;
+    }
+    let cache_root = crate::metadata::meta_cache_root(src_base);
+    if cache_root.exists() {
+        let _ = std::fs::remove_dir_all(&cache_root);
+        eprintln!(
+            "⟳ Compiler changed — cleared analysis cache at {}",
+            cache_root.display()
+        );
+    }
+    true
+}
+
 /// Check if ALL source files are fresh (whole-crate fast path).
 /// Also checks dependency metadata freshness relative to the newest source mtime
 /// and whether the compiler binary itself has changed since the last build.

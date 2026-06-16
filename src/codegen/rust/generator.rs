@@ -241,9 +241,11 @@ pub struct CodeGenerator<'ast> {
     // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
     // Maps expression locations to inferred float types (f32 vs f64)
     // Enables accurate float literal suffix generation without mixing errors
-    pub(crate) float_inference: Option<crate::type_inference::FloatInference>,
+    pub(crate) float_inference: Option<std::sync::Arc<crate::type_inference::FloatInference>>,
     // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
-    pub(crate) int_inference: Option<crate::type_inference::IntInference>,
+    pub(crate) int_inference: Option<std::sync::Arc<crate::type_inference::IntInference>>,
+    /// Full-crate converged registry for multipass library codegen (avoids cloning into every file).
+    global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
     pub(crate) library_source_root: Option<std::path::PathBuf>,
     /// Maps locally defined type names to Rust module paths (multiple entries when names collide).
@@ -434,6 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
             enum_variant_types: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
+            global_signature_registry: None,
             type_defining_modules: std::collections::HashMap::new(),
             extern_submodule_qualifiers: std::collections::HashMap::new(),
             import_aliases: std::collections::HashSet::new(),
@@ -642,12 +645,125 @@ impl<'ast> CodeGenerator<'ast> {
     /// Set expression-level float type inference results
     /// Enables accurate f32/f64 suffix generation based on constraint solving
     pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
+        self.float_inference = Some(std::sync::Arc::new(inference));
+    }
+
+    /// Share one global float inference across many library codegen passes (avoids cloning 668-file state).
+    pub fn set_shared_float_inference(
+        &mut self,
+        inference: std::sync::Arc<crate::type_inference::FloatInference>,
+    ) {
         self.float_inference = Some(inference);
     }
 
     /// Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
     pub fn set_int_inference(&mut self, inference: crate::type_inference::IntInference) {
+        self.int_inference = Some(std::sync::Arc::new(inference));
+    }
+
+    pub fn set_shared_int_inference(
+        &mut self,
+        inference: std::sync::Arc<crate::type_inference::IntInference>,
+    ) {
         self.int_inference = Some(inference);
+    }
+
+    /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).
+    pub fn set_global_signature_registry(&mut self, registry: std::sync::Arc<SignatureRegistry>) {
+        self.global_signature_registry = Some(registry);
+    }
+
+    pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {
+        if let Some(sig) = self.signature_registry.get_signature(name) {
+            return Some(sig);
+        }
+        self.global_signature_registry
+            .as_ref()?
+            .get_signature(name)
+    }
+
+    pub(crate) fn find_method_on_receiver_with_global(
+        &self,
+        type_name: &str,
+        method: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        if let Some(sig) = self
+            .signature_registry
+            .find_method_on_receiver_type(type_name, method, arg_count)
+        {
+            return Some(sig);
+        }
+        self.global_signature_registry.as_ref().and_then(|g| {
+            g.find_method_on_receiver_type(type_name, method, arg_count)
+        })
+    }
+
+    pub(crate) fn find_signature_by_name_and_arg_count_with_global(
+        &self,
+        name: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        if let Some(sig) = self
+            .signature_registry
+            .find_signature_by_name_and_arg_count(name, arg_count)
+        {
+            return Some(sig);
+        }
+        self.global_signature_registry
+            .as_ref()?
+            .find_signature_by_name_and_arg_count(name, arg_count)
+    }
+
+    pub(crate) fn resolve_call_signature_with_global(
+        &self,
+        func_name: &str,
+        receiver_type: Option<&str>,
+        arg_count: usize,
+    ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
+        if let Some(r) = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+            &self.signature_registry,
+            func_name,
+            receiver_type,
+            arg_count,
+            &self.module_alias_map,
+        ) {
+            return Some(r);
+        }
+        self.global_signature_registry.as_ref().and_then(|global| {
+            crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+                global,
+                func_name,
+                receiver_type,
+                arg_count,
+                &self.module_alias_map,
+            )
+        })
+    }
+
+    pub(crate) fn has_collision_with_global(&self, name: &str) -> bool {
+        self.signature_registry.has_collision(name)
+            || self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| g.has_collision(name))
+    }
+
+    pub(crate) fn should_skip_int_to_float_auto_cast_with_global(
+        &self,
+        type_name: Option<&str>,
+        method: &str,
+        qualified_key: Option<&str>,
+    ) -> bool {
+        if self
+            .signature_registry
+            .should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
+        {
+            return true;
+        }
+        self.global_signature_registry.as_ref().is_some_and(|g| {
+            g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
+        })
     }
 
     /// Used with multipass library builds to resolve `use super::...::Type` across sibling `.wj` modules.
@@ -961,7 +1077,22 @@ impl<'ast> CodeGenerator<'ast> {
         if !expects_owned {
             return;
         }
-        if let Some(Type::Reference(inner)) = self.infer_expression_type(expr) {
+        if let Expression::Identifier { name, .. } = expr {
+            if (self.inferred_mut_borrowed_params.contains(name)
+                || self.inferred_borrowed_params.contains(name))
+                && self
+                    .current_function_return_type
+                    .as_ref()
+                    .is_some_and(|t| self.is_type_copy(t))
+                && !expr_str.starts_with('*')
+            {
+                *expr_str = format!("*{}", expr_str);
+                return;
+            }
+        }
+        if let Some(Type::Reference(inner) | Type::MutableReference(inner)) =
+            self.infer_expression_type(expr)
+        {
             if self.is_type_copy(inner.as_ref()) {
                 *expr_str = format!("*{}", expr_str);
             }
@@ -1015,6 +1146,30 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.inferred_borrowed_params,
                 &self.current_function_params,
             );
+            if !super::string_utilities::already_owned_string_expr(expr_str) {
+                if let crate::parser::Expression::Identifier { name, .. } = expr {
+                    let is_ref_text = self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+                        matches!(
+                            t,
+                            Type::Reference(inner) | Type::MutableReference(inner)
+                                if super::types::is_windjammer_text_type(inner)
+                        )
+                    });
+                    let is_string_param = self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && (super::types::is_windjammer_text_type(&p.type_)
+                                || matches!(
+                                    &p.type_,
+                                    Type::Reference(inner)
+                                        if super::types::is_windjammer_text_type(inner)
+                                ))
+                    });
+                    if is_ref_text || is_string_param {
+                        *expr_str =
+                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                    }
+                }
+            }
         }
 
         self.maybe_clone_borrowed_self_field(expr_str, expr);

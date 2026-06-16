@@ -289,6 +289,9 @@ pub struct Analyzer<'ast> {
     /// string, cache locality, etc.) during multipass convergence.
     /// Only ownership inference runs. Final pass sets this to false.
     pub convergence_only: bool,
+    /// When true, global ownership already converged (library Step 3) — skip
+    /// per-file multi-pass ownership loop in analyze_program_with_global_arc.
+    pub ownership_preconverged: bool,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -309,6 +312,7 @@ impl<'ast> Analyzer<'ast> {
             global_struct_field_types: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
+            ownership_preconverged: false,
         }
     }
 

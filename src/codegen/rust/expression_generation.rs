@@ -424,7 +424,23 @@ impl<'ast> CodeGenerator<'ast> {
         // &String auto-derefs to &str. Only skip for bare string literals
         // (already &str) which are handled by string_literal_converted above.
         let is_bare_str_literal = arg_str.starts_with('"') && !arg_str.ends_with(".to_string()");
-        if !is_bare_str_literal {
+        if is_bare_str_literal {
+            return arg_str;
+        }
+        if arg_str.starts_with('&') {
+            return arg_str;
+        }
+        if self
+            .infer_expression_type(arg_to_generate)
+            .as_ref()
+            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+        {
+            return format!("&{arg_str}");
+        }
+        if matches!(
+            arg_to_generate,
+            Expression::Identifier { .. } | Expression::FieldAccess { .. }
+        ) {
             return format!("&{arg_str}");
         }
         arg_str
@@ -436,6 +452,18 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         generated: &str,
     ) -> String {
+        if let Expression::Identifier { name, .. } = expr {
+            if self.match_arm_bindings.contains(name.as_str())
+                && !self.borrowed_iterator_vars.contains(name)
+            {
+                return generated.to_string();
+            }
+            if let Some(ty) = self.local_var_types.get(name) {
+                if !matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                    return generated.to_string();
+                }
+            }
+        }
         let Some(ty) = self.infer_expression_type(expr) else {
             return generated.to_string();
         };

@@ -92,6 +92,12 @@ impl MethodCallAnalyzer {
         method: &str,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
     ) -> bool {
+        // HashMap/BTreeMap keys are borrowed (&K). String/`str` keys must not allocate via
+        // `.to_string()` — `HashMap<String, V>` accepts `&str` directly.
+        if super::super::stdlib_method_traits::is_map_key_method(method) && param_idx == 0 {
+            return false;
+        }
+
         if let Some(sig) = method_signature {
             let resolved_idx = sig.arg_param_index(param_idx);
             if Self::callee_param_is_rust_str_slice(method_signature, resolved_idx) {

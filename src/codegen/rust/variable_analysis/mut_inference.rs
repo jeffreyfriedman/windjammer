@@ -155,13 +155,15 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_nonreadonly_method_call_on_var(expr, var_name)
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block
-                    .iter()
-                    .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
+                self.expression_nonreadonly_method_call_on_var(condition, var_name)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name))
                     || else_block.as_ref().is_some_and(|block| {
                         block
                             .iter()
@@ -227,10 +229,10 @@ impl<'ast> CodeGenerator<'ast> {
         if func_name.is_empty() {
             return false;
         }
-        if self.signature_registry.has_collision(&func_name) {
+        if self.has_collision_with_global(&func_name) {
             return false;
         }
-        let Some(sig) = self.signature_registry.get_signature(&func_name) else {
+        let Some(sig) = self.get_signature_with_global(&func_name) else {
             return false;
         };
         for (i, (_label, arg)) in arguments.iter().enumerate() {
@@ -280,10 +282,10 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let qualified_name = format!("{}::{}", receiver_type, method);
-        if self.signature_registry.has_collision(&qualified_name) {
+        if self.has_collision_with_global(&qualified_name) {
             return false;
         }
-        let Some(sig) = self.signature_registry.get_signature(&qualified_name) else {
+        let Some(sig) = self.get_signature_with_global(&qualified_name) else {
             return false;
         };
         let matches_var = |e: &Expression| match e {
@@ -360,7 +362,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(ref type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
                             if let Some(sig) =
-                                self.signature_registry.get_signature(&qualified_name)
+                                self.get_signature_with_global(&qualified_name)
                             {
                                 if sig.has_self_receiver {
                                     if let Some(ownership) = sig.param_ownership.first() {
@@ -382,7 +384,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         let trait_qualified =
                                             format!("{}::{}", bound_trait, method);
                                         if let Some(sig) =
-                                            self.signature_registry.get_signature(&trait_qualified)
+                                            self.get_signature_with_global(&trait_qualified)
                                         {
                                             if sig.has_self_receiver {
                                                 if let Some(ownership) = sig.param_ownership.first()

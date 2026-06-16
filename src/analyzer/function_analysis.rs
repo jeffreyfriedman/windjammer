@@ -93,11 +93,17 @@ impl<'ast> Analyzer<'ast> {
 
     /// Infer `self` receiver ownership for impl methods. Windjammer always writes bare
     /// `self` in source; codegen maps to `&self`, `&mut self`, or owned `self`.
-    fn infer_impl_self_receiver_ownership(
+    pub(super) fn infer_impl_self_receiver_ownership(
         &self,
         func: &FunctionDecl<'ast>,
         registry: &SignatureRegistry,
     ) -> OwnershipMode {
+        // Multiple recursive `self.method(...)` calls cannot take owned `self` — check first
+        // to avoid re-entering inference while analyzing callees (stack overflow).
+        if self.count_self_method_calls(func, func.name.as_str()) >= 2 {
+            return OwnershipMode::MutBorrowed;
+        }
+
         if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
             return OwnershipMode::MutBorrowed;
         }
@@ -107,17 +113,60 @@ impl<'ast> Analyzer<'ast> {
         let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
         let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-        let consumes_self = (!snapshot_factory && body_moves_fields)
+        let consumes_self = body_moves_fields
             || self.function_moves_self_into_return(func)
             || (!snapshot_factory
                 && (returns_self
                     || self.function_body_consumes_bare_self(func)
                     || self.function_calls_consuming_method_on_self(func, registry)
+                    || self.function_calls_explicit_owned_self_method(func, registry)
                     || self.function_matches_on_self(func)
                     || self.function_consumes_self_field_elements(func, Some(registry))));
+        let calls_owned_on_self = self.function_calls_consuming_method_on_self(func, registry)
+            || self.function_calls_explicit_owned_self_method(func, registry);
+        let mut mutating_call_visited = HashSet::new();
+        let calls_mutating = self
+            .function_calls_mutating_self_methods_with_registry(
+                func,
+                Some(registry),
+                &mut mutating_call_visited,
+            );
+        self.resolve_impl_self_receiver_ownership(
+            func,
+            modifies_fields,
+            returns_self,
+            body_moves_fields,
+            consumes_self,
+            calls_mutating,
+            calls_owned_on_self,
+        )
+    }
+
+    fn resolve_impl_self_receiver_ownership(
+        &self,
+        func: &FunctionDecl<'ast>,
+        modifies_fields: bool,
+        returns_self: bool,
+        body_moves_fields: bool,
+        consumes_self: bool,
+        calls_mutating: bool,
+        calls_owned_on_self: bool,
+    ) -> OwnershipMode {
+        // In-place mutation without returning/consuming self → &mut self, not owned self.
+        // Dogfooding: RenderPort::render_frame mutates fields but must not take owned self.
+        // Skip when the method calls another method with owned `self` (e.g. evaluate → evaluate_node).
+        if (modifies_fields || calls_mutating)
+            && !returns_self
+            && !body_moves_fields
+            && !self.function_moves_self_into_return(func)
+            && !calls_owned_on_self
+        {
+            return OwnershipMode::MutBorrowed;
+        }
+
         if consumes_self {
             OwnershipMode::Owned
-        } else if modifies_fields {
+        } else if modifies_fields || calls_mutating {
             OwnershipMode::MutBorrowed
         } else if self.is_used_in_binary_op("self", &func.body) {
             OwnershipMode::Owned
@@ -156,23 +205,33 @@ impl<'ast> Analyzer<'ast> {
             let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
             let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-            let consumes_self = (!snapshot_factory && body_moves_fields)
+            let consumes_self = body_moves_fields
                 || self.function_moves_self_into_return(func)
                 || (!snapshot_factory
                     && (returns_self
                         || self.function_body_consumes_bare_self(func)
                         || self.function_calls_consuming_method_on_self(func, registry)
+                        || self.function_calls_explicit_owned_self_method(func, registry)
                         || self.function_matches_on_self(func)
                         || self.function_consumes_self_field_elements(func, Some(registry))));
-            let self_ownership = if consumes_self {
-                OwnershipMode::Owned
-            } else if modifies_fields {
-                OwnershipMode::MutBorrowed
-            } else if self.is_used_in_binary_op("self", &func.body) {
-                OwnershipMode::Owned
-            } else {
-                OwnershipMode::Borrowed
-            };
+            let mut mutating_call_visited = HashSet::new();
+            let calls_mutating = self
+                .function_calls_mutating_self_methods_with_registry(
+                    func,
+                    Some(registry),
+                    &mut mutating_call_visited,
+                );
+            let calls_owned_on_self = self.function_calls_consuming_method_on_self(func, registry)
+                || self.function_calls_explicit_owned_self_method(func, registry);
+            let self_ownership = self.resolve_impl_self_receiver_ownership(
+                func,
+                modifies_fields,
+                returns_self,
+                body_moves_fields,
+                consumes_self,
+                calls_mutating,
+                calls_owned_on_self,
+            );
 
             // Store inferred self ownership
             inferred_ownership.insert("self".to_string(), self_ownership);
@@ -216,11 +275,9 @@ impl<'ast> Analyzer<'ast> {
                         // Special case: @render3d functions take &mut for camera parameter (3rd param)
                         OwnershipMode::MutBorrowed
                     } else if param.name == "self" {
-                        // `extern impl Type { fn f(self) {} }` / empty extern bodies: the signature is an
-                        // FFI stub; bare `self` in Windjammer means a receiver is passed — for inherent
-                        // impl methods, treat as `&mut self` so `self.field.method()` is dispatchable
-                        // without moving the struct (see ownership_self_field_mutation test).
-                        if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
+                        if func.parent_type.is_some() {
+                            self.infer_impl_self_receiver_ownership(func, registry)
+                        } else if func.is_extern && func.body.is_empty() {
                             OwnershipMode::MutBorrowed
                         } else {
                             let modifies_fields = self
@@ -231,12 +288,15 @@ impl<'ast> Analyzer<'ast> {
                             let snapshot_factory =
                                 self.function_returns_new_instance_from_self_fields(func);
 
-                            let consumes_self = (!snapshot_factory && body_moves_fields)
+                            let consumes_self = body_moves_fields
                                 || self.function_moves_self_into_return(func)
                                 || (!snapshot_factory
                                     && (returns_self
                                         || self.function_body_consumes_bare_self(func)
                                         || self.function_calls_consuming_method_on_self(
+                                            func, registry,
+                                        )
+                                        || self.function_calls_explicit_owned_self_method(
                                             func, registry,
                                         )
                                         || self.function_matches_on_self(func)
@@ -260,23 +320,9 @@ impl<'ast> Analyzer<'ast> {
                         let is_copy = self.is_copy_type(&param.type_);
 
                         if param.is_mutable {
-                            if Self::is_generic_type_param(&param.type_) {
-                                OwnershipMode::Owned
-                            } else {
-                                let passthrough = self.infer_passthrough_ownership(
-                                    &param.name,
-                                    &param.type_,
-                                    &func.body,
-                                    registry,
-                                    &func.name,
-                                    func,
-                                );
-                                if passthrough == Some(OwnershipMode::MutBorrowed) {
-                                    OwnershipMode::Owned
-                                } else {
-                                    OwnershipMode::MutBorrowed
-                                }
-                            }
+                            // Windjammer `mut name: T` is an owned mutable binding (`mut name: T`
+                            // in Rust), not `name: &mut T`. MutBorrowed comes from inference only.
+                            OwnershipMode::Owned
                         } else if is_copy {
                             let mutated = self.is_mutated(
                                 &param.name,

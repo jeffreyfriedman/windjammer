@@ -208,6 +208,55 @@ fn test_mod_wj_merged_into_mod_rs_is_not_stale() {
     );
 }
 
+/// When `.rs` on disk diverges from what meta recorded at emit time, treat as stale.
+#[test]
+fn test_codegen_cache_invalid_when_output_hash_mismatch() {
+    use windjammer::compiler::incremental::fingerprint_for_emit;
+    use windjammer::metadata::ModuleMetadata;
+
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+    cache_management::write_compiler_stamp(dir.path()).unwrap();
+
+    let wj = src.join("foo.wj");
+    let rs = dir.path().join("foo.rs");
+    let source = "fn foo() {}\n";
+    let emitted = "// correct generated\n";
+    fs::write(&wj, source).unwrap();
+    fs::write(&rs, emitted).unwrap();
+
+    let mut fp = fingerprint_for_emit(source, &[]);
+    fp.output_hash = windjammer::compiler::incremental::hash_output(emitted);
+    let meta = ModuleMetadata {
+        module_path: "foo".to_string(),
+        analysis_fingerprint: Some(fp.into()),
+        ..ModuleMetadata::new("foo".to_string())
+    };
+    let meta_path = windjammer::metadata::meta_cache_path(&wj);
+    if let Some(parent) = meta_path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(&meta_path, serde_json::to_string(&meta).unwrap()).unwrap();
+
+    // Stale .rs with wrong content but fresh mtime
+    thread::sleep(Duration::from_millis(10));
+    fs::write(&rs, "// stale wrong output\n").unwrap();
+
+    assert!(!cache_management::is_codegen_cache_valid(
+        source,
+        &wj,
+        &rs,
+        &[] as &[PathBuf],
+    ));
+
+    let sources = vec![(wj.clone(), source.to_string())];
+    let (dirty, skipped) =
+        cache_management::compute_dirty_files(&sources, &src, dir.path(), &[]);
+    assert_eq!(skipped, 0);
+    assert_eq!(dirty.len(), 1);
+}
+
 /// Injected stdlib sources (outside the library `src_base`) must not fail the post-build
 /// stale guard — they are analysis-only and emit to the compiler tree, not the user output.
 #[test]

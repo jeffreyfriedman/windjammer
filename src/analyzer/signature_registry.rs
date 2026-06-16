@@ -54,6 +54,8 @@ pub struct SignatureRegistry {
     /// Same param types but different ownership — used for auto-borrow safety.
     ownership_collision_keys: HashSet<String>,
     method_index: HashMap<String, Vec<String>>,
+    /// Read-only fallback for cross-file lookups without cloning the full crate registry.
+    global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
 }
 
 impl Default for SignatureRegistry {
@@ -70,6 +72,7 @@ impl SignatureRegistry {
                 type_collision_keys: HashSet::new(),
                 ownership_collision_keys: HashSet::new(),
                 method_index: HashMap::new(),
+                global_fallback: None,
             };
 
             if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
@@ -91,6 +94,18 @@ impl SignatureRegistry {
             type_collision_keys: HashSet::new(),
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
+            global_fallback: None,
+        }
+    }
+
+    /// Local registry with read-through to a shared global registry (O(1) setup vs full clone).
+    pub fn layered(global: std::sync::Arc<SignatureRegistry>) -> Self {
+        SignatureRegistry {
+            signatures: HashMap::new(),
+            type_collision_keys: HashSet::new(),
+            ownership_collision_keys: HashSet::new(),
+            method_index: HashMap::new(),
+            global_fallback: Some(global),
         }
     }
 
@@ -137,7 +152,12 @@ impl SignatureRegistry {
     }
 
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
-        self.signatures.get(name)
+        if let Some(sig) = self.signatures.get(name) {
+            return Some(sig);
+        }
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.get_signature(name))
     }
 
     /// Check if a signature key has been registered with conflicting param types
@@ -146,7 +166,12 @@ impl SignatureRegistry {
         if self.type_collision_keys.contains(name) || self.ownership_collision_keys.contains(name) {
             return true;
         }
-        self.has_method_name_collision(name)
+        if self.has_method_name_collision(name) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.has_collision(name))
     }
 
     /// True when multiple qualified methods share this suffix (e.g. `new`) with
@@ -169,7 +194,12 @@ impl SignatureRegistry {
         if qualified_key.is_some_and(|k| self.type_collision_keys.contains(k)) {
             return true;
         }
-        self.has_method_name_collision_for_type(type_name, method)
+        if self.has_method_name_collision_for_type(type_name, method) {
+            return true;
+        }
+        self.global_fallback.as_ref().is_some_and(|g| {
+            g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
+        })
     }
 
     /// Like [`has_method_name_collision`] but only considers signatures whose key
@@ -180,7 +210,9 @@ impl SignatureRegistry {
         method: &str,
     ) -> bool {
         let Some(keys) = self.method_index.get(method) else {
-            return false;
+            return self.global_fallback.as_ref().is_some_and(|g| {
+                g.has_method_name_collision_for_type(type_name, method)
+            });
         };
         let filtered: Vec<&String> = if let Some(tn) = type_name {
             keys.iter()
@@ -193,23 +225,25 @@ impl SignatureRegistry {
         } else {
             keys.iter().collect()
         };
-        if filtered.len() < 2 {
-            return false;
-        }
-        let mut first: Option<&FunctionSignature> = None;
-        for key in filtered {
-            if let Some(sig) = self.signatures.get(key) {
-                if let Some(f) = first {
-                    if f.param_types != sig.param_types || f.param_ownership != sig.param_ownership
-                    {
-                        return true;
+        if filtered.len() >= 2 {
+            let mut first: Option<&FunctionSignature> = None;
+            for key in filtered {
+                if let Some(sig) = self.signatures.get(key) {
+                    if let Some(f) = first {
+                        if f.param_types != sig.param_types
+                            || f.param_ownership != sig.param_ownership
+                        {
+                            return true;
+                        }
+                    } else {
+                        first = Some(sig);
                     }
-                } else {
-                    first = Some(sig);
                 }
             }
         }
-        false
+        self.global_fallback.as_ref().is_some_and(|g| {
+            g.has_method_name_collision_for_type(type_name, method)
+        })
     }
 
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -236,7 +270,9 @@ impl SignatureRegistry {
                 }
             }
         }
-        None
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.find_signature_ending_with(suffix))
     }
 
     /// Find a signature matching the simple name with a specific argument count.
@@ -246,7 +282,7 @@ impl SignatureRegistry {
         name: &str,
         arg_count: usize,
     ) -> Option<&FunctionSignature> {
-        if let Some(sig) = self.signatures.get(name) {
+        if let Some(sig) = self.get_signature(name) {
             let sig_args = if sig.has_self_receiver {
                 sig.param_ownership.len().saturating_sub(1)
             } else {
@@ -270,7 +306,49 @@ impl SignatureRegistry {
                 }
             }
         }
-        None
+        self.global_fallback.as_ref().and_then(|g| {
+            g.find_signature_by_name_and_arg_count(name, arg_count)
+        })
+    }
+
+    fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
+        if sig.has_self_receiver {
+            sig.param_ownership.len().saturating_sub(1)
+        } else {
+            sig.param_ownership.len()
+        }
+    }
+
+    /// Resolve `TypeName::method` for call-site borrow coercion when homonyms exist.
+    pub fn find_method_on_receiver_type(
+        &self,
+        type_name: &str,
+        method: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        let qualified = format!("{type_name}::{method}");
+        if let Some(sig) = self.get_signature(&qualified) {
+            if Self::sig_user_arg_count(sig) == arg_count {
+                return Some(sig);
+            }
+        }
+        if let Some(keys) = self.method_index.get(method) {
+            for key in keys {
+                if !key.ends_with(&format!("::{method}"))
+                    || !key.contains(type_name)
+                {
+                    continue;
+                }
+                if let Some(sig) = self.signatures.get(key) {
+                    if Self::sig_user_arg_count(sig) == arg_count {
+                        return Some(sig);
+                    }
+                }
+            }
+        }
+        self.global_fallback.as_ref().and_then(|g| {
+            g.find_method_on_receiver_type(type_name, method, arg_count)
+        })
     }
 
     /// Register module-qualified aliases for all signatures in `source`.
