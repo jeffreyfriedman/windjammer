@@ -494,7 +494,9 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
-                        if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                        // Direct impl methods must not register bare names — homonyms like
+                        // `check_collision` would overwrite imported free functions in the global registry.
+                        if is_trait_impl && registry.get_signature(&func.name).is_none() {
                             registry.add_function(func.name.clone(), signature);
                         }
 
@@ -737,8 +739,8 @@ impl<'ast> Analyzer<'ast> {
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());
                                     }
-                                    if !is_trait_impl
-                                        || registry.get_signature(&func.name).is_none()
+                                    if is_trait_impl
+                                        && registry.get_signature(&func.name).is_none()
                                     {
                                         registry.add_function(func.name.clone(), signature);
                                     }
