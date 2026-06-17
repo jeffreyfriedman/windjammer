@@ -1,6 +1,0 @@
-fn main() {
-    let x = 85
-    let grade = if x >= 90 { "A" } else if x >= 80 { "B" } else { "C" }
-    println!("Grade: {}", grade)
-}
-

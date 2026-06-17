@@ -1,9 +1,0 @@
-fn call_with_ref(callback: fn(&String) -> String, value: String) -> String {
-    callback(&value)
-}
-
-fn main() {
-    let result = call_with_ref(|s| s.to_uppercase(), "hello")
-    println!("Result: {}", result)
-}
-
