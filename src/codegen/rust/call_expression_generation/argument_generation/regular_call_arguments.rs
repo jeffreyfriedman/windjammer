@@ -282,11 +282,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     || gen.has_collision_with_global(simple_name);
                 let has_ownership_collision = has_registry_collision
                     && {
-                        let sig_args = if sig.has_self_receiver {
-                            sig.param_ownership.len().saturating_sub(1)
-                        } else {
-                            sig.param_ownership.len()
-                        };
+                        let sig_args =
+                            crate::codegen::rust::call_signature_resolution::effective_user_arg_count(
+                                sig,
+                            );
                         // Only suppress when resolution was ambiguous (fallback/suffix) or
                         // arg count doesn't match the resolved signature.
                         signature_from_simple_fallback && sig_args != arguments.len()

@@ -1057,6 +1057,91 @@ impl PhysicsWorld {
 }
 
 #[test]
+fn test_imported_borrowed_fn_borrows_cloned_locals_on_borrowed_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "physics/collision2d.wj",
+        r#"
+pub enum Collider2D {
+    Box { w: f32 },
+}
+
+pub struct RigidBody2D {
+    collider: Collider2D,
+    is_kinematic: bool,
+}
+
+pub fn check_collision(a: RigidBody2D, b: RigidBody2D) -> Option<bool> {
+    match a.collider {
+        Collider2D::Box { w } => {
+            match b.collider {
+                Collider2D::Box { w: w2 } => Some(w == w2),
+            }
+        },
+    }
+}
+"#,
+    );
+    test.add_file(
+        "physics/physics_body.wj",
+        r#"
+pub struct VoxelWorld {}
+
+pub struct PhysicsBody {}
+
+impl PhysicsBody {
+    fn check_collision(self, world: VoxelWorld) {
+    }
+}
+"#,
+    );
+    test.add_file(
+        "physics/physics_world.wj",
+        r#"
+use collision2d::check_collision
+use collision2d::RigidBody2D
+use collision2d::Collider2D
+
+pub struct PhysicsWorld {
+    bodies: Vec<RigidBody2D>,
+}
+
+impl PhysicsWorld {
+    pub fn detect_collisions(self) -> bool {
+        for i in 0..self.bodies.len() {
+            let body_a = self.bodies[i]
+            for j in (i + 1)..self.bodies.len() {
+                let body_b = self.bodies[j]
+                if body_a.is_kinematic && body_b.is_kinematic {
+                    continue
+                }
+                match check_collision(body_a, body_b) {
+                    Some(_) => {},
+                    None => {},
+                }
+            }
+        }
+        true
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("physics/physics_world.rs").expect("physics_world.rs");
+
+    assert!(
+        rs.contains("check_collision(&body_a, &body_b)")
+            || rs.contains("check_collision(& body_a, & body_b)"),
+        "auto-cloned locals must borrow into imported &T params. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("check_collision(body_a.clone()"),
+        "must not pass owned clone to borrowed params. Got:\n{rs}"
+    );
+}
+
+#[test]
 fn test_mut_string_local_from_borrowed_param_coerces_to_owned() {
     let mut test = MultiFileTest::new();
     test.add_file(
