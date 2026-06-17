@@ -61,6 +61,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if !s.ends_with(".clone()")
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
+                    && !self.suppress_borrowed_clone
                 {
                     let ty = self.infer_expression_type(e);
                     let is_borrowed_binding = matches!(
@@ -70,11 +71,25 @@ impl<'ast> CodeGenerator<'ast> {
                     );
                     let needs_clone = is_borrowed_binding
                         || ty.as_ref().is_some_and(|t| match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                !self.is_type_copy(inner)
+                            Type::Reference(inner) => !self.is_type_copy(inner),
+                            Type::MutableReference(_) => false,
+                            Type::Option(inner)
+                                if matches!(
+                                    inner.as_ref(),
+                                    Type::MutableReference(_)
+                                ) =>
+                            {
+                                false
                             }
                             _ => false,
-                        });
+                        })
+                        || matches!(e, Expression::Identifier { name, .. }
+                            if self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                a.needs_clone_anywhere(name)
+                            }) && !matches!(
+                                self.infer_expression_type(e),
+                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                            ));
                     if !needs_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)
@@ -615,6 +630,28 @@ impl<'ast> CodeGenerator<'ast> {
                     expr_str = self.peel_copy_ref_binding_for_struct_field(expr, &expr_str);
                     expr_str =
                         self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
+                }
+
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis.needs_clone_anywhere(id)
+                            && !expr_str.ends_with(".clone()")
+                            && !expr_str.ends_with(".to_string()")
+                        {
+                            let is_copy = self
+                                .local_var_types
+                                .get(id)
+                                .is_some_and(|t| self.is_type_copy(t))
+                                || self
+                                    .current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *id)
+                                    .is_some_and(|p| self.is_type_copy(&p.type_));
+                            if !is_copy {
+                                expr_str = format!("{}.clone()", expr_str);
+                            }
+                        }
+                    }
                 }
 
                 // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
