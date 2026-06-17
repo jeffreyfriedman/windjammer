@@ -312,11 +312,7 @@ impl SignatureRegistry {
     }
 
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
-        if sig.has_self_receiver {
-            sig.param_ownership.len().saturating_sub(1)
-        } else {
-            sig.param_ownership.len()
-        }
+        crate::codegen::rust::call_signature_resolution::effective_user_arg_count(sig)
     }
 
     /// Resolve `TypeName::method` for call-site borrow coercion when homonyms exist.

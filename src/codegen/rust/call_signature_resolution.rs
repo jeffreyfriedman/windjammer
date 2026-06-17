@@ -247,12 +247,23 @@ fn try_receiver_qualified(
 
 /// Validate that a signature's expected argument count matches the call site.
 fn validate_arg_count(sig: &FunctionSignature, call_arg_count: usize) -> bool {
-    let expected = if sig.has_self_receiver {
-        sig.param_ownership.len().saturating_sub(1)
-    } else {
-        sig.param_ownership.len()
-    };
+    let expected = effective_user_arg_count(sig);
     expected == call_arg_count
+}
+
+/// User-visible argument count for a signature (call-site arity).
+pub(crate) fn effective_user_arg_count(sig: &FunctionSignature) -> usize {
+    if !sig.param_ownership.is_empty() {
+        if sig.has_self_receiver {
+            sig.param_ownership.len().saturating_sub(1)
+        } else {
+            sig.param_ownership.len()
+        }
+    } else if sig.has_self_receiver {
+        sig.param_types.len().saturating_sub(1)
+    } else {
+        sig.param_types.len()
+    }
 }
 
 #[cfg(test)]
