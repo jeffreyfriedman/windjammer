@@ -1,8 +1,0 @@
-fn main() {
-    foo()
-}
-
-fn foo() -> int {
-    42
-}
-
