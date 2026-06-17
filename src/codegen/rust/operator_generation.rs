@@ -31,9 +31,6 @@ impl<'ast> CodeGenerator<'ast> {
         if let Expression::Identifier { name, .. } = expr {
             let is_borrowed = self.inferred_borrowed_params.contains(name)
                 || self.borrowed_iterator_vars.contains(&name.to_string())
-                || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                })
                 || self.current_function_params.iter().any(|p| {
                     p.name == *name
                         && matches!(p.ownership, OwnershipHint::Ref | OwnershipHint::Mut)
@@ -47,7 +44,12 @@ impl<'ast> CodeGenerator<'ast> {
                 self.infer_expression_type(expr)
             {
                 if self.is_type_copy(inner.as_ref()) {
-                    expr_str = format!("*{}", expr_str);
+                    let root_is_borrowed = matches!(expr, Expression::Identifier { name, .. }
+                        if self.inferred_borrowed_params.contains(name)
+                            || self.borrowed_iterator_vars.contains(name));
+                    if root_is_borrowed {
+                        expr_str = format!("*{}", expr_str);
+                    }
                 }
             }
         }

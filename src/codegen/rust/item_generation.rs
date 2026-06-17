@@ -907,6 +907,40 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.current_impl_instance_methods = instance_methods;
 
+        let mut consuming_methods: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for func in &impl_block.functions {
+            if super::self_analysis::function_consumes_self(func)
+                || super::self_analysis::function_return_moves_self_fields(func)
+            {
+                consuming_methods.insert(func.name.clone());
+                continue;
+            }
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
+            {
+                if analyzed_func
+                    .inferred_ownership
+                    .get("self")
+                    .is_some_and(|o| *o == OwnershipMode::Owned)
+                {
+                    consuming_methods.insert(func.name.clone());
+                    continue;
+                }
+                let returns_self = self.method_returns_impl_struct(func);
+                let body_modifies = super::self_analysis::function_modifies_self(
+                    func,
+                    Some(&self.signature_registry),
+                    Some(&impl_block.type_name),
+                );
+                if returns_self && body_modifies {
+                    consuming_methods.insert(func.name.clone());
+                }
+            }
+        }
+        self.current_impl_consuming_self_methods = consuming_methods;
+
         for func in &impl_block.functions {
             if let Some(analyzed_func) = analyzed
                 .iter()
@@ -918,6 +952,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.current_impl_instance_methods.clear();
+        self.current_impl_consuming_self_methods.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
         self.current_trait_impl_name = old_trait_impl_name;

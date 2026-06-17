@@ -5,8 +5,10 @@ use std::http::*
 use std::fs::*
 
 fn main() {
+    let base_dir = "../windjammer-ui/examples"
+
     println!("🎨 Windjammer Showcase Server (Pure Windjammer!)")
-    println!("Serving from: /Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui/examples")
+    println!("Serving from: {}", base_dir)
     println!("")
     println!("Starting server on http://localhost:8080")
     println!("Open http://localhost:8080 to see the showcase")
@@ -22,7 +24,7 @@ fn main() {
 }
 
 fn handle_request(request: ServerRequest) -> ServerResponse {
-    let base_dir = "/Users/jeffreyfriedman/src/windjammer/crates/windjammer-ui/examples"
+    let base_dir = "../windjammer-ui/examples"
     
     let file_path = if request.path == "/" {
         format!("{}/index.html", base_dir)

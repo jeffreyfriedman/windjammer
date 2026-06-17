@@ -231,24 +231,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         .param_ownership
                         .iter()
                         .all(|o| matches!(o, OwnershipMode::Borrowed));
-                if all_params_borrowed
-                    && matches!(arg, Expression::Identifier { .. })
-                {
+                if all_params_borrowed {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     let already_ref = if let Expression::Identifier { name, .. } = arg {
                         gen.identifier_already_ref(name)
                     } else {
-                        false
+                        arg_str.starts_with('&') && !arg_str.starts_with("&&")
                     };
                     let is_user_closure_param = if let Expression::Identifier { name, .. } = arg {
                         gen.in_user_written_closure && gen.user_closure_params.contains(name)
                     } else {
                         false
                     };
-                    if !already_ref
-                        && !is_user_closure_param
-                        && !arg_str.starts_with('&')
-                    {
+                    if !already_ref && !is_user_closure_param && !arg_str.starts_with('&') {
                         return vec![format!("&{}", arg_str)];
                     }
                 }
@@ -707,10 +702,37 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 let callee_expects_ref = param_ty.is_some_and(|t| {
                     matches!(t, Type::Reference(_) | Type::MutableReference(_))
                 });
+                let global_sig = gen
+                    .get_signature_with_global(func_name)
+                    .or_else(|| {
+                        let short = func_name.rsplit("::").next().unwrap_or(func_name);
+                        gen.signature_registry
+                            .find_signature_ending_with(&format!("::{short}"))
+                    });
+                let global_param_expects_ref = global_sig
+                    .and_then(|gs| {
+                        let idx = gs.arg_param_index(i);
+                        gs.param_types.get(idx)
+                    })
+                    .is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    });
+                let all_params_borrowed = !sig.param_ownership.is_empty()
+                    && sig
+                        .param_ownership
+                        .iter()
+                        .all(|o| matches!(o, OwnershipMode::Borrowed));
+                let all_param_types_are_refs = !sig.param_types.is_empty()
+                    && sig.param_types.iter().all(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    });
                 if sig
                     .param_ownership_for_arg(i)
                     .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
                     || callee_expects_ref
+                    || global_param_expects_ref
+                    || all_params_borrowed
+                    || all_param_types_are_refs
                 {
                     let is_text = param_ty
                         .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);

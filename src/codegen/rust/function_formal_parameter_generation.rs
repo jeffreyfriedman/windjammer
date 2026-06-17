@@ -65,6 +65,22 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, cow_type);
                 }
 
+                if param.name == "self"
+                    && self.function_calls_self_with_recorded_receiver(
+                        &analyzed.decl,
+                        OwnershipMode::MutBorrowed,
+                    )
+                {
+                    self.inferred_mut_borrowed_params.insert("self".to_string());
+                    self.inferred_borrowed_params.remove("self");
+                    self.record_self_receiver_upgrade(
+                        &func.name,
+                        analyzed.inferred_ownership.get("self").copied(),
+                        "&mut self",
+                    );
+                    return "&mut self".to_string();
+                }
+
                 // Handle explicit ownership hints (self, &self, &mut self)
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {

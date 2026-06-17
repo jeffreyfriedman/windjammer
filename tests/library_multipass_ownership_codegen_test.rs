@@ -1354,3 +1354,402 @@ impl EditorState {
         "nested field + owned snapshot must clone field first. Got:\n{rs}"
     );
 }
+
+#[test]
+fn test_let_param_alias_then_reuse_clones_at_alias() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ai/squad_tactics.wj",
+        r#"
+pub enum MessageType {
+    Ping,
+}
+
+pub struct Message {
+    message_type: MessageType,
+}
+
+pub struct Squad {
+    messages: Vec<Message>,
+}
+
+impl Squad {
+    pub fn send_message(&mut self, message: Message) {
+        let msg_copy = message
+        match msg_copy.message_type {
+            MessageType::Ping => {},
+        }
+        self.messages.push(message)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ai/squad_tactics.rs").expect("squad_tactics.rs");
+
+    assert!(
+        rs.contains("let msg_copy = message.clone()")
+            || rs.contains("self.messages.push(message.clone())"),
+        "param moved to alias then reused must auto-clone. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_for_mut_over_self_field_on_mut_self_borrows_iterable() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ai/squad_tactics.wj",
+        r#"
+pub enum AlertLevel {
+    Unaware,
+    Suspicious,
+}
+
+pub struct SquadMember {
+    alert_level: AlertLevel,
+}
+
+pub struct Squad {
+    members: Vec<SquadMember>,
+    shared_target_position: Option<f32>,
+}
+
+impl Squad {
+    pub fn alert_members(&mut self) {
+        for member in self.members {
+            if member.alert_level == AlertLevel::Unaware {
+                member.alert_level = AlertLevel::Suspicious
+            }
+        }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ai/squad_tactics.rs").expect("squad_tactics.rs");
+
+    assert!(
+        rs.contains("for mut member in &mut self.members")
+            || rs.contains("for member in &mut self.members"),
+        "mutating loop var over self field on &mut self must borrow mutably. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("for mut member in self.members")
+            && !rs.contains("for member in self.members {"),
+        "must not move self.members off &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_struct_literal_then_reuse_clones_at_first_move() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "event/dispatcher.wj",
+        r#"
+pub struct GameEvent {
+    text: string,
+}
+
+impl GameEvent {
+    pub fn describe(self) -> string {
+        self.text
+    }
+}
+
+pub struct EventLogEntry {
+    event_description: string,
+}
+
+pub struct Dispatcher {
+    event_log: Vec<EventLogEntry>,
+    max_log_size: i32,
+    current_time: f32,
+}
+
+impl Dispatcher {
+    pub fn record(self, event: GameEvent) -> Vec<string> {
+        let mut descriptions: Vec<string> = Vec::new()
+        let desc = event.describe()
+        if self.event_log.len() < self.max_log_size {
+            self.event_log.push(EventLogEntry { event_description: desc, timestamp: self.current_time, handled: true })
+        }
+        descriptions.push(desc)
+        descriptions
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("event/dispatcher.rs").expect("dispatcher.rs");
+
+    assert!(
+        rs.contains("event_description: desc.clone()")
+            || rs.contains("EventLogEntry { event_description: desc.clone()"),
+        "desc moved into struct then reused must clone at struct field. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_tuple_insert_then_reuse_clones_at_insert() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "save/manager.wj",
+        r#"
+pub struct SaveData {
+    bytes: i32,
+}
+
+pub struct SaveMetadata {
+    slot_name: string,
+}
+
+impl SaveMetadata {
+    pub fn new() -> SaveMetadata {
+        SaveMetadata { slot_name: "" }
+    }
+    pub fn set_slot_name(self, name: string) {
+        self.slot_name = name
+    }
+}
+
+pub struct SaveManager {
+    slots: Map<usize, (SaveData, SaveMetadata)>,
+}
+
+impl SaveManager {
+    pub fn new() -> SaveManager {
+        SaveManager { slots: Map::new() }
+    }
+
+    pub fn write_slot_to_disk(self, slot: usize, data: SaveData) {
+    }
+
+    pub fn save_to_slot(&mut self, slot: usize, data: SaveData) {
+        let mut metadata = SaveMetadata::new()
+        self.slots.insert(slot, (data, metadata))
+        self.write_slot_to_disk(slot, data)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("save/manager.rs").expect("manager.rs");
+
+    assert!(
+        rs.contains("(data.clone(), metadata)")
+            || rs.contains("(data.clone(), metadata.clone())"),
+        "insert tuple must clone param reused after move. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_pass_method_consuming_self_in_struct_literal_uses_owned_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "render/shader_graph_builder.wj",
+        r#"
+pub struct PassId {
+    id: i32,
+}
+
+pub struct PassBuilder {
+    graph: ShaderGraphBuilder,
+    pass_id: PassId,
+}
+
+impl PassBuilder {
+    pub fn new() -> PassBuilder {
+        PassBuilder {
+            graph: ShaderGraphBuilder { passes: Vec::new() },
+            pass_id: PassId { id: 0 },
+        }
+    }
+}
+
+pub struct ShaderGraphBuilder {
+    passes: Vec<i32>,
+}
+
+impl ShaderGraphBuilder {
+    pub fn pass(self, id: PassId) -> PassBuilder {
+        PassBuilder { graph: self, pass_id: id }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("render/shader_graph_builder.rs")
+        .expect("shader_graph_builder.rs");
+
+    assert!(
+        rs.contains("fn pass(self, id: PassId)") || rs.contains("fn pass(mut self, id: PassId)"),
+        "pass() moves self into PassBuilder and must take owned self. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn pass(&self, id: PassId)"),
+        "pass() must not use &self when graph: self moves builder. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_get_compositor_clones_nested_field_on_borrowed_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "render/unified_renderer.wj",
+        r#"
+pub struct HybridCompositor {
+    width: i32,
+}
+
+impl HybridCompositor {
+    pub fn new() -> HybridCompositor {
+        HybridCompositor { width: 1280 }
+    }
+}
+
+pub struct VoxelGPURenderer {
+    compositor: HybridCompositor,
+}
+
+impl VoxelGPURenderer {
+    pub fn new() -> VoxelGPURenderer {
+        VoxelGPURenderer { compositor: HybridCompositor::new() }
+    }
+}
+
+pub struct UnifiedRenderer {
+    voxel_renderer: VoxelGPURenderer,
+}
+
+impl UnifiedRenderer {
+    pub fn get_compositor(self) -> HybridCompositor {
+        self.voxel_renderer.compositor
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("render/unified_renderer.rs").expect("unified_renderer.rs");
+
+    assert!(
+        rs.contains("compositor.clone()"),
+        "borrowed self returning owned nested field must clone. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_self_field_max_does_not_upgrade_to_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "render/sky_model.wj",
+        r#"
+pub struct SkyModel {
+    turbidity: f32,
+    sun_elevation: f32,
+    intensity: f32,
+}
+
+impl SkyModel {
+    pub fn zenith_color(self) -> (f32, f32, f32) {
+        let t = self.turbidity
+        let theta_s = self.sun_elevation.max(0.01)
+        let chi = (4.0 / 9.0 - t / 120.0) * (3.14159 - 2.0 * theta_s)
+        let zenith_lum = (4.0453 * t - 4.9710) * chi.tan() - 0.2155 * t + 2.4192
+        let lum = zenith_lum.max(0.0) * self.intensity
+        (lum, lum, lum)
+    }
+
+    pub fn to_gpu_data(self) -> Vec<f32> {
+        let (_, sky_g, _) = self.zenith_color()
+        let mut data = Vec::new()
+        data.push(sky_g)
+        data
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("render/sky_model.rs").expect("sky_model.rs");
+
+    assert!(
+        rs.contains("fn zenith_color(&self)"),
+        "self.field.max() is read-only and must not infer &mut self. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn zenith_color(&mut self)"),
+        "zenith_color must not use &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_tuple_match_option_mut_ref_scrutinee_skips_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "render/skinned_mesh_renderer.wj",
+        r#"
+pub struct Clip {
+    duration: f32,
+}
+
+impl Clip {
+    pub fn sample_bone(self, bone: u32, time: f32) -> Option<i32> {
+        None
+    }
+}
+
+pub struct Skeleton {
+    bones: Vec<i32>,
+}
+
+impl Skeleton {
+    pub fn update(self) {
+    }
+    pub fn compute_skinning_palette(self) -> Vec<f32> {
+        Vec::new()
+    }
+}
+
+pub struct Instance {
+    active_clip: string,
+    skeleton_id: string,
+}
+
+pub struct SkinnedMeshRenderer {
+    clips: Map<string, Clip>,
+    skeletons: Map<string, Skeleton>,
+    instances: Vec<Instance>,
+}
+
+impl SkinnedMeshRenderer {
+    pub fn update_all(self) {
+        let clip_opt = self.clips.get("a")
+        let skel_opt = self.skeletons.get_mut("b")
+        match (clip_opt, skel_opt) {
+            (Some(clip), Some(skel)) => {
+                skel.update()
+            },
+            _ => {},
+        }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("render/skinned_mesh_renderer.rs")
+        .expect("skinned_mesh_renderer.rs");
+
+    assert!(
+        !rs.contains("skel_opt.clone()"),
+        "Option<&mut T> scrutinee must not be cloned in tuple match. Got:\n{rs}"
+    );
+}

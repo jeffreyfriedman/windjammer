@@ -44,7 +44,6 @@ pub fn generate_agent_index(output: &Path) -> Result<()> {
     let lint_policy = json!({
         "rules": [
             {"id": "no-rust-leakage", "forbidden": [".as_str()", ".unwrap()", "explicit &"]},
-            {"id": "wj-game-build", "required_command": "wj game build"}
         ]
     });
     write_json(output.join("lint_policy.json"), &lint_policy)?;
@@ -67,6 +66,16 @@ fn write_json(path: PathBuf, value: &serde_json::Value) -> Result<()> {
     Ok(())
 }
 
+fn repo_relative_path(path: &Path) -> String {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let rel = path
+        .strip_prefix(&root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    rel.strip_prefix("./").unwrap_or(&rel).to_string()
+}
+
 fn generate_stdlib_index() -> Result<serde_json::Value> {
     let std_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std");
     let mut modules = Vec::new();
@@ -77,7 +86,7 @@ fn generate_stdlib_index() -> Result<serde_json::Value> {
             if path.extension().and_then(|e| e.to_str()) == Some("wj") {
                 modules.push(json!({
                     "module": path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
-                    "path": path.display().to_string()
+                    "path": repo_relative_path(&path)
                 }));
             }
         }
@@ -88,7 +97,7 @@ fn generate_stdlib_index() -> Result<serde_json::Value> {
 fn generate_spec_index() -> Result<serde_json::Value> {
     let spec_md = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/LANGUAGE_SPEC_TESTS.md");
     Ok(json!({
-        "index_file": spec_md.display().to_string(),
+        "index_file": repo_relative_path(&spec_md),
         "exists": spec_md.exists(),
         "categories": ["parser", "analyzer", "codegen", "inference", "pattern_matching"]
     }))
