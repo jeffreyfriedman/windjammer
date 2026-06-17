@@ -68,6 +68,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
     pub(crate) current_impl_methods: std::collections::HashSet<String>, // Method names in current impl block
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
+    /// Same-impl methods that codegen will emit with owned/`mut self` (consuming receiver).
+    pub(crate) current_impl_consuming_self_methods: std::collections::HashSet<String>,
     pub(crate) in_impl_block: bool, // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
     pub(crate) usize_struct_fields:
@@ -371,6 +373,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
+            current_impl_consuming_self_methods: std::collections::HashSet::new(),
             in_impl_block: false,
             usize_struct_fields: std::collections::HashMap::new(),
             method_return_types: std::collections::HashMap::new(),

@@ -118,6 +118,19 @@ impl<'ast> Analyzer<'ast> {
             Statement::Let { value, .. } => {
                 matches!(value, Expression::Identifier { name, .. } if name == "self")
             }
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. } => {
+                matches!(expr, Expression::Identifier { name, .. } if name == "self")
+                    || matches!(
+                        expr,
+                        Expression::StructLiteral { fields, .. }
+                            if fields.iter().any(|(_, v)| {
+                                matches!(v, Expression::Identifier { name, .. } if name == "self")
+                            })
+                    )
+            }
             Statement::If {
                 then_block,
                 else_block,

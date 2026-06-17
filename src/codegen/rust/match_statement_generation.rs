@@ -105,6 +105,10 @@ impl<'ast> CodeGenerator<'ast> {
             if !needs_borrow_break_check
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
+                let prev_suppress = self.suppress_borrowed_clone;
+                if matches!(&arms[0].pattern, Pattern::Tuple(_)) {
+                    self.suppress_borrowed_clone = true;
+                }
                 let value_str = if let Expression::MethodCall {
                     object,
                     method,
@@ -181,6 +185,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     format!("{}{}", scrutinee_ref_prefix, base)
                 };
+                self.suppress_borrowed_clone = prev_suppress;
                 let main_arm = &arms[0];
 
                 let mut bound_vars = std::collections::HashSet::new();

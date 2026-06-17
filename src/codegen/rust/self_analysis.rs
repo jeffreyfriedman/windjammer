@@ -1128,6 +1128,9 @@ fn method_is_mutating(
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
 ) -> bool {
+    if crate::analyzer::stdlib_method_traits::is_known_readonly(method) {
+        return false;
+    }
     if super::stdlib_method_traits::method_mutates_receiver(method) {
         return true;
     }
@@ -1137,9 +1140,8 @@ fn method_is_mutating(
             let qualified = format!("{}::{}", ctx, method);
             if let Some(sig) = reg.get_signature(&qualified) {
                 if sig.has_self_receiver
-                    && sig.param_ownership.first().is_some_and(|o| {
-                        *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
-                    })
+                    && sig.param_ownership.first()
+                        == Some(&OwnershipMode::MutBorrowed)
                 {
                     return true;
                 }
@@ -1147,9 +1149,7 @@ fn method_is_mutating(
         }
         if let Some(sig) = lookup_method_in_registry(reg, method) {
             return sig.has_self_receiver
-                && sig.param_ownership.first().is_some_and(|o| {
-                    *o == OwnershipMode::MutBorrowed || *o == OwnershipMode::Owned
-                });
+                && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed);
         }
     }
 
@@ -1167,7 +1167,7 @@ fn lookup_method_in_registry<'a>(
     registry.lookup_method(method)
 }
 
-fn is_self_field_chain(expr: &Expression) -> bool {
+pub(crate) fn is_self_field_chain(expr: &Expression) -> bool {
     match expr {
         Expression::FieldAccess { object, .. } => {
             matches!(&**object, Expression::Identifier { name, .. } if name == "self")

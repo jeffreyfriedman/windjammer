@@ -54,6 +54,53 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    /// Resolved self-receiver ownership for a method, including codegen upgrades recorded
+    /// while emitting earlier methods in the same compilation unit.
+    pub(super) fn effective_method_self_ownership(
+        &self,
+        qualified: &str,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> crate::analyzer::OwnershipMode {
+        if let Some(upgraded) = self.self_receiver_upgrades.get(qualified) {
+            return *upgraded;
+        }
+        sig.param_ownership
+            .first()
+            .copied()
+            .unwrap_or(crate::analyzer::OwnershipMode::Borrowed)
+    }
+
+    pub(super) fn method_requires_consuming_self_receiver(
+        &self,
+        qualified: &str,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> bool {
+        match self.effective_method_self_ownership(qualified, sig) {
+            crate::analyzer::OwnershipMode::Owned => true,
+            crate::analyzer::OwnershipMode::MutBorrowed => {
+                sig.return_type.as_ref().is_some_and(|t| match t {
+                    Type::Custom(name) => self
+                        .current_struct_name
+                        .as_ref()
+                        .is_some_and(|sn| sn == name),
+                    _ => false,
+                })
+            }
+            _ => false,
+        }
+    }
+
+    pub(super) fn method_requires_owned_self_receiver(
+        &self,
+        qualified: &str,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> bool {
+        matches!(
+            self.effective_method_self_ownership(qualified, sig),
+            crate::analyzer::OwnershipMode::Owned
+        )
+    }
+
     /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
     ///
     /// The analyzer sets Owned for several reasons: match-on-self, consuming field
@@ -72,6 +119,8 @@ impl<'ast> CodeGenerator<'ast> {
         } else if body_modifies {
             "&mut self"
         } else if self.current_struct_is_copy() {
+            "self"
+        } else if super::self_analysis::function_consumes_self(func) {
             "self"
         } else {
             "&self"
@@ -146,13 +195,121 @@ impl<'ast> CodeGenerator<'ast> {
             _ => return,
         };
 
-        let analyzer_mode = analyzer_ownership.unwrap_or(OwnershipMode::Borrowed);
-        if actual_mode == OwnershipMode::MutBorrowed && analyzer_mode == OwnershipMode::Borrowed {
-            if let Some(struct_name) = &self.current_struct_name {
-                let qualified = format!("{}::{}", struct_name, func_name);
-                self.self_receiver_upgrades
-                    .insert(qualified, OwnershipMode::MutBorrowed);
+        let _analyzer_mode = analyzer_ownership.unwrap_or(OwnershipMode::Borrowed);
+        if let Some(struct_name) = &self.current_struct_name {
+            let qualified = format!("{}::{}", struct_name, func_name);
+            self.self_receiver_upgrades.insert(qualified, actual_mode);
+        }
+    }
+
+    pub(super) fn function_calls_self_with_recorded_receiver(
+        &self,
+        func: &FunctionDecl,
+        mode: OwnershipMode,
+    ) -> bool {
+        let Some(struct_name) = self.current_struct_name.as_ref() else {
+            return false;
+        };
+        func.body.iter().any(|stmt| {
+            self.statement_calls_self_method_with_recorded_receiver(stmt, struct_name, mode)
+        })
+    }
+
+    fn statement_calls_self_method_with_recorded_receiver(
+        &self,
+        stmt: &Statement,
+        struct_name: &str,
+        mode: OwnershipMode,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_calls_self_method_with_recorded_receiver(expr, struct_name, mode)
             }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_calls_self_method_with_recorded_receiver(
+                expr, struct_name, mode,
+            ),
+            Statement::Let { value, .. } => {
+                self.expression_calls_self_method_with_recorded_receiver(value, struct_name, mode)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        self.statement_calls_self_method_with_recorded_receiver(
+                            s, struct_name, mode,
+                        )
+                    })
+                })
+            }
+            Statement::For { body, .. } | Statement::While { body, .. } => body.iter().any(|s| {
+                self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
+            }),
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                if let Expression::Block { statements, .. } = arm.body {
+                    statements.iter().any(|s| {
+                        self.statement_calls_self_method_with_recorded_receiver(
+                            s, struct_name, mode,
+                        )
+                    })
+                } else {
+                    self.expression_calls_self_method_with_recorded_receiver(
+                        arm.body, struct_name, mode,
+                    )
+                }
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_calls_self_method_with_recorded_receiver(
+        &self,
+        expr: &Expression,
+        struct_name: &str,
+        mode: OwnershipMode,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                ..
+            } if matches!(&**object, Expression::Identifier { name, .. } if name == "self") =>
+            {
+                let qualified = format!("{struct_name}::{method}");
+                if self
+                    .self_receiver_upgrades
+                    .get(&qualified)
+                    .is_some_and(|m| *m == mode)
+                {
+                    return true;
+                }
+                if let Some(sig) = self.get_signature_with_global(&qualified) {
+                    return sig.has_self_receiver
+                        && sig.param_ownership.first().is_some_and(|m| *m == mode);
+                }
+                false
+            }
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
+            }),
+            Expression::Binary { left, right, .. } => {
+                self.expression_calls_self_method_with_recorded_receiver(left, struct_name, mode)
+                    || self.expression_calls_self_method_with_recorded_receiver(
+                        right, struct_name, mode,
+                    )
+            }
+            Expression::Unary { operand, .. } => self
+                .expression_calls_self_method_with_recorded_receiver(operand, struct_name, mode),
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expression_calls_self_method_with_recorded_receiver(arg, struct_name, mode)
+            }),
+            _ => false,
         }
     }
 

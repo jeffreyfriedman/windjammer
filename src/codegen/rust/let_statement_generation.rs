@@ -339,6 +339,18 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                if let Expression::Identifier { name, .. } = value {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis.needs_clone_anywhere(name)
+                            && !value_str.ends_with(".clone()")
+                        {
+                            value_str = self.maybe_auto_clone(name, &value_str);
+                            if !value_str.ends_with(".clone()") {
+                                value_str = format!("{}.clone()", value_str);
+                            }
+                        }
+                    }
+                }
                 output.push_str(&value_str);
             } else {
                 // E0282: Emit type ascription for collection types.
@@ -424,6 +436,19 @@ impl<'ast> CodeGenerator<'ast> {
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
                 self.apply_self_field_move_fix(value, &mut value_str);
+
+                if let Expression::Identifier { name, .. } = value {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis.needs_clone_anywhere(name)
+                            && !value_str.ends_with(".clone()")
+                        {
+                            value_str = self.maybe_auto_clone(name, &value_str);
+                            if !value_str.ends_with(".clone()") {
+                                value_str = format!("{}.clone()", value_str);
+                            }
+                        }
+                    }
+                }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
                     mutable,
@@ -581,6 +606,19 @@ impl<'ast> CodeGenerator<'ast> {
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
                 self.apply_self_field_move_fix(value, &mut value_str);
+
+                if let Expression::Identifier { name, .. } = value {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis.needs_clone_anywhere(name)
+                            && !value_str.ends_with(".clone()")
+                        {
+                            value_str = self.maybe_auto_clone(name, &value_str);
+                            if !value_str.ends_with(".clone()") {
+                                value_str = format!("{}.clone()", value_str);
+                            }
+                        }
+                    }
+                }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
                     mutable,

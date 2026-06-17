@@ -119,6 +119,20 @@ impl<'ast> CodeGenerator<'ast> {
 
             self.coerce_return_ref_to_owned_copy(&mut return_str, e);
 
+            // `return self.field` on borrowed `self` when the return type is owned (not `&T`).
+            if super::self_analysis::is_self_field_chain(e)
+                && (self.inferred_mut_borrowed_params.contains("self")
+                    || self.inferred_borrowed_params.contains("self"))
+            {
+                let returns_ref = matches!(
+                    &self.current_function_return_type,
+                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                );
+                if !returns_ref && !return_str.ends_with(".clone()") {
+                    return_str = format!("{}.clone()", return_str);
+                }
+            }
+
             // `let (a, b) = &vec[i]` in Rust: Copy fields like `i32` are still `&i32` bindings.
             // When we record `Type::Reference(i32)` in local_var_types, `return b` must become `*b`.
             if let Expression::Identifier { .. } = e {
