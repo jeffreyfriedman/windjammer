@@ -21,7 +21,9 @@ pub(super) fn ref_from_known_method_signature(
     } else {
         param_idx
     };
-    let ownership = sig.param_ownership.get(sig_param_idx)?;
+    let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+        sig, sig_param_idx,
+    );
     if !matches!(ownership, OwnershipMode::Borrowed) {
         return Some(false);
     }
@@ -93,6 +95,13 @@ pub(super) fn ref_from_known_method_signature(
                 )
         });
         if already_rust_str {
+            return Some(false);
+        }
+        if current_function_params.iter().any(|p| {
+            p.name == *arg_name
+                && MethodCallAnalyzer::is_copy_type_annotation_internal(&p.type_)
+                && !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+        }) {
             return Some(false);
         }
     }

@@ -5,6 +5,21 @@ use crate::parser::*;
 
 use super::super::CodeGenerator;
 
+/// Map `Self::method` in an impl block to `Type::method` for signature lookup.
+fn signature_lookup_for_call<'ast>(
+    gen: &CodeGenerator<'ast>,
+    func_name: &str,
+) -> (String, Option<String>) {
+    if let Some(method) = func_name.strip_prefix("Self::") {
+        if gen.in_impl_block {
+            if let Some(ref tn) = gen.current_struct_name {
+                return (format!("{tn}::{method}"), Some(tn.clone()));
+            }
+        }
+    }
+    (func_name.to_string(), None)
+}
+
 #[allow(clippy::too_many_lines)]
 pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     gen: &mut CodeGenerator<'ast>,
@@ -310,15 +325,32 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Unified signature resolution: local registry first, then converged library-wide registry.
     let mut resolved_via_fallback = false;
+    let (sig_lookup_name, sig_receiver_type) = signature_lookup_for_call(gen, func_name);
     if signature.is_none() {
-        if let Some(r) =
-            gen.resolve_call_signature_with_global(func_name, None, arguments.len())
-        {
-            resolved_via_fallback = matches!(
-                r.resolution_method,
-                crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
-            );
-            signature = Some(r.sig);
+        if let Some(ref tn) = sig_receiver_type {
+            let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);
+            signature = gen.lookup_method_signature_on_receiver_type(tn, method, arguments.len());
+        }
+    }
+    if signature.is_none() {
+        if let Some(r) = gen.resolve_call_signature_with_global(
+            &sig_lookup_name,
+            sig_receiver_type.as_deref(),
+            arguments.len(),
+        ) {
+            let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);
+            let accept = sig_receiver_type.as_ref().map_or(true, |tn| {
+                crate::codegen::rust::call_signature_resolution::accept_method_resolution_for_receiver(
+                    &r, tn, method,
+                )
+            });
+            if accept {
+                resolved_via_fallback = matches!(
+                    r.resolution_method,
+                    crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
+                );
+                signature = Some(r.sig);
+            }
         }
     }
 
@@ -349,48 +381,88 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         is_extern_call,
     );
 
-    // Borrow owned String args when registry says callee takes borrowed `string` (&str in Rust).
+    // Borrow owned args when registry says callee takes `&T` / `&mut T`.
     // Never borrow `string_to_ffi(...)` — extern FFI expects owned FfiString.
     if let Some(ref sig) = signature {
         args = args
             .iter()
             .enumerate()
             .map(|(i, arg_str)| {
-                let sig_param_idx = sig.arg_param_index(i);
-                let borrow = !is_extern_call
-                    && !sig.is_extern
-                    && !arg_str.contains("string_to_ffi(")
-                    && sig
-                        .param_ownership
-                        .get(sig_param_idx)
-                        .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                    && sig
-                        .param_types
-                        .get(sig_param_idx)
-                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-                if borrow && !arg_str.starts_with('&') && !arg_str.starts_with('"') {
-                    let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {
-                        if let Expression::Identifier { name, .. } = arg_expr {
-                            gen.identifier_already_ref(name)
+                if is_extern_call || sig.is_extern || arg_str.contains("string_to_ffi(") {
+                    return arg_str.clone();
+                }
+                let ownership =
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                        sig, i,
+                    );
+                let param_idx = sig.arg_param_index(i);
+                let types_say_owned =
+                    crate::codegen::rust::call_signature_resolution::param_type_is_owned_non_text(
+                        sig, param_idx,
+                    );
+                if types_say_owned && ownership == OwnershipMode::Borrowed
+                {
+                    let mut s = arg_str.clone();
+                    if s.starts_with("&mut ") {
+                        s = s.strip_prefix("&mut ").unwrap_or(&s).to_string();
+                    } else if s.starts_with('&') {
+                        s = s.trim_start_matches('&').to_string();
+                    }
+                    if !s.ends_with(".clone()") {
+                        s = format!("{s}.clone()");
+                    }
+                    return s;
+                }
+                match ownership {
+                    OwnershipMode::MutBorrowed if !arg_str.starts_with("&mut ") =>
+                    {
+                        let arg_already_mut_ref = if let Some((_, arg_expr)) = arguments.get(i) {
+                            if let Expression::Identifier { name, .. } = arg_expr {
+                                gen.identifier_already_mut_ref(name)
+                            } else {
+                                false
+                            }
                         } else {
                             false
+                        };
+                        if arg_already_mut_ref {
+                            return arg_str.clone();
                         }
-                    } else {
-                        false
-                    };
-                    if arg_already_ref {
-                        arg_str.clone()
-                    } else {
-                        format!("&{arg_str}")
+                        let mut s = arg_str.clone();
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
+                        if s.starts_with('&') && !s.starts_with("&mut ") {
+                            format!("&mut {}", s.trim_start_matches('&'))
+                        } else {
+                            format!("&mut {s}")
+                        }
                     }
-                } else {
-                    arg_str.clone()
+                    OwnershipMode::Borrowed
+                        if !arg_str.starts_with('&')
+                            && !arg_str.starts_with('"')
+                            && !types_say_owned =>
+                    {
+                        let mut s = arg_str.clone();
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
+                        let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {
+                            if let Expression::Identifier { name, .. } = arg_expr {
+                                gen.identifier_already_ref(name)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        };
+                        if arg_already_ref {
+                            s
+                        } else {
+                            format!("&{s}")
+                        }
+                    }
+                    _ => arg_str.clone(),
                 }
             })
             .collect();
     }
-
-    // TDD FIX (Bug #3): Extract format!() / write!-block macros in arguments to temp variables
     let needs_format_temp = |arg_str: &str| -> bool {
         arg_str.contains("format!(")
             || arg_str.contains("write!(&mut __s,")

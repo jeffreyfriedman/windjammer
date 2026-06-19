@@ -47,9 +47,15 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(fields) = self.lookup_struct_field_types(&receiver_type) {
                     if fields.get(method).is_some_and(|ty| self.is_type_copy(ty)) {
                         let has_method = self.method_exists_on_type_name(&receiver_type, method);
-                        // GPU buffer types expose `buffer_id()` methods that take owned `self`
-                        // but call sites hold `&StorageRead<T>` — use the Copy field instead.
-                        if recv_is_ref || !has_method {
+                        let base = receiver_type.split('<').next().unwrap_or(&receiver_type);
+                        let trivial_key = format!("{base}::{method}");
+                        let is_trivial_accessor = self
+                            .trivial_copy_field_accessors
+                            .contains(&trivial_key)
+                            || self
+                                .trivial_copy_field_accessors
+                                .contains(&format!("{receiver_type}::{method}"));
+                        if recv_is_ref || !has_method || is_trivial_accessor {
                             return format!("{}.{}", self.generate_expression(object), method);
                         }
                     }
@@ -68,7 +74,9 @@ impl<'ast> CodeGenerator<'ast> {
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);
-        let type_name = self.infer_type_name(object);
+        let type_name = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object));
         let (args, prev_float) = self.mc_build_method_call_arg_strings(
             object,
             effective_method,
@@ -81,6 +89,7 @@ impl<'ast> CodeGenerator<'ast> {
             effective_method,
             type_args,
             arguments,
+            &method_signature,
             obj_str,
             args,
             prev_float,

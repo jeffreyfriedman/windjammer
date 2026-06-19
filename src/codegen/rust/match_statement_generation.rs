@@ -576,7 +576,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let expr = self.generate_expression(value);
                 let raw = self.strip_leading_borrow_prefix(&expr);
                 output.push_str(&format!(
-                    "let __match_borrow_break = {}.clone();\n",
+                    "let mut __match_borrow_break = {}.clone();\n",
                     raw
                 ));
                 output.push_str(&self.indent());
@@ -709,7 +709,27 @@ impl<'ast> CodeGenerator<'ast> {
                 if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
                     && !owned_bindings_from_copy_deref
                 {
-                    bound_vars.iter().cloned().collect()
+                    let inferred = self.infer_match_bound_types(value, &arm.pattern);
+                    let struct_enum_fields = matches!(
+                        &arm.pattern,
+                        Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
+                    );
+                    bound_vars
+                        .iter()
+                        .filter(|var| {
+                            if struct_enum_fields {
+                                return true;
+                            }
+                            inferred.iter().any(|(name, ty)| {
+                                name == *var
+                                    && matches!(
+                                        ty,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    )
+                            })
+                        })
+                        .cloned()
+                        .collect()
                 } else {
                     Vec::new()
                 };

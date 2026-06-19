@@ -1,6 +1,7 @@
 //! Setup and per-function analyzer state loaded before emitting a regular function.
 
 use crate::analyzer::*;
+use crate::codegen::rust::type_analysis;
 use crate::parser::*;
 
 use super::CodeGenerator;
@@ -80,49 +81,8 @@ impl<'ast> CodeGenerator<'ast> {
 
             // NEW ARCHITECTURE: Register method signature for type-based parameter resolution
             // This replaces ALL hard-coded method name heuristics
-            if let Some(impl_type) = &self.current_struct_name {
-                // Build parameter types and ownership from ANALYZED function
-                // Use the actual inferred ownership from the analyzer, not defaults!
-                let mut param_types = Vec::new();
-                let mut param_ownership = Vec::new();
-
-                // Parameter types for call-site coercion must match analyzer + Rust codegen.
-                // Phase-2 optimized `string` parameters become `Reference(str)` in
-                // `AnalyzedFunction::inferred_param_types`, but AST param.type_ stays plain
-                // `string`. Registering AST types breaks MethodCallAnalyzer's user-signatures path
-                // (wrong `param_is_str_ref`, missing `&` on String fields, spurious `.to_string()`).
-                for (idx, param) in func.parameters.iter().enumerate() {
-                    if param.name != "self" {
-                        let p_type = analyzed
-                            .inferred_param_types
-                            .get(idx)
-                            .cloned()
-                            .unwrap_or_else(|| param.type_.clone());
-                        param_types.push(p_type);
-
-                        // Use ACTUAL analyzed ownership from inferred_ownership
-                        let ownership = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
-                            .copied()
-                            .unwrap_or(crate::analyzer::OwnershipMode::Borrowed);
-                        param_ownership.push(ownership);
-                    }
-                }
-
-                // Check if method has self receiver
-                let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-
-                let signature = crate::codegen::rust::generator::MethodSignature::new(
-                    impl_type.clone(),
-                    func.name.clone(),
-                    param_types,
-                    param_ownership,
-                    func.return_type.clone(),
-                    has_self_receiver,
-                );
-
-                self.register_method_signature(signature);
+            if let Some(impl_type) = self.current_struct_name.clone() {
+                self.register_impl_method_signature_from_analyzed(&impl_type, func, analyzed);
             }
         }
 
@@ -261,5 +221,64 @@ impl<'ast> CodeGenerator<'ast> {
         // PHASE 6 OPTIMIZATION: Load defer drop optimizations
         // Track variables that should have their drops deferred to background thread
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
+    }
+
+    /// Register analyzed impl method signatures for call-site lookup (Self:: forward refs).
+    pub(in crate::codegen::rust) fn register_impl_method_signature_from_analyzed(
+        &mut self,
+        impl_type: &str,
+        func: &FunctionDecl<'ast>,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) {
+        let mut param_types = Vec::new();
+        let mut param_ownership = Vec::new();
+
+        for (idx, param) in func.parameters.iter().enumerate() {
+            if param.name != "self" {
+                let p_type = analyzed
+                    .inferred_param_types
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| param.type_.clone());
+
+                let ownership = analyzed
+                    .inferred_ownership
+                    .get(&param.name)
+                    .copied()
+                    .unwrap_or(crate::analyzer::OwnershipMode::Borrowed);
+
+                let stored_type = match ownership {
+                    crate::analyzer::OwnershipMode::Borrowed
+                        if !matches!(
+                            &p_type,
+                            Type::Reference(_) | Type::MutableReference(_)
+                        ) && !type_analysis::is_copy_type(&p_type) =>
+                    {
+                        Type::Reference(Box::new(p_type))
+                    }
+                    crate::analyzer::OwnershipMode::MutBorrowed
+                        if !matches!(&p_type, Type::MutableReference(_)) =>
+                    {
+                        Type::MutableReference(Box::new(p_type))
+                    }
+                    _ => p_type,
+                };
+                param_types.push(stored_type);
+                param_ownership.push(ownership);
+            }
+        }
+
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+
+        let signature = crate::codegen::rust::generator::MethodSignature::new(
+            impl_type.to_string(),
+            func.name.clone(),
+            param_types,
+            param_ownership,
+            func.return_type.clone(),
+            has_self_receiver,
+        );
+
+        self.register_method_signature(signature);
     }
 }

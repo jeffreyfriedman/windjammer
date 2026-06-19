@@ -7,6 +7,7 @@ use super::super::super::{expression_utilities, CodeGenerator};
 
 /// Borrow owned String arguments when the callee's `string` param lowers to `&str`.
 fn coerce_string_arg_for_borrowed_callee<'ast>(
+    gen: &CodeGenerator<'ast>,
     sig: &crate::analyzer::FunctionSignature,
     sig_param_idx: usize,
     arg: &'ast Expression<'ast>,
@@ -17,7 +18,13 @@ fn coerce_string_arg_for_borrowed_callee<'ast>(
         let param_is_str_ref = string_utilities::param_is_rust_str_ref(param_ty);
         let callee_borrows = !arg_str.contains("string_to_ffi(")
             && string_utilities::callee_borrows_string_param(sig, sig_param_idx);
+        let arg_is_text_compatible = gen
+            .infer_expression_type(arg)
+            .as_ref()
+            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
         if (param_is_str_ref || callee_borrows)
+            && arg_is_text_compatible
+            && !arg_expression_is_copy_non_text_scalar(gen, arg)
             && !arg_str.starts_with('&')
             && !matches!(
                 arg,
@@ -31,6 +38,26 @@ fn coerce_string_arg_for_borrowed_callee<'ast>(
         }
     }
     arg_str
+}
+
+fn arg_expression_is_copy_non_text_scalar<'ast>(
+    gen: &CodeGenerator<'ast>,
+    arg: &'ast Expression<'ast>,
+) -> bool {
+    if let Some(t) = gen.infer_expression_type(arg) {
+        return gen.is_type_copy(&t) && !crate::codegen::rust::types::is_windjammer_text_type(&t);
+    }
+    if let Expression::Identifier { name, .. } = arg {
+        if let Some(param) = gen
+            .current_function_params
+            .iter()
+            .find(|p| p.name == *name)
+        {
+            return gen.is_type_copy(&param.type_)
+                && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_);
+        }
+    }
+    false
 }
 
 /// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
@@ -86,11 +113,16 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
             gen.restore_arg_gen_scope(scope);
+            arg_str =
+                gen.peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);
 
             let sig_param_idx = sig.arg_param_index(i);
 
-            if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
-                match ownership {
+            let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                sig, sig_param_idx,
+            );
+
+            match ownership {
                     OwnershipMode::Borrowed => {
                         let is_string_literal = matches!(
                             arg_to_generate,
@@ -147,7 +179,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 // str / &string / &T params are already references in Rust — never add &
                             } else {
                             let should_ref =
-                                crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
+                                !arg_expression_is_copy_non_text_scalar(gen, arg_to_generate)
+                                    && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                                     arg_to_generate,
                                     &arg_str,
                                     call_method,
@@ -235,7 +268,6 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         gen.maybe_clone_borrowed_field_for_owned_param(arg_to_generate, &mut arg_str);
                     }
                 }
-            }
 
             // AUTO-CAST int → float
             let qualified_key = type_name
@@ -264,13 +296,19 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             );
 
             // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
-            if sig
-                .param_ownership
-                .get(sig_param_idx)
-                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                && sig.param_types.get(sig_param_idx).is_some_and(
+            if matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, sig_param_idx,
+                ),
+                OwnershipMode::Borrowed
+            ) && sig.param_types.get(sig_param_idx).is_some_and(
                     crate::codegen::rust::types::is_windjammer_text_type,
                 )
+                && gen
+                    .infer_expression_type(arg_to_generate)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                && !arg_expression_is_copy_non_text_scalar(gen, arg_to_generate)
                 && !arg_str.starts_with('&')
                 && matches!(
                     arg_to_generate,
@@ -283,10 +321,21 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             }
 
             arg_str = coerce_string_arg_for_borrowed_callee(
+                gen,
                 sig,
                 sig_param_idx,
                 arg_to_generate,
                 arg_str,
+            );
+
+            crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+                Some(sig),
+                i,
+                Some(call_method),
+                arg_to_generate,
+                &mut arg_str,
+                type_name.as_deref(),
+                Some(&gen.enum_variant_types),
             );
 
             vec![arg_str]
@@ -306,14 +355,33 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
         .as_ref()
         .map(|tn| format!("{}::{}", tn, call_method))
         .unwrap_or_else(|| call_method.to_string());
-    let fallback_sig = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-        &gen.signature_registry,
-        &qualified_name,
-        type_name.as_deref(),
-        arguments.len(),
-        &gen.module_alias_map,
-    )
-    .map(|r| r.sig);
+    let fallback_sig = type_name
+        .as_ref()
+        .and_then(|tn| {
+            gen.lookup_method_signature_on_receiver_type(tn, call_method, arguments.len())
+        })
+        .or_else(|| {
+            gen.resolve_call_signature_with_global(
+                &qualified_name,
+                type_name.as_deref(),
+                arguments.len(),
+            )
+            .filter(|r| {
+                match r.resolution_method {
+                    crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated => {
+                        type_name.as_ref().is_some_and(|tn| {
+                            crate::codegen::rust::call_signature_resolution::arg_count_validated_matches_receiver(
+                                &r.qualified_key,
+                                tn,
+                                call_method,
+                            )
+                        })
+                    }
+                    _ => true,
+                }
+            })
+            .map(|r| r.sig)
+        });
 
     arguments
         .iter()
@@ -324,6 +392,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
             gen.restore_arg_gen_scope(scope);
+            arg_str =
+                gen.peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);
 
             let is_string_literal = matches!(
                 arg_to_generate,
@@ -415,6 +485,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             );
             if let Some(ref fb_sig) = fallback_sig {
                 arg_str = coerce_string_arg_for_borrowed_callee(
+                    gen,
                     fb_sig,
                     fb_sig.arg_param_index(i),
                     arg_to_generate,
@@ -426,8 +497,25 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 // tell if the callee takes owned or borrowed, so being
                 // conservative and skipping the borrow for unknown methods
                 // avoids incorrect `&` on owned params (e.g. Vec::push).
-                let is_instance_call = type_name.is_some();
-                if is_instance_call {
+                //
+                // Static associated calls (`VoxelScene::new(64)`) also infer a
+                // CamelCase type_name — do not treat those as instance methods.
+                let is_copy_literal = matches!(
+                    arg_to_generate,
+                    Expression::Literal {
+                        value: Literal::Int(_)
+                            | Literal::IntSuffixed(_, _)
+                            | Literal::Float(_)
+                            | Literal::Bool(_),
+                        ..
+                    }
+                );
+                let is_static_associated_call = type_name.as_ref().is_some_and(|tn| {
+                    tn.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                });
+                let is_instance_call =
+                    type_name.is_some() && !is_static_associated_call;
+                if is_instance_call && !is_copy_literal {
                     let is_non_copy_value = gen
                         .infer_expression_type(arg_to_generate)
                         .as_ref()
@@ -446,6 +534,15 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     }
                 }
             }
+            crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+                fallback_sig.as_ref(),
+                i,
+                Some(call_method),
+                arg_to_generate,
+                &mut arg_str,
+                type_name.as_deref(),
+                Some(&gen.enum_variant_types),
+            );
             arg_str
         })
         .collect()

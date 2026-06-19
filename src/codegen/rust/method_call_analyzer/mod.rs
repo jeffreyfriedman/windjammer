@@ -174,13 +174,14 @@ impl MethodCallAnalyzer {
                     } else {
                         param_idx
                     };
-                    if let Some(&OwnershipMode::Borrowed) = sig.param_ownership.get(sig_param_idx) {
+                    let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                        sig, sig_param_idx,
+                    );
+                    if matches!(ownership, OwnershipMode::Borrowed) {
                         return true;
                     }
-                    if let Some(&ownership) = sig.param_ownership.get(sig_param_idx) {
-                        if matches!(ownership, OwnershipMode::Owned | OwnershipMode::MutBorrowed) {
-                            return false;
-                        }
+                    if matches!(ownership, OwnershipMode::Owned | OwnershipMode::MutBorrowed) {
+                        return false;
                     }
                 }
 
@@ -206,6 +207,8 @@ impl MethodCallAnalyzer {
                 str_ref_optimized_params,
                 borrowed_iterator_vars,
             ) {
+                // HashSet/Vec::contains and slice::binary_search take `&Q`. When the binding
+                // already generates as `&String` / `&str`, pass it through — `&name` → E0277.
                 return false;
             }
         }

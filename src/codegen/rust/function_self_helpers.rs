@@ -51,6 +51,8 @@ impl<'ast> CodeGenerator<'ast> {
             func,
             Some(&self.signature_registry),
             self.current_struct_name.as_deref(),
+            Some(&self.struct_field_types),
+            Some(&self.self_receiver_upgrades),
         )
     }
 
@@ -175,6 +177,8 @@ impl<'ast> CodeGenerator<'ast> {
             func,
             Some(&self.signature_registry),
             self.current_struct_name.as_deref(),
+            Some(&self.struct_field_types),
+            Some(&self.self_receiver_upgrades),
         )
     }
 
@@ -333,23 +337,16 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|key| self.analyzed_trait_methods.get(key))
                 });
                 if let Some(trait_method) = methods.and_then(|m| m.get(func_name)) {
-                    let ownership = trait_method.inferred_ownership.get("self").copied();
-                    match ownership {
-                        Some(OwnershipMode::Borrowed) | Some(OwnershipMode::MutBorrowed) => {
-                            return ownership;
-                        }
-                        Some(OwnershipMode::Owned) => {
-                            // Explicit or inferred consuming `self` on the trait (e.g. `fn consume(self) -> T`).
-                            return Some(OwnershipMode::Owned);
-                        }
-                        None => {
-                            // Abstract trait method (no body): use the impl's own
-                            // analyzed ownership so that consuming impls
-                            // (e.g. `self.value` for non-Copy) get owned `self`.
-                            let impl_ownership = analyzed.inferred_ownership.get("self").copied();
-                            return impl_ownership.or(Some(OwnershipMode::Borrowed));
-                        }
+                    if let Some(ownership) = trait_method.inferred_ownership.get("self").copied() {
+                        return Some(ownership);
                     }
+                    if let Some(reg_own) =
+                        self.lookup_trait_method_ownership_in_registry(trait_name, func_name)
+                    {
+                        return Some(reg_own);
+                    }
+                    // Abstract trait method with no inferred receiver yet — default &self.
+                    return Some(OwnershipMode::Borrowed);
                 }
                 // Trait exists but this specific method wasn't in the analysis map.
                 // Trait codegen defaults to &self for unanalyzed methods, so match that.

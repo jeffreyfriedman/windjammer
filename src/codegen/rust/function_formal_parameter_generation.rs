@@ -43,6 +43,11 @@ impl<'ast> CodeGenerator<'ast> {
         needs_lifetime: bool,
         unused_params: &HashSet<String>,
     ) -> Vec<String> {
+        let body_modifies = if self.in_trait_impl {
+            self.function_modifies_self(&analyzed.decl)
+        } else {
+            self.function_modifies_self_or_derived(&analyzed.decl)
+        };
         func.parameters
             .iter()
             .enumerate()
@@ -66,6 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 if param.name == "self"
+                    && !self.in_trait_impl
                     && self.function_calls_self_with_recorded_receiver(
                         &analyzed.decl,
                         OwnershipMode::MutBorrowed,
@@ -85,7 +91,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
-                            let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let body_modifies = body_modifies;
                             let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
                                 || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);
                             let eff_ownership =
@@ -152,7 +158,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
-                            let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let body_modifies = body_modifies;
                             if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
@@ -188,7 +194,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Mut => {
                         if param.name == "self" {
-                            let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let body_modifies = body_modifies;
                             if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
@@ -221,7 +227,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Inferred => {
                         if param.name == "self" {
-                            let body_modifies = self.function_modifies_self(&analyzed.decl);
+                            let body_modifies = body_modifies;
                             let returns_self = self.method_returns_impl_struct(&analyzed.decl);
                             let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
                                 || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);

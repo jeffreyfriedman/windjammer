@@ -722,13 +722,14 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
 
-                if Self::is_windjammer_text_param_type(&param.type_)
-                    && self.is_only_hashmap_lookup_key_param(
-                        &param.name,
-                        &func.decl.body,
-                        &func.decl,
-                    )
-                {
+                if self.is_only_hashmap_lookup_key_param(
+                    &param.name,
+                    &func.decl.body,
+                    &func.decl,
+                ) {
+                    if self.is_copy_type(&param.type_) {
+                        return OwnershipMode::Owned;
+                    }
                     return OwnershipMode::Borrowed;
                 }
 
@@ -745,10 +746,9 @@ impl<'ast> Analyzer<'ast> {
                     return OwnershipMode::Owned;
                 }
 
-                // Copy types are always passed by value (Owned) unless mutated
+                // Copy types pass by value unless the analyzer inferred mut borrow for in-body mutation.
                 // This must match the logic in codegen.rs
                 if self.is_copy_type(&param.type_) {
-                    // Copy types: pass by value unless they need to be mutated
                     if inferred == OwnershipMode::MutBorrowed {
                         OwnershipMode::MutBorrowed
                     } else {
@@ -818,22 +818,49 @@ impl<'ast> Analyzer<'ast> {
 
         let has_self_receiver = explicit_self || synthetic_self_receiver;
 
-        // Phase 2: `string` may become `Reference(Custom("str"))` in inferred_param_types while
+        // Phase 2: inferred_param_types may become `Reference`/`MutableReference` while
         // ownership inference still marks the parameter `Owned` (e.g. forwarding calls where
-        // the body is only `Call(FieldAccess)` and string-ref analysis does not recurse).
-        // Rust lowers these parameters as `&str` with a borrow — call-site helpers that key
-        // off `param_ownership` (`should_add_to_string`, `OwnershipMode::Owned` in bare `Call`)
-        // must agree or we emit `arg.to_string()` / bad conversions for `&str` → `&str` calls.
+        // the body is only `Call(FieldAccess)` and ref analysis does not recurse).
+        // Rust lowers these parameters as `&T` / `&mut T` — call-site helpers that key off
+        // `param_ownership` must agree or we emit `.clone()` / `.to_string()` incorrectly.
         use crate::parser::Type as PType;
         for (idx, ty) in param_types.iter().enumerate() {
-            if matches!(
-                ty,
-                PType::Reference(inner)
-                    if matches!(&**inner, PType::Custom(s) if s == "str")
-            ) {
+            let mode = match ty {
+                PType::Reference(_) => Some(OwnershipMode::Borrowed),
+                PType::MutableReference(_) => Some(OwnershipMode::MutBorrowed),
+                _ => None,
+            };
+            if let Some(mode) = mode {
                 if let Some(slot) = param_ownership.get_mut(idx) {
-                    *slot = OwnershipMode::Borrowed;
+                    *slot = mode;
                 }
+            }
+        }
+
+        // Phase 3: Mirror impl-method registration — when ownership is Borrowed/MutBorrowed
+        // but param_types still use bare `T`, wrap as `Reference(T)` / `MutableReference(T)`
+        // so call-site lowering agrees with formal parameter codegen. Stale engine metadata
+        // that marks owned `Custom(T)` as Borrowed keeps bare `T` and is handled separately.
+        for (idx, ownership) in param_ownership.iter().enumerate() {
+            if has_self_receiver && idx == 0 {
+                continue;
+            }
+            let Some(ty) = param_types.get_mut(idx) else {
+                continue;
+            };
+            match ownership {
+                OwnershipMode::Borrowed
+                    if !matches!(ty, PType::Reference(_) | PType::MutableReference(_))
+                        && !self.is_copy_type(ty) =>
+                {
+                    *ty = PType::Reference(Box::new(ty.clone()));
+                }
+                OwnershipMode::MutBorrowed
+                    if !matches!(ty, PType::MutableReference(_)) && !self.is_copy_type(ty) =>
+                {
+                    *ty = PType::MutableReference(Box::new(ty.clone()));
+                }
+                _ => {}
             }
         }
 
