@@ -431,6 +431,11 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
 }
 
 fn signature_is_declaration_stub_like(sig: &FunctionSignature) -> bool {
+    if sig.param_ownership.is_empty() {
+        return sig.param_types.iter().all(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        });
+    }
     sig.param_ownership
         .iter()
         .all(|o| matches!(o, OwnershipMode::Owned))
