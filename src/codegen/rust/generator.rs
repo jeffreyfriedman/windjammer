@@ -1199,6 +1199,12 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
 
+        if self.inferred_borrowed_params.contains(name)
+            || self.inferred_mut_borrowed_params.contains(name)
+        {
+            return arg_str.to_string();
+        }
+
         let binding_is_copy = self
             .current_function_params
             .iter()

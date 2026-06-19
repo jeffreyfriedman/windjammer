@@ -26,8 +26,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     func_name: &str,
     function: &Expression<'ast>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
-) -> String {
-    let mut func_str = gen.generate_expression(function);
+    ) -> String {
+        let mut func_str = gen.generate_expression(function);
 
     // Windjammer stdlib type mapping: Map::method → HashMap::method
     if func_str.starts_with("Map::") {
