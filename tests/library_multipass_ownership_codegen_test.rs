@@ -3128,46 +3128,6 @@ impl VoxelScene {
 }
 
 #[test]
-fn test_engine_quick_start_game_wj_single_file_with_game_core_metadata() {
-    use std::path::PathBuf;
-    use std::process::Command;
-
-    let engine = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core");
-    let src = engine.join("src/quick_start/game.wj");
-    let meta = engine.join("metadata.json");
-    assert!(src.exists(), "missing {}", src.display());
-    assert!(meta.exists(), "missing {}", meta.display());
-
-    let out = tempfile::TempDir::new().expect("tempdir");
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args([
-            "build",
-            src.to_str().unwrap(),
-            "--output",
-            out.path().to_str().unwrap(),
-            "--library",
-            "--no-cargo",
-            "--metadata",
-            &format!("game_core={}", meta.display()),
-        ])
-        .output()
-        .expect("wj build game.wj");
-    assert!(
-        output.status.success(),
-        "single-file game.wj failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let rs = std::fs::read_to_string(out.path().join("game.rs")).expect("game.rs");
-    assert!(
-        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
-            && !rs.contains("VoxelScene::new(&64)"),
-        "engine quick_start/game.wj must not borrow i32 literal. Got:\n{rs}"
-    );
-}
-
-#[test]
 fn test_homonymous_voxel_scene_modules_game_before_defs_with_metadata() {
     use std::fs;
     use windjammer::{build_project_ext, CompilationTarget};

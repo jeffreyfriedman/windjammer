@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 
 use crate::analyzer::*;
-use crate::codegen::rust::type_analysis;
 use crate::parser::*;
 
 use super::CodeGenerator;
@@ -187,9 +186,14 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             self.type_to_rust(inferred_type)
                         } else {
-                            // TDD FIX: Borrowed → &T (including &String for strings)
-                            // Correctness > idioms: &String works with Vec<String> methods
-                            format!("&{}", self.type_to_rust(inferred_type))
+                            // TDD FIX: Copy types pass by value even with Ref hint
+                            if self.is_type_copy(inferred_type) {
+                                self.type_to_rust(inferred_type)
+                            } else {
+                                // TDD FIX: Borrowed → &T (including &String for strings)
+                                // Correctness > idioms: &String works with Vec<String> methods
+                                format!("&{}", self.type_to_rust(inferred_type))
+                            }
                         }
                     }
                     OwnershipHint::Mut => {
@@ -355,7 +359,7 @@ impl<'ast> CodeGenerator<'ast> {
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(inferred_type),
                                 OwnershipMode::Borrowed => {
-                                    if type_analysis::is_copy_type(inferred_type) {
+                                    if self.is_type_copy(inferred_type) {
                                         // Copy types pass by value even when borrowed
                                         self.type_to_rust(inferred_type)
                                     } else {
