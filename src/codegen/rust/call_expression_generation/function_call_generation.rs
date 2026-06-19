@@ -402,6 +402,16 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     );
                 if types_say_owned && ownership == OwnershipMode::Borrowed
                 {
+                    if let Some((_, arg_expr)) = arguments.get(i) {
+                        if let Expression::Identifier { name, .. } = arg_expr {
+                            if gen.inferred_borrowed_params.contains(name)
+                                || gen.inferred_mut_borrowed_params.contains(name)
+                                || gen.identifier_already_ref(name)
+                            {
+                                return arg_str.clone();
+                            }
+                        }
+                    }
                     let mut s = arg_str.clone();
                     if s.starts_with("&mut ") {
                         s = s.strip_prefix("&mut ").unwrap_or(&s).to_string();
