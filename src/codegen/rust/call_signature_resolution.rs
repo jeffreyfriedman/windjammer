@@ -263,12 +263,27 @@ pub fn resolve_call_signature(
         }
     }
 
-    // Step 6: Arg-count-validated suffix match (last resort).
-    // Uses find_signature_by_name_and_arg_count which searches all `::method` entries
-    // but validates arg count. Only matches when the func_name already contains `::`
-    // (type or module qualifier) — bare names like `update` should not match
-    // `Component::update` because methods and free functions have different semantics.
+    // Step 6: Arg-count-validated match for qualified calls.
+    // Type-qualified static calls (`Foo::new`) must not match unrelated homonyms
+    // (`Emitter::new`) from the stdlib baseline registry.
     if func_name.contains("::") {
+        if let Some(pos) = func_name.rfind("::") {
+            let qualifier = &func_name[..pos];
+            if qualifier.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                if let Some(sig) =
+                    registry.find_method_on_receiver_type(qualifier, method_part, arg_count)
+                {
+                    let qualified_key = format!("{qualifier}::{method_part}");
+                    return Some(ResolvedSignature {
+                        sig: sig.clone(),
+                        qualified_key,
+                        resolution_method: ResolutionMethod::ArgCountValidated,
+                        has_collision: registry.has_collision(method_part),
+                    });
+                }
+                return None;
+            }
+        }
         if let Some(sig) = registry.find_signature_by_name_and_arg_count(method_part, arg_count) {
             let qualified_key = registry
                 .signatures
@@ -408,25 +423,31 @@ fn normalize_signature_param_types(types: &[Type]) -> Vec<Type> {
         .collect()
 }
 
-/// Stale engine/dependency metadata: `Owned` bare **non-copy** args (e.g.
-/// `QuestManager::is_quest_active(id: QuestId)` while the impl lowers to `&QuestId`).
+/// Stale engine/dependency metadata where ownership and param types disagree.
 ///
-/// Copy scalars (`u32`, `usize`, …) legitimately stay `Owned` at call sites and must
-/// not mark an otherwise converged signature as stub-like.
+/// Examples:
+/// - `QuestManager::is_quest_active(self, id: QuestId)` stub marks `id` Owned while impl uses `&QuestId`
+/// - Borrowed/MutBorrowed ownership with bare `Custom(T)` instead of `Reference(T)`
+///
+/// **Not** stale: static helpers that truly consume a param (`MannequinMesh::generate(config: MannequinConfig)`).
 pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
     sig.param_ownership.iter().enumerate().any(|(idx, own)| {
         if sig.has_self_receiver && idx == 0 {
             return false;
         }
-        if !matches!(own, OwnershipMode::Owned) {
+        let Some(ty) = sig.param_types.get(idx) else {
             return false;
+        };
+        let bare_non_copy = param_type_is_owned_non_text(sig, idx)
+            && !matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+            && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(
+                ty,
+            );
+        match own {
+            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed => bare_non_copy,
+            // Method args after `self` marked Owned with bare struct type are engine stubs.
+            OwnershipMode::Owned => sig.has_self_receiver && idx > 0 && bare_non_copy,
         }
-        sig.param_types.get(idx).is_some_and(|ty| {
-            param_type_is_owned_non_text(sig, idx)
-                && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(
-                    ty,
-                )
-        })
     })
 }
 
@@ -436,10 +457,7 @@ fn signature_is_declaration_stub_like(sig: &FunctionSignature) -> bool {
             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
         });
     }
-    sig.param_ownership
-        .iter()
-        .all(|o| matches!(o, OwnershipMode::Owned))
-        || has_stale_owned_non_copy_params(sig)
+    has_stale_owned_non_copy_params(sig)
 }
 
 /// True when `local` still looks like a declaration stub and `global` has converged ownership.
@@ -909,15 +927,15 @@ impl BuildFingerprint {
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
-            has_self_receiver: true,
+            has_self_receiver: false,
             is_extern: false,
         };
         assert_eq!(
-            effective_param_ownership(&sig, 1),
+            effective_param_ownership(&sig, 0),
             OwnershipMode::Borrowed,
         );
         assert!(
-            !param_type_is_owned_non_text(&sig, 1),
+            !param_type_is_owned_non_text(&sig, 0),
             "Reference(QuestId) is not owned"
         );
     }
@@ -1298,6 +1316,27 @@ impl BuildFingerprint {
             is_extern: false,
         };
         assert!(has_stale_owned_non_copy_params(&sig));
+    }
+
+    #[test]
+    fn converged_owned_static_struct_param_not_stale() {
+        let sig = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Custom("MannequinConfig".into())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert!(
+            !has_stale_owned_non_copy_params(&sig),
+            "owned consumption params must not be stub-like"
+        );
+        assert!(
+            !signature_is_declaration_stub_like(&sig),
+            "converged owned static method must resolve at call sites"
+        );
     }
 
     #[test]
