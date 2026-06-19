@@ -5,6 +5,57 @@ use crate::parser::*;
 
 use super::super::super::{expression_utilities, CodeGenerator};
 
+fn module_qualified_call_name(
+    type_name: &Option<String>,
+    call_method: &str,
+    call_obj: &Expression,
+) -> String {
+    if let Some(tn) = type_name {
+        format!("{tn}::{call_method}")
+    } else if let Expression::Identifier { name, .. } = call_obj {
+        format!("{name}::{call_method}")
+    } else {
+        call_method.to_string()
+    }
+}
+
+fn infer_external_module_mut_borrow_upgrade<'ast>(
+    gen: &CodeGenerator<'ast>,
+    qualified_name: &str,
+    arg_idx: usize,
+    arg: &Expression,
+    ownership: OwnershipMode,
+) -> OwnershipMode {
+    if !matches!(ownership, OwnershipMode::Owned) || arg_idx != 0 {
+        return ownership;
+    }
+    if !crate::codegen::rust::call_signature_resolution::is_external_module_qualified_call(
+        qualified_name,
+    ) {
+        return ownership;
+    }
+    let Expression::Identifier { name, .. } = arg else {
+        return ownership;
+    };
+    if !gen.inferred_mut_borrowed_params.contains(name) {
+        return ownership;
+    }
+    let non_copy = gen
+        .current_function_params
+        .iter()
+        .find(|p| p.name == *name)
+        .is_some_and(|p| !gen.is_type_copy(&p.type_))
+        || gen
+            .infer_expression_type(arg)
+            .as_ref()
+            .is_none_or(|t| !gen.is_type_copy(t));
+    if non_copy {
+        OwnershipMode::MutBorrowed
+    } else {
+        ownership
+    }
+}
+
 /// Borrow owned String arguments when the callee's `string` param lowers to `&str`.
 fn coerce_string_arg_for_borrowed_callee<'ast>(
     gen: &CodeGenerator<'ast>,
@@ -101,9 +152,11 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     call_method: &str,
     method_signature: &Option<crate::analyzer::FunctionSignature>,
     type_name: &Option<String>,
+    call_obj: &Expression<'ast>,
     runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
+    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     arguments
         .iter()
         .enumerate()
@@ -118,8 +171,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
             let sig_param_idx = sig.arg_param_index(i);
 
-            let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                sig, sig_param_idx,
+            let ownership = infer_external_module_mut_borrow_upgrade(
+                gen,
+                &qualified_name,
+                i,
+                arg_to_generate,
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, sig_param_idx,
+                ),
             );
 
             match ownership {
@@ -219,6 +278,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             &gen.current_function_params,
                             &gen.inferred_mut_borrowed_params,
                         );
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     }
                     OwnershipMode::Owned => {
                         let is_str_lit = matches!(
@@ -348,13 +408,11 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     gen: &mut CodeGenerator<'ast>,
     call_method: &str,
     type_name: &Option<String>,
+    call_obj: &Expression<'ast>,
     runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
-    let qualified_name = type_name
-        .as_ref()
-        .map(|tn| format!("{}::{}", tn, call_method))
-        .unwrap_or_else(|| call_method.to_string());
+    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     let fallback_sig = type_name
         .as_ref()
         .and_then(|tn| {
@@ -543,6 +601,24 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 type_name.as_deref(),
                 Some(&gen.enum_variant_types),
             );
+            if i == 0 {
+                let upgraded = infer_external_module_mut_borrow_upgrade(
+                    gen,
+                    &qualified_name,
+                    i,
+                    arg_to_generate,
+                    OwnershipMode::Owned,
+                );
+                if matches!(upgraded, OwnershipMode::MutBorrowed) {
+                    crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                        arg_to_generate,
+                        &mut arg_str,
+                        &gen.current_function_params,
+                        &gen.inferred_mut_borrowed_params,
+                    );
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
+                }
+            }
             arg_str
         })
         .collect()

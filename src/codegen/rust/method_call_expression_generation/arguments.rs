@@ -78,6 +78,19 @@ impl<'ast> CodeGenerator<'ast> {
                     && receiver_is_set;
                 let is_collection_key_arg = is_map_key_arg || is_set_key_arg;
 
+                let is_external_module_method = matches!(
+                    object,
+                    Expression::Identifier { name, .. }
+                        if name.chars().next().is_some_and(|c| c.is_lowercase())
+                );
+                let external_module_mut_reborrow = is_external_module_method
+                    && i == 0
+                    && matches!(
+                        arg,
+                        Expression::Identifier { name, .. }
+                            if self.inferred_mut_borrowed_params.contains(name)
+                    );
+
                 let effective_ownership = method_signature
                     .as_ref()
                     .filter(|sig| {
@@ -104,6 +117,12 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                         })
                     });
+
+                let effective_ownership = if external_module_mut_reborrow {
+                    Some(OwnershipMode::MutBorrowed)
+                } else {
+                    effective_ownership
+                };
 
                 // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
                 // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
@@ -213,6 +232,7 @@ impl<'ast> CodeGenerator<'ast> {
                             || self.inferred_mut_borrowed_params.contains(name)
                 );
                 if !arg_is_inferred_borrowed_param
+                    && !external_module_mut_reborrow
                     && !is_collection_key_arg
                     && !self.in_user_written_closure
                     && !matches!(arg_to_generate, Expression::Closure { .. })
@@ -601,6 +621,7 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                     if let Some(ref analysis) = self.auto_clone_analysis {
                         if !arg_is_inferred_borrowed_param
+                            && !external_module_mut_reborrow
                             && !param_is_mut_borrowed
                             && !param_is_borrowed_map_key
                             && !is_borrowed_iter_collecting_refs
@@ -739,7 +760,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // `if let Some(x) = &self.opt` — pass owned values via `.clone()`, not `&x` / `&mut x`.
                 // Skip when callee expects a borrow (HashMap keys, &str params, etc.).
-                if !param_expects_borrowed && !is_collection_key_arg {
+                if !param_expects_borrowed && !is_collection_key_arg && !external_module_mut_reborrow {
                     if let Expression::Identifier { name, .. } = arg_to_generate {
                     let inferred = self.infer_expression_type(arg_to_generate);
                     let is_ref_binding = inferred
@@ -780,7 +801,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // AUTO-MUT-BORROW: Add &mut when parameter expects MutBorrowed
-                if let Some(ref sig) = method_signature {
+                if external_module_mut_reborrow {
+                    crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                        arg,
+                        &mut arg_str,
+                        &self.current_function_params,
+                        &self.inferred_mut_borrowed_params,
+                    );
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
+                } else if let Some(ref sig) = method_signature {
                     let sig_param_idx = sig.arg_param_index(i);
                     let ownership_is_mut = sig
                         .param_ownership

@@ -88,6 +88,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             call_method,
             &method_signature,
             &type_name,
+            call_obj,
             runtime_module,
             arguments,
         )
@@ -96,6 +97,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             gen,
             call_method,
             &type_name,
+            call_obj,
             runtime_module,
             arguments,
         )

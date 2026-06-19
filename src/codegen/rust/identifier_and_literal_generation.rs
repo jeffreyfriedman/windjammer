@@ -109,6 +109,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if self.in_owned_value_context
+            && !self.in_call_argument_generation
             && !self.generating_assignment_target
             && !self.in_field_access_object
         {
