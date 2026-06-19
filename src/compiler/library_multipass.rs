@@ -688,7 +688,13 @@ pub(crate) fn build_library_multipass(
     // Analysis still runs for ALL files (needed for metadata.json convergence),
     // but the expensive codegen + write is skipped for files whose source hasn't changed.
     let (dirty_indices, skipped_count) =
-        super::cache_management::compute_dirty_files(&sources, &src_base, output, &dep_roots);
+        super::cache_management::compute_dirty_files_with_dep_epoch(
+            &sources,
+            &src_base,
+            output,
+            &dep_roots,
+            dep_epoch_snapshot,
+        );
     let dirty_set: HashSet<usize> = dirty_indices.into_iter().collect();
     if skipped_count > 0 {
         eprintln!(
@@ -699,10 +705,15 @@ pub(crate) fn build_library_multipass(
         );
     }
 
-    // Step 4B: Single sequential pass — analyze, merge registry, codegen per file.
-    // Avoids duplicate full-crate re-analysis (Phase 1 batch + Phase 2 re-run was ~2× cost
-    // and ~19 min/file on the 664-file engine).
+    // Step 4B: Two-phase — analyze ALL files first (merge registry), then codegen so
+    // cross-module call sites see converged signatures from files compiled later in order
+    // (e.g. game_systems.wj calling QuestManager before quest/manager.wj was analyzed).
     let step4b_start = Instant::now();
+    let global_enum_variant_types = std::sync::Arc::new(
+        super::library_copy_registry::collect_global_enum_variant_types_for_library(
+            &parsed_programs,
+        ),
+    );
     let mut final_global_registry = global_registry;
     let mut local_converged_sigs: HashMap<String, crate::analyzer::FunctionSignature> =
         HashMap::new();
@@ -734,14 +745,18 @@ pub(crate) fn build_library_multipass(
         .filter_map(|(i, (f, _))| f.strip_prefix(&src_base).ok().map(|_| i))
         .collect();
     let user_file_count = user_file_indices.len();
-    let mut step_done = 0usize;
+    let mut step4b_analyses: Vec<Option<Step4bFileAnalysis>> =
+        (0..sources.len()).map(|_| None).collect();
 
-    for i in user_file_indices {
-        let file = &sources[i].0;
+    // Phase 4B-a: analyze every file and merge into the global registry.
+    let step4b_analyze_start = Instant::now();
+    let mut step_done = 0usize;
+    for i in &user_file_indices {
+        let file = &sources[*i].0;
         step_done += 1;
         if user_file_count > 16 {
             eprintln!(
-                "⟳ Analyze+codegen: file {}/{} ({})...",
+                "⟳ Analyze: file {}/{} ({})...",
                 step_done,
                 user_file_count,
                 file.file_name().and_then(|n| n.to_str()).unwrap_or("?")
@@ -750,7 +765,7 @@ pub(crate) fn build_library_multipass(
 
         let file_start = Instant::now();
         let analysis = analyze_file_for_step4b(
-            i,
+            *i,
             &sources,
             &parsed_programs,
             &stripped_programs,
@@ -774,10 +789,8 @@ pub(crate) fn build_library_multipass(
                 );
             }
         }
-        let program: &crate::parser::Program<'static> =
-            stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]);
 
-        deferred_lint_errors.extend(analysis.lint_errors);
+        deferred_lint_errors.extend(analysis.lint_errors.clone());
 
         {
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
@@ -812,23 +825,85 @@ pub(crate) fn build_library_multipass(
             }
         }
 
+        step4b_analyses[*i] = Some(analysis);
+    }
+    profile_phase("Step 4B-a: Analysis (sequential)", step4b_analyze_start);
+
+    // Promote converged local signatures over stale engine/dependency stubs on canonical
+    // `Type::method` keys. Step 4B merge can leave engine metadata on the short key while
+    // body analysis converged under a module-qualified alias (e.g. quest/manager.wj).
+    {
+        use crate::codegen::rust::call_signature_resolution::prefer_converged_over_stub;
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        for (name, sig) in &local_converged_sigs {
+            let mut keys = vec![name.clone()];
+            let parts: Vec<&str> = name.split("::").collect();
+            if parts.len() >= 2 {
+                let method = parts[parts.len() - 1];
+                let ty = parts[parts.len() - 2];
+                if ty.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                    keys.push(format!("{ty}::{method}"));
+                }
+            }
+            for key in keys {
+                if let Some(existing) = reg.get_signature(&key) {
+                    if prefer_converged_over_stub(existing, sig) {
+                        reg.signatures.insert(key, sig.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 4B-b: codegen every file using the fully merged global registry.
+    let step4b_codegen_start = Instant::now();
+    step_done = 0;
+    for i in user_file_indices {
+        let file = &sources[i].0;
+        step_done += 1;
+        if user_file_count > 16 {
+            eprintln!(
+                "⟳ Codegen: file {}/{} ({})...",
+                step_done,
+                user_file_count,
+                file.file_name().and_then(|n| n.to_str()).unwrap_or("?")
+            );
+        }
+
+        let analysis = step4b_analyses[i]
+            .as_ref()
+            .expect("analysis must exist after phase 4B-a");
+        let program: &crate::parser::Program<'static> =
+            stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]);
+
         if !dirty_set.contains(&i) && analysis.output_file.exists() {
-            let (_, source) = &sources[i];
-            if !super::cache_management::is_library_codegen_cache_valid(
-                source,
+            let source = std::fs::read_to_string(file).unwrap_or_else(|_| sources[i].1.clone());
+            if !super::cache_management::is_library_codegen_cache_valid_with_dep_epoch(
+                &source,
                 file,
                 &analysis.output_file,
                 &src_base,
                 output,
-                &dep_roots,
+                dep_epoch_snapshot,
             ) {
-                return Err(anyhow::anyhow!(
-                    "incremental codegen skip would leave stale output for {} — \
-                     source changed but cache appeared fresh; this is a compiler bug",
-                    file.display()
-                ));
+                // Cache looked fresh in compute_dirty but diverged — regenerate instead of skipping.
+            } else {
+                continue;
             }
-            continue;
+        }
+
+        let mut full_registry = analysis.registry.clone();
+        {
+            let mut tmp_analyzer = Analyzer::for_library_pass(
+                global_copy_structs.clone(),
+                global_struct_fields.clone(),
+                struct_defining_module_paths.clone(),
+            );
+            tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
+            tmp_analyzer.register_trait_methods_in_registry(
+                &analysis.merged_trait_methods,
+                &mut full_registry,
+            );
         }
 
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
@@ -836,6 +911,7 @@ pub(crate) fn build_library_multipass(
         codegen.set_copy_types_registry((*global_copy_structs).clone());
         codegen.set_non_copy_types_registry(global_non_copy_types.clone());
         codegen.set_global_struct_field_types((*global_struct_fields).clone());
+        codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
         codegen.set_output_file(&analysis.output_file);
         codegen.set_source_file(file);
         codegen.set_library_source_root(src_base.clone());
@@ -857,7 +933,12 @@ pub(crate) fn build_library_multipass(
             &dep_roots,
             Some(dep_epoch_snapshot),
         )?;
+        {
+            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+            codegen.apply_self_receiver_upgrades(reg);
+        }
     }
+    profile_phase("Step 4B-b: Codegen (sequential)", step4b_codegen_start);
     profile_phase(
         "Step 4B: Analysis + codegen (sequential)",
         step4b_start,

@@ -121,7 +121,7 @@ pub fn collect_per_file_declaration_stubs(
         &mut struct_defining_module_paths,
     );
 
-    let stub_registry = SignatureRegistry::from_program_declarations(program);
+    let stub_registry = SignatureRegistry::from_program_declarations_in_module(program, &file_module);
     let file_stem = file
         .file_stem()
         .and_then(|s| s.to_str())
@@ -275,6 +275,58 @@ impl Counter {
         assert!(
             matches!(ret, Some(t) if format!("{:?}", t).contains("i32")),
             "second file should win for duplicate foo name"
+        );
+    }
+
+    #[test]
+    fn test_module_qualified_stubs_preserve_homonymous_voxel_scene_new() {
+        let src = std::path::PathBuf::from("/proj/src");
+        let qs_file = src.join("quick_start/voxel_scene.wj");
+        let voxel_file = src.join("voxel/voxel_scene.wj");
+        let qs_prog = parse(
+            r#"
+pub struct VoxelScene {}
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene { VoxelScene {} }
+}
+"#,
+            "quick_start/voxel_scene.wj",
+        );
+        let voxel_prog = parse(
+            r#"
+pub struct VoxelScene {}
+impl VoxelScene {
+    pub fn new() -> VoxelScene { VoxelScene {} }
+}
+"#,
+            "voxel/voxel_scene.wj",
+        );
+        let qs = collect_per_file_declaration_stubs(&src, &qs_file, &qs_prog);
+        let vx = collect_per_file_declaration_stubs(&src, &voxel_file, &voxel_prog);
+
+        let mut registry = SignatureRegistry::new();
+        merge_declaration_stub_contributions(
+            &mut registry,
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[(qs_file, qs), (voxel_file, vx)],
+            &mut CrateMetadata::default(),
+            &[qs_prog, voxel_prog],
+            &[0, 1],
+        );
+
+        let qs_sig = registry
+            .get_signature("quick_start::voxel_scene::VoxelScene::new")
+            .expect("quick_start ctor");
+        assert_eq!(qs_sig.param_types.len(), 1);
+        let vx_sig = registry
+            .get_signature("voxel::voxel_scene::VoxelScene::new")
+            .expect("voxel ctor");
+        assert!(vx_sig.param_types.is_empty());
+        assert!(
+            registry.get_signature("VoxelScene::new").is_none(),
+            "bare homonym key must not overwrite module-qualified ctors"
         );
     }
 }

@@ -273,6 +273,14 @@ pub fn is_map_key_method(method: &str) -> bool {
     MAP_KEY.contains(&method)
 }
 
+pub fn is_set_lookup_method(method: &str) -> bool {
+    matches!(method, "contains" | "remove")
+}
+
+pub fn is_collection_key_method(method: &str) -> bool {
+    is_map_key_method(method) || is_set_lookup_method(method)
+}
+
 pub fn is_storage_method(method: &str) -> bool {
     STORAGE.contains(&method)
 }

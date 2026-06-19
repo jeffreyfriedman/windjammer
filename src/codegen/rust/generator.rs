@@ -70,6 +70,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
     /// Same-impl methods that codegen will emit with owned/`mut self` (consuming receiver).
     pub(crate) current_impl_consuming_self_methods: std::collections::HashSet<String>,
+    /// `TypeName::method` keys for zero-arg methods that only return `self.method` Copy field.
+    pub(crate) trivial_copy_field_accessors: std::collections::HashSet<String>,
+    /// Generic type parameter names from the current impl block (for per-method where clauses).
+    pub(crate) current_impl_generic_type_params: Vec<String>,
     pub(crate) in_impl_block: bool, // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
     pub(crate) usize_struct_fields:
@@ -374,6 +378,8 @@ impl<'ast> CodeGenerator<'ast> {
             current_impl_methods: std::collections::HashSet::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
             current_impl_consuming_self_methods: std::collections::HashSet::new(),
+            trivial_copy_field_accessors: std::collections::HashSet::new(),
+            current_impl_generic_type_params: Vec::new(),
             in_impl_block: false,
             usize_struct_fields: std::collections::HashMap::new(),
             method_return_types: std::collections::HashMap::new(),
@@ -519,6 +525,14 @@ impl<'ast> CodeGenerator<'ast> {
 
     pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.non_copy_types_registry = registry;
+    }
+
+    /// Pre-populate enum variant payload types from the whole library (cross-module factory helpers).
+    pub fn set_global_enum_variant_types(
+        &mut self,
+        variant_types: std::collections::HashMap<String, Vec<crate::parser::Type>>,
+    ) {
+        self.enum_variant_types.extend(variant_types);
     }
 
     /// Look up a method signature by receiver type and method name
@@ -718,30 +732,160 @@ impl<'ast> CodeGenerator<'ast> {
             .find_signature_by_name_and_arg_count(name, arg_count)
     }
 
+    pub(crate) fn global_signature_registry(&self) -> Option<&SignatureRegistry> {
+        self.global_signature_registry.as_deref()
+    }
+
+    pub(in crate::codegen::rust) fn mc_method_param_expects_owned_string_from_global(
+        &self,
+        object: &Expression<'_>,
+        method: &str,
+        arg_idx: usize,
+        arg_count: usize,
+    ) -> bool {
+        let Some(type_name) = self.infer_type_name(object) else {
+            return false;
+        };
+        let Some(global) = self.global_signature_registry.as_ref() else {
+            return false;
+        };
+        let qualified = format!("{type_name}::{method}");
+        let Some(sig) = global.get_signature(&qualified) else {
+            return false;
+        };
+        if !crate::codegen::rust::call_signature_resolution::validate_arg_count(sig, arg_count) {
+            return false;
+        }
+        sig.param_type_for_arg(arg_idx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+        })
+    }
+
     pub(crate) fn resolve_call_signature_with_global(
         &self,
         func_name: &str,
         receiver_type: Option<&str>,
         arg_count: usize,
     ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
-        if let Some(r) = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+        let caller_module = self.library_source_root.as_ref().and_then(|root| {
+            if self.current_wj_file.as_os_str().is_empty() {
+                None
+            } else {
+                crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
+                    .map(|parts| parts.join("::"))
+            }
+        });
+        let local = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
             &self.signature_registry,
             func_name,
             receiver_type,
             arg_count,
             &self.module_alias_map,
-        ) {
-            return Some(r);
-        }
-        self.global_signature_registry.as_ref().and_then(|global| {
+            caller_module.as_deref(),
+        );
+        let global = self.global_signature_registry.as_ref().and_then(|global| {
             crate::codegen::rust::call_signature_resolution::resolve_call_signature(
                 global,
                 func_name,
                 receiver_type,
                 arg_count,
                 &self.module_alias_map,
+                caller_module.as_deref(),
             )
-        })
+        });
+        let picked = crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
+            local, global,
+        );
+        if let Some(ref resolved) = picked {
+            if crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
+                &resolved.sig,
+            ) {
+                if let Some(global_reg) = self.global_signature_registry.as_ref() {
+                    if let Some(global_only) =
+                        crate::codegen::rust::call_signature_resolution::resolve_call_signature(
+                            global_reg,
+                            func_name,
+                            receiver_type,
+                            arg_count,
+                            &self.module_alias_map,
+                            caller_module.as_deref(),
+                        )
+                    {
+                        if !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
+                            &global_only.sig,
+                        ) {
+                            return Some(global_only);
+                        }
+                    }
+                }
+            }
+        }
+        picked
+    }
+
+    /// Resolve `Type::method` for call-site borrow lowering (Self:: and instance calls).
+    pub(in crate::codegen::rust) fn lookup_method_signature_on_receiver_type(
+        &self,
+        receiver_type: &str,
+        method: &str,
+        arg_count: usize,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        use crate::codegen::rust::call_signature_resolution::{
+            accept_method_resolution_for_receiver, validate_arg_count,
+        };
+
+        // Prefer signatures registered during codegen (analyzed ownership/types) over
+        // declaration stubs in the registry (often all-Owned before convergence).
+        if let Some(ms) = self.lookup_method_signature(receiver_type, method) {
+            let sig = ms.to_function_signature();
+            if validate_arg_count(&sig, arg_count) {
+                return Some(sig);
+            }
+        }
+
+        let qualified = format!("{receiver_type}::{method}");
+        if let Some(resolved) =
+            self.resolve_call_signature_with_global(&qualified, Some(receiver_type), arg_count)
+        {
+            if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
+                return Some(resolved.sig);
+            }
+        }
+
+        if let Some(sig) = self
+            .signature_registry
+            .find_method_on_receiver_type(receiver_type, method, arg_count)
+        {
+            return Some(sig.clone());
+        }
+        if let Some(global) = &self.global_signature_registry {
+            if let Some(sig) = global.find_method_on_receiver_type(receiver_type, method, arg_count)
+            {
+                return Some(sig.clone());
+            }
+        }
+
+        // Module-path qualified keys from library multipass (e.g. `foo::Type::method`).
+        let suffix = format!("::{receiver_type}::{method}");
+        for (key, sig) in self.signature_registry.all_signatures() {
+            if key.ends_with(&suffix)
+                && crate::codegen::rust::call_signature_resolution::validate_arg_count(sig, arg_count)
+            {
+                return Some(sig.clone());
+            }
+        }
+        if let Some(global) = &self.global_signature_registry {
+            for (key, sig) in global.all_signatures() {
+                if key.ends_with(&suffix)
+                    && crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                        sig, arg_count,
+                    )
+                {
+                    return Some(sig.clone());
+                }
+            }
+        }
+        None
     }
 
     pub(crate) fn has_collision_with_global(&self, name: &str) -> bool {
@@ -814,10 +958,11 @@ impl<'ast> CodeGenerator<'ast> {
     pub fn apply_self_receiver_upgrades(&self, registry: &mut SignatureRegistry) {
         for (qualified_name, upgrade_mode) in &self.self_receiver_upgrades {
             if let Some(sig) = registry.signatures.get_mut(qualified_name) {
-                if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-                    if sig.param_ownership[0] != *upgrade_mode {
-                        sig.param_ownership[0] = *upgrade_mode;
-                    }
+                sig.has_self_receiver = true;
+                if sig.param_ownership.is_empty() {
+                    sig.param_ownership.push(*upgrade_mode);
+                } else if sig.param_ownership[0] != *upgrade_mode {
+                    sig.param_ownership[0] = *upgrade_mode;
                 }
             }
         }
@@ -1023,6 +1168,18 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Whether a named identifier already generates as `&mut T` in Rust (explicit or inferred).
+    pub(crate) fn identifier_already_mut_ref(&self, name: &str) -> bool {
+        if self.inferred_mut_borrowed_params.contains(name) {
+            return true;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(p.ownership, crate::parser::OwnershipHint::Mut)
+                    || matches!(&p.type_, Type::MutableReference(_)))
+        })
+    }
+
     /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.
     ///
     /// Returns the (possibly cloned) expression string. Skips the clone when:
@@ -1214,16 +1371,20 @@ impl<'ast> CodeGenerator<'ast> {
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        if let crate::parser::Expression::FieldAccess { .. } = arg {
+        if let crate::parser::Expression::FieldAccess { object, .. } = arg {
             let root_name = self.extract_root_identifier(arg);
             if let Some(ref name) = root_name {
+                let is_self_field = matches!(&**object, crate::parser::Expression::Identifier { name: n, .. } if n == "self");
                 let is_borrowed_iter = self.borrowed_iterator_vars.contains(name);
                 let is_explicit_ref = self.current_function_params.iter().any(|p| {
                     p.name == *name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 });
                 let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
 
-                if (is_borrowed_iter || is_explicit_ref || is_inferred_borrowed)
+                if (is_self_field
+                    || is_borrowed_iter
+                    || is_explicit_ref
+                    || is_inferred_borrowed)
                     && !arg_str.ends_with(".clone()")
                 {
                     let is_copy = self

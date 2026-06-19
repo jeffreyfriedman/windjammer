@@ -842,12 +842,8 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&impl_block.type_name);
         }
 
-        // Generic impls that clone `self.dense` / `self.dense[i]` need `T: Clone` for Rust Vec/element Clone.
-        let mut merged_where = impl_block.where_clause.clone();
-        let inferred_clone = codegen_helpers::infer_clone_where_bounds_for_impl(impl_block);
-        if !inferred_clone.is_empty() {
-            merged_where = codegen_helpers::merge_where_clauses(merged_where, inferred_clone);
-        }
+        // Generic impl header type params (for per-method where clauses).
+        let merged_where = impl_block.where_clause.clone();
         output.push_str(&codegen_helpers::format_where_clause(&merged_where));
 
         output.push_str(" {\n");
@@ -904,6 +900,17 @@ impl<'ast> CodeGenerator<'ast> {
             if has_explicit_self || has_inferred_self || accesses_fields {
                 instance_methods.insert(func.name.clone());
             }
+            if super::self_analysis::function_returns_self_field_with_name(func, &func.name) {
+                let base = impl_block
+                    .type_name
+                    .split('<')
+                    .next()
+                    .unwrap_or(&impl_block.type_name);
+                self.trivial_copy_field_accessors
+                    .insert(format!("{base}::{}", func.name));
+                self.trivial_copy_field_accessors
+                    .insert(format!("{}::{}", impl_block.type_name, func.name));
+            }
         }
         self.current_impl_instance_methods = instance_methods;
 
@@ -933,6 +940,8 @@ impl<'ast> CodeGenerator<'ast> {
                     func,
                     Some(&self.signature_registry),
                     Some(&impl_block.type_name),
+                    Some(&self.struct_field_types),
+                    Some(&self.self_receiver_upgrades),
                 );
                 if returns_self && body_modifies {
                     consuming_methods.insert(func.name.clone());
@@ -940,6 +949,47 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         self.current_impl_consuming_self_methods = consuming_methods;
+
+        // Fixed-point pre-pass: record &mut self upgrades before generating methods so
+        // `self.callee()` in callers above callees in source order sees accurate mutability.
+        {
+            let struct_name = impl_block.type_name.clone();
+            let max_iters = impl_block.functions.len().max(1);
+            for _ in 0..max_iters {
+                for func in &impl_block.functions {
+                    let body_modifies = super::self_analysis::function_modifies_self(
+                        func,
+                        Some(&self.signature_registry),
+                        Some(&struct_name),
+                        Some(&self.struct_field_types),
+                        Some(&self.self_receiver_upgrades),
+                    );
+                    if body_modifies {
+                        let qualified = format!("{}::{}", struct_name, func.name);
+                        self.self_receiver_upgrades
+                            .insert(qualified, OwnershipMode::MutBorrowed);
+                    }
+                }
+            }
+        }
+
+        self.current_impl_generic_type_params =
+            codegen_helpers::impl_block_type_param_names(impl_block);
+
+        // Self:: static calls to sibling methods defined later in the impl need signatures
+        // registered before any function body is emitted (forward-ref within same impl).
+        for func in &impl_block.functions {
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
+            {
+                self.register_impl_method_signature_from_analyzed(
+                    &impl_block.type_name,
+                    func,
+                    analyzed_func,
+                );
+            }
+        }
 
         for func in &impl_block.functions {
             if let Some(analyzed_func) = analyzed
@@ -953,6 +1003,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.current_impl_instance_methods.clear();
         self.current_impl_consuming_self_methods.clear();
+        self.current_impl_generic_type_params.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
         self.current_trait_impl_name = old_trait_impl_name;

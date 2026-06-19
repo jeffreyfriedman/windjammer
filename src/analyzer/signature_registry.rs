@@ -139,7 +139,16 @@ impl SignatureRegistry {
                 self.ownership_collision_keys.insert(name.clone());
             }
             if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
-                return;
+                // Declaration stubs may incorrectly include synthetic `self`; direct impl
+                // static methods must be able to replace them for Self:: call-site lowering.
+                let existing_is_declaration_stub = existing.param_ownership.iter().all(|o| {
+                    matches!(o, OwnershipMode::Owned)
+                }) && !existing.param_types.iter().any(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                });
+                if !existing_is_declaration_stub {
+                    return;
+                }
             }
         }
         if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
@@ -248,6 +257,21 @@ impl SignatureRegistry {
 
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
         self.signatures.iter()
+    }
+
+    /// Local signatures plus global fallback entries not shadowed locally.
+    /// Used by call resolution step 5c on layered registries so module-qualified
+    /// keys like `quick_start::voxel_scene::VoxelScene::new` remain visible.
+    pub fn all_signatures_for_suffix_search(
+        &self,
+    ) -> impl Iterator<Item = (&String, &FunctionSignature)> {
+        let local = self.signatures.iter();
+        let global = self.global_fallback.as_ref().into_iter().flat_map(|g| {
+            g.signatures
+                .iter()
+                .filter(|(k, _)| !self.signatures.contains_key(*k))
+        });
+        local.chain(global)
     }
 
     /// Look up a method by name, trying exact match first then falling back to
@@ -372,6 +396,7 @@ impl SignatureRegistry {
     /// Check if a signature's ownership has changed compared to a reference registry.
     pub fn ownership_changed(old: &FunctionSignature, new: &FunctionSignature) -> bool {
         old.param_ownership != new.param_ownership
+            || old.param_types != new.param_types
             || old.return_ownership != new.return_ownership
             || old.has_self_receiver != new.has_self_receiver
     }
@@ -379,13 +404,23 @@ impl SignatureRegistry {
     /// Build declaration-only signature stubs from a parsed program (no ownership inference).
     /// Used by library multipass Step 2 to seed the global registry before Step 3 convergence.
     pub fn from_program_declarations(program: &crate::parser::Program<'_>) -> Self {
+        Self::from_program_declarations_in_module(program, &[])
+    }
+
+    /// Like [`from_program_declarations`] but registers impl methods under the file's module path
+    /// (`quick_start::voxel_scene::VoxelScene::new`) so homonymous types do not overwrite stubs.
+    pub fn from_program_declarations_in_module(
+        program: &crate::parser::Program<'_>,
+        module_prefix: &[String],
+    ) -> Self {
         let mut registry = Self::empty();
-        Self::collect_declarations_from_items(&program.items, &mut registry);
+        Self::collect_declarations_from_items(&program.items, module_prefix, &mut registry);
         registry
     }
 
     fn collect_declarations_from_items(
         items: &[crate::parser::ast::core::Item<'_>],
+        module_prefix: &[String],
         registry: &mut Self,
     ) {
         use crate::parser::ast::core::Item;
@@ -404,9 +439,20 @@ impl SignatureRegistry {
                         .unwrap_or(&block.type_name);
                     for func in &block.functions {
                         let sig = Self::signature_stub_from_decl(func, &func.name);
-                        let qualified_name = format!("{}::{}", base_type_name, func.name);
+                        let qualified_name = if module_prefix.is_empty() {
+                            format!("{}::{}", base_type_name, func.name)
+                        } else {
+                            format!(
+                                "{}::{}::{}",
+                                module_prefix.join("::"),
+                                base_type_name,
+                                func.name
+                            )
+                        };
                         registry.add_function(qualified_name, sig.clone());
-                        registry.add_function(func.name.clone(), sig);
+                        if module_prefix.is_empty() {
+                            registry.add_function(func.name.clone(), sig);
+                        }
                     }
                 }
                 Item::Trait { decl, .. } => {
@@ -415,9 +461,16 @@ impl SignatureRegistry {
                             .parameters
                             .first()
                             .is_some_and(|p| p.name == "self" || p.name == "mut self");
-                        let param_types: Vec<Type> =
-                            method.parameters.iter().map(|p| p.type_.clone()).collect();
-                        let param_ownership = vec![OwnershipMode::Owned; param_types.len()];
+                        let param_types: Vec<Type> = method
+                            .parameters
+                            .iter()
+                            .map(|p| Self::declaration_stub_param_type(p))
+                            .collect();
+                        let param_ownership: Vec<OwnershipMode> = method
+                            .parameters
+                            .iter()
+                            .map(|p| Self::declaration_stub_param_ownership(p))
+                            .collect();
                         let sig = FunctionSignature {
                             name: method.name.clone(),
                             param_types,
@@ -430,8 +483,10 @@ impl SignatureRegistry {
                         registry.add_function(format!("{}::{}", decl.name, method.name), sig);
                     }
                 }
-                Item::Mod { items, .. } => {
-                    Self::collect_declarations_from_items(items, registry);
+                Item::Mod { name, items, .. } => {
+                    let mut nested = module_prefix.to_vec();
+                    nested.push(name.clone());
+                    Self::collect_declarations_from_items(items, &nested, registry);
                 }
                 _ => {}
             }
@@ -446,8 +501,16 @@ impl SignatureRegistry {
             .parameters
             .first()
             .is_some_and(|p| p.name == "self" || p.name == "mut self");
-        let param_types: Vec<Type> = func.parameters.iter().map(|p| p.type_.clone()).collect();
-        let param_ownership = vec![OwnershipMode::Owned; param_types.len()];
+        let param_types: Vec<Type> = func
+            .parameters
+            .iter()
+            .map(|p| Self::declaration_stub_param_type(p))
+            .collect();
+        let param_ownership: Vec<OwnershipMode> = func
+            .parameters
+            .iter()
+            .map(|p| Self::declaration_stub_param_ownership(p))
+            .collect();
 
         FunctionSignature {
             name: name.to_string(),
@@ -458,6 +521,37 @@ impl SignatureRegistry {
             has_self_receiver,
             is_extern: func.is_extern,
         }
+    }
+
+    fn is_declaration_stub_text_type(ty: &Type) -> bool {
+        matches!(ty, Type::String)
+            || matches!(ty, Type::Custom(name) if name == "string" || name == "String")
+    }
+
+    fn declaration_stub_param_type(param: &crate::parser::Parameter<'_>) -> Type {
+        if Self::is_declaration_stub_text_type(&param.type_) {
+            Type::Reference(Box::new(Type::Custom("str".into())))
+        } else {
+            param.type_.clone()
+        }
+    }
+
+    fn declaration_stub_param_ownership(param: &crate::parser::Parameter<'_>) -> OwnershipMode {
+        match param.name.as_str() {
+            "mut self" => OwnershipMode::MutBorrowed,
+            "self" => OwnershipMode::Borrowed,
+            _ if Self::is_declaration_stub_text_type(&param.type_) => OwnershipMode::Borrowed,
+            _ => OwnershipMode::Owned,
+        }
+    }
+
+    fn is_declaration_stub_like(sig: &FunctionSignature) -> bool {
+        sig.param_ownership
+            .iter()
+            .all(|o| matches!(o, OwnershipMode::Owned))
+            && !sig.param_types.iter().any(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
     }
 
     /// BUG #8 FIX: Merge signatures from another registry.
@@ -473,6 +567,15 @@ impl SignatureRegistry {
                     }
                 } else if existing.param_ownership != sig.param_ownership {
                     self.ownership_collision_keys.insert(name.clone());
+                }
+                // Keep converged dependency / multi-pass ownership over per-file stubs.
+                if Self::is_declaration_stub_like(sig)
+                    && !Self::is_declaration_stub_like(existing)
+                    && crate::codegen::rust::call_signature_resolution::prefer_converged_over_stub(
+                        sig, existing,
+                    )
+                {
+                    continue;
                 }
             }
             if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {

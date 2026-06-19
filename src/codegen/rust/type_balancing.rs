@@ -977,29 +977,33 @@ impl<'ast> CodeGenerator<'ast> {
         let left_is_ref = matches!(lt.as_ref(), Some(Type::Reference(_)));
         let right_is_ref = matches!(rt.as_ref(), Some(Type::Reference(_)));
 
-        // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
-        // Match arm bindings extract OWNED values from enums, never references
-        // So we should NEVER add * to them, even if type inference suggests they're refs
-        let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
-            self.match_arm_bindings.contains(name.as_str())
-        } else {
-            false
-        };
-        let right_is_match_binding = if let Expression::Identifier { name, .. } = right {
-            self.match_arm_bindings.contains(name.as_str())
-        } else {
-            false
+        let match_binding_skips_copy_deref = |expr: &Expression| -> bool {
+            let Expression::Identifier { name, .. } = expr else {
+                return false;
+            };
+            if !self.match_arm_bindings.contains(name.as_str()) {
+                return false;
+            }
+            // Owned-scrutinee bindings stay `T`; only skip deref for those, not `&T` from `match &self`.
+            !self
+                .local_var_types
+                .get(name.as_str())
+                .is_some_and(|ty| matches!(ty, Type::Reference(_) | Type::MutableReference(_)))
         };
 
         if let (Some(lb), Some(rb)) = (lhs_base, rhs_base) {
             if lb == rb && self.is_type_copy(lb) {
-                // Don't add * if either side is a match arm binding (owned, not ref)
-                if left_is_ref && !right_is_ref && !right_is_match_binding && !left_is_match_binding {
+                if left_is_ref
+                    && !right_is_ref
+                    && !match_binding_skips_copy_deref(right)
+                {
                     *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                     return;
                 }
-                // Don't add * if left side is a match arm binding (owned, not ref)
-                if right_is_ref && !left_is_ref && !left_is_match_binding && !right_is_match_binding {
+                if right_is_ref
+                    && !left_is_ref
+                    && !match_binding_skips_copy_deref(left)
+                {
                     *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                     return;
                 }

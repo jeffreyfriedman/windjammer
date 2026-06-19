@@ -114,37 +114,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 .split('<')
                                 .next()
                                 .unwrap_or(struct_name.as_str());
-                            let resolve = || {
-                                self.struct_field_types
-                                    .get(struct_name.as_str())
-                                    .or_else(|| self.struct_field_types.get(base))
-                            };
-                            if let Some(fields) = resolve() {
+                            if let Some(fields) = self
+                                .lookup_struct_field_types(struct_name)
+                                .or_else(|| self.lookup_struct_field_types(base))
+                            {
                                 if let Some(field_type) = fields.get(field.as_str()) {
                                     return Some(field_type.clone());
-                                }
-                            }
-                            // Library dogfood: registry keys are often `dir::file::StructName`.
-                            // Duplicate basenames make unqualified lookup miss; qualify like float inference.
-                            if let Some(src_root) = self.library_source_root.as_ref() {
-                                if !self.current_wj_file.as_os_str().is_empty() {
-                                    if let Some(module_path) =
-                                        crate::analyzer::type_collector::wj_file_to_module_path(
-                                            src_root,
-                                            &self.current_wj_file,
-                                        )
-                                    {
-                                        let key =
-                                            crate::type_inference::struct_field_registry::qualify_struct_key(
-                                                &module_path,
-                                                base,
-                                            );
-                                        if let Some(fields) = self.struct_field_types.get(&key) {
-                                            if let Some(field_type) = fields.get(field.as_str()) {
-                                                return Some(field_type.clone());
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }

@@ -88,12 +88,11 @@ impl<'ast> Analyzer<'ast> {
                     })
                     .unwrap_or(false);
 
-                let param_is_returned =
+                // Passthrough `return path` / implicit return still allows &str at the API;
+                // codegen emits `.to_string()` at return sites when needed.
+                let _returns_string = returns_string;
+                let _param_is_returned =
                     returns_string && self.param_is_returned_directly(&param.name, &func.body);
-
-                if param_is_returned {
-                    continue;
-                }
 
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);

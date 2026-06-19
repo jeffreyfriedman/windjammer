@@ -98,6 +98,22 @@ fn return_type_is(sig: &FunctionSignature, pred: impl Fn(&Type) -> bool) -> bool
 // ── Map type constants ───────────────────────────────────────────────────
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
+const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
+
+pub fn is_set_type_name(name: &str) -> bool {
+    SET_TYPES.contains(&name.split('<').next().unwrap_or(name))
+}
+
+pub fn is_set_type(ty: &crate::parser::Type) -> bool {
+    match ty {
+        crate::parser::Type::Parameterized(base, _) if is_set_type_name(base) => true,
+        crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner) => {
+            is_set_type(inner)
+        }
+        crate::parser::Type::Custom(name) => is_set_type_name(name),
+        _ => false,
+    }
+}
 
 fn is_map_receiver(receiver_type: Option<&str>) -> bool {
     receiver_type.is_some_and(|ty| {
@@ -429,6 +445,11 @@ pub fn is_map_key_method(method: &str) -> bool {
         method,
         "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
     )
+}
+
+/// HashSet/BTreeSet lookup — first arg is always borrowed.
+pub fn is_set_lookup_method(method: &str) -> bool {
+    matches!(method, "contains" | "remove")
 }
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.

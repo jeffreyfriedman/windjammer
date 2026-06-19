@@ -478,7 +478,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // branches, match arms, blocks) also coerce their string literals.
                 let prev_coerce = self.coerce_string_literals_to_owned;
                 self.coerce_string_literals_to_owned = true;
+                let prev_expr_ctx = self.in_expression_context;
+                self.in_expression_context = true;
                 let mut expr_str = self.generate_expression(expr);
+                self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;
 
                 // Restore previous context

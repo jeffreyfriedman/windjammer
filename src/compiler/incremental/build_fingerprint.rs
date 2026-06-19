@@ -217,14 +217,13 @@ pub fn is_codegen_cache_valid(
     if !output_path.exists() {
         return false;
     }
-    if !is_output_mtime_fresh(source_path, output_path) {
-        return false;
-    }
     if !fingerprint_matches_cached(source, source_path, dep_roots) {
         return false;
     }
-    cached_output_hash(source_path)
-        .is_none_or(|h| output_hash_matches(output_path, h))
+    match cached_output_hash(source_path) {
+        Some(h) if h != 0 => output_hash_matches(output_path, h),
+        _ => is_output_mtime_fresh(source_path, output_path),
+    }
 }
 
 /// Like [`is_codegen_cache_valid`] but uses a dep-metadata epoch snapshot from build start.
@@ -237,14 +236,13 @@ pub fn is_codegen_cache_valid_with_dep_epoch(
     if !output_path.exists() {
         return false;
     }
-    if !is_output_mtime_fresh(source_path, output_path) {
-        return false;
-    }
     if !fingerprint_matches_cached_with_dep_epoch(source, source_path, dep_epoch) {
         return false;
     }
-    cached_output_hash(source_path)
-        .is_none_or(|h| output_hash_matches(output_path, h))
+    match cached_output_hash(source_path) {
+        Some(h) if h != 0 => output_hash_matches(output_path, h),
+        _ => is_output_mtime_fresh(source_path, output_path),
+    }
 }
 
 impl From<SourceFingerprint> for crate::metadata::AnalysisFingerprint {

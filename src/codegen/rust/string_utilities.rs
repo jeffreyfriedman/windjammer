@@ -151,6 +151,207 @@ pub fn callee_borrows_string_param(
         || (sig.param_ownership.is_empty() && is_text)
 }
 
+/// Engine `Blackboard` stores keys as borrowed `&str` at the API boundary (see game-core gen).
+fn is_blackboard_borrowed_key_method(
+    receiver_type: &str,
+    method: &str,
+    arg_index: usize,
+) -> bool {
+    receiver_type == "Blackboard"
+        && arg_index == 0
+        && matches!(
+            method,
+            "set_bool" | "set_f32" | "set_i32" | "set_string" | "get_bool" | "get_f32"
+                | "get_i32" | "get_string" | "find_index"
+        )
+}
+
+/// Read-only lookup APIs (`get_*`, map `get`, BT conditions, etc.) lower string keys to
+/// `&str` in Rust even when stale metadata still lists owned `String`.
+pub fn is_readonly_string_key_method(method: &str, arg_index: usize) -> bool {
+    if arg_index != 0 {
+        return false;
+    }
+    method.starts_with("get_")
+        || matches!(
+            method,
+            "get" | "contains" | "contains_key" | "has" | "has_key" | "has_value" | "find_index"
+                | "add_condition" | "add_action" | "remove"
+        )
+}
+
+/// Enum variant constructor arg (e.g. `QuestReward::relationship` → `Relationship(string, i32)`).
+pub fn enum_factory_string_param_needs_owned(
+    enum_variant_types: &std::collections::HashMap<String, Vec<Type>>,
+    receiver_type: &str,
+    method: &str,
+    arg_index: usize,
+) -> bool {
+    let mut variant = String::new();
+    if let Some(first) = method.chars().next() {
+        variant.push(first.to_ascii_uppercase());
+        variant.push_str(&method[first.len_utf8()..]);
+    }
+    let key = format!("{receiver_type}::{variant}");
+    let method_key = format!("{receiver_type}::{method}");
+    for lookup in [&key, &method_key] {
+        if enum_variant_types
+            .get(lookup)
+            .and_then(|ts| ts.get(arg_index))
+            .is_some_and(param_is_owned_string_type)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
+pub fn string_literal_needs_owned_coercion(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+) -> bool {
+    string_literal_needs_owned_coercion_with_enum(sig, arg_index, method, None, None)
+}
+
+/// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
+pub fn string_literal_needs_owned_coercion_with_enum(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+    receiver_type: Option<&str>,
+    enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
+) -> bool {
+    if let Some(m) = method {
+        if let Some(tn) = receiver_type {
+            if is_blackboard_borrowed_key_method(tn, m, arg_index) {
+                return false;
+            }
+        }
+        if crate::codegen::rust::stdlib_method_traits::is_map_key_method(m) && arg_index == 0 {
+            return false;
+        }
+        if is_readonly_string_key_method(m, arg_index) {
+            return false;
+        }
+        if matches!(
+            m,
+            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add"
+                | "fill"
+        ) && arg_index == 0
+        {
+            return true;
+        }
+        if m == "new" || m.ends_with("_new") {
+            return true;
+        }
+    }
+
+    let Some(sig) = sig else {
+        if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
+            return enum_factory_string_param_needs_owned(variants, tn, m, arg_index);
+        }
+        return false;
+    };
+
+    let idx = sig.arg_param_index(arg_index);
+    let Some(param_type) = sig.param_types.get(idx) else {
+        return false;
+    };
+
+    if !crate::codegen::rust::types::is_windjammer_text_type(param_type) {
+        return false;
+    }
+
+    if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
+        if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
+            return true;
+        }
+    }
+
+    if param_is_rust_str_ref(param_type) {
+        return false;
+    }
+    if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+        &Some(sig.clone()),
+        idx,
+    ) {
+        return false;
+    }
+
+    if crate::codegen::rust::string_utilities::callee_borrows_string_param(sig, idx) {
+        // Stale `Borrowed` on plain `string` must not suppress `.to_string()` when the
+        // converged Rust formal is owned `String` (only `&str` / `&String` stay bare).
+        if param_is_rust_str_ref(param_type)
+            || crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+                &Some(sig.clone()),
+                idx,
+            )
+        {
+            return false;
+        }
+    }
+
+    // Rust formal is owned `String` — allocate even when stale metadata still says Borrowed.
+    if param_is_owned_string_type(param_type) {
+        return true;
+    }
+
+    if matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+        crate::analyzer::OwnershipMode::Owned
+    ) {
+        return true;
+    }
+
+    false
+}
+
+/// Final pass: align string literal emission with [`string_literal_needs_owned_coercion`].
+pub fn finalize_string_literal_call_site_arg<'ast>(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+    arg: &Expression<'ast>,
+    arg_str: &mut String,
+    receiver_type: Option<&str>,
+    enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
+) {
+    let is_string_literal = matches!(
+        arg,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        }
+    );
+    if !is_string_literal {
+        return;
+    }
+
+    let needs_owned = string_literal_needs_owned_coercion_with_enum(
+        sig,
+        arg_index,
+        method,
+        receiver_type,
+        enum_variant_types,
+    );
+    if needs_owned {
+        if !already_owned_string_expr(arg_str) {
+            *arg_str = coerce_expr_to_owned_string(arg_str);
+        }
+    } else {
+        if arg_str.ends_with(".to_string()") {
+            *arg_str = arg_str[..arg_str.len() - 12].to_string();
+        } else if arg_str.ends_with(".into()") {
+            *arg_str = arg_str[..arg_str.len() - 7].to_string();
+        }
+        if arg_str.starts_with('&') {
+            *arg_str = arg_str.trim_start_matches('&').to_string();
+        }
+    }
+}
+
 /// When `expr_str` ends with `.clone()` and the cloned identifier is a borrowed
 /// string parameter, rewrite `.clone()` to `.to_string()`. Cloning a `&str`
 /// produces another `&str`; `.to_string()` produces an owned `String`.

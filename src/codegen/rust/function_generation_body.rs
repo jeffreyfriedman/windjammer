@@ -23,8 +23,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Add where clause if present
-        output.push_str(&codegen_helpers::format_where_clause(&func.where_clause));
+        // Add where clause if present (impl-level + per-method inferred bounds).
+        let mut where_clause = func.where_clause.clone();
+        if self.current_impl_generic_type_params.len() == 1 {
+            let inferred = codegen_helpers::infer_clone_where_bounds_for_function(
+                func,
+                &self.current_impl_generic_type_params,
+            );
+            if !inferred.is_empty() {
+                where_clause =
+                    codegen_helpers::merge_where_clauses(where_clause, inferred);
+            }
+        }
+        output.push_str(&codegen_helpers::format_where_clause(&where_clause));
 
         output.push_str(" {\n");
         self.indent_level += 1;

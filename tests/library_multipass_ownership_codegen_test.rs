@@ -823,8 +823,8 @@ impl BlendTree {
     let rs = map.get("animation/blend_tree.rs").expect("blend_tree.rs");
 
     assert!(
-        rs.contains("let __match_borrow_break = self.nodes[") && rs.contains("].clone();"),
-        "enum borrow-break must clone owned node. Got:\n{rs}"
+        rs.contains("let mut __match_borrow_break = self.nodes[") && rs.contains("].clone();"),
+        "enum borrow-break must clone owned node into mut binding for ref mut patterns. Got:\n{rs}"
     );
     assert!(
         !rs.contains("let __match_borrow_break = &self.nodes"),
@@ -1836,5 +1836,1960 @@ impl SkinnedMeshRenderer {
     assert!(
         !rs.contains("skel_opt.clone()"),
         "Option<&mut T> scrutinee must not be cloned in tuple match. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_static_self_method_borrows_str_param_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "editor/asset_browser.wj",
+        r#"
+impl AssetEntry {
+    pub fn new(id: i32, name: string, path: string) -> AssetEntry {
+        let ext = Self::extract_extension(path)
+        AssetEntry { id: id, name: name, path: path, asset_type: 0, size_bytes: 0, is_loaded: false, visible: true, dependencies: Vec::new() }
+    }
+
+    pub fn extract_extension(path: string) -> string {
+        path
+    }
+
+    pub fn get_extension(self) -> string {
+        Self::extract_extension(self.path)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("editor/asset_browser.rs").expect("asset_browser.rs");
+
+    assert!(
+        rs.contains("Self::extract_extension(path)") || rs.contains("Self::extract_extension(&path)"),
+        "static call with borrowed string param must not clone/to_string. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("path.to_string().clone()") && !rs.contains("self.path.clone()"),
+        "must borrow &str at static call sites. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_static_self_method_borrows_vec_param_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/build_fingerprint.wj",
+        r#"
+impl BuildFingerprint {
+    pub fn generate(source_dir: string) -> BuildFingerprint {
+        let files = Self::collect_wj_files(source_dir)
+        let hash = Self::hash_files(files)
+        BuildFingerprint { source_hash: hash, build_timestamp: 0, source_files: files }
+    }
+
+    fn collect_wj_files(dir: string) -> Vec<string> {
+        Vec::new()
+    }
+
+    fn hash_files(files: Vec<string>) -> u64 {
+        0
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/build_fingerprint.rs")
+        .expect("build_fingerprint.rs");
+
+    assert!(
+        rs.contains("Self::collect_wj_files(source_dir)")
+            || rs.contains("Self::collect_wj_files(&source_dir)"),
+        "borrowed string static arg must not to_string. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("Self::hash_files(&files)") || rs.contains("Self::hash_files(files.as_ref())"),
+        "borrowed Vec param must use reference not clone. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("hash_files(files.clone())"),
+        "must not clone Vec for borrowed param. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_impl_clone_where_on_method_not_whole_impl() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/gpu_types.wj",
+        r#"
+pub struct StorageWrite<T> {
+    buffer_id: u32,
+    data: T,
+}
+
+impl StorageWrite<T> {
+    pub fn from_id(buffer_id: u32, data: T) -> StorageWrite<T> {
+        StorageWrite { buffer_id: buffer_id, data: data }
+    }
+}
+
+pub struct StorageRead<T> {
+    buffer_id: u32,
+    data: T,
+}
+
+impl StorageRead<T> {
+    pub fn from(write: StorageWrite<T>) -> StorageRead<T> {
+        StorageRead { buffer_id: write.buffer_id, data: write.data.clone() }
+    }
+
+    pub fn buffer_id(self) -> u32 {
+        self.buffer_id
+    }
+}
+
+pub struct PassBuilder {}
+
+impl PassBuilder {
+    pub fn bind(self, buffer: StorageRead<i32>) -> PassBuilder {
+        let _id = buffer.buffer_id()
+        self
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("rendering/gpu_types.rs").expect("gpu_types.rs");
+
+    assert!(
+        !rs.contains("impl<T> StorageRead<T>\nwhere\n    T: Clone"),
+        "T: Clone must not apply to whole impl. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("fn from(") && rs.contains("where\n    T: Clone"),
+        "only `from` needs T: Clone. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_self_indexed_field_mutating_method_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "editor/viewport.wj",
+        r#"
+pub struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+pub struct Gizmo {
+    position: Vec2,
+    size: f32,
+    is_hovered: bool,
+}
+
+impl Gizmo {
+    pub fn check_hover(self, mouse_pos: Vec2) -> bool {
+        self.is_hovered = true
+        self.is_hovered
+    }
+}
+
+pub struct GizmoManager {
+    gizmos: Vec<Gizmo>,
+}
+
+impl GizmoManager {
+    pub fn update_gizmos(self, mouse_pos: Vec2) {
+        for i in 0..self.gizmos.len() as i64 {
+            self.gizmos[i as usize].check_hover(mouse_pos)
+        }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("editor/viewport.rs").expect("viewport.rs");
+
+    assert!(
+        rs.contains("fn update_gizmos(&mut self"),
+        "indexed field mutating method call requires &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_self_nested_field_mutating_initialize_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/unified_renderer.wj",
+        r#"
+pub struct VoxelRenderer {
+    ready: bool,
+}
+
+impl VoxelRenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+
+pub struct MeshRenderer {
+    ready: bool,
+}
+
+impl MeshRenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+
+pub struct UnifiedRenderer {
+    voxel_renderer: VoxelRenderer,
+    mesh_renderer: MeshRenderer,
+}
+
+impl UnifiedRenderer {
+    pub fn initialize(self) {
+        self.voxel_renderer.initialize()
+        self.mesh_renderer.initialize()
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/unified_renderer.rs")
+        .expect("unified_renderer.rs");
+
+    assert!(
+        rs.contains("fn initialize(&mut self)"),
+        "nested field mutating calls require &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_param_field_readonly_method_no_mut_camera_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "math/mat4.wj",
+        r#"
+pub struct Mat4 {
+    m00: f32,
+}
+
+impl Mat4 {
+    pub fn to_column_major_array(self) -> [f32; 16] {
+        [self.m00, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    }
+
+    pub fn inverse(self) -> Mat4 {
+        self
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/render_port.wj",
+        r#"
+use crate::math::mat4::Mat4
+
+pub struct CameraData {
+    view_matrix: Mat4,
+    proj_matrix: Mat4,
+}
+
+pub struct GpuCameraState {
+    view_matrix: [f32; 16],
+    proj_matrix: [f32; 16],
+    inv_view: [f32; 16],
+    inv_proj: [f32; 16],
+}
+
+pub struct UnifiedRenderer {}
+
+impl UnifiedRenderer {
+    fn camera_data_to_gpu_state(camera: CameraData) -> GpuCameraState {
+        let view_arr = camera.view_matrix.to_column_major_array()
+        let proj_arr = camera.proj_matrix.to_column_major_array()
+        let inv_view = camera.view_matrix.inverse().to_column_major_array()
+        let inv_proj = camera.proj_matrix.inverse().to_column_major_array()
+        GpuCameraState {
+            view_matrix: view_arr,
+            proj_matrix: proj_arr,
+            inv_view: inv_view,
+            inv_proj: inv_proj,
+        }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/render_port.rs")
+        .expect("render_port.rs");
+
+    assert!(
+        !rs.contains("camera: &mut CameraData"),
+        "readonly field method chain must not infer &mut param. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("camera: CameraData") || rs.contains("camera: &CameraData"),
+        "expected owned or &CameraData param. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_trait_impl_readonly_self_not_upgraded_for_mutating_callee() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "input/input_port.wj",
+        r#"
+pub trait InputPort {
+    fn is_key_pressed(key: i32) -> bool
+    fn is_key_just_pressed(key: i32) -> bool
+}
+
+pub struct MockInputPort {
+    pressed_keys: Vec<i32>,
+}
+
+impl MockInputPort {
+    pub fn new() -> MockInputPort {
+        MockInputPort { pressed_keys: Vec::new() }
+    }
+}
+
+impl InputPort for MockInputPort {
+    fn is_key_pressed(key: i32) -> bool {
+        for k in self.pressed_keys {
+            if k == key {
+                return true
+            }
+        }
+        false
+    }
+
+    fn is_key_just_pressed(key: i32) -> bool {
+        self.is_key_pressed(key)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("input/input_port.rs").expect("input_port.rs");
+
+    assert!(
+        rs.contains("fn is_key_just_pressed(&self"),
+        "trait impl must keep &self when trait requires it. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn is_key_just_pressed(&mut self"),
+        "must not upgrade trait impl to &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_direct_initialize_with_early_return_cross_file_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/voxel_gpu_renderer.wj",
+        r#"
+pub struct VoxelGPURenderer {
+    ready: bool,
+}
+
+impl VoxelGPURenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/mesh_renderer.wj",
+        r#"
+pub struct MeshRenderer {
+    ready: bool,
+}
+
+impl MeshRenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/unified_renderer.wj",
+        r#"
+use crate::rendering::voxel_gpu_renderer::VoxelGPURenderer
+use crate::rendering::mesh_renderer::MeshRenderer
+
+pub struct UnifiedRenderer {
+    test_mode: bool,
+    voxel_renderer: VoxelGPURenderer,
+    mesh_renderer: MeshRenderer,
+}
+
+impl UnifiedRenderer {
+    /// Direct initialize (shadows RenderPort trait for non-trait dispatch)
+    pub fn initialize(self) {
+        if self.test_mode {
+            return
+        }
+        self.voxel_renderer.initialize()
+        self.mesh_renderer.initialize()
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/unified_renderer.rs")
+        .expect("unified_renderer.rs");
+
+    assert!(
+        rs.contains("pub fn initialize(&mut self)"),
+        "cross-file nested mutating calls require &mut self on direct initialize. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("pub fn initialize(&self)"),
+        "must not emit &self when nested field methods mutate. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_trait_impl_mut_receiver_matches_trait_contract() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/render_port.wj",
+        r#"
+pub trait RenderPort {
+    fn initialize()
+    fn set_camera(camera: i32)
+}
+
+pub struct MockRenderer {
+    ready: bool,
+    camera_set: bool,
+}
+
+impl MockRenderer {
+    pub fn new() -> MockRenderer {
+        MockRenderer { ready: false, camera_set: false }
+    }
+}
+
+impl RenderPort for MockRenderer {
+    fn initialize() {
+    }
+
+    fn set_camera(camera: i32) {
+        self.camera_set = true
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/unified_renderer.wj",
+        r#"
+use crate::rendering::render_port::RenderPort
+
+pub struct VoxelRenderer {
+    ready: bool,
+}
+
+impl VoxelRenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+
+pub struct UnifiedRenderer {
+    voxel_renderer: VoxelRenderer,
+    ready: bool,
+}
+
+impl UnifiedRenderer {
+    pub fn new() -> UnifiedRenderer {
+        UnifiedRenderer {
+            voxel_renderer: VoxelRenderer { ready: false },
+            ready: false,
+        }
+    }
+}
+
+impl RenderPort for UnifiedRenderer {
+    fn initialize() {
+        self.voxel_renderer.initialize()
+        self.ready = true
+    }
+
+    fn set_camera(camera: i32) {
+        self.ready = false
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/unified_renderer.rs")
+        .expect("unified_renderer.rs");
+
+    assert!(
+        rs.contains("impl RenderPort for UnifiedRenderer")
+            && rs.contains("fn initialize(&mut self)"),
+        "trait impl must use &mut self when trait contract requires it. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("impl RenderPort for UnifiedRenderer")
+            || !rs.contains("fn initialize(&self)"),
+        "must not downgrade trait impl to &self when trait uses &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_implicit_return_vec_index_no_ref_before_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ecs/scene.wj",
+        r#"
+pub struct Scene {
+    children: Vec<Vec<i64>>,
+}
+
+pub struct SceneGraph {
+    children: Vec<Vec<i64>>,
+}
+
+impl SceneGraph {
+    pub fn get_children(self, entity_id: i64) -> Vec<i64> {
+        let pi = 0
+        self.children[pi as usize]
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ecs/scene.rs").expect("scene.rs");
+
+    assert!(
+        !rs.contains("&self.children[") || rs.contains("(&self.children["),
+        "implicit return must not emit &vec[i].clone() — use ( &vec[i] ).clone(). Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_hashmap_get_option_binding_borrows_not_clones() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "animation/controller.wj",
+        r#"
+pub struct Animation {
+    frames: Vec<i32>,
+}
+
+impl Animation {
+    pub fn get_frame(self, index: usize) -> Option<i32> {
+        None
+    }
+}
+
+pub struct AnimationController {
+    animations: Map<string, Animation>,
+    current_animation: Option<string>,
+    current_frame_index: usize,
+}
+
+impl AnimationController {
+    pub fn current_frame(self) -> usize {
+        if let Some(anim_name) = self.current_animation {
+            if let Some(animation) = self.animations.get(anim_name) {
+                if let Some(frame) = animation.get_frame(self.current_frame_index) {
+                    return frame
+                }
+            }
+        }
+        0
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("animation/controller.rs").expect("controller.rs");
+
+    assert!(
+        !rs.contains("anim_name.clone()"),
+        "HashMap get key must borrow, not clone Option binding. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_copy_type_param_not_mut_ref_state_id() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "state_machine/state_id.wj",
+        r#"
+pub struct StateId {
+    value: u32,
+}
+"#,
+    );
+    test.add_file(
+        "state_machine/machine.wj",
+        r#"
+use crate::state_machine::state_id::StateId
+
+pub struct State {
+    enter_count: i32,
+}
+
+impl State {
+    pub fn increment_enter_count(self) {
+        self.enter_count = self.enter_count + 1
+    }
+}
+
+pub struct StateMachine {
+    states: Map<StateId, State>,
+    initial_state: Option<StateId>,
+    current_state: Option<StateId>,
+    time_in_state: f32,
+}
+
+impl StateMachine {
+    pub fn set_initial_state(self, id: StateId) {
+        if self.states.contains_key(id) {
+            self.initial_state = Some(id)
+            self.current_state = Some(id)
+            if let Some(state) = self.states.get_mut(id) {
+                state.increment_enter_count()
+            }
+        }
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("state_machine/machine.rs").expect("machine.rs");
+
+    assert!(
+        !rs.contains("id: &mut StateId"),
+        "Copy lookup key params must not become &mut. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_hashset_contains_borrows_owned_string_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "scene/manager.wj",
+        r#"
+pub struct SceneManager {
+    registered_scenes: Vec<string>,
+}
+
+impl SceneManager {
+    pub fn is_registered(self, name: string) -> bool {
+        self.registered_scenes.contains(name)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("scene/manager.rs").expect("manager.rs");
+
+    assert!(
+        rs.contains("contains(&name)")
+            || rs.contains("contains(name.as_str())")
+            || (rs.contains("contains(name)") && rs.contains("name: &String")),
+        "Vec/Set contains must borrow string param without to_string(). Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("contains(name.to_string())"),
+        "must not allocate to_string for contains lookup. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_set_bool_string_literal_not_to_string_for_str_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "behavior_tree/blackboard.wj",
+        r#"
+pub struct Blackboard {}
+
+impl Blackboard {
+    pub fn set_bool(self, key: string, value: bool) {
+        let _ = key
+        let _ = value
+    }
+}
+"#,
+    );
+    test.add_file(
+        "enemy/bt_actions.wj",
+        r#"
+use crate::behavior_tree::blackboard::Blackboard
+
+pub fn populate_conditions(bb: Blackboard) {
+    bb.set_bool("__cond_is_alive", true)
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("enemy/bt_actions.rs").expect("bt_actions.rs");
+
+    assert!(
+        rs.contains("set_bool(\"__cond_is_alive\""),
+        "string literal key must stay bare for &str param. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"__cond_is_alive\".to_string()"),
+        "must not allocate to_string for &str key param. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_set_name_string_literal_to_string_for_owned_string_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rendering/material.wj",
+        r#"
+pub struct Material {
+    name: string,
+}
+
+impl Material {
+    pub fn new() -> Material {
+        Material { name: "" }
+    }
+
+    pub fn set_name(self, name: string) {
+        self.name = name
+    }
+}
+
+pub fn create_metal_material() -> Material {
+    let mut material = Material::new()
+    material.set_name("Metal")
+    material
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("rendering/material.rs").expect("material.rs");
+
+    assert!(
+        rs.contains("set_name(\"Metal\".to_string())") || rs.contains("set_name(\"Metal\".into())"),
+        "owned String param needs allocation from literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_add_condition_string_literal_not_to_string_for_str_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "behavior_tree/behavior_tree.wj",
+        r#"
+pub struct NodeId {
+    id: i32,
+}
+
+pub struct BehaviorTree {
+    next_id: i32,
+}
+
+impl BehaviorTree {
+    pub fn new() -> BehaviorTree {
+        BehaviorTree { next_id: 0 }
+    }
+
+    pub fn add_condition(self, name: string) -> NodeId {
+        NodeId { id: 0 }
+    }
+}
+
+pub fn build_tree() -> BehaviorTree {
+    let mut tree = BehaviorTree::new()
+    let _ = tree.add_condition("is_enemy_near")
+    tree
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("behavior_tree/behavior_tree.rs")
+        .expect("behavior_tree.rs");
+
+    assert!(
+        rs.contains("add_condition(\"is_enemy_near\""),
+        "lookup-key condition name must stay bare for &str param. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"is_enemy_near\".to_string()"),
+        "must not allocate to_string for add_condition key. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_user_contains_f32_params_not_collection_key_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "audio/reverb_zones.wj",
+        r#"
+pub struct ReverbZone {
+    min_x: f32,
+    max_x: f32,
+}
+
+impl ReverbZone {
+    pub fn contains(self, x: f32, y: f32, z: f32) -> bool {
+        x >= self.min_x && x <= self.max_x
+    }
+}
+
+pub fn test_reverb_zone_contains() {
+    let zone = ReverbZone { min_x: 0.0, max_x: 10.0 }
+    assert(!zone.contains(-1.0, 2.5, 5.0), "outside")
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("audio/reverb_zones.rs").expect("reverb_zones.rs");
+
+    assert!(
+        rs.contains("zone.contains(-1.0_f32") || rs.contains("zone.contains(-1.0,"),
+        "f32 contains args pass by value. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("contains(&-1.0"),
+        "must not borrow Copy f32 for user contains(). Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_user_get_copy_key_not_hashmap_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "voxel/material.wj",
+        r#"
+pub struct VoxelMaterial {
+    color_r: f32,
+}
+
+pub struct MaterialPalette {
+    materials: Vec<VoxelMaterial>,
+}
+
+impl MaterialPalette {
+    pub fn get(self, id: u8) -> VoxelMaterial {
+        self.materials[id as usize].clone()
+    }
+
+    pub fn validate(self, wall_id: u8) -> i32 {
+        let m = self.get(wall_id)
+        if m.color_r > 0.5 {
+            return 1
+        }
+        0
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("voxel/material.rs").expect("material.rs");
+
+    assert!(
+        rs.contains("self.get(wall_id)") || rs.contains("self.get(wall_id.clone())"),
+        "u8 get key passes by value for user get(). Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("self.get(&wall_id)"),
+        "must not borrow Copy u8 for user get(). Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_caller_above_callee_in_source_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "visual_scripting/graph.wj",
+        r#"
+pub struct GraphNode {
+    value: i32,
+}
+
+impl GraphNode {
+    pub fn execute(self) {
+        self.value = 1
+    }
+}
+
+pub struct ScriptGraph {
+    nodes: Vec<GraphNode>,
+}
+
+impl ScriptGraph {
+    pub fn execute_from_event(self, _event_id: u32) {
+        self.execute_node(0)
+    }
+
+    fn execute_node(self, node_idx: usize) {
+        self.nodes[node_idx].execute()
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("visual_scripting/graph.rs").expect("graph.rs");
+
+    assert!(
+        rs.contains("fn execute_from_event(&mut self"),
+        "caller above callee in source must get &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_cross_file_nested_initialize_needs_mut_self() {
+    let mut test = MultiFileTest::new();
+    // Alphabetical order: unified_renderer before voxel_renderer — simulates engine compile order.
+    test.add_file(
+        "rendering/unified_renderer.wj",
+        r#"
+use crate::rendering::voxel_renderer::VoxelRenderer
+
+pub struct UnifiedRenderer {
+    voxel_renderer: VoxelRenderer,
+}
+
+impl UnifiedRenderer {
+    pub fn initialize(self) {
+        self.voxel_renderer.initialize()
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/voxel_renderer.wj",
+        r#"
+pub struct VoxelRenderer {
+    ready: bool,
+}
+
+impl VoxelRenderer {
+    pub fn initialize(self) {
+        self.ready = true
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rendering/mod.wj",
+        r#"
+pub mod unified_renderer
+pub mod voxel_renderer
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map
+        .get("rendering/unified_renderer.rs")
+        .expect("unified_renderer.rs");
+
+    assert!(
+        rs.contains("fn initialize(&mut self)"),
+        "cross-file nested initialize requires &mut self. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_hashset_contains_no_double_borrow_on_borrowed_string_param() {
+    // Dogfooding: scene/manager.wj — `name: &String` + `contains(&name)` → E0277.
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "scene/manager.wj",
+        r#"
+use std::collections::HashSet
+
+pub struct SceneManager {
+    registered_scenes: HashSet<string>,
+    paused_scenes: HashSet<string>,
+}
+
+impl SceneManager {
+    pub fn is_registered(self, name: string) -> bool {
+        self.registered_scenes.contains(name)
+    }
+
+    pub fn is_paused(self, name: string) -> bool {
+        self.paused_scenes.contains(name)
+    }
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .unwrap_or_else(|e| panic!("compile failed: {e}"));
+    let rs = map.get("scene/manager.rs").expect("manager.rs");
+
+    assert!(
+        !rs.contains("contains(&name)"),
+        "borrowed string param must not double-borrow for HashSet::contains. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("contains(name)"),
+        "HashSet::contains should pass borrowed param by value. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_qualified_new_i32_literal_not_borrowed_with_homonym_new_registry() {
+    // Multipass registry has thousands of `::new` entries; must not borrow `64` for i32 params.
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "other/type_a.wj",
+        r#"
+pub struct TypeA {}
+
+impl TypeA {
+    pub fn new() -> TypeA {
+        TypeA {}
+    }
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/game.wj",
+        r#"
+use crate::quick_start::voxel_scene::VoxelScene
+
+pub fn quick_start() -> VoxelScene {
+    VoxelScene::new(64)
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .unwrap_or_else(|e| panic!("compile failed: {e}"));
+    let rs = map.get("quick_start/game.rs").expect("game.rs");
+
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "i32 constructor literal must not be auto-borrowed. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_qualified_new_i32_literal_with_stale_voxelscene_metadata_homonym() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "other/type_a.wj",
+        r#"
+pub struct TypeA {}
+
+impl TypeA {
+    pub fn new() -> TypeA {
+        TypeA {}
+    }
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/game.wj",
+        r#"
+use crate::quick_start::voxel_scene::VoxelScene
+
+pub fn quick_start() -> VoxelScene {
+    VoxelScene::new(64)
+}
+"#,
+    );
+
+    let meta_path = test.build_dir().parent().unwrap().join("stale_metadata.json");
+    fs::write(
+        &meta_path,
+        r#"{
+  "functions": {
+    "VoxelScene::new": {
+      "params": [],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": true,
+      "parent_type": "VoxelScene",
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "material::new": {
+      "params": ["Custom(\"MaterialPalette\")"],
+      "return_type": "Custom(\"Material\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  }
+}"#,
+    )
+    .expect("write stale metadata");
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[("game_core", &meta_path)],
+    )
+    .unwrap_or_else(|e| panic!("compile with stale metadata failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("quick_start/game.rs")).expect("game.rs");
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "stale 0-arg VoxelScene::new metadata must not borrow i32 literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_qualified_new_i32_literal_when_game_file_is_analyzed_before_voxel_scene() {
+    // Engine discovery order is alphabetical: `quick_start/game.wj` before
+    // `quick_start/voxel_scene.wj`. Codegen must not borrow `64` while waiting
+    // for the defining module's constructor signature.
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "quick_start/game.wj",
+        r#"
+use crate::quick_start::voxel_scene::VoxelScene
+
+pub fn quick_start() -> VoxelScene {
+    VoxelScene::new(64)
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .unwrap_or_else(|e| panic!("compile failed: {e}"));
+    let rs = map.get("quick_start/game.rs").expect("game.rs");
+
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "game.wj before voxel_scene.wj must not auto-borrow i32 ctor literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_qualified_new_i32_literal_game_before_voxel_scene_with_stale_metadata() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "quick_start/game.wj",
+        r#"
+use crate::quick_start::voxel_scene::VoxelScene
+
+pub fn quick_start() -> VoxelScene {
+    VoxelScene::new(64)
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+
+    let meta_path = test.build_dir().parent().unwrap().join("stale_metadata.json");
+    fs::write(
+        &meta_path,
+        r#"{
+  "functions": {
+    "VoxelScene::new": {
+      "params": [],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": true,
+      "parent_type": "VoxelScene",
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "quick_start::voxel_scene::VoxelScene::new": {
+      "params": ["Custom(\"i32\")"],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "material::new": {
+      "params": ["Custom(\"MaterialPalette\")"],
+      "return_type": "Custom(\"Material\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  }
+}"#,
+    )
+    .expect("write stale metadata");
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[("game_core", &meta_path)],
+    )
+    .unwrap_or_else(|e| panic!("compile failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("quick_start/game.rs")).expect("game.rs");
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "stale metadata + game-before-voxel must not borrow i32 literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_engine_quick_start_game_wj_single_file_with_game_core_metadata() {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    let engine = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../windjammer-game/windjammer-game-core");
+    let src = engine.join("src/quick_start/game.wj");
+    let meta = engine.join("metadata.json");
+    assert!(src.exists(), "missing {}", src.display());
+    assert!(meta.exists(), "missing {}", meta.display());
+
+    let out = tempfile::TempDir::new().expect("tempdir");
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            src.to_str().unwrap(),
+            "--output",
+            out.path().to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+            "--metadata",
+            &format!("game_core={}", meta.display()),
+        ])
+        .output()
+        .expect("wj build game.wj");
+    assert!(
+        output.status.success(),
+        "single-file game.wj failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rs = std::fs::read_to_string(out.path().join("game.rs")).expect("game.rs");
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "engine quick_start/game.wj must not borrow i32 literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_homonymous_voxel_scene_modules_game_before_defs_with_metadata() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "quick_start/game.wj",
+        r#"
+use crate::quick_start::voxel_scene::VoxelScene
+
+pub fn quick_start() -> VoxelScene {
+    VoxelScene::new(64)
+}
+"#,
+    );
+    test.add_file(
+        "quick_start/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new(grid_size: i32) -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+    test.add_file(
+        "voxel/voxel_scene.wj",
+        r#"
+pub struct VoxelScene {}
+
+impl VoxelScene {
+    pub fn new() -> VoxelScene {
+        VoxelScene {}
+    }
+}
+"#,
+    );
+
+    let meta_path = test.build_dir().parent().unwrap().join("stale_metadata.json");
+    fs::write(
+        &meta_path,
+        r#"{
+  "functions": {
+    "VoxelScene::new": {
+      "params": [],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": true,
+      "parent_type": "VoxelScene",
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "quick_start::voxel_scene::VoxelScene::new": {
+      "params": ["Custom(\"i32\")"],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "voxel::voxel_scene::VoxelScene::new": {
+      "params": [],
+      "return_type": "Custom(\"VoxelScene\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  }
+}"#,
+    )
+    .expect("write metadata");
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[("game_core", &meta_path)],
+    )
+    .unwrap_or_else(|e| panic!("compile failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("quick_start/game.rs")).expect("game.rs");
+    assert!(
+        (rs.contains("VoxelScene::new(64)") || rs.contains("VoxelScene::new(64_i32)"))
+            && !rs.contains("VoxelScene::new(&64)"),
+        "homonymous VoxelScene modules must not borrow i32 literal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_item_new_u32_id_not_borrowed_with_stale_str_metadata() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "inventory/equipment.wj",
+        r#"
+use crate::inventory::item::Item
+
+pub enum EquipSlot {
+    Weapon,
+}
+
+pub struct EquipmentStats {
+    damage_bonus: f32,
+}
+
+pub struct EquippableItem {
+    item: Item,
+    slot: EquipSlot,
+    stats: EquipmentStats,
+}
+
+impl EquippableItem {
+    pub fn weapon(id: u32, name: string, description: string, damage: f32) -> EquippableItem {
+        EquippableItem {
+            item: Item::new(id, name, description),
+            slot: EquipSlot::Weapon,
+            stats: EquipmentStats { damage_bonus: damage },
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "inventory/item.wj",
+        r#"
+pub struct Item {
+    id: u32,
+    name: string,
+    description: string,
+}
+
+impl Item {
+    pub fn new(id: u32, name: string, description: string) -> Item {
+        Item { id: id, name: name, description: description }
+    }
+}
+"#,
+    );
+
+    let meta_path = test.build_dir().parent().unwrap().join("stale_item_metadata.json");
+    fs::write(
+        &meta_path,
+        r#"{
+  "functions": {
+    "Item::new": {
+      "params": [
+        "Reference(Custom(\"str\"))",
+        "Reference(Custom(\"str\"))",
+        "Reference(Custom(\"str\"))"
+      ],
+      "return_type": "Custom(\"Item\")",
+      "is_associated": true,
+      "parent_type": "Item",
+      "param_ownership": ["Borrowed", "Borrowed", "Borrowed"],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  }
+}"#,
+    )
+    .expect("write stale metadata");
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[("game_core", &meta_path)],
+    )
+    .unwrap_or_else(|e| panic!("compile with stale Item metadata failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("inventory/equipment.rs")).expect("equipment.rs");
+    assert!(
+        rs.contains("Item::new(id,") && !rs.contains("Item::new(&id,"),
+        "Copy u32 id must not be auto-borrowed even when stale metadata marks all params Borrowed str. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_item_new_u32_not_borrowed_when_rpg_item_homonym_exists() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "inventory/equipment.wj",
+        r#"
+use crate::inventory::item::Item
+
+pub enum EquipSlot {
+    Weapon,
+}
+
+pub struct EquipmentStats {
+    damage_bonus: f32,
+}
+
+pub struct EquippableItem {
+    item: Item,
+    slot: EquipSlot,
+    stats: EquipmentStats,
+}
+
+impl EquippableItem {
+    pub fn weapon(id: u32, name: string, description: string, damage: f32) -> EquippableItem {
+        EquippableItem {
+            item: Item::new(id, name, description),
+            slot: EquipSlot::Weapon,
+            stats: EquipmentStats { damage_bonus: damage },
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "inventory/item.wj",
+        r#"
+pub struct Item {
+    id: u32,
+    name: string,
+    description: string,
+}
+
+impl Item {
+    pub fn new(id: u32, name: string, description: string) -> Item {
+        Item { id: id, name: name, description: description }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "rpg/item.wj",
+        r#"
+pub struct Item {
+    id: string,
+    name: string,
+    description: string,
+}
+
+impl Item {
+    pub fn new(id: string, name: string, description: string) -> Item {
+        Item { id: id, name: name, description: description }
+    }
+}
+"#,
+    );
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("compile with homonymous Item types failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("inventory/equipment.rs")).expect("equipment.rs");
+    assert!(
+        rs.contains("Item::new(id,") && !rs.contains("Item::new(&id,"),
+        "inventory Item::new(u32) must not borrow id when rpg Item homonym exists. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_string_literal_not_to_string_for_borrowed_str_param_in_multipass() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "bots/metrics_collector.wj",
+        r#"
+pub struct PlaytestMetrics {
+    samples: Vec<f32>,
+}
+
+impl PlaytestMetrics {
+    pub fn new() -> PlaytestMetrics {
+        PlaytestMetrics { samples: Vec::new() }
+    }
+
+    pub fn record_section_frame_ms(self, section: string, ms: f32) {
+        let _ = section
+        let _ = ms
+    }
+}
+"#,
+    );
+    test.add_file(
+        "bots/playtest_hooks.wj",
+        r#"
+use crate::bots::metrics_collector::PlaytestMetrics
+
+pub fn smoke() {
+    let mut m = PlaytestMetrics::new()
+    m.record_section_frame_ms("section_a", 10.0)
+}
+"#,
+    );
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("compile failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("bots/playtest_hooks.rs")).expect("playtest_hooks.rs");
+    assert!(
+        rs.contains("record_section_frame_ms(\"section_a\""),
+        "borrowed string param must not allocate to_string on literal. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"section_a\".to_string()"),
+        "must not use to_string for &str param before metrics module converges. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_borrowed_fn_param_not_cloned_for_nested_method_call() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "dialogue/system.wj",
+        r#"
+pub struct DialogueState {
+    honor: i32,
+    flags: Vec<string>,
+}
+
+impl DialogueState {
+    pub fn new() -> DialogueState {
+        DialogueState { honor: 0, flags: Vec::new() }
+    }
+
+    pub fn is_flag_set(self, flag: string) -> bool {
+        true
+    }
+}
+
+pub enum DialogueCondition {
+    FlagSet(string),
+}
+
+impl DialogueCondition {
+    pub fn is_met(self, state: DialogueState) -> bool {
+        match self {
+            DialogueCondition::FlagSet(flag) => state.is_flag_set(flag),
+        }
+    }
+}
+
+pub struct DialogueLine {
+    conditions: Vec<DialogueCondition>,
+}
+
+impl DialogueLine {
+    pub fn is_available(self, state: DialogueState) -> bool {
+        for i in 0..self.conditions.len() {
+            if !self.conditions[i].is_met(state) {
+                return false
+            }
+        }
+        true
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("dialogue/system.rs").expect("system.rs");
+
+    assert!(
+        rs.contains(".is_met(state)") && !rs.contains(".is_met(state.clone())"),
+        "borrowed state param must pass through without clone. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_borrowed_struct_param_passes_ref_not_clone_at_method_call() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "bots/pathfinding.wj",
+        r#"
+pub struct TerrainGrid {
+    width: i32,
+    depth: i32,
+}
+
+impl TerrainGrid {
+    pub fn in_bounds(self, x: i32, z: i32) -> bool {
+        x >= 0 && z >= 0 && x < self.width && z < self.depth
+    }
+}
+
+pub struct AStarWorkspace {
+    closed: Vec<bool>,
+}
+
+impl AStarWorkspace {
+    pub fn new() -> AStarWorkspace {
+        AStarWorkspace { closed: Vec::new() }
+    }
+
+    pub fn relax_neighbor(self, grid: TerrainGrid, nx: i32, nz: i32) {
+        if !grid.in_bounds(nx, nz) {
+            return
+        }
+        self.closed.push(true)
+    }
+}
+
+pub fn find_step(grid: TerrainGrid, ws: AStarWorkspace, nx: i32, nz: i32) {
+    let mut w = ws
+    w.relax_neighbor(grid, nx, nz)
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("bots/pathfinding.rs").expect("pathfinding.rs");
+
+    assert!(
+        !rs.contains("relax_neighbor(grid.clone()"),
+        "borrowed grid param must not clone at call site. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("w.relax_neighbor(&grid,") || rs.contains("w.relax_neighbor( &grid,")
+            || rs.contains("w.relax_neighbor(grid,"),
+        "relax_neighbor call must pass grid by ref or compatible borrow. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_extern_string_to_ffi_clones_self_field_without_move() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "audio/sound.wj",
+        r#"
+extern fn audio_play_music(name: string)
+
+pub struct SoundManager {
+    current_track: string,
+}
+
+impl SoundManager {
+    pub fn new() -> SoundManager {
+        SoundManager { current_track: "" }
+    }
+
+    pub fn replay(self) {
+        audio_play_music(self.current_track)
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("audio/sound.rs").expect("sound.rs");
+
+    assert!(
+        rs.contains("string_to_ffi(self.current_track.clone())"),
+        "extern owned string param must clone self.field to avoid E0507 move. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("string_to_ffi(self.current_track))"),
+        "must not move self.current_track into extern call. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_match_borrow_break_clone_binding_is_mut_for_ref_mut_arm() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "inventory/stack.wj",
+        r#"
+pub struct Item {
+    id: string,
+}
+
+pub struct ItemStack {
+    item: Item,
+    quantity: i32,
+}
+
+pub struct Inventory {
+    slots: Vec<Option<ItemStack>>,
+    capacity: i32,
+}
+
+impl Inventory {
+    pub fn new() -> Inventory {
+        Inventory { slots: Vec::new(), capacity: 10 }
+    }
+
+    pub fn remove_quantity(self, item_id: string, amount: i32) -> bool {
+        let mut remaining: i32 = amount
+        let mut i: i32 = 0
+        while i < self.capacity && remaining > 0 {
+            if let Some(stack) = self.slots[i as usize] {
+                if stack.item.id == item_id {
+                    if stack.quantity <= remaining {
+                        remaining = remaining - stack.quantity
+                        self.slots[i as usize] = None
+                    } else {
+                        stack.quantity = stack.quantity - remaining
+                        self.slots[i as usize] = Some(stack)
+                        remaining = 0
+                    }
+                }
+            }
+            i = i + 1
+        }
+        remaining == 0
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("inventory/stack.rs").expect("stack.rs");
+
+    assert!(
+        rs.contains("let mut __match_borrow_break = self.slots[") && rs.contains("].clone();"),
+        "clone borrow-break for mut stack binding must use mut binding (E0596). Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_format_temp_passes_owned_string_for_set_flag_not_ref_string() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "dialogue/flags.wj",
+        r#"
+pub struct DialogueState {
+    flags: Vec<string>,
+}
+
+impl DialogueState {
+    pub fn set_flag(self, flag: string) {
+        self.flags.push(flag)
+    }
+
+    pub fn apply_fail(self, quest_name: string) {
+        self.set_flag("quest_failed_${quest_name}")
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("dialogue/flags.rs").expect("flags.rs");
+
+    assert!(
+        rs.contains("set_flag(_temp0)") || rs.contains("set_flag( _temp0 )"),
+        "owned String param must take format temp by value, not &String. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("set_flag(&_temp"),
+        "must not borrow format temp for owned String param. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_global_converged_mut_borrow_preferred_over_stub_owned_at_call() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "voxel/grid_ops.wj",
+        r#"
+pub struct VoxelGrid {
+    data: Vec<i32>,
+}
+
+impl VoxelGrid {
+    pub fn new() -> VoxelGrid {
+        VoxelGrid { data: Vec::new() }
+    }
+
+    pub fn mark(self, x: i32) {
+        self.data.push(x)
+    }
+}
+
+pub fn touch_grid(grid: VoxelGrid, x: i32) {
+    grid.mark(x)
+}
+"#,
+    );
+    test.add_file(
+        "voxel/build.wj",
+        r#"
+use crate::voxel::grid_ops::{VoxelGrid, touch_grid}
+
+pub fn build_grid() {
+    let mut grid = VoxelGrid::new()
+    touch_grid(grid, 1)
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("voxel/build.rs").expect("build.rs");
+
+    assert!(
+        rs.contains("touch_grid(&mut grid,") || rs.contains("touch_grid( &mut grid,"),
+        "mut-borrow grid param must pass &mut grid, not owned clone. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("touch_grid(grid.clone()"),
+        "must not clone grid for &mut VoxelGrid param. Got:\n{rs}"
     );
 }
