@@ -597,23 +597,30 @@ pub(crate) fn effective_user_arg_count(sig: &FunctionSignature) -> usize {
 
 /// Resolve callee parameter ownership for call-site lowering.
 ///
-/// Signature `param_ownership` can lag behind codegen (e.g. Windjammer `string` lowered to `&str`
-/// with empty/stale `Owned` in metadata). Trust explicit reference param types first.
+/// When `param_ownership` is populated (converged analysis), trust it over
+/// `Reference(T)` wrappers in `param_types` that may lag from Phase 3.
+/// Empty `param_ownership` falls back to reference param types (metadata stubs).
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
     if let Some(ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
             return OwnershipMode::Borrowed;
         }
+    }
+    if !sig.param_ownership.is_empty() {
+        return sig
+            .param_ownership
+            .get(param_idx)
+            .copied()
+            .unwrap_or(OwnershipMode::Owned);
+    }
+    if let Some(ty) = sig.param_types.get(param_idx) {
         match ty {
             Type::Reference(_) => return OwnershipMode::Borrowed,
             Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
             _ => {}
         }
     }
-    sig.param_ownership
-        .get(param_idx)
-        .copied()
-        .unwrap_or(OwnershipMode::Owned)
+    OwnershipMode::Owned
 }
 
 /// `station_builder::set_if`, not `Vec3::new` or bare `helper`.
