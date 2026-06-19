@@ -685,6 +685,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     let is_inferred_mut_borrowed =
                                         gen.inferred_mut_borrowed_params.contains(name);
 
+                                    // Borrowed formals are already `&T` in Rust — stale Owned callee
+                                    // metadata must not force `.clone()` (fps_camera::collides_aabb).
+                                    if (is_inferred_borrowed || is_inferred_mut_borrowed)
+                                        && !is_borrowed_iterator_var
+                                        && !gen.str_ref_optimized_params.contains(name)
+                                    {
+                                        return vec![arg_str];
+                                    }
+
                                     if (is_borrowed_iterator_var
                                         || is_inferred_borrowed
                                         || is_inferred_mut_borrowed
