@@ -27,8 +27,8 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn infer_type_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => {
-                // "self" refers to the current struct type
-                if name == "self" && self.in_impl_block {
+                // "self" / "Self" refer to the current impl struct type
+                if (name == "self" || name == "Self") && self.in_impl_block {
                     return self.current_struct_name.clone();
                 }
                 // TDD FIX: Check function parameters for type info
@@ -72,17 +72,36 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, field, .. } => {
                 // TDD FIX: Try to resolve field type from struct field type tracking
                 // e.g., self.transforms → World.transforms → ComponentArray<int> → "ComponentArray"
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        if let Some(struct_name) = &self.current_struct_name {
+                            if let Some(fields) = self
+                                .lookup_struct_field_types(struct_name)
+                                .or_else(|| {
+                                    struct_name
+                                        .split('<')
+                                        .next()
+                                        .and_then(|base| self.lookup_struct_field_types(base))
+                                })
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    if let Some(name) = Self::type_to_name(field_type) {
+                                        return Some(name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 let owner_type = self.infer_type_name(object);
                 if let Some(ref owner) = owner_type {
                     // TDD FIX: For generic types like "ComponentArray<T>", also try base name "ComponentArray"
-                    if let Some(field_types) =
-                        self.struct_field_types.get(owner.as_str()).or_else(|| {
-                            owner
-                                .split('<')
-                                .next()
-                                .and_then(|base| self.struct_field_types.get(base))
-                        })
-                    {
+                    if let Some(field_types) = self.lookup_struct_field_types(owner).or_else(|| {
+                        owner
+                            .split('<')
+                            .next()
+                            .and_then(|base| self.lookup_struct_field_types(base))
+                    }) {
                         if let Some(field_type) = field_types.get(field) {
                             if let Some(name) = Self::type_to_name(field_type) {
                                 return Some(name);
@@ -90,8 +109,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // Fallback: use the owner type (for self.field_name → current struct type)
-                owner_type
+                None
             }
             Expression::Unary {
                 op:
@@ -131,14 +149,12 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     let owner_type = self.infer_type_name(field_obj);
                     if let Some(ref owner) = owner_type {
-                        if let Some(field_types) =
-                            self.struct_field_types.get(owner.as_str()).or_else(|| {
-                                owner
-                                    .split('<')
-                                    .next()
-                                    .and_then(|base| self.struct_field_types.get(base))
-                            })
-                        {
+                        if let Some(field_types) = self.lookup_struct_field_types(owner).or_else(|| {
+                            owner
+                                .split('<')
+                                .next()
+                                .and_then(|base| self.lookup_struct_field_types(base))
+                        }) {
                             if let Some(field_type) = field_types.get(field.as_str()) {
                                 if let Some(elem_type) =
                                     Self::extract_iterator_element_type(field_type)

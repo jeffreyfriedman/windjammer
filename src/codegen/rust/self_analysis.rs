@@ -402,6 +402,26 @@ fn expression_moves_self_fields_in_struct_literal(expr: &Expression) -> bool {
     }
 }
 
+/// True when the function body only returns `self.{field_name}` (trivial Copy field accessor).
+pub fn function_returns_self_field_with_name(func: &FunctionDecl, field_name: &str) -> bool {
+    use crate::parser::{Expression, Statement};
+
+    let return_expr = match func.body.last() {
+        Some(Statement::Return {
+            value: Some(expr), ..
+        }) => expr,
+        Some(Statement::Expression { expr, .. }) => expr,
+        _ => return false,
+    };
+
+    matches!(
+        return_expr,
+        Expression::FieldAccess { object, field, .. }
+            if field == field_name
+                && matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+    )
+}
+
 /// Snapshot/factory: returns a new parent-type instance from `self.field` reads, not bare `self`.
 pub fn function_returns_new_instance_from_self_fields(
     func: &FunctionDecl,
@@ -411,7 +431,7 @@ pub fn function_returns_new_instance_from_self_fields(
     use crate::parser::{Expression, Statement, Type};
 
     // Mutating then returning `Self { field: self.field, ... }` moves fields — not a snapshot.
-    if function_modifies_self(func, registry, struct_name) {
+    if function_modifies_self(func, registry, struct_name, None, None) {
         return false;
     }
 
@@ -528,9 +548,13 @@ pub fn function_modifies_self(
     func: &FunctionDecl,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
     for stmt in &func.body {
-        if statement_modifies_self(stmt, registry, struct_name) {
+        if statement_modifies_self(stmt, registry, struct_name, field_types, receiver_upgrades) {
             return true;
         }
     }
@@ -544,8 +568,12 @@ pub fn function_modifies_self_or_derived_local(
     func: &FunctionDecl,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
-    if function_modifies_self(func, registry, struct_name) {
+    if function_modifies_self(func, registry, struct_name, field_types, receiver_upgrades) {
         return true;
     }
     let derived = collect_self_derived_locals(func);
@@ -793,7 +821,7 @@ fn match_arm_body_mutates_var(
             .any(|s| statement_mutates_var(s, var_name, registry, struct_name)),
         Expression::MethodCall { object, method, .. } => {
             if expression_is_var(object, var_name) {
-                return method_is_mutating(method, registry, struct_name);
+                return method_is_mutating(method, registry, struct_name, None);
             }
             false
         }
@@ -856,7 +884,7 @@ fn expr_mutates_var(
     match expr {
         Expression::MethodCall { object, method, .. } => {
             if expression_is_var(object, var_name) || expression_is_field_of_var(object, var_name) {
-                if method_is_mutating(method, registry, struct_name) {
+                if method_is_mutating(method, registry, struct_name, None) {
                     return true;
                 }
             }
@@ -889,42 +917,47 @@ pub fn statement_modifies_self(
     stmt: &Statement,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
     match stmt {
         Statement::Let { value, .. } => {
-            expression_modifies_self(value, registry, struct_name)
+            expression_modifies_self(value, registry, struct_name, field_types, receiver_upgrades)
         }
         Statement::Assignment { target, .. } => {
             // Check if target is self.field
             expression_is_self_field_modification(target)
         }
-        Statement::Expression { expr, .. } => expression_modifies_self(expr, registry, struct_name),
+        Statement::Expression { expr, .. } => {
+            expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
+        }
         Statement::If {
             then_block,
             else_block,
             ..
         } => {
-            then_block
-                .iter()
-                .any(|s| statement_modifies_self(s, registry, struct_name))
-                || else_block.as_ref().is_some_and(|block| {
-                    block
-                        .iter()
-                        .any(|s| statement_modifies_self(s, registry, struct_name))
+            then_block.iter().any(|s| {
+                statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+            }) || else_block.as_ref().is_some_and(|block| {
+                block.iter().any(|s| {
+                    statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+                })
+            })
+        }
+        Statement::While { body, .. } => body.iter().any(|s| {
+            statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+        }),
+        Statement::For { iterable, body, .. } => {
+            expression_modifies_self(iterable, registry, struct_name, field_types, receiver_upgrades)
+                || body.iter().any(|s| {
+                    statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
                 })
         }
-        Statement::While { body, .. } => body
-            .iter()
-            .any(|s| statement_modifies_self(s, registry, struct_name)),
-        Statement::For { iterable, body, .. } => {
-            expression_modifies_self(iterable, registry, struct_name)
-                || body
-                    .iter()
-                    .any(|s| statement_modifies_self(s, registry, struct_name))
-        }
-        Statement::Match { arms, .. } => arms
-            .iter()
-            .any(|arm| expression_modifies_self(arm.body, registry, struct_name)),
+        Statement::Match { arms, .. } => arms.iter().any(|arm| {
+            expression_modifies_self(arm.body, registry, struct_name, field_types, receiver_upgrades)
+        }),
         _ => false,
     }
 }
@@ -1080,11 +1113,15 @@ pub fn expression_modifies_self(
     expr: &Expression,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
     match expr {
-        Expression::Block { statements, .. } => statements
-            .iter()
-            .any(|s| statement_modifies_self(s, registry, struct_name)),
+        Expression::Block { statements, .. } => statements.iter().any(|s| {
+            statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+        }),
         Expression::MethodCall {
             object,
             method,
@@ -1093,27 +1130,83 @@ pub fn expression_modifies_self(
         } => {
             let receiver_mutates = matches!(&**object, Expression::Identifier { name, .. } if name == "self")
                 || is_self_field_chain(object);
-            if receiver_mutates && method_is_mutating(method, registry, struct_name) {
+            if receiver_mutates
+                && method_is_mutating_on_receiver(
+                    object,
+                    method,
+                    registry,
+                    struct_name,
+                    field_types,
+                    receiver_upgrades,
+                )
+            {
                 return true;
             }
 
             arguments
                 .iter()
-                .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name))
+                .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades))
         }
-        Expression::Call { arguments, .. } => arguments
-            .iter()
-            .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name)),
+        Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+            expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
+        }),
         Expression::Binary { left, right, .. } => {
-            expression_modifies_self(left, registry, struct_name)
-                || expression_modifies_self(right, registry, struct_name)
+            expression_modifies_self(left, registry, struct_name, field_types, receiver_upgrades)
+                || expression_modifies_self(right, registry, struct_name, field_types, receiver_upgrades)
         }
         Expression::Unary { operand, .. } => {
-            expression_modifies_self(operand, registry, struct_name)
+            expression_modifies_self(operand, registry, struct_name, field_types, receiver_upgrades)
         }
-        Expression::Cast { expr, .. } => expression_modifies_self(expr, registry, struct_name),
+        Expression::Cast { expr, .. } => {
+            expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
+        }
         _ => false,
     }
+}
+
+/// Determine if a method call on a receiver chain is mutating.
+fn method_is_mutating_on_receiver(
+    receiver: &Expression,
+    method: &str,
+    registry: Option<&SignatureRegistry>,
+    struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
+) -> bool {
+    if let (Some(ctx), Some(fields)) = (struct_name, field_types) {
+        if is_self_field_chain(receiver) {
+            if let Some(recv_type) = resolve_self_field_chain_type_name(receiver, ctx, fields) {
+                let qname = format!("{}::{}", recv_type, method);
+                if let Some(upgrades) = receiver_upgrades {
+                    if let Some(mode) = upgrades.get(&qname) {
+                        return match mode {
+                            OwnershipMode::MutBorrowed => true,
+                            OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                            _ => false,
+                        };
+                    }
+                }
+                if let Some(reg) = registry {
+                    if let Some(sig) = reg.get_signature(&qname) {
+                        if let Some(mode) = sig.param_ownership.first() {
+                            return match mode {
+                                OwnershipMode::MutBorrowed => true,
+                                OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                                _ => false,
+                            };
+                        }
+                        if sig.has_self_receiver {
+                            return false;
+                        }
+                    }
+                }
+                return method_is_mutating(method, registry, Some(recv_type.as_str()), receiver_upgrades);
+            }
+        }
+    }
+    method_is_mutating(method, registry, struct_name, receiver_upgrades)
 }
 
 /// Determine if a method call is mutating by consulting the stdlib method registry
@@ -1121,12 +1214,14 @@ pub fn expression_modifies_self(
 ///
 /// Priority:
 /// 1. stdlib `method_mutates_receiver` → definitively mutating (push, insert, clear, etc.)
-/// 2. SignatureRegistry lookup → use the analyzed ownership of the self receiver
-/// 3. Unknown → default to not-mutating (assignment detection covers actual field writes)
+/// 2. Codegen self-receiver upgrades (same-impl / prior-file &mut self)
+/// 3. SignatureRegistry lookup → use the analyzed ownership of the self receiver
+/// 4. Unknown → default to not-mutating (assignment detection covers actual field writes)
 fn method_is_mutating(
     method: &str,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
     if crate::analyzer::stdlib_method_traits::is_known_readonly(method) {
         return false;
@@ -1135,17 +1230,33 @@ fn method_is_mutating(
         return true;
     }
 
+    if let Some(ctx) = struct_name {
+        let qualified = format!("{}::{}", ctx, method);
+        if let Some(upgrades) = receiver_upgrades {
+            if let Some(mode) = upgrades.get(&qualified) {
+                return match mode {
+                    OwnershipMode::MutBorrowed => true,
+                    OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                    _ => false,
+                };
+            }
+        }
+    }
+
     if let Some(reg) = registry {
         if let Some(ctx) = struct_name {
             let qualified = format!("{}::{}", ctx, method);
             if let Some(sig) = reg.get_signature(&qualified) {
-                if sig.has_self_receiver
-                    && sig.param_ownership.first()
-                        == Some(&OwnershipMode::MutBorrowed)
-                {
-                    return true;
+                if let Some(mode) = sig.param_ownership.first() {
+                    return match mode {
+                        OwnershipMode::MutBorrowed => true,
+                        OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                        _ => false,
+                    };
                 }
+                return false;
             }
+            return false;
         }
         if let Some(sig) = lookup_method_in_registry(reg, method) {
             return sig.has_self_receiver
@@ -1173,8 +1284,62 @@ pub(crate) fn is_self_field_chain(expr: &Expression) -> bool {
             matches!(&**object, Expression::Identifier { name, .. } if name == "self")
                 || is_self_field_chain(object)
         }
+        Expression::Index { object, .. } => is_self_field_chain(object),
         _ => false,
     }
+}
+
+/// Resolve the Rust type name at the end of a `self.field[...]` chain for method lookup.
+pub fn resolve_self_field_chain_type_name(
+    expr: &Expression,
+    struct_name: &str,
+    field_types: &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+) -> Option<String> {
+    use crate::parser::Type;
+    let fields = field_types.get(struct_name)?;
+    resolve_self_field_chain_type(expr, fields).and_then(|ty| type_to_custom_name(&ty))
+}
+
+fn type_to_custom_name(ty: &crate::parser::Type) -> Option<String> {
+    match ty {
+        crate::parser::Type::Custom(name) => Some(name.clone()),
+        crate::parser::Type::Parameterized(name, _) => Some(name.clone()),
+        _ => None,
+    }
+}
+
+fn resolve_self_field_chain_type(
+    expr: &Expression,
+    fields: &std::collections::HashMap<String, crate::parser::Type>,
+) -> Option<crate::parser::Type> {
+    use crate::parser::Type;
+    match expr {
+        Expression::FieldAccess { object, field, .. } => {
+            if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
+                fields.get(field.as_str()).cloned()
+            } else {
+                let base = resolve_self_field_chain_type(object, fields)?;
+                lookup_field_on_type(&base, field)
+            }
+        }
+        Expression::Index { object, .. } => {
+            let base = resolve_self_field_chain_type(object, fields)?;
+            match base {
+                Type::Vec(inner) | Type::Array(inner, _) => Some(*inner),
+                Type::Parameterized(name, params) if name == "Vec" && !params.is_empty() => {
+                    Some(params[0].clone())
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn lookup_field_on_type(ty: &crate::parser::Type, field: &str) -> Option<crate::parser::Type> {
+    // Nested field access on non-struct types is rare in this path; defer to None.
+    let _ = (ty, field);
+    None
 }
 
 /// Check if an expression accesses struct fields

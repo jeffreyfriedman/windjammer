@@ -191,6 +191,7 @@ pub fn build_project_ext(
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
         let mut codegen = CodeGenerator::new(registry, target);
+        codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);

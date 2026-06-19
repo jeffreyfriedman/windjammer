@@ -75,12 +75,13 @@ impl<'ast> Analyzer<'ast> {
 
         // Multi-pass registry-aware inference
 
-        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed.
+        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed (or owned if Copy).
         // Match scrutinees like `match self.nodes.get(id)` must not infer Owned for `id`
         // when passthrough collides on bare `get` from unrelated types.
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
         }
 
@@ -217,18 +218,20 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
         }
 
         // 8. HashMap lookup keys — pin Borrowed after registry-dependent steps.
         // Large engine metadata can flip passthrough/is_mutated heuristics on later
         // convergence passes; the body fact (only used as HashMap key) is authoritative.
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
         }
 
@@ -408,6 +411,13 @@ impl<'ast> Analyzer<'ast> {
     pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
         if self.types_equal(sig_ty, decl_ty) {
             return true;
+        }
+        // Callee signature uses `&T` / `&mut T` while the caller declares owned `T`.
+        match sig_ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                return self.types_equal(inner, decl_ty);
+            }
+            _ => {}
         }
         let decl_str = matches!(decl_ty, Type::String);
         let sig_str = matches!(sig_ty, Type::String);

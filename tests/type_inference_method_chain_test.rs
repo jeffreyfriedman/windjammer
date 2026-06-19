@@ -137,4 +137,31 @@ pub fn example() -> f32 {
     );
 }
 
+/// i32 `.max`/`.min` chains must not cast integer bounds to `f32`.
+#[test]
+fn test_i32_min_max_chain_keeps_integer_literals() {
+    let source = r#"
+pub struct Character {
+    relationship_value: i32,
+}
+
+impl Character {
+    pub fn modify(self, delta: i32) {
+        self.relationship_value = (self.relationship_value + delta).max(-100).min(100)
+    }
+}
+"#;
+
+    let output = test_utils::compile_single(source);
+
+    assert!(
+        output.contains(".min(100") || output.contains(".min(100_i32"),
+        "Expected plain i32 min bound, got:\n{output}"
+    );
+    assert!(
+        !output.contains("100 as f32"),
+        "i32 min must not cast bound to f32, got:\n{output}"
+    );
+}
+
 // Helper function to compile Windjammer code and return generated Rust

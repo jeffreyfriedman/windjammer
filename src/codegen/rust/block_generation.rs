@@ -101,25 +101,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                         self.coerce_return_ref_to_owned_copy(&mut expr_str, expr);
 
-                        // Implicit return of `self.field` on borrowed `self` with owned return type.
-                        if super::self_analysis::is_self_field_chain(expr)
-                            && (self.inferred_mut_borrowed_params.contains("self")
-                                || self.inferred_borrowed_params.contains("self"))
-                        {
-                            let returns_ref = matches!(
-                                &self.current_function_return_type,
-                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
-                            );
-                            if !returns_ref && !expr_str.ends_with(".clone()") {
-                                expr_str = format!("{}.clone()", expr_str);
-                            }
-                        }
-
                         self.apply_owned_string_tail_coercion(&mut expr_str, expr, true);
 
                         // DOGFOODING FIX: Vec indexing &vec[idx] for non-Copy needs .clone() when implicit return
                         // Applies to all return types (SaveSlot, Option<String>, etc.), not just String
                         // Use parentheses: (&vec[idx]).clone() - . has higher precedence than &
+                        // MUST run before self.field clone below — otherwise `&x.clone()` is emitted.
                         if expr_str.starts_with("&")
                             && !expr_str.starts_with("&mut")
                             && !expr_str.ends_with(".clone()")
@@ -148,6 +135,24 @@ impl<'ast> CodeGenerator<'ast> {
                                     if !self.is_type_copy(&inner) {
                                         expr_str = format!("{}.clone()", expr_str);
                                     }
+                                }
+                            }
+                        }
+
+                        // Implicit return of `self.field` on borrowed `self` with owned return type.
+                        if super::self_analysis::is_self_field_chain(expr)
+                            && (self.inferred_mut_borrowed_params.contains("self")
+                                || self.inferred_borrowed_params.contains("self"))
+                        {
+                            let returns_ref = matches!(
+                                &self.current_function_return_type,
+                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                            );
+                            if !returns_ref && !expr_str.ends_with(".clone()") {
+                                if expr_str.starts_with('&') && !expr_str.starts_with("&mut") {
+                                    expr_str = format!("({}).clone()", expr_str);
+                                } else {
+                                    expr_str = format!("{}.clone()", expr_str);
                                 }
                             }
                         }
@@ -188,7 +193,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // This prevents adding semicolons to if-else branches when used as values
                         let returns_unit = self.current_function_return_type.is_none()
                             || matches!(self.current_function_return_type, Some(Type::Tuple(ref types)) if types.is_empty());
-                        if returns_unit && !self.in_expression_context {
+                        if returns_unit
+                            && !self.in_expression_context
+                            && !self.in_struct_literal_field
+                        {
                             output.push(';');
                         }
                         output.push('\n');

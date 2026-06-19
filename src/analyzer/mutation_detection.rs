@@ -517,14 +517,22 @@ impl<'ast> Analyzer<'ast> {
                     // UNKNOWN METHOD: When we attempted a type-qualified lookup
                     // (had a type hint) but the method wasn't in the registry,
                     // assume non-mutation and rely on multi-pass convergence.
-                    // Without a type hint, conservatively assume mutation.
-                    return !qualified_attempted;
+                    // Without a type hint, conservatively assume mutation only when
+                    // stdlib heuristics already failed to classify the method.
+                    if param_type_hint.is_none() {
+                        return true;
+                    }
+                    return false;
                 }
 
                 // Check if param is passed as an argument to a method whose
                 // corresponding parameter has MutBorrowed ownership.
                 // Example: obj.apply(state) where apply expects &mut DialogueState
                 // → state must be MutBorrowed.
+                // HashMap/HashSet key args are never mut-borrowed (get_mut key is &Q not &mut Q).
+                if super::stdlib_method_traits::is_collection_key_method(method) {
+                    return false;
+                }
                 if let Expression::MethodCall { arguments, .. } = expr {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {

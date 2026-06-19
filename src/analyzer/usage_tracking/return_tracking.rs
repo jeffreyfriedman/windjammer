@@ -110,6 +110,11 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
+            // Returning `param.field` moves the field out of an owned parameter (consumes `param`).
+            Expression::FieldAccess { object, .. } => {
+                self.expression_uses_identifier_for_return(name, object)
+            }
+
             // CRITICAL FIX: Binary expressions (comparisons, arithmetic) return the RESULT, not the parameter
             // Example: `id == "test"` returns bool, NOT id
             // Example: `id + 1` returns the sum, NOT id
