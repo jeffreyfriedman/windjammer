@@ -404,9 +404,23 @@ pub fn collect_analyzed_module_metadata(
     for item in &program.items {
         match item {
             Item::Function { decl, .. } => {
-                if let Some(sig) = registry.get_signature(&decl.name) {
+                let sig = registry
+                    .get_signature(&decl.name)
+                    .or_else(|| {
+                        if module_name.is_empty() {
+                            None
+                        } else {
+                            registry.get_signature(&format!("{}::{}", module_name, decl.name))
+                        }
+                    });
+                if let Some(sig) = sig {
+                    let key = if registry.get_signature(&decl.name).is_some() {
+                        decl.name.clone()
+                    } else {
+                        format!("{}::{}", module_name, decl.name)
+                    };
                     meta.functions.insert(
-                        decl.name.clone(),
+                        key,
                         metadata_function_sig_from_analyzer(sig, false, None),
                     );
                 }

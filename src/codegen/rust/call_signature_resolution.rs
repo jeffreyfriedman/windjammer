@@ -593,6 +593,11 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         .unwrap_or(OwnershipMode::Owned)
 }
 
+/// `station_builder::set_if`, not `Vec3::new` or bare `helper`.
+pub(crate) fn is_external_module_qualified_call(func_name: &str) -> bool {
+    func_name.contains("::") && func_name.chars().next().is_some_and(|c| c.is_lowercase())
+}
+
 /// True when the resolved signature's param type is an owned non-text value (not `&T`).
 pub fn param_type_is_owned_non_text(sig: &FunctionSignature, param_idx: usize) -> bool {
     sig.param_types

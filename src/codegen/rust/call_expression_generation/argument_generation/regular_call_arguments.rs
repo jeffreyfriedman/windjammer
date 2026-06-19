@@ -404,6 +404,28 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
                 }
+                if matches!(ownership, OwnershipMode::Owned)
+                    && i == 0
+                    && crate::codegen::rust::call_signature_resolution::is_external_module_qualified_call(
+                        func_name,
+                    )
+                {
+                    if let Expression::Identifier { name, .. } = arg {
+                        if gen.inferred_mut_borrowed_params.contains(name)
+                            && (gen
+                                .current_function_params
+                                .iter()
+                                .find(|p| p.name == *name)
+                                .is_some_and(|p| !gen.is_type_copy(&p.type_))
+                                || gen
+                                    .infer_expression_type(arg)
+                                    .as_ref()
+                                    .is_none_or(|t| !gen.is_type_copy(t)))
+                        {
+                            ownership = OwnershipMode::MutBorrowed;
+                        }
+                    }
+                }
                 match ownership {
                         OwnershipMode::Borrowed if !has_ownership_collision => {
                             // PHASE 1: Generate &String parameters for correctness
