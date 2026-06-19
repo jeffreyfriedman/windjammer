@@ -685,13 +685,50 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     let is_inferred_mut_borrowed =
                                         gen.inferred_mut_borrowed_params.contains(name);
 
-                                    // Borrowed formals are already `&T` in Rust — stale Owned callee
-                                    // metadata must not force `.clone()` (fps_camera::collides_aabb).
+                                    // Borrowed formals are already `&T` in Rust — when converged
+                                    // callee analysis expects borrow, do not `.clone()` for stale
+                                    // Owned metadata (fps_camera::collides_aabb).
                                     if (is_inferred_borrowed || is_inferred_mut_borrowed)
                                         && !is_borrowed_iterator_var
                                         && !gen.str_ref_optimized_params.contains(name)
                                     {
-                                        return vec![arg_str];
+                                        let lookup_name = if let Some(method) =
+                                            func_name.strip_prefix("Self::")
+                                        {
+                                            if gen.in_impl_block {
+                                                gen.current_struct_name.as_ref().map(|tn| {
+                                                    format!("{tn}::{method}")
+                                                })
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            Some(func_name.to_string())
+                                        };
+                                        let receiver = lookup_name.as_ref().and_then(|n| {
+                                            n.rsplit_once("::").map(|(qual, _)| qual)
+                                        });
+                                        let callee_expects_borrow = lookup_name
+                                            .as_ref()
+                                            .and_then(|n| {
+                                                gen.resolve_call_signature_with_global(
+                                                    n,
+                                                    receiver,
+                                                    arguments.len(),
+                                                )
+                                            })
+                                            .is_some_and(|resolved| {
+                                                matches!(
+                                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                                        &resolved.sig, i,
+                                                    ),
+                                                    OwnershipMode::Borrowed
+                                                        | OwnershipMode::MutBorrowed
+                                                )
+                                            });
+                                        if callee_expects_borrow {
+                                            return vec![arg_str];
+                                        }
                                     }
 
                                     if (is_borrowed_iterator_var
