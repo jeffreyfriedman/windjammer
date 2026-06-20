@@ -22,6 +22,7 @@ pub mod binary_expression_generation;
 pub mod block_generation;
 pub mod call_expression_generation;
 pub mod call_signature_resolution;
+pub mod signature_promotion;
 pub mod closure_generation;
 pub mod codegen_helpers;
 pub mod collection_detection;

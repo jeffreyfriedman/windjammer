@@ -73,31 +73,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             })
     });
 
-    let resolved = match (&from_global, &from_method) {
-        (Some(g), Some(m))
-            if call_signature_resolution::prefer_converged_over_stub(&m.sig, &g.sig) =>
-        {
-            from_global
-        }
-        (Some(g), Some(m))
-            if !g.sig.param_ownership.is_empty()
-                && g.sig.param_ownership != m.sig.param_ownership =>
-        {
-            from_global
-        }
-        (Some(_), None) => from_global,
-        (None, Some(_)) => from_method,
-        (Some(g), Some(m)) => {
-            // When both exist, prefer global for static methods with converged ownership.
-            // Body-inferred method registry can mark formals as Borrowed when they're Owned.
-            if !g.sig.has_self_receiver && !g.sig.param_ownership.is_empty() {
-                from_global
-            } else {
-                Some(g.clone())
-            }
-        }
-        (None, None) => None,
-    };
+    let resolved = call_signature_resolution::pick_best_resolved_signature(from_method, from_global);
     let method_signature = resolved.as_ref().map(|r| r.sig.clone());
 
     let runtime_module = match call_obj {

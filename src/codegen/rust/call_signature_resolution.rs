@@ -9,6 +9,13 @@ use std::collections::HashMap;
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 
+pub(crate) use super::signature_promotion::{
+    body_borrow_must_not_replace_owned_copy_formal, body_borrow_must_not_replace_owned_formal_stub,
+    best_method_signature_for_receiver, effective_user_arg_count,
+    has_stale_owned_non_copy_params, param_type_is_owned_non_text, pick_best_resolved_signature,
+    prefer_converged_over_stub, signature_is_declaration_stub_like,
+};
+
 #[derive(Debug, Clone)]
 pub struct ResolvedSignature {
     pub sig: FunctionSignature,
@@ -325,60 +332,6 @@ pub fn resolve_call_signature(
     None
 }
 
-/// Pick the best `Type::method` entry for call-site lowering, preferring converged
-/// body analysis over stale engine/dependency stubs on the same receiver.
-fn best_method_signature_for_receiver(
-    registry: &SignatureRegistry,
-    receiver_type: &str,
-    method: &str,
-    arg_count: usize,
-) -> Option<(String, FunctionSignature)> {
-    let base = receiver_type.split('<').next().unwrap_or(receiver_type);
-    let exact = format!("{base}::{method}");
-    let suffix = format!("::{base}::{method}");
-    let mut best: Option<(String, FunctionSignature, bool)> = None;
-
-    let mut consider = |key: &str, sig: &FunctionSignature| {
-        if !validate_arg_count(sig, arg_count) {
-            return;
-        }
-        if let Some((_, ref best_sig, _)) = best {
-            if body_borrow_must_not_replace_owned_formal_stub(best_sig, sig) {
-                return;
-            }
-            if body_borrow_must_not_replace_owned_formal_stub(sig, best_sig) {
-                best = Some((key.to_string(), sig.clone(), false));
-                return;
-            }
-        }
-        let converged = !signature_is_declaration_stub_like(sig)
-            && !has_stale_owned_non_copy_params(sig);
-        let replace = best.as_ref().is_none_or(|(_, _, prev_converged)| {
-            if converged && !prev_converged {
-                return true;
-            }
-            if converged == *prev_converged {
-                return key.len() > best.as_ref().unwrap().0.len();
-            }
-            false
-        });
-        if replace {
-            best = Some((key.to_string(), sig.clone(), converged));
-        }
-    };
-
-    if let Some(sig) = registry.get_signature(&exact) {
-        consider(&exact, sig);
-    }
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.as_str() == exact || key.ends_with(&suffix) {
-            consider(key, sig);
-        }
-    }
-
-    best.map(|(key, sig, _)| (key, sig))
-}
-
 /// Try receiver-type-qualified lookup with base-type stripping.
 fn try_receiver_qualified(
     registry: &SignatureRegistry,
@@ -422,297 +375,6 @@ pub(crate) fn validate_arg_count(sig: &FunctionSignature, call_arg_count: usize)
     expected == call_arg_count
 }
 
-fn normalize_signature_param_types(types: &[Type]) -> Vec<Type> {
-    types
-        .iter()
-        .map(|t| match t {
-            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
-            other => other.clone(),
-        })
-        .collect()
-}
-
-/// Stale engine/dependency metadata where ownership and param types disagree.
-///
-/// Examples:
-/// - `QuestManager::is_quest_active(self, id: QuestId)` stub marks `id` Owned while impl uses `&QuestId`
-/// - Borrowed/MutBorrowed ownership with bare `Custom(T)` instead of `Reference(T)`
-///
-/// **Not** stale: static helpers that truly consume a param (`MannequinMesh::generate(config: MannequinConfig)`).
-pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
-    sig.param_ownership.iter().enumerate().any(|(idx, own)| {
-        if sig.has_self_receiver && idx == 0 {
-            return false;
-        }
-        let Some(ty) = sig.param_types.get(idx) else {
-            return false;
-        };
-        let bare_non_copy = param_type_is_owned_non_text(sig, idx)
-            && !matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-            && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(
-                ty,
-            );
-        match own {
-            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed => bare_non_copy,
-            // Method args after `self` marked Owned with bare struct type are engine stubs.
-            OwnershipMode::Owned => sig.has_self_receiver && idx > 0 && bare_non_copy,
-        }
-    })
-}
-
-fn signature_is_declaration_stub_like(sig: &FunctionSignature) -> bool {
-    if sig.param_ownership.is_empty() {
-        return sig.param_types.iter().all(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        });
-    }
-    has_stale_owned_non_copy_params(sig)
-}
-
-/// True when `local` still looks like a declaration stub and `global` has converged ownership.
-pub(crate) fn prefer_converged_over_stub(
-    local: &FunctionSignature,
-    global: &FunctionSignature,
-) -> bool {
-    use crate::parser::Type;
-
-    if normalize_signature_param_types(&local.param_types)
-        != normalize_signature_param_types(&global.param_types)
-    {
-        return false;
-    }
-    if local.param_ownership == global.param_ownership {
-        return false;
-    }
-
-    // Pattern 1: stub marks all params Owned; convergence introduces borrows (e.g. &mut Grid).
-    // Empty param_ownership is a metadata stub — not "all owned" (see Pattern 6).
-    let local_all_owned = !local.param_ownership.is_empty()
-        && local
-            .param_ownership
-            .iter()
-            .all(|o| matches!(o, OwnershipMode::Owned));
-    let global_has_borrow = global.param_ownership.iter().any(|o| {
-        matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-    });
-    if local_all_owned && global_has_borrow {
-        return true;
-    }
-
-    // Pattern 2: stub marks string as Borrowed &str; convergence uses owned String.
-    let local_stub_str_borrow = local
-        .param_ownership
-        .iter()
-        .zip(&local.param_types)
-        .any(|(o, t)| {
-            matches!(o, OwnershipMode::Borrowed)
-                && matches!(
-                    t,
-                    Type::Reference(inner) if matches!(inner.as_ref(), Type::Custom(s) if s == "str")
-                )
-        });
-    let global_owned_string = global
-        .param_ownership
-        .iter()
-        .zip(&global.param_types)
-        .any(|(o, t)| {
-            matches!(o, OwnershipMode::Owned)
-                && crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
-        });
-    if local_stub_str_borrow && global_owned_string {
-        return true;
-    }
-
-    // Pattern 3: stale dependency metadata marks non-copy args Owned while body analysis
-    // converged them to borrowed (often with Reference(T) in param_types). Example:
-    // engine QuestManager::is_quest_active(id: Owned QuestId) vs game quest/manager.wj
-    // converged (id: Borrowed &QuestId).
-    let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
-    if local
-        .param_ownership
-        .iter()
-        .enumerate()
-        .zip(global.param_ownership.iter())
-        .any(|((idx, local_own), global_own)| {
-            if skip_self(idx) {
-                return false;
-            }
-            if !matches!(local_own, OwnershipMode::Owned) {
-                return false;
-            }
-            if !matches!(
-                global_own,
-                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-            ) {
-                return false;
-            }
-            local.param_types.get(idx).is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
-            })
-        })
-    {
-        return true;
-    }
-
-    // Pattern 4: body-inferred borrow (local) vs converged owned formal (global).
-    // Example: MannequinMesh::generate(config) — impl reads config twice (Borrowed) but
-    // the formal consumes by value (Owned). Call sites must pass `config`, not `&config`.
-    // Skip when global still looks like a stale engine stub (Pattern 3 inverse).
-    if has_stale_owned_non_copy_params(global) {
-        return false;
-    }
-    if local
-        .param_ownership
-        .iter()
-        .enumerate()
-        .zip(global.param_ownership.iter())
-        .any(|((idx, local_own), global_own)| {
-            if skip_self(idx) {
-                return false;
-            }
-            if !matches!(
-                local_own,
-                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-            ) {
-                return false;
-            }
-            if !matches!(global_own, OwnershipMode::Owned) {
-                return false;
-            }
-            global.param_types.get(idx).is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
-        })
-    {
-        return true;
-    }
-
-    // Pattern 5: empty param_ownership (stale engine metadata) vs converged non-empty ownership.
-    // Example: engine metadata.json has `MannequinMesh::generate` with `param_ownership: []`
-    // while local analysis converged to `[Owned]`. Prefer the converged global.
-    // Skip when global only adds body-inferred borrow over a bare owned formal stub.
-    if local.param_ownership.is_empty() && !global.param_ownership.is_empty() {
-        let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
-        let body_borrow_over_owned_stub = global.param_ownership.iter().enumerate().any(
-            |(idx, global_own)| {
-                if skip_self(idx) {
-                    return false;
-                }
-                matches!(
-                    global_own,
-                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                ) && local
-                    .param_types
-                    .get(idx)
-                    .is_some_and(|_| param_type_is_owned_non_text(local, idx))
-            },
-        );
-        if !body_borrow_over_owned_stub {
-            return true;
-        }
-    }
-
-    // Pattern 6: body-inferred borrow on local vs metadata/declaration stub with bare owned formals.
-    // Example: local `generate` has `[Borrowed]` from double-use body; global metadata has
-    // `param_ownership: []` and `Custom(MannequinConfig)` — call sites must use global/owned formal.
-    if global.param_ownership.is_empty() && !local.param_ownership.is_empty() {
-        let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
-        if local.param_ownership.iter().enumerate().any(|(idx, local_own)| {
-            if skip_self(idx) {
-                return false;
-            }
-            matches!(
-                local_own,
-                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-            ) && global
-                .param_types
-                .get(idx)
-                .is_some_and(|t| param_type_is_owned_non_text(global, idx))
-        }) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Block promotion when body-inferred borrow would overwrite a metadata/declaration stub
-/// that still shows a bare owned formal (`param_ownership: []`, `Custom(T)` param type).
-pub(crate) fn body_borrow_must_not_replace_owned_formal_stub(
-    existing: &FunctionSignature,
-    converged: &FunctionSignature,
-) -> bool {
-    if !existing.param_ownership.is_empty() {
-        return false;
-    }
-    let skip_self = |idx: usize| existing.has_self_receiver && idx == 0;
-    converged.param_ownership.iter().enumerate().any(|(idx, converged_own)| {
-        if skip_self(idx) {
-            return false;
-        }
-        matches!(
-            converged_own,
-            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-        ) && existing
-            .param_types
-            .get(idx)
-            .is_some_and(|_| param_type_is_owned_non_text(existing, idx))
-    })
-}
-
-/// Block promotion when body-inferred borrow would overwrite a correct engine/converged
-/// owned formal for a Copy struct param (MannequinMesh::generate(config: MannequinConfig)).
-pub(crate) fn body_borrow_must_not_replace_owned_copy_formal(
-    existing: &FunctionSignature,
-    converged: &FunctionSignature,
-    copy_structs: &std::collections::HashSet<String>,
-) -> bool {
-    use crate::parser::Type;
-
-    if existing.param_ownership.is_empty() || converged.param_ownership.is_empty() {
-        return false;
-    }
-    let skip_self = |idx: usize| existing.has_self_receiver && idx == 0;
-    existing
-        .param_ownership
-        .iter()
-        .enumerate()
-        .zip(converged.param_ownership.iter())
-        .any(|((idx, existing_own), converged_own)| {
-            if skip_self(idx) {
-                return false;
-            }
-            if !matches!(existing_own, OwnershipMode::Owned) {
-                return false;
-            }
-            if !matches!(
-                converged_own,
-                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-            ) {
-                return false;
-            }
-            existing.param_types.get(idx).is_some_and(|t| {
-                matches!(t, Type::Custom(name) if copy_structs.contains(name))
-                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
-        })
-}
-
-/// Prefer converged global signatures over per-file declaration stubs at call sites.
-pub(crate) fn pick_best_resolved_signature(
-    local: Option<ResolvedSignature>,
-    global: Option<ResolvedSignature>,
-) -> Option<ResolvedSignature> {
-    match (local, global) {
-        (Some(l), Some(g)) if prefer_converged_over_stub(&l.sig, &g.sig) => Some(g),
-        (Some(l), _) => Some(l),
-        (None, Some(g)) => Some(g),
-        (None, None) => None,
-    }
-}
-
 /// When a per-file stub says `Owned`, look for a longer module-qualified global key
 /// (e.g. `dep::module::touch_grid`) with converged borrow ownership.
 pub(crate) fn global_suffix_param_ownership(
@@ -737,21 +399,6 @@ pub(crate) fn global_suffix_param_ownership(
     best.map(|(_, own)| own)
 }
 
-/// User-visible argument count for a signature (call-site arity).
-pub(crate) fn effective_user_arg_count(sig: &FunctionSignature) -> usize {
-    if !sig.param_ownership.is_empty() {
-        if sig.has_self_receiver {
-            sig.param_ownership.len().saturating_sub(1)
-        } else {
-            sig.param_ownership.len()
-        }
-    } else if sig.has_self_receiver {
-        sig.param_types.len().saturating_sub(1)
-    } else {
-        sig.param_types.len()
-    }
-}
-
 /// Resolve callee parameter ownership for call-site lowering.
 ///
 /// When `param_types` shows a bare owned formal (`Custom(T)` without `Reference` wrapper),
@@ -767,12 +414,16 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         }
     }
 
-    // Bare owned formal type is authoritative for call-site lowering.
+    // Bare owned formal type is authoritative for call-site lowering when Phase 3 did not
+    // wrap `param_types` as `Reference(T)` (Copy structs and true owned formals).
+    // Non-copy converged borrows keep `Reference(T)` in `param_types` — honor `param_ownership`.
     if param_type_is_owned_non_text(sig, param_idx)
         && sig
-            .param_types
-            .get(param_idx)
+            .formal_param_type(param_idx)
             .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+        && sig.param_types.get(param_idx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        })
     {
         return OwnershipMode::Owned;
     }
@@ -797,17 +448,6 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
 /// `station_builder::set_if`, not `Vec3::new` or bare `helper`.
 pub(crate) fn is_external_module_qualified_call(func_name: &str) -> bool {
     func_name.contains("::") && func_name.chars().next().is_some_and(|c| c.is_lowercase())
-}
-
-/// True when the resolved signature's param type is an owned non-text value (not `&T`).
-pub fn param_type_is_owned_non_text(sig: &FunctionSignature, param_idx: usize) -> bool {
-    sig.param_types
-        .get(param_idx)
-        .is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                && !crate::codegen::rust::types::is_windjammer_text_type(t)
-        })
 }
 
 pub fn effective_param_ownership_for_arg(sig: &FunctionSignature, arg_index: usize) -> OwnershipMode {
@@ -852,6 +492,10 @@ mod tests {
         FunctionSignature {
             name: name.to_string(),
             param_types: vec![Type::Custom("i32".into()); param_count],
+            formal_param_types: vec![],
+            formal_param_types: vec![],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Owned; param_count + if has_self { 1 } else { 0 }],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -865,6 +509,10 @@ mod tests {
         FunctionSignature {
             name: name.to_string(),
             param_types: types,
+            formal_param_types: vec![],
+            formal_param_types: vec![],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Owned; ownership_len],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -1077,6 +725,8 @@ impl BuildFingerprint {
         let sig = FunctionSignature {
             name: "svo64_convert::voxelgrid_to_svo64_flat".to_string(),
             param_types: vec![Type::Custom("VoxelGrid".to_string())],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Parameterized(
                 "Vec".to_string(),
@@ -1102,6 +752,8 @@ impl BuildFingerprint {
         let sig = FunctionSignature {
             name: "QuestManager::update_objective_progress".to_string(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("QuestId".to_string())))],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -1591,6 +1243,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("usize".into()),
                 Type::Custom("u32".into()),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![
                 OwnershipMode::MutBorrowed,
                 OwnershipMode::Borrowed,
@@ -1620,6 +1273,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Custom("QuestId".into()),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1634,6 +1288,8 @@ pub fn test_mannequin_default_generation() {
         let sig = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1655,6 +1311,8 @@ pub fn test_mannequin_default_generation() {
         let sig = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1676,6 +1334,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Custom("QuestId".into()),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1688,6 +1347,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Reference(Box::new(Type::Custom("QuestId".into()))),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1735,6 +1395,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Custom("QuestId".into()),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1747,6 +1408,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Reference(Box::new(Type::Custom("QuestId".into()))),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1782,6 +1444,8 @@ pub fn test_mannequin_default_generation() {
         let engine_stub = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1791,6 +1455,8 @@ pub fn test_mannequin_default_generation() {
         let body_converged = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1815,6 +1481,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Custom("QuestId".into()),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1827,6 +1494,7 @@ pub fn test_mannequin_default_generation() {
                 Type::Custom("Self".into()),
                 Type::Reference(Box::new(Type::Custom("QuestId".into()))),
             ],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("Bool".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1860,6 +1528,8 @@ pub fn test_mannequin_default_generation() {
         let body_inferred = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1869,6 +1539,8 @@ pub fn test_mannequin_default_generation() {
         let formal_owned = FunctionSignature {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
+            formal_param_types: vec![],
+            formal_param_types: vec![], 
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
