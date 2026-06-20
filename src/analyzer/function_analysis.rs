@@ -837,10 +837,14 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        // Formal types: snapshot before Phase 3 Reference wrap (call-site vs formal separation).
+        let formal_param_types = param_types.clone();
+
         // Phase 3: Mirror impl-method registration — when ownership is Borrowed/MutBorrowed
         // but param_types still use bare `T`, wrap as `Reference(T)` / `MutableReference(T)`
         // so call-site lowering agrees with formal parameter codegen. Stale engine metadata
         // that marks owned `Custom(T)` as Borrowed keeps bare `T` and is handled separately.
+        // Only `param_types` is wrapped — `formal_param_types` stays bare AST types.
         for (idx, ownership) in param_ownership.iter().enumerate() {
             if has_self_receiver && idx == 0 {
                 continue;
@@ -870,6 +874,7 @@ impl<'ast> Analyzer<'ast> {
         FunctionSignature {
             name: func.decl.name.clone(),
             param_types,
+            formal_param_types,
             param_ownership,
             return_type,
             return_ownership: OwnershipMode::Owned, // For now, always owned

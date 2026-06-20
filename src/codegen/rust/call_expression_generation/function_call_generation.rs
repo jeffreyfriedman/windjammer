@@ -325,6 +325,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 Some(crate::analyzer::FunctionSignature {
                     name: func_name.to_string(),
                     param_types: params.clone(),
+                    formal_param_types: params.clone(),
                     param_ownership,
                     return_type: return_type.as_ref().map(|t| (**t).clone()),
                     return_ownership: OwnershipMode::Owned,

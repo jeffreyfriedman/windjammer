@@ -91,6 +91,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
     Some(FunctionSignature {
         name: full_name,
         param_types: vec![], // TODO: Extract from Rust AST
+        formal_param_types: vec![],
         param_ownership,
         return_type: None,                      // TODO: Extract from Rust AST
         return_ownership: OwnershipMode::Owned, // Default
@@ -136,6 +137,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "println".to_string(),
             param_types: vec![Type::Reference(Box::new(Type::String))], // Takes &str
+            formal_param_types: vec![],
             param_ownership: vec![Borrowed],
             return_type: None,
             return_ownership: Owned,
@@ -150,6 +152,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "game::create_entity".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![MutBorrowed],
             return_type: None,
             return_ownership: Owned,
@@ -163,6 +166,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "game::add_transform".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_type: None,
             return_ownership: Owned,
@@ -176,6 +180,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "game::add_velocity".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_type: None,
             return_ownership: Owned,
@@ -189,6 +194,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "game::add_mesh".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![MutBorrowed, Owned, Owned],
             return_type: None,
             return_ownership: Owned,
@@ -204,6 +210,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "split".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![Borrowed, Borrowed],
             return_type: Some(Type::Vec(Box::new(Type::String))),
             return_ownership: Owned,
@@ -216,6 +223,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         FunctionSignature {
             name: "strings::split".to_string(),
             param_types: vec![],
+            formal_param_types: vec![],
             param_ownership: vec![Borrowed, Borrowed],
             return_type: Some(Type::Vec(Box::new(Type::String))),
             return_ownership: Owned,

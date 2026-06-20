@@ -193,6 +193,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                 .iter()
                 .map(|_| crate::analyzer::OwnershipMode::Owned)
                 .collect();
+            let formal_param_types = param_types.clone();
             let return_type = sig
                 .return_type
                 .as_ref()
@@ -202,6 +203,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                 AnalyzerFunctionSignature {
                     name: name.to_string(),
                     param_types,
+                    formal_param_types,
                     param_ownership,
                     return_type,
                     return_ownership: OwnershipMode::Owned,
