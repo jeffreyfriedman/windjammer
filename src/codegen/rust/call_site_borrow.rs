@@ -210,9 +210,10 @@ mod tests {
     fn vec_formal_honors_converged_borrow() {
         let elem = Type::Custom("AABB".into());
         let vec_ty = Type::Parameterized("Vec".into(), vec![elem]);
+        let borrowed_vec = Type::Reference(Box::new(vec_ty.clone()));
         let sig = sig_with_formal(
             "check_collisions",
-            vec![vec_ty.clone()],
+            vec![borrowed_vec],
             vec![vec_ty],
             vec![OwnershipMode::Borrowed],
             false,

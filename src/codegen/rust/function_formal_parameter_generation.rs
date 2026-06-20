@@ -57,6 +57,14 @@ impl<'ast> CodeGenerator<'ast> {
                     .get(param_idx)
                     .unwrap_or(&param.type_);
 
+                let formal_emission_sig =
+                    self.build_formal_emission_signature(func, analyzed);
+                let effective_param_own =
+                    super::call_signature_resolution::effective_param_ownership(
+                        &formal_emission_sig,
+                        param_idx,
+                    );
+
                 // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
                 if self.cow_optimizations.contains(&param.name) {
                     let base_type = self.type_to_rust(inferred_type);
@@ -307,18 +315,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // Already has & or &mut - just convert
                             self.type_to_rust(inferred_type)
                         } else {
-                            // Apply ownership mode from analyzer
-                            // TDD FIX: Default to Owned, not Borrowed
-                            // THE WINDJAMMER WAY: Parameters are owned by default unless analyzer
-                            // detects they should be borrowed (e.g., only read, passed to & functions)
-                            let ownership_mode = analyzed
-                                .inferred_ownership
-                                .get(&param.name)
-                                .unwrap_or(&OwnershipMode::Owned);
-
-                            // E0053 FIX: Trait impl parameters MUST match the trait
-                            // definition's parameter types exactly. Look up the trait's
-                            // method signature and use its ownership for each parameter.
+                            // Apply ownership mode from analyzer / registry (aligned with call sites)
                             let ownership_mode = if self.in_trait_impl {
                                 let trait_param_ownership = self
                                     .current_trait_impl_name
@@ -337,15 +334,13 @@ impl<'ast> CodeGenerator<'ast> {
                                             });
                                         methods.and_then(|m| {
                                             m.get(func.name.as_str()).and_then(|trait_fn| {
-                                                // Find matching param by name in the trait
-                                                // method's inferred ownership
-                                                trait_fn.inferred_ownership.get(&param.name)
+                                                trait_fn.inferred_ownership.get(&param.name).copied()
                                             })
                                         })
                                     });
-                                trait_param_ownership.unwrap_or(&OwnershipMode::Owned)
+                                trait_param_ownership.unwrap_or(OwnershipMode::Owned)
                             } else {
-                                ownership_mode
+                                effective_param_own
                             };
 
                             match ownership_mode {
