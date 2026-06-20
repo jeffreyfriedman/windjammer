@@ -492,7 +492,12 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
                     if formal_type_honors_converged_borrow(formal_ty) {
-                        return *own;
+                        let types_show_borrow = sig.param_types.get(param_idx).is_some_and(|t| {
+                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        });
+                        if types_show_borrow {
+                            return *own;
+                        }
                     }
                 }
             }
@@ -525,6 +530,17 @@ pub(crate) fn is_external_module_qualified_call(func_name: &str) -> bool {
 pub fn effective_param_ownership_for_arg(sig: &FunctionSignature, arg_index: usize) -> OwnershipMode {
     let idx = sig.arg_param_index(arg_index);
     effective_param_ownership(sig, idx)
+}
+
+/// `MannequinMesh::generate`, `Vec::push` — not `foo::bar` module paths.
+pub fn is_type_qualified_associated_call(func_name: &str) -> bool {
+    let Some((type_part, _method)) = func_name.rsplit_once("::") else {
+        return false;
+    };
+    type_part
+        .rsplit("::")
+        .next()
+        .is_some_and(|leaf| leaf.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
 }
 
 /// Whether an arg-count-validated resolution is safe for a known receiver type.

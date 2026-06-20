@@ -48,7 +48,7 @@ fn test_vec_bare_formal_honors_converged_borrow() {
     let vec_ty = Type::Parameterized("Vec".into(), vec![elem.clone()]);
     let sig = FunctionSignature {
         name: "check_collisions".into(),
-        param_types: vec![vec_ty.clone()],
+        param_types: vec![Type::Reference(Box::new(vec_ty.clone()))],
         formal_param_types: vec![vec_ty],
         param_ownership: vec![OwnershipMode::Borrowed],
         return_type: Some(Type::Custom("Bool".into())),

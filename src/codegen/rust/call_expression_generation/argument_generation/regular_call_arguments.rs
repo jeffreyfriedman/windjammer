@@ -355,7 +355,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, i,
                     );
-                if matches!(ownership, OwnershipMode::Owned) {
+                if matches!(ownership, OwnershipMode::Owned)
+                    && !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                        func_name,
+                    )
+                {
                     if let Some(global) = gen.global_signature_registry() {
                         if let Some(global_own) =
                             crate::codegen::rust::call_signature_resolution::global_suffix_param_ownership(
@@ -397,7 +401,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                                         &resolved.sig, i,
                                     );
-                                if !matches!(upgraded, OwnershipMode::Owned) {
+                                if !matches!(upgraded, OwnershipMode::Owned)
+                                    && !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                                        &lookup_name,
+                                    )
+                                {
                                     ownership = upgraded;
                                 }
                             }
