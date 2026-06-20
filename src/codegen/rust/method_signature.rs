@@ -33,6 +33,7 @@ impl MethodSignature {
         crate::analyzer::FunctionSignature {
             name: format!("{}::{}", self.receiver_type, self.method_name),
             param_types,
+            formal_param_types: self.param_types.clone(),
             param_ownership,
             return_type: self.return_type.clone(),
             return_ownership: OwnershipMode::Owned,

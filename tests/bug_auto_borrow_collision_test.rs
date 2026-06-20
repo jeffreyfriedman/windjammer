@@ -25,6 +25,7 @@ fn test_auto_borrow_skipped_on_signature_collision() {
         FunctionSignature {
             name: "draw_text".to_string(),
             param_types: vec![Type::String, Type::Float, Type::Float],
+            formal_param_types: vec![],
             param_ownership: vec![
                 OwnershipMode::Borrowed,
                 OwnershipMode::Owned,
@@ -45,6 +46,7 @@ fn test_auto_borrow_skipped_on_signature_collision() {
         FunctionSignature {
             name: "draw_text".to_string(),
             param_types: vec![Type::String, Type::Float, Type::Float],
+            formal_param_types: vec![],
             param_ownership: vec![
                 OwnershipMode::Owned,
                 OwnershipMode::Owned,
@@ -124,6 +126,7 @@ fn test_module_qualified_call_auto_borrow_skipped_on_collision() {
         FunctionSignature {
             name: "draw_text".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -139,6 +142,7 @@ fn test_module_qualified_call_auto_borrow_skipped_on_collision() {
         FunctionSignature {
             name: "draw_text".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -177,6 +181,7 @@ fn test_mut_borrow_skipped_on_collision() {
         FunctionSignature {
             name: "update".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::MutBorrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -192,6 +197,7 @@ fn test_mut_borrow_skipped_on_collision() {
         FunctionSignature {
             name: "update".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -227,6 +233,7 @@ fn test_collision_detected_for_different_ownership_same_types() {
         FunctionSignature {
             name: "process".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -241,6 +248,7 @@ fn test_collision_detected_for_different_ownership_same_types() {
         FunctionSignature {
             name: "process".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             return_ownership: OwnershipMode::Owned,

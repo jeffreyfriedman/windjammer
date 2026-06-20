@@ -1,6 +1,7 @@
 //! Function signature metadata and merging into the analyzer registry.
 
 use crate::analyzer::{FunctionSignature as AnalyzerFunctionSignature, OwnershipMode};
+use crate::parser::Type;
 use serde::{Deserialize, Serialize};
 
 use super::ModuleMetadata;
@@ -8,8 +9,13 @@ use super::ModuleMetadata;
 /// Function signature for type inference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionSignature {
-    /// Parameter types
+    /// Parameter types (serialized Type JSON). These are formal AST types at export.
     pub params: Vec<String>, // Serialized Type (JSON is easier than bincode for now)
+
+    /// Formal parameter types when they differ from call-site `param_types` after inference.
+    /// When empty, `params` is the formal source of truth (legacy metadata).
+    #[serde(default)]
+    pub formal_params: Vec<String>,
 
     /// Return type (None for unit)
     pub return_type: Option<String>,
@@ -39,9 +45,18 @@ pub fn metadata_function_sig_from_analyzer(
     is_associated: bool,
     parent_type: Option<String>,
 ) -> FunctionSignature {
+    let formal_types: Vec<Type> = if !sig.formal_param_types.is_empty() {
+        sig.formal_param_types.clone()
+    } else {
+        sig.param_types.clone()
+    };
     FunctionSignature {
         params: sig
             .param_types
+            .iter()
+            .map(ModuleMetadata::serialize_type)
+            .collect(),
+        formal_params: formal_types
             .iter()
             .map(ModuleMetadata::serialize_type)
             .collect(),
@@ -80,6 +95,16 @@ pub fn try_analyzer_signature_from_metadata(
         param_types.push(ty);
     }
 
+    let formal_param_types = if meta_sig.formal_params.is_empty() {
+        param_types.clone()
+    } else {
+        let mut formal = Vec::with_capacity(meta_sig.formal_params.len());
+        for p in &meta_sig.formal_params {
+            formal.push(ModuleMetadata::deserialize_type(p)?);
+        }
+        formal
+    };
+
     let param_ownership = if meta_sig.param_ownership.is_empty() {
         param_types
             .iter()
@@ -110,6 +135,7 @@ pub fn try_analyzer_signature_from_metadata(
     Some(AnalyzerFunctionSignature {
         name: name.to_string(),
         param_types,
+        formal_param_types,
         param_ownership,
         return_type,
         return_ownership: OwnershipMode::Owned,

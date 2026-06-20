@@ -42,6 +42,7 @@ fn test_passthrough_to_owned_callee_keeps_param_owned() {
         FunctionSignature {
             name: "CombatStats::apply_damage".to_string(),
             param_types: vec![Type::Custom("Self".into()), Type::Custom("Attack".into())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::Owned],
             return_type: Some(Type::Custom("CombatResult".into())),
             return_ownership: OwnershipMode::Owned,
@@ -105,6 +106,7 @@ fn test_string_passthrough_to_borrowed_callee_stays_borrowed() {
         FunctionSignature {
             name: "deserialize_save_data".to_string(),
             param_types: vec![Type::String],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("Result".into())),
             return_ownership: OwnershipMode::Owned,
