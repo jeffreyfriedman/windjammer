@@ -955,6 +955,8 @@ impl<'ast> CodeGenerator<'ast> {
         {
             let struct_name = impl_block.type_name.clone();
             let max_iters = impl_block.functions.len().max(1);
+            // Do not pass `self_receiver_upgrades` here — that creates a fixed-point cycle
+            // where read-only recursive callees get upgraded to &mut self and contaminate callers.
             for _ in 0..max_iters {
                 for func in &impl_block.functions {
                     let body_modifies = super::self_analysis::function_modifies_self(
@@ -962,7 +964,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(&self.signature_registry),
                         Some(&struct_name),
                         Some(&self.struct_field_types),
-                        Some(&self.self_receiver_upgrades),
+                        None,
                     );
                     if body_modifies {
                         let qualified = format!("{}::{}", struct_name, func.name);
