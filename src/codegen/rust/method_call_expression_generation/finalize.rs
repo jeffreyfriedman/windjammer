@@ -60,20 +60,27 @@ impl<'ast> CodeGenerator<'ast> {
                     if arg_str.contains("string_to_ffi(") {
                         return arg_str;
                     }
+                    let sig_param_idx = sig.arg_param_index(i);
                     let ownership =
                         crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                             sig, i,
                         );
-                    let param_is_ref_type = sig.param_type_for_arg(i).is_some_and(|t| {
-                        matches!(t, Type::Reference(_))
+                    // Converged ownership wins over Reference(T) wrappers in param_types that
+                    // may lag from body analysis (MannequinMesh::generate(config: MannequinConfig)).
+                    let formal_lowers_to_owned_value = sig
+                        .param_types
+                        .get(sig_param_idx)
+                        .is_some_and(|t| {
+                            crate::codegen::rust::call_signature_resolution::param_type_is_owned_non_text(
+                                sig, sig_param_idx,
+                            )
+                        });
+                    let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                        self.is_type_copy(t)
                     });
                     let apply_borrow = |arg_str: &mut String| {
-                        let param_is_str_ref = sig.param_type_for_arg(i).is_some_and(|t| {
+                        let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                        });
-                        let param_is_copy_scalar = sig.param_type_for_arg(i).is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(t)
                         });
                         let arg_is_string_literal = matches!(
                             arguments.get(i).map(|(_, e)| e),
@@ -82,7 +89,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 ..
                             })
                         );
-                        if param_is_str_ref || arg_is_string_literal || param_is_copy_scalar {
+                        if param_is_str_ref || arg_is_string_literal || param_is_copy {
                             return;
                         }
                         if let Some((_, arg_expr)) = arguments.get(i) {
@@ -118,16 +125,21 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         crate::analyzer::OwnershipMode::Borrowed
-                            if !arg_str.starts_with('&') =>
+                            if !arg_str.starts_with('&')
+                                && !formal_lowers_to_owned_value =>
                         {
                             apply_borrow(&mut arg_str);
                             arg_str
                         }
-                        crate::analyzer::OwnershipMode::Owned
-                            if param_is_ref_type && !arg_str.starts_with('&') =>
-                        {
-                            apply_borrow(&mut arg_str);
-                            arg_str
+                        crate::analyzer::OwnershipMode::Owned => {
+                            let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            });
+                            if arg_str.starts_with('&') && !param_is_str_ref {
+                                arg_str.trim_start_matches('&').to_string()
+                            } else {
+                                arg_str
+                            }
                         }
                         _ => arg_str,
                     }

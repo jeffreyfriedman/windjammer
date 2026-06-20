@@ -230,22 +230,54 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
         analyzed: &AnalyzedFunction<'ast>,
     ) {
+        let qualified = format!("{impl_type}::{}", func.name);
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        
+        // Skip method registry for static methods - always use global registry for consistency.
+        // Body-inferred Borrowed from double-use shouldn't override converged Owned formals.
+        // The global registry has the converged ownership after multipass analysis.
+        if !has_self_receiver {
+            if let Some(global_sig) = self.global_signature_registry() {
+                if global_sig.get_signature(&qualified).is_some() {
+                    return;
+                }
+            }
+        }
+        
+        let registry_sig = self.signature_registry.get_signature(&qualified);
         let mut param_types = Vec::new();
         let mut param_ownership = Vec::new();
 
         for (idx, param) in func.parameters.iter().enumerate() {
             if param.name != "self" {
-                let p_type = analyzed
+                let mut p_type = analyzed
                     .inferred_param_types
                     .get(idx)
                     .cloned()
                     .unwrap_or_else(|| param.type_.clone());
 
-                let ownership = analyzed
-                    .inferred_ownership
-                    .get(&param.name)
-                    .copied()
-                    .unwrap_or(crate::analyzer::OwnershipMode::Borrowed);
+                let ownership = if has_self_receiver {
+                    analyzed
+                        .inferred_ownership
+                        .get(&param.name)
+                        .copied()
+                        .unwrap_or(crate::analyzer::OwnershipMode::Borrowed)
+                } else {
+                    registry_sig
+                        .and_then(|sig| sig.param_ownership.get(idx).copied())
+                        .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
+                        .unwrap_or(crate::analyzer::OwnershipMode::Borrowed)
+                };
+
+                if !has_self_receiver {
+                    if let Some(reg) = registry_sig {
+                        if let Some(formal_ty) = reg.param_types.get(idx) {
+                            if matches!(ownership, crate::analyzer::OwnershipMode::Owned) {
+                                p_type = formal_ty.clone();
+                            }
+                        }
+                    }
+                }
 
                 let stored_type = match ownership {
                     crate::analyzer::OwnershipMode::Borrowed
@@ -267,8 +299,6 @@ impl<'ast> CodeGenerator<'ast> {
                 param_ownership.push(ownership);
             }
         }
-
-        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
 
         let signature = crate::codegen::rust::generator::MethodSignature::new(
             impl_type.to_string(),

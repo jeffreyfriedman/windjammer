@@ -91,17 +91,33 @@ impl<'ast> CodeGenerator<'ast> {
                             if self.inferred_mut_borrowed_params.contains(name)
                     );
 
-                let effective_ownership = method_signature
+                let effective_ownership = type_name
                     .as_ref()
-                    .filter(|sig| {
-                        !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
-                            sig,
+                    .and_then(|tn| {
+                        self.resolve_call_signature_with_global(
+                            &format!("{tn}::{method}"),
+                            Some(tn.as_str()),
+                            arguments.len(),
                         )
+                        .map(|resolved| {
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                &resolved.sig, i,
+                            )
+                        })
                     })
-                    .map(|sig| {
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
-                        )
+                    .or_else(|| {
+                        method_signature
+                            .as_ref()
+                            .filter(|sig| {
+                                !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
+                                    sig,
+                                )
+                            })
+                            .map(|sig| {
+                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                    sig, i,
+                                )
+                            })
                     })
                     .or_else(|| {
                         type_name.as_ref().and_then(|tn| {
@@ -127,12 +143,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
                 // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
                 // Fix: Suppress clone when param expects Borrowed -> just add & to field
-                let param_expects_borrowed = effective_ownership
-                    .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
-                    || method_signature
-                        .as_ref()
-                        .and_then(|sig| sig.param_type_for_arg(i))
-                        .is_some_and(|t| matches!(t, Type::Reference(_)));
+                let param_expects_borrowed =
+                    effective_ownership.is_some_and(|o| matches!(o, OwnershipMode::Borrowed));
 
                 let is_auto_borrow_target =
                     matches!(method, "push_str" | "extend_from_slice") && i == 0;
@@ -835,7 +847,20 @@ impl<'ast> CodeGenerator<'ast> {
                 // AUTO-REF: Add & when parameter expects reference but arg is owned
                 // Skip when .to_string() was stripped for &str param — the result is
                 // already a bare literal/value that is &str, adding & would create &&str.
-                if !string_literal_converted && !to_string_stripped_for_str_param {
+                let callee_expects_owned = matches!(effective_ownership, Some(OwnershipMode::Owned))
+                    || method_signature
+                        .as_ref()
+                        .map(|sig| {
+                            let idx = sig.arg_param_index(i);
+                            crate::codegen::rust::call_signature_resolution::param_type_is_owned_non_text(
+                                sig, idx,
+                            )
+                        })
+                        .unwrap_or(false);
+                if !string_literal_converted
+                    && !to_string_stripped_for_str_param
+                    && !callee_expects_owned
+                {
                     let should_ref = crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                         arg_to_generate,
                         &arg_str,

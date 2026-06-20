@@ -44,34 +44,60 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             }
         });
 
-    let resolved = type_name
-        .as_ref()
-        .and_then(|tn| {
-            gen.lookup_method_signature_on_receiver_type(tn, call_method, arguments.len())
-                .map(|sig| call_signature_resolution::ResolvedSignature {
-                    sig,
-                    qualified_key: format!("{tn}::{call_method}"),
-                    resolution_method: call_signature_resolution::ResolutionMethod::MethodRegistry,
-                    has_collision: false,
-                })
-        })
-        .or_else(|| {
-            qualified_name.as_deref().and_then(|name| {
-                gen.resolve_call_signature_with_global(name, type_name.as_deref(), arguments.len())
-                    .filter(|r| match r.resolution_method {
-                        call_signature_resolution::ResolutionMethod::ArgCountValidated => type_name
-                            .as_ref()
-                            .is_some_and(|tn| {
-                                call_signature_resolution::arg_count_validated_matches_receiver(
-                                    &r.qualified_key,
-                                    tn,
-                                    call_method,
-                                )
-                            }),
-                        _ => true,
-                    })
+    // Prefer converged signature_registry (Owned consumers like MannequinMesh::generate)
+    // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused
+    // inside the callee). Method registry remains fallback for stdlib / not-yet-registered.
+    let from_global = qualified_name.as_deref().and_then(|name| {
+        gen.resolve_call_signature_with_global(name, type_name.as_deref(), arguments.len())
+            .filter(|r| match r.resolution_method {
+                call_signature_resolution::ResolutionMethod::ArgCountValidated => type_name
+                    .as_ref()
+                    .is_some_and(|tn| {
+                        call_signature_resolution::arg_count_validated_matches_receiver(
+                            &r.qualified_key,
+                            tn,
+                            call_method,
+                        )
+                    }),
+                _ => true,
             })
-        });
+    });
+
+    let from_method = type_name.as_ref().and_then(|tn| {
+        gen.lookup_method_signature_on_receiver_type(tn, call_method, arguments.len())
+            .map(|sig| call_signature_resolution::ResolvedSignature {
+                sig,
+                qualified_key: format!("{tn}::{call_method}"),
+                resolution_method: call_signature_resolution::ResolutionMethod::MethodRegistry,
+                has_collision: false,
+            })
+    });
+
+    let resolved = match (&from_global, &from_method) {
+        (Some(g), Some(m))
+            if call_signature_resolution::prefer_converged_over_stub(&m.sig, &g.sig) =>
+        {
+            from_global
+        }
+        (Some(g), Some(m))
+            if !g.sig.param_ownership.is_empty()
+                && g.sig.param_ownership != m.sig.param_ownership =>
+        {
+            from_global
+        }
+        (Some(_), None) => from_global,
+        (None, Some(_)) => from_method,
+        (Some(g), Some(m)) => {
+            // When both exist, prefer global for static methods with converged ownership.
+            // Body-inferred method registry can mark formals as Borrowed when they're Owned.
+            if !g.sig.has_self_receiver && !g.sig.param_ownership.is_empty() {
+                from_global
+            } else {
+                Some(g.clone())
+            }
+        }
+        (None, None) => None,
+    };
     let method_signature = resolved.as_ref().map(|r| r.sig.clone());
 
     let runtime_module = match call_obj {
