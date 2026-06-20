@@ -11,6 +11,8 @@ use super::OwnershipMode;
 pub struct FunctionSignature {
     pub name: String,
     pub param_types: Vec<Type>,
+    /// AST/metadata param types — never mutated by body Phase 3 Reference wrap.
+    pub formal_param_types: Vec<Type>,
     pub param_ownership: Vec<OwnershipMode>,
     pub return_type: Option<Type>,
     pub return_ownership: OwnershipMode,
@@ -41,6 +43,21 @@ impl FunctionSignature {
     /// Get the type for a call-site argument, accounting for `self`.
     pub fn param_type_for_arg(&self, arg_index: usize) -> Option<&Type> {
         self.param_types.get(self.arg_param_index(arg_index))
+    }
+
+    /// Formal parameter type at `idx` (AST/metadata). Falls back to `param_types` when
+    /// `formal_param_types` is empty (legacy signatures).
+    pub fn formal_param_type(&self, idx: usize) -> Option<&Type> {
+        if !self.formal_param_types.is_empty() {
+            self.formal_param_types.get(idx)
+        } else {
+            self.param_types.get(idx)
+        }
+    }
+
+    /// Formal parameter type for a call-site argument index, accounting for `self`.
+    pub fn formal_param_type_for_arg(&self, arg_index: usize) -> Option<&Type> {
+        self.formal_param_type(self.arg_param_index(arg_index))
     }
 }
 
@@ -466,6 +483,7 @@ impl SignatureRegistry {
                             .iter()
                             .map(|p| Self::declaration_stub_param_type(p))
                             .collect();
+                        let formal_param_types = param_types.clone();
                         let param_ownership: Vec<OwnershipMode> = method
                             .parameters
                             .iter()
@@ -474,6 +492,7 @@ impl SignatureRegistry {
                         let sig = FunctionSignature {
                             name: method.name.clone(),
                             param_types,
+                            formal_param_types,
                             param_ownership,
                             return_type: method.return_type.clone(),
                             return_ownership: OwnershipMode::Owned,
@@ -506,6 +525,7 @@ impl SignatureRegistry {
             .iter()
             .map(|p| Self::declaration_stub_param_type(p))
             .collect();
+        let formal_param_types = param_types.clone();
         let param_ownership: Vec<OwnershipMode> = func
             .parameters
             .iter()
@@ -515,6 +535,7 @@ impl SignatureRegistry {
         FunctionSignature {
             name: name.to_string(),
             param_types,
+            formal_param_types,
             param_ownership,
             return_type: func.return_type.clone(),
             return_ownership: OwnershipMode::Owned,
@@ -545,15 +566,6 @@ impl SignatureRegistry {
         }
     }
 
-    fn is_declaration_stub_like(sig: &FunctionSignature) -> bool {
-        sig.param_ownership
-            .iter()
-            .all(|o| matches!(o, OwnershipMode::Owned))
-            && !sig.param_types.iter().any(|t| {
-                matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
-    }
-
     /// BUG #8 FIX: Merge signatures from another registry.
     /// Detects collisions when different registries provide different
     /// param types for the same key (namespace collision from different modules).
@@ -569,8 +581,10 @@ impl SignatureRegistry {
                     self.ownership_collision_keys.insert(name.clone());
                 }
                 // Keep converged dependency / multi-pass ownership over per-file stubs.
-                if Self::is_declaration_stub_like(sig)
-                    && !Self::is_declaration_stub_like(existing)
+                if crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(sig)
+                    && !crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(
+                        existing,
+                    )
                     && crate::codegen::rust::call_signature_resolution::prefer_converged_over_stub(
                         sig, existing,
                     )
