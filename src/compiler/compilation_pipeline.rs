@@ -2,7 +2,10 @@
 
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
-use crate::metadata::CrateMetadata;
+use crate::metadata::{
+    metadata_function_sig_from_analyzer, struct_name_from_method_key, signature_targets_local_struct,
+    CrateMetadata,
+};
 use crate::parser::ast::core::Item;
 use crate::parser::ast::types::Type;
 use crate::type_inference::{FloatInference, IntInference};
@@ -190,7 +193,7 @@ pub fn build_project_ext(
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
-        let mut codegen = CodeGenerator::new(registry, target);
+        let mut codegen = CodeGenerator::new(registry.clone(), target);
         codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
@@ -250,6 +253,40 @@ pub fn build_project_ext(
             &ancestor_roots,
             None,
         )?;
+
+        if library {
+            let local_struct_names: HashSet<String> = program
+                .items
+                .iter()
+                .filter_map(|item| {
+                    if let Item::Struct { decl, .. } = item {
+                        Some(decl.name.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let local_keys: Vec<String> = crate_metadata
+                .functions
+                .keys()
+                .filter(|name| signature_targets_local_struct(name, &local_struct_names))
+                .cloned()
+                .collect();
+            for name in local_keys {
+                if let Some(sig) = registry.get_signature(&name) {
+                    let (is_associated, parent_type) =
+                        if let Some(struct_name) = struct_name_from_method_key(&name) {
+                            (true, Some(struct_name.to_string()))
+                        } else {
+                            (false, None)
+                        };
+                    crate_metadata.functions.insert(
+                        name,
+                        metadata_function_sig_from_analyzer(sig, is_associated, parent_type),
+                    );
+                }
+            }
+        }
     }
 
     if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {

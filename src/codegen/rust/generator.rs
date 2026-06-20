@@ -843,12 +843,28 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let qualified = format!("{receiver_type}::{method}");
         if let Some(resolved) =
-            self.resolve_call_signature_with_global(&qualified, Some(receiver_type), arg_count)
+            crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site(
+                &self.signature_registry,
+                self.global_signature_registry.as_deref(),
+                receiver_type,
+                method,
+                arg_count,
+            )
         {
             if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
                 return Some(resolved.sig);
+            }
+        }
+
+        if self.global_signature_registry.is_none() {
+            let qualified = format!("{receiver_type}::{method}");
+            if let Some(resolved) =
+                self.resolve_call_signature_with_global(&qualified, Some(receiver_type), arg_count)
+            {
+                if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
+                    return Some(resolved.sig);
+                }
             }
         }
 

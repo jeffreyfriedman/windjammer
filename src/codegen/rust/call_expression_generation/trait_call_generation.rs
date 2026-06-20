@@ -30,50 +30,37 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     let type_name = gen.infer_type_name(call_obj);
 
-    // Build qualified name for the resolver. Try inferred type first,
-    // then fall back to the identifier itself (handles both `Emitter::new`
-    // where Emitter is a type, and `gpu::load_shader` where gpu is a module).
-    let qualified_name = type_name
-        .as_ref()
-        .map(|tn| format!("{}::{}", tn, call_method))
-        .or_else(|| {
-            if let Expression::Identifier { name, .. } = call_obj {
-                Some(format!("{}::{}", name, call_method))
-            } else {
-                None
-            }
-        });
-
     // Prefer converged signature_registry (Owned consumers like MannequinMesh::generate)
     // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused
     // inside the callee). Method registry remains fallback for stdlib / not-yet-registered.
-    let from_global = qualified_name.as_deref().and_then(|name| {
-        gen.resolve_call_signature_with_global(name, type_name.as_deref(), arguments.len())
-            .filter(|r| match r.resolution_method {
-                call_signature_resolution::ResolutionMethod::ArgCountValidated => type_name
-                    .as_ref()
-                    .is_some_and(|tn| {
-                        call_signature_resolution::arg_count_validated_matches_receiver(
-                            &r.qualified_key,
-                            tn,
-                            call_method,
-                        )
-                    }),
-                _ => true,
-            })
+    let from_registry = type_name.as_ref().and_then(|tn| {
+        call_signature_resolution::resolve_method_for_call_site(
+            &gen.signature_registry,
+            gen.global_signature_registry(),
+            tn,
+            call_method,
+            arguments.len(),
+        )
     });
 
-    let from_method = type_name.as_ref().and_then(|tn| {
-        gen.lookup_method_signature_on_receiver_type(tn, call_method, arguments.len())
-            .map(|sig| call_signature_resolution::ResolvedSignature {
-                sig,
-                qualified_key: format!("{tn}::{call_method}"),
-                resolution_method: call_signature_resolution::ResolutionMethod::MethodRegistry,
-                has_collision: false,
-            })
+    let from_method_registry = type_name.as_ref().and_then(|tn| {
+        gen.lookup_method_signature(tn, call_method).and_then(|ms| {
+            let sig = ms.to_function_signature();
+            if call_signature_resolution::validate_arg_count(&sig, arguments.len()) {
+                Some(call_signature_resolution::ResolvedSignature {
+                    sig,
+                    qualified_key: format!("{tn}::{call_method}"),
+                    resolution_method: call_signature_resolution::ResolutionMethod::MethodRegistry,
+                    has_collision: false,
+                })
+            } else {
+                None
+            }
+        })
     });
 
-    let resolved = call_signature_resolution::pick_best_resolved_signature(from_method, from_global);
+    let resolved =
+        call_signature_resolution::pick_best_resolved_signature(from_method_registry, from_registry);
     let method_signature = resolved.as_ref().map(|r| r.sig.clone());
 
     let runtime_module = match call_obj {

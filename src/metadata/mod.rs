@@ -21,7 +21,8 @@ pub use crate_metadata::{
     meta_cache_root, CrateMetadata,
 };
 pub use function_metadata::{
-    metadata_function_sig_from_analyzer, try_analyzer_signature_from_metadata, FunctionSignature,
+    default_skeleton_param_ownership_from_types, metadata_function_sig_from_analyzer,
+    try_analyzer_signature_from_metadata, FunctionSignature,
 };
 pub use type_metadata::infer_copy_from_metadata_structs_pub;
 
@@ -323,18 +324,17 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                 meta.structs.insert(decl.name.clone(), fields);
             }
             Item::Function { decl, .. } => {
+                let param_types: Vec<_> = decl.parameters.iter().map(|p| p.type_.clone()).collect();
                 meta.functions.insert(
                     decl.name.clone(),
                     FunctionSignature {
-                        params: decl
-                            .parameters
+                        params: param_types
                             .iter()
-                            .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                            .map(ModuleMetadata::serialize_type)
                             .collect(),
-                        formal_params: decl
-                            .parameters
+                        formal_params: param_types
                             .iter()
-                            .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                            .map(ModuleMetadata::serialize_type)
                             .collect(),
                         return_type: decl
                             .return_type
@@ -342,7 +342,7 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                             .map(ModuleMetadata::serialize_type),
                         is_associated: false,
                         parent_type: None,
-                        param_ownership: vec![],
+                        param_ownership: default_skeleton_param_ownership_from_types(&param_types),
                         has_self_receiver: false,
                         is_extern: decl.is_extern,
                     },
@@ -350,19 +350,19 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
             }
             Item::Impl { block, .. } => {
                 for func_decl in &block.functions {
+                    let param_types: Vec<_> =
+                        func_decl.parameters.iter().map(|p| p.type_.clone()).collect();
                     let full_name = format!("{}::{}", block.type_name, func_decl.name);
                     meta.functions.insert(
                         full_name,
                         FunctionSignature {
-                            params: func_decl
-                                .parameters
+                            params: param_types
                                 .iter()
-                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                .map(ModuleMetadata::serialize_type)
                                 .collect(),
-                            formal_params: func_decl
-                                .parameters
+                            formal_params: param_types
                                 .iter()
-                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                .map(ModuleMetadata::serialize_type)
                                 .collect(),
                             return_type: func_decl
                                 .return_type
@@ -370,7 +370,9 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                                 .map(ModuleMetadata::serialize_type),
                             is_associated: true,
                             parent_type: Some(block.type_name.clone()),
-                            param_ownership: vec![],
+                            param_ownership: default_skeleton_param_ownership_from_types(
+                                &param_types,
+                            ),
                             has_self_receiver: false,
                             is_extern: false,
                         },
