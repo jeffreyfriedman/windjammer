@@ -331,6 +331,11 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                             .iter()
                             .map(|p| ModuleMetadata::serialize_type(&p.type_))
                             .collect(),
+                        formal_params: decl
+                            .parameters
+                            .iter()
+                            .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                            .collect(),
                         return_type: decl
                             .return_type
                             .as_ref()
@@ -350,6 +355,11 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                         full_name,
                         FunctionSignature {
                             params: func_decl
+                                .parameters
+                                .iter()
+                                .map(|p| ModuleMetadata::serialize_type(&p.type_))
+                                .collect(),
+                            formal_params: func_decl
                                 .parameters
                                 .iter()
                                 .map(|p| ModuleMetadata::serialize_type(&p.type_))
