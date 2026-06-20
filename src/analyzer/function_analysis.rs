@@ -100,8 +100,22 @@ impl<'ast> Analyzer<'ast> {
     ) -> OwnershipMode {
         // Multiple recursive `self.method(...)` calls cannot take owned `self` — check first
         // to avoid re-entering inference while analyzing callees (stack overflow).
+        // Read-only recursion still needs a borrowed receiver, but `&self` not `&mut self`.
         if self.count_self_method_calls(func, func.name.as_str()) >= 2 {
-            return OwnershipMode::MutBorrowed;
+            let modifies_fields =
+                self.function_modifies_self_fields_with_registry(func, Some(registry));
+            if modifies_fields {
+                return OwnershipMode::MutBorrowed;
+            }
+            let mut mutating_call_visited = std::collections::HashSet::new();
+            if self.function_calls_mutating_self_methods_with_registry(
+                func,
+                Some(registry),
+                &mut mutating_call_visited,
+            ) {
+                return OwnershipMode::MutBorrowed;
+            }
+            return OwnershipMode::Borrowed;
         }
 
         if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {

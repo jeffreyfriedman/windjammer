@@ -1183,7 +1183,8 @@ fn method_is_mutating_on_receiver(
                     if let Some(mode) = upgrades.get(&qname) {
                         return match mode {
                             OwnershipMode::MutBorrowed => true,
-                            OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                            // Owned receiver at call site does not imply field mutation.
+                            OwnershipMode::Owned => false,
                             _ => false,
                         };
                     }
@@ -1193,7 +1194,7 @@ fn method_is_mutating_on_receiver(
                         if let Some(mode) = sig.param_ownership.first() {
                             return match mode {
                                 OwnershipMode::MutBorrowed => true,
-                                OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                                OwnershipMode::Owned => false,
                                 _ => false,
                             };
                         }
@@ -1236,7 +1237,7 @@ fn method_is_mutating(
             if let Some(mode) = upgrades.get(&qualified) {
                 return match mode {
                     OwnershipMode::MutBorrowed => true,
-                    OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                    OwnershipMode::Owned => false,
                     _ => false,
                 };
             }
@@ -1250,7 +1251,7 @@ fn method_is_mutating(
                 if let Some(mode) = sig.param_ownership.first() {
                     return match mode {
                         OwnershipMode::MutBorrowed => true,
-                        OwnershipMode::Owned => !is_known_readonly_method_name(method),
+                        OwnershipMode::Owned => false,
                         _ => false,
                     };
                 }
