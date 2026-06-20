@@ -6,6 +6,20 @@ use serde::{Deserialize, Serialize};
 
 use super::ModuleMetadata;
 
+/// Default ownership for AST skeleton export (pre-analysis): string → Borrowed, else Owned.
+pub fn default_skeleton_param_ownership_from_types(types: &[Type]) -> Vec<String> {
+    types
+        .iter()
+        .map(|ty| {
+            if crate::codegen::rust::types::is_windjammer_text_type(ty) {
+                format!("{:?}", OwnershipMode::Borrowed)
+            } else {
+                format!("{:?}", OwnershipMode::Owned)
+            }
+        })
+        .collect()
+}
+
 /// Function signature for type inference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionSignature {

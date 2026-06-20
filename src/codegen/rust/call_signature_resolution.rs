@@ -332,6 +332,53 @@ pub fn resolve_call_signature(
     None
 }
 
+/// Single entry point for `ReceiverType::method` call-site signature resolution.
+///
+/// Combines `best_method_signature_for_receiver` on local and global registries,
+/// applies `pick_best_resolved_signature`, and filters body-inferred borrows that
+/// must not replace owned formal stubs (MannequinMesh::generate pattern).
+pub fn resolve_method_for_call_site(
+    local: &SignatureRegistry,
+    global: Option<&SignatureRegistry>,
+    receiver_type: &str,
+    method: &str,
+    arg_count: usize,
+) -> Option<ResolvedSignature> {
+    let to_resolved = |registry: &SignatureRegistry| -> Option<ResolvedSignature> {
+        best_method_signature_for_receiver(registry, receiver_type, method, arg_count).map(
+            |(qualified_key, sig)| {
+                let collision_key = format!("{receiver_type}::{method}");
+                ResolvedSignature {
+                    sig,
+                    qualified_key,
+                    resolution_method: ResolutionMethod::ReceiverQualified,
+                    has_collision: registry.has_collision(&collision_key),
+                }
+            },
+        )
+    };
+
+    let local_resolved = to_resolved(local);
+    let global_resolved = global.and_then(|g| to_resolved(g));
+
+    let (local_filtered, global_filtered) = match (&local_resolved, &global_resolved) {
+        (Some(l), Some(g)) => {
+            let mut l_out = local_resolved.clone();
+            let mut g_out = global_resolved.clone();
+            if body_borrow_must_not_replace_owned_formal_stub(&g.sig, &l.sig) {
+                l_out = None;
+            }
+            if body_borrow_must_not_replace_owned_formal_stub(&l.sig, &g.sig) {
+                g_out = None;
+            }
+            (l_out, g_out)
+        }
+        _ => (local_resolved, global_resolved),
+    };
+
+    pick_best_resolved_signature(local_filtered, global_filtered)
+}
+
 /// Try receiver-type-qualified lookup with base-type stripping.
 fn try_receiver_qualified(
     registry: &SignatureRegistry,
@@ -407,6 +454,22 @@ pub(crate) fn global_suffix_param_ownership(
 ///
 /// Non-copy converged borrows get `Reference(T)` in `param_types` via Phase 3; those still
 /// lower as borrowed. Empty `param_ownership` falls back to reference param types (metadata stubs).
+fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
+    match formal_ty {
+        Type::Parameterized(base, _) => matches!(
+            base.as_str(),
+            "Vec" | "HashMap" | "HashSet" | "Map" | "Option" | "Result"
+        ),
+        Type::String => true,
+        Type::Custom(name) if name == "string" => true,
+        Type::Custom(name) if crate::codegen::rust::type_analysis_pure::is_known_copy_type(name) => {
+            false
+        }
+        Type::Custom(_) => true,
+        _ => !crate::codegen::rust::type_analysis_pure::is_copy_type(formal_ty),
+    }
+}
+
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
     if let Some(ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
@@ -416,7 +479,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
 
     // Bare owned formal type is authoritative for call-site lowering when Phase 3 did not
     // wrap `param_types` as `Reference(T)` (Copy structs and true owned formals).
-    // Non-copy converged borrows keep `Reference(T)` in `param_types` — honor `param_ownership`.
+    // Non-copy params with body-inferred Borrowed still honor param_ownership (Vec<AABB>).
     if param_type_is_owned_non_text(sig, param_idx)
         && sig
             .formal_param_type(param_idx)
@@ -425,6 +488,15 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
         })
     {
+        if let Some(own) = sig.param_ownership.get(param_idx) {
+            if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
+                if let Some(formal_ty) = sig.formal_param_type(param_idx) {
+                    if formal_type_honors_converged_borrow(formal_ty) {
+                        return *own;
+                    }
+                }
+            }
+        }
         return OwnershipMode::Owned;
     }
 
@@ -493,9 +565,7 @@ mod tests {
             name: name.to_string(),
             param_types: vec![Type::Custom("i32".into()); param_count],
             formal_param_types: vec![],
-            formal_param_types: vec![],
-            formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Owned; param_count + if has_self { 1 } else { 0 }],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -510,9 +580,7 @@ mod tests {
             name: name.to_string(),
             param_types: types,
             formal_param_types: vec![],
-            formal_param_types: vec![],
-            formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Owned; ownership_len],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -726,7 +794,7 @@ impl BuildFingerprint {
             name: "svo64_convert::voxelgrid_to_svo64_flat".to_string(),
             param_types: vec![Type::Custom("VoxelGrid".to_string())],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Parameterized(
                 "Vec".to_string(),
@@ -753,7 +821,7 @@ impl BuildFingerprint {
             name: "QuestManager::update_objective_progress".to_string(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("QuestId".to_string())))],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -1289,7 +1357,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1312,7 +1380,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1445,7 +1513,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1456,7 +1524,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1529,7 +1597,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Borrowed],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,
@@ -1540,7 +1608,7 @@ pub fn test_mannequin_default_generation() {
             name: "MannequinMesh::generate".into(),
             param_types: vec![Type::Custom("MannequinConfig".into())],
             formal_param_types: vec![],
-            formal_param_types: vec![], 
+ 
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("MannequinMesh".into())),
             return_ownership: OwnershipMode::Owned,

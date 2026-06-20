@@ -10,6 +10,23 @@ fn create_project(base: &std::path::Path, subdirs: &[&str]) {
 }
 
 #[test]
+fn test_skeleton_param_ownership_defaults() {
+    use crate::parser::Type;
+
+    let owned = default_skeleton_param_ownership_from_types(&[Type::Custom("QuestId".into())]);
+    assert_eq!(owned, vec!["Owned"]);
+
+    let borrowed = default_skeleton_param_ownership_from_types(&[Type::String]);
+    assert_eq!(borrowed, vec!["Borrowed"]);
+
+    let mixed = default_skeleton_param_ownership_from_types(&[
+        Type::String,
+        Type::Custom("MannequinConfig".into()),
+    ]);
+    assert_eq!(mixed, vec!["Borrowed", "Owned"]);
+}
+
+#[test]
 fn test_metadata_round_trip() {
     let mut meta = ModuleMetadata::new("math::vec3".to_string());
 

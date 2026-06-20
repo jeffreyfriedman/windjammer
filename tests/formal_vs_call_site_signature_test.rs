@@ -19,11 +19,12 @@ use windjammer::parser::Type;
 #[test]
 fn test_mannequin_generate_formal_owned_call_site_owned() {
     // Copy struct: Phase 3 skips Reference wrap — param_types stays bare like formal.
+    // After build_signature, Copy params have param_ownership Owned (not body Borrowed).
     let sig = FunctionSignature {
         name: "MannequinMesh::generate".into(),
         param_types: vec![Type::Custom("MannequinConfig".into())],
         formal_param_types: vec![Type::Custom("MannequinConfig".into())],
-        param_ownership: vec![OwnershipMode::Borrowed],
+        param_ownership: vec![OwnershipMode::Owned],
         return_type: Some(Type::Custom("MannequinMesh".into())),
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
@@ -37,7 +38,29 @@ fn test_mannequin_generate_formal_owned_call_site_owned() {
     assert_eq!(
         effective_param_ownership_for_arg(&sig, 0),
         OwnershipMode::Owned,
-        "call site must pass owned config despite body-inferred Borrowed"
+        "call site must pass owned config for bare owned Copy formal"
+    );
+}
+
+#[test]
+fn test_vec_bare_formal_honors_converged_borrow() {
+    let elem = Type::Custom("AABB".into());
+    let vec_ty = Type::Parameterized("Vec".into(), vec![elem.clone()]);
+    let sig = FunctionSignature {
+        name: "check_collisions".into(),
+        param_types: vec![vec_ty.clone()],
+        formal_param_types: vec![vec_ty],
+        param_ownership: vec![OwnershipMode::Borrowed],
+        return_type: Some(Type::Custom("Bool".into())),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+    };
+
+    assert_eq!(
+        effective_param_ownership_for_arg(&sig, 0),
+        OwnershipMode::Borrowed,
+        "non-copy collection formal with converged borrow must pass & at call site"
     );
 }
 
