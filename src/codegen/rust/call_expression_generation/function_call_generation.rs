@@ -5,15 +5,28 @@ use crate::parser::*;
 
 use super::super::CodeGenerator;
 
-/// Map `Self::method` in an impl block to `Type::method` for signature lookup.
+/// Map static impl calls to `Type::method` + receiver context for signature lookup.
+///
+/// `Self::method` and `Type::method` (when `Type` is the enclosing impl struct) must both
+/// supply receiver type. Without it, `resolve_call_signature` falls through declaration
+/// stubs to arg-count suffix matches and mis-lowers borrows (e.g. `grid.clone()` for
+/// `FpsCamera::collides_aabb` in library builds).
 fn signature_lookup_for_call<'ast>(
     gen: &CodeGenerator<'ast>,
     func_name: &str,
 ) -> (String, Option<String>) {
-    if let Some(method) = func_name.strip_prefix("Self::") {
-        if gen.in_impl_block {
-            if let Some(ref tn) = gen.current_struct_name {
+    if gen.in_impl_block {
+        if let Some(ref tn) = gen.current_struct_name {
+            if let Some(method) = func_name.strip_prefix("Self::") {
                 return (format!("{tn}::{method}"), Some(tn.clone()));
+            }
+            if let Some((qualifier, method)) = func_name.rsplit_once("::") {
+                if qualifier == tn.as_str()
+                    && qualifier.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    && !method.contains("::")
+                {
+                    return (func_name.to_string(), Some(tn.clone()));
+                }
             }
         }
     }

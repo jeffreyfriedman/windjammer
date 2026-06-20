@@ -342,6 +342,15 @@ fn best_method_signature_for_receiver(
         if !validate_arg_count(sig, arg_count) {
             return;
         }
+        if let Some((_, ref best_sig, _)) = best {
+            if body_borrow_must_not_replace_owned_formal_stub(best_sig, sig) {
+                return;
+            }
+            if body_borrow_must_not_replace_owned_formal_stub(sig, best_sig) {
+                best = Some((key.to_string(), sig.clone(), false));
+                return;
+            }
+        }
         let converged = !signature_is_declaration_stub_like(sig)
             && !has_stale_owned_non_copy_params(sig);
         let replace = best.as_ref().is_none_or(|(_, _, prev_converged)| {
@@ -477,10 +486,12 @@ pub(crate) fn prefer_converged_over_stub(
     }
 
     // Pattern 1: stub marks all params Owned; convergence introduces borrows (e.g. &mut Grid).
-    let local_all_owned = local
-        .param_ownership
-        .iter()
-        .all(|o| matches!(o, OwnershipMode::Owned));
+    // Empty param_ownership is a metadata stub — not "all owned" (see Pattern 6).
+    let local_all_owned = !local.param_ownership.is_empty()
+        && local
+            .param_ownership
+            .iter()
+            .all(|o| matches!(o, OwnershipMode::Owned));
     let global_has_borrow = global.param_ownership.iter().any(|o| {
         matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
     });
@@ -517,7 +528,7 @@ pub(crate) fn prefer_converged_over_stub(
     // engine QuestManager::is_quest_active(id: Owned QuestId) vs game quest/manager.wj
     // converged (id: Borrowed &QuestId).
     let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
-    local
+    if local
         .param_ownership
         .iter()
         .enumerate()
@@ -539,6 +550,152 @@ pub(crate) fn prefer_converged_over_stub(
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                     && !crate::codegen::rust::types::is_windjammer_text_type(t)
+            })
+        })
+    {
+        return true;
+    }
+
+    // Pattern 4: body-inferred borrow (local) vs converged owned formal (global).
+    // Example: MannequinMesh::generate(config) — impl reads config twice (Borrowed) but
+    // the formal consumes by value (Owned). Call sites must pass `config`, not `&config`.
+    // Skip when global still looks like a stale engine stub (Pattern 3 inverse).
+    if has_stale_owned_non_copy_params(global) {
+        return false;
+    }
+    if local
+        .param_ownership
+        .iter()
+        .enumerate()
+        .zip(global.param_ownership.iter())
+        .any(|((idx, local_own), global_own)| {
+            if skip_self(idx) {
+                return false;
+            }
+            if !matches!(
+                local_own,
+                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+            ) {
+                return false;
+            }
+            if !matches!(global_own, OwnershipMode::Owned) {
+                return false;
+            }
+            global.param_types.get(idx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+        })
+    {
+        return true;
+    }
+
+    // Pattern 5: empty param_ownership (stale engine metadata) vs converged non-empty ownership.
+    // Example: engine metadata.json has `MannequinMesh::generate` with `param_ownership: []`
+    // while local analysis converged to `[Owned]`. Prefer the converged global.
+    // Skip when global only adds body-inferred borrow over a bare owned formal stub.
+    if local.param_ownership.is_empty() && !global.param_ownership.is_empty() {
+        let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
+        let body_borrow_over_owned_stub = global.param_ownership.iter().enumerate().any(
+            |(idx, global_own)| {
+                if skip_self(idx) {
+                    return false;
+                }
+                matches!(
+                    global_own,
+                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                ) && local
+                    .param_types
+                    .get(idx)
+                    .is_some_and(|_| param_type_is_owned_non_text(local, idx))
+            },
+        );
+        if !body_borrow_over_owned_stub {
+            return true;
+        }
+    }
+
+    // Pattern 6: body-inferred borrow on local vs metadata/declaration stub with bare owned formals.
+    // Example: local `generate` has `[Borrowed]` from double-use body; global metadata has
+    // `param_ownership: []` and `Custom(MannequinConfig)` — call sites must use global/owned formal.
+    if global.param_ownership.is_empty() && !local.param_ownership.is_empty() {
+        let skip_self = |idx: usize| local.has_self_receiver && idx == 0;
+        if local.param_ownership.iter().enumerate().any(|(idx, local_own)| {
+            if skip_self(idx) {
+                return false;
+            }
+            matches!(
+                local_own,
+                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+            ) && global
+                .param_types
+                .get(idx)
+                .is_some_and(|t| param_type_is_owned_non_text(global, idx))
+        }) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Block promotion when body-inferred borrow would overwrite a metadata/declaration stub
+/// that still shows a bare owned formal (`param_ownership: []`, `Custom(T)` param type).
+pub(crate) fn body_borrow_must_not_replace_owned_formal_stub(
+    existing: &FunctionSignature,
+    converged: &FunctionSignature,
+) -> bool {
+    if !existing.param_ownership.is_empty() {
+        return false;
+    }
+    let skip_self = |idx: usize| existing.has_self_receiver && idx == 0;
+    converged.param_ownership.iter().enumerate().any(|(idx, converged_own)| {
+        if skip_self(idx) {
+            return false;
+        }
+        matches!(
+            converged_own,
+            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+        ) && existing
+            .param_types
+            .get(idx)
+            .is_some_and(|_| param_type_is_owned_non_text(existing, idx))
+    })
+}
+
+/// Block promotion when body-inferred borrow would overwrite a correct engine/converged
+/// owned formal for a Copy struct param (MannequinMesh::generate(config: MannequinConfig)).
+pub(crate) fn body_borrow_must_not_replace_owned_copy_formal(
+    existing: &FunctionSignature,
+    converged: &FunctionSignature,
+    copy_structs: &std::collections::HashSet<String>,
+) -> bool {
+    use crate::parser::Type;
+
+    if existing.param_ownership.is_empty() || converged.param_ownership.is_empty() {
+        return false;
+    }
+    let skip_self = |idx: usize| existing.has_self_receiver && idx == 0;
+    existing
+        .param_ownership
+        .iter()
+        .enumerate()
+        .zip(converged.param_ownership.iter())
+        .any(|((idx, existing_own), converged_own)| {
+            if skip_self(idx) {
+                return false;
+            }
+            if !matches!(existing_own, OwnershipMode::Owned) {
+                return false;
+            }
+            if !matches!(
+                converged_own,
+                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+            ) {
+                return false;
+            }
+            existing.param_types.get(idx).is_some_and(|t| {
+                matches!(t, Type::Custom(name) if copy_structs.contains(name))
+                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             })
         })
 }
@@ -597,15 +754,29 @@ pub(crate) fn effective_user_arg_count(sig: &FunctionSignature) -> usize {
 
 /// Resolve callee parameter ownership for call-site lowering.
 ///
-/// When `param_ownership` is populated (converged analysis), trust it over
-/// `Reference(T)` wrappers in `param_types` that may lag from Phase 3.
-/// Empty `param_ownership` falls back to reference param types (metadata stubs).
+/// When `param_types` shows a bare owned formal (`Custom(T)` without `Reference` wrapper),
+/// call sites pass by value — body-inferred `Borrowed` on the callee signature must not
+/// emit `&arg` (MannequinMesh::generate(config: MannequinConfig) with double-use body).
+///
+/// Non-copy converged borrows get `Reference(T)` in `param_types` via Phase 3; those still
+/// lower as borrowed. Empty `param_ownership` falls back to reference param types (metadata stubs).
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
     if let Some(ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
             return OwnershipMode::Borrowed;
         }
     }
+
+    // Bare owned formal type is authoritative for call-site lowering.
+    if param_type_is_owned_non_text(sig, param_idx)
+        && sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+    {
+        return OwnershipMode::Owned;
+    }
+
     if !sig.param_ownership.is_empty() {
         return sig
             .param_ownership
@@ -1278,6 +1449,139 @@ impl BuildFingerprint {
     }
 
     #[test]
+    fn multipass_build_type_qualified_static_helper_borrows_formal() {
+        use crate::compiler::build_project_ext;
+        use crate::CompilationTarget;
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().expect("tempdir");
+        let src = temp.path().join("src");
+        let camera = src.join("camera");
+        let build = temp.path().join("build");
+        fs::create_dir_all(&camera).expect("camera dir");
+        fs::create_dir_all(&build).expect("build");
+        fs::write(src.join("mod.wj"), "mod camera\n").expect("mod.wj");
+        fs::write(camera.join("mod.wj"), "mod fps_camera\n").expect("camera mod");
+        fs::write(
+            camera.join("fps_camera.wj"),
+            r#"
+pub struct VoxelGrid { cells: Vec<i32> }
+pub struct Vec3 { x: f32, y: f32, z: f32 }
+impl Vec3 { pub fn new(x: f32, y: f32, z: f32) -> Vec3 { Vec3 { x, y, z } } }
+
+pub struct FpsCamera {}
+
+impl FpsCamera {
+    pub fn update(self, dt: f32, grid: VoxelGrid) {
+        if !FpsCamera::collides_aabb(grid, Vec3::new(0.0, 0.0, 0.0), 1) {
+            let _ = dt
+        }
+        if !FpsCamera::collides_aabb(grid, Vec3::new(1.0, 0.0, 0.0), 1) {
+            let _ = dt
+        }
+    }
+
+    pub fn collides_aabb(grid: VoxelGrid, pos: Vec3, scale: i32) -> bool {
+        grid.cells.len() > 0
+    }
+}
+"#,
+        )
+        .expect("fps_camera.wj");
+
+        build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+            .expect("build_project_ext");
+
+        let rs = fs::read_to_string(build.join("camera/fps_camera.rs")).expect("read rs");
+        assert!(
+            rs.contains("fn collides_aabb(grid: &VoxelGrid"),
+            "readonly grid formal must be &VoxelGrid. Got:\n{rs}"
+        );
+        assert!(
+            !rs.contains("collides_aabb(grid.clone()"),
+            "Type:: static helper must not clone borrowed formal in library build. Got:\n{rs}"
+        );
+        assert!(
+            rs.contains("FpsCamera::collides_aabb(grid,")
+                || rs.contains("FpsCamera::collides_aabb(&grid,"),
+            "call site must pass borrowed grid. Got:\n{rs}"
+        );
+    }
+
+    #[test]
+    fn multipass_build_type_qualified_static_helper_passes_owned_formal() {
+        use crate::compiler::build_project_ext;
+        use crate::CompilationTarget;
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().expect("tempdir");
+        let src = temp.path().join("src");
+        let character = src.join("character");
+        let build = temp.path().join("build");
+        fs::create_dir_all(&character).expect("character dir");
+        fs::create_dir_all(&build).expect("build");
+        fs::write(src.join("mod.wj"), "mod character\n").expect("mod.wj");
+        fs::write(character.join("mod.wj"), "mod mannequin_mesh\n").expect("character mod");
+        fs::write(
+            character.join("mannequin_mesh.wj"),
+            r#"
+pub struct MannequinConfig { pub torso_height: f32 }
+
+impl MannequinConfig {
+    pub fn default_config() -> MannequinConfig {
+        MannequinConfig { torso_height: 1.0 }
+    }
+}
+
+pub struct MannequinMesh { tag: i32 }
+
+impl MannequinMesh {
+    pub fn generate(config: MannequinConfig) -> MannequinMesh {
+        let mut mesh = MannequinMesh { tag: 0 }
+        mesh.build_skeleton(config)
+        mesh.build_body(config)
+        mesh
+    }
+
+    fn build_skeleton(self, config: MannequinConfig) {
+        let _ = config.torso_height
+    }
+
+    fn build_body(self, config: MannequinConfig) {
+        let _ = config.torso_height
+    }
+}
+
+pub fn test_mannequin_default_generation() {
+    let config = MannequinConfig::default_config()
+    let mesh = MannequinMesh::generate(config)
+    assert_eq(mesh.tag, 1)
+}
+"#,
+        )
+        .expect("mannequin_mesh.wj");
+
+        build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+            .expect("build_project_ext");
+
+        let rs = fs::read_to_string(build.join("character/mannequin_mesh.rs")).expect("read rs");
+        assert!(
+            rs.contains("fn generate(config: MannequinConfig)"),
+            "generate must take owned MannequinConfig. Got:\n{rs}"
+        );
+        assert!(
+            !rs.contains("MannequinMesh::generate(&config)"),
+            "owned formal must not receive &config in library build. Got:\n{rs}"
+        );
+        assert!(
+            rs.contains("MannequinMesh::generate(config"),
+            "call site must pass owned config. Got:\n{rs}"
+        );
+    }
+
+    #[test]
     fn converged_multi_arg_with_owned_copy_scalars_is_not_stale() {
         let sig = FunctionSignature {
             name: "QuestManager::update_objective_progress".into(),
@@ -1343,6 +1647,24 @@ impl BuildFingerprint {
         assert!(
             !signature_is_declaration_stub_like(&sig),
             "converged owned static method must resolve at call sites"
+        );
+    }
+
+    #[test]
+    fn bare_owned_formal_passes_by_value_despite_body_inferred_borrow() {
+        let sig = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Custom("MannequinConfig".into())],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership_for_arg(&sig, 0),
+            OwnershipMode::Owned,
+            "call sites must pass owned Copy struct by value even when body inferred Borrowed"
         );
     }
 
@@ -1456,6 +1778,36 @@ impl BuildFingerprint {
     }
 
     #[test]
+    fn promotion_does_not_replace_owned_formal_stub_with_body_borrow() {
+        let engine_stub = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Custom("MannequinConfig".into())],
+            param_ownership: vec![],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let body_converged = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert!(
+            !prefer_converged_over_stub(&engine_stub, &body_converged),
+            "empty metadata stub must not lose to body-inferred borrow during promotion"
+        );
+        assert!(body_borrow_must_not_replace_owned_formal_stub(
+            &engine_stub,
+            &body_converged
+        ));
+    }
+
+    #[test]
     fn prefer_converged_stale_engine_owned_quest_id_param() {
         let local = FunctionSignature {
             name: "QuestManager::is_quest_active".into(),
@@ -1500,6 +1852,50 @@ impl BuildFingerprint {
         assert_eq!(
             picked.unwrap().sig.param_ownership[1],
             OwnershipMode::Borrowed
+        );
+    }
+
+    #[test]
+    fn pick_best_prefers_owned_formal_over_body_inferred_borrow_at_call_site() {
+        let body_inferred = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Reference(Box::new(Type::Custom("MannequinConfig".into())))],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let formal_owned = FunctionSignature {
+            name: "MannequinMesh::generate".into(),
+            param_types: vec![Type::Custom("MannequinConfig".into())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Custom("MannequinMesh".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert!(prefer_converged_over_stub(
+            &body_inferred,
+            &formal_owned
+        ));
+        let picked = pick_best_resolved_signature(
+            Some(ResolvedSignature {
+                sig: body_inferred,
+                qualified_key: "MannequinMesh::generate".into(),
+                resolution_method: ResolutionMethod::ReceiverQualified,
+                has_collision: false,
+            }),
+            Some(ResolvedSignature {
+                sig: formal_owned,
+                qualified_key: "MannequinMesh::generate".into(),
+                resolution_method: ResolutionMethod::ReceiverQualified,
+                has_collision: false,
+            }),
+        );
+        assert_eq!(
+            picked.unwrap().sig.param_ownership[0],
+            OwnershipMode::Owned
         );
     }
 }

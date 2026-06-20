@@ -199,6 +199,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
                         let mut string_literal_converted_here = false;
 
+                        let formal_lowers_to_owned_value = sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                        });
+
                         if is_string_literal {
                             let param_is_str_ref =
                                 sig.param_types.get(sig_param_idx).is_some_and(|t| {
@@ -230,7 +236,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     string_literal_converted_here = true;
                                 }
                             }
-                        } else if !is_user_closure_param {
+                        } else if !is_user_closure_param && !formal_lowers_to_owned_value {
                             let param_already_ref = if let Expression::Identifier { name, .. } = arg_to_generate {
                                 gen.identifier_already_ref(name)
                             } else { false };
