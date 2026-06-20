@@ -697,17 +697,48 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // TDD FIX: Strip unnecessary .clone() when method param is Borrowed
-                // When a field like `ingredient.item_id` is auto-cloned by the
-                // FieldAccess handler (because owner is borrowed), but the method
-                // expects &String (Borrowed), the clone is wasteful:
-                //   &ingredient.item_id.clone()  ← clones then borrows (wasteful)
-                //   &ingredient.item_id          ← borrows directly (correct)
-                // Strip the .clone() so should_add_ref can add & cleanly.
-                if param_expects_borrowed {
+                // Phase 3: unified call-site borrow lowering (param_expects_borrowed path)
+                let mut borrow_decision =
+                    crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision::default();
+                if let Some(ref sig) = method_signature {
+                    borrow_decision =
+                        crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
+                            sig,
+                            i,
+                            arg_to_generate,
+                            &arg_str,
+                            method,
+                        );
+                }
+
+                // Codegen-local guards preserved from pre-Phase-3 path
+                if matches!(arg_to_generate, Expression::Identifier { name, .. }
+                    if self.identifier_already_ref(name))
+                {
+                    borrow_decision.add_ref = false;
+                }
+                let arg_is_copy = self
+                    .infer_expression_type(arg_to_generate)
+                    .as_ref()
+                    .is_some_and(|t| self.is_type_copy(t));
+                if (param_expects_borrowed || is_collection_key_arg)
+                    && !arg_str.starts_with('&')
+                    && !matches!(arg_to_generate, Expression::Identifier { name, .. }
+                        if self.identifier_already_ref(name))
+                {
+                    if is_collection_key_arg && arg_is_copy {
+                        borrow_decision.add_ref = false;
+                    } else if arg_is_copy {
+                        borrow_decision.add_ref = false;
+                    } else if matches!(arg_to_generate, Expression::StructLiteral { .. }) {
+                        borrow_decision.add_ref = false;
+                    }
+                }
+
+                if borrow_decision.strip_clone {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     // Owned-path may have added `.to_string()` before we knew callee takes &str.
-                    if arg_str.ends_with(".to_string()") {
+                    if param_expects_borrowed && arg_str.ends_with(".to_string()") {
                         if method_signature.as_ref().and_then(|sig| {
                             sig.param_type_for_arg(i)
                         }).is_some_and(|t| {
@@ -718,56 +749,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // Collection lookup keys: never pass `.clone()` — borrow or pass Copy by value.
-                if is_collection_key_arg && arg_str.ends_with(".clone()") {
-                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
-                }
-
-                // Borrow non-text args (e.g. `&Vec<T>`) when effective ownership is Borrowed,
-                // or collection lookup keys (HashMap/HashSet get/contains/remove).
-                if (param_expects_borrowed || is_collection_key_arg)
-                    && !arg_str.starts_with('&')
-                    && !matches!(arg_to_generate, Expression::Identifier { name, .. }
-                        if self.identifier_already_ref(name))
-                {
-                    let arg_is_copy = self
-                        .infer_expression_type(arg_to_generate)
-                        .as_ref()
-                        .is_some_and(|t| self.is_type_copy(t));
-                    if is_collection_key_arg && arg_is_copy {
-                        // HashMap<i64, _>::get(key) accepts i64 by value via Copy.
-                    } else if arg_is_copy {
-                        // Copy literals (64, true) and Copy locals are passed by value, never &T.
-                    } else if matches!(arg_to_generate, Expression::StructLiteral { .. }) {
-                        // Struct literals construct owned values — never borrow at the call site.
-                    } else if param_expects_borrowed {
-                        let param_is_str_ref = method_signature
-                            .as_ref()
-                            .and_then(|sig| sig.param_type_for_arg(i))
-                            .is_some_and(|t| {
-                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            });
-                        let arg_is_string_literal = matches!(
-                            arg,
-                            Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            }
-                        );
-                        if !param_is_str_ref && !arg_is_string_literal {
-                            crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
-                                .apply(&mut arg_str);
-                        }
-                    } else if method_signature
-                        .as_ref()
-                        .and_then(|sig| sig.param_type_for_arg(i))
-                        .is_some_and(|t| {
-                            !crate::codegen::rust::types::is_windjammer_text_type(t)
-                                || is_collection_key_arg
-                        })
-                    {
-                        crate::codegen::rust::rust_coercion_rules::Coercion::Borrow.apply(&mut arg_str);
-                    }
+                if borrow_decision.add_ref && !arg_str.starts_with('&') {
+                    crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
+                        .apply(&mut arg_str);
                 }
 
                 // `if let Some(x) = &self.opt` — pass owned values via `.clone()`, not `&x` / `&mut x`.
@@ -890,12 +874,22 @@ impl<'ast> CodeGenerator<'ast> {
                                     .infer_expression_type(arg_to_generate)
                                     .is_some_and(|t| matches!(t, Type::String)));
                         if !push_owned_string {
-                            if let Expression::Cast { .. } = arg_to_generate {
-                                arg_str = format!("&({})", arg_str);
-                            } else {
-                                arg_str = format!("&{}", arg_str);
-                            }
+                            borrow_decision.add_ref = true;
                         }
+                    }
+                }
+
+                if borrow_decision.add_ref && !arg_str.starts_with('&') {
+                    if let Expression::Cast { .. } = arg_to_generate {
+                        arg_str = format!("&({})", arg_str);
+                    } else {
+                        crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
+                            &crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision {
+                                add_ref: true,
+                                ..Default::default()
+                            },
+                            &mut arg_str,
+                        );
                     }
                 }
 

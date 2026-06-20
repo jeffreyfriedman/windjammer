@@ -894,86 +894,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
-            // auto-clone may append `.clone()` for reused locals; borrowed callees need `&T`.
+            // Unified borrow lowering (auto-clone strip + & insertion).
             if let Some(ref sig) = signature {
-                let param_ty = sig.param_type_for_arg(i);
-                let callee_expects_ref = param_ty.is_some_and(|t| {
-                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                });
-                let global_sig = gen.get_signature_with_global(func_name);
-                let global_param_expects_ref = if signature_from_simple_fallback {
-                    global_sig
-                        .and_then(|gs| {
-                            let idx = gs.arg_param_index(i);
-                            gs.param_types.get(idx)
-                        })
-                        .is_some_and(|t| {
-                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        })
-                } else {
-                    false
-                };
-                let all_params_borrowed = !sig.param_ownership.is_empty()
-                    && sig
-                        .param_ownership
-                        .iter()
-                        .all(|o| matches!(o, OwnershipMode::Borrowed));
-                let all_param_types_are_refs = !sig.param_types.is_empty()
-                    && sig.param_types.iter().all(|t| {
-                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    });
-                if !is_copy_literal
-                    && (matches!(
-                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                        sig, i,
-                    ),
-                    OwnershipMode::Borrowed
-                )
-                    || callee_expects_ref
-                    || global_param_expects_ref
-                    || all_params_borrowed
-                    || all_param_types_are_refs)
-                {
-                    let is_text = param_ty
-                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-                    if !is_text {
-                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
-                            &mut arg_str,
+                if !is_extern_call && !sig.is_extern {
+                    let method_name = func_name.rsplit("::").next().unwrap_or(func_name);
+                    let decision =
+                        crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
+                            sig, i, arg, &arg_str, method_name,
                         );
-                        let is_copy_literal = is_copy_literal;
-                        let arg_is_copy_scalar = gen
-                            .infer_expression_type(arg)
-                            .as_ref()
-                            .is_some_and(|t| {
-                                gen.is_type_copy(t)
-                                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
-                            });
-                        let param_is_copy_scalar = param_ty.is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(t)
-                                && gen.is_type_copy(t)
-                                && !crate::codegen::rust::types::is_windjammer_text_type(t)
-                        });
-                        if !arg_str.starts_with('&')
-                            && !expression_helpers::is_reference_expression(arg)
-                        {
-                            let is_user_closure_param =
-                                if let Expression::Identifier { name, .. } = arg {
-                                    gen.in_user_written_closure
-                                        && gen.user_closure_params.contains(name)
-                                } else {
-                                    false
-                                };
-                            if !is_user_closure_param
-                                && !is_copy_literal
-                                && !param_is_copy_scalar
-                                && !arg_is_copy_scalar
-                            {
-                                crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
-                                    .apply(&mut arg_str);
-                            }
-                        }
-                    }
+                    crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
+                        &decision, &mut arg_str,
+                    );
                 }
             }
 

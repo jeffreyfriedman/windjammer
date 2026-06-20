@@ -409,13 +409,9 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, i,
                     );
-                let param_idx = sig.arg_param_index(i);
-                let types_say_owned =
-                    crate::codegen::rust::call_signature_resolution::param_type_is_owned_non_text(
-                        sig, param_idx,
-                    );
-                if types_say_owned && ownership == OwnershipMode::Borrowed
-                {
+                if crate::codegen::rust::call_site_borrow::is_stale_borrow_on_owned_copy_formal(
+                    sig, i,
+                ) {
                     if let Some((_, arg_expr)) = arguments.get(i) {
                         if let Expression::Identifier { name, .. } = arg_expr {
                             if gen.inferred_borrowed_params.contains(name)
@@ -461,9 +457,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         }
                     }
                     OwnershipMode::Borrowed
-                        if !arg_str.starts_with('&')
-                            && !arg_str.starts_with('"')
-                            && !types_say_owned =>
+                        if !arg_str.starts_with('&') && !arg_str.starts_with('"') =>
                     {
                         let mut s = arg_str.clone();
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);

@@ -58,6 +58,42 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
         if let Some(ref tn) = type_name {
+            use crate::codegen::rust::call_signature_resolution::{
+                resolve_method_for_call_site, validate_arg_count, ResolvedSignature,
+                ResolutionMethod,
+            };
+
+            let from_method_registry = self.lookup_method_signature(tn, method).and_then(|ms| {
+                let sig = ms.to_function_signature();
+                if validate_arg_count(&sig, arguments.len()) {
+                    Some(ResolvedSignature {
+                        sig,
+                        qualified_key: format!("{tn}::{method}"),
+                        resolution_method: ResolutionMethod::MethodRegistry,
+                        has_collision: false,
+                    })
+                } else {
+                    None
+                }
+            });
+
+            let from_registry = resolve_method_for_call_site(
+                &self.signature_registry,
+                self.global_signature_registry(),
+                tn,
+                method,
+                arguments.len(),
+            );
+
+            if let Some(resolved) =
+                crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
+                    from_method_registry,
+                    from_registry,
+                )
+            {
+                return Some(resolved.sig);
+            }
+
             return self.lookup_method_signature_on_receiver_type(tn, method, arguments.len());
         }
 

@@ -93,3 +93,87 @@ fn game_update() {
         code
     );
 }
+
+/// Single-file library `metadata.json` must export non-empty `param_ownership` for static
+/// methods with owned formal parameters (skeleton defaults + post-codegen refresh).
+#[test]
+fn test_single_file_library_metadata_static_method_owned_param_ownership() {
+    use std::fs;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let src = tmp.path().join("src");
+    fs::create_dir_all(&src).expect("mkdir");
+
+    fs::write(
+        src.join("mesh.wj"),
+        r#"
+pub struct MannequinConfig { pub torso_height: f32 }
+
+pub struct MannequinMesh { tag: i32 }
+
+impl MannequinMesh {
+    pub fn generate(config: MannequinConfig) -> MannequinMesh {
+        MannequinMesh { tag: 1 }
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    let out = tmp.path().join("gen");
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            src.join("mesh.wj").to_str().unwrap(),
+            "--output",
+            out.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+            "--module-file",
+        ])
+        .output()
+        .expect("wj build");
+
+    assert!(
+        output.status.success(),
+        "library build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let metadata_path = out.join("metadata.json");
+    let metadata = fs::read_to_string(&metadata_path).unwrap_or_else(|_| {
+        panic!(
+            "metadata.json missing at {}. stderr:\n{}",
+            metadata_path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+
+    assert!(
+        metadata.contains("MannequinMesh::generate"),
+        "metadata should list MannequinMesh::generate. Got:\n{}",
+        metadata
+    );
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&metadata).expect("metadata.json should be valid JSON");
+    let sig = parsed["functions"]["MannequinMesh::generate"]
+        .as_object()
+        .expect("MannequinMesh::generate entry");
+    let ownership = sig["param_ownership"]
+        .as_array()
+        .expect("param_ownership array");
+    assert!(
+        !ownership.is_empty(),
+        "param_ownership must not be empty for static method with owned formal. Got:\n{}",
+        metadata
+    );
+    assert_eq!(
+        ownership[0].as_str(),
+        Some("Owned"),
+        "owned MannequinConfig formal should export Owned param_ownership. Got:\n{}",
+        metadata
+    );
+}
