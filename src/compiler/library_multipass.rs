@@ -833,7 +833,10 @@ pub(crate) fn build_library_multipass(
     // `Type::method` keys. Step 4B merge can leave engine metadata on the short key while
     // body analysis converged under a module-qualified alias (e.g. quest/manager.wj).
     {
-        use crate::codegen::rust::call_signature_resolution::prefer_converged_over_stub;
+        use crate::codegen::rust::call_signature_resolution::{
+            body_borrow_must_not_replace_owned_copy_formal,
+            body_borrow_must_not_replace_owned_formal_stub, prefer_converged_over_stub,
+        };
         let reg = std::sync::Arc::make_mut(&mut final_global_registry);
         for (name, sig) in &local_converged_sigs {
             let mut keys = vec![name.clone()];
@@ -847,7 +850,14 @@ pub(crate) fn build_library_multipass(
             }
             for key in keys {
                 if let Some(existing) = reg.get_signature(&key) {
-                    if prefer_converged_over_stub(existing, sig) {
+                    if prefer_converged_over_stub(existing, sig)
+                        && !body_borrow_must_not_replace_owned_formal_stub(existing, sig)
+                        && !body_borrow_must_not_replace_owned_copy_formal(
+                            existing,
+                            sig,
+                            &global_copy_structs,
+                        )
+                    {
                         reg.signatures.insert(key, sig.clone());
                     }
                 }
