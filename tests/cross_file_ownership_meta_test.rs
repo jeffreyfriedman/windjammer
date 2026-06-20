@@ -88,8 +88,8 @@ fn game_update() {
     let code = compile_with_external_sigs(file_b_source, &registry_a);
 
     assert!(
-        code.contains("check_collisions(&walls)") || code.contains("check_collisions(walls)"),
-        "Cross-file call should pass walls by borrow or owned move. Got:\n{}",
+        code.contains("check_collisions(&walls)"),
+        "Cross-file call should insert & for borrowed parameter. Got:\n{}",
         code
     );
 }
