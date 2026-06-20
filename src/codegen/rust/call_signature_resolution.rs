@@ -492,12 +492,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
                     if formal_type_honors_converged_borrow(formal_ty) {
-                        let types_show_borrow = sig.param_types.get(param_idx).is_some_and(|t| {
-                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        });
-                        if types_show_borrow {
-                            return *own;
-                        }
+                        return *own;
                     }
                 }
             }
