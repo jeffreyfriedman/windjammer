@@ -52,11 +52,20 @@ impl<'ast> Analyzer<'ast> {
                     // Example: find_translation(lang, key: string) -> string only compares `key`;
                     // inferring Owned for `key` breaks callers that pass the same String twice (E0382).
                     // Non-string types keep the broader rule (transform/migrate still get Owned).
-                    let string_like = matches!(param_type, Type::String);
-                    if self.is_returned(param_name, body)
-                        || self.is_stored(param_name, body)
-                        || (!string_like && self.param_is_consumed_into_return(param_name, body))
-                    {
+                    let string_like = Self::is_windjammer_text_param_type(param_type);
+                    // Module-level identity returns (e.g. `pub fn greet(name) -> name`) need
+                    // owned `String` formals. Impl-method passthrough helpers (e.g.
+                    // `extract_extension(path) -> path` called with `self.path`) stay
+                    // borrowed so static call sites pass `&str` without cloning.
+                    let force_owned = if string_like && func.parent_type.is_some() {
+                        self.is_stored(param_name, body)
+                            || self.param_is_consumed_into_return(param_name, body)
+                    } else {
+                        self.is_returned(param_name, body)
+                            || self.is_stored(param_name, body)
+                            || (!string_like && self.param_is_consumed_into_return(param_name, body))
+                    };
+                    if force_owned {
                         return Ok(OwnershipMode::Owned);
                     }
                 }
@@ -91,7 +100,9 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // 2. Check if parameter is returned (escapes function)
-        if self.is_returned(param_name, body) {
+        if self.is_returned(param_name, body)
+            && !(Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_some())
+        {
             return Ok(OwnershipMode::Owned);
         }
 

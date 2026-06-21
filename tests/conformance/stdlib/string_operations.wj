@@ -88,7 +88,7 @@ struct Greeter {
 
 impl Greeter {
     fn greet(self, name: string) -> string {
-        self.prefix.clone() + ", " + name + "!"
+        self.prefix + ", " + name + "!"
     }
 }
 

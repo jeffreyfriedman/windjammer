@@ -114,4 +114,76 @@ impl<'ast> CodeGenerator<'ast> {
             .find_signature_by_name_and_arg_count(method, arguments.len())
             .cloned()
     }
+
+    /// Single source of truth for call-site signature selection.
+    ///
+    /// `mc_resolve_method_call_signature` already runs `pick_best_resolved_signature`
+    /// (method registry vs global). Downstream must not re-resolve via global first — that
+    /// resurrects stale declaration stubs with bare `Vec` + `Owned` metadata.
+    pub(in crate::codegen::rust) fn mc_select_call_site_signature(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        resolved_from_mc: &Option<FunctionSignature>,
+    ) -> Option<FunctionSignature> {
+        use crate::codegen::rust::call_signature_resolution::{
+            has_stale_owned_non_copy_params, validate_arg_count,
+        };
+
+        let is_usable = |sig: &FunctionSignature| {
+            validate_arg_count(sig, arguments.len()) && !has_stale_owned_non_copy_params(sig)
+        };
+
+        let trace = std::env::var("WJ_SIGNATURE_TRACE").is_ok();
+
+        if let Some(sig) = resolved_from_mc {
+            if is_usable(sig) {
+                if trace {
+                    eprintln!(
+                        "[wj-sig] call-site {method} arg#{}: mc_resolve ({:?})",
+                        arguments.len(),
+                        sig.param_types
+                    );
+                }
+                return Some(sig.clone());
+            }
+        }
+
+        if let Some(sig) = self.mc_resolve_method_call_signature(object, method, arguments) {
+            if is_usable(&sig) {
+                return Some(sig);
+            }
+        }
+
+        let receiver_type_name = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object))
+            .or_else(|| {
+                if let Expression::Identifier { name, .. } = object {
+                    if (name == "Self" || name == "self") && self.in_impl_block {
+                        return self.current_struct_name.clone();
+                    }
+                }
+                None
+            });
+
+        receiver_type_name
+            .as_ref()
+            .and_then(|tn| {
+                self.resolve_call_signature_with_global(
+                    &format!("{tn}::{method}"),
+                    Some(tn.as_str()),
+                    arguments.len(),
+                )
+                .map(|r| r.sig)
+                .filter(|sig| is_usable(sig))
+            })
+            .or_else(|| {
+                receiver_type_name.as_ref().and_then(|tn| {
+                    self.lookup_method_signature_on_receiver_type(tn, method, arguments.len())
+                })
+            })
+            .or_else(|| resolved_from_mc.clone())
+    }
 }

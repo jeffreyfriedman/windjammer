@@ -12,7 +12,6 @@ pub mod platform;
 
 // Core modules (fully implemented)
 pub mod fs;
-#[cfg(feature = "server")]
 pub mod http;
 pub mod json;
 pub mod mime;
@@ -58,8 +57,7 @@ pub mod time;
 pub mod timeout;
 
 // Re-export commonly used types
-#[cfg(feature = "server")]
-pub use http::{Request, Response, Router, ServerResponse};
+pub use http::{Request, Response, Router, Server, ServerRequest, ServerResponse};
 
 // Prelude for common imports
 pub mod prelude {
