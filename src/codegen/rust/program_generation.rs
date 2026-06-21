@@ -207,8 +207,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             if let Item::Use { path, .. } = item {
-                if path.len() == 2 && path[0] == "std" {
-                    if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(&path[1]) {
+                if path.first().is_some_and(|p| p == "std") {
+                    if path.len() >= 2
+                        && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                            &path[1],
+                        )
+                    {
                         self.runtime_std_module_imports.insert(path[1].clone());
                     }
                 }

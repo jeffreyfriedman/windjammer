@@ -1,0 +1,16 @@
+// Minimal std::http server — compiles against windjammer-runtime
+use std::http::*
+use std::env
+
+fn main() {
+    let bind = env.get_or("TEST_BIND", "127.0.0.1")
+    let server = Server::new(bind, 0)
+    let _ = server.serve(handle_request)
+}
+
+fn handle_request(request: ServerRequest) -> ServerResponse {
+    if request.method == "GET" && request.path == "/health" {
+        return ServerResponse::json("{\"status\":\"ok\"}")
+    }
+    ServerResponse::error(404, "Not found")
+}

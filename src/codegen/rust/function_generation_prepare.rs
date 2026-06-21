@@ -232,19 +232,36 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         let qualified = format!("{impl_type}::{}", func.name);
         let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-        
-        // Skip method registry for static methods - always use global registry for consistency.
-        // Body-inferred Borrowed from double-use shouldn't override converged Owned formals.
-        // The global registry has the converged ownership after multipass analysis.
+        let registry_sig = self.signature_registry.get_signature(&qualified);
+
+        // Static methods: register analyzed signatures for call-site lookup, except when
+        // body-inferred borrow would override an owned Copy formal (MannequinMesh::generate).
         if !has_self_receiver {
-            if let Some(global_sig) = self.global_signature_registry() {
-                if global_sig.get_signature(&qualified).is_some() {
+            if let Some(reg) = registry_sig {
+                let skip_body_borrow_over_owned_copy = func.parameters.iter().enumerate().any(
+                    |(idx, param)| {
+                        if param.name == "self" {
+                            return false;
+                        }
+                        let body_borrow = analyzed
+                            .inferred_ownership
+                            .get(&param.name)
+                            .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
+                        body_borrow
+                            && crate::codegen::rust::signature_promotion::param_type_is_owned_non_text(
+                                reg, idx,
+                            )
+                            && reg
+                                .formal_param_type(idx)
+                                .is_some_and(crate::codegen::rust::type_analysis::is_copy_type)
+                    },
+                );
+                if skip_body_borrow_over_owned_copy {
                     return;
                 }
             }
         }
-        
-        let registry_sig = self.signature_registry.get_signature(&qualified);
+
         let mut param_types = Vec::new();
         let mut param_ownership = Vec::new();
 
@@ -256,23 +273,39 @@ impl<'ast> CodeGenerator<'ast> {
                     .cloned()
                     .unwrap_or_else(|| param.type_.clone());
 
-                let ownership = if has_self_receiver {
+                let mut ownership = if has_self_receiver {
                     analyzed
                         .inferred_ownership
                         .get(&param.name)
                         .copied()
-                        .unwrap_or(crate::analyzer::OwnershipMode::Borrowed)
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 } else {
-                    registry_sig
-                        .and_then(|sig| sig.param_ownership.get(idx).copied())
-                        .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
-                        .unwrap_or(crate::analyzer::OwnershipMode::Borrowed)
+                    analyzed
+                        .inferred_ownership
+                        .get(&param.name)
+                        .copied()
+                        .or_else(|| {
+                            registry_sig
+                                .and_then(|sig| sig.param_ownership.get(idx).copied())
+                        })
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 };
+
+                if matches!(&p_type, Type::Reference(_)) {
+                    ownership = crate::analyzer::OwnershipMode::Borrowed;
+                } else if matches!(&p_type, Type::MutableReference(_)) {
+                    ownership = crate::analyzer::OwnershipMode::MutBorrowed;
+                }
 
                 if !has_self_receiver {
                     if let Some(reg) = registry_sig {
                         if let Some(formal_ty) = reg.param_types.get(idx) {
-                            if matches!(ownership, crate::analyzer::OwnershipMode::Owned) {
+                            if matches!(ownership, crate::analyzer::OwnershipMode::Owned)
+                                && !matches!(
+                                    &p_type,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                            {
                                 p_type = formal_ty.clone();
                             }
                         }

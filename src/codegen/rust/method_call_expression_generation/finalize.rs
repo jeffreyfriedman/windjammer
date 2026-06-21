@@ -1,5 +1,6 @@
 //! Final Rust emission for method calls.
 
+use crate::analyzer::OwnershipMode;
 use crate::parser::*;
 
 use crate::codegen::rust::CodeGenerator;
@@ -17,42 +18,12 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        let receiver_type_name = self
-            .mc_infer_method_receiver_type_name(object)
-            .or_else(|| self.infer_type_name(object));
-        let mut resolved_signature = receiver_type_name.as_ref().and_then(|tn| {
-            self.resolve_call_signature_with_global(
-                &format!("{tn}::{method}"),
-                Some(tn.as_str()),
-                arguments.len(),
-            )
-            .map(|r| r.sig)
-        });
-        if resolved_signature.is_none() {
-            resolved_signature = method_signature.clone().or_else(|| {
-                receiver_type_name.as_ref().and_then(|tn| {
-                    self.lookup_method_signature_on_receiver_type(tn, method, arguments.len())
-                })
-            });
-        }
-        if let Some(ref sig) = resolved_signature {
-            if crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(sig)
-            {
-                if let Some(tn) = receiver_type_name.as_ref() {
-                    if let Some(g) = self.resolve_call_signature_with_global(
-                        &format!("{tn}::{method}"),
-                        Some(tn.as_str()),
-                        arguments.len(),
-                    ) {
-                        if !crate::codegen::rust::call_signature_resolution::has_stale_owned_non_copy_params(
-                            &g.sig,
-                        ) {
-                            resolved_signature = Some(g.sig);
-                        }
-                    }
-                }
-            }
-        }
+        let resolved_signature = self.mc_select_call_site_signature(
+            object,
+            method,
+            arguments,
+            method_signature,
+        );
         let args = if let Some(ref sig) = resolved_signature {
             args.into_iter()
                 .enumerate()
@@ -65,16 +36,6 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                             sig, i,
                         );
-                    // Converged ownership wins over Reference(T) wrappers in param_types that
-                    // may lag from body analysis (MannequinMesh::generate(config: MannequinConfig)).
-                    let formal_lowers_to_owned_value = sig
-                        .param_types
-                        .get(sig_param_idx)
-                        .is_some_and(|t| {
-                            crate::codegen::rust::call_signature_resolution::param_type_is_owned_non_text(
-                                sig, sig_param_idx,
-                            )
-                        });
                     let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                         self.is_type_copy(t)
                     });
@@ -94,7 +55,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         if let Some((_, arg_expr)) = arguments.get(i) {
                             if let Expression::Identifier { name, .. } = arg_expr {
-                                if self.identifier_already_ref(name) {
+                                if self.identifier_already_ref(name)
+                                    || self.str_ref_optimized_params.contains(name.as_str())
+                                {
                                     return;
                                 }
                             }
@@ -125,8 +88,14 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         crate::analyzer::OwnershipMode::Borrowed
-                            if !arg_str.starts_with('&')
-                                && !formal_lowers_to_owned_value =>
+                            if !arg_str.starts_with('&') =>
+                        {
+                            apply_borrow(&mut arg_str);
+                            arg_str
+                        }
+                        _ if sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                            matches!(t, Type::Reference(_))
+                        }) && !arg_str.starts_with('&') =>
                         {
                             apply_borrow(&mut arg_str);
                             arg_str
@@ -385,10 +354,19 @@ impl<'ast> CodeGenerator<'ast> {
 
                         let param_wants_owned_string = method_signature
                             .as_ref()
-                            .and_then(|sig| sig.param_type_for_arg(arg_idx))
-                            .is_some_and(|t| {
-                                crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+                            .map(|sig| {
+                                let idx = sig.arg_param_index(arg_idx);
+                                matches!(
+                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                                        sig, idx,
+                                    ),
+                                    OwnershipMode::Owned,
+                                ) && sig.formal_param_type(idx).is_some_and(|t| {
+                                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                                })
                             })
+                            .unwrap_or(false)
                             || self.mc_method_param_expects_owned_string_from_global(
                                 object,
                                 method,

@@ -1,0 +1,42 @@
+{
+  "module_path": "main",
+  "functions": {
+    "handle_request": {
+      "params": [
+        "Reference(Custom(\"http::Request\"))"
+      ],
+      "formal_params": [
+        "Custom(\"http::Request\")"
+      ],
+      "return_type": "Custom(\"http::ServerResponse\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.48.0",
+  "analysis_fingerprint": {
+    "content_hash": 17485439972350923064,
+    "compiler_version": "0.48.0:2f1c9e2265392e04",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 14999128556575855290
+  }
+}

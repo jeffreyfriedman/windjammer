@@ -98,6 +98,21 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl<'ast>,
         registry: &SignatureRegistry,
     ) -> OwnershipMode {
+        let mut visited = HashSet::new();
+        self.infer_impl_self_receiver_ownership_inner(func, registry, &mut visited)
+    }
+
+    /// Inner inference with cycle detection (`a` → `b` → `a` must not recurse infinitely).
+    pub(super) fn infer_impl_self_receiver_ownership_inner(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+        visited: &mut HashSet<String>,
+    ) -> OwnershipMode {
+        if !visited.insert(func.name.clone()) {
+            return OwnershipMode::Borrowed;
+        }
+
         // Multiple recursive `self.method(...)` calls cannot take owned `self` — check first
         // to avoid re-entering inference while analyzing callees (stack overflow).
         // Read-only recursion still needs a borrowed receiver, but `&self` not `&mut self`.
@@ -132,11 +147,11 @@ impl<'ast> Analyzer<'ast> {
             || (!snapshot_factory
                 && (returns_self
                     || self.function_body_consumes_bare_self(func)
-                    || self.function_calls_consuming_method_on_self(func, registry)
+                    || self.function_calls_consuming_method_on_self_with_visited(func, registry, visited)
                     || self.function_calls_explicit_owned_self_method(func, registry)
                     || self.function_matches_on_self(func)
                     || self.function_consumes_self_field_elements(func, Some(registry))));
-        let calls_owned_on_self = self.function_calls_consuming_method_on_self(func, registry)
+        let calls_owned_on_self = self.function_calls_consuming_method_on_self_with_visited(func, registry, visited)
             || self.function_calls_explicit_owned_self_method(func, registry);
         let mut mutating_call_visited = HashSet::new();
         let calls_mutating = self
@@ -419,6 +434,10 @@ impl<'ast> Analyzer<'ast> {
             // Only skip the truly expensive codegen-only optimizations.
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
+            let mut str_ref_optimizable_params = str_ref_optimizable_params;
+            str_ref_optimizable_params.retain(|name| {
+                inferred_ownership.get(name) != Some(&OwnershipMode::Owned)
+            });
             let inferred_param_types: Vec<Type> = func
                 .parameters
                 .iter()
@@ -470,6 +489,10 @@ impl<'ast> Analyzer<'ast> {
             let cache_locality = super::CacheLocalityAnalysis::default();
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
+            let mut str_ref_optimizable_params = str_ref_optimizable_params;
+            str_ref_optimizable_params.retain(|name| {
+                inferred_ownership.get(name) != Some(&OwnershipMode::Owned)
+            });
 
             let inferred_param_types: Vec<Type> = func
                 .parameters
@@ -621,14 +644,21 @@ impl<'ast> Analyzer<'ast> {
                                 ),
                             }
                         } else if let Some(mode) = trait_mode {
-                            mode
+                            // E0053: `fn foo(self, key: string)` in the trait item is owned `String`
+                            // in Rust — merged borrow hints from read-only impl bodies must not
+                            // downgrade to `&str` when the trait declaration uses plain `string`.
+                            if Self::trait_param_is_owned_string(&trait_param.type_) {
+                                OwnershipMode::Owned
+                            } else {
+                                mode
+                            }
                         } else {
-                            impl_body_mode.unwrap_or_else(|| {
-                                self.convert_ownership_hint_to_mode(
-                                    &trait_param.ownership,
-                                    &trait_param.name,
-                                )
-                            })
+                            // E0053: Non-self trait impl params must match the trait declaration,
+                            // not the impl body's borrow inference (e.g. read-only `string` → Owned).
+                            self.convert_ownership_hint_to_mode(
+                                &trait_param.ownership,
+                                &trait_param.name,
+                            )
                         };
 
                         if impl_param.name == "self" {
@@ -666,7 +696,7 @@ impl<'ast> Analyzer<'ast> {
         // E0053: Parameter types in generated Rust must match the trait declaration (impls may
         // rename parameters or use incompatible aliases). Ownership already matches the trait above.
         if !is_std_operator_trait {
-            if let Some(analyzed_trait_fn) = self
+            let analyzed_trait_fn = self
                 .analyzed_trait_methods
                 .get(trait_key)
                 .and_then(|m| m.get(&func.name))
@@ -674,38 +704,36 @@ impl<'ast> Analyzer<'ast> {
                     self.analyzed_trait_methods
                         .get(trait_name)
                         .and_then(|m| m.get(&func.name))
-                })
-            {
-                for (i, _) in func.parameters.iter().enumerate() {
-                    if let Some(trait_ty) = analyzed_trait_fn.inferred_param_types.get(i) {
-                        if i < analyzed.inferred_param_types.len() {
-                            analyzed.inferred_param_types[i] = trait_ty.clone();
-                        }
-                    }
-                }
-            }
-            // If multipass never stored analyzed trait fn types, still copy AST parameter types so
-            // generated Rust matches the trait item (E0053).
+                });
             if let Some(trait_decl) = self.trait_definitions.get(trait_key) {
                 if let Some(trait_method) = trait_decl.methods.iter().find(|m| m.name == func.name)
                 {
-                    let tf = self
-                        .analyzed_trait_methods
-                        .get(trait_key)
-                        .and_then(|m| m.get(&func.name))
-                        .or_else(|| {
-                            self.analyzed_trait_methods
-                                .get(trait_name)
-                                .and_then(|m| m.get(&func.name))
-                        });
                     for (i, trait_param) in trait_method.parameters.iter().enumerate() {
                         if i >= analyzed.inferred_param_types.len() {
                             break;
                         }
-                        let use_ast = tf.and_then(|t| t.inferred_param_types.get(i)).is_none();
-                        if use_ast {
+                        if Self::trait_param_is_owned_string(&trait_param.type_) {
+                            if let Some(impl_param) = func.parameters.get(i) {
+                                analyzed.inferred_ownership.insert(
+                                    impl_param.name.clone(),
+                                    OwnershipMode::Owned,
+                                );
+                                analyzed
+                                    .str_ref_optimizable_params
+                                    .remove(&impl_param.name);
+                            }
                             analyzed.inferred_param_types[i] = trait_param.type_.clone();
+                        } else if let Some(trait_ty) =
+                            analyzed_trait_fn.and_then(|tf| tf.inferred_param_types.get(i))
+                        {
+                            analyzed.inferred_param_types[i] = trait_ty.clone();
                         }
+                    }
+                }
+            } else if let Some(trait_fn) = analyzed_trait_fn {
+                for (i, trait_ty) in trait_fn.inferred_param_types.iter().enumerate() {
+                    if i < analyzed.inferred_param_types.len() {
+                        analyzed.inferred_param_types[i] = trait_ty.clone();
                     }
                 }
             }
@@ -852,7 +880,36 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // Formal types: snapshot before Phase 3 Reference wrap (call-site vs formal separation).
-        let formal_param_types = param_types.clone();
+        let mut formal_param_types = param_types.clone();
+
+        // E0053: plain `string` in the item signature is owned `String` — keep formals on AST
+        // types and ownership even when str_ref inference wrapped `param_types` as `&str`.
+        for (idx, param) in func.decl.parameters.iter().enumerate() {
+            if Self::trait_param_is_owned_string(&param.type_) {
+                if idx < formal_param_types.len() {
+                    formal_param_types[idx] = param.type_.clone();
+                }
+                if idx < param_ownership.len() {
+                    param_ownership[idx] = OwnershipMode::Owned;
+                }
+            }
+        }
+
+        // Extern FFI string parameters are converted at the call site (string_to_ffi).
+        // Registry ownership for passthrough must stay Borrowed so Windjammer wrappers
+        // keep &str APIs and callers auto-borrow; codegen adds .to_string() at the boundary.
+        if func.decl.is_extern {
+            for (idx, ty) in formal_param_types.iter().enumerate() {
+                if has_self_receiver && idx == 0 {
+                    continue;
+                }
+                if Self::is_windjammer_text_param_type(ty) {
+                    if let Some(slot) = param_ownership.get_mut(idx) {
+                        *slot = OwnershipMode::Borrowed;
+                    }
+                }
+            }
+        }
 
         // Phase 3: Mirror impl-method registration — when ownership is Borrowed/MutBorrowed
         // but param_types still use bare `T`, wrap as `Reference(T)` / `MutableReference(T)`
@@ -869,7 +926,12 @@ impl<'ast> Analyzer<'ast> {
             match ownership {
                 OwnershipMode::Borrowed
                     if !matches!(ty, PType::Reference(_) | PType::MutableReference(_))
-                        && !self.is_copy_type(ty) =>
+                        && !self.is_copy_type(ty)
+                        && !func
+                            .decl
+                            .parameters
+                            .get(idx)
+                            .is_some_and(|p| Self::trait_param_is_owned_string(&p.type_)) =>
                 {
                     *ty = PType::Reference(Box::new(ty.clone()));
                 }

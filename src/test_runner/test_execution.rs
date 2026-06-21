@@ -1,11 +1,25 @@
 //! Compiling the project under test, FFI wiring, and generating the Rust test harness crate.
 
-use crate::{build_project, CompilationTarget};
+use crate::{build_project, build_project_ext, CompilationTarget};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 use super::test_discovery::TestFunction;
 use super::util::copy_dir_recursive;
+
+/// Windjammer test sources use `use crate::module::...` (same as in-crate unit tests).
+/// When the harness compiles tests into a separate `windjammer-tests` crate, rewrite those
+/// paths to the library under test (e.g. `foobar_api::domain::...`).
+pub fn rewrite_test_crate_imports(rust_code: &str, lib_crate_name: &str) -> String {
+    let mut out = rust_code.to_string();
+    // `pub use crate::` must be rewritten before bare `use crate::`.
+    out = out.replace(
+        "pub use crate::",
+        &format!("pub use {}::", lib_crate_name),
+    );
+    out = out.replace("use crate::", &format!("use {}::", lib_crate_name));
+    out
+}
 
 /// True when `dir` contains at least one `.wj` source file (recursively).
 fn directory_has_wj_sources(dir: &Path) -> bool {
@@ -96,9 +110,22 @@ fn detect_and_compile_library(
         lib_name
     );
 
-    // Use build_project to compile the library
-    eprintln!("DEBUG: About to call build_project");
-    match build_project(&src_dir, &lib_output_dir, CompilationTarget::Rust, true) {
+    // Prefer mod.wj entry (excludes main.wj binary) when present — matches `wj build src/mod.wj`.
+    let build_entry = if src_dir.join("mod.wj").exists() {
+        src_dir.join("mod.wj")
+    } else {
+        src_dir.clone()
+    };
+
+    eprintln!("DEBUG: About to call build_project_ext for library");
+    match build_project_ext(
+        &build_entry,
+        &lib_output_dir,
+        CompilationTarget::Rust,
+        true,
+        true,
+        &[],
+    ) {
         Ok(_) => {
             eprintln!("DEBUG: build_project returned Ok");
             // Generate lib.rs entry point for the compiled library
@@ -394,7 +421,8 @@ fn generate_lib_rs_for_library(lib_output_dir: &Path) -> Result<()> {
     // "lib" is a reserved name for the library itself, not a module to import
     // This prevents: error[E0761]: file for module `lib` found at both "lib.rs" and "lib/mod.rs"
     // Also exclude "mod" — `pub mod mod;` is invalid (keyword); mod.rs is the barrel, not a child module
-    modules.retain(|m| m != "lib" && m != "mod");
+    // `main` is the binary entry — not part of the library surface under test.
+    modules.retain(|m| m != "lib" && m != "mod" && m != "main");
 
     if modules.is_empty() {
         return Ok(()); // No modules to export after filtering
@@ -846,6 +874,21 @@ pub(crate) fn generate_test_harness(
     // Detect and compile the library if it exists
     let library_dependency = detect_and_compile_library(project_root, output_dir)?;
 
+    // Tests compiled above still contain `use crate::...`; point them at the library crate.
+    if let Some((lib_crate_name, _, _)) = &library_dependency {
+        for (file, _) in &tests_by_file {
+            let output_file = output_dir.join(format!(
+                "{}.rs",
+                file.file_stem().unwrap().to_string_lossy()
+            ));
+            if output_file.exists() {
+                let rust_code = fs::read_to_string(&output_file)?;
+                let rewritten = rewrite_test_crate_imports(&rust_code, lib_crate_name);
+                fs::write(&output_file, rewritten)?;
+            }
+        }
+    }
+
     let _ = crate::rust_integration_tests::sync_rust_integration_tests(project_root);
 
     // TDD FIX: Copy windjammer-runtime to test directory so tests can find it
@@ -944,4 +987,32 @@ path = "lib.rs"
     fs::write(output_dir.join("lib.rs"), lib_rs)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod rewrite_import_tests {
+    use super::rewrite_test_crate_imports;
+
+    #[test]
+    fn rewrites_use_crate_paths_to_library_crate() {
+        let input = "use crate::domain::account::Account;\nuse crate::application::reports::build_trial_balance_report;";
+        let out = rewrite_test_crate_imports(input, "foobar_api");
+        assert!(out.contains("use foobar_api::domain::account::Account;"));
+        assert!(out.contains("use foobar_api::application::reports::build_trial_balance_report;"));
+        assert!(!out.contains("use crate::"));
+    }
+
+    #[test]
+    fn rewrites_pub_use_crate_paths() {
+        let input = "pub use crate::domain::*;";
+        let out = rewrite_test_crate_imports(input, "test_lib");
+        assert_eq!(out, "pub use test_lib::domain::*;");
+    }
+
+    #[test]
+    fn leaves_non_crate_imports_unchanged() {
+        let input = "use windjammer_runtime::test;\nuse std::collections::HashMap;";
+        let out = rewrite_test_crate_imports(input, "foobar_api");
+        assert_eq!(out, input);
+    }
 }

@@ -506,6 +506,15 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.is_type_copy(pointee) {
             return generated.to_string();
         }
+        if let Expression::Identifier { name, .. } = expr {
+            if self.match_arm_bindings.contains(name.as_str()) {
+                // HashMap/Option match arms already lower Copy payloads as owned locals.
+                return generated.to_string();
+            }
+            if generated == *name {
+                return format!("*{generated}");
+            }
+        }
         format!("*({generated})")
     }
 
