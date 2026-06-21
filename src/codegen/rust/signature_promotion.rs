@@ -223,6 +223,25 @@ pub fn prefer_converged_over_stub(
         }
     }
 
+    // Pattern 7: Phase 3 wrapped borrowed params as Reference(T) in global; per-file stub still bare.
+    // Example: ComponentRegistry::add(data: Vec<u8>) call sites need &data from converged global.
+    // Never promote body-inferred borrow over a metadata stub with bare owned formals (MannequinMesh::generate).
+    if body_borrow_must_not_replace_owned_formal_stub(local, global) {
+        return false;
+    }
+    if !has_stale_owned_non_copy_params(global)
+        && global.param_types.iter().enumerate().any(|(idx, g_ty)| {
+            matches!(g_ty, Type::Reference(_) | Type::MutableReference(_))
+                && local.param_types.get(idx).is_some_and(|l| {
+                    !matches!(l, Type::Reference(_) | Type::MutableReference(_))
+                        && normalize_signature_param_types(std::slice::from_ref(l))
+                            == normalize_signature_param_types(std::slice::from_ref(g_ty))
+                })
+        })
+    {
+        return true;
+    }
+
     false
 }
 

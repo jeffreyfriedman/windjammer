@@ -121,17 +121,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 }
                             } else if ffi_arg.ends_with(".to_string()") {
                                 ffi_arg.clone()
-                            } else if matches!(arg, Expression::Identifier { name, .. }
-                                if gen.identifier_already_ref(name)
-                                    || gen.inferred_borrowed_params.contains(name)
-                                    || gen.inferred_mut_borrowed_params.contains(name))
-                            {
-                                format!("{}.to_string()", ffi_arg)
-                            } else if gen
-                                .infer_expression_type(arg)
-                                .is_some_and(|t| matches!(t, Type::String))
-                            {
-                                ffi_arg.clone()
                             } else {
                                 format!("{}.to_string()", ffi_arg)
                             };
@@ -402,9 +391,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                         &resolved.sig, i,
                                     );
                                 if !matches!(upgraded, OwnershipMode::Owned)
-                                    && !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
-                                        &lookup_name,
-                                    )
+                                    && (func_name.starts_with("Self::")
+                                        || !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                                            &lookup_name,
+                                        ))
                                 {
                                     ownership = upgraded;
                                 }
@@ -906,9 +896,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             if let Some(ref sig) = signature {
                 if !is_extern_call && !sig.is_extern {
                     let method_name = func_name.rsplit("::").next().unwrap_or(func_name);
+                    let arg_already_rust_ref = matches!(
+                        arg,
+                        Expression::Identifier { name, .. }
+                            if gen.identifier_already_ref(name)
+                                || gen.str_ref_optimized_params.contains(name.as_str())
+                    );
                     let decision =
                         crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
-                            sig, i, arg, &arg_str, method_name,
+                            sig, i, arg, &arg_str, method_name, arg_already_rust_ref,
                         );
                     crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
                         &decision, &mut arg_str,

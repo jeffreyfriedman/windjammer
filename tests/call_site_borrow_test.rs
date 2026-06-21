@@ -46,7 +46,7 @@ fn test_owned_formal_copy_struct_no_ampersand() {
         name: "config".into(),
         location: Default::default(),
     };
-    let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate");
+    let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate", false);
     assert!(
         !decision.add_ref,
         "owned Copy formal must not add & at call site"
@@ -74,7 +74,7 @@ fn test_borrowed_reference_param_adds_ampersand() {
         name: "quest_id".into(),
         location: Default::default(),
     };
-    let decision = should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active");
+    let decision = should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false);
     assert!(decision.add_ref, "converged borrow must add & at call site");
 
     let mut arg_str = "quest_id".to_string();
@@ -95,7 +95,7 @@ fn test_copy_scalar_i32_no_ampersand() {
         value: Literal::Int(64),
         location: Default::default(),
     };
-    let decision = should_borrow_at_call_site(&sig, 0, &arg, "64", "push");
+    let decision = should_borrow_at_call_site(&sig, 0, &arg, "64", "push", false);
     assert!(!decision.add_ref, "Copy i32 literal must not add &");
 }
 
@@ -112,7 +112,7 @@ fn test_string_literal_to_str_param_no_extra_ampersand() {
         value: Literal::String("hello".into()),
         location: Default::default(),
     };
-    let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "log");
+    let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "log", false);
     assert!(
         !decision.add_ref,
         "string literal to &str param must not add extra &"

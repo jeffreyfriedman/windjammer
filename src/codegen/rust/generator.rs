@@ -756,8 +756,13 @@ impl<'ast> CodeGenerator<'ast> {
         if !crate::codegen::rust::call_signature_resolution::validate_arg_count(sig, arg_count) {
             return false;
         }
-        sig.param_type_for_arg(arg_idx).is_some_and(|t| {
-            crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+        let idx = sig.arg_param_index(arg_idx);
+        matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+            crate::analyzer::OwnershipMode::Owned,
+        ) && sig.formal_param_type(idx).is_some_and(|t| {
+            !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_))
+                && crate::codegen::rust::types::is_windjammer_text_type(t)
         })
     }
 
@@ -1337,16 +1342,17 @@ impl<'ast> CodeGenerator<'ast> {
                                 if super::types::is_windjammer_text_type(inner)
                         )
                     });
-                    let is_string_param = self.current_function_params.iter().any(|p| {
-                        p.name == *name
-                            && (super::types::is_windjammer_text_type(&p.type_)
-                                || matches!(
+                    let is_borrowed_string_param = self.inferred_borrowed_params.contains(name)
+                        || self.str_ref_optimized_params.contains(name)
+                        || self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && matches!(
                                     &p.type_,
                                     Type::Reference(inner)
                                         if super::types::is_windjammer_text_type(inner)
-                                ))
-                    });
-                    if is_ref_text || is_string_param {
+                                )
+                        });
+                    if is_ref_text || is_borrowed_string_param {
                         *expr_str =
                             super::string_utilities::coerce_expr_to_owned_string(expr_str);
                     }

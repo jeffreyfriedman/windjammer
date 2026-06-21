@@ -471,9 +471,39 @@ fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
 }
 
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
+    // E0053: plain `string` in a trait/item signature is owned `String` in Rust. Stale str_ref
+    // metadata in `param_types` must not force `&` / `&str` at call sites.
+    if sig.formal_param_type(param_idx).is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            && crate::codegen::rust::types::is_windjammer_text_type(t)
+    }) {
+        return OwnershipMode::Owned;
+    }
+    // Registry may list `Reference(str)` in `param_types` while `param_ownership`/`formal_params`
+    // still record the owned `string` contract (see `.wj.meta` formal_params vs params).
+    if matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
+        && sig.param_types.get(param_idx).is_some_and(|t| {
+            matches!(t, Type::String)
+                || matches!(
+                    t,
+                    Type::Reference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                )
+        })
+    {
+        return OwnershipMode::Owned;
+    }
+
     if let Some(ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
             return OwnershipMode::Borrowed;
+        }
+        // Phase 3 converged signatures wrap borrowed params as Reference(T) in param_types.
+        // That wrapper is authoritative even when param_ownership still says Owned.
+        match ty {
+            Type::Reference(_) => return OwnershipMode::Borrowed,
+            Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
+            _ => {}
         }
     }
 
@@ -506,13 +536,6 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             .get(param_idx)
             .copied()
             .unwrap_or(OwnershipMode::Owned);
-    }
-    if let Some(ty) = sig.param_types.get(param_idx) {
-        match ty {
-            Type::Reference(_) => return OwnershipMode::Borrowed,
-            Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
-            _ => {}
-        }
     }
     OwnershipMode::Owned
 }
@@ -800,6 +823,31 @@ impl BuildFingerprint {
     }
 
     #[test]
+    fn owned_string_formal_is_owned_at_call_site_despite_str_ref_param_types() {
+        let sig = FunctionSignature {
+            name: "SeedAccountReader::list_accounts".to_string(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Parameterized(
+                "Vec".into(),
+                vec![Type::Custom("Account".into())],
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership(&sig, 1),
+            OwnershipMode::Owned,
+            "trait `string` param must pass by value at call sites"
+        );
+    }
+
+    #[test]
     fn stale_borrowed_metadata_on_owned_struct_param_is_owned() {
         let sig = FunctionSignature {
             name: "svo64_convert::voxelgrid_to_svo64_flat".to_string(),
@@ -846,6 +894,41 @@ impl BuildFingerprint {
         assert!(
             !param_type_is_owned_non_text(&sig, 0),
             "Reference(QuestId) is not owned"
+        );
+    }
+
+    #[test]
+    fn reference_wrapped_vec_honors_borrow_despite_stale_owned_metadata() {
+        let vec_ty = Type::Parameterized("Vec".into(), vec![Type::Custom("u8".into())]);
+        let sig = FunctionSignature {
+            name: "ComponentRegistry::add".to_string(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Custom("i64".into()),
+                Type::Custom("ComponentId".into()),
+                Type::Reference(Box::new(vec_ty.clone())),
+            ],
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Custom("i64".into()),
+                Type::Custom("ComponentId".into()),
+                vec_ty,
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership(&sig, 3),
+            OwnershipMode::Borrowed,
+            "Reference(Vec) wrapper must win over stale Owned param_ownership"
         );
     }
 

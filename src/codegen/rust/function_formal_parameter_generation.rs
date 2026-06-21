@@ -57,9 +57,24 @@ impl<'ast> CodeGenerator<'ast> {
                     .get(param_idx)
                     .unwrap_or(&param.type_);
 
+                // E0053: Trait impl formal parameters must match the trait item. Plain `string` in
+                // source is owned `String` — do not emit `&str` from str_ref inference on the impl.
+                let is_owned_string_decl = matches!(&param.type_, Type::String)
+                    || matches!(&param.type_, Type::Custom(name) if name == "string");
+                let formal_type: &Type = if self.in_trait_impl
+                    && param.name != "self"
+                    && is_owned_string_decl
+                {
+                    &param.type_
+                } else {
+                    inferred_type
+                };
+                let trait_impl_owned_string =
+                    self.in_trait_impl && param.name != "self" && is_owned_string_decl;
+
                 // PHASE 9 OPTIMIZATION: Check if this parameter should use Cow<'_, T>
                 if self.cow_optimizations.contains(&param.name) {
-                    let base_type = self.type_to_rust(inferred_type);
+                    let base_type = self.type_to_rust(formal_type);
                     // For String types, use Cow<'_, str>
                     let cow_type = if base_type == "String" {
                         "Cow<'_, str>".to_string()
@@ -153,7 +168,7 @@ impl<'ast> CodeGenerator<'ast> {
                             return self_str.to_string();
                         }
                         // Owned parameters are always mutable in Windjammer
-                        return format!("mut {}: {}", param.name, self.type_to_rust(inferred_type));
+                        return format!("mut {}: {}", param.name, self.type_to_rust(formal_type));
                     }
                     OwnershipHint::Ref => {
                         if param.name == "self" {
@@ -181,18 +196,18 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         // Don't add & if the type is already a Reference
                         if matches!(
-                            inferred_type,
+                            formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) {
-                            self.type_to_rust(inferred_type)
+                            self.type_to_rust(formal_type)
                         } else {
                             // TDD FIX: Copy types pass by value even with Ref hint
-                            if self.is_type_copy(inferred_type) {
-                                self.type_to_rust(inferred_type)
+                            if self.is_type_copy(formal_type) {
+                                self.type_to_rust(formal_type)
                             } else {
                                 // TDD FIX: Borrowed → &T (including &String for strings)
                                 // Correctness > idioms: &String works with Vec<String> methods
-                                format!("&{}", self.type_to_rust(inferred_type))
+                                format!("&{}", self.type_to_rust(formal_type))
                             }
                         }
                     }
@@ -223,10 +238,10 @@ impl<'ast> CodeGenerator<'ast> {
                             return "&mut self".to_string();
                         }
                         // Don't add &mut if the type is already a MutableReference
-                        if matches!(inferred_type, Type::MutableReference(_)) {
-                            self.type_to_rust(inferred_type)
+                        if matches!(formal_type, Type::MutableReference(_)) {
+                            self.type_to_rust(formal_type)
                         } else {
-                            format!("&mut {}", self.type_to_rust(inferred_type))
+                            format!("&mut {}", self.type_to_rust(formal_type))
                         }
                     }
                     OwnershipHint::Inferred => {
@@ -301,11 +316,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Check if type already has ownership baked in (like &str from string inference)
                         if matches!(
-                            inferred_type,
+                            formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) {
                             // Already has & or &mut - just convert
-                            self.type_to_rust(inferred_type)
+                            self.type_to_rust(formal_type)
                         } else {
                             // Apply ownership mode from analyzer
                             // TDD FIX: Default to Owned, not Borrowed
@@ -319,7 +334,9 @@ impl<'ast> CodeGenerator<'ast> {
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's
                             // method signature and use its ownership for each parameter.
-                            let ownership_mode = if self.in_trait_impl {
+                            let ownership_mode = if trait_impl_owned_string {
+                                &OwnershipMode::Owned
+                            } else if self.in_trait_impl {
                                 let trait_param_ownership = self
                                     .current_trait_impl_name
                                     .as_ref()
@@ -347,27 +364,28 @@ impl<'ast> CodeGenerator<'ast> {
                             };
 
                             match ownership_mode {
-                                OwnershipMode::Owned => self.type_to_rust(inferred_type),
+                                OwnershipMode::Owned => self.type_to_rust(formal_type),
                                 OwnershipMode::Borrowed => {
-                                    if self.is_type_copy(inferred_type) {
+                                    if self.is_type_copy(formal_type) {
                                         // Copy types pass by value even when borrowed
-                                        self.type_to_rust(inferred_type)
+                                        self.type_to_rust(formal_type)
                                     } else {
                                         // PHASE 2: Check if this string parameter can use &str optimization
-                                        let is_string = matches!(inferred_type, Type::String)
-                                            || matches!(inferred_type, Type::Custom(ref name) if name == "string");
+                                        let is_string = matches!(formal_type, Type::String)
+                                            || matches!(formal_type, Type::Custom(ref name) if name == "string");
 
                                         if is_string
                                             && analyzed.str_ref_optimizable_params.contains(&param.name)
+                                            && !self.in_trait_impl
                                         {
                                             "&str".to_string()
                                         } else {
-                                            format!("&{}", self.type_to_rust(inferred_type))
+                                            format!("&{}", self.type_to_rust(formal_type))
                                         }
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
-                                    format!("&mut {}", self.type_to_rust(inferred_type))
+                                    format!("&mut {}", self.type_to_rust(formal_type))
                                 }
                             }
                         }

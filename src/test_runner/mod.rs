@@ -10,10 +10,11 @@ use anyhow::Result;
 use std::path::Path;
 
 mod test_discovery;
-mod test_execution;
+pub mod test_execution;
 mod test_reporting;
 mod util;
 
+pub use test_execution::rewrite_test_crate_imports;
 pub use util::{copy_dir_recursive, path_to_toml_string};
 
 pub fn run_tests(

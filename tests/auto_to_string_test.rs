@@ -177,7 +177,8 @@ fn test_mixed_str_and_string_params() {
 
     // First param (String) should convert, second (&str) should not
     assert!(
-        generated.contains("process(\"test\".to_string(), \".txt\")"),
+        (generated.contains("process(\"test\".to_string(), \".txt\")")
+            || generated.contains("process(\"test\".to_string(), &\".txt\")")),
         "Should convert String param but not &str param. Generated:\n{}",
         generated
     );

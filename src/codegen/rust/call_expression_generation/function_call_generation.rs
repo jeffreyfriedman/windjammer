@@ -405,10 +405,28 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 if is_extern_call || sig.is_extern || arg_str.contains("string_to_ffi(") {
                     return arg_str.clone();
                 }
-                let ownership =
+                let mut ownership =
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, i,
                     );
+                if matches!(ownership, OwnershipMode::Owned) {
+                    if let Some(method) = func_name.strip_prefix("Self::") {
+                        if let Some(ref tn) = gen.current_struct_name {
+                            if let Some(ms) = gen.lookup_method_signature(tn, method) {
+                                let local_sig = ms.to_function_signature();
+                                if crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                                    &local_sig,
+                                    arguments.len(),
+                                ) {
+                                    ownership =
+                                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                            &local_sig, i,
+                                        );
+                                }
+                            }
+                        }
+                    }
+                }
                 if crate::codegen::rust::call_site_borrow::is_stale_borrow_on_owned_copy_formal(
                     sig, i,
                 ) {

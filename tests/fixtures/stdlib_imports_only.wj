@@ -1,0 +1,22 @@
+// Import-only smoke: every runtime-mapped std module resolves at compile time.
+use std::http::*
+use std::json
+use std::async
+use std::time
+use std::regex
+use std::crypto
+use std::db
+use std::cli
+use std::math
+use std::mime
+use std::log
+use std::csv
+use std::subprocess
+use std::strings
+use std::random
+use std::testing
+use std::env
+
+fn main() {
+    let _bind = env.get_or("BIND", "127.0.0.1")
+}

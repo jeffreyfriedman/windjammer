@@ -147,24 +147,51 @@ impl<'ast> CodeGenerator<'ast> {
         ))
     }
 
-    /// Try to convert print/println/eprintln/eprint to macros
+    /// Use windjammer_runtime::io for print builtins when the compilation unit links
+    /// the runtime (stdlib imports). Standalone `--no-cargo` snippets keep `println!`.
+    pub(in crate::codegen::rust) fn should_use_runtime_io(&self) -> bool {
+        !self.runtime_std_module_imports.is_empty()
+    }
+
+    /// Map Windjammer print builtins to windjammer_runtime::io (no Rust `println!` leakage).
+    fn runtime_io_print_fn(func_name: &str) -> &'static str {
+        match func_name {
+            "print" => "windjammer_runtime::io::print",
+            "println" => "windjammer_runtime::io::println",
+            "eprint" => "windjammer_runtime::io::eprint",
+            "eprintln" => "windjammer_runtime::io::eprintln",
+            _ => "windjammer_runtime::io::println",
+        }
+    }
+
+    fn emit_runtime_print_call(io_fn: &str, format_literal: &str, format_args: &[String]) -> String {
+        if format_args.is_empty() {
+            format!("{io_fn}({format_literal})")
+        } else {
+            format!(
+                "{io_fn}(&format!({}{}))",
+                format_literal,
+                format!(", {}", format_args.join(", "))
+            )
+        }
+    }
+
+    /// Convert print/println/eprintln/eprint to windjammer_runtime::io calls.
     /// Returns Some(code) if this is a print function, None otherwise
     pub(in crate::codegen::rust) fn try_generate_print_macro(
         &mut self,
         func_name: &str,
         arguments: &[(Option<String>, &Expression<'ast>)],
     ) -> Option<String> {
-        // Print functions that convert to macros
         if !matches!(func_name, "print" | "println" | "eprintln" | "eprint") {
             return None;
         }
 
-        // For print() -> println!(), otherwise keep the same name
-        let target_macro = if func_name == "print" {
-            "println"
-        } else {
-            func_name
-        };
+        if !self.should_use_runtime_io() {
+            return self.try_generate_print_rust_macro(func_name, arguments);
+        }
+
+        let io_fn = Self::runtime_io_print_fn(func_name);
 
         // Check if the first argument is a format! macro (from string interpolation)
         if let Some((_, first_arg)) = arguments.first() {
@@ -177,21 +204,16 @@ impl<'ast> CodeGenerator<'ast> {
             } = **first_arg
             {
                 if name == "format" && !macro_args.is_empty() {
-                    // Unwrap the format! call and put its arguments directly into println!
-                    // format!("text {}", var) -> println!("text {}", var)
                     let format_str = self.format_macro_template_arg(macro_args[0]);
                     let format_args: Vec<String> = macro_args[1..]
                         .iter()
                         .map(|arg| self.generate_expression(arg))
                         .collect();
-
-                    let args_str = if format_args.is_empty() {
-                        String::new()
-                    } else {
-                        format!(", {}", format_args.join(", "))
-                    };
-
-                    return Some(format!("{}!({}{})", target_macro, format_str, args_str));
+                    return Some(Self::emit_runtime_print_call(
+                        io_fn,
+                        &format_str,
+                        &format_args,
+                    ));
                 }
             }
 
@@ -220,18 +242,133 @@ impl<'ast> CodeGenerator<'ast> {
                     || string_analysis::contains_string_literal(right);
 
                 if has_string_literal {
-                    // Collect all parts of the concatenation
                     let mut parts = Vec::new();
                     string_analysis::collect_concat_parts_static(left, &mut parts);
                     string_analysis::collect_concat_parts_static(right, &mut parts);
 
-                    // Generate format string and arguments
-                    let format_str = "{}".repeat(parts.len());
+                    let format_str = format!("\"{}\"", "{}".repeat(parts.len()));
                     let format_args: Vec<String> = parts
                         .iter()
                         .map(|expr| self.generate_expression(expr))
                         .collect();
 
+                    return Some(Self::emit_runtime_print_call(
+                        io_fn,
+                        &format_str,
+                        &format_args,
+                    ));
+                }
+            }
+        }
+
+        let args: Vec<String> = arguments
+            .iter()
+            .map(|(_label, arg)| self.generate_expression(arg))
+            .collect();
+
+        let first_arg_is_string_literal = arguments
+            .first()
+            .map(|(_, arg)| {
+                matches!(
+                    arg,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                )
+            })
+            .unwrap_or(false);
+
+        if args.is_empty() {
+            return Some(format!("{io_fn}(\"\")"));
+        }
+
+        if args.len() == 1 && first_arg_is_string_literal {
+            // Single string literal — pass directly as &str
+            Some(format!("{io_fn}({})", args[0]))
+        } else if args.len() == 1 && !first_arg_is_string_literal {
+            // Single non-string value — format it
+            Some(Self::emit_runtime_print_call(io_fn, "\"{}\"", &args))
+        } else if first_arg_is_string_literal {
+            // println("fmt {}", a, b) — first arg is format template
+            Some(Self::emit_runtime_print_call(
+                io_fn,
+                &args[0],
+                &args[1..],
+            ))
+        } else {
+            // Multiple non-literal args — join with spaces
+            let format_str = format!("\"{}\"", " ".repeat(args.len()));
+            Some(Self::emit_runtime_print_call(io_fn, &format_str, &args))
+        }
+    }
+
+    /// Legacy Rust macro lowering for standalone builds without windjammer_runtime linked.
+    fn try_generate_print_rust_macro(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> Option<String> {
+        let target_macro = if func_name == "print" {
+            "println"
+        } else {
+            func_name
+        };
+
+        if let Some((_, first_arg)) = arguments.first() {
+            if let Expression::MacroInvocation {
+                is_repeat: _,
+                ref name,
+                args: ref macro_args,
+                ..
+            } = **first_arg
+            {
+                if name == "format" && !macro_args.is_empty() {
+                    let format_str = self.format_macro_template_arg(macro_args[0]);
+                    let format_args: Vec<String> = macro_args[1..]
+                        .iter()
+                        .map(|arg| self.generate_expression(arg))
+                        .collect();
+                    let args_str = if format_args.is_empty() {
+                        String::new()
+                    } else {
+                        format!(", {}", format_args.join(", "))
+                    };
+                    return Some(format!("{}!({}{})", target_macro, format_str, args_str));
+                }
+            }
+
+            if let Expression::Binary {
+                left,
+                op: BinaryOp::Add,
+                right,
+                ..
+            } = **first_arg
+            {
+                let has_string_literal = matches!(
+                    left,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) || matches!(
+                    right,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                ) || string_analysis::contains_string_literal(left)
+                    || string_analysis::contains_string_literal(right);
+
+                if has_string_literal {
+                    let mut parts = Vec::new();
+                    string_analysis::collect_concat_parts_static(left, &mut parts);
+                    string_analysis::collect_concat_parts_static(right, &mut parts);
+                    let format_str = "{}".repeat(parts.len());
+                    let format_args: Vec<String> = parts
+                        .iter()
+                        .map(|expr| self.generate_expression(expr))
+                        .collect();
                     return Some(format!(
                         "{}!(\"{}\", {})",
                         target_macro,
@@ -242,16 +379,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // No interpolation, just regular print
-        // TDD FIX: Auto-format non-string arguments
-        // println(value) where value: bool → println!("{}", value)
-        // println("text") → println!("text") (string literals stay as-is)
         let args: Vec<String> = arguments
             .iter()
             .map(|(_label, arg)| self.generate_expression(arg))
             .collect();
 
-        // Check if first argument is a string literal
         let first_arg_is_string_literal = arguments
             .first()
             .map(|(_, arg)| {
@@ -266,10 +398,8 @@ impl<'ast> CodeGenerator<'ast> {
             .unwrap_or(false);
 
         if args.len() == 1 && !first_arg_is_string_literal {
-            // Single non-string argument - format it
             Some(format!("{}!(\"{{}}\", {})", target_macro, args[0]))
         } else {
-            // Multiple args or string literal - keep as-is
             Some(format!("{}!({})", target_macro, args.join(", ")))
         }
     }

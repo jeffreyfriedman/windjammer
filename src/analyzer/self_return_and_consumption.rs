@@ -1,4 +1,6 @@
 //! Returning `self`, `match self`, moves, and general identifier scans.
+use std::collections::HashSet;
+
 use crate::parser::*;
 
 use super::Analyzer;
@@ -163,12 +165,23 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
         registry: &super::SignatureRegistry,
     ) -> bool {
+        let mut visited = HashSet::new();
+        self.function_calls_consuming_method_on_self_with_visited(func, registry, &mut visited)
+    }
+
+    pub(super) fn function_calls_consuming_method_on_self_with_visited(
+        &self,
+        func: &FunctionDecl,
+        registry: &super::SignatureRegistry,
+        visited: &mut HashSet<String>,
+    ) -> bool {
         func.body.iter().any(|stmt| {
             self.statement_calls_consuming_method_on_self(
                 stmt,
                 registry,
                 func.parent_type.as_deref(),
                 Some(func.name.as_str()),
+                visited,
             )
         })
     }
@@ -353,6 +366,7 @@ impl<'ast> Analyzer<'ast> {
         registry: &super::SignatureRegistry,
         parent_type: Option<&str>,
         caller_name: Option<&str>,
+        visited: &mut HashSet<String>,
     ) -> bool {
         match stmt {
             Statement::Expression { expr, .. } => {
@@ -361,6 +375,7 @@ impl<'ast> Analyzer<'ast> {
                     registry,
                     parent_type,
                     caller_name,
+                    visited,
                 )
             }
             Statement::Return {
@@ -370,6 +385,7 @@ impl<'ast> Analyzer<'ast> {
                 registry,
                 parent_type,
                 caller_name,
+                visited,
             ),
             Statement::Let { value, .. } => {
                 self.expression_calls_consuming_method_on_self(
@@ -377,6 +393,7 @@ impl<'ast> Analyzer<'ast> {
                     registry,
                     parent_type,
                     caller_name,
+                    visited,
                 )
             }
             Statement::If {
@@ -390,6 +407,7 @@ impl<'ast> Analyzer<'ast> {
                         registry,
                         parent_type,
                         caller_name,
+                        visited,
                     )
                 }) || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
@@ -398,6 +416,7 @@ impl<'ast> Analyzer<'ast> {
                             registry,
                             parent_type,
                             caller_name,
+                            visited,
                         )
                     })
                 })
@@ -412,6 +431,7 @@ impl<'ast> Analyzer<'ast> {
         registry: &super::SignatureRegistry,
         parent_type: Option<&str>,
         caller_name: Option<&str>,
+        visited: &mut HashSet<String>,
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
@@ -429,9 +449,10 @@ impl<'ast> Analyzer<'ast> {
                                 .find(|p| p.name == "self")
                                 .is_some_and(|p| {
                                     matches!(p.ownership, OwnershipHint::Owned)
-                                        || self.infer_impl_self_receiver_ownership(
+                                        || self.infer_impl_self_receiver_ownership_inner(
                                             called_func,
                                             registry,
+                                            visited,
                                         ) == super::OwnershipMode::Owned
                                 });
                             if callee_self_owned {
@@ -469,6 +490,7 @@ impl<'ast> Analyzer<'ast> {
                     registry,
                     parent_type,
                     caller_name,
+                    visited,
                 )
             }
             Expression::Block { statements, .. } => statements.iter().any(|s| {
@@ -477,6 +499,7 @@ impl<'ast> Analyzer<'ast> {
                     registry,
                     parent_type,
                     caller_name,
+                    visited,
                 )
             }),
             _ => false,

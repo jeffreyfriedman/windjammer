@@ -79,6 +79,7 @@ pub fn should_borrow_at_call_site(
     arg_expr: &Expression,
     arg_str: &str,
     method_name: &str,
+    arg_already_rust_ref: bool,
 ) -> CallSiteBorrowDecision {
     let effective = effective_ownership_for_call_arg(sig, arg_index);
     let param_expects_borrowed = matches!(effective, OwnershipMode::Borrowed);
@@ -107,14 +108,16 @@ pub fn should_borrow_at_call_site(
 
     let arg_is_copy = expression_is_copy_literal(arg_expr);
 
+    if arg_already_rust_ref {
+        return decision;
+    }
+
     if !(param_expects_borrowed || is_collection_key) {
         return decision;
     }
 
-    if is_collection_key && arg_is_copy {
-        return decision;
-    }
-    if arg_is_copy {
+    // Copy keys on map/set lookups still need `&K` (HashMap::get(&u32)).
+    if arg_is_copy && !is_collection_key {
         return decision;
     }
 
@@ -125,13 +128,25 @@ pub fn should_borrow_at_call_site(
             .get(param_idx)
             .is_some_and(string_utilities::param_is_rust_str_ref);
         let arg_is_string_literal = expression_is_string_literal(arg_expr);
-        if !param_is_str_ref && !arg_is_string_literal {
+        if param_is_str_ref {
+            return decision;
+        }
+        if !arg_is_string_literal {
             decision.add_ref = true;
         }
-    } else if sig.param_type_for_arg(arg_index).is_some_and(|t| {
-        !types::is_windjammer_text_type(t) || is_collection_key
-    }) {
-        decision.add_ref = true;
+    } else if is_collection_key {
+        if sig
+            .param_type_for_arg(arg_index)
+            .is_some_and(types::is_windjammer_text_type)
+        {
+            return decision;
+        }
+        if sig
+            .param_type_for_arg(arg_index)
+            .is_some_and(|t| !types::is_windjammer_text_type(t))
+        {
+            decision.add_ref = true;
+        }
     }
 
     decision
@@ -198,7 +213,7 @@ mod tests {
             name: "config".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate");
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate", false);
         assert!(!decision.add_ref, "owned Copy formal must not add &");
         assert_eq!(
             effective_ownership_for_call_arg(&sig, 0),
@@ -221,7 +236,7 @@ mod tests {
             name: "walls".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions");
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions", false);
         assert!(decision.add_ref, "Vec formal with converged borrow must add &");
         assert_eq!(
             effective_ownership_for_call_arg(&sig, 0),
@@ -245,7 +260,7 @@ mod tests {
             name: "quest_id".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active");
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false);
         assert!(decision.add_ref, "converged borrow must add &");
     }
 
@@ -262,7 +277,7 @@ mod tests {
             value: Literal::Int(42),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "42", "push");
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false);
         assert!(!decision.add_ref, "Copy scalar literal must not add &");
     }
 
@@ -279,8 +294,28 @@ mod tests {
             value: Literal::String("hello".into()),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println");
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println", false);
         assert!(!decision.add_ref, "string literal to &str must not add extra &");
+    }
+
+    #[test]
+    fn copy_map_key_still_borrows() {
+        let sig = sig_with_formal(
+            "HashMap::get",
+            vec![
+                Type::Custom("Self".into()),
+                Type::Custom("u32".into()),
+            ],
+            vec![Type::Custom("Self".into()), Type::Custom("u32".into())],
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            true,
+        );
+        let arg = Expression::Identifier {
+            name: "node".into(),
+            location: Default::default(),
+        };
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "node", "get", false);
+        assert!(decision.add_ref, "Copy map keys must still get & at call site");
     }
 
     #[test]

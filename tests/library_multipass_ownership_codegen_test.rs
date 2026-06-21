@@ -202,6 +202,175 @@ impl DynamicWorld {
 }
 
 #[test]
+fn test_component_registry_add_formal_borrows_vec_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ecs/component_storage.wj",
+        r#"
+pub struct ComponentId {
+    id: i32,
+}
+
+pub struct ComponentArray {
+    bytes: Vec<u8>,
+}
+
+impl ComponentArray {
+    pub fn new() -> ComponentArray {
+        ComponentArray { bytes: Vec::new() }
+    }
+
+    pub fn insert(self, entity: i64, data: Vec<u8>) {
+        let mut i = 0
+        while i < data.len() {
+            self.bytes.push(data[i])
+            i = i + 1
+        }
+    }
+}
+
+pub struct ComponentRegistry {
+    arrays: Vec<ComponentArray>,
+}
+
+impl ComponentRegistry {
+    pub fn new() -> ComponentRegistry {
+        ComponentRegistry { arrays: Vec::new() }
+    }
+
+    pub fn add(self, entity: i64, component_id: ComponentId, data: Vec<u8>) {
+        let idx = component_id.id as usize
+        self.arrays[idx].insert(entity, data)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "ecs/world.wj",
+        r#"
+use crate::ecs::component_storage::ComponentRegistry
+
+pub fn make_registry() -> ComponentRegistry {
+    ComponentRegistry::new()
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ecs/component_storage.rs").expect("component_storage.rs");
+
+    assert!(
+        rs.contains("data: &Vec<u8>"),
+        "add formal must emit borrowed Vec param. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_registry_add_borrows_vec_data_at_call_site() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ecs/component_storage.wj",
+        r#"
+pub struct ComponentId { id: i32 }
+pub struct ComponentArray { bytes: Vec<u8> }
+impl ComponentArray {
+    pub fn new() -> ComponentArray { ComponentArray { bytes: Vec::new() } }
+    pub fn insert(self, entity: i64, data: Vec<u8>) {
+        let mut i = 0
+        while i < data.len() { self.bytes.push(data[i]); i = i + 1 }
+    }
+}
+pub struct ComponentRegistry { arrays: Vec<ComponentArray> }
+impl ComponentRegistry {
+    pub fn new() -> ComponentRegistry { ComponentRegistry { arrays: Vec::new() } }
+    pub fn add(self, entity: i64, component_id: ComponentId, data: Vec<u8>) {
+        let idx = component_id.id as usize
+        self.arrays[idx].insert(entity, data)
+    }
+    pub fn attach(self, entity: i64, transform_id: ComponentId) {
+        let data: Vec<u8> = vec![0u8; 36]
+        self.add(entity, transform_id, data)
+    }
+}
+"#,
+    );
+    let map = test.compile().expect("compile");
+    let rs = map.get("ecs/component_storage.rs").expect("component_storage.rs");
+    assert!(
+        rs.contains("add(entity, transform_id, &data)")
+            || rs.contains("self.add(entity, transform_id, &data)"),
+        "call site must borrow Vec for borrowed formal. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_hashmap_get_copy_u32_key_borrows_at_call_site() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ai/navmesh.wj",
+        r#"
+use std::map::Map
+
+pub fn trace_parent(came_from: Map<u32, u32>, node: u32) -> Option<u32> {
+    match came_from.get(node) {
+        Some(parent) => Some(parent),
+        None => None,
+    }
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ai/navmesh.rs").expect("navmesh.rs");
+
+    assert!(
+        rs.contains("came_from.get(&node)"),
+        "HashMap get with Copy u32 key must auto-borrow. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_hashmap_get_copy_binding_push_no_spurious_deref_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "ai/path.wj",
+        r#"
+use std::map::Map
+
+pub fn rebuild_path(came_from: Map<u32, u32>, goal: u32) -> Vec<u32> {
+    let mut path: Vec<u32> = Vec::new()
+    path.push(goal)
+    let mut node = goal
+    loop {
+        match came_from.get(node) {
+            Some(parent) => {
+                path.push(parent)
+                node = parent
+            }
+            None => break,
+        }
+    }
+    path
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("ai/path.rs").expect("path.rs");
+
+    assert!(
+        !rs.contains("*(parent).clone()"),
+        "Copy HashMap binding must not get *(parent).clone(). Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("path.push(*parent)")
+            || rs.contains("path.push(parent)")
+            || rs.contains("path.push(parent.clone())"),
+        "path.push must pass owned u32, not ref. Got:\n{rs}"
+    );
+}
+
+#[test]
 fn test_vec_index_return_clones_non_copy_element() {
     let mut test = MultiFileTest::new();
     test.add_file(

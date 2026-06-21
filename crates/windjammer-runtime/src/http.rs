@@ -193,28 +193,47 @@ pub struct ServerResponse {
     pub status: u16,
     pub body: String,
     pub headers: HashMap<String, String>,
+    pub binary_body: Option<Vec<u8>>,
 }
 
 impl ServerResponse {
-    /// Create a 200 OK response
-    pub fn ok(body: String) -> Self {
+    /// Create a response with explicit status and body.
+    /// Status is Windjammer `int` (i64) — bare literals like `404` work without suffixes.
+    pub fn new(status: i64, body: impl Into<String>) -> Self {
         Self {
-            status: 200,
-            body,
+            status: status as u16,
+            body: body.into(),
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
-    /// Create a JSON response
-    pub fn json<T: serde::Serialize>(data: &T) -> Result<Self, String> {
-        let body = serde_json::to_string(data).map_err(|e| e.to_string())?;
+    /// Create a 200 OK response
+    pub fn ok(body: impl Into<String>) -> Self {
+        Self {
+            status: 200,
+            body: body.into(),
+            headers: HashMap::new(),
+            binary_body: None,
+        }
+    }
+
+    /// Create a JSON response from a pre-serialized body
+    pub fn json(body: impl Into<String>) -> Self {
         let mut headers = HashMap::new();
         headers.insert("Content-Type".to_string(), "application/json".to_string());
-        Ok(Self {
+        Self {
             status: 200,
-            body,
+            body: body.into(),
             headers,
-        })
+            binary_body: None,
+        }
+    }
+
+    /// Create a JSON response from a serializable value
+    pub fn json_value<T: serde::Serialize>(data: &T) -> Result<Self, String> {
+        let body = serde_json::to_string(data).map_err(|e| e.to_string())?;
+        Ok(Self::json(body))
     }
 
     /// Create a 201 Created response
@@ -223,6 +242,7 @@ impl ServerResponse {
             status: 201,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -232,6 +252,7 @@ impl ServerResponse {
             status: 204,
             body: String::new(),
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -241,6 +262,7 @@ impl ServerResponse {
             status: 400,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -250,6 +272,7 @@ impl ServerResponse {
             status: 401,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -259,6 +282,7 @@ impl ServerResponse {
             status: 403,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -268,6 +292,41 @@ impl ServerResponse {
             status: 404,
             body: "Not Found".to_string(),
             headers: HashMap::new(),
+            binary_body: None,
+        }
+    }
+
+    /// Create an error response with explicit status (Windjammer `int` / i64).
+    pub fn error(status: i64, message: impl Into<String>) -> Self {
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type".to_string(), "text/plain".to_string());
+        Self {
+            status: status as u16,
+            body: message.into(),
+            headers,
+            binary_body: None,
+        }
+    }
+
+    /// Create a binary response (WASM, images, etc.)
+    pub fn binary(status: i64, data: Vec<u8>) -> Self {
+        Self {
+            status: status as u16,
+            body: String::new(),
+            headers: HashMap::new(),
+            binary_body: Some(data),
+        }
+    }
+
+    /// Create an HTML response
+    pub fn html(body: String) -> Self {
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type".to_string(), "text/html".to_string());
+        Self {
+            status: 200,
+            body,
+            headers,
+            binary_body: None,
         }
     }
 
@@ -277,6 +336,7 @@ impl ServerResponse {
             status: 500,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
@@ -286,10 +346,17 @@ impl ServerResponse {
             status,
             body,
             headers: HashMap::new(),
+            binary_body: None,
         }
     }
 
-    /// Add a header to the response
+    /// Add a header to the response (builder-style)
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    /// Add a header to the response (alias)
     pub fn with_header(mut self, key: String, value: String) -> Self {
         self.headers.insert(key, value);
         self
@@ -298,11 +365,14 @@ impl ServerResponse {
 
 impl IntoResponse for ServerResponse {
     fn into_response(self) -> AxumResponse {
-        let mut response = (
-            StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            self.body,
-        )
-            .into_response();
+        let status =
+            StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        let mut response = if let Some(binary) = self.binary_body {
+            (status, binary).into_response()
+        } else {
+            (status, self.body).into_response()
+        };
 
         for (key, value) in self.headers {
             if let Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_bytes()) {
@@ -436,21 +506,24 @@ impl Default for Router {
     }
 }
 
+/// Parse `application/x-www-form-urlencoded` query strings (e.g. URI query component).
+pub fn parse_query_string(query: Option<&str>) -> HashMap<String, String> {
+    query
+        .map(|q| {
+            url::form_urlencoded::parse(q.as_bytes())
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Extract our Request type from Axum's request
 async fn extract_request(req: AxumRequest) -> Request {
     let method = req.method().to_string();
     let path = req.uri().path().to_string();
 
     // Extract query parameters
-    let query: HashMap<String, String> = req
-        .uri()
-        .query()
-        .map(|q| {
-            url::form_urlencoded::parse(q.as_bytes())
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let query = parse_query_string(req.uri().query());
 
     // Extract headers
     let headers: HashMap<String, String> = req
@@ -500,6 +573,118 @@ where
     serve(addr, router)
 }
 
+// ============================================================================
+// SIMPLE SERVER API (Server::new + ServerRequest)
+// ============================================================================
+
+/// HTTP Server Request (received by simple server handlers)
+#[derive(Debug, Clone)]
+pub struct ServerRequest {
+    pub method: String,
+    pub path: String,
+    pub query: HashMap<String, String>,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+}
+
+impl ServerRequest {
+    /// Lookup a single query parameter by key.
+    pub fn query_param(&self, key: &str) -> Option<String> {
+        self.query.get(key).cloned()
+    }
+
+    /// Windjammer std name for query parameter lookup.
+    pub fn query(&self, key: &str) -> Option<String> {
+        self.query_param(key)
+    }
+
+    /// Case-insensitive header lookup.
+    pub fn header(&self, key: &str) -> Option<String> {
+        self.headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value.clone())
+    }
+}
+
+/// Simple HTTP server bound to address + port
+#[derive(Debug, Clone)]
+pub struct Server {
+    pub address: String,
+    pub port: i64,
+}
+
+impl Server {
+    pub fn new(address: impl Into<String>, port: i64) -> Self {
+        Self {
+            address: address.into(),
+            port,
+        }
+    }
+
+    pub fn serve<F>(self, handler: F) -> Result<(), String>
+    where
+        F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
+    {
+        server_serve(self.address, self.port, handler)
+    }
+}
+
+/// Start a simple HTTP server with a catch-all handler
+pub fn server_serve<F>(address: String, port: i64, handler: F) -> Result<(), String>
+where
+    F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
+{
+    use std::sync::Arc;
+
+    let handler = Arc::new(handler);
+    let rt = Runtime::new().map_err(|e| e.to_string())?;
+    rt.block_on(async move {
+        let handler = handler.clone();
+        let app = AxumRouter::new().fallback(move |req: AxumRequest| {
+            let handler = handler.clone();
+            async move {
+                let method = req.method().to_string();
+                let path = req.uri().path().to_string();
+                let query = parse_query_string(req.uri().query());
+                let headers: Vec<(String, String)> = req
+                    .headers()
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        v.to_str()
+                            .ok()
+                            .map(|s| (k.to_string(), s.to_string()))
+                    })
+                    .collect();
+                let body_bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
+                    .await
+                    .unwrap_or_default();
+                let body = String::from_utf8_lossy(&body_bytes).to_string();
+                let wj_req = ServerRequest {
+                    method,
+                    path,
+                    query,
+                    headers,
+                    body,
+                };
+                let response = handler(&wj_req);
+                response.into_response()
+            }
+        });
+
+        let addr = format!("{}:{}", address, port);
+        let socket_addr: SocketAddr = addr.parse().map_err(|e: std::net::AddrParseError| {
+            e.to_string()
+        })?;
+        let listener = tokio::net::TcpListener::bind(socket_addr)
+            .await
+            .map_err(|e| e.to_string())?;
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| e.to_string())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,5 +708,56 @@ mod tests {
             .with_header("X-Custom".to_string(), "value".to_string());
 
         assert_eq!(resp.headers.get("X-Custom"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn parse_query_string_extracts_params() {
+        let q = parse_query_string(Some("as_of=2026-06-01&fmt=json"));
+        assert_eq!(q.get("as_of"), Some(&"2026-06-01".to_string()));
+        assert_eq!(q.get("fmt"), Some(&"json".to_string()));
+    }
+
+    #[test]
+    fn server_request_query_param_lookup() {
+        let mut query = HashMap::new();
+        query.insert("as_of".to_string(), "2026-06-15".to_string());
+        let req = ServerRequest {
+            method: "GET".to_string(),
+            path: "/api/v1/reports/trial-balance".to_string(),
+            query,
+            headers: vec![],
+            body: String::new(),
+        };
+        assert_eq!(req.query_param("as_of"), Some("2026-06-15".to_string()));
+        assert_eq!(req.query_param("missing"), None);
+    }
+
+    #[test]
+    fn server_request_header_lookup_is_case_insensitive() {
+        let req = ServerRequest {
+            method: "GET".to_string(),
+            path: "/api/v1/accounts".to_string(),
+            query: HashMap::new(),
+            headers: vec![("x-tenant-slug".to_string(), "demo".to_string())],
+            body: String::new(),
+        };
+        assert_eq!(req.header("X-Tenant-Slug"), Some("demo".to_string()));
+        assert_eq!(req.header("x-tenant-slug"), Some("demo".to_string()));
+    }
+
+    #[test]
+    fn test_server_request_response() {
+        let resp = ServerResponse::json("{\"ok\":true}".to_string());
+        assert_eq!(resp.status, 200);
+        assert_eq!(
+            resp.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+
+        let err = ServerResponse::error(404, "missing".to_string());
+        assert_eq!(err.status, 404);
+
+        let bin = ServerResponse::binary(200, vec![0x00, 0x01]);
+        assert!(bin.binary_body.is_some());
     }
 }
