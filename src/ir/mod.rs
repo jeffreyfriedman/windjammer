@@ -17,12 +17,16 @@
 pub mod annotations;
 pub mod constraints;
 pub mod node;
+pub mod numeric_solver;
+pub mod numeric_types;
 pub mod safety_type;
 pub mod solver;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use node::{IrFunction, IrNode, IrNodeKind};
+pub use numeric_solver::NumericSolver;
+pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
     TaintStatus,
