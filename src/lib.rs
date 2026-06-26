@@ -19,6 +19,7 @@ pub mod fuzzy_matcher;
 pub mod ide_analysis;
 pub mod inference;
 pub mod interpreter;
+pub mod ir;
 pub mod lexer;
 pub mod linter;
 pub mod metadata;
