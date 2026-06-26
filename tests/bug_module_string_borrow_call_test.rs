@@ -10,7 +10,7 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-/// Internal module fn taking borrowed `string` must receive `&owned_string` at call sites.
+/// Module-level `string` formals are owned `String`; callers pass owned locals by value.
 #[test]
 fn test_internal_module_call_borrows_string_arg() {
     let source = r#"
@@ -28,9 +28,9 @@ pub fn build() -> u32 {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains("load_shader(&shader_path)")
-            || generated.contains("load_shader(& shader_path)"),
-        "owned String local should be borrowed for &str param. Got:\n{}",
+        generated.contains("load_shader(shader_path)")
+            && !generated.contains("load_shader(&shader_path)"),
+        "owned String local should pass by value to owned string param. Got:\n{}",
         generated
     );
 }

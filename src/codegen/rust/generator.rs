@@ -825,7 +825,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        picked
+        picked.map(|mut resolved| {
+            resolved.sig =
+                crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(
+                    resolved.sig,
+                );
+            resolved
+        })
     }
 
     /// Resolve `Type::method` for call-site borrow lowering (Self:: and instance calls).

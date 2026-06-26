@@ -365,23 +365,19 @@ impl<'ast> CodeGenerator<'ast> {
 
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(formal_type),
+                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                    if self.is_type_copy(formal_type) =>
+                                {
+                                    self.type_to_rust(formal_type)
+                                }
                                 OwnershipMode::Borrowed => {
-                                    if self.is_type_copy(formal_type) {
-                                        // Copy types pass by value even when borrowed
-                                        self.type_to_rust(formal_type)
+                                    let is_string = matches!(formal_type, Type::String)
+                                        || matches!(formal_type, Type::Custom(ref name) if name == "string");
+                                    // Impl read-only `string` → `&str` (HashSet::contains(name), not &name).
+                                    if is_string && !trait_impl_owned_string {
+                                        "&str".to_string()
                                     } else {
-                                        // PHASE 2: Check if this string parameter can use &str optimization
-                                        let is_string = matches!(formal_type, Type::String)
-                                            || matches!(formal_type, Type::Custom(ref name) if name == "string");
-
-                                        if is_string
-                                            && analyzed.str_ref_optimizable_params.contains(&param.name)
-                                            && !self.in_trait_impl
-                                        {
-                                            "&str".to_string()
-                                        } else {
-                                            format!("&{}", self.type_to_rust(formal_type))
-                                        }
+                                        format!("&{}", self.type_to_rust(formal_type))
                                     }
                                 }
                                 OwnershipMode::MutBorrowed => {
@@ -406,6 +402,12 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str
                 };
 
+                // Copy owned formals pass by value — clear stale borrow metadata from body analysis.
+                if self.is_type_copy(formal_type) && !type_str.starts_with('&') {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                }
+
                 // TDD FIX: Auto-infer `mut` for owned parameters
                 // THE WINDJAMMER WAY: Users don't track mutability - the compiler does.
                 // If a parameter has mutating method calls or field mutations,
@@ -413,6 +415,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let auto_needs_mut = param.name != "self"
                     && !param.is_mutable
                     && matches!(type_str.as_str(), s if !s.starts_with("&"))
+                    && !self.is_type_copy(formal_type)
                     && self.variable_needs_mut(&param.name);
                 let mut_prefix = if param.is_mutable || auto_needs_mut {
                     "mut "

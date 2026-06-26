@@ -509,6 +509,7 @@ pub fn is_runtime_std_module(name: &str) -> bool {
         name,
         "strings"
             | "json"
+            | "jwt"
             | "time"
             | "math"
             | "random"
@@ -532,8 +533,36 @@ pub fn is_runtime_std_module(name: &str) -> bool {
 pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
     matches!(
         module,
-        "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env"
+        "strings" | "json" | "jwt" | "regex" | "csv" | "mime" | "http" | "env" | "db"
     )
+}
+
+/// Stdlib struct types that lower to a `windjammer_runtime` module (receiver type → module).
+pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
+    match type_name {
+        "Connection" | "Row" | "DatabaseType" => Some("db"),
+        _ => None,
+    }
+}
+
+/// Whether a method call receiver uses an AsRef<str> runtime std module.
+pub fn receiver_uses_asref_str_runtime_module(
+    runtime_module: Option<&str>,
+    receiver_type: Option<&str>,
+    is_imported_runtime_std_module: impl Fn(&str) -> bool,
+) -> bool {
+    if runtime_module.is_some_and(runtime_std_module_uses_asref_str) {
+        return true;
+    }
+    if let Some(tn) = receiver_type {
+        if let Some(m) = runtime_std_module_for_type(tn) {
+            return runtime_std_module_uses_asref_str(m);
+        }
+        if is_imported_runtime_std_module(tn) {
+            return runtime_std_module_uses_asref_str(tn);
+        }
+    }
+    false
 }
 
 /// Check if a runtime std module function parameter should be auto-borrowed.

@@ -5,15 +5,20 @@
 use sha2::{Digest, Sha256};
 
 /// SHA-256 hash
-pub fn sha256(data: &[u8]) -> String {
+pub fn sha256_bytes(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
 }
 
+/// SHA-256 hash of string (Windjammer `std::crypto::sha256(string)`).
+pub fn sha256(data: impl AsRef<str>) -> String {
+    sha256_string(data.as_ref())
+}
+
 /// SHA-256 hash of string
 pub fn sha256_string(s: &str) -> String {
-    sha256(s.as_bytes())
+    sha256_bytes(s.as_bytes())
 }
 
 /// Hash password with bcrypt
@@ -46,12 +51,18 @@ mod tests {
 
     #[test]
     fn test_sha256() {
-        let hash = sha256_string("hello");
+        let hash = sha256("hello");
         assert_eq!(hash.len(), 64); // SHA-256 produces 64 hex characters
         assert_eq!(
             hash,
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
         );
+    }
+
+    #[test]
+    fn test_sha256_bytes() {
+        let hash = sha256_bytes(b"hello");
+        assert_eq!(hash.len(), 64);
     }
 
     #[test]

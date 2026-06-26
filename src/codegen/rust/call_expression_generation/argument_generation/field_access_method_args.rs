@@ -112,6 +112,19 @@ fn arg_expression_is_copy_non_text_scalar<'ast>(
 }
 
 /// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
+fn asref_str_module_for_receiver<'ast>(
+    gen: &CodeGenerator<'ast>,
+    runtime_module: Option<&str>,
+    type_name: &Option<String>,
+) -> bool {
+    crate::codegen::rust::stdlib_method_traits::receiver_uses_asref_str_runtime_module(
+        runtime_module,
+        type_name.as_deref(),
+        |name| gen.is_imported_runtime_std_module(name),
+    )
+}
+
+/// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
 fn borrow_runtime_std_str_arg<'ast>(
     gen: &CodeGenerator<'ast>,
     runtime_module: Option<&str>,
@@ -119,17 +132,14 @@ fn borrow_runtime_std_str_arg<'ast>(
     arg: &'ast Expression<'ast>,
     arg_str: String,
 ) -> String {
-    let asref_str_module = runtime_module
-        .or_else(|| {
-            type_name
-                .as_deref()
-                .filter(|t| gen.is_imported_runtime_std_module(t))
-        })
-        .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
-    let arg_is_string = gen
-        .infer_expression_type(arg)
-        .as_ref()
-        .is_some_and(crate::codegen::rust::string_utilities::param_is_owned_string_type);
+    let asref_str_module =
+        asref_str_module_for_receiver(gen, runtime_module, type_name);
+    let arg_is_string = crate::codegen::rust::string_utilities::expression_is_owned_string_for_asref_borrow(
+        arg,
+        gen.infer_expression_type(arg).as_ref(),
+        &gen.local_var_types,
+        &gen.current_function_params,
+    );
     if asref_str_module
         && arg_is_string
         && matches!(
@@ -157,6 +167,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
+    let runtime_module = runtime_module.or_else(|| {
+        qualified_name
+            .split("::")
+            .next()
+            .filter(|m| {
+                crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+            })
+    });
     arguments
         .iter()
         .enumerate()
@@ -209,15 +227,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     )
                                 });
 
-                            let asref_str_module = runtime_module
-                                .or_else(|| {
-                                    type_name
-                                        .as_deref()
-                                        .filter(|t| gen.is_imported_runtime_std_module(t))
-                                })
-                                .is_some_and(
-                                    super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
-                                );
+                            let asref_str_module =
+                                asref_str_module_for_receiver(gen, runtime_module, type_name);
 
                             if !param_is_str_ref && !asref_str_module {
                                 let param_is_string =
@@ -288,7 +299,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 ..
                             }
                         );
-                        let is_str_param = matches!(
+                        let is_caller_str_slice_param = matches!(
                             arg_to_generate,
                             Expression::Identifier { name, .. }
                                 if gen.current_function_params.iter().any(|p| {
@@ -303,16 +314,25 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                         )
                                 })
                         );
-                        if is_str_lit || is_str_param {
-                            let asref_str_module = runtime_module
-                                .or_else(|| {
-                                    type_name
-                                        .as_deref()
-                                        .filter(|t| gen.is_imported_runtime_std_module(t))
+                        let arg_is_owned_string_binding =
+                            if let Expression::Identifier { name, .. } = arg_to_generate {
+                                gen.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && crate::codegen::rust::types::is_windjammer_text_type(
+                                            &p.type_,
+                                        )
+                                        && !matches!(
+                                            &p.type_,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
                                 })
-                                .is_some_and(
-                                    super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
-                                );
+                            } else {
+                                false
+                            };
+                        if (is_str_lit || is_caller_str_slice_param) && !arg_is_owned_string_binding
+                        {
+                            let asref_str_module =
+                                asref_str_module_for_receiver(gen, runtime_module, type_name);
                             let is_explicit_str_ref = sig.param_types.get(sig_param_idx).is_some_and(
                                 |t| {
                                     matches!(t, Type::Reference(inner) if
@@ -355,6 +375,21 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 arg_str,
             );
 
+            if asref_str_module_for_receiver(gen, runtime_module, type_name) {
+                let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(
+                    crate::codegen::rust::string_utilities::param_is_owned_string_type,
+                );
+                if param_is_string
+                    && matches!(
+                        arg_to_generate,
+                        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                    )
+                    && !arg_str.starts_with('&')
+                {
+                    arg_str = format!("&{arg_str}");
+                }
+            }
+
             // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
             if matches!(
                 crate::codegen::rust::call_signature_resolution::effective_param_ownership(
@@ -396,6 +431,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 &mut arg_str,
                 type_name.as_deref(),
                 Some(&gen.enum_variant_types),
+                runtime_module,
             );
 
             vec![arg_str]
@@ -413,6 +449,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
+    let runtime_module = runtime_module.or_else(|| {
+        qualified_name
+            .split("::")
+            .next()
+            .filter(|m| {
+                crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+            })
+    });
     let fallback_sig = type_name
         .as_ref()
         .and_then(|tn| {
@@ -474,15 +518,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                         })
             );
             if is_string_literal || is_str_param {
-                let asref_str_module = runtime_module
-                    .or_else(|| {
-                        type_name
-                            .as_deref()
-                            .filter(|t| gen.is_imported_runtime_std_module(t))
-                    })
-                    .is_some_and(
-                        super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str,
-                    );
+                let asref_str_module =
+                    asref_str_module_for_receiver(gen, runtime_module, type_name);
                 let needs_to_string = !asref_str_module
                     && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
                         i,
@@ -600,6 +637,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 &mut arg_str,
                 type_name.as_deref(),
                 Some(&gen.enum_variant_types),
+                runtime_module,
             );
             if i == 0 {
                 let upgraded = infer_external_module_mut_borrow_upgrade(

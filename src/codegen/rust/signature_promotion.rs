@@ -307,13 +307,87 @@ pub(crate) fn body_borrow_must_not_replace_owned_copy_formal(
         })
 }
 
+/// True when `global` has body-converged `Reference(str)` where `local` still carries a bare
+/// `String` stub for the same parameter (cross-file call sites: world.wj local registry vs
+/// component_storage converged global entry).
+fn global_has_converged_str_refs_over_local(
+    local: &FunctionSignature,
+    global: &FunctionSignature,
+) -> bool {
+    for idx in 0..local.param_ownership.len().min(global.param_ownership.len()) {
+        if local.has_self_receiver && idx == 0 {
+            continue;
+        }
+        let local_bare_string = local.param_types.get(idx).is_some_and(|t| {
+            matches!(t, Type::String)
+                || matches!(t, Type::Custom(name) if name == "string" || name == "String")
+        });
+        let global_str_ref = global.param_types.get(idx).is_some_and(
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref,
+        );
+        let global_borrowed =
+            matches!(global.param_ownership.get(idx), Some(OwnershipMode::Borrowed));
+        if local_bare_string && global_str_ref && global_borrowed {
+            return true;
+        }
+    }
+    false
+}
+
+/// Cross-file static impl: global body analysis marked text params `Borrowed` while the caller's
+/// local registry still carries declaration stubs (`Owned` + bare `String`).
+pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
+    local: &FunctionSignature,
+    global: &FunctionSignature,
+) -> bool {
+    if local.has_self_receiver != global.has_self_receiver {
+        return false;
+    }
+    for idx in 0..local.param_ownership.len().min(global.param_ownership.len()) {
+        if local.has_self_receiver && idx == 0 {
+            continue;
+        }
+        let local_owned_text = matches!(
+            local.param_ownership.get(idx),
+            Some(OwnershipMode::Owned)
+        ) && local.param_types.get(idx).is_some_and(|t| {
+            crate::codegen::rust::types::is_windjammer_text_type(t)
+                && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        });
+        let global_borrowed_text = matches!(
+            global.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) && global.param_types.get(idx).is_some_and(|t| {
+            crate::codegen::rust::types::is_windjammer_text_type(t)
+                || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+        });
+        if local_owned_text && global_borrowed_text {
+            return true;
+        }
+    }
+    false
+}
+
 /// Prefer converged global signatures over per-file declaration stubs at call sites.
 pub fn pick_best_resolved_signature(
     local: Option<ResolvedSignature>,
     global: Option<ResolvedSignature>,
 ) -> Option<ResolvedSignature> {
     match (local, global) {
-        (Some(l), Some(g)) if prefer_converged_over_stub(&l.sig, &g.sig) => Some(g),
+        (Some(l), Some(g))
+            if prefer_converged_over_stub(&l.sig, &g.sig)
+                || global_has_converged_str_refs_over_local(&l.sig, &g.sig)
+                || global_has_borrowed_text_over_local_owned_stub(&l.sig, &g.sig) =>
+        {
+            Some(g)
+        }
+        (Some(l), Some(g))
+            if prefer_converged_over_stub(&g.sig, &l.sig)
+                || global_has_converged_str_refs_over_local(&g.sig, &l.sig)
+                || global_has_borrowed_text_over_local_owned_stub(&g.sig, &l.sig) =>
+        {
+            Some(l)
+        }
         (Some(l), _) => Some(l),
         (None, Some(g)) => Some(g),
         (None, None) => None,
@@ -348,9 +422,28 @@ pub(crate) fn best_method_signature_for_receiver(
         }
         let converged = !signature_is_declaration_stub_like(sig)
             && !has_stale_owned_non_copy_params(sig);
-        let replace = best.as_ref().is_none_or(|(_, _, prev_converged)| {
+        let str_ref_params = sig
+            .param_types
+            .iter()
+            .filter(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+            .count();
+        let replace = best.as_ref().is_none_or(|(_, best_sig, prev_converged)| {
             if converged && !prev_converged {
                 return true;
+            }
+            if !converged && *prev_converged {
+                return false;
+            }
+            let best_str_refs = best_sig
+                .param_types
+                .iter()
+                .filter(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+                .count();
+            if str_ref_params > best_str_refs {
+                return true;
+            }
+            if str_ref_params < best_str_refs {
+                return false;
             }
             if converged == *prev_converged {
                 return key.len() > best.as_ref().unwrap().0.len();

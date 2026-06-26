@@ -543,6 +543,28 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // `pub const FOO: string` lowers to &'static str; owned String fields need .to_string().
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if string_utilities::is_string_const_identifier(
+                        id,
+                        self.auto_clone_analysis.as_ref(),
+                    ) && !expr_str.ends_with(".to_string()")
+                    {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        let field_is_string = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|fields| fields.get(field_name))
+                            .is_some_and(|field_type| {
+                                matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String")
+                            })
+                            || struct_name.len() > 0;
+                        if field_is_string {
+                            expr_str = format!("{}.to_string()", expr_str);
+                        }
+                    }
+                }
+
                 // Windjammer `string` params inferred as borrowed (`&String`/`&str`) need
                 // `.clone()` when assigned to owned String struct fields.
                 if let Expression::Identifier { name: id, .. } = expr {

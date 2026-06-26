@@ -13,7 +13,7 @@ use crate::codegen::rust::rust_coercion_rules::Coercion;
 use crate::codegen::rust::stdlib_method_traits;
 use crate::codegen::rust::string_utilities;
 use crate::codegen::rust::types;
-use crate::parser::{Expression, Literal};
+use crate::parser::{Expression, Literal, Type};
 
 /// Lowering actions to apply to a generated argument expression string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -81,6 +81,18 @@ pub fn should_borrow_at_call_site(
     method_name: &str,
     arg_already_rust_ref: bool,
 ) -> CallSiteBorrowDecision {
+    let param_idx = sig.arg_param_index(arg_index);
+    // Plain owned `string` formals are always `String` at the call site — never prefix `&`.
+    if sig.formal_param_type(param_idx).is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            && types::is_windjammer_text_type(t)
+    }) {
+        return CallSiteBorrowDecision::default();
+    }
+    if matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned)) {
+        return CallSiteBorrowDecision::default();
+    }
+
     let effective = effective_ownership_for_call_arg(sig, arg_index);
     let param_expects_borrowed = matches!(effective, OwnershipMode::Borrowed);
     let is_collection_key = is_collection_key_arg(method_name, arg_index);
@@ -171,7 +183,7 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
     }
 
     if decision.add_ref && !arg_str.starts_with('&') {
-        Coercion::Borrow.apply(arg_str);
+        crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
     }
 }
 
@@ -218,6 +230,33 @@ mod tests {
         assert_eq!(
             effective_ownership_for_call_arg(&sig, 0),
             OwnershipMode::Owned
+        );
+    }
+
+    #[test]
+    fn owned_string_formal_no_borrow_despite_stale_borrowed_param_type() {
+        let sig = sig_with_formal(
+            "TrialBalanceReader::trial_balance_lines",
+            vec![Type::Reference(Box::new(Type::String))],
+            vec![Type::String],
+            vec![OwnershipMode::Borrowed],
+            true,
+        );
+        let arg = Expression::Identifier {
+            name: "tenant_slug".into(),
+            location: Default::default(),
+        };
+        let decision = should_borrow_at_call_site(
+            &sig,
+            0,
+            &arg,
+            "tenant_slug.clone()",
+            "trial_balance_lines",
+            false,
+        );
+        assert!(
+            !decision.add_ref,
+            "owned string formal must not borrow at call site"
         );
     }
 

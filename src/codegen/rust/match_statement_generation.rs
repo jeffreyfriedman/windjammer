@@ -536,10 +536,9 @@ impl<'ast> CodeGenerator<'ast> {
         let needs_borrow_break = !self.match_scrutinee_allows_mut_binding_directly(value)
             && (self.match_scrutinee_is_self_method_call(value)
                 || self.match_scrutinee_is_self_field(value))
-                && (self.match_arms_mutate_self(arms)
-                    || option_reassigns
-                    || (self.inferred_mut_borrowed_params.contains("self")
-                        && self.match_arms_call_self_method(arms)));
+            && (self.match_arms_mutate_self(arms)
+                || option_reassigns
+                || self.match_arms_call_self_method(arms));
         let use_copied_borrow_break =
             needs_borrow_break && self.match_borrow_break_yields_ref_copy_binding(value);
         let use_owned_copy_borrow_break = needs_borrow_break

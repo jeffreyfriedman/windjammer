@@ -117,20 +117,7 @@ impl<'ast> Analyzer<'ast> {
         // to avoid re-entering inference while analyzing callees (stack overflow).
         // Read-only recursion still needs a borrowed receiver, but `&self` not `&mut self`.
         if self.count_self_method_calls(func, func.name.as_str()) >= 2 {
-            let modifies_fields =
-                self.function_modifies_self_fields_with_registry(func, Some(registry));
-            if modifies_fields {
-                return OwnershipMode::MutBorrowed;
-            }
-            let mut mutating_call_visited = std::collections::HashSet::new();
-            if self.function_calls_mutating_self_methods_with_registry(
-                func,
-                Some(registry),
-                &mut mutating_call_visited,
-            ) {
-                return OwnershipMode::MutBorrowed;
-            }
-            return OwnershipMode::Borrowed;
+            return OwnershipMode::MutBorrowed;
         }
 
         if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
@@ -376,10 +363,19 @@ impl<'ast> Analyzer<'ast> {
                                     param.name, func.name, mutated, passthrough_mut, param.type_
                                 );
                             }
+                            // Copy formals stay owned — field dispatch copies, never &mut AppDeps.
                             if mutated || passthrough_mut {
-                                OwnershipMode::MutBorrowed
-                            } else {
                                 OwnershipMode::Owned
+                            } else {
+                                self.infer_parameter_ownership(
+                                    &param.name,
+                                    &param.type_,
+                                    &func.body,
+                                    &func.return_type,
+                                    registry,
+                                    &func.name,
+                                    func,
+                                )?
                             }
                         } else {
                             // Perform inference based on usage in function body
@@ -788,26 +784,22 @@ impl<'ast> Analyzer<'ast> {
                     return OwnershipMode::Owned;
                 }
 
-                // Copy types pass by value unless the analyzer inferred mut borrow for in-body mutation.
-                // This must match the logic in codegen.rs
+                // Copy types: always owned in signatures and at call sites.
+                // Body-inferred MutBorrowed on @derive(Copy) structs (e.g. AppDeps) must not
+                // become `&mut T` — field dispatch copies, composition root passes by value.
                 if self.is_copy_type(&param.type_) {
-                    if inferred == OwnershipMode::MutBorrowed {
-                        OwnershipMode::MutBorrowed
-                    } else {
-                        OwnershipMode::Owned
-                    }
-                } else {
-                    // THE WINDJAMMER WAY: The compiler infers ownership, not the user.
-                    // Non-Copy types follow the analyzer's inference:
-                    // - Borrowed: parameter is only read (default for read-only params)
-                    // - MutBorrowed: parameter is mutated
-                    // - Owned: parameter is consumed (returned, stored, iterated, etc.)
-                    //
-                    // Users write `data: Vec<f32>` and the compiler figures out whether
-                    // it should be `&Vec<f32>`, `&mut Vec<f32>`, or `Vec<f32>` in Rust.
-                    // This matches call sites where `&self.data` is naturally passed.
-                    inferred
+                    return OwnershipMode::Owned;
                 }
+                // THE WINDJAMMER WAY: The compiler infers ownership, not the user.
+                // Non-Copy types follow the analyzer's inference:
+                // - Borrowed: parameter is only read (default for read-only params)
+                // - MutBorrowed: parameter is mutated
+                // - Owned: parameter is consumed (returned, stored, iterated, etc.)
+                //
+                // Users write `data: Vec<f32>` and the compiler figures out whether
+                // it should be `&Vec<f32>`, `&mut Vec<f32>`, or `Vec<f32>` in Rust.
+                // This matches call sites where `&self.data` is naturally passed.
+                inferred
             })
             .collect();
 
@@ -879,18 +871,40 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        // Formal types: snapshot before Phase 3 Reference wrap (call-site vs formal separation).
-        let mut formal_param_types = param_types.clone();
+        // Formal types: AST annotations before body-inferred Reference wrap (call-site vs formal).
+        let mut formal_param_types: Vec<PType> = func
+            .decl
+            .parameters
+            .iter()
+            .map(|p| p.type_.clone())
+            .collect();
+        if synthetic_self_receiver {
+            let self_ty = func
+                .decl
+                .parent_type
+                .as_ref()
+                .map(|n| PType::Custom(n.clone()))
+                .unwrap_or(PType::Custom("Self".to_string()));
+            formal_param_types.insert(0, self_ty);
+        }
 
-        // E0053: plain `string` in the item signature is owned `String` — keep formals on AST
-        // types and ownership even when str_ref inference wrapped `param_types` as `&str`.
-        for (idx, param) in func.decl.parameters.iter().enumerate() {
-            if Self::trait_param_is_owned_string(&param.type_) {
-                if idx < formal_param_types.len() {
-                    formal_param_types[idx] = param.type_.clone();
-                }
-                if idx < param_ownership.len() {
-                    param_ownership[idx] = OwnershipMode::Owned;
+        // Module-level plain `string` formals stay owned `String` (pit-of-success / E0053).
+        // Struct/enum impl methods keep body-inferred &str; trait items are handled in trait_analysis.
+        // Body-inferred Borrowed (read-only concat params, passthrough wrappers) is preserved.
+        if func.decl.parent_type.is_none() {
+            for (idx, param) in func.decl.parameters.iter().enumerate() {
+                if Self::trait_param_is_owned_string(&param.type_) {
+                    if idx < formal_param_types.len() {
+                        formal_param_types[idx] = param.type_.clone();
+                    }
+                    if idx < param_ownership.len()
+                        && !matches!(
+                            param_ownership[idx],
+                            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                        )
+                    {
+                        param_ownership[idx] = OwnershipMode::Owned;
+                    }
                 }
             }
         }
@@ -927,13 +941,19 @@ impl<'ast> Analyzer<'ast> {
                 OwnershipMode::Borrowed
                     if !matches!(ty, PType::Reference(_) | PType::MutableReference(_))
                         && !self.is_copy_type(ty)
-                        && !func
-                            .decl
-                            .parameters
-                            .get(idx)
-                            .is_some_and(|p| Self::trait_param_is_owned_string(&p.type_)) =>
+                        && !(func.decl.parent_type.is_none()
+                            && matches!(ownership, OwnershipMode::Owned)
+                            && func
+                                .decl
+                                .parameters
+                                .get(idx)
+                                .is_some_and(|p| Self::trait_param_is_owned_string(&p.type_))) =>
                 {
-                    *ty = PType::Reference(Box::new(ty.clone()));
+                    *ty = if Self::is_windjammer_text_param_type(ty) {
+                        PType::Reference(Box::new(PType::Custom("str".into())))
+                    } else {
+                        PType::Reference(Box::new(ty.clone()))
+                    };
                 }
                 OwnershipMode::MutBorrowed
                     if !matches!(ty, PType::MutableReference(_)) && !self.is_copy_type(ty) =>

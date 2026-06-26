@@ -36,18 +36,17 @@ fn main() {
     let rust_code = test_utils::compile_single_result(source).expect("Compilation failed");
     println!("Generated Rust code:\n{}", rust_code);
 
-    // NEW DESIGN: String ownership is inferred from USAGE
-    // `name: String` (read-only) → infers to `name: &str` (idiomatic Rust!)
+    // Pit-of-success: `string` annotation is owned `String` even when read-only.
     assert!(
-        rust_code.contains("fn greet(name: &str)"),
-        "Read-only string parameter should infer to &str.\nGenerated:\n{}",
+        rust_code.contains("fn greet(name: String)"),
+        "Explicit string parameter should stay owned String.\nGenerated:\n{}",
         rust_code
     );
 
-    // String literals (already &str) are passed directly to &str parameters
     assert!(
-        rust_code.contains(r#"greet("Alice")"#),
-        "String literals should be passed directly to &str parameters.\nGenerated:\n{}",
+        rust_code.contains(r#"greet("Alice".to_string())"#)
+            || rust_code.contains(r#"greet(String::from("Alice"))"#),
+        "String literals should coerce to owned String at call sites.\nGenerated:\n{}",
         rust_code
     );
 }

@@ -60,11 +60,26 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     });
 
     let resolved =
-        call_signature_resolution::pick_best_resolved_signature(from_method_registry, from_registry);
-    let method_signature = resolved.as_ref().map(|r| r.sig.clone());
+        call_signature_resolution::pick_best_resolved_signature(from_registry, from_method_registry);
+    let method_signature = resolved.as_ref().map(|r| {
+        let mut sig = r.sig.clone();
+        if let Some(global) = gen.global_signature_registry() {
+            call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                global,
+                call_method,
+                &mut sig,
+            );
+        }
+        call_signature_resolution::finalize_call_site_signature(sig)
+    });
 
     let runtime_module = match call_obj {
-        Expression::Identifier { name, .. } if gen.is_imported_runtime_std_module(name) => {
+        Expression::Identifier { name, .. }
+            if gen.is_imported_runtime_std_module(name)
+                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                    name,
+                ) =>
+        {
             Some(name.as_str())
         }
         _ => None,
@@ -101,6 +116,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             .enumerate()
             .map(|(i, arg_str)| {
                 let sig_param_idx = sig.arg_param_index(i);
+                // Plain owned `string` trait formals pass `String` at the call site.
+                if sig.formal_param_type(sig_param_idx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                }) {
+                    return arg_str.clone();
+                }
                 let borrow = !callee_is_extern
                     && !arg_str.contains("string_to_ffi(")
                     && matches!(
@@ -161,7 +183,11 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                     if arg_is_str_param {
                         arg_str.clone()
                     } else {
-                        format!("&{arg_str}")
+                        let mut borrowed = arg_str.clone();
+                        crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                            &mut borrowed,
+                        );
+                        borrowed
                     }
                 } else {
                     arg_str.clone()
