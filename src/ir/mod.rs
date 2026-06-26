@@ -17,6 +17,7 @@
 pub mod annotations;
 pub mod constraints;
 pub mod effects;
+pub mod execution;
 pub mod node;
 pub mod numeric_solver;
 pub mod numeric_types;
@@ -26,6 +27,7 @@ pub mod taint;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
+pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use node::{IrFunction, IrNode, IrNodeKind};
