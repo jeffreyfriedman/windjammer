@@ -430,16 +430,25 @@ impl<'ast> CodeGenerator<'ast> {
         string_literal_converted: bool,
     ) -> String {
         let callee_wants_borrowed_str = |sig: &crate::analyzer::FunctionSignature, idx: usize| {
-            sig.param_ownership
-                .get(idx)
-                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                && sig
-                    .param_types
-                    .get(idx)
-                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+            matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+                OwnershipMode::Borrowed,
+            )
         };
 
         if string_literal_converted {
+            return arg_str;
+        }
+        if method_signature.as_ref().is_some_and(|sig| {
+            sig.formal_param_type(sig_param_idx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && crate::codegen::rust::types::is_windjammer_text_type(t)
+            }) || matches!(sig.param_ownership.get(sig_param_idx), Some(OwnershipMode::Owned))
+                || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                })
+        }) {
             return arg_str;
         }
         if arg_str.starts_with('&') {
@@ -476,13 +485,17 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
         {
-            return format!("&{arg_str}");
+            let mut borrowed = arg_str;
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut borrowed);
+            return borrowed;
         }
         if matches!(
             arg_to_generate,
             Expression::Identifier { .. } | Expression::FieldAccess { .. }
         ) {
-            return format!("&{arg_str}");
+            let mut borrowed = arg_str;
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut borrowed);
+            return borrowed;
         }
         arg_str
     }

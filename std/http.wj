@@ -4,6 +4,8 @@
 
 // PUBLIC API - Users interact with these types only
 
+use std::collections::HashMap
+
 //===============================================
 // CLIENT TYPES
 //===============================================
@@ -451,6 +453,7 @@ impl ServerResponse {
 struct ServerRequest {
     method: string,
     path: string,
+    query: HashMap<string, string>,
     headers: Vec<(string, string)>,
     body: string,
 }

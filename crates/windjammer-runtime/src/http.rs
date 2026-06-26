@@ -624,7 +624,7 @@ impl Server {
 
     pub fn serve<F>(self, handler: F) -> Result<(), String>
     where
-        F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
+        F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
     {
         server_serve(self.address, self.port, handler)
     }
@@ -633,7 +633,7 @@ impl Server {
 /// Start a simple HTTP server with a catch-all handler
 pub fn server_serve<F>(address: String, port: i64, handler: F) -> Result<(), String>
 where
-    F: Fn(&ServerRequest) -> ServerResponse + Send + Sync + 'static,
+    F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
 {
     use std::sync::Arc;
 
@@ -667,7 +667,7 @@ where
                     headers,
                     body,
                 };
-                let response = handler(&wj_req);
+                let response = handler(wj_req);
                 response.into_response()
             }
         });

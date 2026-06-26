@@ -14,6 +14,7 @@ pub mod platform;
 pub mod fs;
 pub mod http;
 pub mod json;
+pub mod jwt;
 pub mod mime;
 
 // Profiling (Tracy zones; optional `tracy` feature)

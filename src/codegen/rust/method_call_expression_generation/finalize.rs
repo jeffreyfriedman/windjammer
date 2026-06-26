@@ -24,6 +24,9 @@ impl<'ast> CodeGenerator<'ast> {
             arguments,
             method_signature,
         );
+        let receiver_type_name = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object));
         let args = if let Some(ref sig) = resolved_signature {
             args.into_iter()
                 .enumerate()
@@ -33,13 +36,25 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     let sig_param_idx = sig.arg_param_index(i);
                     let ownership =
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                            sig, i, receiver_type_name.as_deref(),
                         );
                     let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                         self.is_type_copy(t)
                     });
                     let apply_borrow = |arg_str: &mut String| {
+                        if matches!(
+                            sig.param_ownership.get(sig_param_idx),
+                            Some(OwnershipMode::Owned)
+                        ) {
+                            return;
+                        }
+                        if sig.formal_param_type(sig_param_idx).is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && crate::codegen::rust::types::is_windjammer_text_type(t)
+                        }) {
+                            return;
+                        }
                         let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                         });
@@ -64,7 +79,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(arg_str);
                         if !arg_str.starts_with('&') {
-                            *arg_str = format!("&{arg_str}");
+                            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                arg_str,
+                            );
                         }
                     };
                     match ownership {
@@ -88,14 +105,28 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         crate::analyzer::OwnershipMode::Borrowed
-                            if !arg_str.starts_with('&') =>
+                            if !arg_str.starts_with('&')
+                                && !matches!(
+                                    sig.param_ownership.get(sig_param_idx),
+                                    Some(OwnershipMode::Owned)
+                                ) =>
                         {
-                            apply_borrow(&mut arg_str);
-                            arg_str
+                            if sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                matches!(t, Type::String)
+                                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                            }) {
+                                arg_str
+                            } else {
+                                apply_borrow(&mut arg_str);
+                                arg_str
+                            }
                         }
                         _ if sig.param_types.get(sig_param_idx).is_some_and(|t| {
                             matches!(t, Type::Reference(_))
-                        }) && !arg_str.starts_with('&') =>
+                        }) && !matches!(
+                            ownership,
+                            crate::analyzer::OwnershipMode::Owned,
+                        ) && !arg_str.starts_with('&') =>
                         {
                             apply_borrow(&mut arg_str);
                             arg_str

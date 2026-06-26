@@ -52,6 +52,31 @@ pub fn strip_trailing_clone(arg_str: &mut String) {
     }
 }
 
+/// True when prefix `&` would bind to the first sub-expression only (e.g. `&a + b`).
+fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
+    if expr_str.starts_with('(') {
+        return false;
+    }
+    [
+        " + ", " - ", " * ", " / ", " % ", " == ", " != ", " < ", " > ", " <= ", " >= ", " && ",
+        " || ",
+    ]
+    .iter()
+    .any(|op| expr_str.contains(op))
+}
+
+/// Prefix shared borrow on generated Rust, parenthesizing compound expressions.
+pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
+    if expr_str.starts_with('&') && !expr_str.starts_with("&&") {
+        return;
+    }
+    if expr_needs_borrow_parentheses(expr_str) {
+        *expr_str = format!("&({expr_str})");
+    } else {
+        *expr_str = format!("&{expr_str}");
+    }
+}
+
 /// Check whether an identifier is already a `&mut` reference, either through
 /// explicit declaration (`param: &mut T`) or through ownership inference.
 pub fn is_identifier_already_mut_ref(
@@ -109,4 +134,23 @@ pub fn apply_mut_borrow_coercion(
     }
     super::rust_coercion_rules::Coercion::BorrowMut.apply(arg_str);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_borrow_parenthesizes_string_concat() {
+        let mut s = "prev_hash_hex + &canonical_payload".to_string();
+        apply_shared_borrow_prefix(&mut s);
+        assert_eq!(s, "&(prev_hash_hex + &canonical_payload)");
+    }
+
+    #[test]
+    fn shared_borrow_leaves_simple_identifiers_unwrapped() {
+        let mut s = "tenant_slug".to_string();
+        apply_shared_borrow_prefix(&mut s);
+        assert_eq!(s, "&tenant_slug");
+    }
 }

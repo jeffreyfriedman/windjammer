@@ -550,18 +550,15 @@ impl SignatureRegistry {
     }
 
     fn declaration_stub_param_type(param: &crate::parser::Parameter<'_>) -> Type {
-        if Self::is_declaration_stub_text_type(&param.type_) {
-            Type::Reference(Box::new(Type::Custom("str".into())))
-        } else {
-            param.type_.clone()
-        }
+        // Plain `string` in an item signature is owned `String` (E0053) — do not stub as &str.
+        param.type_.clone()
     }
 
     fn declaration_stub_param_ownership(param: &crate::parser::Parameter<'_>) -> OwnershipMode {
         match param.name.as_str() {
             "mut self" => OwnershipMode::MutBorrowed,
             "self" => OwnershipMode::Borrowed,
-            _ if Self::is_declaration_stub_text_type(&param.type_) => OwnershipMode::Borrowed,
+            _ if Self::is_declaration_stub_text_type(&param.type_) => OwnershipMode::Owned,
             _ => OwnershipMode::Owned,
         }
     }
@@ -585,8 +582,22 @@ impl SignatureRegistry {
                     && !crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(
                         existing,
                     )
-                    && crate::codegen::rust::call_signature_resolution::prefer_converged_over_stub(
+                    && crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
                         sig, existing,
+                    )
+                {
+                    continue;
+                }
+                // Cross-file: caller analysis re-registers `Type::method` with declaration
+                // `Owned` metadata after the defining module already converged borrows
+                // (e.g. squad.wj `Squad::new` → &str, then caller.wj merge overwrites).
+                if (crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
+                    sig, existing,
+                ) || crate::codegen::rust::signature_promotion::global_has_borrowed_text_over_local_owned_stub(
+                    sig, existing,
+                ))
+                    && !crate::codegen::rust::signature_promotion::body_borrow_must_not_replace_owned_formal_stub(
+                        existing, sig,
                     )
                 {
                     continue;
@@ -643,4 +654,54 @@ impl SignatureRegistry {
 #[derive(Debug, Clone, Default)]
 pub struct SignatureDelta {
     pub changed: HashMap<String, FunctionSignature>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
+    use crate::parser::Type;
+
+    #[test]
+    fn merge_keeps_converged_static_text_borrow_over_caller_owned_stub() {
+        let converged = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let caller_stub = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+
+        let mut global = SignatureRegistry::new();
+        global
+            .signatures
+            .insert("Squad::new".into(), converged.clone());
+
+        global.merge(&{
+            let mut caller = SignatureRegistry::new();
+            caller
+                .signatures
+                .insert("Squad::new".into(), caller_stub);
+            caller
+        });
+
+        let stored = global.get_signature("Squad::new").expect("Squad::new");
+        assert_eq!(
+            stored.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            "caller owned stub must not overwrite body-converged borrows"
+        );
+    }
 }
